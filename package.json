@@ -1,0 +1,26 @@
+{
+  "name": "orion",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ORION core — modular monolith backend + shared React frontend core",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:api": "corepack pnpm --filter @orion/api dev",
+    "dev:web": "corepack pnpm --filter @orion/web dev",
+    "dev:desktop": "corepack pnpm --filter @orion/desktop tauri dev",
+    "build": "corepack pnpm -r build",
+    "typecheck": "corepack pnpm -r --if-present run typecheck",
+    "lint": "eslint .",
+    "db:up": "docker compose -f infra/postgres/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/postgres/docker-compose.yml down",
+    "db:migrate": "corepack pnpm --filter @orion/api prisma:migrate:dev",
+    "db:generate": "corepack pnpm --filter @orion/api prisma:generate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.11.0",
+    "typescript-eslint": "^8.11.0"
+  }
+}

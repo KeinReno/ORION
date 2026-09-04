@@ -1,0 +1,15 @@
+node_modules
+dist
+.next
+out
+.turbo
+*.log
+.env
+.env.local
+pnpm-lock.yaml
+target
+**/src-tauri/gen
+**/src-tauri/target
+.tmp
+tmp/
+*.stackdump
