@@ -27,12 +27,15 @@ pnpm --filter @orion/desktop tauri:dev   # окно поверх запущен�
 
 pnpm typecheck        # tsc --noEmit по всем пакетам
 pnpm lint             # eslint .
+pnpm test             # vitest run — юнит-тесты в packages/**, без БД
 pnpm build            # сборка всех пакетов
 ```
 
-Тестов пока нет. Единственная автоматическая проверка перед коммитом —
-`pnpm typecheck && pnpm lint`. Ручные сценарии проверки каждого модуля — в
-секциях «Проверка» в `docs/PLAN.md`.
+Гейт перед коммитом — `pnpm typecheck && pnpm lint && pnpm test`.
+`pnpm test` покрывает только чистую логику в `packages/` (zod-схемы =
+контракт, `ApiClient` 401→refresh→retry, `TokenStore`). Тестов на
+NestJS-сервисы и БД-интеграцию пока нет — эти пути закрыты ручными
+сценариями «Проверка» в `docs/PLAN.md`.
 
 ---
 
