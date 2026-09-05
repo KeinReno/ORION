@@ -11,6 +11,7 @@
     "build": "corepack pnpm -r build",
     "typecheck": "corepack pnpm -r --if-present run typecheck",
     "lint": "eslint .",
+    "test": "vitest run",
     "db:up": "docker compose -f infra/postgres/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/postgres/docker-compose.yml down",
     "db:migrate": "corepack pnpm --filter @orion/api prisma:migrate:dev",
@@ -21,6 +22,7 @@
     "eslint": "^9.13.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "globals": "^15.11.0",
-    "typescript-eslint": "^8.11.0"
+    "typescript-eslint": "^8.11.0",
+    "vitest": "^5.0.0"
   }
 }
