@@ -1,13 +1,17 @@
 import {
   authResponseSchema,
   noteSchema,
+  taskSchema,
   workspaceSchema,
   type AuthResponse,
   type CreateNoteInput,
+  type CreateTaskInput,
   type LoginInput,
   type Note,
   type RegisterInput,
+  type Task,
   type UpdateNoteInput,
+  type UpdateTaskInput,
   type Workspace
 } from "@orion/shared-types";
 import { z } from "zod";
@@ -29,27 +33,45 @@ export interface ApiClientOptions {
   tokenStore: TokenStore;
 }
 
+const AUTH_ENDPOINTS_WITHOUT_RETRY = new Set(["/auth/login", "/auth/register", "/auth/refresh"]);
+
 /**
  * Typed fetch client for the ORION API. Framework-agnostic — no React,
  * no DOM assumptions beyond a global fetch (present in browsers, Node 18+,
  * and the Tauri webview alike).
  */
 export class ApiClient {
+  /** Single-flight guard: concurrent 401s share one /auth/refresh call instead of racing each other. */
+  private refreshPromise: Promise<string> | null = null;
+
   constructor(private readonly options: ApiClientOptions) {}
 
   async register(input: RegisterInput): Promise<AuthResponse> {
     const data = await this.request("POST", "/auth/register", input, authResponseSchema);
-    await this.options.tokenStore.set(data.accessToken);
+    await this.options.tokenStore.setPair(data.accessToken, data.refreshToken);
     return data;
   }
 
   async login(input: LoginInput): Promise<AuthResponse> {
     const data = await this.request("POST", "/auth/login", input, authResponseSchema);
-    await this.options.tokenStore.set(data.accessToken);
+    await this.options.tokenStore.setPair(data.accessToken, data.refreshToken);
     return data;
   }
 
   async logout(): Promise<void> {
+    const refreshToken = await this.options.tokenStore.getRefreshToken();
+    if (refreshToken) {
+      try {
+        await this.request("POST", "/auth/logout", { refreshToken }, z.unknown());
+      } catch {
+        // best-effort — the token gets cleared locally regardless
+      }
+    }
+    await this.options.tokenStore.clear();
+  }
+
+  async logoutAll(): Promise<void> {
+    await this.request("POST", "/auth/logout-all", undefined, z.unknown());
     await this.options.tokenStore.clear();
   }
 
@@ -77,11 +99,28 @@ export class ApiClient {
     await this.request("DELETE", `/workspaces/${workspaceId}/notes/${noteId}`, undefined, z.unknown());
   }
 
+  listTasks(workspaceId: string): Promise<Task[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/tasks`, undefined, z.array(taskSchema));
+  }
+
+  createTask(workspaceId: string, input: CreateTaskInput): Promise<Task> {
+    return this.request("POST", `/workspaces/${workspaceId}/tasks`, input, taskSchema);
+  }
+
+  updateTask(workspaceId: string, taskId: string, input: UpdateTaskInput): Promise<Task> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/tasks/${taskId}`, input, taskSchema);
+  }
+
+  async deleteTask(workspaceId: string, taskId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/tasks/${taskId}`, undefined, z.unknown());
+  }
+
   private async request<T>(
     method: string,
     path: string,
     body: unknown,
-    schema: z.ZodType<T>
+    schema: z.ZodType<T>,
+    isRetry = false
   ): Promise<T> {
     const token = await this.options.tokenStore.get();
     const response = await fetch(`${this.options.baseUrl}${path}`, {
@@ -94,6 +133,17 @@ export class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && !isRetry && !AUTH_ENDPOINTS_WITHOUT_RETRY.has(path)) {
+        try {
+          await this.refreshAccessToken();
+        } catch {
+          await this.options.tokenStore.clear();
+          const payload = await safeJson(response);
+          throw new ApiError(response.status, extractMessage(payload) ?? response.statusText, payload);
+        }
+        return this.request(method, path, body, schema, true);
+      }
+
       const payload = await safeJson(response);
       throw new ApiError(response.status, extractMessage(payload) ?? response.statusText, payload);
     }
@@ -104,6 +154,33 @@ export class ApiClient {
 
     const json = await safeJson(response);
     return schema.parse(json);
+  }
+
+  /** Rotates the refresh token and stores the new pair. Concurrent callers share one in-flight request. */
+  private async refreshAccessToken(): Promise<string> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+    this.refreshPromise = (async () => {
+      const refreshToken = await this.options.tokenStore.getRefreshToken();
+      if (!refreshToken) {
+        throw new ApiError(401, "Нет refresh-токена");
+      }
+      const data = await this.request<AuthResponse>(
+        "POST",
+        "/auth/refresh",
+        { refreshToken },
+        authResponseSchema
+      );
+      await this.options.tokenStore.setPair(data.accessToken, data.refreshToken);
+      return data.accessToken;
+    })();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
   }
 }
 

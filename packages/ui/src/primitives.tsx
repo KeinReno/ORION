@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function Button({
   className,
@@ -44,6 +44,6 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): Re
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }): React.ReactElement {
-  return <div className={clsx("rounded-2xl border border-white/10 bg-white/[0.03] p-4", className)}>{children}</div>;
+export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>): React.ReactElement {
+  return <div className={clsx("rounded-2xl border border-white/10 bg-white/[0.03] p-4", className)} {...props} />;
 }

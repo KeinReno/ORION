@@ -1,9 +1,11 @@
 node_modules
 dist
 .next
+.next-desktop
 out
 .turbo
 *.log
+*.tsbuildinfo
 .env
 .env.local
 pnpm-lock.yaml

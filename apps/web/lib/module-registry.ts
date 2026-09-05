@@ -1,5 +1,5 @@
 import type { SidebarLinkItem } from "@orion/ui";
-import { LayoutDashboard, StickyNote } from "lucide-react";
+import { CalendarDays, LayoutDashboard, ListTodo, StickyNote } from "lucide-react";
 
 /**
  * Every ORION module contributes one entry here. The sidebar itself
@@ -7,5 +7,7 @@ import { LayoutDashboard, StickyNote } from "lucide-react";
  */
 export const moduleRegistry: SidebarLinkItem[] = [
   { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
+  { href: "/tasks", label: "Задачи", icon: ListTodo },
+  { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/notes", label: "Заметки", icon: StickyNote }
 ];

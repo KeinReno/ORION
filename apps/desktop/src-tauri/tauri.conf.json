@@ -10,6 +10,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "ORION",
         "width": 1280,
         "height": 800,

@@ -1,11 +1,13 @@
 "use client";
 
-import { useLogout, useSession } from "@orion/core-react";
+import { useLogout, useSession, useTasks } from "@orion/core-react";
 import { Sidebar } from "@orion/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { moduleRegistry } from "../../lib/module-registry";
+import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 
 function NextLink({ href, className, children }: { href: string; className?: string; children: ReactNode }): React.ReactElement {
   return (
@@ -20,6 +22,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const pathname = usePathname();
   const { user, isLoading } = useSession();
   const logout = useLogout();
+  const { workspace } = useActiveWorkspace();
+  const { data: tasks } = useTasks(workspace?.id);
+  useDesktopDueReminders(tasks);
 
   useEffect(() => {
     if (!isLoading && !user) {
