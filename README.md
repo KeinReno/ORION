@@ -4,13 +4,14 @@
 TypeScript-core, переиспользуемый между веб- и десктоп-клиентом. v0 — рабочий
 скелет (auth → workspace → один демо-модуль "Заметки"), не финальный продукт.
 
-Полный контекст решений и почему они такие — `C:\Users\Reno\.claude\plans\structured-hatching-cherny.md`.
+Полный контекст решений и почему они такие — [`docs/PLAN.md`](docs/PLAN.md).
+Ориентация для ИИ-агентов — [`CLAUDE.md`](CLAUDE.md).
 
 ## Монорепозиторий
 
 ```
 apps/
-  api/        — NestJS: auth, workspaces, notes
+  api/        — NestJS: auth, workspaces, notes, tasks, notifications
   web/        — Next.js: сайдбар-оболочка + страницы
   desktop/    — Tauri: тонкая обёртка над web-билдом
 packages/
@@ -53,7 +54,7 @@ pnpm --filter @orion/desktop tauri:build    # .exe / NSIS-инсталлятор
 - Tauri не содержит бизнес-логики — только окно.
 - Мобильного клиента нет.
 
-Причины — в плане (`structured-hatching-cherny.md`), основаны на разборе
+Причины — в плане ([`docs/PLAN.md`](docs/PLAN.md)), основаны на разборе
 реальных багов в других проектах (в частности, сломанного sync-движка у
 NiVar FinControl).
 
