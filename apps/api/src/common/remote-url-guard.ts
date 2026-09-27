@@ -1,5 +1,9 @@
 import { BadRequestException } from "@nestjs/common";
+import * as dnsCallback from "node:dns";
 import * as dns from "node:dns/promises";
+import * as http from "node:http";
+import * as https from "node:https";
+import type { LookupAddress, LookupOptions } from "node:dns";
 
 /**
  * S05 — shared SSRF guard for every user-supplied outbound URL (calendar ICS
@@ -25,6 +29,13 @@ import * as dns from "node:dns/promises";
  * S05 journal) — callers additionally re-run this check as close to the
  * actual network call as practical (see `sync.service.ts` `remoteFor`) to
  * shrink that window rather than checking only once at config-save time.
+ *
+ * 2026-09-27: that residual race is now closed for both outbound paths.
+ * `publicOnlyLookup` below is handed to the socket itself (ICS feeds via
+ * `fetchPublicText`, WebDAV remotes via `publicOnlyAgents`), so the address
+ * that gets connected to is the address that gets checked — a DNS server
+ * that answers "public" to the pre-check and "127.0.0.1" to the connect
+ * no longer wins. The pre-check stays: it gives a clean 400 at save time.
  */
 export async function assertPublicRemoteUrl(raw: string, label = "Адрес"): Promise<URL> {
   let url: URL;
@@ -69,7 +80,11 @@ export async function assertResolvedHostIsPublic(hostname: string, label = "Ад
   }
 }
 
-export function isPrivateOrLoopbackHost(host: string): boolean {
+export function isPrivateOrLoopbackHost(rawHost: string): boolean {
+  // IPv4-mapped IPv6 (`::ffff:127.0.0.1`) is the IPv4 address in disguise —
+  // a resolver may hand it back for an AAAA query.
+  const host = rawHost.replace(/^::ffff:/i, "");
+  if (/^0\./.test(host)) return true;
   if (host === "localhost" || host === "::1" || host === "0.0.0.0" || host.endsWith(".local")) return true;
   if (/^127\./.test(host)) return true;
   if (/^10\./.test(host)) return true;
@@ -86,14 +101,112 @@ export function isPrivateOrLoopbackHost(host: string): boolean {
 /** Max bytes read from an outbound remote-feed response body (ICS/WebDAV probe). */
 export const MAX_REMOTE_RESPONSE_BYTES = 5 * 1024 * 1024;
 
+function allowPrivate(): boolean {
+  return process.env.ALLOW_PRIVATE_CALENDAR_URLS === "true";
+}
+
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number
+) => void;
+
 /**
- * `fetch()` follows redirects by default, which defeats the hostname check
- * above (a permitted public URL can 302 to an internal address). Callers use
- * `redirect: "manual"` and this helper to turn any redirect into a rejection
- * instead of a silent follow.
+ * `dns.lookup`-compatible resolver for sockets: resolves, rejects the
+ * connection if ANY resolved address is loopback/private/link-local (unless
+ * `ALLOW_PRIVATE_CALENDAR_URLS=true`), and only then hands the addresses to
+ * `net.connect`. Because it runs inside the connect, there is no gap between
+ * "checked" and "connected" for a rebinding DNS server to exploit.
  */
-export function rejectRedirect(response: Response, label = "Адрес"): void {
-  if (response.status >= 300 && response.status < 400) {
-    throw new Error(`${label}: редиректы не поддерживаются из соображений безопасности`);
-  }
+export function publicOnlyLookup(hostname: string, options: LookupOptions, callback: LookupCallback): void {
+  dnsCallback.lookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) {
+      callback(error, "");
+      return;
+    }
+    const list = addresses as LookupAddress[];
+    if (!allowPrivate() && list.some((entry) => isPrivateOrLoopbackHost(entry.address.toLowerCase()))) {
+      const rejected: NodeJS.ErrnoException = new Error(
+        "Адрес резолвится в локальную или служебную сеть — соединение отклонено (DNS rebinding)"
+      );
+      rejected.code = "EPRIVATEADDR";
+      callback(rejected, "");
+      return;
+    }
+    if (list.length === 0) {
+      const empty: NodeJS.ErrnoException = new Error(`DNS: нет адресов для ${hostname}`);
+      empty.code = "ENOTFOUND";
+      callback(empty, "");
+      return;
+    }
+    if (options.all) callback(null, list);
+    else callback(null, list[0].address, list[0].family);
+  });
+}
+
+/** HTTP(S) agents whose sockets resolve through `publicOnlyLookup` — for clients that take an agent (WebDAV). */
+export function publicOnlyAgents(): { httpAgent: http.Agent; httpsAgent: https.Agent } {
+  return {
+    httpAgent: new http.Agent({ keepAlive: true, lookup: publicOnlyLookup }),
+    httpsAgent: new https.Agent({ keepAlive: true, lookup: publicOnlyLookup })
+  };
+}
+
+/**
+ * GET a user-supplied URL as text with every outbound guard in one place:
+ * connect-time DNS pinning (`publicOnlyLookup`), no redirects (3xx is an
+ * error, not a follow), a timeout, and a hard byte cap enforced while
+ * streaming — not after buffering the whole body. Replaces `fetch()` for ICS
+ * feeds: `fetch` resolves DNS on its own and can't take a lookup hook
+ * without the `undici` package as a direct dependency.
+ */
+export function fetchPublicText(
+  raw: string,
+  options: { headers?: Record<string, string>; timeoutMs?: number; maxBytes?: number; label?: string } = {}
+): Promise<string> {
+  const label = options.label ?? "Адрес";
+  const maxBytes = options.maxBytes ?? MAX_REMOTE_RESPONSE_BYTES;
+  const url = new URL(raw);
+  const client = url.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      url,
+      { method: "GET", headers: options.headers, lookup: publicOnlyLookup, timeout: options.timeoutMs ?? 20_000 },
+      (response) => {
+        const status = response.statusCode ?? 0;
+        if (status >= 300 && status < 400) {
+          response.resume();
+          reject(new Error(`${label}: редиректы не поддерживаются из соображений безопасности`));
+          return;
+        }
+        if (status < 200 || status >= 300) {
+          response.resume();
+          reject(new Error(`HTTP ${status}`));
+          return;
+        }
+        const declared = Number(response.headers["content-length"] ?? "0");
+        if (declared > maxBytes) {
+          response.destroy();
+          reject(new Error(`${label}: ответ превышает допустимый размер`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let received = 0;
+        response.on("data", (chunk: Buffer) => {
+          received += chunk.length;
+          if (received > maxBytes) {
+            response.destroy();
+            reject(new Error(`${label}: ответ превышает допустимый размер`));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        response.on("error", reject);
+      }
+    );
+    request.on("timeout", () => request.destroy(new Error(`${label}: превышено время ожидания`)));
+    request.on("error", reject);
+    request.end();
+  });
 }

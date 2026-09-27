@@ -432,8 +432,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   обязателен пароль с `passwordScore >= 2`. `POST /auth/login` защищён
   `LoginRateLimitGuard` (10 попыток/5 мин, in-memory). Исходящие удалённые
   запросы (WebDAV remote, calendar ICS) идут через
-  `apps/api/src/common/remote-url-guard.ts` (`assertPublicRemoteUrl`,
-  `rejectRedirect`, лимит тела 5 МиБ) — SSRF-заслон. Веб-клиент (`login`/
+  `apps/api/src/common/remote-url-guard.ts` — SSRF-заслон:
+  `assertPublicRemoteUrl` (400 при сохранении), а сам запрос — только через
+  `fetchPublicText` (ICS) или `publicOnlyAgents()` (WebDAV): DNS проверяется
+  в момент соединения (`publicOnlyLookup`), редиректы не следуются, тело
+  режется на 5 МиБ при чтении. Голый `fetch()` для пользовательского URL не
+  использовать — он резолвит DNS сам, мимо проверки. Веб-клиент (`login`/
   `register`) пока не различает режимы визуально — сервер просто отклоняет
   запрещённые в `server` пути 403/400; это известный UX-разрыв, не баг с точки
   зрения безопасности.

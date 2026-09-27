@@ -5,7 +5,7 @@ import type { CalendarConnection, CalendarConnectionInput } from "@orion/shared-
 import { PrismaService } from "../common/prisma.service";
 import { openSecret, sealSecret, syncSecretAvailable } from "../sync/sync-crypto";
 import { WorkspacesService } from "../workspaces/workspaces.service";
-import { assertPublicRemoteUrl, MAX_REMOTE_RESPONSE_BYTES, rejectRedirect } from "../common/remote-url-guard";
+import { assertPublicRemoteUrl, fetchPublicText, MAX_REMOTE_RESPONSE_BYTES } from "../common/remote-url-guard";
 
 /** Everything a sync pass needs, without caring whether it runs for a user or for the system. */
 type SyncableConnection = {
@@ -143,25 +143,16 @@ export class CalendarConnectionsService {
     }
 
     try {
-      // redirect: "manual" — a redirect is treated as a rejection, not
-      // followed, because validateRemoteUrl() only checked the *original*
-      // hostname; blindly following a 3xx would let a permitted public URL
-      // hand back an internal address after the check already passed.
-      const response = await fetch(connection.url, {
+      // fetchPublicText: no redirect following (a 3xx is a rejection — the
+      // pre-check only vetted the original hostname), a streamed 5 MiB cap,
+      // and DNS pinned at connect time so a rebinding resolver can't swap in
+      // an internal address after validateRemoteUrl() passed.
+      const text = await fetchPublicText(connection.url, {
         headers,
-        redirect: "manual",
-        signal: AbortSignal.timeout(20_000)
+        timeoutMs: 20_000,
+        maxBytes: MAX_REMOTE_RESPONSE_BYTES,
+        label: "Календарь"
       });
-      rejectRedirect(response, "Календарь");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const contentLength = Number(response.headers.get("content-length") ?? "0");
-      if (contentLength > MAX_REMOTE_RESPONSE_BYTES) {
-        throw new Error("Ответ календаря превышает допустимый размер");
-      }
-      const text = await response.text();
-      if (Buffer.byteLength(text, "utf8") > MAX_REMOTE_RESPONSE_BYTES) {
-        throw new Error("Ответ календаря превышает допустимый размер");
-      }
       const parsed = parseICalendar(text);
       await scope(async (tx) => {
         const seen: string[] = [];
