@@ -569,9 +569,15 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   `tauri-plugin-single-instance` (для него нужен Rust/Cargo, недоступный в
   агентских сессиях) — минимально достаточный Node-уровневый лок, не умеет
   фокусировать уже открытое окно. Production CSP в
-  `apps/desktop/src-tauri/tauri.conf.json` больше не `null` — выведена чтением
-  кода (`script-src 'self'`, `style-src 'self' 'unsafe-inline'` для
-  Tailwind/CodeMirror, `worker-src 'self' blob:` для pdf.js, `connect-src
-  'self' http://127.0.0.1:* http://localhost:*`). Ни CSP-совместимость, ни
-  сам `tauri dev`/`tauri:build` не проверялись живьём ни в одной сессии
-  бэклога — нет Rust/Cargo/Tauri CLI в среде агента.
+  `apps/desktop/src-tauri/tauri.conf.json` больше не `null`:
+  `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly modern-xlsx — без него
+  сохранение книги с диаграммой молча зависало), `style-src 'self'
+  'unsafe-inline'` для Tailwind/CodeMirror, `worker-src 'self' blob:` и
+  `connect-src 'self' blob: http://127.0.0.1:* http://localhost:*` (pdf.js
+  читает файл через `blob:`-URL — без него ни один PDF не открывался).
+  CSP-совместимость проверена живьём (2026-09-27): статический экспорт
+  `.next-desktop` раздавался с этим заголовком плюс sha256 inline-скриптов,
+  как их добавляет Tauri, и прогонялся в Chromium — все панели, PDF, docx,
+  xlsx с диаграммой, без нарушений. Сам `tauri dev`/`tauri:build` (WebView2,
+  нативное окно, single-instance фокус) по-прежнему не запускался — нет
+  Rust/Cargo/Tauri CLI в среде агента.
