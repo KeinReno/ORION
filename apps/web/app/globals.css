@@ -326,3 +326,26 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Documents file list: the columns follow the width of the list itself, not
+ * the viewport. The list lives in a docked panel's left pane (~330px even on
+ * a 1440px screen), where the old viewport-based `sm:` grid of
+ * 1.75rem/1fr/5rem/7rem/2rem left the name column ~20px wide — folder names
+ * rendered as nothing. Native `@container` (Chromium/WebView2) instead of a
+ * Tailwind plugin: one rule, no new dependency.
+ */
+.doc-list {
+  container-type: inline-size;
+}
+.doc-row {
+  grid-template-columns: 1.75rem minmax(0, 1fr) 4.5rem 6.5rem 2rem;
+}
+@container (max-width: 30rem) {
+  .doc-row {
+    grid-template-columns: 1.75rem minmax(0, 1fr) 4.5rem 2rem;
+  }
+  .doc-list .doc-col-modified {
+    display: none;
+  }
+}

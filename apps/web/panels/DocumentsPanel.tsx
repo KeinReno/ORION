@@ -693,12 +693,12 @@ export function DocumentsPanel(): React.ReactElement {
           })}
         </div>
       ) : (
-        <div className="rounded-xl border border-border">
-          <div className="grid grid-cols-[1.75rem_1fr_5rem_7rem_2rem] items-center gap-2 border-b border-border px-2.5 py-1.5 text-2xs uppercase tracking-wide text-subtle-foreground">
+        <div className="doc-list rounded-xl border border-border">
+          <div className="doc-row grid items-center gap-2 border-b border-border px-2.5 py-1.5 text-2xs uppercase tracking-wide text-subtle-foreground">
             <span />
             <span>Имя</span>
             <span className="text-right">Размер</span>
-            <span className="hidden text-right sm:block">Изменён</span>
+            <span className="doc-col-modified text-right">Изменён</span>
             <span />
           </div>
           <ul className="divide-y divide-border">
@@ -715,7 +715,7 @@ export function DocumentsPanel(): React.ReactElement {
                     onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
                     onClick={() => (isFolder ? !trash && openFolder(doc.id) : setSelectedFileId(doc.id))}
                     className={cx(
-                      "group grid grid-cols-[1.75rem_1fr_5rem_7rem_2rem] items-center gap-2 px-2.5 py-2 transition-colors",
+                      "doc-row group grid items-center gap-2 px-2.5 py-2 transition-colors",
                       trash ? "" : "cursor-pointer",
                       active ? "bg-accent/[0.07]" : "hover:bg-card-hover"
                     )}
@@ -739,7 +739,7 @@ export function DocumentsPanel(): React.ReactElement {
                     <span className="shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
                       {isFolder ? "" : formatBytes(doc.sizeBytes)}
                     </span>
-                    <span className="hidden shrink-0 text-right text-2xs tabular-nums text-subtle-foreground sm:block">
+                    <span className="doc-col-modified shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
                       {trash && doc.deletedAt ? `удалено ${relativeTime(doc.deletedAt)}` : relativeTime(doc.updatedAt)}
                     </span>
                     <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">

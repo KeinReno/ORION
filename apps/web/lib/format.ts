@@ -51,6 +51,23 @@ export function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
+/**
+ * Where an event starts on the viewer's own calendar. An all-day event's
+ * `startAt` is a date, not an instant (UTC midnight — see shared-types
+ * event.ts), so it is re-anchored on local midnight of that date; reading
+ * it as an instant shows "03:00" in Moscow and the previous day west of UTC.
+ */
+export function eventLocalStart(event: { startAt: string; allDay: boolean }): Date {
+  const d = new Date(event.startAt);
+  return event.allDay ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) : d;
+}
+
+/** "3 окт." for an all-day event, "3 окт., 14:30" for a timed one. */
+export function eventShortStart(event: { startAt: string; allDay: boolean }): string {
+  const start = eventLocalStart(event).toISOString();
+  return event.allDay ? shortDate(start) : shortDateTime(start);
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

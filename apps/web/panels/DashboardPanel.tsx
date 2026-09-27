@@ -61,7 +61,7 @@ import {
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { OnboardingCard } from "../components/onboarding-card";
 import { describeError } from "../lib/error-message";
-import { formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
+import { eventLocalStart, eventShortStart, formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
 import { focusNote, focusTask, openPanel } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useDayKey, useLocalNow } from "../lib/use-day-boundary";
@@ -156,11 +156,18 @@ export function DashboardPanel(): React.ReactElement {
     (week.completed.length > 0 || week.remaining.length > 0 || week.overdueBeforeWeek.length > 0);
 
   const todayEvents = useMemo(
-    () => (events ?? []).filter((event) => event.startAt < dayRange.to),
-    [events, dayRange.to]
+    () =>
+      (events ?? []).filter(
+        (event) =>
+          eventLocalStart(event).toISOString() < dayRange.to &&
+          // The API window is by instant; yesterday's all-day event (UTC
+          // 00:00–24:00) still overlaps the start of a Moscow day by 3 hours.
+          (!event.allDay || eventLocalStart({ startAt: event.endAt, allDay: true }).toISOString() > dayRange.from)
+      ),
+    [events, dayRange.from, dayRange.to]
   );
   const nearbyEvents = useMemo(
-    () => (events ?? []).filter((event) => event.startAt >= dayRange.to),
+    () => (events ?? []).filter((event) => eventLocalStart(event).toISOString() >= dayRange.to),
     [events, dayRange.to]
   );
 
@@ -513,7 +520,7 @@ export function DashboardPanel(): React.ReactElement {
                               {event.title || "Без названия"}
                             </span>
                             <span className="shrink-0 text-micro text-subtle-foreground">
-                              {shortDateTime(event.startAt)}
+                              {eventShortStart(event)}
                             </span>
                           </button>
                         </li>

@@ -141,12 +141,24 @@ export function IconButton({
   );
 }
 
+/**
+ * `w-full` unless the caller sets its own width. Both classes on one element
+ * don't "override" in Tailwind — whichever the stylesheet emits later wins,
+ * and `w-full` came after `w-36`, so every `<Input className="w-36">` (the
+ * finance date filters, event-form reminder fields, xlsx editor inputs)
+ * silently stretched to the full row.
+ */
+function defaultWidth(className: string | undefined): string | false {
+  return !/(^|\s)(w-|min-w-full)/.test(className ?? "") && "w-full";
+}
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>): React.ReactElement {
   return (
     <input
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
+        defaultWidth(props.className),
+        "rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
         "placeholder:text-subtle-foreground outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
         props.className
       )}
@@ -159,7 +171,8 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): Re
     <textarea
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
+        defaultWidth(props.className),
+        "rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
         "placeholder:text-subtle-foreground outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
         props.className
       )}

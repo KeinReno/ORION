@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sumByCurrency } from "./format";
+import { eventLocalStart, eventShortStart, sumByCurrency } from "./format";
 
 /**
  * S16 (Finance): accounts are not all the same currency (Account.currency,
@@ -44,5 +44,22 @@ describe("sumByCurrency", () => {
 
   it("handles an empty list", () => {
     expect(sumByCurrency([] as { currency: string; balance: number }[], (a) => a.currency, (a) => a.balance)).toEqual([]);
+  });
+});
+
+describe("eventLocalStart", () => {
+  it("anchors an all-day date on local midnight of its UTC date", () => {
+    const d = eventLocalStart({ startAt: "2026-10-03T00:00:00.000Z", allDay: true });
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 9, 3, 0]);
+  });
+
+  it("leaves a timed event's instant alone", () => {
+    expect(eventLocalStart({ startAt: "2026-10-03T10:15:00.000Z", allDay: false }).toISOString()).toBe(
+      "2026-10-03T10:15:00.000Z"
+    );
+  });
+
+  it("prints an all-day start without a time of day", () => {
+    expect(eventShortStart({ startAt: "2026-10-03T00:00:00.000Z", allDay: true })).not.toMatch(/\d:\d\d/);
   });
 });
