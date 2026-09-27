@@ -757,7 +757,11 @@ function TaskRow({
 }): React.ReactElement {
   const done = task.status === "done";
   return (
-    <li className="flex items-center gap-2 rounded-lg px-1 py-row hover:bg-white/5">
+    // flex-wrap + a title with a real minimum width: on a phone (or a
+    // narrow docked panel) the meta group — project tag, due date, timer —
+    // drops under the title instead of squeezing the title to zero width
+    // and pushing «Запустить таймер» out of the card.
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg px-1 py-row hover:bg-white/5">
       <CheckToggle
         checked={done}
         onClick={() => onToggle(task)}
@@ -765,28 +769,34 @@ function TaskRow({
         label={done ? "Вернуть в работу" : `Отметить «${task.title}» выполненной`}
         tone="success"
       />
-      <button type="button" onClick={() => focusTask(task.id)} className="min-w-0 flex-1 truncate text-left text-body text-foreground">
+      <button
+        type="button"
+        onClick={() => focusTask(task.id)}
+        className="min-w-[8rem] flex-1 basis-32 truncate text-left text-body text-foreground"
+      >
         {task.title}
       </button>
-      {task.projectTag ? <Badge tone="neutral">{task.projectTag}</Badge> : null}
-      {withDate && task.dueAt ? (
-        <span className="shrink-0 text-micro text-subtle-foreground">{shortDateTime(task.dueAt)}</span>
-      ) : null}
-      {onStart ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onStart(task)}
-          aria-label={running ? "Открыть таймер" : `Запустить таймер для «${task.title}»`}
-          className={cx(
-            "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-label",
-            running ? "text-accent" : "text-subtle-foreground hover:text-foreground"
-          )}
-        >
-          <Timer className="h-3.5 w-3.5" />
-          {running ? null : <span>Запустить таймер</span>}
-        </button>
-      ) : null}
+      <span className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
+        {task.projectTag ? <Badge tone="neutral">{task.projectTag}</Badge> : null}
+        {withDate && task.dueAt ? (
+          <span className="shrink-0 text-micro text-subtle-foreground">{shortDateTime(task.dueAt)}</span>
+        ) : null}
+        {onStart ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onStart(task)}
+            aria-label={running ? "Открыть таймер" : `Запустить таймер для «${task.title}»`}
+            className={cx(
+              "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-label",
+              running ? "text-accent" : "text-subtle-foreground hover:text-foreground"
+            )}
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {running ? null : <span>Запустить таймер</span>}
+          </button>
+        ) : null}
+      </span>
     </li>
   );
 }

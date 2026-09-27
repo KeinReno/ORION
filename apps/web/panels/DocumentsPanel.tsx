@@ -874,7 +874,7 @@ export function DocumentsPanel(): React.ReactElement {
           )
         }
       >
-        <div className="relative flex-1 sm:max-w-xs">
+        <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" className="pl-8" />
         </div>

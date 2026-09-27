@@ -152,19 +152,24 @@ export function PanelHeader({
         className
       )}
     >
-      <div className="flex min-h-8 items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+      {/* flex-wrap: when title + actions don't fit (phone, narrow docked
+          panel) the actions move under the title instead of overflowing
+          the header's right edge. */}
+      <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-48 items-start gap-3">
           {Icon ? (
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-muted-foreground">
               <Icon className="h-4 w-4" />
             </span>
           ) : null}
           <div className="min-w-0">
-            <h1 className="truncate text-display text-foreground">{title}</h1>
+            {/* Two lines, then an ellipsis — a single-line truncate cut
+                «Добрый день, Мария Волкова» to «Добрый день, Мар» on a phone. */}
+            <h1 className="line-clamp-2 break-words text-display text-foreground">{title}</h1>
             {subtitle ? <p className="mt-0.5 truncate text-label text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
       {children ? <div className="mt-3 flex flex-wrap items-center gap-2">{children}</div> : null}
     </header>
