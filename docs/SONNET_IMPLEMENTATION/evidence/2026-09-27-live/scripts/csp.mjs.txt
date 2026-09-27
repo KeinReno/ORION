@@ -1,0 +1,20 @@
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await login(page);
+console.log("url", page.url());
+for (const label of ["Задачи", "Календарь", "Заметки", "Проекты", "Время", "Финансы", "Документы"]) {
+  try { await openPanel(page, label); } catch (e) { console.log("FAIL", label, e.message.split("\n")[0]); }
+}
+// open a PDF and a docx/xlsx in Documents to exercise pdf.js worker, mammoth, xlsx under CSP
+const pdfs = await page.evaluate(async () => {
+  const token = localStorage.getItem("orion.auth.accessToken");
+  const ws = await (await fetch("http://localhost:4000/workspaces/me", { headers: { Authorization: `Bearer ${token}` } })).json();
+  const docs = await (await fetch(`http://localhost:4000/workspaces/${ws[0].id}/documents?all=1`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  return (Array.isArray(docs) ? docs : docs.items ?? []).filter((d) => d.kind !== "folder").map((d) => ({ name: d.name, mime: d.mimeType, parentId: d.parentId }));
+});
+console.log("files:", pdfs.map((d) => d.name + " (" + d.mime + ")").join(", ").slice(0, 600));
+console.log("--- console errors (CSP violations show as 'Refused to ...'):");
+console.log(errors.filter((e) => /Refused|Content Security|CSP/i.test(e)).join("\n") || "none");
+console.log("--- other errors:", errors.filter((e) => !/Refused|Content Security|CSP/i.test(e)).slice(0, 10).join("\n") || "none");
+await page.screenshot({ path: "95-csp-docs.png" });
+await browser.close();

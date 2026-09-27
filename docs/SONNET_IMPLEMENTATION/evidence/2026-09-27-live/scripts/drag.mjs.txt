@@ -1,0 +1,12 @@
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open({ tz: process.env.TZNAME ?? "Europe/Moscow" });
+await login(page);
+await openPanel(page, "Календарь");
+const cellOf = (d) => page.locator("div.group").filter({ has: page.locator(`text=/^${d}$/`) }).first();
+await page.getByText("Весь день la", { exact: true }).dragTo(cellOf("22"), { targetPosition: { x: 60, y: 45 } });
+await page.waitForTimeout(2500);
+await page.getByText(/Созвон с Ириной/).first().dragTo(cellOf("23"), { targetPosition: { x: 60, y: 45 } });
+await page.waitForTimeout(2500);
+await page.screenshot({ path: "41-cal-drag.png" });
+console.log(errors.join("\n"));
+await browser.close();

@@ -58,7 +58,7 @@ ORION_PG_DATA=<scratchpad>/pg-test-data ORION_PG_PORT=5544 node scripts/postgres
 
 | ID | Статус | Блокировка / следующий шаг |
 |---|---|---|
-| S00 | PARTIAL | Baseline/lint/unit/integration переснят и PASS; populated screenshots SKIPPED — нет browser-tooling в сессии, см. журнал |
+| S00 | DONE | **2026-09-27**: populated screenshots сняты живым браузером (Playwright/Chromium, демо-пространство) — `evidence/2026-09-27-live/`, см. журнал «2026-09-27». — ранее: Baseline/lint/unit/integration переснят и PASS; populated screenshots SKIPPED — нет browser-tooling в сессии, см. журнал |
 | S01 | DONE | Actor-aware `ModulesService.accessibleSetTx` протянут в Search/Projects/Links/NoteAttachments |
 | S02 | DONE | Owner-only sync gates добавлены и покрыты regression-тестами |
 | S03 | DONE | Реестр моделей + manifest v2 + fail-closed legacy + data-only roundtrip, см. журнал |
@@ -69,14 +69,14 @@ ORION_PG_DATA=<scratchpad>/pg-test-data ORION_PG_PORT=5544 node scripts/postgres
 | S08 | DONE | Discriminated `SessionState`, unavailable≠unauthenticated wired into every consumer |
 | S09 | DONE | Pending-intent channel with workspace scoping + acknowledgement, see журнал |
 | S10 | DONE | Реактивный локальный день — day-boundary hook + wiring, см. журнал |
-| S11 | PARTIAL | Trailing-drain autosave + server CAS done and tested; conflict UI + navigation guard done but not visually verified (no browser tooling); tasks/projects CRDT explicitly out of scope, see журнал |
-| S12 | PARTIAL | Select control-height fix + testable focus-trap + error-pattern sweep (5 files, 6 block-level error renders → `EmptyState tone="danger"`) done; visual/zoom/contrast verification still not done (no browser tooling), see журнал |
-| S13 | PARTIAL | Independent block errors (Dashboard) + team-default «Только мои» + Доска/Список toggle (Tasks) сделаны; InboxPanel просмотрен без правок; screenshots/live U01-U03/U09 не прогонялись — см. журнал |
+| S11 | DONE | **2026-09-27**: конфликт автосохранения проверен вживую двумя окнами — баннер, локальный текст сохранён, «Сохранить мою версию поверх» пишет новую ревизию. CAS задач/проектов вне scope карточки. — ранее: Trailing-drain autosave + server CAS done and tested; conflict UI + navigation guard done but not visually verified (no browser tooling); tasks/projects CRDT explicitly out of scope, see журнал |
+| S12 | PARTIAL | **2026-09-27**: вживую проверены 390/320px, эквивалент зума 200%, фокус-ловушка и возврат фокуса модалки (найден и починен дефект возврата), имена иконок-кнопок; найдено и починено 5 дефектов раскладки. Контраст инструментом и compact/акценты — ещё нет. — ранее: Select control-height fix + testable focus-trap + error-pattern sweep (5 files, 6 block-level error renders → `EmptyState tone="danger"`) done; visual/zoom/contrast verification still not done (no browser tooling), see журнал |
+| S13 | DONE | **2026-09-27**: U01/U02 и скриншоты desktop+narrow сняты вживую; найден и починен дефект «задача из своего инбокса пропадает из «Только мои»». U03 — интеграционными тестами. — ранее: Independent block errors (Dashboard) + team-default «Только мои» + Доска/Список toggle (Tasks) сделаны; InboxPanel просмотрен без правок; screenshots/live U01-U03/U09 не прогонялись — см. журнал |
 | S14 | DONE | S14a done; S14b (notes layout/attachments) done — nested-modal фикс + верификация; S14c done — data-integrity инвариант (move/trash/restore compensation) + replaceContent/restoreVersion fault-injection (реальный баг найден и починен: `revertContentIfWritten`) + bulk-partial-failure сквозной тест (VERIFIED_EXISTING). WebDAV-driver и `purge` дополнительной защиты не получили (обоснование в записи S14c-добивка) — не блокирует DONE |
 | S15 | DONE | Time entries cursor pagination + exact server aggregate totals + cross-workspace cursor rejection; inbox honest truncation; finance/search/projects — добивающей сессией подтверждено реальным нагрузочным тестом (600/550 Transaction на изолированной БД), что Transaction listing уже offset-paginated с точными server-side aggregate итогами, а search/projects-activity лимиты намеренные и не используются для наивного суммирования — см. журнал |
 | S16 | DONE | Finance done earlier session; Inventory VERIFIED_EXISTING earlier session; Habits — real bug found and fixed (toggle concurrency); Calendar — recurrence/readonly VERIFIED_EXISTING (readonly enforced server-side, not just UI; added direct-endpoint PATCH/DELETE test), real all-day timezone bucketing bug found and fixed (`allDayAnchor`), drag&drop all-day reschedule edge case found but not fixed (see журнал); Lists — **2026-09-22**: Codex (18-REVIEW-FINAL-PASS) указал, что BLOCKED был основан на неверном прочтении done-критерия — "destructive copy" в исходной карточке означает интерфейсный текст для разрушительных действий (число + обратимость), а НЕ функцию дублирования списка. Проверено: архивация списка уже использует `FuseButton` (двойное подтверждение, "Ещё раз — архив"/"В архиве"); «Очистить отмеченные» уже обратимо через toast с действием «Отменить» (пересоздаёт снятые пункты) — не хватало только явного числа в самой кнопке, добавлено (`Очистить отмеченные (N) — можно отменить`). Придуманная функция дублирования списков не требовалась и не реализовывалась. Lists снят с BLOCKED → DONE, карточка S16 целиком DONE, см. журнал "R18-01/R18-02/R18-03" |
 | S17 | DONE | Task comments + audit log (CRUD/ownership/XSS-safe/pagination/notification producer/RLS/snapshot), см. журнал |
-| S18 | PARTIAL | Readiness polling (HTTP /system/health, not fixed sleep) + single-instance lock + production CSP done and unit-tested; native Tauri single-instance plugin, DNS-rebinding-style CSP hardening beyond loopback wildcard, and any visual/runtime verification not done — no Rust/Tauri build tooling in session, see журнал |
+| S18 | PARTIAL | **2026-09-27**: production CSP проверен в Chromium на экспорте `.next-desktop` — найдено и починено 2 блокера (PDF через `blob:`, WebAssembly xlsx). Нативный Tauri по-прежнему не запускался (нет Rust). — ранее: Readiness polling (HTTP /system/health, not fixed sleep) + single-instance lock + production CSP done and unit-tested; native Tauri single-instance plugin, DNS-rebinding-style CSP hardening beyond loopback wildcard, and any visual/runtime verification not done — no Rust/Tauri build tooling in session, see журнал |
 | S19 | DONE (release BLOCKED overall, see журнал) | Composite acceptance run on a truly clean DB PASS (migrate deploy 61 migrations clean, typecheck/lint/unit/test:integration/build/build:desktop-export all PASS); release verdict is BLOCKED for reasons unrelated to this session's checks — see журнал |
 | S20 | DONE | Документация выпуска — `docs/RELEASE_NOTES.md` актуализирован под честное текущее состояние всех карточек после серии добивочных сессий (финализация 2026-09-22) |
 | S21 | DONE | Recurring/inbox concurrency barriers — see журнал |
@@ -7461,3 +7461,53 @@ for the original R28-05 slow-save scenario ("PASS чистого helper-тест
 no dedicated automated test. Tauri/desktop build was not exercised (no
 Rust/Cargo/Tauri CLI in this environment, consistent with every prior
 session's stated limitation).
+
+
+## 2026-09-27 · Живая браузерная приёмка + фиксы (ветка `claude/modest-pasteur-tfpb9x`)
+
+Первая сессия с реальным браузером (Chromium + Playwright в облачной среде).
+Среда: Postgres 16 на 5433 (системный, от пользователя `postgres` — embedded
+`pnpm db:up` не стартует под root), `prisma migrate deploy`, `pnpm demo:seed`,
+`pnpm dev:api` + `pnpm dev:web`, для CSP — статический сервер над
+`.next-desktop`. Скрипты и скриншоты — `evidence/2026-09-27-live/`.
+
+**Baseline до правок:** typecheck/lint/unit (271) зелёные;
+`test:integration` 171/172 — **падал R30 «member grantee cannot retarget a
+grant through RLS»** (реальная дыра, не флак).
+
+**Исправлено (коммиты на ветке, каждый с тестом или живой проверкой):**
+1. RLS `cross_workspace_grants`: INSERT/DELETE — только owner, UPDATE — owner
+   или выдавший; триггер делает цель гранта неизменяемой
+   (миграция `20260927110000_cross_workspace_grants_write_roles`). R30 зелёный.
+2. Финансы по валютам: `MonthlyFinanceSummary`/`CategoryBreakdownEntry` +
+   `currency`, строка на валюту; `Budget.currency` (миграция
+   `20260927100000_budget_currency`, бэкфилл из одновалютных пространств,
+   уникальность `(categoryId, month, currency)`); `budgetSpentTx` по валюте;
+   переключатель валюты в отчётах. Тест `finance-currency.integration.test.ts`.
+3. All-day события: `normaliseRange` добавлял лишний день к исключающему
+   `endAt` (однодневное → двухдневное); PATCH только `startAt` писался сырым и
+   оставлял `endAt` позади; форма/полоса «весь день» якорили локальную
+   полночь (Москва → предыдущий день); месячная сетка теряла время и длину.
+   Тесты: `events-all-day.integration.test.ts` (RED на старом коде
+   подтверждён), `calendar-reschedule.test.ts` в 5 поясах (UTC−11…UTC+14).
+   Живьём: событие из Москвы, Лос-Анджелеса и Киритимати — ровно один день на
+   своём месте; drag в месячной сетке сохраняет время/длину.
+4. Дашборд: all-day показывается датой (`eventShortStart`), вчерашнее
+   all-day не попадает в «Сегодня» восточнее UTC.
+5. Документы: колонки списка через `@container` — имена папок в доке были
+   нулевой ширины.
+6. `Input`/`Textarea`: собственная ширина больше не проигрывает `w-full`.
+7. Телефон: заголовок панели в две строки, действия заголовка переносятся,
+   строки «Фокуса» переносят мету, поиск с минимальной шириной.
+8. Задачи в команде: самоназначение при разборе своего инбокса + автор по
+   умолчанию в «Новой задаче» (`inbox-assignee.integration.test.ts`);
+   сохранённые виды без критериев не подсвечиваются активными.
+9. Модалки/шторки: возврат фокуса открывателю (раньше — `<body>`), не
+   отбирают фокус у autoFocus-поля.
+10. Desktop CSP: `connect-src … blob:` (PDF не открывался) и
+    `script-src … 'wasm-unsafe-eval'` (сохранение xlsx с диаграммой висло).
+
+**Не сделано / не проверено:** нативный Tauri; контраст инструментом;
+U03/U04/U06/U07/U10/U11/U13/U14 кликами (есть интеграционные тесты);
+исправление уже сохранённых «раздутых» all-day событий — нужно решение
+владельца (см. `RELEASE_NOTES.md`, раздел 2026-09-27).

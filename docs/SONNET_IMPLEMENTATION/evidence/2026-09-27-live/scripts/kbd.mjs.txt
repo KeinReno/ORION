@@ -1,0 +1,28 @@
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open({ reducedMotion: "reduce" });
+await login(page);
+await openPanel(page, "Задачи");
+const btn = page.getByRole("button", { name: "Новая задача" });
+await btn.focus();
+await page.keyboard.press("Enter");
+await page.waitForTimeout(600);
+const inDialog = await page.evaluate(() => (document.activeElement?.closest("[role=dialog]") ? document.activeElement.tagName + (document.activeElement.getAttribute("placeholder") ?? "") : "outside"));
+// Tab cycles inside the dialog (focus trap)
+for (let i = 0; i < 40; i++) await page.keyboard.press("Tab");
+const stillInDialog = await page.evaluate(() => !!document.activeElement?.closest("[role=dialog]"));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+const back = await page.evaluate(() => document.activeElement?.tagName + ":" + (document.activeElement?.textContent ?? "").trim().slice(0, 40));
+  const typedTarget = null;
+console.log({ focusMovedIntoDialog: inDialog, trappedAfter40Tabs: stillInDialog, focusAfterEscape: back });
+// icon buttons without accessible names
+const unnamed = await page.evaluate(() => [...document.querySelectorAll("button")].filter((b) => !b.textContent.trim() && !b.getAttribute("aria-label") && !b.getAttribute("title") && b.offsetParent).map((b) => b.outerHTML.slice(0, 160)));
+console.log("icon buttons without a name:", unnamed.length); console.log(unnamed.slice(0, 8).join("\n"));
+// 200% zoom equivalent: 720x450 CSS px
+await page.setViewportSize({ width: 720, height: 450 });
+await page.waitForTimeout(1000);
+const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+console.log("200% zoom overflow:", o);
+await page.screenshot({ path: "90-zoom200-tasks.png" });
+console.log(errors.join("\n"));
+await browser.close();

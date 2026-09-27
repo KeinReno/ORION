@@ -1,0 +1,27 @@
+import { readFileSync } from "node:fs";
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await login(page);
+const pdf = readFileSync("csp-test.pdf").toString("base64");
+const up = "skip"; const _u = 0 && await page.evaluate(async (b64) => {
+  const token = localStorage.getItem("orion.auth.accessToken");
+  const ws = await (await fetch("http://localhost:4000/workspaces/me", { headers: { Authorization: `Bearer ${token}` } })).json();
+  const fd = new FormData();
+  fd.append("files", new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "application/pdf" }), "csp-test.pdf");
+  const r = await fetch(`http://localhost:4000/workspaces/${ws[0].id}/documents/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+  return r.status + " " + (await r.text()).slice(0, 200);
+}, pdf);
+console.log("upload:", up);
+await openPanel(page, "Документы");
+await page.getByText("csp-test.pdf").first().click();
+await page.waitForTimeout(5000);
+const canvas = await page.locator("canvas").count();
+console.log("pdf canvases rendered:", canvas);
+await page.screenshot({ path: "96-csp-pdf.png" });
+// native xlsx: «Таблица» creates a new workbook and opens the editor
+await page.getByText("Реестр_оплат_Q3.csv").first().click().catch(() => {});
+await page.waitForTimeout(6000);
+await page.screenshot({ path: "97-csp-xlsx.png" });
+console.log("--- CSP violations:", errors.filter((e) => /Refused|Content Security/i.test(e)).join("\n") || "none");
+console.log("--- other errors:", errors.filter((e) => !/Refused|Content Security/i.test(e)).slice(0, 10).join("\n") || "none");
+await browser.close();

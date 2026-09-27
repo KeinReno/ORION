@@ -1,0 +1,25 @@
+import { open, login, openPanel } from "./lib.mjs";
+const tz = process.env.TZNAME ?? "Europe/Moscow";
+const tag = process.env.TAG ?? "msk";
+const { browser, page, errors } = await open({ tz });
+await login(page);
+await openPanel(page, "Календарь");
+// click day 15 cell in month grid (empty area of the cell)
+const cell = page.locator("div.group").filter({ has: page.locator(`text=/^${process.env.DAY ?? "15"}$/`) }).first();
+await cell.click({ position: { x: 60, y: 40 } });
+await page.getByPlaceholder("Название").fill(`Весь день ${tag}`);
+await page.getByLabel("Весь день").check();
+await page.waitForTimeout(300);
+const dates = await page.locator('input[type="date"]').evaluateAll((els) => els.map((e) => e.value));
+console.log("form dates", dates);
+await page.getByRole("button", { name: "Создать" }).click();
+await page.waitForTimeout(2500);
+await page.screenshot({ path: `40-cal-${tag}.png` });
+// read back via API with the page's token
+const res = await page.evaluate(async () => {
+  const ws = Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)]);
+  return ws.filter(([k]) => /token|session|workspace/i.test(k)).map(([k, v]) => k + "=" + (v ?? "").slice(0, 60));
+});
+console.log(res.join("\n"));
+console.log(errors.join("\n"));
+await browser.close();

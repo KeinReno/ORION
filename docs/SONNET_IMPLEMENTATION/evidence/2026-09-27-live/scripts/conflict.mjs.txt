@@ -1,0 +1,25 @@
+import { open, login, openPanel } from "./lib.mjs";
+const A = await open(); const B = await open();
+await login(A.page); await login(B.page);
+for (const s of [A, B]) { await openPanel(s.page, "Заметки"); await s.page.getByText("Ежедневная", { exact: true }).first().click(); await s.page.waitForTimeout(2500); }
+// A types and waits for autosave
+await A.page.locator(".cm-content").first().click();
+await A.page.keyboard.press("Control+End");
+await A.page.keyboard.type("\nПравка A");
+await A.page.waitForTimeout(4000);
+await A.page.screenshot({ path: "60-A-saved.png" });
+// B (still on revision N) types
+await B.page.locator(".cm-content").first().click();
+await B.page.keyboard.press("Control+End");
+await B.page.keyboard.type("\nПравка B");
+await B.page.waitForTimeout(5000);
+await B.page.screenshot({ path: "61-B-conflict.png" });
+const banner = await B.page.getByText("Сохранить мою версию поверх").count();
+console.log("conflict banner visible:", banner > 0);
+if (banner) {
+  await B.page.getByText("Сохранить мою версию поверх").click();
+  await B.page.waitForTimeout(4000);
+  await B.page.screenshot({ path: "62-B-overwrite.png" });
+}
+console.log("A errors", A.errors.join("\n")); console.log("B errors", B.errors.join("\n"));
+await A.browser.close(); await B.browser.close();

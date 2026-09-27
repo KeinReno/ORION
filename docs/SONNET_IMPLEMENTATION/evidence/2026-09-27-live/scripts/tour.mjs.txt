@@ -1,0 +1,11 @@
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await login(page);
+console.log("url", page.url());
+await page.screenshot({ path: "10-dashboard.png" });
+for (const [label, file] of [["Задачи","11-tasks"],["Календарь","12-calendar"],["Заметки","13-notes"],["Проекты","14-projects"],["Время","15-time"],["Привычки","16-habits"],["Списки","17-lists"],["Финансы","18-finance"],["Склад","19-inventory"],["Документы","20-documents"],["Инбокс","21-inbox"],["Обзор","22-overview"],["Доступно мне","23-shared"],["Резервные копии","24-sync"]]) {
+  try { await openPanel(page, label); await page.screenshot({ path: file + ".png" }); console.log("ok", label); }
+  catch (e) { console.log("FAIL", label, e.message.split("\n")[0]); }
+}
+console.log(errors.slice(0, 30).join("\n"));
+await browser.close();

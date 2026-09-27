@@ -1,0 +1,22 @@
+import { open, login, openPanel } from "./lib.mjs";
+const { browser, page, errors } = await open();
+await login(page);
+const title = `U01b ${Date.now() % 100000}`;
+await page.getByPlaceholder(/В инбокс/).fill(title);
+await page.keyboard.press("Enter");
+await page.waitForTimeout(1500);
+await openPanel(page, "Инбокс");
+await page.getByText(title).first().waitFor({ timeout: 10000 });
+// «На сегодня»: task due today, stay in queue
+await page.getByRole("button", { name: /На сегодня/ }).first().click();
+await page.waitForTimeout(2000);
+await openPanel(page, "Задачи");
+const visible = await page.locator("main, [class*=dv-]").getByText(title, { exact: true }).count();
+console.log("task visible on board (Только мои):", visible);
+await page.getByText(title, { exact: true }).first().click();
+await page.waitForTimeout(1500);
+await page.screenshot({ path: "75-u01-task-sheet.png" });
+const timerBtn = page.getByRole("button", { name: /таймер/i }).first();
+console.log("timer control:", await timerBtn.count(), await timerBtn.getAttribute("aria-label").catch(() => null), await timerBtn.textContent().catch(() => null));
+console.log(errors.join("\n"));
+await browser.close();

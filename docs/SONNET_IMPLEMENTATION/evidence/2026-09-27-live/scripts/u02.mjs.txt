@@ -1,0 +1,37 @@
+import { open, login, openPanel } from "./lib.mjs";
+const title = `U02 для Анны ${Date.now() % 100000}`;
+const A = await open();
+await login(A.page, "Мария Волкова");
+await openPanel(A.page, "Задачи");
+await A.page.getByRole("button", { name: "Новая задача" }).click();
+await A.page.waitForTimeout(800);
+const dialog = A.page.getByRole("dialog");
+await dialog.locator("input").first().fill(title);
+const assignee = dialog.locator("label").filter({ hasText: "Исполнитель" }).locator("select");
+const defaultAssignee = await assignee.evaluate((s) => s.options[s.selectedIndex].text);
+console.log("default assignee in «Только мои»:", defaultAssignee);
+await assignee.selectOption({ label: "Анна Белова" });
+await dialog.getByRole("button", { name: "Создать" }).click();
+await A.page.waitForTimeout(2000);
+// «Только мои» hides it for Мария — switch to all and open the card
+await A.page.getByRole("button", { name: "Только мои" }).click();
+await A.page.waitForTimeout(1500);
+await A.page.getByText(title, { exact: true }).first().click();
+await A.page.waitForTimeout(1500);
+await A.page.getByPlaceholder("Написать комментарий…").fill("Анна, глянь до вечера, пожалуйста");
+await A.page.getByRole("button", { name: "Отправить" }).click();
+await A.page.waitForTimeout(2000);
+await A.page.screenshot({ path: "80-u02-owner.png" });
+await A.browser.close();
+
+const C = await open();
+await login(C.page, "Анна Белова");
+await openPanel(C.page, "Задачи");
+console.log("Анна sees task in «Только мои»:", await C.page.getByText(title, { exact: true }).count());
+await C.page.screenshot({ path: "81-u02-member-tasks.png" });
+await C.page.getByRole("button", { name: /Уведомлени/ }).first().click().catch(() => {});
+await C.page.waitForTimeout(1500);
+await C.page.screenshot({ path: "82-u02-member-bell.png" });
+console.log("notification mentions comment:", await C.page.getByText(/коммент/i).count());
+console.log(C.errors.join("\n"));
+await C.browser.close();

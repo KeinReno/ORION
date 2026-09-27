@@ -581,3 +581,39 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   xlsx с диаграммой, без нарушений. Сам `tauri dev`/`tauri:build` (WebView2,
   нативное окно, single-instance фокус) по-прежнему не запускался — нет
   Rust/Cargo/Tauri CLI в среде агента.
+
+### Живая приёмка и инварианты сессии 2026-09-27
+
+- **All-day события — даты, не моменты.** `startAt` — UTC-полночь первого
+  дня, `endAt` — UTC-полночь **после** последнего (исключающий конец, как в
+  `eventSchema`). Клиент шлёт UTC-полночь выбранного *локального* дня —
+  `allDayDateISO(day)` из `@orion/ui`, а не `startOfDay(day).toISOString()`
+  (восточнее UTC это предыдущий день). Показывать — через `allDayAnchor` /
+  `eventLocalStart` / `eventShortStart` (`apps/web/lib/format.ts`), не через
+  `new Date(startAt)`. Перенос в календаре собирает PATCH только через
+  `eventReschedulePatch` (`apps/web/lib/calendar-reschedule.ts`). Сервер
+  (`normaliseRange`/`resolveRange` в `events.service.ts`) снэпит к датам на
+  любом пути, включая PATCH только `startAt` (сохраняет длину).
+- **Деньги в разных валютах не складываются нигде.** Отчёты
+  (`monthlySummary`, `categoryBreakdown`) отдают строку на валюту счёта
+  (`currency` в DTO); у `Budget` своя `currency`, `spent` считает только
+  расходы со счетов этой валюты. Новый агрегат по деньгам — сразу с
+  измерением валюты.
+- **Команда: «Только мои» — вид по умолчанию.** Задача, созданная человеком
+  из своего инбокса, в командном пространстве назначается на него
+  (`selfAssigneeTx` в `inbox.service.ts`); форма «Новая задача» в режиме
+  «Только мои» предлагает создателя. Иначе задача исчезает у автора.
+- `Input`/`Textarea` из `@orion/ui` ставят `w-full` только если в
+  `className` нет своей ширины (`w-…`) — два width-класса на элементе не
+  «переопределяют» друг друга в Tailwind.
+- Ширина колонок внутри панели дока зависит от **ширины панели**, а не окна:
+  брейкпоинты `sm:` смотрят на viewport. Для таких мест — нативный
+  `@container` (пример — `.doc-list`/`.doc-row` в `globals.css`).
+- **Живая приёмка возможна**: в облачной среде есть Chromium + Playwright.
+  Рецепт и скрипты сценариев (вход через account picker, обход панелей,
+  all-day в трёх поясах, конфликт заметки в двух окнах, U01/U02, клавиатура,
+  320/390px, desktop-экспорт под production CSP) — в
+  `docs/SONNET_IMPLEMENTATION/evidence/2026-09-27-live/scripts/*.mjs.txt`.
+  Под root embedded-Postgres (`pnpm db:up`) не стартует — тот же контракт
+  (5433, `orion`/`orion_local_dev`, `01-app-roles.sql`) поднимается
+  системным Postgres 16 от пользователя `postgres`.

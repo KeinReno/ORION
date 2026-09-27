@@ -1,0 +1,31 @@
+// Serves apps/web/.next-desktop with the production CSP from tauri.conf.json.
+// Like Tauri v2 does at build time, sha256 hashes of each page's inline
+// <script> blocks are appended to script-src (Tauri's asset CSP modification).
+import { createServer } from "node:http";
+import { readFileSync, existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { join, extname } from "node:path";
+const ROOT = "/home/user/ORION/apps/web/.next-desktop";
+const conf = JSON.parse(readFileSync("/home/user/ORION/apps/desktop/src-tauri/tauri.conf.json", "utf8"));
+const BASE_CSP = conf.app.security.csp;
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".txt": "text/plain" };
+function resolve(url) {
+  let p = decodeURIComponent(url.split("?")[0]);
+  for (const c of [p, p + ".html", join(p, "index.html")]) {
+    const f = join(ROOT, c);
+    if (existsSync(f) && statSync(f).isFile()) return f;
+  }
+  return null;
+}
+createServer((req, res) => {
+  const file = resolve(req.url) ?? join(ROOT, "404.html");
+  let body = readFileSync(file);
+  const type = TYPES[extname(file)] ?? "application/octet-stream";
+  const headers = { "Content-Type": type };
+  if (type.startsWith("text/html")) {
+    const html = body.toString("utf8");
+    const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => `'sha256-${createHash("sha256").update(m[1]).digest("base64")}'`);
+    if (!process.env.NOCSP) headers["Content-Security-Policy"] = BASE_CSP.replace("script-src 'self'", `script-src 'self' ${hashes.join(" ")}`);
+  }
+  res.writeHead(200, headers); res.end(body);
+}).listen(3010, "127.0.0.1", () => console.log("csp server on :3010"));

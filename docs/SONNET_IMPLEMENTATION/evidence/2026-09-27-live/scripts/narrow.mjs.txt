@@ -1,0 +1,20 @@
+import { open, login } from "./lib.mjs";
+const w = Number(process.env.W ?? 390), h = Number(process.env.H ?? 844);
+const { browser, page, errors } = await open({ viewport: { width: w, height: h } });
+await login(page);
+await page.screenshot({ path: `50-${w}-dashboard.png` });
+const menu = page.getByRole("button", { name: "Открыть меню" });
+for (const label of ["Задачи", "Календарь", "Заметки", "Проекты", "Финансы", "Документы", "Время"]) {
+  try {
+    await menu.click({ timeout: 8000 });
+    await page.waitForTimeout(700);
+    if (label === "Задачи") await page.screenshot({ path: `51-${w}-menu.png` });
+    await page.getByRole("dialog").getByText(label, { exact: true }).or(page.locator("aside").getByText(label, { exact: true })).first().click({ timeout: 8000 });
+    await page.waitForTimeout(2500);
+    const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+    await page.screenshot({ path: `52-${w}-${label}.png` });
+    console.log(label, o.sw > o.cw ? "HORIZONTAL OVERFLOW" : "ok", o);
+  } catch (e) { console.log("FAIL", label, e.message.split("\n")[0]); await page.keyboard.press("Escape"); }
+}
+console.log(errors.join("\n"));
+await browser.close();
