@@ -260,7 +260,14 @@ export const budgetSchema = z.object({
   /** First-of-month, ISO. */
   month: z.string(),
   limitAmount: z.number().int().positive(),
-  /** Sum of expense transactions in that category for that month — computed by BudgetsService. */
+  /**
+   * ISO 4217 code the limit is denominated in. `spent` counts only expense
+   * lines from accounts in this same currency — summing a USD and a RUB
+   * expense into one "spent" figure is not an amount of anything (same bug
+   * class as `sumByCurrency` on the client).
+   */
+  currency: z.string(),
+  /** Sum of expense transactions in that category, month and currency — computed by BudgetsService. */
   spent: z.number().int()
 });
 export type Budget = z.infer<typeof budgetSchema>;
@@ -268,7 +275,8 @@ export type Budget = z.infer<typeof budgetSchema>;
 export const createBudgetInputSchema = z.object({
   categoryId: z.string(),
   month: z.string().datetime(),
-  limitAmount: z.number().int().positive("Лимит должен быть больше нуля")
+  limitAmount: z.number().int().positive("Лимит должен быть больше нуля"),
+  currency: z.string().length(3).default("RUB")
 });
 export type CreateBudgetInput = z.infer<typeof createBudgetInputSchema>;
 
@@ -328,10 +336,17 @@ export type UpdateRecurringTransactionInput = z.infer<typeof updateRecurringTran
  * the balance across every account as of the end of that month; a transfer
  * never appears in it (see `transactionTypeSchema` comment) — only
  * income/expense do.
+ *
+ * Every aggregate carries `currency`: the server returns one row per
+ * (month, currency) / (category, currency), grouped by the account's
+ * currency, instead of silently adding kopecks of different currencies
+ * together. A single-currency workspace gets exactly one row per month, as
+ * before.
  */
 export const monthlyFinanceSummarySchema = z.object({
   /** "YYYY-MM". */
   month: z.string(),
+  currency: z.string(),
   income: z.number().int(),
   expense: z.number().int(),
   netWorth: z.number().int()
@@ -341,6 +356,7 @@ export type MonthlyFinanceSummary = z.infer<typeof monthlyFinanceSummarySchema>;
 export const categoryBreakdownEntrySchema = z.object({
   categoryId: z.string().nullable(),
   categoryName: z.string(),
+  currency: z.string(),
   amount: z.number().int()
 });
 export type CategoryBreakdownEntry = z.infer<typeof categoryBreakdownEntrySchema>;

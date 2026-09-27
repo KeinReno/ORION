@@ -6,6 +6,8 @@ import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { explicitRange, monthRange, toMonthKey } from "../finance-refs.util";
 
 const MAX_MONTHS = 24;
+/** Series currency for a workspace with no accounts yet — same default as `Account.currency`. */
+const DEFAULT_CURRENCY = "RUB";
 
 @Injectable()
 export class ReportsService {
@@ -28,19 +30,31 @@ export class ReportsService {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
 
-      const startingTotal = await tx.account.aggregate({ where: { workspaceId }, _sum: { startingBalance: true } });
-      let netWorth = startingTotal._sum.startingBalance ?? 0;
+      // One series per account currency — kopecks of RUB and cents of USD
+      // are never added together (see monthlyFinanceSummarySchema).
+      const startingByCurrency = await tx.account.groupBy({
+        by: ["currency"],
+        where: { workspaceId },
+        _sum: { startingBalance: true },
+        orderBy: { currency: "asc" }
+      });
+      const currencies = startingByCurrency.length
+        ? startingByCurrency.map((row) => ({ currency: row.currency, starting: row._sum.startingBalance ?? 0 }))
+        : [{ currency: DEFAULT_CURRENCY, starting: 0 }];
 
       const keys = lastMonthKeys(count);
       const results: MonthlyFinanceSummary[] = [];
-      for (const key of keys) {
-        const range = monthRange(key) as { start: Date; end: Date };
-        const [income, expense] = await Promise.all([
-          sumLines(tx, workspaceId, "income", range),
-          sumLines(tx, workspaceId, "expense", range)
-        ]);
-        netWorth += income - expense;
-        results.push({ month: key, income, expense, netWorth });
+      for (const { currency, starting } of currencies) {
+        let netWorth = starting;
+        for (const key of keys) {
+          const range = monthRange(key) as { start: Date; end: Date };
+          const [income, expense] = await Promise.all([
+            sumLines(tx, workspaceId, "income", range, currency),
+            sumLines(tx, workspaceId, "expense", range, currency)
+          ]);
+          netWorth += income - expense;
+          results.push({ month: key, currency, income, expense, netWorth });
+        }
       }
       return results;
     });
@@ -50,7 +64,9 @@ export class ReportsService {
    * Expense-only breakdown by category for one period — `categoryId: null`
    * groups uncategorised lines under "Без категории". `from`/`to` (v0.13)
    * take priority over `month` when either is given, same rule as
-   * `TransactionsService.list`.
+   * `TransactionsService.list`. One entry per (category, currency): Prisma's
+   * groupBy can't group by a relation field, so it runs once per account
+   * currency — a workspace has a handful of those at most.
    */
   async categoryBreakdown(
     userId: string,
@@ -61,18 +77,29 @@ export class ReportsService {
     if (!range) return [];
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const grouped = await tx.transactionLine.groupBy({
-        by: ["categoryId"],
-        where: {
-          workspaceId,
-          transaction: {
-            type: "expense",
-            occurredAt: { ...(range.start ? { gte: range.start } : {}), ...(range.end ? { lt: range.end } : {}) }
-          }
-        },
-        _sum: { amount: true },
-        orderBy: { _sum: { amount: "desc" } }
+      const currencyRows = await tx.account.findMany({
+        where: { workspaceId },
+        distinct: ["currency"],
+        select: { currency: true },
+        orderBy: { currency: "asc" }
       });
+      const grouped: { categoryId: string | null; currency: string; amount: number }[] = [];
+      for (const { currency } of currencyRows) {
+        const rows = await tx.transactionLine.groupBy({
+          by: ["categoryId"],
+          where: {
+            workspaceId,
+            transaction: {
+              type: "expense",
+              account: { currency },
+              occurredAt: { ...(range.start ? { gte: range.start } : {}), ...(range.end ? { lt: range.end } : {}) }
+            }
+          },
+          _sum: { amount: true },
+          orderBy: { _sum: { amount: "desc" } }
+        });
+        for (const row of rows) grouped.push({ categoryId: row.categoryId, currency, amount: row._sum.amount ?? 0 });
+      }
       const categoryIds = grouped.map((g) => g.categoryId).filter((id): id is string => id !== null);
       const categories = categoryIds.length
         ? await tx.financeCategory.findMany({ where: { id: { in: categoryIds } } })
@@ -81,7 +108,8 @@ export class ReportsService {
       return grouped.map((g) => ({
         categoryId: g.categoryId,
         categoryName: g.categoryId ? (nameById.get(g.categoryId) ?? "Категория удалена") : "Без категории",
-        amount: g._sum.amount ?? 0
+        currency: g.currency,
+        amount: g.amount
       }));
     });
   }
@@ -91,10 +119,11 @@ async function sumLines(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   type: "income" | "expense",
-  range: { start: Date; end: Date }
+  range: { start: Date; end: Date },
+  currency: string
 ): Promise<number> {
   const sum = await tx.transactionLine.aggregate({
-    where: { workspaceId, transaction: { type, occurredAt: { gte: range.start, lt: range.end } } },
+    where: { workspaceId, transaction: { type, account: { currency }, occurredAt: { gte: range.start, lt: range.end } } },
     _sum: { amount: true }
   });
   return sum._sum.amount ?? 0;

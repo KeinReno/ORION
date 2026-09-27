@@ -27,7 +27,7 @@ export class BudgetsService {
       const budgets = await tx.budget.findMany({ where, orderBy: { month: "desc" } });
       const withSpent: Budget[] = [];
       for (const budget of budgets) {
-        const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
+        const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month, budget.currency);
         withSpent.push(toDto(budget, spent));
       }
       return withSpent;
@@ -41,13 +41,19 @@ export class BudgetsService {
         await this.workspaces.assertMemberTx(tx, userId, workspaceId);
         await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
         return tx.budget.create({
-          data: { workspaceId, categoryId: input.categoryId, month, limitAmount: input.limitAmount }
+          data: {
+            workspaceId,
+            categoryId: input.categoryId,
+            month,
+            limitAmount: input.limitAmount,
+            currency: input.currency
+          }
         });
       });
       return toDto(budget, 0);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictException("Бюджет для этой категории на этот месяц уже есть");
+        throw new ConflictException("Бюджет для этой категории на этот месяц в этой валюте уже есть");
       }
       throw error;
     }
@@ -58,7 +64,7 @@ export class BudgetsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, budgetId);
       const budget = await tx.budget.update({ where: { id: budgetId }, data: input });
-      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
+      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month, budget.currency);
       return { budget, spent };
     });
     return toDto(budget, spent);
@@ -80,7 +86,7 @@ export class BudgetsService {
   }
 }
 
-type BudgetRow = { id: string; workspaceId: string; categoryId: string; month: Date; limitAmount: number };
+type BudgetRow = { id: string; workspaceId: string; categoryId: string; month: Date; limitAmount: number; currency: string };
 
 function toDto(budget: BudgetRow, spent: number): Budget {
   return {
@@ -89,6 +95,7 @@ function toDto(budget: BudgetRow, spent: number): Budget {
     categoryId: budget.categoryId,
     month: budget.month.toISOString(),
     limitAmount: budget.limitAmount,
+    currency: budget.currency,
     spent
   };
 }

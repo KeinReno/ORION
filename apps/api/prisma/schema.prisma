@@ -998,11 +998,15 @@ model Budget {
   /// sorts and compares natively, one per category per month.
   month       DateTime
   limitAmount Int
+  /// ISO 4217 code the limit is in; `spent` counts only expense lines from
+  /// accounts in this currency (see budgetSpentTx). One budget per category,
+  /// month and currency — a workspace with RUB and USD accounts can cap both.
+  currency    String   @default("RUB")
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category  FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@unique([categoryId, month])
+  @@unique([categoryId, month, currency])
   @@index([workspaceId])
   @@map("finance_budgets")
 }

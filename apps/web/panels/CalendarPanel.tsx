@@ -39,6 +39,7 @@ import {
 import { CalendarDays, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { eventReschedulePatch, shiftAllDayIso } from "../lib/calendar-reschedule";
 import { nextListId } from "../lib/list-nav";
 import { describeAuthError, describeError } from "../lib/error-message";
 import {
@@ -109,10 +110,18 @@ function shiftIso(iso: string, days: number, hours: number): string {
 }
 
 function keyboardReschedule(item: CalendarItem, days: number, hours: number): ReschedulePayload {
-  const hourShift = item.allDay ? 0 : hours;
+  if (item.allDay) {
+    // Whole UTC days — see shiftAllDayIso (a local setDate across a DST
+    // switch would knock the UTC-midnight anchor off its date).
+    return {
+      start: shiftAllDayIso(item.start, days),
+      end: item.end ? shiftAllDayIso(item.end, days) : undefined,
+      allDay: true
+    };
+  }
   return {
-    start: shiftIso(item.start, days, hourShift),
-    end: item.end ? shiftIso(item.end, days, hourShift) : undefined,
+    start: shiftIso(item.start, days, hours),
+    end: item.end ? shiftIso(item.end, days, hours) : undefined,
     allDay: item.allDay
   };
 }
@@ -235,9 +244,12 @@ export function CalendarPanel(): React.ReactElement {
 
   function applyEventReschedule(event: Event, payload: ReschedulePayload, editScope: EventScope): void {
     const { masterId, occurrenceStart } = splitOccurrenceId(event.id);
-    const patch: UpdateEventInput = { startAt: payload.start, endAt: payload.end, allDay: payload.allDay };
+    // Month-grid drops carry only the target day; `eventReschedulePatch`
+    // keeps the event's length, time of day and all-day date-only contract.
+    const patch: UpdateEventInput = eventReschedulePatch(event, payload);
     const prevStart = event.startAt;
     const prevEnd = event.endAt;
+    const prevAllDay = event.allDay;
     updateEvent.mutate(
       { eventId: masterId, input: patch, scope: editScope, occurrenceStart },
       {
@@ -250,7 +262,7 @@ export function CalendarPanel(): React.ReactElement {
               onClick: () =>
                 updateEvent.mutate({
                   eventId: masterId,
-                  input: { startAt: prevStart, endAt: prevEnd },
+                  input: { startAt: prevStart, endAt: prevEnd, allDay: prevAllDay },
                   scope: editScope,
                   occurrenceStart
                 })

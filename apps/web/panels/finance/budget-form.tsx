@@ -9,6 +9,7 @@ export interface BudgetFormValues {
   categoryId: string;
   month: string;
   limitAmount: number;
+  currency: string;
 }
 
 /** "YYYY-MM" (native `<input type="month">`) → first-of-month ISO datetime, matching createBudgetInputSchema. */
@@ -23,6 +24,7 @@ function isoToMonthInput(iso: string): string {
 export function BudgetForm({
   initial,
   expenseCategories,
+  currencies,
   defaultMonth,
   busy,
   submitLabel,
@@ -31,6 +33,8 @@ export function BudgetForm({
 }: {
   initial?: Budget;
   expenseCategories: FinanceCategory[];
+  /** Currencies of the workspace's accounts — a budget caps spend in one of them. */
+  currencies: string[];
   defaultMonth: string;
   busy: boolean;
   submitLabel: string;
@@ -39,6 +43,7 @@ export function BudgetForm({
 }): React.ReactElement {
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? expenseCategories[0]?.id ?? "");
   const [month, setMonth] = useState(initial ? isoToMonthInput(initial.month) : defaultMonth);
+  const [currency, setCurrency] = useState(initial?.currency ?? currencies[0] ?? "RUB");
   const [limitAmount, setLimitAmount] = useState(fromKopecks(initial?.limitAmount));
   const [error, setError] = useState<string | null>(null);
 
@@ -50,14 +55,14 @@ export function BudgetForm({
       return;
     }
     if (!categoryId) return;
-    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks });
+    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks, currency });
   }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       {initial ? (
         <p className="text-sm text-foreground">
-          {expenseCategories.find((c) => c.id === initial.categoryId)?.name ?? "Категория"} · {month}
+          {expenseCategories.find((c) => c.id === initial.categoryId)?.name ?? "Категория"} · {month} · {initial.currency}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -75,10 +80,23 @@ export function BudgetForm({
             Месяц
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} required />
           </label>
+          {currencies.length > 1 ? (
+            <label className="flex flex-col gap-1 text-2xs text-subtle-foreground sm:col-span-2">
+              Валюта
+              <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {currencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+              <span>Считаются только расходы со счетов в этой валюте.</span>
+            </label>
+          ) : null}
         </div>
       )}
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-        Лимит, ₽
+        Лимит, {currency === "RUB" ? "₽" : currency}
         <Input
           inputMode="decimal"
           placeholder="0"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useBudgets, useCreateBudget, useDeleteBudget, useFinanceCategories, useUpdateBudget } from "@orion/core-react";
+import { useAccounts, useBudgets, useCreateBudget, useDeleteBudget, useFinanceCategories, useUpdateBudget } from "@orion/core-react";
 import type { Budget } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, IconButton, Modal, useToast } from "@orion/ui";
 import { ChevronLeft, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
@@ -33,6 +33,7 @@ export function BudgetsView(): React.ReactElement {
   // includeArchived: true so an already-archived category referenced by an
   // existing budget doesn't vanish from the edit form — see withArchivedFallback.
   const { data: categories } = useFinanceCategories(workspace?.id, true);
+  const { data: accounts } = useAccounts(workspace?.id);
   const createBudget = useCreateBudget(workspace?.id);
   const updateBudget = useUpdateBudget(workspace?.id);
   const deleteBudget = useDeleteBudget(workspace?.id);
@@ -44,8 +45,13 @@ export function BudgetsView(): React.ReactElement {
 
   const expenseCategoriesAll = (categories ?? []).filter((c) => c.kind === "expense");
   const expenseCategories = expenseCategoriesAll.filter((c) => !c.archivedAt);
-  const budgetedCategoryIds = new Set((budgets ?? []).map((b) => b.categoryId));
-  const availableCategories = expenseCategories.filter((c) => !budgetedCategoryIds.has(c.id));
+  // Budgets are per currency (Budget.currency): with RUB and USD accounts a
+  // category can carry one limit in each, so it's "taken" only once every
+  // currency has a budget for it.
+  const currencies = [...new Set((accounts ?? []).map((a) => a.currency))];
+  if (currencies.length === 0) currencies.push("RUB");
+  const budgetedKeys = new Set((budgets ?? []).map((b) => `${b.categoryId}:${b.currency}`));
+  const availableCategories = expenseCategories.filter((c) => currencies.some((cur) => !budgetedKeys.has(`${c.id}:${cur}`)));
 
   async function create(values: BudgetFormValues): Promise<void> {
     try {
@@ -100,10 +106,13 @@ export function BudgetsView(): React.ReactElement {
             return (
               <li key={budget.id} className="rounded-xl border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">{category?.name ?? "Категория"}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {category?.name ?? "Категория"}
+                    {currencies.length > 1 ? <span className="ml-1.5 text-2xs text-subtle-foreground">{budget.currency}</span> : null}
+                  </span>
                   <div className="flex items-center gap-1">
                     <span className={`font-mono text-xs tabular-nums ${over ? "text-destructive" : "text-muted-foreground"}`}>
-                      {formatMoney(budget.spent)} из {formatMoney(budget.limitAmount)}
+                      {formatMoney(budget.spent, budget.currency)} из {formatMoney(budget.limitAmount, budget.currency)}
                     </span>
                     <IconButton label="Изменить лимит" size="sm" onClick={() => setEditing(budget)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -145,6 +154,7 @@ export function BudgetsView(): React.ReactElement {
       <Modal open={creating} onClose={() => setCreating(false)} title="Новый бюджет" size="sm">
         <BudgetForm
           expenseCategories={availableCategories}
+          currencies={currencies}
           defaultMonth={month}
           busy={createBudget.isPending}
           submitLabel="Создать"
@@ -159,6 +169,7 @@ export function BudgetsView(): React.ReactElement {
             key={editing.id}
             initial={editing}
             expenseCategories={withArchivedFallback(expenseCategoriesAll, editing.categoryId)}
+            currencies={currencies}
             defaultMonth={month}
             busy={updateBudget.isPending}
             submitLabel="Сохранить"

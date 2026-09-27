@@ -1,9 +1,9 @@
 "use client";
 
 import { useCategoryBreakdown, useMonthlyFinanceSummary } from "@orion/core-react";
-import { EmptyState, IconButton, Skeleton } from "@orion/ui";
+import { EmptyState, IconButton, SegmentedControl, Skeleton } from "@orion/ui";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatMoney, projectColor } from "../../lib/format";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
@@ -44,6 +44,15 @@ export function ReportsView(): React.ReactElement {
   const [breakdownMonth, setBreakdownMonth] = useState(currentMonthKey());
   const { data: breakdown, isLoading: breakdownLoading } = useCategoryBreakdown(workspace?.id, { month: breakdownMonth });
 
+  // The server returns one series per account currency (see
+  // monthlyFinanceSummarySchema) — the charts show one currency at a time,
+  // never a sum across them. A single-currency workspace sees no switcher.
+  const currencies = useMemo(() => [...new Set((monthly ?? []).map((m) => m.currency))], [monthly]);
+  const [pickedCurrency, setPickedCurrency] = useState<string | null>(null);
+  const currency = pickedCurrency && currencies.includes(pickedCurrency) ? pickedCurrency : currencies[0];
+  const series = (monthly ?? []).filter((m) => m.currency === currency);
+  const entries = (breakdown ?? []).filter((e) => e.currency === currency);
+
   const hasData = (monthly ?? []).some((m) => m.income > 0 || m.expense > 0);
 
   if (monthlyLoading) {
@@ -55,7 +64,7 @@ export function ReportsView(): React.ReactElement {
     );
   }
 
-  if (!hasData) {
+  if (!hasData || !currency) {
     return (
       <EmptyState
         icon={BarChart3}
@@ -67,12 +76,24 @@ export function ReportsView(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-6">
-      <IncomeExpenseChart data={monthly ?? []} />
-      <NetWorthChart data={monthly ?? []} />
+      {currencies.length > 1 ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-2xs text-subtle-foreground">Счета в разных валютах — отчёт строится по каждой отдельно.</p>
+          <SegmentedControl<string>
+            size="sm"
+            options={currencies.map((c) => ({ value: c, label: c }))}
+            value={currency}
+            onChange={setPickedCurrency}
+          />
+        </div>
+      ) : null}
+      <IncomeExpenseChart data={series} currency={currency} />
+      <NetWorthChart data={series} currency={currency} />
       <CategoryBreakdown
         month={breakdownMonth}
         onShiftMonth={(delta) => setBreakdownMonth((m) => shiftMonthKey(m, delta))}
-        entries={breakdown ?? []}
+        entries={entries}
+        currency={currency}
         loading={breakdownLoading}
       />
     </div>
@@ -83,7 +104,13 @@ const CHART_WIDTH = 600;
 const CHART_HEIGHT = 180;
 const CHART_PAD = 24;
 
-function IncomeExpenseChart({ data }: { data: { month: string; income: number; expense: number }[] }): React.ReactElement {
+function IncomeExpenseChart({
+  data,
+  currency
+}: {
+  data: { month: string; income: number; expense: number }[];
+  currency: string;
+}): React.ReactElement {
   const max = Math.max(1, ...data.map((d) => Math.max(d.income, d.expense)));
   const groupWidth = (CHART_WIDTH - CHART_PAD * 2) / data.length;
   const barWidth = Math.min(18, groupWidth / 3);
@@ -117,7 +144,7 @@ function IncomeExpenseChart({ data }: { data: { month: string; income: number; e
                 rx={2}
                 className="fill-success"
               >
-                <title>{`${monthFullLabel(d.month)} · доход: ${formatMoney(d.income)}`}</title>
+                <title>{`${monthFullLabel(d.month)} · доход: ${formatMoney(d.income, currency)}`}</title>
               </rect>
               <rect
                 x={groupX + groupWidth / 2 + 2}
@@ -127,7 +154,7 @@ function IncomeExpenseChart({ data }: { data: { month: string; income: number; e
                 rx={2}
                 className="fill-destructive"
               >
-                <title>{`${monthFullLabel(d.month)} · расход: ${formatMoney(d.expense)}`}</title>
+                <title>{`${monthFullLabel(d.month)} · расход: ${formatMoney(d.expense, currency)}`}</title>
               </rect>
               <text
                 x={groupX + groupWidth / 2}
@@ -145,7 +172,13 @@ function IncomeExpenseChart({ data }: { data: { month: string; income: number; e
   );
 }
 
-function NetWorthChart({ data }: { data: { month: string; netWorth: number }[] }): React.ReactElement {
+function NetWorthChart({
+  data,
+  currency
+}: {
+  data: { month: string; netWorth: number }[];
+  currency: string;
+}): React.ReactElement {
   const values = data.map((d) => d.netWorth);
   const min = Math.min(...values, 0);
   const max = Math.max(...values, 1);
@@ -164,14 +197,14 @@ function NetWorthChart({ data }: { data: { month: string; netWorth: number }[] }
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground">Чистый капитал</p>
-        {last ? <p className="text-sm font-semibold text-foreground">{formatMoney(last.value)}</p> : null}
+        {last ? <p className="text-sm font-semibold text-foreground">{formatMoney(last.value, currency)}</p> : null}
       </div>
       <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="h-32 w-full" role="img" aria-label="Чистый капитал по месяцам">
         <path d={path} fill="none" strokeWidth={2} className="stroke-accent" />
         {points.map((p, i) => (
           <g key={i}>
             <circle cx={p.x} cy={p.y} r={8} fill="transparent">
-              <title>{`${monthFullLabel(data[i].month)} · ${formatMoney(p.value)}`}</title>
+              <title>{`${monthFullLabel(data[i].month)} · ${formatMoney(p.value, currency)}`}</title>
             </circle>
             <circle cx={p.x} cy={p.y} r={3} className="fill-accent" />
           </g>
@@ -196,11 +229,13 @@ function CategoryBreakdown({
   month,
   onShiftMonth,
   entries,
+  currency,
   loading
 }: {
   month: string;
   onShiftMonth: (delta: number) => void;
   entries: { categoryId: string | null; categoryName: string; amount: number }[];
+  currency: string;
   loading: boolean;
 }): React.ReactElement {
   const max = Math.max(1, ...entries.map((e) => e.amount));
@@ -233,7 +268,7 @@ function CategoryBreakdown({
               <div key={key}>
                 <div className="mb-1 flex items-center justify-between text-2xs">
                   <span className="text-muted-foreground">{entry.categoryName}</span>
-                  <span className="tabular-nums text-subtle-foreground">{formatMoney(entry.amount)}</span>
+                  <span className="tabular-nums text-subtle-foreground">{formatMoney(entry.amount, currency)}</span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                   <div

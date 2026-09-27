@@ -83,13 +83,21 @@ export async function budgetSpentTx(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   categoryId: string,
-  month: Date
+  month: Date,
+  currency: string
 ): Promise<number> {
   const range = monthRange(toMonthKey(month)) as { start: Date; end: Date };
   const sum = await tx.transactionLine.aggregate({
     where: {
       categoryId,
-      transaction: { workspaceId, type: "expense", occurredAt: { gte: range.start, lt: range.end } }
+      transaction: {
+        workspaceId,
+        type: "expense",
+        occurredAt: { gte: range.start, lt: range.end },
+        // Only the budget's own currency: a USD expense is not "spent" out of
+        // a RUB limit (an expense's currency is its source account's).
+        account: { currency }
+      }
     },
     _sum: { amount: true }
   });
