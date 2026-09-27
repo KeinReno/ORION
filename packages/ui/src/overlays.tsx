@@ -188,15 +188,16 @@ export function Modal({
 
   useEffect(() => {
     if (!shown) return;
+    const opener = openerRef.current;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
     const raf = requestAnimationFrame(() => focusInto(dialogRef.current));
     return () => {
       document.body.style.overflow = overflow;
       cancelAnimationFrame(raf);
-      restoreOpener(openerRef.current);
+      restoreOpener(opener);
     };
-  }, [shown]);
+  }, [shown, openerRef]);
 
   if (!mounted) return null;
 
@@ -279,15 +280,16 @@ export function Sheet({
 
   useEffect(() => {
     if (!shown) return;
+    const opener = openerRef.current;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
     const raf = requestAnimationFrame(() => focusInto(panelRef.current));
     return () => {
       document.body.style.overflow = overflow;
       cancelAnimationFrame(raf);
-      restoreOpener(openerRef.current);
+      restoreOpener(opener);
     };
-  }, [shown]);
+  }, [shown, openerRef]);
 
   if (!mounted) return null;
 
