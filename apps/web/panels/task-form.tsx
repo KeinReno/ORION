@@ -84,6 +84,7 @@ export function TaskForm({
   defaultProjectId,
   projects,
   members,
+  defaultAssigneeId,
   tasks = [],
   milestones,
   parentOptions,
@@ -103,6 +104,8 @@ export function TaskForm({
   projects?: Project[];
   /** Workspace members — the "Исполнитель" select. Absent = "Команда" plugin is off. */
   members?: WorkspaceMember[];
+  /** Pre-select the assignee when creating — the caller's own member id in a team workspace. */
+  defaultAssigneeId?: string | null;
   /** Every task of the workspace, for the "зависит от" picker. */
   tasks?: Task[];
   /** Every milestone of the workspace — narrowed to the selected project's own. Absent = no Gantt field shown. */
@@ -130,7 +133,7 @@ export function TaskForm({
   const [recurrenceFreq, setRecurrenceFreq] = useState<TaskRecurrence["freq"] | "">(initial?.recurrence?.freq ?? "");
   const [recurrenceInterval, setRecurrenceInterval] = useState(String(initial?.recurrence?.interval ?? 1));
   const [dependencyIds, setDependencyIds] = useState<string[]>(initial?.dependencyIds ?? []);
-  const [assigneeId, setAssigneeId] = useState(initial?.assigneeId ?? "");
+  const [assigneeId, setAssigneeId] = useState(initial ? (initial.assigneeId ?? "") : (defaultAssigneeId ?? ""));
   const [startAt, setStartAt] = useState(toDatetimeLocal(initial?.startAt ?? null));
   const [estimatedHours, setEstimatedHours] = useState(
     initial?.estimatedMinutes !== null && initial?.estimatedMinutes !== undefined ? String(initial.estimatedMinutes / 60) : ""

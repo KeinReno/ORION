@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   INBOX_TARGET_MODULE,
+  isPluginEnabled,
   type CaptureInboxInput,
   type InboxItem,
   type InboxList,
@@ -145,8 +146,20 @@ export class InboxService {
   ): Promise<string> {
     await this.modules.assertEnabledTx(tx, userId, workspaceId, INBOX_TARGET_MODULE[kind]);
     if (kind === "task") {
+      // Team workspace: the person triaging their inbox is the one who
+      // just decided "this is my task" — assign it to them, or it is missing
+      // from the Tasks panel's default «Только мои» view right away (found
+      // in the live U01 pass). Self-assignment is allowed for any member.
+      const assigneeId = await selfAssigneeTx(tx, userId, workspaceId);
       const task = await tx.task.create({
-        data: { workspaceId, title: inbox.title, description: inbox.body, dueAt: dueAt ? new Date(dueAt) : null, projectId }
+        data: {
+          workspaceId,
+          title: inbox.title,
+          description: inbox.body,
+          dueAt: dueAt ? new Date(dueAt) : null,
+          projectId,
+          assigneeId
+        }
       });
       return task.id;
     }
@@ -197,4 +210,15 @@ function toDto(row: {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
+}
+
+/** The caller's own member id when the «Команда» plugin is on, else null. */
+async function selfAssigneeTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string): Promise<string | null> {
+  const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { pluginOverrides: true } });
+  if (!isPluginEnabled(workspace?.pluginOverrides, "team")) return null;
+  const member = await tx.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId, userId } },
+    select: { id: true }
+  });
+  return member?.id ?? null;
 }

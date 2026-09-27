@@ -67,8 +67,15 @@ export function SavedViewsBar({
     <div className="flex flex-wrap items-center gap-1.5">
       {isLoading ? <Skeleton className="h-6 w-24" /> : null}
       {(views ?? []).map((view) => {
+        // A view with nothing this panel can restore (e.g. one saved with only
+        // a `due` filter) "matched" the empty filter, so it sat highlighted as
+        // active all the time. Active = it restores something AND that's what
+        // is applied now.
+        const restoresSomething = Boolean(view.filters.search) || Boolean(view.filters.projectId);
         const isActive =
-          (view.filters.search ?? "") === current.search && (view.filters.projectId ?? null) === current.projectId;
+          restoresSomething &&
+          (view.filters.search ?? "") === current.search &&
+          (view.filters.projectId ?? null) === current.projectId;
         return (
           <span
             key={view.id}
