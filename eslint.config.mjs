@@ -9,10 +9,13 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
+      "**/.next-desktop/**",
       "**/out/**",
       "**/target/**",
       "**/src-tauri/gen/**",
       "**/generated/**",
+      // Vendored pdf.js worker, copied into public/ by copy-pdf-worker.mjs.
+      "apps/web/public/**",
       "**/*.config.js",
       "**/*.config.mjs"
     ]

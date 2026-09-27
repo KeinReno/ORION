@@ -16,7 +16,7 @@ export class NotificationsController {
    * over other users' data.
    */
   @Post("check-due")
-  checkDue(@CurrentUser() user: RequestUser): Promise<{ notified: number }> {
+  checkDue(@CurrentUser() user: RequestUser): Promise<{ notified: number; skipped: number }> {
     return this.checker.runCheckForUser(user.userId);
   }
 }

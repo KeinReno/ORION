@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.orion.desktop",
   "build": {
-    "frontendDist": "../../web/out",
+    "frontendDist": "../../web/.next-desktop",
     "devUrl": "http://localhost:3010"
   },
   "app": {
@@ -15,11 +15,12 @@
         "width": 1280,
         "height": 800,
         "minWidth": 960,
-        "minHeight": 640
+        "minHeight": 640,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     }
   },
   "bundle": {

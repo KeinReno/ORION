@@ -1,0 +1,385 @@
+"use client";
+
+import {
+  useArchiveInventoryItem,
+  useCreateInventoryItem,
+  useInventoryItems,
+  useInventoryMovements,
+  useProjects,
+  useRecordInventoryMovement,
+  useUpdateInventoryItem
+} from "@orion/core-react";
+import type { InventoryItem, InventoryMovementType } from "@orion/shared-types";
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  DropdownMenu,
+  EmptyState,
+  IconButton,
+  Modal,
+  PanelBody,
+  PanelHeader,
+  PanelShell,
+  Sheet,
+  Skeleton,
+  StatCard,
+  useToast
+} from "@orion/ui";
+import { Archive, ArchiveRestore, Boxes, MoreHorizontal, Pencil, Plus, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { describeAuthError } from "../lib/error-message";
+import { formatMoney, shortDateTime } from "../lib/format";
+import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { useEnabledModules } from "../lib/use-enabled-modules";
+import { InventoryItemForm, type InventoryItemFormValues } from "./inventory/item-form";
+import { InventoryMovementForm, type InventoryMovementFormValues } from "./inventory/movement-form";
+
+const MOVEMENT_TYPE_LABEL: Record<InventoryMovementType, string> = {
+  receipt: "Приход",
+  issue: "Расход",
+  adjustment: "Корректировка"
+};
+
+/**
+ * Склад (v0.26): item list + a per-item ledger. Balance and average cost are
+ * computed server-side from the movement ledger (see InventoryService) —
+ * this panel only ever shows them, never re-derives them.
+ */
+export function InventoryPanel(): React.ReactElement {
+  const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
+  const workspaceId = workspace?.id;
+  const { isEnabled } = useEnabledModules();
+
+  const [showArchived, setShowArchived] = useState(false);
+  const itemsQuery = useInventoryItems(workspaceId, showArchived);
+  const { data: projectList } = useProjects(isEnabled("projects") ? workspaceId : undefined);
+
+  const createItem = useCreateInventoryItem(workspaceId);
+  const updateItem = useUpdateInventoryItem(workspaceId);
+  const archiveItem = useArchiveInventoryItem(workspaceId);
+  const recordMovement = useRecordInventoryMovement(workspaceId);
+  const { toast } = useToast();
+
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<InventoryItem | null>(null);
+  const [pendingArchive, setPendingArchive] = useState<InventoryItem | null>(null);
+  const [detail, setDetail] = useState<InventoryItem | null>(null);
+  const [recording, setRecording] = useState(false);
+
+  const items = itemsQuery.data ?? [];
+  const activeItems = items.filter((item) => !item.archivedAt);
+  const lowStockCount = activeItems.filter((item) => item.lowStock).length;
+
+  async function create(values: InventoryItemFormValues): Promise<void> {
+    try {
+      await createItem.mutateAsync(values);
+      setCreating(false);
+      toast({ title: "Позиция создана", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось создать позицию", description: describeAuthError(error), tone: "danger" });
+    }
+  }
+
+  async function save(itemId: string, values: InventoryItemFormValues): Promise<void> {
+    try {
+      await updateItem.mutateAsync({ itemId, input: values });
+      setEditing(null);
+      toast({ title: "Сохранено", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось сохранить позицию", description: describeAuthError(error), tone: "danger" });
+    }
+  }
+
+  function toggleArchived(item: InventoryItem): void {
+    updateItem.mutate(
+      { itemId: item.id, input: { archivedAt: item.archivedAt ? null : new Date().toISOString() } },
+      {
+        onSuccess: (updated) => {
+          toast({ title: item.archivedAt ? "Позиция восстановлена" : "Позиция в архиве", tone: "default" });
+          if (detail?.id === updated.id) setDetail(updated);
+        }
+      }
+    );
+  }
+
+  function confirmArchive(): void {
+    const item = pendingArchive;
+    if (!item) return;
+    setPendingArchive(null);
+    archiveItem.mutate(item.id, {
+      onSuccess: () => toast({ title: "Позиция в архиве", description: "Леджер движений сохранён", tone: "default" }),
+      onError: () => toast({ title: "Не удалось убрать в архив", tone: "danger" })
+    });
+  }
+
+  async function submitMovement(values: InventoryMovementFormValues): Promise<void> {
+    if (!detail) return;
+    try {
+      await recordMovement.mutateAsync({ itemId: detail.id, input: values });
+      setRecording(false);
+      toast({ title: "Движение записано", tone: "success" });
+      // The item cache refetches; the sheet stays open on the same item.
+      const fresh = (itemsQuery.data ?? []).find((item) => item.id === detail.id);
+      if (fresh) setDetail(fresh);
+    } catch (error) {
+      toast({ title: "Не удалось записать движение", description: describeAuthError(error), tone: "danger" });
+    }
+  }
+
+  return (
+    <PanelShell>
+      <PanelHeader
+        icon={Boxes}
+        title="Склад"
+        subtitle="Позиции и остатки — считаются по движениям"
+        actions={
+          <Button size="sm" onClick={() => setCreating(true)} disabled={workspaceId === undefined}>
+            <Plus className="h-4 w-4" /> Новая позиция
+          </Button>
+        }
+      >
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            disabled={workspaceId === undefined}
+            onChange={(event) => setShowArchived(event.target.checked)}
+          />
+          Показать архив
+        </label>
+      </PanelHeader>
+
+      <PanelBody measure="prose">
+        {workspaceId === undefined ? (
+          workspaceLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={Boxes} title="Нет рабочего пространства" description="Склад живёт внутри пространства — создайте его или войдите заново." />
+          )
+        ) : itemsQuery.isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : itemsQuery.isError ? (
+          <EmptyState
+            icon={TriangleAlert}
+            tone="danger"
+            title="Не удалось загрузить склад"
+            description={describeAuthError(itemsQuery.error)}
+            action={
+              <Button size="sm" variant="outline" onClick={() => void itemsQuery.refetch()}>
+                Повторить
+              </Button>
+            }
+          />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Boxes}
+            title="Позиций пока нет"
+            description="Заведите первую позицию — остаток появится после первого прихода."
+            action={
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> Новая позиция
+              </Button>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <StatCard label="Активных позиций" value={String(activeItems.length)} hint="в работе" />
+              <StatCard
+                label="Низкий остаток"
+                value={<span className={lowStockCount > 0 ? "text-destructive" : undefined}>{String(lowStockCount)}</span>}
+                hint={lowStockCount > 0 ? "нужно пополнить" : "всё в порядке"}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((item) => (
+                <Card
+                  key={item.id}
+                  interactive
+                  className={`flex flex-col gap-2 ${item.archivedAt ? "opacity-60" : ""}`}
+                  onClick={() => setDetail(item)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+                      <p className="text-2xs text-subtle-foreground">
+                        {item.sku ? `${item.sku} · ` : ""}
+                        {item.unit}
+                        {item.archivedAt ? " · в архиве" : ""}
+                      </p>
+                    </div>
+                    <DropdownMenu
+                      trigger={({ toggle }) => (
+                        <IconButton
+                          label="Действия"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggle();
+                          }}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </IconButton>
+                      )}
+                      items={[
+                        { label: "Изменить", icon: Pencil, onSelect: () => setEditing(item) },
+                        item.archivedAt
+                          ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(item) }
+                          : { label: "В архив", icon: Archive, onSelect: () => setPendingArchive(item) }
+                      ]}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className={`font-mono text-xl font-semibold tabular-nums ${item.lowStock ? "text-destructive" : "text-foreground"}`}>
+                      {item.balance} {item.unit}
+                    </p>
+                    {item.lowStock ? <Badge tone="danger">низкий остаток</Badge> : null}
+                  </div>
+                  {item.avgCostMinor !== null ? (
+                    <p className="text-2xs text-subtle-foreground">Средняя себестоимость: {formatMoney(item.avgCostMinor)}</p>
+                  ) : null}
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </PanelBody>
+
+      <Modal open={creating} onClose={() => setCreating(false)} title="Новая позиция" size="sm">
+        <InventoryItemForm
+          projects={isEnabled("projects") ? projectList : undefined}
+          busy={createItem.isPending}
+          submitLabel="Создать"
+          onCancel={() => setCreating(false)}
+          onSubmit={create}
+        />
+      </Modal>
+
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title="Изменить позицию" size="sm">
+        {editing ? (
+          <InventoryItemForm
+            key={editing.id}
+            initial={editing}
+            projects={isEnabled("projects") ? projectList : undefined}
+            busy={updateItem.isPending}
+            submitLabel="Сохранить"
+            onCancel={() => setEditing(null)}
+            onSubmit={(values) => save(editing.id, values)}
+          />
+        ) : null}
+      </Modal>
+
+      <ConfirmDialog
+        open={pendingArchive !== null}
+        title="Убрать в архив?"
+        description={
+          pendingArchive ? `«${pendingArchive.name}» уйдёт из списка. Леджер движений сохранится — позицию можно вернуть из архива.` : undefined
+        }
+        confirmLabel="В архив"
+        danger={false}
+        onConfirm={confirmArchive}
+        onCancel={() => setPendingArchive(null)}
+      />
+
+      <Sheet open={detail !== null} onClose={() => setDetail(null)} title={detail?.name} width="32rem">
+        {detail ? (
+          <InventoryItemDetail
+            item={detail}
+            recording={recording}
+            recordBusy={recordMovement.isPending}
+            onStartRecord={() => setRecording(true)}
+            onCancelRecord={() => setRecording(false)}
+            onSubmitMovement={submitMovement}
+          />
+        ) : null}
+      </Sheet>
+    </PanelShell>
+  );
+}
+
+function InventoryItemDetail({
+  item,
+  recording,
+  recordBusy,
+  onStartRecord,
+  onCancelRecord,
+  onSubmitMovement
+}: {
+  item: InventoryItem;
+  recording: boolean;
+  recordBusy: boolean;
+  onStartRecord: () => void;
+  onCancelRecord: () => void;
+  onSubmitMovement: (values: InventoryMovementFormValues) => void | Promise<void>;
+}): React.ReactElement {
+  const { workspace } = useActiveWorkspace();
+  const movementsQuery = useInventoryMovements(workspace?.id, item.id);
+  const movements = movementsQuery.data ?? [];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard
+          label="Остаток"
+          value={<span className={item.lowStock ? "text-destructive" : undefined}>{`${item.balance} ${item.unit}`}</span>}
+          hint={item.lowStock ? "ниже порога" : "в норме"}
+        />
+        <StatCard
+          label="Средняя себестоимость"
+          value={item.avgCostMinor !== null ? formatMoney(item.avgCostMinor) : "—"}
+          hint={item.avgCostMinor !== null ? "по приходам" : "нет данных"}
+        />
+      </div>
+
+      {recording ? (
+        <InventoryMovementForm unit={item.unit} busy={recordBusy} onCancel={onCancelRecord} onSubmit={onSubmitMovement} />
+      ) : (
+        <Button size="sm" onClick={onStartRecord}>
+          <Plus className="h-4 w-4" /> Новое движение
+        </Button>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-2xs text-subtle-foreground">Леджер</span>
+        {movementsQuery.isLoading ? (
+          <div className="space-y-1.5">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : movements.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Движений пока нет.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {movements.map((movement) => (
+              <li key={movement.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-xs">
+                <div className="min-w-0">
+                  <p className="text-foreground">
+                    {MOVEMENT_TYPE_LABEL[movement.type]}
+                    {movement.note ? ` · ${movement.note}` : ""}
+                  </p>
+                  <p className="text-2xs text-subtle-foreground">{shortDateTime(movement.createdAt)}</p>
+                </div>
+                <span className={`shrink-0 font-medium ${movement.quantity < 0 ? "text-destructive" : "text-success"}`}>
+                  {movement.quantity > 0 ? "+" : ""}
+                  {movement.quantity} {item.unit}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

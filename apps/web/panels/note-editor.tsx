@@ -1,0 +1,595 @@
+"use client";
+
+import { useNoteBacklinks, useNoteTitles } from "@orion/core-react";
+import type { Note, Project } from "@orion/shared-types";
+import {
+  AutosaveStatus,
+  Button,
+  DropdownMenu,
+  IconButton,
+  MarkdownEditor,
+  MarkdownView,
+  SegmentedControl,
+  Select,
+  Sheet,
+  markdownOutline,
+  useToast
+} from "@orion/ui";
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  FileStack,
+  Hash,
+  History,
+  Link2,
+  List,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Trash2,
+  X
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent } from "react";
+import { EntityLinksSection } from "../components/entity-links";
+import { ShareGrantSection } from "../components/share-grant-section";
+import { formatDayTitle, fromDatetimeLocal, projectColor, relativeTime, toDatetimeLocal } from "../lib/format";
+import { describeError } from "../lib/error-message";
+import { NoteAutosave, type AutosaveConflict, type AutosaveState as NoteAutosaveState } from "../lib/note-autosave";
+import { focusNote } from "../lib/panel-bus";
+import { useEnabledModules } from "../lib/use-enabled-modules";
+import { NoteAttachmentsSection } from "./note-attachments";
+import { NoteHistory } from "./note-history";
+
+type EditorMode = "edit" | "preview";
+
+/** editedAt is null for pre-v0.8 notes — fall back to updatedAt so the sort/label never breaks. */
+export function contentTime(note: Note): string {
+  return note.editedAt ?? note.updatedAt;
+}
+
+export interface NoteEditorInput {
+  title: string;
+  body: string;
+  tags: string[];
+  eventAt: string | null;
+  /** Real project (v0.14), same field the tasks module already uses. */
+  projectId: string | null;
+}
+
+/**
+ * Note body + autosave — the second independent concern of NotesPanel
+ * (list/search/filters stay in NotesPanel.tsx). Same split as
+ * TasksPanel → task-card: the panel is layout, this file is the editor.
+ */
+export function NoteEditor({
+  note,
+  workspaceId,
+  projects,
+  busy,
+  onCreate,
+  onSave,
+  onClose,
+  onReload,
+  onTogglePin,
+  onToggleArchive,
+  onDuplicate,
+  onToggleTemplate,
+  onDelete
+}: {
+  note: Note | null;
+  workspaceId: string | undefined;
+  /** Active projects of this workspace — the "Проект" select. Absent = projects module is off. */
+  projects?: Project[];
+  busy: boolean;
+  onCreate: (input: NoteEditorInput) => Promise<void>;
+  /**
+   * Throws an `AutosaveConflict` (see `../lib/note-autosave`) on a 409 CAS
+   * mismatch — `NoteAutosave` catches that shape specifically to switch to
+   * the "conflict" state instead of a generic retryable error.
+   */
+  onSave: (id: string, input: NoteEditorInput, expectedRevision: number, opts?: { silent?: boolean }) => Promise<Note>;
+  onClose: () => void;
+  /** Ask the panel to remount this editor (e.g. after a revision restore replaced the content). */
+  onReload: () => void;
+  onTogglePin?: (note: Note) => void;
+  onToggleArchive?: (note: Note) => void;
+  onDuplicate?: (note: Note) => void;
+  onToggleTemplate?: (note: Note) => void;
+  onDelete?: (note: Note) => void;
+}): React.ReactElement {
+  const { toast } = useToast();
+  const { isEnabled } = useEnabledModules();
+  const calendarOn = isEnabled("calendar");
+  const { data: titles } = useNoteTitles(workspaceId);
+  const { data: backlinks } = useNoteBacklinks(workspaceId, note?.id);
+  const titleLookup = useMemo(() => new Map((titles ?? []).map((t) => [t.title.toLowerCase(), t])), [titles]);
+
+  const [title, setTitle] = useState(note?.title ?? "");
+  const [body, setBody] = useState(note?.body ?? "");
+  const [tags, setTags] = useState<string[]>(note?.tags ?? []);
+  const [tagDraft, setTagDraft] = useState("");
+  const [eventAt, setEventAt] = useState(toDatetimeLocal(note?.eventAt ?? null));
+  const [projectId, setProjectId] = useState(note?.projectId ?? "");
+  const [mode, setMode] = useState<EditorMode>("edit");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // S11: the compose form (note === null) always saves explicitly via the
+  // Create button and never autosaves, so it keeps the old plain
+  // "compare current fields to what was last saved" dirty check. An
+  // existing note's dirty/saving/error/conflict state instead comes from
+  // `NoteAutosave` (see below) — it's the only thing that knows whether the
+  // *server* has acknowledged the latest content, which a local diff can't.
+  const initial = useRef({
+    title: note?.title ?? "",
+    body: note?.body ?? "",
+    tags: note?.tags ?? [],
+    eventAt: note?.eventAt ?? null,
+    projectId: note?.projectId ?? null
+  });
+  const composeDirty =
+    title !== initial.current.title ||
+    body !== initial.current.body ||
+    eventAt !== toDatetimeLocal(initial.current.eventAt) ||
+    (projectId || null) !== initial.current.projectId ||
+    tags.length !== initial.current.tags.length ||
+    tags.some((t, i) => t !== initial.current.tags[i]);
+
+  const [autosaveState, setAutosaveState] = useState<NoteAutosaveState>("saved");
+  const [conflict, setConflict] = useState<AutosaveConflict | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const autosaveRef = useRef<NoteAutosave | null>(null);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  // One NoteAutosave per open note (and its workspace) — a save started for
+  // note A must never land on note B's UI state after the user switches, so
+  // switching notes disposes the old controller (which drops any in-flight
+  // result) and creates a fresh one seeded from the new note's own revision.
+  // Component unmount hits the same `dispose()` via the cleanup function.
+  useEffect(() => {
+    if (!note || !workspaceId) {
+      autosaveRef.current = null;
+      return;
+    }
+    const controller = new NoteAutosave(
+      { workspaceId, noteId: note.id },
+      {
+        debounceMs: 900,
+        revision: note.revision,
+        initial: { title: note.title, body: note.body, tags: note.tags, eventAt: note.eventAt, projectId: note.projectId },
+        save: async (identity, snapshot, expectedRevision) => {
+          const saved = await onSaveRef.current(
+            identity.noteId,
+            { title: snapshot.title, body: snapshot.body, tags: snapshot.tags, eventAt: snapshot.eventAt, projectId: snapshot.projectId },
+            expectedRevision,
+            { silent: true }
+          );
+          return { revision: saved.revision };
+        },
+        onStateChange: setAutosaveState,
+        onSaved: () => {
+          setConflict(null);
+          setSaveError(null);
+        },
+        onError: (err) => setSaveError(describeError(err)),
+        onConflict: (c) => setConflict(c)
+      }
+    );
+    autosaveRef.current = controller;
+    return () => {
+      controller.dispose();
+      if (autosaveRef.current === controller) autosaveRef.current = null;
+    };
+    // Recreate only when the identity changes — not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.id, workspaceId]);
+
+  const dirty = note ? autosaveState !== "saved" : composeDirty;
+
+  const words = useMemo(() => {
+    const m = body.trim().match(/[^\s]+/g);
+    return m ? m.length : 0;
+  }, [body]);
+  const readMin = Math.max(1, Math.round(words / 200));
+
+  const outline = useMemo(() => markdownOutline(body), [body]);
+
+  // Titles to offer in the `[[ ]]` autocomplete — everything except this note.
+  const wikiTargets = useMemo(
+    () => (titles ?? []).map((t) => t.title).filter((t) => t.toLowerCase() !== title.trim().toLowerCase()),
+    [titles, title]
+  );
+
+  function navigateWikiLink(target: string): void {
+    const match = (titles ?? []).find((t) => t.title.toLowerCase() === target.toLowerCase());
+    if (match) focusNote(match.id);
+    else toast({ title: `Заметки «${target}» нет`, tone: "default" });
+  }
+
+  // Feed every field change to the autosave controller — it owns its own
+  // debounce, serialization (one in-flight save) and trailing drain (S11).
+  // Skip while the title is blank: the server rejects that, and there's
+  // nothing useful to save yet (matches the old guard in the removed
+  // `runSave`). No effect for the compose form — `note` is null there.
+  useEffect(() => {
+    if (!note || !title.trim()) return;
+    autosaveRef.current?.setSnapshot({ title, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
+  }, [note, title, body, tags, eventAt, projectId]);
+
+  /** Explicit save (Submit button / Ctrl+S in the editor) — skips the debounce wait. */
+  function runSave(): void {
+    if (!note || !title.trim()) return;
+    autosaveRef.current?.flush();
+  }
+
+  /** "Загрузить последнюю версию" in the conflict banner — discards local edits, adopts the server's. */
+  function acceptServerVersion(): void {
+    if (!conflict) return;
+    setTitle(conflict.current.title);
+    setBody(conflict.current.body);
+    setTags(conflict.current.tags);
+    setEventAt(toDatetimeLocal(conflict.current.eventAt));
+    setProjectId(conflict.current.projectId ?? "");
+    initial.current = { ...conflict.current };
+    autosaveRef.current?.adoptServerState(conflict.current, conflict.currentRevision);
+    setConflict(null);
+  }
+
+  /** "Сохранить мою версию" — keeps local edits, adopts the server's revision so the next save actually lands. */
+  function overwriteServerVersion(): void {
+    if (!conflict) return;
+    autosaveRef.current?.forceRevision(conflict.currentRevision);
+    setConflict(null);
+    autosaveRef.current?.retry();
+  }
+
+  // Navigation guard (S11): warn on tab close / reload while there's
+  // anything the server hasn't acknowledged yet (dirty, mid-save, or a
+  // save that failed and is sitting as a local draft) — the one case an
+  // in-app "Закрыть" confirm can't cover.
+  useEffect(() => {
+    if (!dirty) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent): void {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
+
+  function requestClose(): void {
+    if (dirty && !window.confirm("Есть несохранённые изменения — закрыть без сохранения?")) return;
+    onClose();
+  }
+
+  function addTag(raw: string): void {
+    const tag = raw.trim();
+    if (!tag || tags.includes(tag)) return;
+    setTags((cur) => [...cur, tag]);
+    setTagDraft("");
+  }
+
+  function jumpToHeading(slug: string): void {
+    setMode("preview");
+    // Wait for the preview to mount before scrolling to the anchor.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(slug)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (!title.trim()) return;
+    if (note) {
+      runSave();
+    } else {
+      await onCreate({ title, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
+    }
+  }
+
+  const composing = note === null;
+  const createDisabled = busy || !title.trim();
+  const saving = autosaveState === "saving";
+
+  const menuItems: ComponentProps<typeof DropdownMenu>["items"] = [];
+  if (note) {
+    if (onTogglePin) {
+      menuItems.push({
+        label: note.pinnedAt ? "Открепить" : "Закрепить",
+        icon: note.pinnedAt ? PinOff : Pin,
+        onSelect: () => onTogglePin(note)
+      });
+    }
+    if (onToggleArchive) {
+      menuItems.push({
+        label: note.archivedAt ? "Из архива" : "В архив",
+        icon: note.archivedAt ? ArchiveRestore : Archive,
+        onSelect: () => onToggleArchive(note)
+      });
+    }
+    if (onDuplicate) {
+      menuItems.push({ label: "Дублировать", icon: Copy, onSelect: () => onDuplicate(note) });
+    }
+    if (onToggleTemplate) {
+      menuItems.push({
+        label: note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном",
+        icon: FileStack,
+        onSelect: () => onToggleTemplate(note)
+      });
+    }
+    if (onDelete) {
+      menuItems.push("separator", { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => onDelete(note) });
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="flex h-full flex-col">
+      <div className="orion-scroll flex-1 overflow-y-auto p-5 lg:px-8">
+        <div className="w-full max-w-[65ch] space-y-3">
+          <div className="flex items-start gap-3">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Заголовок"
+              required
+              className="min-w-0 flex-1 bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
+            />
+            <div className="flex shrink-0 items-center gap-2 pt-1">
+              <AutosaveStatus state={autosaveState === "conflict" ? "error" : autosaveState} explicit={composing} />
+              {!composing && autosaveState === "error" ? (
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => autosaveRef.current?.retry()}
+                  title={saveError ?? undefined}
+                >
+                  Повторить
+                </Button>
+              ) : null}
+              {composing ? (
+                <Button type="submit" variant="primary" size="sm" disabled={createDisabled} title={!title.trim() ? "Введите заголовок" : undefined}>
+                  Создать
+                </Button>
+              ) : null}
+              {note && menuItems.length > 0 ? (
+                <DropdownMenu
+                  align="end"
+                  trigger={({ toggle }) => (
+                    <IconButton label="Действия" size="sm" onClick={toggle}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </IconButton>
+                  )}
+                  items={menuItems}
+                />
+              ) : null}
+            </div>
+          </div>
+          {note ? (
+            <p className="text-micro text-subtle-foreground">
+              {note.dailyOn ? `Ежедневная · ${formatDayTitle(note.dailyOn)} · ` : ""}
+              {note.isTemplate ? "Шаблон · " : ""}Создано {relativeTime(note.createdAt)} · изменено{" "}
+              {relativeTime(contentTime(note))}
+            </p>
+          ) : null}
+
+          {note && conflict ? (
+            <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-label text-foreground">
+              <p>
+                Эту заметку сохранил кто-то другой (или вы сами в другой вкладке), пока вы её редактировали. Выберите,
+                какую версию оставить — обе не сохранятся автоматически.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="subtle" size="sm" onClick={acceptServerVersion}>
+                  Загрузить их версию
+                </Button>
+                <Button type="button" variant="primary" size="sm" onClick={overwriteServerVersion}>
+                  Сохранить мою версию поверх
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex items-center justify-between gap-2 border-y border-border py-1.5">
+            <SegmentedControl<EditorMode>
+              value={mode}
+              onChange={setMode}
+              size="sm"
+              options={[
+                { value: "edit", label: "Правка" },
+                { value: "preview", label: "Просмотр" }
+              ]}
+            />
+            <div className="flex items-center gap-1.5">
+              {words > 0 ? (
+                <span className="text-micro text-subtle-foreground">
+                  {words} сл · ~{readMin} мин
+                </span>
+              ) : null}
+              {outline.length > 0 ? (
+                <DropdownMenu
+                  align="end"
+                  trigger={({ toggle }) => (
+                    <IconButton label="Оглавление" size="sm" onClick={toggle}>
+                      <List className="h-4 w-4" />
+                    </IconButton>
+                  )}
+                  items={outline.map((h) => ({
+                    label: `${"  ".repeat(Math.max(0, h.level - 1))}${h.text || "—"}`,
+                    icon: Hash,
+                    onSelect: () => jumpToHeading(h.slug)
+                  }))}
+                />
+              ) : null}
+              {note ? (
+                <IconButton label="История версий" size="sm" onClick={() => setHistoryOpen(true)}>
+                  <History className="h-4 w-4" />
+                </IconButton>
+              ) : null}
+            </div>
+          </div>
+
+          {mode === "edit" ? (
+            <MarkdownEditor
+              value={body}
+              onChange={setBody}
+              onSave={() => void runSave()}
+              placeholder="Текст заметки… Markdown и [[ссылки]] поддерживаются"
+              className="min-h-[18rem]"
+              wikiLinkTargets={wikiTargets}
+            />
+          ) : body.trim() ? (
+            <MarkdownView
+              source={body}
+              className="min-h-[18rem]"
+              onWikiLink={navigateWikiLink}
+              getWikiLinkPreview={(target) => titleLookup.get(target.toLowerCase())}
+            />
+          ) : (
+            <p className="min-h-[18rem] text-body text-subtle-foreground">Пусто — переключитесь на «Правку».</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                style={projectColor(tag)}
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-micro font-medium"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => setTags((cur) => cur.filter((x) => x !== tag))}
+                  aria-label={`Убрать тег ${tag}`}
+                  className="opacity-60 hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  addTag(tagDraft);
+                } else if (e.key === "Backspace" && !tagDraft && tags.length > 0) {
+                  setTags((cur) => cur.slice(0, -1));
+                }
+              }}
+              onBlur={() => addTag(tagDraft)}
+              placeholder={tags.length === 0 ? "Новый тег" : "Ещё тег"}
+              className="min-w-[6rem] flex-1 bg-transparent text-micro text-foreground outline-none placeholder:text-subtle-foreground"
+            />
+          </div>
+          {calendarOn ? (
+            <label className="flex items-center gap-2 text-label text-subtle-foreground">
+              Показать в календаре
+              <input
+                type="datetime-local"
+                value={eventAt}
+                onChange={(e) => setEventAt(e.target.value)}
+                className="rounded-md border border-border bg-transparent px-2 py-1 text-foreground outline-none focus:border-accent"
+              />
+              {eventAt ? (
+                <button type="button" onClick={() => setEventAt("")} className="text-subtle-foreground hover:text-foreground">
+                  Убрать
+                </button>
+              ) : null}
+            </label>
+          ) : null}
+          {projects ? (
+            <label className="flex items-center gap-2 text-label text-subtle-foreground">
+              Проект
+              <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">Без проекта</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
+
+          {note ? (
+            <div className="border-t border-border pt-3">
+              <EntityLinksSection workspaceId={workspaceId} type="note" id={note.id} />
+            </div>
+          ) : null}
+
+          {note ? (
+            <div className="border-t border-border pt-3">
+              <ShareGrantSection workspaceId={workspaceId} type="note" id={note.id} />
+            </div>
+          ) : null}
+
+          {note ? (
+            <div className="border-t border-border pt-3">
+              <NoteAttachmentsSection workspaceId={workspaceId} noteId={note.id} />
+            </div>
+          ) : null}
+
+          {note && backlinks && backlinks.length > 0 ? (
+            <div className="space-y-1.5 border-t border-border pt-3">
+              <p className="flex items-center gap-1.5 text-micro font-medium text-subtle-foreground">
+                <Link2 className="h-3 w-3" /> Упоминания · {backlinks.length}
+              </p>
+              <ul className="space-y-1">
+                {backlinks.map((bl) => (
+                  <li key={bl.id}>
+                    <button
+                      type="button"
+                      onClick={() => focusNote(bl.id)}
+                      className="w-full rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-card-hover"
+                    >
+                      <span className="block truncate text-label font-medium text-foreground">{bl.title || "Без заголовка"}</span>
+                      {bl.snippet ? (
+                        <span className="mt-0.5 block truncate text-micro text-subtle-foreground">{bl.snippet}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
+        <span />
+        <div className="flex gap-2">
+          <Button type="button" variant="subtle" size="sm" onClick={requestClose}>
+            Закрыть
+          </Button>
+          {composing ? (
+            <Button type="submit" variant="primary" size="sm" disabled={createDisabled} title={!title.trim() ? "Введите заголовок" : undefined}>
+              Создать
+            </Button>
+          ) : (
+            <Button type="submit" size="sm" disabled={busy || saving || !title.trim() || !dirty}>
+              Сохранить
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {note ? (
+        <Sheet open={historyOpen} onClose={() => setHistoryOpen(false)} title="История версий" width="40rem" bare>
+          <NoteHistory
+            workspaceId={workspaceId}
+            noteId={note.id}
+            currentTitle={title}
+            currentBody={body}
+            onRestored={() => {
+              setHistoryOpen(false);
+              onReload();
+            }}
+          />
+        </Sheet>
+      ) : null}
+    </form>
+  );
+}

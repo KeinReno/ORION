@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createTaskInputSchema, taskStatusSchema, updateTaskInputSchema } from "./task";
+import { createTaskInputSchema, isTaskClosed, TASK_CLOSED_STATUSES, taskStatusSchema, updateTaskInputSchema } from "./task";
 import { createNoteInputSchema } from "./note";
-import { authResponseSchema, refreshInputSchema, registerInputSchema } from "./auth";
+import { authResponseSchema, loginInputSchema, refreshInputSchema, registerInputSchema } from "./auth";
 
 // The zod schemas in this package are the single source of truth for the
 // API contract (backend ZodValidationPipe, frontend ApiClient response
@@ -23,14 +23,26 @@ describe("task schemas", () => {
     expect(createTaskInputSchema.safeParse({ title: "x", dueAt: "not-a-date" }).success).toBe(false);
   });
 
-  it("only allows the three known statuses", () => {
-    expect(taskStatusSchema.options).toEqual(["todo", "in_progress", "done"]);
+  it("only allows the five known statuses", () => {
+    expect(taskStatusSchema.options).toEqual(["backlog", "todo", "in_progress", "done", "canceled"]);
     expect(taskStatusSchema.safeParse("archived").success).toBe(false);
   });
 
   it("update schema keeps every field optional", () => {
     expect(updateTaskInputSchema.parse({})).toEqual({});
     expect(updateTaskInputSchema.safeParse({ status: "in_progress" }).success).toBe(true);
+  });
+
+  it("treats done and canceled as closed, everything else as open", () => {
+    // Every "is it still actionable" decision in the codebase goes through
+    // this helper — before it existed, six call sites compared against
+    // "done" by hand and counted canceled tasks as overdue.
+    expect(isTaskClosed("done")).toBe(true);
+    expect(isTaskClosed("canceled")).toBe(true);
+    for (const status of ["backlog", "todo", "in_progress"] as const) {
+      expect(isTaskClosed(status)).toBe(false);
+    }
+    expect(TASK_CLOSED_STATUSES).toEqual(["done", "canceled"]);
   });
 });
 
@@ -41,29 +53,41 @@ describe("note schema", () => {
 });
 
 describe("auth schemas", () => {
-  it("register requires an 8+ char password and a valid email", () => {
-    expect(
-      registerInputSchema.safeParse({ email: "a@b.co", password: "short", name: "A" }).success
-    ).toBe(false);
-    expect(
-      registerInputSchema.safeParse({ email: "not-email", password: "longenough", name: "A" }).success
-    ).toBe(false);
-    expect(
-      registerInputSchema.safeParse({ email: "a@b.co", password: "longenough", name: "A" }).success
-    ).toBe(true);
+  it("register accepts name+password without email, or a PIN", () => {
+    expect(registerInputSchema.safeParse({ name: "A", password: "short" }).success).toBe(false);
+    expect(registerInputSchema.safeParse({ name: "A", password: "longenough" }).success).toBe(true);
+    expect(registerInputSchema.safeParse({ name: "A", pin: "1234" }).success).toBe(true);
+    expect(registerInputSchema.safeParse({ name: "A", pin: "12" }).success).toBe(false);
+    expect(registerInputSchema.safeParse({ name: "A", email: "not-email", password: "longenough" }).success).toBe(false);
+    expect(registerInputSchema.safeParse({ name: "A", email: "a@b.co", password: "longenough" }).success).toBe(true);
+  });
+
+  it("login accepts a userId or the legacy email field", () => {
+    expect(loginInputSchema.safeParse({ userId: "u1", password: "1" }).success).toBe(true);
+    expect(loginInputSchema.safeParse({ email: "1", password: "1" }).success).toBe(true);
+    expect(loginInputSchema.safeParse({ userId: "u1", pin: "1234" }).success).toBe(true);
+    expect(loginInputSchema.safeParse({ email: "  ", password: "1" }).success).toBe(false);
   });
 
   it("refresh input rejects an empty token", () => {
     expect(refreshInputSchema.safeParse({ refreshToken: "" }).success).toBe(false);
   });
 
-  it("auth response requires both tokens and a user", () => {
-    const ok = {
-      accessToken: "a",
-      refreshToken: "r",
-      user: { id: "1", email: "a@b.co", name: "A" }
+  it("auth response requires both tokens and a complete user", () => {
+    const user = {
+      id: "1",
+      email: "a@b.co",
+      name: "A",
+      unlockKind: "password" as const,
+      hasAvatar: false,
+      passwordStrength: 2,
+      passwordChangedAt: null
     };
+    const ok = { accessToken: "a", refreshToken: "r", user };
     expect(authResponseSchema.safeParse(ok).success).toBe(true);
     expect(authResponseSchema.safeParse({ ...ok, refreshToken: undefined }).success).toBe(false);
+    // The password fields are part of the contract, not optional extras —
+    // dropping them must fail loudly instead of being defaulted away.
+    expect(authResponseSchema.safeParse({ ...ok, user: { id: "1", email: "a@b.co", name: "A" } }).success).toBe(false);
   });
 });

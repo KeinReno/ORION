@@ -1,0 +1,236 @@
+import { NotificationCenterService } from "../src/notifications/notification-center.service";
+import { createHash } from "node:crypto";
+import type { INestApplication } from "@nestjs/common";
+import { NestFactory } from "@nestjs/core";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { AppModule } from "../src/app.module";
+import { PrismaService } from "../src/common/prisma.service";
+import { configureApp } from "../src/configure-app";
+import { STORAGE_ADAPTER, type StorageAdapter } from "../src/storage/storage-adapter";
+import { collectBlobRefs } from "../src/sync/blob-manifest";
+import { decryptSnapshot, encryptSnapshot } from "../src/sync/sync-crypto";
+import { SnapshotService } from "../src/sync/snapshot.service";
+import { NotesService } from "../src/notes/notes.service";
+import { WebdavRemote } from "../src/sync/webdav-remote";
+
+/**
+ * S04 (10-BACKLOG.md) — файловые бэкапы и восстановление с recovery.
+ *
+ * Инвариант: `SyncService.backup()`/`restore()` копируют не только строки
+ * БД (S03), но и байты документов, и делают это так, что сбой посередине
+ * либо ничего не портит (backup — ничего не уходит на удалёнку, пока весь
+ * снапшот+манифест не собран в памяти), либо оставляет уже применённое
+ * дерево файлов нетронутым до подтверждённого свопа (restore — staging +
+ * атомарный rename, см. `blob-backup.service.ts`).
+ *
+ * `WebdavRemote` застублен тем же паттерном, что уже использует S02
+ * (`api-rls.integration.test.ts`) — никакого реального WebDAV-сервера,
+ * шифрование/дешифровка снапшота настоящие. `StorageAdapter` — настоящий
+ * `LocalDiskStorage` на `STORAGE_DIR` из `setup-integration.ts`; сбой в
+ * него инжектируется через `vi.spyOn` на реальном singleton-инстансе.
+ */
+describe("file backups and restore with recovery (S04)", () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  let storage: StorageAdapter;
+  let baseUrl: string;
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const emailPrefix = `blob-backup-${runId}`;
+
+  beforeAll(async () => {
+    app = await NestFactory.create(AppModule, { logger: false });
+    configureApp(app);
+    await app.listen(0, "127.0.0.1");
+    const address = app.getHttpServer().address() as { port: number };
+    baseUrl = `http://127.0.0.1:${address.port}`;
+    prisma = app.get(PrismaService);
+    storage = app.get(STORAGE_ADAPTER);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterAll(async () => {
+    if (prisma) {
+      await prisma.asSystem(async (tx) => {
+        const users = await tx.user.findMany({
+          where: { email: { startsWith: emailPrefix } },
+          select: { id: true }
+        });
+        if (users.length === 0) return;
+        const userIds = users.map((u) => u.id);
+        const memberships = await tx.workspaceMember.findMany({
+          where: { userId: { in: userIds } },
+          select: { workspaceId: true }
+        });
+        const workspaceIds = [...new Set(memberships.map((m) => m.workspaceId))];
+        await tx.user.deleteMany({ where: { id: { in: userIds } } });
+        await tx.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
+        const leftovers = await tx.workspace.count({ where: { id: { in: workspaceIds } } });
+        if (leftovers > 0) throw new Error(`Cleanup left ${leftovers} test workspace(s) behind`);
+      });
+    }
+    await app?.close();
+  });
+
+  it("REVIEW: DB failure after blob swap must preserve live bytes", async () => {
+    const actor = await register("review-db-failure");
+    const uploaded = await uploadFile(actor, "review.txt", "BACKUP");
+    expect(uploaded.status).toBe(201);
+    await putRemote(actor);
+    const capture = stubWebdav();
+    try {
+      const backup = await request(`/workspaces/${actor.workspaceId}/sync/backup`, { method: "POST", token: actor.accessToken });
+      expect(backup.status).toBe(201);
+      await replaceContent(actor, uploaded.data[0].id, "LATEST");
+      vi.spyOn(app.get(SnapshotService), "apply").mockRejectedValueOnce(new Error("review injected DB failure"));
+      const restore = await request(`/workspaces/${actor.workspaceId}/sync/restore`, { method: "POST", token: actor.accessToken, body: { dryRun: false, confirmWorkspaceId: actor.workspaceId } });
+      expect(restore.status).toBe(500);
+      expect(await fetchContent(actor, uploaded.data[0].id)).toBe("LATEST");
+    } finally { capture.restore(); }
+  });
+
+  it("REVIEW: restoring a revision must invalidate stale editor revision", async () => {
+    const actor = await register("review-note-cas");
+    const notes = app.get(NotesService);
+    const created = await notes.create(actor.userId, actor.workspaceId, { title: "Review", body: "OLD", tags: [] });
+    const current = await notes.update(actor.userId, actor.workspaceId, created.id, { body: "NEW", expectedRevision: created.revision });
+    const historical = await prisma.withUser(actor.userId, tx => tx.noteRevision.findFirstOrThrow({ where: { noteId: created.id } }));
+    const restored = await notes.restoreRevision(actor.userId, actor.workspaceId, created.id, historical.id);
+    expect(restored.body).toBe("OLD");
+    await expect(notes.update(actor.userId, actor.workspaceId, created.id, { body: "STALE", expectedRevision: current.revision })).rejects.toThrow();
+  });
+  it("REVIEW: notifications must hide entities after module access is revoked", async () => {
+    const owner = await register("review-owner");
+    const member = await register("review-member");
+    await prisma.asSystem(async tx => {
+      await tx.workspaceMember.create({ data: { workspaceId: owner.workspaceId, userId: member.userId, role: "member" } });
+      await tx.notification.create({ data: { workspaceId: owner.workspaceId, recipientId: member.userId, kind: "task_due", title: "SECRET TASK TITLE", entityType: "task", entityId: "review-task" } });
+      await tx.workspace.update({ where: { id: owner.workspaceId }, data: { restrictedModules: ["tasks"] } });
+    });
+    const notifications = await app.get(NotificationCenterService).list(member.userId, owner.workspaceId);
+    expect(notifications.some(n => n.title === "SECRET TASK TITLE")).toBe(false);
+  });
+  // --- helpers ---------------------------------------------------------
+
+  interface Actor {
+    workspaceId: string;
+    userId: string;
+    accessToken: string;
+  }
+
+  async function register(name: string): Promise<Actor> {
+    const email = `${emailPrefix}-${name}@example.test`;
+    const response = await fetch(`${baseUrl}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password: "integration-password-123", name })
+    });
+    expect(response.status).toBe(201);
+    const data = (await response.json()) as { accessToken: string; user: { id: string } };
+    const workspacesResponse = await fetch(`${baseUrl}/workspaces/me`, {
+      headers: { Authorization: `Bearer ${data.accessToken}` }
+    });
+    const workspaces = (await workspacesResponse.json()) as Array<{ id: string }>;
+    expect(workspaces).toHaveLength(1);
+    return { workspaceId: workspaces[0].id, userId: data.user.id, accessToken: data.accessToken };
+  }
+
+  async function uploadFile(
+    actor: Actor,
+    name: string,
+    content: string
+  ): Promise<{ status: number; data: Array<{ id: string }> }> {
+    const form = new FormData();
+    form.append("files", new Blob([content], { type: "text/plain" }), name);
+    const response = await fetch(`${baseUrl}/workspaces/${actor.workspaceId}/documents/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${actor.accessToken}` },
+      body: form
+    });
+    return { status: response.status, data: (await response.json()) as Array<{ id: string }> };
+  }
+
+  async function replaceContent(actor: Actor, id: string, content: string): Promise<void> {
+    const form = new FormData();
+    form.append("file", new Blob([content], { type: "text/plain" }), "unused.txt");
+    const response = await fetch(`${baseUrl}/workspaces/${actor.workspaceId}/documents/${id}/content`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${actor.accessToken}` },
+      body: form
+    });
+    expect(response.status).toBe(201);
+  }
+
+  async function fetchContent(actor: Actor, id: string): Promise<string> {
+    const response = await fetch(`${baseUrl}/workspaces/${actor.workspaceId}/documents/${id}/content`, {
+      headers: { Authorization: `Bearer ${actor.accessToken}` }
+    });
+    expect(response.status).toBe(200);
+    return response.text();
+  }
+
+  async function putRemote(actor: Actor): Promise<void> {
+    const res = await request(`/workspaces/${actor.workspaceId}/sync/remote`, {
+      method: "PUT",
+      token: actor.accessToken,
+      body: {
+        kind: "webdav",
+        url: "https://example.invalid/dav",
+        username: "u",
+        password: "p",
+        baseDir: "/ORION",
+        depthInfinity: true,
+        encAlgo: "rclone-base64",
+        autoEveryMs: -1
+      }
+    });
+    expect(res.status).toBe(200);
+  }
+
+  /**
+   * Same stubbing pattern as S02: captures whatever backup() uploads as
+   * `latest.orion` and hands it back to restore(). Returns the mutable
+   * capture object directly (not a getter/setter wrapper) so a test can also
+   * pre-seed `capture.sealedLatest` itself (S04d, simulating a legacy file).
+   */
+  function stubWebdav(): { sealedLatest: Buffer | null; restore: () => void } {
+    const capture: { sealedLatest: Buffer | null; restore: () => void } = {
+      sealedLatest: null,
+      restore: () => {}
+    };
+    const spies = [
+      vi.spyOn(WebdavRemote.prototype, "ensureDir").mockResolvedValue(undefined),
+      vi.spyOn(WebdavRemote.prototype, "putFile").mockImplementation(async (rel: string, data: Buffer) => {
+        if (rel.endsWith("latest.orion")) capture.sealedLatest = data;
+      }),
+      vi.spyOn(WebdavRemote.prototype, "exists").mockResolvedValue(true),
+      vi.spyOn(WebdavRemote.prototype, "getFile").mockImplementation(async () => {
+        if (!capture.sealedLatest) throw new Error("test setup bug: no backup captured yet");
+        return capture.sealedLatest;
+      })
+    ];
+    capture.restore = () => spies.forEach((s) => s.mockRestore());
+    return capture;
+  }
+
+  async function request<T = unknown>(
+    path: string,
+    opts: { method?: string; token?: string; body?: unknown }
+  ): Promise<{ status: number; data: T }> {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: opts.method ?? "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {})
+      },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
+    });
+    const text = await response.text();
+    return { status: response.status, data: (text ? JSON.parse(text) : undefined) as T };
+  }
+});
+
+
+

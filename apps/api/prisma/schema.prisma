@@ -8,13 +8,28 @@ datasource db {
 }
 
 model User {
-  id            String            @id @default(uuid())
-  email         String            @unique
-  passwordHash  String
-  name          String
-  createdAt     DateTime          @default(now())
-  memberships   WorkspaceMember[]
-  refreshTokens RefreshToken[]
+  id                String            @id @default(uuid())
+  /// Optional for local accounts — invite-by-email still needs it when used.
+  email             String?           @unique
+  passwordHash      String
+  name              String
+  /// "password" | "pin" — both secrets live in passwordHash (argon2).
+  unlockKind        String            @default("password")
+  hasAvatar         Boolean           @default(false)
+  avatarMime        String?
+  passwordStrength  Int               @default(0)
+  passwordChangedAt DateTime?
+  createdAt         DateTime           @default(now())
+  memberships       WorkspaceMember[]
+  refreshTokens     RefreshToken[]
+  preference        UserPreference?
+  sentInvites       WorkspaceInvite[]
+  timeEntries       TimeEntry[]
+  notifications     Notification[]
+  taskComments      TaskComment[]
+  taskActivities    TaskActivity[]
+  ownedReminders    EntityReminder[] @relation("EntityReminderOwner")
+  receivedReminders EntityReminder[] @relation("EntityReminderRecipient")
 
   @@map("users")
 }
@@ -28,6 +43,10 @@ model RefreshToken {
   /// Id of the token this one was rotated into — plain audit field, not a
   /// Prisma relation, to avoid self-referencing FK/cascade complications.
   replacedById String?
+  userAgent    String?
+  ipAddress    String?
+  deviceName   String?
+  lastUsedAt   DateTime  @default(now())
   createdAt    DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -36,20 +55,198 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model UserPreference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  theme                String   @default("system")
+  accent               String   @default("violet")
+  density              String   @default("comfortable")
+  /// "none" | "aurora" | "grid" | "liquid-ether" | "light-pillar" | "dark-veil" | "shape-waves"
+  /// — decorative backdrop behind the app shell. The last four are WebGL (OGL),
+  /// the rest are plain CSS.
+  backgroundStyle      String   @default("none")
+  /// "low" | "medium" | "high" — opacity multiplier for backgroundStyle.
+  backgroundIntensity  String   @default("medium")
+  /// Per-effect tunables for the four WebGL backgroundStyle variants, keyed by
+  /// variant id — {"liquid-ether": {...}, "light-pillar": {...}, ...}. Each
+  /// variant keeps its own shape (reactbits.dev has a different prop set per
+  /// effect); see `backgroundEffectSettingsSchema` in shared-types for the
+  /// authoritative shape and defaults. Stored as raw JSON rather than one
+  /// column per field — four effects' worth of individually-typed columns
+  /// would be a lot of schema churn for what's tuned entirely through one
+  /// settings form and never queried by the DB itself.
+  backgroundEffectSettings Json  @default("{}")
+  /// Follows the pointer with a bracket/reticle overlay (reactbits TargetCursor).
+  targetCursorEnabled  Boolean  @default(false)
+  /// "solid" | "glass" — whether sidebar/panels/cards are translucent+blurred
+  /// so backgroundStyle actually shows through (solid panels hide it entirely).
+  surfaceStyle         String   @default("solid")
+  /// 0.1–1 — panel/card/sidebar opacity in glass mode (replaces the old fixed
+  /// 0.6/0.55/0.45 constants in globals.css).
+  panelOpacity         Float    @default(0.6)
+  /// 0–40 (px) — backdrop-filter blur radius in glass mode.
+  panelBlur            Int      @default(16)
+  /// Hex or null — null follows the global accent; lets panels/cards carry a
+  /// different tint than buttons/links/highlights.
+  panelAccent          String?
+  timeZone             String?
+  weekStartsOn         Int      @default(1)
+  desktopNotifications Boolean  @default(true)
+  taskReminders        Boolean  @default(true)
+  eventReminders       Boolean  @default(true)
+  financeAlerts        Boolean  @default(true)
+  inventoryAlerts      Boolean  @default(true)
+  quietHoursStart      String?
+  quietHoursEnd        String?
+  dashboardWidgets     String[]  @default(["focus", "calendar", "tasks", "finance", "notes", "projects"])
+  /// When set, the first-run card on Today stays hidden. Null = not dismissed.
+  onboardingCompletedAt DateTime?
+  /// U05 (24-CONNECTED-CORE-BACKLOG.md) — personal grouping of the user's own
+  /// workspaces ("Дом"/"Работа"), NOT a new ownership/access hierarchy: a
+  /// sphere name/order/composition is per-user UI metadata and grants no
+  /// rights (see 23-UNIVERSAL-CONNECTED-CORE.md "Иерархия и владение"). The
+  /// same shared workspace can sit in different spheres for different
+  /// members. Shape: `WorkspaceSphere[]` = `{ id, name, order, workspaceIds }`
+  /// (see `workspaceSphereSchema` in shared-types) — a JSON column, not a
+  /// separate table, because it is read/written as one small per-user blob
+  /// and never queried by the DB itself (mirrors backgroundEffectSettings
+  /// above). A workspace the user is no longer a member of is filtered out
+  /// lazily on every read (`SettingsService.getOrganization`), not cleaned up
+  /// eagerly on membership revoke — so it can never go stale.
+  spheres              Json      @default("[]")
+  /// U05 — pinned-for-quick-access workspace ids, independent of spheres
+  /// ("для быстрого доступа есть независимое избранное" in the spec). Same
+  /// lazy-filter-by-membership treatment as `spheres`.
+  favoriteWorkspaceIds String[]  @default([])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
 model Workspace {
   id        String            @id @default(uuid())
   name      String
+  /// Unguessable token for the read-only .ics subscription feed
+  /// (GET /calendar/:token.ics — no auth guard, token *is* the credential).
+  /// Nullable only for pre-v0.10 rows; the migration backfills every row and
+  /// AuthService.register sets it for new workspaces.
+  icsToken  String?           @unique
+  /// Domain modules the owner turned off for this workspace. Empty = all
+  /// catalog modules stay on. Disable never deletes rows; re-enable restores
+  /// the panel and API. Shell surfaces (dashboard/inbox/settings/sync) are
+  /// not stored here — they are core, not modules.
+  disabledModules String[]    @default([])
+  /// Plugin ids whose enabled state was flipped away from PLUGIN_CATALOG's
+  /// `defaultEnabled` — NOT a flat "disabled" list like disabledModules,
+  /// because a plugin can default off (see isPluginEnabled). Same
+  /// "override never deletes rows" rule.
+  pluginOverrides String[]    @default([])
+  /// Module ids visible only to `owner`/`lead` members — a plain `member`
+  /// gets 403 from the API and never sees the panel. Unlike disabledModules,
+  /// this never turns the module off for owner/lead; it's a visibility gate,
+  /// not an availability one. Enforced entirely in application code
+  /// (ModulesService.assertEnabledTx) — Postgres RLS stays membership-only,
+  /// same as every other table (see CLAUDE.md "Postgres RLS").
+  restrictedModules String[]  @default([])
   createdAt DateTime          @default(now())
-  members   WorkspaceMember[]
-  notes     Note[]
-  tasks     Task[]
+  members       WorkspaceMember[]
+  invites       WorkspaceInvite[]
+  notes         Note[]
+  noteLinks     NoteLink[]
+  noteRevisions NoteRevision[]
+  tasks         Task[]
+  events        Event[]
+  projects      Project[]
+  notifications Notification[]
+  inboxItems    InboxItem[]
+  savedTaskViews SavedTaskView[]
+  taskDependencies TaskDependency[]
+  taskComments  TaskComment[]
+  taskActivities TaskActivity[]
+  entityLinks   EntityLink[]
+  entityReminders EntityReminder[]
+  calendarConnections CalendarConnection[]
+
+  financeAccounts       Account[]
+  financeCategories     FinanceCategory[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+  categoryRules         CategoryRule[]
+  savingsGoals          SavingsGoal[]
+  documents             Document[]
+  documentVersions      DocumentVersion[]
+  documentAnnotations   DocumentAnnotation[]
+  noteAttachments       NoteAttachment[]
+  timeEntries           TimeEntry[]
+  habits                Habit[]
+  habitEntries          HabitEntry[]
+  lists                 List[]
+  listItems             ListItem[]
+  inventoryItems        InventoryItem[]
+  inventoryMovements    InventoryMovement[]
+  milestones            Milestone[]
+  milestoneDependencies MilestoneDependency[]
+
+  /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
+  /// настроенная удалёнка на рабочее пространство на этом узле.
+  syncRemote            SyncRemote?
 
   @@map("workspaces")
+}
+
+model Project {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  name         String
+  description  String    @default("")
+  status       String    @default("active")
+  color        String?
+  startAt      DateTime?
+  dueAt        DateTime?
+  budgetAmount Int?
+  /// ORION v0.19: ставка за час в копейках — то, чего не хватало, чтобы
+  /// превратить учтённое время в деньги. Null = ставка не задана, и стоимость
+  /// по проекту просто не считается (никаких «нулевых» ставок по умолчанию:
+  /// ноль означал бы «работа бесплатна», а это другое утверждение).
+  hourlyRate   Int?
+  currency     String    @default("RUB")
+  /// ORION v0.27: «где я остановился» — one free-text scratchpad, distinct
+  /// from the Notes module. A note has revisions and a title and is a
+  /// document; this is operational memory that just gets overwritten, shown
+  /// first when the project is reopened. Empty string, not null, so the
+  /// panel never has to special-case "never set" vs "cleared".
+  contextNote  String    @default("")
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks        Task[]
+  notes        Note[]
+  events       Event[]
+  transactions Transaction[]
+  documents    Document[]
+  timeEntries  TimeEntry[]
+  inventoryItems InventoryItem[]
+  milestones   Milestone[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([dueAt])
+  @@map("projects")
 }
 
 enum WorkspaceRole {
   owner
   member
+  /// "Команда" plugin (extends tasks). Can invite/revoke/remove members and
+  /// assign tasks to someone other than themselves; cannot change anyone's
+  /// role (owner-only, so a lead can't escalate itself or others to owner).
+  lead
 }
 
 model WorkspaceMember {
@@ -61,46 +258,1299 @@ model WorkspaceMember {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedTasks Task[]
 
   @@unique([workspaceId, userId])
   @@map("workspace_members")
 }
 
+enum WorkspaceInviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+/// Invite-by-email — the only way (besides registering yourself) a
+/// WorkspaceMember row for a second person gets created. `tokenHash` follows
+/// RefreshToken's precedent: the raw token is returned to the inviter exactly
+/// once (in the create response, as `acceptUrl`) and never stored — there is
+/// no outbound email integration yet (v1 is a dry-run/copy-link flow, same
+/// posture as the Telegram integration before a bot token is configured).
+model WorkspaceInvite {
+  id          String                @id @default(uuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole         @default(member)
+  tokenHash   String                @unique
+  status      WorkspaceInviteStatus @default(pending)
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime              @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("workspace_invites")
+}
+
 model Note {
+  id          String    @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  title       String
+  body        String    @default("")
+  /// Free-form labels, same idea as Task.projectTag but multi-valued —
+  /// a native Postgres array column, not a join table (no cross-note
+  /// tag management needed yet, see docs/PLAN.md v0.7).
+  tags        String[]  @default([])
+  /// Non-null pins the note to the top of the list; the timestamp itself
+  /// (not just a boolean) doubles as "pinned since", for a stable sort
+  /// among several pinned notes.
+  pinnedAt    DateTime?
+  /// Optional date that puts this note on the calendar alongside tasks —
+  /// a note is not a task, so this is deliberately its own field rather
+  /// than reusing Task.dueAt semantics (no status/overdue concept here).
+  eventAt     DateTime?
+  /// "Content last changed" — set by NotesService *only* when title/body/tags
+  /// change, never on a pure pin/unpin. `updatedAt` (Prisma @updatedAt) bumps
+  /// on every write incl. pinning, so the "изменённые" sort uses this instead
+  /// to stop pinning from reshuffling the list. Nullable only for pre-v0.8
+  /// rows; the migration backfills it from updatedAt.
+  editedAt    DateTime?
+  /// Non-null = in the trash. Soft delete so an accidental delete is
+  /// recoverable (there was no restore path before v0.8); a daily cron
+  /// (NoteTrashPurgeService) hard-deletes rows past the retention window.
+  deletedAt   DateTime?
+  /// Non-null = archived: tucked out of the normal list but NOT trash —
+  /// never auto-purged, still editable. Same "timestamp as flag" idiom as
+  /// pinnedAt/deletedAt (the value is "archived since").
+  archivedAt  DateTime?
+  /// Set = this note IS the "daily note" for that calendar date (one per
+  /// workspace). Plain DATE — the time part is meaningless. NULL for every
+  /// ordinary note; Postgres treats NULLs as distinct so the unique below
+  /// still permits many.
+  dailyOn     DateTime? @db.Date
+  /// A reusable skeleton: kept out of the normal note list, offered by
+  /// "Новая из шаблона". Just a flag — a template is an ordinary note.
+  isTemplate  Boolean   @default(false)
+  /// Optimistic-concurrency counter (CAS), S11. Starts at 1, incremented by
+  /// exactly 1 on every successful `update()` that reaches the DB. A client
+  /// sends the revision it last saw as `expectedRevision`; a mismatch means
+  /// someone else (another tab/device) saved in between, and the write is
+  /// rejected with 409 instead of silently clobbering their change. Compared
+  /// with a plain `UPDATE ... WHERE revision = $expected` (single statement,
+  /// no read-then-write race) — see `NotesService.update`.
+  revision    Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  /// `[[wiki links]]` written in THIS note's body (rebuilt on every save).
+  outgoingLinks NoteLink[]     @relation("NoteOutgoingLinks")
+  /// `[[wiki links]]` in OTHER notes that resolve to this one — the backlinks.
+  incomingLinks NoteLink[]     @relation("NoteIncomingLinks")
+  /// Past content snapshots, newest last. Written before a content change.
+  revisions     NoteRevision[]
+  attachments   NoteAttachment[]
+
+  @@unique([workspaceId, dailyOn])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([eventAt])
+  @@index([deletedAt])
+  @@map("notes")
+}
+
+/// A `[[wiki link]]` from one note's body to another note, matched by title.
+/// Derived data — NotesService rebuilds a note's outgoing rows on every save
+/// and re-resolves incoming ones when titles change. `targetNoteId` is NULL
+/// while `targetTitle` doesn't match any live note in the workspace.
+model NoteLink {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  sourceNoteId String
+  targetNoteId String?
+  /// The title as written inside `[[ ]]` (trimmed, original case). Compared
+  /// to Note.title case-insensitively when resolving `targetNoteId`.
+  targetTitle  String
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source    Note      @relation("NoteOutgoingLinks", fields: [sourceNoteId], references: [id], onDelete: Cascade)
+  target    Note?     @relation("NoteIncomingLinks", fields: [targetNoteId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceNoteId, targetTitle])
+  @@index([workspaceId])
+  @@index([targetNoteId])
+  @@map("note_links")
+}
+
+/// A point-in-time snapshot of a note's content. NotesService writes one
+/// *before* a content change, but at most once per `REVISION_MIN_GAP_MS`
+/// per note — a burst of autosaves collapses into one "before" state, not
+/// dozens. A manual revision-restore always snapshots first (so it's
+/// undoable). Pure history: never updated; pruned by the notes cron;
+/// cascade-deleted with the note.
+model NoteRevision {
   id          String   @id @default(uuid())
   workspaceId String
+  noteId      String
   title       String
-  body        String   @default("")
+  body        String
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([noteId, createdAt])
+  @@map("note_revisions")
+}
+
+enum TaskStatus {
+  backlog
+  todo
+  in_progress
+  done
+  canceled
+}
+
+enum TaskPriority {
+  low
+  normal
+  high
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  parentId    String?
+  title       String
+  description String       @default("")
+  status      TaskStatus   @default(todo)
+  priority    TaskPriority @default(normal)
+  dueAt       DateTime?
+  projectTag  String?
+  recurrence  Json?
+  completedAt DateTime?
+  sortOrder   Int          @default(0)
+  notifiedAt  DateTime?
+  /// "Команда" plugin (extends tasks — see PLUGIN_CATALOG). References
+  /// WorkspaceMember, not User: the assignment is scoped to this workspace's
+  /// membership, not the person globally. Writing this field requires the
+  /// plugin enabled; the value itself is kept and still shown if the plugin
+  /// is later disabled (disable ≠ delete, same as everywhere else).
+  assigneeId  String?
+  /// ORION v0.27 «План проекта»: Gantt-планирование. `startAt` is the bar's
+  /// left edge — `dueAt` was always the "finish" date, so the pair is the
+  /// duration a drag-resize edits. Both nullable independently of each other:
+  /// a task can carry only a deadline (pre-v0.27 behaviour, unchanged) or only
+  /// a planned start, and the Gantt simply doesn't draw a bar until both exist.
+  startAt         DateTime?
+  /// Planned effort, minutes — the "план" side of план/факт (факт is
+  /// `entryMinutes` over this task's TimeEntry rows, v0.18). Null, not 0: "not
+  /// estimated" and "estimated at zero" are different statements (same rule as
+  /// `Project.hourlyRate`, v0.19).
+  estimatedMinutes Int?
+  milestoneId      String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent     Task?            @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Task[]           @relation("TaskTree")
+  dependsOn  TaskDependency[] @relation("TaskDependsOn")
+  requiredBy TaskDependency[] @relation("TaskRequiredBy")
+  timeEntries TimeEntry[]
+  assignee   WorkspaceMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  milestone  Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  comments   TaskComment[]
+  activities TaskActivity[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([parentId])
+  @@index([dueAt])
+  @@index([assigneeId])
+  @@index([milestoneId])
+  @@map("tasks")
+}
+
+/// ORION S17 «Комментарии и журнал задач». A free-text comment on a task,
+/// rendered client-side with the same `renderMarkdown` (markdown-it,
+/// `html: false`) safe path as note bodies — no raw HTML, no separate
+/// sanitizer needed, see packages/ui/src/markdown.tsx.
+///
+/// `userId` points at `User`, not `WorkspaceMember`: comment authorship is a
+/// global identity fact, not a membership one, so a comment stays fully
+/// attributed (name, id) even after the author is removed from this
+/// workspace — `WorkspaceMember` deletion never cascades to `User` (see
+/// CLAUDE.md v0.19/08-TEAM-AND-ACCESS.md: removing a member is not account
+/// deletion). Only the comment's own author may edit/delete it — no
+/// owner/lead moderation override exists (checked against
+/// 08-TEAM-AND-ACCESS.md, which does not carve one out for comments; not
+/// invented here).
+model TaskComment {
+  id          String    @id @default(uuid())
+  workspaceId String
+  taskId      String
+  /// Server-stamped from the authenticated user on create — the client
+  /// payload never supplies this (see CreateTaskCommentInput, which has no
+  /// userId field at all).
+  userId      String
+  body        String
+  /// Set on every edit after creation; null means never edited. Distinct
+  /// from `updatedAt`, which Prisma always bumps — this is what the UI
+  /// shows as "(изменено)".
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([taskId, createdAt])
+  @@map("task_comments")
+}
+
+/// Audit log for status/assignee/due edits — append-only, never updated or
+/// deleted by users. `actorId` is nullable for the same "history survives
+/// removal" reason as `TaskComment.userId`'s sibling fields elsewhere
+/// (TimeEntry.userId): a null actor here means "system/unknown", not "no
+/// one" — see TasksService, which always stamps the authenticated user and
+/// only a future system producer would ever leave this null.
+model TaskActivity {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskId      String
+  actorId     String?
+  /// "status" | "assigneeId" | "dueAt" — the only three fields this journal
+  /// tracks per S17's card (not a generic diff of every column).
+  field       String
+  fromValue   String?
+  toValue     String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([taskId, createdAt])
+  @@map("task_activities")
+}
+
+/// ORION v0.18 «Учёт времени». A single row is one stretch of work on a task
+/// (and/or a project): `endedAt = null` means the timer is running right now.
+///
+/// Why a nullable `endedAt` instead of `startedAt + minutes`: a running timer
+/// then needs no writes at all (the client only displays `now - startedAt`),
+/// and "what is running?" is one indexed lookup instead of a special row. The
+/// invariant "at most one running entry per (workspace, user)" (S06 — NOT
+/// per-workspace; team members must be able to run independent timers) is
+/// enforced by a composite partial unique index in the S06 migration (Prisma
+/// can't express `WHERE`-indexes in the schema — same precedent as the v0.7
+/// full-text GIN indexes).
+model TimeEntry {
+  id          String    @id @default(uuid())
+  workspaceId String
+  /// Actor who worked this stretch. Nullable ONLY for legacy rows created
+  /// before this column existed (pre-S06) — the server always stamps it from
+  /// the authenticated userId on every new row; the client can never set or
+  /// override it. `null` here means "author unknown", not "nobody's": do not
+  /// auto-assign these rows to the workspace owner (see S06 runbook note in
+  /// docs/SONNET_IMPLEMENTATION/12-PROGRESS.md) — reports must show them as
+  /// unknown-author, not attribute them.
+  userId      String?
+  /// Optional: time can be tracked against a project without a specific task.
+  taskId      String?
+  /// Denormalised from the task when it isn't given explicitly — the panel
+  /// sums by project, and following `task.projectId` for every row would make
+  /// that a join for no reason. Kept in sync by TimeService on write.
+  projectId   String?
+  note        String    @default("")
+  startedAt   DateTime
+  endedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([taskId])
+  @@index([projectId])
+  @@index([startedAt])
+  @@map("time_entries")
+}
+
+/// ORION v0.19 «Привычки». A habit is a recurring intention ("зарядка",
+/// "дневник") with a weekly schedule; the ticks live in HabitEntry.
+///
+/// Why its own table instead of reusing `Task.recurrence`: a habit is not a
+/// task — it has no status, no due date and no completion, only "done on that
+/// day". Reusing Task would mean a growing pile of completed rows and a
+/// `dueAt` that means something different; the calendar already shows tasks,
+/// and a habit tick is a fact about a day, not a deadline.
+model Habit {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  note        String    @default("")
+  /// Weekly schedule, 0 = Monday … 6 = Sunday (same convention as the recurring
+  /// engine's `byWeekday`, see packages/shared-types/src/recurrence.ts).
+  /// An empty array means *every day* — a Postgres empty array is also what a
+  /// client that never touched the schedule sends.
+  weekdays    Int[]     @default([])
+  /// Optional curated palette key (same keys the calendar/projects use).
+  color       String?
+  /// Non-null = archived: hidden from the daily checklist, ticks kept.
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries   HabitEntry[]
+
+  @@index([workspaceId])
+  @@map("habits")
+}
+
+/// One tick: the habit was done on that calendar day.
+///
+/// `day` is a `@db.Date` (no time part) on purpose: a tick is a fact about a
+/// *day in the user's life*, not an instant. Storing an instant would make
+/// "did I do it yesterday?" depend on the timezone the server happens to run
+/// in, and a tick made at 23:30 could land on the next day (the same trap
+/// `Note.dailyOn` documents for daily notes).
+model HabitEntry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  habitId     String
+  day         DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  habit     Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  /// One tick per habit per day — the database says so, so a double click can't
+  /// create two rows (the service upserts/deletes and never has to check).
+  @@unique([habitId, day])
+  @@index([workspaceId])
+  @@index([habitId, day])
+  @@map("habit_entries")
+}
+
+/// ORION «Списки» — lightweight checklists (shopping, to-dos), deliberately
+/// separate from Task: no status, no due date, no recurrence, just a name and
+/// checkable items. Standalone like Habit — no projectId.
+model List {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  /// Non-null = archived: hidden from the active view, items kept.
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     ListItem[]
+
+  @@index([workspaceId])
+  @@map("lists")
+}
+
+/// One checkable line in a List. No `sortOrder`: items sort by `createdAt`
+/// server-side; floating unchecked items to the top is a display-only client
+/// concern, not a persisted column (avoids a half-built drag-reorder).
+model ListItem {
+  id          String   @id @default(uuid())
+  workspaceId String
+  listId      String
+  label       String
+  checked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  list      List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([listId])
+  @@map("list_items")
+}
+
+model TaskDependency {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  taskId          String
+  dependsOnTaskId String
+  createdAt       DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task      @relation("TaskDependsOn", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task      @relation("TaskRequiredBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([workspaceId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+model SavedTaskView {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  filters     Json
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, name])
   @@index([workspaceId])
-  @@map("notes")
+  @@map("saved_task_views")
 }
 
-enum TaskStatus {
-  todo
-  in_progress
-  done
+/// ORION v0.10 "Календарь" — see docs/PLAN.md. A first-class calendar event,
+/// separate from Task.dueAt / Note.eventAt. Recurrence lives in `recurrence`
+/// as the JSON spec from packages/shared-types/src/recurrence.ts and is
+/// expanded server-side per queried window (EventsService.list). Per-
+/// occurrence edits/cancellations of a recurring event go in EventOverride;
+/// SentReminder is the delivery ledger the reminder cron dedupes against.
+/// All three tables carry a denormalised `workspaceId` so their RLS policy
+/// is the same flat membership check as every other table (same choice as
+/// finance_transaction_lines).
+
+model Event {
+  id          String   @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  calendarConnectionId String?
+  title       String
+  description String   @default("")
+  location    String?
+  url         String?
+  /// ISO instant. For allDay, midnight UTC of the start date.
+  startAt     DateTime
+  /// Exclusive end. For allDay, midnight UTC of the day after the last day.
+  endAt       DateTime
+  allDay      Boolean  @default(false)
+  /// IANA zone captured at creation — stored for a future zone-aware
+  /// expansion; the current engine is UTC-naive (see recurrence.ts).
+  tz          String?
+  colorTag    String?
+  recurrence  Json?
+  /// Minutes before startAt to fire a reminder.
+  reminders   Int[]    @default([])
+  source       String   @default("local")
+  externalUid String?
+  readOnly     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  calendarConnection CalendarConnection? @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+  overrides     EventOverride[]
+  sentReminders SentReminder[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([calendarConnectionId])
+  @@unique([calendarConnectionId, externalUid])
+  @@index([startAt])
+  @@map("events")
 }
 
-model Task {
-  id          String     @id @default(uuid())
+model CalendarConnection {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  kind        String   @default("ics")
+  url         String
+  username    String   @default("")
+  passwordEnc String   @default("")
+  color       String?
+  enabled     Boolean  @default(true)
+  lastSyncAt  DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    Event[]
+
+  @@index([workspaceId])
+  @@map("calendar_connections")
+}
+
+model EventOverride {
+  id          String   @id @default(uuid())
+  workspaceId String
+  eventId     String
+  /// The original (un-shifted) start of the occurrence this row targets.
+  occurrenceStart DateTime
+  /// True = this one occurrence is removed from the series.
+  canceled    Boolean  @default(false)
+  /// Patch fields — null means "inherit from the master event".
+  title       String?
+  description String?
+  location    String?
+  url         String?
+  startAt     DateTime?
+  endAt       DateTime?
+  colorTag    String?
+  createdAt   DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, occurrenceStart])
+  @@index([workspaceId])
+  @@index([eventId])
+  @@map("event_overrides")
+}
+
+model SentReminder {
+  id          String   @id @default(uuid())
+  workspaceId String
+  eventId     String
+  /// Which occurrence (original start) and which offset this delivery was for —
+  /// a recurring event has many, so a single notifiedAt column (as on Task)
+  /// would not work.
+  occurrenceStart DateTime
+  offsetMinutes   Int
+  sentAt      DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, occurrenceStart, offsetMinutes])
+  @@index([workspaceId])
+  @@index([eventId])
+  @@map("sent_reminders")
+}
+
+/// ORION v0.8 "Финансы" — see docs/PLAN.md. Five tables, all workspace-scoped
+/// and RLS-protected the same way as notes/tasks (see the finance_rls
+/// migration). Money is always an Int in minor units (kopecks) — never a
+/// float — for the same reason dates are ISO strings everywhere else in this
+/// project: no ambiguity, no rounding surprises at the boundary.
+
+enum AccountKind {
+  cash
+  card
+  savings
+  other
+}
+
+model Account {
+  id          String      @id @default(uuid())
+  workspaceId String
+  name        String
+  kind        AccountKind @default(other)
+  currency    String      @default("RUB")
+  /// Kopecks. The account's live balance is never stored — it's
+  /// startingBalance plus a sum over its transactions, computed on read
+  /// (see AccountsService.list) — one fewer place for the truth to drift.
+  startingBalance Int      @default(0)
+  archivedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// Transactions where this account is the source (all income/expense, and the "from" side of a transfer).
+  transactions   Transaction[]          @relation("TransactionFrom")
+  /// The "to" side of transfer transactions only — see Transaction.toAccountId.
+  transactionsIn Transaction[]          @relation("TransactionTo")
+  recurring      RecurringTransaction[]
+  savingsGoals   SavingsGoal[]
+
+  @@index([workspaceId])
+  @@map("finance_accounts")
+}
+
+enum FinanceCategoryKind {
+  income
+  expense
+}
+
+model FinanceCategory {
+  id          String              @id @default(uuid())
+  workspaceId String
+  name        String
+  kind        FinanceCategoryKind
+  color       String?
+  archivedAt  DateTime?
+  createdAt   DateTime            @default(now())
+
+  workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactionLines  TransactionLine[]
+  budgets           Budget[]
+  recurring         RecurringTransaction[]
+  rules             CategoryRule[]
+
+  @@index([workspaceId])
+  @@map("finance_categories")
+}
+
+enum TransactionType {
+  income
+  expense
+  /// Money moving between two of the user's own accounts. Never counted as
+  /// income or expense anywhere (category budgets, reports) — net effect on
+  /// total net worth is always zero, since it leaves one account and enters
+  /// another. See docs/PLAN.md v0.9.
+  transfer
+}
+
+/// A transaction is a header; the actual money lives in its lines (below).
+/// A plain (non-split) income/expense is just a transaction with one line —
+/// splitting into several categories and moving money between accounts are
+/// not two different mechanisms bolted on separately, they're the same one:
+/// a transfer is a transaction with exactly one line that has no category.
+model Transaction {
+  id          String          @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  /// Source account for income/expense, and the "from" side of a transfer.
+  accountId   String
+  /// Only set (and required) when type = transfer — the "to" side.
+  toAccountId String?
+  type        TransactionType
+  note        String          @default("")
+  /// Free-form cross-cutting labels, same idea as Note.tags — separate from
+  /// categories (which drive budgets) and from CategoryRule (which only
+  /// matches note text, not tags).
+  tags        String[]        @default([])
+  reconciledAt DateTime?
+  importedRef  String?
+  occurredAt  DateTime
+  /// S21: set only for transactions materialised by RecurringCheckerService.
+  /// `(recurringRuleId, scheduledFor)` is the durable idempotency barrier —
+  /// a UNIQUE constraint, not an in-process flag, so two concurrent workers
+  /// (or a retried cron tick) racing to materialise the same occurrence get
+  /// exactly one row: the loser hits P2002 and is treated as a no-op, not a
+  /// crash. `scheduledFor` is the rule's `nextRunAt` at read time (the
+  /// occurrence the row represents), never the wall-clock time the worker
+  /// happened to run — see recurring-checker.service.ts.
+  recurringRuleId String?
+  scheduledFor    DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  account       Account               @relation("TransactionFrom", fields: [accountId], references: [id], onDelete: Cascade)
+  toAccount     Account?              @relation("TransactionTo", fields: [toAccountId], references: [id], onDelete: Cascade)
+  lines         TransactionLine[]
+  /// SetNull (not Cascade): deleting a recurring rule must not erase the
+  /// transactions it already produced — only the future schedule dies.
+  recurringRule RecurringTransaction? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@unique([workspaceId, importedRef])
+  @@unique([recurringRuleId, scheduledFor])
+  @@index([accountId])
+  @@index([occurredAt])
+  @@map("finance_transactions")
+}
+
+model TransactionLine {
+  id            String  @id @default(uuid())
+  /// Denormalised from the parent transaction — keeps RLS on this table the
+  /// same flat "USING (EXISTS (... workspace_members ...))" shape as every
+  /// other finance table, instead of a two-hop join through transactions.
+  workspaceId   String
+  transactionId String
+  /// Null only for a transfer's single line — a transfer has no category.
+  categoryId    String?
+  /// Kopecks, always positive — the sign comes from the parent's `type`.
+  amount        Int
+
+  transaction Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category    FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([transactionId])
+  @@index([categoryId])
+  @@map("finance_transaction_lines")
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  workspaceId String
+  categoryId  String
+  /// First-of-month, 00:00 — a real DateTime (not a "YYYY-MM" string) so it
+  /// sorts and compares natively, one per category per month.
+  month       DateTime
+  limitAmount Int
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, month])
+  @@index([workspaceId])
+  @@map("finance_budgets")
+}
+
+enum RecurrenceInterval {
+  weekly
+  monthly
+}
+
+model RecurringTransaction {
+  id          String             @id @default(uuid())
+  workspaceId String
+  accountId   String
+  categoryId  String?
+  type        TransactionType
+  amount      Int
+  note        String             @default("")
+  interval    RecurrenceInterval
+  /// Meaning depends on `interval`: day-of-month (1-28, capped so it never
+  /// lands on a month that doesn't have that day) for `monthly`, or
+  /// day-of-week (0 = Monday .. 6 = Sunday) for `weekly`.
+  anchorDay   Int
+  nextRunAt   DateTime
+  /// Non-null pauses generation — same "timestamp doubles as flag" idea as
+  /// Note.pinnedAt, so "paused since" is there for free if it's ever shown.
+  pausedAt    DateTime?
+  createdAt   DateTime           @default(now())
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account      Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category     FinanceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([workspaceId])
+  @@map("finance_recurring_transactions")
+}
+
+/// ORION v0.13 "Финансы" — правила автокатегоризации и цели накопления, see
+/// docs/PLAN.md. Applied client-side only (TransactionForm), not by the
+/// server on write — the API never silently rewrites a category the user
+/// chose (or didn't) themselves.
+model CategoryRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  /// Case-insensitive substring match against Transaction.note.
+  matchText   String
+  categoryId  String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("finance_category_rules")
+}
+
+/// A savings goal tied to one account — "progress" is simply that account's
+/// already-computed balance (see AccountsService/computeNetByAccount), not
+/// a second, separately-tracked ledger of contributions.
+model SavingsGoal {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  name         String
+  accountId    String
+  targetAmount Int
+  targetDate   DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("finance_savings_goals")
+}
+
+/// ORION v0.12 "Документы" — see docs/PLAN.md. One self-referential tree of
+/// folders and files per workspace. `parentId` (hierarchy) is a deliberate
+/// exception to the project's "no parentId" rule (see CLAUDE.md): folders are
+/// the whole point of this module, so a tree is unavoidable, unlike notes
+/// where tags/[[links]] made it needless.
+///
+/// Binary content lives outside Postgres, behind StorageAdapter
+/// (apps/api/src/storage) — the `local` / `webdav` driver mirrors this tree
+/// as a real directory structure under STORAGE_DIR, so the DB row holds only
+/// metadata and the blob path is *derived* from the parentId chain (never
+/// stored as an independent second source of truth). RLS is the same flat
+/// membership check as every other table (see the documents_rls migration).
+
+enum DocumentKind {
+  folder
+  file
+}
+
+model Document {
+  id          String       @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  /// null = at the workspace root.
+  parentId    String?
+  kind        DocumentKind
+  /// Display name; for a file this includes the extension.
+  name        String
+  /// file-only (null for folders): MIME type sniffed at upload.
+  mimeType    String?
+  /// file-only: byte size of the stored blob.
+  sizeBytes   Int?
+  /// file-only: sha256 hex of the blob, for integrity / dedupe.
+  checksum    String?
+  extractedText String @default("")
+  /// Non-null = in the trash (soft delete). DocumentTrashPurgeService
+  /// hard-deletes rows — and their blobs — past the retention window.
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent    Document?  @relation("DocumentTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Document[] @relation("DocumentTree")
+  versions  DocumentVersion[]
+  annotations DocumentAnnotation[]
+  noteAttachments NoteAttachment[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([parentId])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  documentId    String
+  versionNumber Int
+  storageKey    String
+  sizeBytes     Int
+  checksum      String
+  /// The doc's MIME type at the time this snapshot was taken — needed to
+  /// restore it correctly and to set `Content-Type` when downloading it.
+  mimeType      String?
+  createdAt     DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNumber])
+  @@index([workspaceId])
+  @@map("document_versions")
+}
+
+model DocumentAnnotation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  documentId  String
+  page        Int?
+  quote       String?
+  body        String
+  color       String?
+  position    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([documentId])
+  @@map("document_annotations")
+}
+
+model NoteAttachment {
+  id          String   @id @default(uuid())
+  workspaceId String
+  noteId      String
+  documentId  String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, documentId])
+  @@index([workspaceId])
+  @@map("note_attachments")
+}
+
+model InboxItem {
+  id          String    @id @default(uuid())
   workspaceId String
   title       String
-  description String     @default("")
-  status      TaskStatus @default(todo)
+  body        String    @default("")
+  kind        String    @default("inbox")
   dueAt       DateTime?
-  projectTag  String?
-  notifiedAt  DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  targetType  String?
+  targetId    String?
+  projectId   String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
-  @@index([dueAt])
-  @@map("tasks")
+  @@index([processedAt])
+  @@map("inbox_items")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  workspaceId String
+  /// Who this is addressed to (v0.28 "addressed notifications" — see
+  /// S07 in docs/SONNET_IMPLEMENTATION). Nullable only for legacy rows
+  /// created before this column existed; every row NotificationCenterService
+  /// creates from here on sets it. `readAt` is per-row, so once every row
+  /// belongs to exactly one recipient, read state is naturally per-user —
+  /// no separate join table needed.
+  recipientId String?
+  /// Dedup key, unique together with recipientId (partial index, see the
+  /// RLS/dedup migration) — lets a cron producer call createTx() on every
+  /// tick without checking for an existing row first: a repeated run for
+  /// the same (recipient, event) is a no-op (P2002), not a duplicate.
+  eventKey    String?
+  kind        String
+  title       String
+  body        String    @default("")
+  entityType  String?
+  entityId    String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recipient User?     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([recipientId])
+  @@index([readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+/// U01 (24-CONNECTED-CORE-BACKLOG.md): `kind` is a stable relation-kind id from
+/// the closed catalog in `@orion/shared-types` (`RELATION_KIND_CATALOG`) —
+/// `related_to` (symmetric), `supports`, `evidence_for` — never the free-text
+/// `label`. For a symmetric kind the app layer always writes the pair in
+/// canonical (sourceType,sourceId) < (targetType,targetId) order (see
+/// `canonicalizeEndpoints` in shared-types + `SearchService.createLink`), so
+/// A->B and B->A never coexist as two rows for the same symmetric kind — the
+/// unique index below includes `kind` because a directed kind (e.g.
+/// `evidence_for`) may legitimately coexist with `related_to` on the same pair.
+model EntityLink {
+  id          String   @id @default(uuid())
+  workspaceId String
+  sourceType  String
+  sourceId    String
+  targetType  String
+  targetId    String
+  kind        String   @default("related_to")
+  label       String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId, targetType, targetId, kind])
+  @@index([workspaceId])
+  @@index([targetType, targetId])
+  @@map("entity_links")
+}
+
+/// U03 (24-CONNECTED-CORE-BACKLOG.md): personal one-shot reminder against any
+/// entity from the closed U01 registry (`SearchableEntityType`) — a NEW,
+/// separate entity, deliberately not a rework of DueTaskCheckerService/
+/// EventReminderService (23-UNIVERSAL-CONNECTED-CORE.md "не переписывать без
+/// миграционного плана"). First slice: `recipientId` is always the creator
+/// ("personal" reminder to self) — a future slice can widen this the same way
+/// `Notification.recipientId` already generalizes to other recipients.
+///
+/// `status` transitions pending -> delivered (only after a real notification
+/// was created — see ReminderCheckerService) or pending -> cancelled (user
+/// action, PATCH). Nothing transitions out of delivered/cancelled.
+model EntityReminder {
+  id          String   @id @default(uuid())
+  workspaceId String
+  /// Who created it — always able to cancel their own reminder.
+  ownerId     String
+  /// Who it is delivered to. Equal to ownerId in this first slice.
+  recipientId String
+  entityType  String
+  entityId    String
+  scheduledAt DateTime
+  /// IANA zone the reminder was created in — kept for a future "in your local
+  /// evening" display; delivery itself compares scheduledAt (UTC instant) to
+  /// now(), same as EventReminderService, so the zone does not affect *when*
+  /// the cron fires, only how the time is explained back to the user.
+  timezone    String
+  status      String   @default("pending")
+  deliveredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     User      @relation("EntityReminderOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  recipient User      @relation("EntityReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([status, scheduledAt])
+  @@index([entityType, entityId])
+  @@map("entity_reminders")
+}
+
+/// ORION — синхронизация и бэкап через облако (WebDAV). Полный разбор и
+/// архитектура — docs/SYNC.md. Это Стадия 1: одна настроенная удалёнка на
+/// рабочее пространство на этом узле; строк-состояния синка (SyncEntry) и
+/// команды (Peer/Share/ShareGrant) пока нет — они из Стадий 2–3.
+///
+/// RLS: своя миграция (raw SQL) — ENABLE + FORCE ROW LEVEL SECURITY +
+/// CREATE POLICY по current_setting('app.current_user_id', true), как для
+/// любой workspace-таблицы (см. CLAUDE.md).
+model SyncRemote {
+  id            String   @id @default(uuid())
+  workspaceId   String   @unique
+  /// Пока всегда "webdav".
+  kind          String   @default("webdav")
+  url           String
+  username      String   @default("")
+  /// AES-GCM(SYNC_SECRET) в base64 — НЕ открытый текст (см. sync-crypto.ts).
+  passwordEnc   String   @default("")
+  baseDir       String   @default("/ORION")
+  /// false = сервер без PROPFIND Depth: infinity (Mail.ru Cloud).
+  depthInfinity Boolean  @default(true)
+  /// "rclone-base64" | "openssl-base64" | "none".
+  encAlgo       String   @default("rclone-base64")
+  /// Интервал автобэкапа в мс; -1 = выключено (семантика Remotely Save).
+  autoEveryMs   Int      @default(-1)
+  lastRunAt     DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("sync_remotes")
+}
+
+/// R18-01: durable two-phase restore. One row per workspace (unique
+/// workspaceId — doubles as the "restore in progress" lock: a second
+/// concurrent restore attempt hits the unique constraint and gets a 409,
+/// not a stomped-on staging batch). `phase` tracks how far the *current*
+/// restore attempt got:
+///   "staging"   — files are being written to `_restore-staging/<batchId>`
+///                 (see blob-backup.service.ts); live tree untouched.
+///   "committed" — the DB transaction that applied the snapshot rows has
+///                 durably committed (this row's phase is flipped to
+///                 "committed" *inside that same transaction*, so it is
+///                 atomic with the row apply) but the live file tree has
+///                 not been swapped in yet.
+/// If the process crashes: a row stuck at "staging" means the DB was never
+/// touched — safe to discard the staged batch and unlock. A row stuck at
+/// "committed" means the DB is already the new state — the only safe move
+/// is to finish publishing that batch's files (never roll back, the DB
+/// already moved forward). See SyncService.recoverRestore.
+model SyncRestoreOperation {
+  id          String   @id @default(uuid())
+  workspaceId String   @unique
+  batchId     String
+  phase       String
+  createdAt   DateTime @default(now())
+
+  @@map("sync_restore_operations")
+}
+
+/// ORION v0.26 «Склад» — см. docs/PLAN.md. `receipt`/`issue` — обычный
+/// приход/расход, `quantity` всегда положительная. `adjustment` — ручная
+/// корректировка остатка (пересчёт, списание брака и т.п.) и может быть
+/// как положительной, так и отрицательной. Знак хранится прямо в
+/// `InventoryMovement.quantity` (не выводится из типа) — остаток всегда
+/// `SUM(quantity)`, без отдельной ветки на тип движения.
+enum InventoryMovementType {
+  receipt
+  issue
+  adjustment
+}
+
+/// Номенклатура склада. Остаток и средняя себестоимость никогда не
+/// хранятся здесь — они считаются по `InventoryMovement` (см.
+/// InventoryService и комментарий у `Account.startingBalance` — тот же
+/// приём: одним меньше место, где правда может разъехаться).
+model InventoryItem {
+  id          String    @id @default(uuid())
+  workspaceId String
+  projectId   String?
+  /// Артикул. Nullable — Postgres считает NULL в уникальном индексе
+  /// самостоятельным значением, поэтому несколько позиций без артикула не
+  /// конфликтуют друг с другом.
+  sku         String?
+  name        String
+  /// Единица измерения — просто ярлык для отображения (шт, кг, л...), без
+  /// конвертации между единицами (осознанное упрощение v0.26).
+  unit        String    @default("шт")
+  /// Порог для уведомления о низком остатке. Null = уведомления выключены
+  /// для этой позиции.
+  minStock    Int?
+  /// Момент последнего уведомления о низком остатке — дедуп, чтобы крон/
+  /// движение не слало одно и то же предупреждение на каждый чих. Сбрасывается
+  /// в null, как только остаток снова поднимается выше minStock, так что
+  /// следующее пересечение порога уведомит заново.
+  lowStockNotifiedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  movements InventoryMovement[]
+
+  @@unique([workspaceId, sku])
+  @@index([workspaceId])
+  @@map("inventory_items")
+}
+
+/// Одно движение остатка — неизменяемый леджер (append-only, ничего не
+/// редактируется и не удаляется задним числом; ошибку исправляет встречное
+/// движение). `unitCostMinor` — копейки за единицу на приходе, откуда
+/// считается средняя себестоимость (см. InventoryService.computeTotalsTx).
+model InventoryMovement {
+  id            String                @id @default(uuid())
+  /// Денормализовано из позиции — плоская RLS-политика той же формы, что и
+  /// у остальных workspace-таблиц (см. комментарий у TransactionLine).
+  workspaceId   String
+  itemId        String
+  type          InventoryMovementType
+  quantity      Int
+  unitCostMinor Int?
+  note          String                @default("")
+  createdAt     DateTime              @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([itemId, createdAt])
+  @@map("inventory_movements")
+}
+
+/// ORION v0.27 «План проекта» — see docs/PLAN.md. A phase/checkpoint inside a
+/// project, the second level of the Gantt (tasks are the first). A
+/// milestone's own bar (`startAt`/`dueAt`) is independent of the tasks
+/// grouped under it via `Task.milestoneId` — the user sets it directly,
+/// ORION never infers it from the task group (no hidden "auto" mode to
+/// second-guess).
+enum MilestoneStatus {
+  planned
+  in_progress
+  done
+}
+
+model Milestone {
+  id          String          @id @default(uuid())
+  workspaceId String
+  projectId   String
+  title       String
+  note        String          @default("")
+  status      MilestoneStatus @default(planned)
+  startAt     DateTime?
+  dueAt       DateTime?
+  /// Planned effort for the whole phase — same "null ≠ 0" rule as
+  /// `Task.estimatedMinutes`; independent of the sum of its tasks' own
+  /// estimates (a milestone can be estimated before any task under it exists).
+  estimatedMinutes Int?
+  /// Manual Gantt row order within the project — same idea as
+  /// `Task.sortOrder`, a plain integer the panel reorders on drag, not a date.
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  dependsOn  MilestoneDependency[] @relation("MilestoneDependsOn")
+  requiredBy MilestoneDependency[] @relation("MilestoneRequiredBy")
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("milestones")
+}
+
+/// Finish-to-start only (see MilestonesService.cascadeReschedule) — mirrors
+/// `TaskDependency` one level up. No lag/lead, no start-to-start: the Gantt's
+/// auto-reschedule only ever pushes a dependent forward so its start never
+/// precedes its predecessor's finish, the smallest rule that still gives
+/// drag-resize a reason to exist.
+model MilestoneDependency {
+  id                   String   @id @default(uuid())
+  workspaceId          String
+  milestoneId          String
+  dependsOnMilestoneId String
+  createdAt            DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation("MilestoneDependsOn", fields: [milestoneId], references: [id], onDelete: Cascade)
+  dependsOn Milestone @relation("MilestoneRequiredBy", fields: [dependsOnMilestoneId], references: [id], onDelete: Cascade)
+
+  @@unique([milestoneId, dependsOnMilestoneId])
+  @@index([workspaceId])
+  @@index([dependsOnMilestoneId])
+  @@map("milestone_dependencies")
+}
+
+/// U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — explicit,
+/// read-only cross-workspace grant. NOT a workspace-scoped resource in the
+/// usual sense: it lives in the source workspace (workspaceId), but its
+/// visibility rule for the grantee is NOT "member of workspaceId" (they
+/// never are) — see the `cross_workspace_grants` RLS policy, which is
+/// additive to the normal membership policy (grantee OR member/owner of the
+/// source workspace can read the grant row itself; only the *target*
+/// object's grant-read policy needs the transaction-scoped
+/// `app.active_grant_id` GUC — see PrismaService.withGrant).
+model CrossWorkspaceGrant {
+  id          String   @id @default(uuid())
+  /// Source workspace that owns the shared object.
+  workspaceId String
+  /// WorkspaceMember.id of the owner who issued this grant (owner-only, see
+  /// SharedGrantsService.create).
+  granterId   String
+  /// User.id of the recipient — a person, not a workspace. Never
+  /// WorkspaceMember.id: the grantee is explicitly NOT a member of
+  /// workspaceId (see threat model T-model doc, "granteeWorkspaceId" was
+  /// rejected in favor of this).
+  granteeUserId String
+  /// Closed enum mirroring SearchableEntityType, restricted at the service
+  /// layer to the allowlisted subset ("note" | "document" | "project" |
+  /// "transaction") — never an arbitrary client-supplied string/table name.
+  objectType  String
+  objectId    String
+  /// "full" | "projection" — only "full" is implemented in this slice.
+  scope       String   @default("full")
+  /// Allowlist of fields for scope="projection". Always empty for "full".
+  projectionFields String[]  @default([])
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  revokedAt   DateTime?
+  /// Audit only — who revoked (owner or original granter). Does not decide
+  /// who is *allowed* to revoke; that check lives in SharedGrantsService.
+  revokedByUserId String?
+
+  @@index([workspaceId])
+  @@index([granteeUserId, objectType, objectId])
+  @@map("cross_workspace_grants")
 }

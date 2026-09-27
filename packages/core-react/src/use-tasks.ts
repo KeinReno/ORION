@@ -4,11 +4,16 @@ import type { CreateTaskInput, Task, UpdateTaskInput } from "@orion/shared-types
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
-export function useTasks(workspaceId: string | undefined) {
+/**
+ * `search` (optional) switches to the server's full-text query instead of
+ * the plain list (see TasksService.list) — pass a debounced value, since
+ * each distinct string is its own cached query and fires its own request.
+ */
+export function useTasks(workspaceId: string | undefined, search?: string, assignedToMe?: boolean) {
   const { api } = useCore();
   return useQuery<Task[]>({
-    queryKey: ["tasks", workspaceId],
-    queryFn: () => api.listTasks(workspaceId as string),
+    queryKey: ["tasks", workspaceId, search ?? "", assignedToMe ?? false],
+    queryFn: () => api.listTasks(workspaceId as string, search, assignedToMe),
     enabled: Boolean(workspaceId),
     refetchInterval: 60_000
   });
@@ -29,7 +34,13 @@ export function useUpdateTask(workspaceId: string | undefined) {
   return useMutation({
     mutationFn: ({ taskId, input }: { taskId: string; input: UpdateTaskInput }) =>
       api.updateTask(workspaceId as string, taskId, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks", workspaceId] })
+    onSuccess: (_task, vars) => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks", workspaceId] });
+      if (vars.input.status !== undefined) {
+        void queryClient.invalidateQueries({ queryKey: ["time-running", workspaceId] });
+        void queryClient.invalidateQueries({ queryKey: ["time", workspaceId] });
+      }
+    }
   });
 }
 

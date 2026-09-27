@@ -41,7 +41,7 @@ export function TiltCard({ children, className }: TiltCardProps): React.ReactEle
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
       style={{ rotateX, rotateY, transformPerspective: 800 }}
-      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-6 ${className ?? ""}`}
+      className={`relative overflow-hidden rounded-2xl border border-border bg-card p-6 ${className ?? ""}`}
     >
       <motion.div style={{ background: glare }} className="pointer-events-none absolute inset-0" />
       <div className="relative">{children}</div>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ORION</title>
+  </head>
+  <!--
+    Deliberately empty: dockview's browser popout doesn't render this page,
+    it reparents the panel's already-rendered DOM node (from the main
+    window's React tree) into this window's <body> and copies over the
+    main window's stylesheets once this loads. See dockview-core's
+    PopoutWindow.open() and ORION's v0.5 plan for why the Tauri desktop
+    case needs a different mechanism (a real /panel/[id] route instead).
+  -->
+  <body style="margin: 0"></body>
+</html>

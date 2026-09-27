@@ -16,6 +16,17 @@ target
 tmp/
 *.stackdump
 
+# Portable Postgres data dir (pnpm db:up). Survives db:down; delete to re-init.
+infra/postgres/data/
+
+# Vendored pdf.js worker — copied from node_modules by copy-pdf-worker.mjs.
+apps/web/public/pdf.worker.min.mjs
+# Vendored modern-xlsx WASM binary — copied from node_modules by copy-modern-xlsx-wasm.mjs.
+apps/web/public/modern-xlsx.wasm
+
+# Local document/blob store (STORAGE_DRIVER=local); never upload dev workspaces.
+apps/api/.data/
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
 /.ignore

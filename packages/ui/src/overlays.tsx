@@ -1,0 +1,602 @@
+"use client";
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import clsx from "clsx";
+import { X } from "lucide-react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
+import { usePanelVisible } from "./panel-shell";
+import { Button, IconButton, Input } from "./primitives";
+import { useEscapeKey, useMounted, useOnClickOutside } from "./hooks";
+import { computeFocusTrapAction } from "./focus-trap";
+
+/** Portal overlays must not stay on screen after their host panel is hidden. */
+function useOverlayOpen(open: boolean): boolean {
+  const panelVisible = usePanelVisible();
+  return open && panelVisible;
+}
+
+/*
+ * Nested overlays happen legitimately (a note attachment's preview Modal, or
+ * its detach ConfirmDialog, opened while the note editor itself sits inside
+ * NotesPanel's mobile Sheet) — see `rule/no-nested-modals` in 04-UX.md: the
+ * rule bans a *second modal choice flow* nested inside a modal, not "a Modal
+ * can never be a descendant of a Sheet in the DOM". What must never happen is
+ * two overlays reacting to the same input at once. Without this, both Modal
+ * and Sheet independently `useEscapeKey`/`useFocusTrap` off raw
+ * `document`-level listeners: opening a Modal over an already-open Sheet made
+ * Escape close *both* in one press, and Tab inside the (topmost) Modal kept
+ * getting yanked back into the Sheet's trap, because the Sheet's own
+ * `currentOutsideContainer` check saw focus was outside itself and forced it
+ * back — a real keyboard-trap bug, not a hypothetical one.
+ * This tiny global stack tracks *open* Modal/Sheet instances; only the
+ * topmost one gets an active Escape handler / Tab trap, and a covered one
+ * disables its own until it is topmost again.
+ */
+let overlayStack: number[] = [];
+let nextOverlayId = 0;
+const overlayStackListeners = new Set<() => void>();
+
+function notifyOverlayStack(): void {
+  overlayStackListeners.forEach((listener) => listener());
+}
+
+/** True while this instance is the top of the Modal/Sheet stack (or the only one open). */
+function useTopmostOverlay(open: boolean): boolean {
+  const idRef = useRef<number | null>(null);
+  const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = ++nextOverlayId;
+    idRef.current = id;
+    overlayStack.push(id);
+    notifyOverlayStack();
+    return () => {
+      overlayStack = overlayStack.filter((existing) => existing !== id);
+      idRef.current = null;
+      notifyOverlayStack();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    function onChange(): void {
+      forceRender((n) => n + 1);
+    }
+    overlayStackListeners.add(onChange);
+    return () => {
+      overlayStackListeners.delete(onChange);
+    };
+  }, []);
+
+  return open && idRef.current !== null && overlayStack[overlayStack.length - 1] === idRef.current;
+}
+
+function restoreOpener(el: HTMLElement | null): void {
+  if (!el?.isConnected) return;
+  // Hidden dockview tabs are display:none — focusing the opener there would
+  // steal focus from the panel the user just switched to.
+  if (el.getClientRects().length === 0) return;
+  el.focus?.();
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function focusableIn(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (node) => !node.hasAttribute("disabled") && node.getAttribute("aria-hidden") !== "true"
+  );
+}
+
+/** Keeps Tab cycling inside `ref` while `active`. Restoring the opener is the caller's job. */
+function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    const node = ref.current;
+    if (!node) return;
+
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== "Tab" || !ref.current) return;
+      const nodes = focusableIn(ref.current);
+      const current = document.activeElement;
+      const action = computeFocusTrapAction({
+        nodes,
+        current,
+        currentOutsideContainer: !ref.current.contains(current),
+        shiftKey: event.shiftKey
+      });
+      if (action.type === "focus-container") {
+        event.preventDefault();
+        ref.current.focus();
+      } else if (action.type === "focus-node") {
+        event.preventDefault();
+        (action.node as HTMLElement).focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [active, ref]);
+}
+
+function useMotionDuration(full: number): number {
+  const reduce = useReducedMotion();
+  return reduce ? 0 : full;
+}
+
+/* ------------------------------------------------------------------ Modal */
+
+type ModalSize = "sm" | "md" | "lg";
+
+/**
+ * Centered dialog. Hand-rolled (no Radix / Headless UI dependency): portal
+ * to <body>, backdrop click + Escape to close, body scroll lock, focus
+ * moved into the dialog on open and restored to the opener on close.
+ */
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  size = "md"
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: ModalSize;
+}): React.ReactElement | null {
+  const mounted = useMounted();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const labelId = useId();
+  const fade = useMotionDuration(0.13);
+  const pop = useMotionDuration(0.14);
+  const shown = useOverlayOpen(open);
+  const isTop = useTopmostOverlay(shown);
+
+  useEscapeKey(onClose, isTop);
+  useFocusTrap(dialogRef, isTop);
+
+  useEffect(() => {
+    if (!shown) return;
+    openerRef.current = document.activeElement as HTMLElement | null;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    const raf = requestAnimationFrame(() => dialogRef.current?.focus());
+    return () => {
+      document.body.style.overflow = overflow;
+      cancelAnimationFrame(raf);
+      restoreOpener(openerRef.current);
+    };
+  }, [shown]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {shown ? (
+        <motion.div
+          key="modal"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: fade }}
+          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 sm:p-6"
+        >
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? labelId : undefined}
+            tabIndex={-1}
+            initial={{ opacity: 0, scale: 0.97, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: pop, ease: "easeOut" }}
+            className={clsx(
+              "relative z-10 my-8 w-full rounded-2xl border border-border bg-card/85 shadow-2xl shadow-black/40 outline-none backdrop-blur-xl",
+              size === "sm" && "max-w-sm",
+              size === "md" && "max-w-lg",
+              size === "lg" && "max-w-2xl"
+            )}
+          >
+            {title ? (
+              <div className="border-b border-border px-5 py-3.5">
+                <h2 id={labelId} className="text-sm font-semibold text-foreground">
+                  {title}
+                </h2>
+                {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+              </div>
+            ) : null}
+            <div className="px-5 py-4">{children}</div>
+            {footer ? <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div> : null}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+/* ------------------------------------------------------------------ Sheet */
+
+/** Slide-over panel anchored to one edge — used for task details. */
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  width = "28rem",
+  bare = false
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  width?: string;
+  /** Drop the body's padding + scroll wrapper so the child can own its own layout. */
+  bare?: boolean;
+}): React.ReactElement | null {
+  const mounted = useMounted();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const fade = useMotionDuration(0.15);
+  const slide = useMotionDuration(0.2);
+  const shown = useOverlayOpen(open);
+  const isTop = useTopmostOverlay(shown);
+  useEscapeKey(onClose, isTop);
+  useFocusTrap(panelRef, isTop);
+
+  useEffect(() => {
+    if (!shown) return;
+    openerRef.current = document.activeElement as HTMLElement | null;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    const raf = requestAnimationFrame(() => panelRef.current?.focus());
+    return () => {
+      document.body.style.overflow = overflow;
+      cancelAnimationFrame(raf);
+      restoreOpener(openerRef.current);
+    };
+  }, [shown]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {shown ? (
+        <motion.div
+          key="sheet"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: fade }}
+          className="fixed inset-0 z-[100] flex justify-end"
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "tween", duration: slide, ease: "easeOut" }}
+            style={{ width }}
+            className="relative z-10 flex h-full max-w-[92vw] flex-col border-l border-border bg-card/90 shadow-2xl shadow-black/50 outline-none backdrop-blur-xl"
+          >
+            {title ? (
+              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+                <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+                <IconButton label="Закрыть" size="sm" onClick={onClose}>
+                  <X className="h-4 w-4" />
+                </IconButton>
+              </div>
+            ) : null}
+            {bare ? (
+              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            ) : (
+              <div className="orion-scroll flex-1 overflow-y-auto px-5 py-4">{children}</div>
+            )}
+            {footer ? <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div> : null}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+/* ----------------------------------------------------------- DropdownMenu */
+
+export interface MenuItem {
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  onSelect: () => void;
+  tone?: "default" | "danger";
+  disabled?: boolean;
+}
+
+export function DropdownMenu({
+  trigger,
+  items,
+  align = "end"
+}: {
+  trigger: (api: { open: boolean; toggle: () => void }) => ReactNode;
+  items: (MenuItem | "separator")[];
+  align?: "start" | "end";
+}): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  useOnClickOutside(wrapRef, () => setOpen(false), open);
+  useEscapeKey(() => setOpen(false), open);
+
+  return (
+    <div ref={wrapRef} className="relative inline-flex">
+      {trigger({ open, toggle })}
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            role="menu"
+            initial={{ opacity: 0, scale: 0.96, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: -2 }}
+            transition={{ duration: 0.12 }}
+            className={clsx(
+              "absolute top-full z-50 mt-1 min-w-[10rem] overflow-hidden rounded-xl border border-border bg-card/90 p-1 shadow-xl shadow-black/40 backdrop-blur-md",
+              align === "end" ? "right-0" : "left-0"
+            )}
+          >
+            {items.map((item, index) => {
+              if (item === "separator") return <div key={`sep-${index}`} className="my-1 h-px bg-border" />;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect();
+                  }}
+                  className={clsx(
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors disabled:opacity-40",
+                    item.tone === "danger"
+                      ? "text-destructive hover:bg-destructive/10"
+                      : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                  )}
+                >
+                  {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                  {item.label}
+                </button>
+              );
+            })}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- Popover */
+
+/**
+ * Fixed-positioned popover measured from its trigger's rect, so it works
+ * even when the trigger sits in a tiny clipped box (a calendar day cell).
+ * Controlled or uncontrolled.
+ */
+export function Popover({
+  trigger,
+  children,
+  align = "start",
+  open: controlledOpen,
+  onOpenChange,
+  width = 288,
+  backdrop = false
+}: {
+  trigger: (api: { open: boolean; toggle: () => void; ref: React.RefObject<HTMLButtonElement> }) => ReactNode;
+  children: (api: { close: () => void }) => ReactNode;
+  align?: "start" | "end" | "center";
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  width?: number;
+  /** Click-catcher behind the panel — needed when the popover is as wide as a phone viewport. */
+  backdrop?: boolean;
+}): React.ReactElement {
+  const mounted = useMounted();
+  const [uncontrolled, setUncontrolled] = useState(false);
+  const open = controlledOpen ?? uncontrolled;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      setUncontrolled(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange]
+  );
+
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width });
+
+  const shown = useOverlayOpen(open);
+  useOnClickOutside([triggerRef, panelRef], () => setOpen(false), shown);
+  useEscapeKey(() => setOpen(false), shown);
+
+  const reposition = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const boxWidth = Math.min(width, Math.max(200, window.innerWidth - 16));
+    const rect = el.getBoundingClientRect();
+    let left = rect.left;
+    if (align === "end") left = rect.right - boxWidth;
+    if (align === "center") left = rect.left + rect.width / 2 - boxWidth / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - boxWidth - 8));
+    const top = Math.min(rect.bottom + 6, window.innerHeight - 8);
+    setPos({ top, left, width: boxWidth });
+  }, [align, width]);
+
+  useEffect(() => {
+    if (!shown) return;
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [shown, reposition]);
+
+  return (
+    <>
+      {trigger({ open, toggle: () => setOpen(!open), ref: triggerRef })}
+      {mounted
+        ? createPortal(
+            <AnimatePresence>
+              {shown ? (
+                <Fragment key="popover">
+                  {backdrop ? (
+                    <motion.div
+                      key="popover-backdrop"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.12 }}
+                      className="fixed inset-0 z-[89] bg-black/40"
+                      onClick={() => setOpen(false)}
+                    />
+                  ) : null}
+                  <motion.div
+                    key="popover-panel"
+                    ref={panelRef}
+                    initial={{ opacity: 0, scale: 0.97, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                    style={{
+                      position: "fixed",
+                      top: pos.top,
+                      left: pos.left,
+                      width: pos.width,
+                      maxHeight: `calc(100vh - ${pos.top + 8}px)`
+                    }}
+                    className="z-[90] overflow-y-auto rounded-xl border border-border bg-card/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md"
+                  >
+                    {children({ close: () => setOpen(false) })}
+                  </motion.div>
+                </Fragment>
+              ) : null}
+            </AnimatePresence>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
+
+/* --------------------------------------------------------- ConfirmDialog */
+
+/**
+ * Small yes/no confirmation on top of Modal — for destructive actions with
+ * no undo (there's no restore endpoint for a deleted note or task).
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Удалить",
+  cancelLabel = "Отмена",
+  onConfirm,
+  onCancel,
+  danger = true,
+  confirmDisabled = false
+}: {
+  open: boolean;
+  title: string;
+  /** A plain string renders as one line of muted text; pass a node (e.g. with an embedded Input) for a type-to-confirm prompt. */
+  description?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  danger?: boolean;
+  /** Disables the confirm button — e.g. until a type-to-confirm field matches. */
+  confirmDisabled?: boolean;
+}): React.ReactElement {
+  return (
+    <Modal open={open} onClose={onCancel} title={title} size="sm">
+      {description ? <div className="text-sm text-muted-foreground">{description}</div> : null}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
+          {cancelLabel}
+        </Button>
+        <Button type="button" variant={danger ? "danger" : "primary"} size="sm" disabled={confirmDisabled} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Level-3 confirmation: irreversible, high-cost (purge bytes, bulk move).
+ * Confirm stays disabled until the user types `phrase` exactly.
+ */
+export function TypeToConfirmDialog({
+  open,
+  title,
+  description,
+  phrase,
+  confirmLabel = "Удалить навсегда",
+  onConfirm,
+  onCancel
+}: {
+  open: boolean;
+  title: string;
+  description: ReactNode;
+  phrase: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): React.ReactElement {
+  const [typed, setTyped] = useState("");
+  useEffect(() => {
+    if (open) setTyped("");
+  }, [open]);
+
+  return (
+    <ConfirmDialog
+      open={open}
+      title={title}
+      confirmLabel={confirmLabel}
+      confirmDisabled={typed.trim() !== phrase}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      description={
+        <div className="space-y-3">
+          <div>{description}</div>
+          <label className="block space-y-1">
+            <span className="text-micro text-subtle-foreground">Введите «{phrase}»</span>
+            <Input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={phrase}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+        </div>
+      }
+    />
+  );
+}

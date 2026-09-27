@@ -2,8 +2,327 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+  /* Accent as raw RGB channels (Tailwind reads them as
+     rgb(var(--orion-accent) / <alpha-value>)). The default is exactly the
+     violet that used to be a hardcoded token, so nothing changes for anyone
+     who never opens the appearance settings. */
+  --orion-accent: 99 102 241;
+  --orion-accent-hover: 124 127 243;
+  /* Semantic tones — fixed, independent of the accent preset. Same channel
+     form so `text-success/80` and `bg-destructive/10` keep working. */
+  --orion-success: 16 185 129;
+  --orion-success-hover: 52 211 153;
+  --orion-warning: 245 158 11;
+  --orion-warning-hover: 251 191 36;
+  --orion-danger: 244 63 94;
+  --orion-danger-hover: 251 113 133;
+
+  /* Type scale (docs/UI_UX_DESIGN.md). Compact overrides live on
+     html[data-density="compact"] so density is not only html font-size. */
+  --font-display: 1.5rem;
+  --font-title: 1.125rem;
+  --font-body: 0.9375rem;
+  --font-label: 0.8125rem;
+  --font-micro: 0.6875rem;
+
+  /* Extra density for data rows — html rem-scaling tightens type/gaps,
+     these shrink the leftover air between table/card rows. */
+  --orion-row-py: 0.5rem;
+  --orion-card-row-py: 0.75rem;
+}
+
+/* Appearance preferences (v0.16). `data-accent` / `data-density` are set on
+   <html> by PreferencesEffect from the saved user preferences; the accent
+   values are hue swaps at the default violet's lightness, so contrast against
+   the dark surface stays where it was. */
+[data-accent="violet"] {
+  --orion-accent: 99 102 241;
+  --orion-accent-hover: 124 127 243;
+}
+[data-accent="blue"] {
+  --orion-accent: 59 130 246;
+  --orion-accent-hover: 96 165 250;
+}
+[data-accent="green"] {
+  --orion-accent: 34 197 94;
+  --orion-accent-hover: 74 222 128;
+}
+[data-accent="amber"] {
+  --orion-accent: 245 158 11;
+  --orion-accent-hover: 251 191 36;
+}
+[data-accent="rose"] {
+  --orion-accent: 244 63 94;
+  --orion-accent-hover: 251 113 133;
+}
+
+/* Density scales the root font size, and every Tailwind spacing/text utility in
+   the app is rem-based — so one rule tightens the whole interface instead of
+   every panel needing its own compact variant. */
+html {
+  font-size: 16px;
+}
+html[data-density="compact"] {
+  font-size: 14px;
+  --font-display: 1.375rem;
+  --font-title: 1.0625rem;
+  --font-body: 0.875rem;
+  --font-label: 0.75rem;
+  /* micro must stay ~11px — counteract the 14px root or it becomes unreadable. */
+  --font-micro: calc(0.6875rem * 16 / 14);
+  --orion-row-py: 0.25rem;
+  --orion-card-row-py: 0.375rem;
+}
+
 html,
 body {
-  background-color: #0a0a0a;
-  color: #ffffff;
+  background-color: #0a0a0c;
+  color: #f4f4f5;
+}
+
+/* The app shell's `-z-10 fixed` AppBackground/WebglBackground layers paint
+   behind the root canvas background per spec — an opaque `body` background
+   hides them no matter how translucent the panels above it are. Only drop it
+   in glass mode; solid mode still wants the flat body color as a backstop. */
+[data-surface="glass"] body {
+  background-color: transparent;
+}
+
+/* Thin, unobtrusive scrollbars for the scrolling area inside every panel. */
+.orion-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #34343d transparent;
+}
+.orion-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.orion-scroll::-webkit-scrollbar-thumb {
+  background: #34343d;
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.orion-scroll::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+  background-clip: content-box;
+}
+
+/*
+ * Harmonise dockview's built-in "abyss" theme with the ORION tokens above —
+ * purely cosmetic, keeps the chrome from clashing with the redesigned
+ * panels. The active tab is a solid accent-filled pill (same visual weight
+ * as a primary Button), not a thin underline — meant to be unmissable at a
+ * glance across a full row of tabs, the way a browser or VS Code tab reads.
+ *
+ * Every value below carries `!important`: dockview's own "abyss" theme CSS
+ * (dockview-react/dist/styles/dockview.css) is imported from `workbench.tsx`,
+ * a component module, so in the built bundle it can land *after* this
+ * stylesheet — same selector specificity, later in source order, so it was
+ * silently winning and leaving the stock navy (`#1c1c2a`) tab bar in place
+ * instead of this override. `!important` makes the outcome independent of
+ * which chunk happens to load last.
+ */
+.dockview-theme-abyss {
+  --dv-background-color: #0d0d11 !important;
+  --dv-group-view-background-color: #0d0d11 !important;
+  --dv-tabs-and-actions-container-background-color: rgba(10, 10, 12, 0.72) !important;
+  --dv-activegroup-visiblepanel-tab-background-color: rgb(var(--orion-accent)) !important;
+  --dv-activegroup-visiblepanel-tab-color: #fff !important;
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent !important;
+  --dv-activegroup-hiddenpanel-tab-color: rgba(255, 255, 255, 0.5) !important;
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent !important;
+  --dv-inactivegroup-visiblepanel-tab-color: rgba(255, 255, 255, 0.5) !important;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent !important;
+  --dv-inactivegroup-hiddenpanel-tab-color: rgba(255, 255, 255, 0.3) !important;
+  --dv-tab-divider-color: transparent !important;
+  /* The old #24242b separator sat ~1 step above the #0d0d11 group
+     background — under the backdrop-blur stack that's below the JND, so two
+     side-by-side panels (e.g. Notes | Tasks) read as one continuous surface.
+     Lightened past --border (now #2c2c35) so the split stays visible without
+     turning into a heavy VS Code-style gutter. */
+  --dv-separator-border: #3f3f4a !important;
+  --dv-paneview-header-border-color: #2c2c35 !important;
+  --dv-icon-hover-background-color: rgba(255, 255, 255, 0.08) !important;
+}
+/* The sash itself (the draggable hit area on top of the 1px separator) stays
+   fully transparent at rest in "abyss", so the only feedback a resizable
+   split gives is that faint 1px line. A soft idle tint makes the seam and
+   its drag affordance readable without turning it into a visible gutter. */
+.dockview-theme-abyss .dv-sash-container .dv-sash {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+.dockview-theme-abyss .dv-sash-container .dv-sash:hover,
+.dockview-theme-abyss .dv-sash-container .dv-sash:active {
+  background-color: rgb(var(--orion-accent) / 0.35) !important;
+}
+.dockview-theme-abyss .dv-tabs-and-actions-container {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid #2c2c35;
+  gap: 2px;
+  padding: 6px 6px 0 6px;
+}
+.dockview-theme-abyss .dv-tab {
+  border-radius: 8px 8px 0 0 !important;
+  transition: background-color 0.15s ease;
+}
+.dockview-theme-abyss .dv-tab.dv-inactive-tab:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+@media (max-width: 767px) {
+  .orion-shell--compact .dv-tabs-and-actions-container {
+    display: none;
+  }
+}
+
+/* Slow ambient drift for the aurora blobs behind auth screens / empty states
+   (see @orion/ui AuroraBackground). Pure CSS on purpose — no rAF loop for
+   something that's just decorative, and it's already covered by the
+   prefers-reduced-motion rule below. */
+@keyframes orion-aurora-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.06);
+  }
+}
+.orion-aurora-blob {
+  animation: orion-aurora-drift 16s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ---------------------------------------------------- Background + glass */
+/* Settings → Внешний вид → Фон / Поверхности (see SettingsPanel.tsx). Both
+   are data-attributes on <html>, set by PreferencesEffect from the saved
+   UserPreference — CSS-only from here down, same mechanism as data-accent. */
+
+:root {
+  --orion-bg-opacity: 0.85;
+}
+[data-background-intensity="low"] {
+  --orion-bg-opacity: 0.5;
+}
+[data-background-intensity="medium"] {
+  --orion-bg-opacity: 0.85;
+}
+[data-background-intensity="high"] {
+  --orion-bg-opacity: 1;
+}
+[data-background="aurora"] .orion-app-background-aurora {
+  opacity: var(--orion-bg-opacity);
+}
+[data-background="grid"] .orion-app-background-grid {
+  opacity: var(--orion-bg-opacity);
+}
+
+/* WebGL variants (liquid-ether/light-pillar/dark-veil/shape-waves) render
+   their own opacity via the `uOpacity` shader uniform (see WebglBackground),
+   driven straight from --orion-bg-opacity in TSX rather than CSS, since the
+   canvas has to know the number to feed the shader anyway. */
+.orion-app-background-webgl {
+  position: absolute;
+  inset: 0;
+}
+.orion-app-background-webgl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ------------------------------------------------------- Target cursor */
+/* Settings → Внешний вид → Курсор-цель (see @orion/ui TargetCursor). Hides
+   the native cursor only while the effect is mounted, so unchecking the
+   preference (or the pointer:coarse bail-out inside the component) leaves
+   the normal cursor untouched. */
+.orion-target-cursor-active,
+.orion-target-cursor-active * {
+  cursor: none !important;
+}
+.orion-target-cursor-dot,
+.orion-target-cursor-box {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+.orion-target-cursor-dot {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background: rgb(var(--orion-accent));
+}
+.orion-target-cursor-box {
+  border: 1.5px solid rgb(var(--orion-accent));
+  border-radius: 6px;
+  opacity: 0;
+  transition:
+    width 0.15s ease,
+    height 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* "glass": sidebar, panel shells and cards become translucent + blurred so
+   AppBackground actually shows through. Plain !important overrides on the
+   existing utility classes rather than touching every component — same
+   trade-off as the dockview override above, and for the same reason: these
+   classes are used bare (`bg-panel`, `bg-card`) all over panels/, so a
+   targeted class-selector override here is far lower risk than threading a
+   new prop through every call site. Elements that already declare their own
+   opacity (`bg-card/85` in Modal, `bg-card/90` in Sheet/Toast/Popover, …)
+   generate a *different* utility class and are untouched by this. */
+/* Settings → Внешний вид → Панели (see SettingsPanel.tsx): opacity/blur/tint
+   are now user-tunable rather than fixed constants — PreferencesEffect sets
+   these three on <html>. The per-element multipliers below (0.92/0.75/0.67/
+   0.58) preserve the original relative contrast between panel/card/background/
+   dockview layers that the old fixed 0.6/0.55/0.45/0.4/0.35 values had. */
+:root {
+  --orion-panel-opacity: 0.6;
+  --orion-panel-blur: 16px;
+  --orion-panel-tint: 13 13 17;
+}
+[data-surface="glass"] .bg-panel {
+  background-color: rgb(var(--orion-panel-tint) / var(--orion-panel-opacity)) !important;
+}
+/* SwipeRow sits on a translucent .bg-panel in glass mode, so Delete/etc.
+   bleed through idle rows. Keep the sliding surface opaque without giving
+   up the user's panel tint. */
+[data-surface="glass"] .orion-opaque-on-glass {
+  background-color: rgb(var(--orion-panel-tint)) !important;
+}
+[data-surface="glass"] .bg-card {
+  background-color: rgb(var(--orion-panel-tint) / calc(var(--orion-panel-opacity) * 0.92)) !important;
+  backdrop-filter: blur(var(--orion-panel-blur));
+  -webkit-backdrop-filter: blur(var(--orion-panel-blur));
+}
+[data-surface="glass"] .bg-background {
+  background-color: rgb(var(--orion-panel-tint) / calc(var(--orion-panel-opacity) * 0.75)) !important;
+  backdrop-filter: blur(calc(var(--orion-panel-blur) * 1.25));
+  -webkit-backdrop-filter: blur(calc(var(--orion-panel-blur) * 1.25));
+}
+[data-surface="glass"] .dockview-theme-abyss {
+  --dv-background-color: rgb(var(--orion-panel-tint) / calc(var(--orion-panel-opacity) * 0.67)) !important;
+  --dv-group-view-background-color: rgb(var(--orion-panel-tint) / calc(var(--orion-panel-opacity) * 0.67)) !important;
+  --dv-tabs-and-actions-container-background-color: rgb(var(--orion-panel-tint) / calc(var(--orion-panel-opacity) * 0.58)) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
