@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: orion
+          POSTGRES_USER: orion
+          POSTGRES_PASSWORD: orion_local_dev
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U orion -d orion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://orion:orion_local_dev@127.0.0.1:5433/orion
+      APP_DATABASE_URL: postgresql://orion_app:OcjNaKnQFUp0gdwdju-cSP9T_0gaiOZI@127.0.0.1:5433/orion
+      JWT_SECRET: ci-only-secret-with-sufficient-length
+      SYNC_SECRET: b3Jpb24taW50ZWdyYXRpb24tdGVzdC1rZXktMzItYnl0ZXMhISE=
+      STORAGE_DRIVER: local
+      STORAGE_DIR: ./tmp/ci-documents
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare database roles
+        env:
+          PGPASSWORD: orion_local_dev
+        run: psql -h 127.0.0.1 -p 5433 -U orion -d orion -f infra/postgres/init/01-app-roles.sql
+      - run: pnpm db:generate
+      - run: pnpm --filter @orion/api prisma:migrate:deploy
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm test:integration
+      - run: pnpm build
+      - name: Desktop static export (output:export, S22 gate)
+        run: pnpm build:desktop-export
