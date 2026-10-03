@@ -6,11 +6,12 @@ This file is the mandatory entry point for AI agents working in this repository.
 
 Read in this order:
 
-1. `docs/MODULES_AND_PLUGINS.md`
-2. `docs/AI_FIRST_EXTENSION_ARCHITECTURE.md`
-3. `docs/AI_REFACTOR_MIGRATION_MAP.md`
-4. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
-5. the public contracts / SDK / extension points used by the task
+1. `ORION_CONSTITUTION.md`
+2. `docs/MODULES_AND_PLUGINS.md`
+3. `docs/AI_FIRST_EXTENSION_ARCHITECTURE.md`
+4. `docs/AI_REFACTOR_MIGRATION_MAP.md`
+5. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
+6. the public contracts / SDK / extension points used by the task
 
 Do not treat missing context as permission to infer architecture from nearby implementation code.
 
