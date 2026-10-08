@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CalendarSearch } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SegmentedControl } from "../primitives";
 import { Agenda } from "./agenda";
 import { MonthGrid } from "./month-grid";
@@ -68,6 +69,7 @@ export function Calendar({
   const [uncontrolledView, setUncontrolledView] = useState<CalendarView>("month");
   const view = controlledView ?? uncontrolledView;
   const today = new Date();
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const range = useMemo(() => {
     let from: Date;
@@ -91,6 +93,16 @@ export function Calendar({
     onRangeChange?.(range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.from, range.to]);
+
+  function openDatePicker(): void {
+    const input = dateInputRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      input.focus();
+    }
+  }
 
   const setView = (v: CalendarView): void => {
     setUncontrolledView(v);
@@ -161,6 +173,27 @@ export function Calendar({
           >
             →
           </button>
+          <button
+            type="button"
+            onClick={openDatePicker}
+            aria-label="Перейти к дате"
+            title="Перейти к дате"
+            className="rounded-md border border-border px-2 py-1 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          >
+            <CalendarSearch className="h-3.5 w-3.5" />
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            tabIndex={-1}
+            aria-hidden
+            className="sr-only"
+            onChange={(e) => {
+              const [y, m, d] = e.target.value.split("-").map(Number);
+              if (y && m && d) setCursor(new Date(y, m - 1, d));
+              e.target.value = "";
+            }}
+          />
           <span className="ml-2 text-sm font-medium capitalize text-foreground" aria-live="polite">
             {periodLabel}
           </span>

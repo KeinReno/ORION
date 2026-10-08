@@ -480,6 +480,11 @@ export function CalendarPanel(): React.ReactElement {
                           on ? "opacity-100" : "opacity-40"
                         }`}
                       >
+                        <span
+                          aria-hidden
+                          className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                          style={{ background: on ? "currentColor" : "transparent", boxShadow: "inset 0 0 0 1px currentColor" }}
+                        />
                         {source.label}
                       </button>
                     );
