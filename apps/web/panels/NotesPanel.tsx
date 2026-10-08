@@ -592,7 +592,9 @@ export function NotesPanel(): React.ReactElement {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск"
+            placeholder={trash ? "В корзине поиск отключён" : "Название, описание, текст, теги"}
+            aria-label="Поиск по заметкам"
+            title="Ищет по названию, краткому описанию, тексту и тегам"
             className="pl-8"
             disabled={trash}
           />

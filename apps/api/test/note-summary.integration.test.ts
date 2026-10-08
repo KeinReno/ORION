@@ -166,4 +166,24 @@ describe("Note summary (UI-03)", () => {
     expect(restored.data.summary).toBe("первое описание");
     expect(restored.data.body).toBe("v1");
   });
+
+  it("search also works inside the archive and never leaks archived notes into the active search", async () => {
+    const alice = await register("archive-search");
+    const base = `/workspaces/${alice.workspaceId}/notes`;
+    const created = await request<NoteDto>(base, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { title: "Старая", summary: "квартальная инвентаризация", body: "x" }
+    });
+    const archivedAt = new Date().toISOString();
+    expect((await request(`${base}/${created.data.id}`, { method: "PATCH", token: alice.accessToken, body: { archivedAt } })).status).toBe(200);
+    const term = encodeURIComponent("инвентаризация");
+
+    const inArchive = await request<NoteDto[]>(`${base}?view=archive&search=${term}`, { method: "GET", token: alice.accessToken });
+    expect(inArchive.data.map((n) => n.id)).toEqual([created.data.id]);
+    const archiveMiss = await request<NoteDto[]>(`${base}?view=archive&search=${encodeURIComponent("несуществующее")}`, { method: "GET", token: alice.accessToken });
+    expect(archiveMiss.data).toEqual([]);
+    const inActive = await request<NoteDto[]>(`${base}?search=${term}`, { method: "GET", token: alice.accessToken });
+    expect(inActive.data).toEqual([]);
+  });
 });

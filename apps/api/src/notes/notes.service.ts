@@ -63,14 +63,33 @@ export class NotesService {
         });
       }
 
+      const query = search?.trim();
+
       if (view === "archive") {
+        // Search works in the archive too (it used to be silently ignored there,
+        // so the box looked functional and did nothing). Same expression as the
+        // active list, so the same GIN index serves both.
+        if (query) {
+          return tx.$queryRaw<NoteRow[]>`
+            SELECT * FROM "notes"
+            WHERE "workspaceId" = ${workspaceId}
+              AND "deletedAt" IS NULL
+              AND "archivedAt" IS NOT NULL
+              AND "isTemplate" = ${templates}
+              AND to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
+                  @@ websearch_to_tsquery('russian', ${query})
+            ORDER BY ts_rank(
+              to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' ')),
+              websearch_to_tsquery('russian', ${query})
+            ) DESC
+          `;
+        }
         return tx.note.findMany({
           where: { workspaceId, deletedAt: null, archivedAt: { not: null }, isTemplate: templates },
           orderBy: { archivedAt: "desc" }
         });
       }
 
-      const query = search?.trim();
       if (query) {
         return tx.$queryRaw<NoteRow[]>`
           SELECT * FROM "notes"
