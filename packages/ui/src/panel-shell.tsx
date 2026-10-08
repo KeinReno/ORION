@@ -152,8 +152,8 @@ export function PanelHeader({
         className
       )}
     >
-      <div className="flex min-h-8 items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+      <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="flex min-w-0 max-w-full flex-auto items-start gap-3">
           {Icon ? (
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-muted-foreground">
               <Icon className="h-4 w-4" />
@@ -164,7 +164,7 @@ export function PanelHeader({
             {subtitle ? <p className="mt-0.5 truncate text-label text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div> : null}
       </div>
       {children ? <div className="mt-3 flex flex-wrap items-center gap-2">{children}</div> : null}
     </header>
