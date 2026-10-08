@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { useMemo } from "react";
+import { useResizeWidth } from "../hooks";
 import { Popover } from "../overlays";
 import {
   addDays,
@@ -21,6 +22,14 @@ import {
 
 const MAX_SPAN_LANES = 3;
 const MAX_SINGLES = 3;
+/**
+ * Below this grid width a day cell is ~40–70px: a pill there shows a clipped
+ * time and no title. The cell then shows only a count that opens the same
+ * day popover the "+N ещё" overflow already uses — the panel can be this
+ * narrow in a wide window (dockview split), so it is the grid's own width
+ * that decides, not a viewport breakpoint.
+ */
+const COMPACT_BELOW_PX = 560;
 
 interface MonthGridProps {
   cursor: Date;
@@ -55,6 +64,8 @@ export function MonthGrid({
     const gridStart = new Date(year, month, 1 - leading);
     return Array.from({ length: 6 }, (_, w) => Array.from({ length: 7 }, (_, d) => addDays(gridStart, w * 7 + d)));
   }, [cursor]);
+  const [gridRef, gridWidth] = useResizeWidth<HTMLDivElement>();
+  const compact = gridWidth > 0 && gridWidth < COMPACT_BELOW_PX;
 
   return (
     <>
@@ -65,7 +76,7 @@ export function MonthGrid({
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-1">
+      <div ref={gridRef} className="flex flex-col gap-1">
         {weeks.map((week) => (
           <WeekRow
             key={dateKey(week[0])}
@@ -77,6 +88,7 @@ export function MonthGrid({
             onItemReschedule={onItemReschedule}
             onSlotCreate={onSlotCreate}
             focusedId={focusedId}
+            compact={compact}
           />
         ))}
       </div>
@@ -92,11 +104,13 @@ function WeekRow({
   onItemClick,
   onItemReschedule,
   onSlotCreate,
-  focusedId
+  focusedId,
+  compact
 }: {
   week: Date[];
   month: number;
   today: Date;
+  compact: boolean;
 } & Pick<MonthGridProps, "items" | "onItemClick" | "onItemReschedule" | "onSlotCreate" | "focusedId">): React.ReactElement {
   const weekStartMs = startOfDay(week[0]).getTime();
   const weekEndMs = weekStartMs + 7 * 86_400_000;
@@ -177,7 +191,8 @@ function WeekRow({
         {week.map((day, col) => {
           const inMonth = day.getMonth() === month;
           const singles = singlesByCol[col];
-          const overflow = Math.max(0, singles.length - MAX_SINGLES);
+          const shown = compact ? 0 : MAX_SINGLES;
+          const overflow = Math.max(0, singles.length - shown);
           return (
             <div
               key={dateKey(day)}
@@ -206,7 +221,7 @@ function WeekRow({
                 </span>
               </div>
               <div className="flex flex-col gap-0.5">
-                {singles.slice(0, MAX_SINGLES).map((item) => (
+                {singles.slice(0, shown).map((item) => (
                   <Pill
                     key={item.id}
                     item={item}
@@ -229,9 +244,14 @@ function WeekRow({
                           e.stopPropagation();
                           toggle();
                         }}
-                        className="px-1 text-left text-2xs text-muted-foreground hover:text-foreground"
+                        aria-label={compact ? `Записей: ${overflow} — показать` : undefined}
+                        className={
+                          compact
+                            ? "w-full rounded bg-white/10 px-1 py-0.5 text-center text-2xs text-foreground/80 hover:bg-white/15"
+                            : "px-1 text-left text-2xs text-muted-foreground hover:text-foreground"
+                        }
                       >
-                        +{overflow} ещё
+                        {compact ? overflow : `+${overflow} ещё`}
                       </button>
                     )}
                   >

@@ -34,6 +34,7 @@ import {
   PanelShell,
   Skeleton,
   StatCard,
+  useResizeWidth,
   useToast
 } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -131,6 +132,8 @@ function EntryRow({
  * mutation invalidates both (see `use-time.ts`).
  */
 export function TimePanel(): React.ReactElement {
+  const [layoutRef, layoutWidth] = useResizeWidth<HTMLDivElement>();
+  const wideLayout = layoutWidth >= 920;
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
   const workspaceId = workspace?.id;
@@ -285,7 +288,8 @@ export function TimePanel(): React.ReactElement {
         }
       />
 
-      <PanelBody measure="prose" className="space-y-6">
+      <PanelBody className="mx-auto w-full max-w-6xl">
+        <div ref={layoutRef}>
         {workspaceId === undefined ? (
           workspaceLoading ? (
             <div className="space-y-2">
@@ -301,7 +305,8 @@ export function TimePanel(): React.ReactElement {
             />
           )
         ) : (
-          <>
+          <div className={wideLayout ? "grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-6" : "mx-auto max-w-2xl space-y-6"}>
+            <div className="min-w-0 space-y-6">
             <TimerWidget
               key={running?.id ?? "idle"}
               workspaceId={workspaceId}
@@ -415,7 +420,9 @@ export function TimePanel(): React.ReactElement {
                 </div>
               ) : null}
             </PanelSection>
+            </div>
 
+            <div className="min-w-0">
             <PanelSection title="Записи">
               {entriesQuery.isLoading ? (
                 <div className="space-y-2">
@@ -489,8 +496,10 @@ export function TimePanel(): React.ReactElement {
                 </div>
               )}
             </PanelSection>
-          </>
+            </div>
+          </div>
         )}
+        </div>
       </PanelBody>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Новая запись" size="sm">

@@ -19,6 +19,7 @@ import {
   Button,
   Calendar,
   EmptyState,
+  IconButton,
   Modal,
   PanelBody,
   PanelHeader,
@@ -36,7 +37,7 @@ import {
   type ReschedulePayload,
   type SlotCreatePayload
 } from "@orion/ui";
-import { CalendarDays, TriangleAlert } from "lucide-react";
+import { CalendarDays, CircleHelp, Plus, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { nextListId } from "../lib/list-nav";
@@ -203,6 +204,7 @@ export function CalendarPanel(): React.ReactElement {
   const sourcesError = failedQueries[0]?.error;
 
   const [newSlot, setNewSlot] = useState<SlotCreatePayload | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const [selected, setSelected] = useState<Event | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focusedIdRef = useRef<string | null>(null);
@@ -415,7 +417,27 @@ export function CalendarPanel(): React.ReactElement {
 
   return (
     <PanelShell>
-      <PanelHeader icon={CalendarDays} title="Календарь" subtitle={`${items.length} на экране`} />
+      <PanelHeader
+        icon={CalendarDays}
+        title="Календарь"
+        subtitle={`${items.length} на экране`}
+        actions={
+          <>
+            <IconButton
+              label="Как пользоваться календарём"
+              size="sm"
+              aria-controls="calendar-help"
+              aria-expanded={showHelp}
+              onClick={() => setShowHelp((value) => !value)}
+            >
+              <CircleHelp className="h-4 w-4" />
+            </IconButton>
+            <Button size="sm" onClick={() => setNewSlot({ start: new Date().toISOString(), allDay: false })}>
+              <Plus className="h-4 w-4" /> Событие
+            </Button>
+          </>
+        }
+      />
       <PanelBody>
         {failedQueries.length > 0 ? (
           <EmptyState
@@ -474,7 +496,7 @@ export function CalendarPanel(): React.ReactElement {
                 </div>
               }
             />
-            <p className="text-micro text-subtle-foreground">
+            <p id="calendar-help" hidden={!showHelp} className="text-micro text-subtle-foreground">
               Клик по пустому месту — новое событие. Тяните за середину, чтобы перенести, за нижний край — изменить
               длительность. Задачи — точка без длины. Клавиши: ← → период, T сегодня, 1–4 виды.
             </p>
