@@ -68,7 +68,9 @@ export function MonthGrid({
   const compact = gridWidth > 0 && gridWidth < COMPACT_BELOW_PX;
 
   return (
-    <>
+    // The month fills the card's height (the card itself grows with the panel),
+    // so the six weeks share the space instead of leaving an empty tail below.
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
       <div className="grid grid-cols-7 gap-1 text-center text-2xs text-subtle-foreground">
         {WEEKDAY_LABELS.map((label) => (
           <div key={label} className="py-1">
@@ -76,7 +78,7 @@ export function MonthGrid({
           </div>
         ))}
       </div>
-      <div ref={gridRef} className="flex flex-col gap-1">
+      <div ref={gridRef} className="flex flex-1 flex-col gap-1">
         {weeks.map((week) => (
           <WeekRow
             key={dateKey(week[0])}
@@ -92,7 +94,7 @@ export function MonthGrid({
           />
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -160,7 +162,7 @@ function WeekRow({
   const laneCount = Math.min(MAX_SPAN_LANES, bars.reduce((m, b) => Math.max(m, b.lane + 1), 0));
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-1 flex-col gap-1">
       {/* multi-day ribbon band — its own 7-col grid so a bar spans real columns */}
       {laneCount > 0 ? (
         <div
@@ -187,7 +189,7 @@ function WeekRow({
       ) : null}
 
       {/* day cells */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid flex-1 grid-cols-7 gap-1">
         {week.map((day, col) => {
           const inMonth = day.getMonth() === month;
           const singles = singlesByCol[col];

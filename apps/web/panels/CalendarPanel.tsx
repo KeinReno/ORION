@@ -438,7 +438,7 @@ export function CalendarPanel(): React.ReactElement {
           </>
         }
       />
-      <PanelBody>
+      <PanelBody className="flex flex-col">
         {failedQueries.length > 0 ? (
           <EmptyState
             icon={TriangleAlert}

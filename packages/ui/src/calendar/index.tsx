@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { CalendarSearch } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SegmentedControl } from "../primitives";
@@ -133,7 +134,7 @@ export function Calendar({
 
   return (
     <div
-      className="rounded-2xl border border-border bg-card p-3"
+      className={clsx("rounded-2xl border border-border bg-card p-3", view === "month" && "flex flex-1 flex-col")}
       role="group"
       aria-label="Календарь"
       tabIndex={0}
