@@ -132,4 +132,38 @@ describe("Note summary (UI-03)", () => {
     });
     expect(miss.data).toEqual([]);
   });
+
+  it("version history keeps the summary, and a restore brings it back", async () => {
+    const alice = await register("history");
+    const base = `/workspaces/${alice.workspaceId}/notes`;
+    const created = await request<NoteDto>(base, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { title: "H", summary: "первое описание", body: "v1" }
+    });
+    // The first content edit snapshots the pre-edit state (summary included).
+    const edited = await request<NoteDto>(`${base}/${created.data.id}`, {
+      method: "PATCH",
+      token: alice.accessToken,
+      body: { summary: "второе описание", body: "v2", expectedRevision: 1 }
+    });
+    expect(edited.status).toBe(200);
+
+    const list = await request<Array<{ id: string }>>(`${base}/${created.data.id}/revisions`, { method: "GET", token: alice.accessToken });
+    expect(list.data.length).toBeGreaterThan(0);
+    const old = await request<{ summary: string; body: string }>(`${base}/${created.data.id}/revisions/${list.data[list.data.length - 1].id}`, {
+      method: "GET",
+      token: alice.accessToken
+    });
+    expect(old.data.summary).toBe("первое описание");
+
+    const restored = await request<NoteDto>(`${base}/${created.data.id}/revisions/${list.data[list.data.length - 1].id}/restore`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { expectedRevision: edited.data.revision }
+    });
+    expect(restored.status).toBe(201);
+    expect(restored.data.summary).toBe("первое описание");
+    expect(restored.data.body).toBe("v1");
+  });
 });

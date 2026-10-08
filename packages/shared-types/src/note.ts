@@ -69,6 +69,7 @@ export type NoteRevisionSummary = z.infer<typeof noteRevisionSummarySchema>;
 /// One full past snapshot — `GET .../notes/:id/revisions/:revisionId`.
 export const noteRevisionSchema = noteRevisionSummarySchema.extend({
   noteId: z.string(),
+  summary: z.string(),
   body: z.string(),
   tags: z.array(z.string())
 });

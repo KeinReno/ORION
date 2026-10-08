@@ -16,7 +16,7 @@ import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 /** The bit of a note the link-sync + snapshot helpers need — a Prisma create/update result satisfies it. */
-type NoteCore = { id: string; workspaceId: string; title: string; body: string; tags: string[] };
+type NoteCore = { id: string; workspaceId: string; title: string; summary: string; body: string; tags: string[] };
 
 /**
  * A content change within this window of the newest revision does not add
@@ -471,6 +471,7 @@ export class NotesService {
         where: { id: noteId, revision: effectiveExpectedRevision },
         data: {
           title: revision.title,
+          summary: revision.summary,
           body: revision.body,
           tags: revision.tags,
           editedAt: new Date(),
@@ -512,6 +513,7 @@ export class NotesService {
         workspaceId: note.workspaceId,
         noteId: note.id,
         title: note.title,
+        summary: note.summary,
         body: note.body,
         tags: note.tags
       }
@@ -569,6 +571,7 @@ function toRevision(r: DbNoteRevision): NoteRevision {
     id: r.id,
     noteId: r.noteId,
     title: r.title,
+    summary: r.summary,
     body: r.body,
     tags: r.tags,
     createdAt: r.createdAt.toISOString()
