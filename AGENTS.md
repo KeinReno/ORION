@@ -16,6 +16,7 @@ Read in this order:
 For deployment work, also read `docs/DEPLOYMENT_READINESS.md`. For Compass
 Vertex or FinControl work, read `docs/INTEGRATIONS_COMPASS_FINCONTROL.md` and
 recheck the external source revision before copying behavior or data.
+For frontend/product UI work, also read `docs/FRONTEND_WORKSPACE_SPEC.md`.
 
 Do not treat missing context as permission to infer architecture from nearby implementation code.
 

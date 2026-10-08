@@ -15,6 +15,9 @@ PostgreSQL обслуживают общий TypeScript-клиент, котор
 история релизных проверок — в [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md),
 план интеграции Compass/FinControl — в
 [`docs/INTEGRATIONS_COMPASS_FINCONTROL.md`](docs/INTEGRATIONS_COMPASS_FINCONTROL.md).
+Согласованные решения по рабочей оболочке, заметкам, календарю, проектам,
+открепляемым видам и схемам — в
+[`docs/FRONTEND_WORKSPACE_SPEC.md`](docs/FRONTEND_WORKSPACE_SPEC.md).
 Документы о plugin SDK и новой архитектуре описывают **целевое состояние**:
 текущий код ещё проходит поэтапный переход и должен сохранить существующий UX.
 
