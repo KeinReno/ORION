@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { NoteAutosave, type AutosaveConflict, type AutosaveSnapshot, type AutosaveState, type SaveAck } from "./note-autosave";
 
 function snap(body: string): AutosaveSnapshot {
-  return { title: "T", body, tags: [], eventAt: null, projectId: null };
+  return { title: "T", summary: "", body, tags: [], eventAt: null, projectId: null };
 }
 
 /** A promise this test controls the settling of — no real network/timers. */

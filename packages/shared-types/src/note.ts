@@ -5,6 +5,9 @@ export const noteSchema = z.object({
   workspaceId: z.string(),
   projectId: z.string().nullable(),
   title: z.string(),
+  /// Optional short description ("о чём заметка"); empty string = none, and the
+  /// list falls back to a plain-text excerpt of `body`.
+  summary: z.string(),
   body: z.string(),
   tags: z.array(z.string()),
   /// Non-null = pinned (the value is "pinned since", for a stable sort).
@@ -107,6 +110,7 @@ export type AttachNoteDocumentInput = z.infer<typeof attachNoteDocumentInputSche
 
 export const createNoteInputSchema = z.object({
   title: z.string().min(1, "Заголовок обязателен").max(200),
+  summary: z.string().max(300).optional(),
   body: z.string().max(20_000).default(""),
   tags: z.array(noteTagSchema).max(20).default([]),
   eventAt: z.string().datetime().nullable().optional(),
@@ -117,6 +121,7 @@ export type CreateNoteInput = z.infer<typeof createNoteInputSchema>;
 
 export const updateNoteInputSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  summary: z.string().max(300).optional(),
   body: z.string().max(20_000).optional(),
   tags: z.array(noteTagSchema).max(20).optional(),
   pinnedAt: z.string().datetime().nullable().optional(),

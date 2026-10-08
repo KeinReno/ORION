@@ -30,6 +30,7 @@ export type AutosaveState = "saved" | "dirty" | "saving" | "error" | "conflict";
 
 export interface AutosaveSnapshot {
   title: string;
+  summary: string;
   body: string;
   tags: string[];
   eventAt: string | null;
@@ -80,6 +81,7 @@ function sameSnapshot(a: AutosaveSnapshot | null, b: AutosaveSnapshot | null): b
   if (!a || !b) return false;
   return (
     a.title === b.title &&
+    a.summary === b.summary &&
     a.body === b.body &&
     a.eventAt === b.eventAt &&
     a.projectId === b.projectId &&

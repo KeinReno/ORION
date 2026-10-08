@@ -190,6 +190,7 @@ export function NotesPanel(): React.ReactElement {
   async function createFromTemplate(template: Note): Promise<void> {
     const created = await createNote.mutateAsync({
       title: template.title,
+      summary: template.summary,
       body: template.body,
       tags: template.tags
     });
@@ -247,6 +248,7 @@ export function NotesPanel(): React.ReactElement {
           currentRevision: payload.currentRevision,
           current: {
             title: payload.current.title as string,
+            summary: (payload.current.summary as string | undefined) ?? "",
             body: payload.current.body as string,
             tags: payload.current.tags as string[],
             eventAt: (payload.current.eventAt as string | null) ?? null,
@@ -262,6 +264,7 @@ export function NotesPanel(): React.ReactElement {
   async function handleDuplicate(note: Note): Promise<void> {
     const created = await createNote.mutateAsync({
       title: `${note.title} (копия)`,
+      summary: note.summary,
       body: note.body,
       tags: note.tags,
       isTemplate: note.isTemplate
@@ -414,7 +417,8 @@ export function NotesPanel(): React.ReactElement {
           {visible.map((note) => {
             const active = note.id === selectedId;
             const project = note.projectId ? (projectList ?? []).find((p) => p.id === note.projectId) : undefined;
-            const preview = noteListPreview(note.body);
+            // The author's own description wins; otherwise a cleaned excerpt of the body.
+            const preview = note.summary.trim() || noteListPreview(note.body);
             return (
               <li key={note.id}>
                 <div

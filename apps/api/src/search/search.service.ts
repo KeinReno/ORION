@@ -52,7 +52,7 @@ export class SearchService {
           ? tx.task.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
         enabled.has(SEARCH_TYPE_MODULE.note)
-          ? tx.note.findMany({ where: { workspaceId, deletedAt: null, isTemplate: false, OR: [{ title: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
+          ? tx.note.findMany({ where: { workspaceId, deletedAt: null, isTemplate: false, OR: [{ title: { contains: term, mode: "insensitive" } }, { summary: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
         enabled.has(SEARCH_TYPE_MODULE.event)
           ? tx.event.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }, { location: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })

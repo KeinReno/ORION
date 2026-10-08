@@ -302,6 +302,10 @@ model Note {
   workspaceId String
   projectId   String?
   title       String
+  /// Optional one/two-line "what this note is about" (UI-03). Empty = none:
+  /// the list then shows a plain-text excerpt of `body`. Part of the full-text
+  /// index `notes_search_idx` (see migration 20261008210000_note_summary).
+  summary     String    @default("")
   body        String    @default("")
   /// Free-form labels, same idea as Task.projectTag but multi-valued —
   /// a native Postgres array column, not a join table (no cross-note

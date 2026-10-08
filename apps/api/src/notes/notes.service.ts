@@ -78,10 +78,10 @@ export class NotesService {
             AND "deletedAt" IS NULL
             AND "archivedAt" IS NULL
             AND "isTemplate" = ${templates}
-            AND to_tsvector('russian', "title" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
+            AND to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
                 @@ websearch_to_tsquery('russian', ${query})
           ORDER BY ts_rank(
-            to_tsvector('russian', "title" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' ')),
+            to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' ')),
             websearch_to_tsquery('russian', ${query})
           ) DESC
         `;
@@ -197,6 +197,7 @@ export class NotesService {
       data: {
         workspaceId,
         title: input.title,
+        summary: input.summary,
         body: input.body,
         tags: input.tags,
         eventAt: input.eventAt ?? null,
@@ -219,7 +220,8 @@ export class NotesService {
    */
   async update(userId: string, workspaceId: string, noteId: string, input: UpdateNoteInput): Promise<Note> {
     const { expectedRevision, ...patch } = input;
-    const touchesContent = patch.title !== undefined || patch.body !== undefined || patch.tags !== undefined;
+    const touchesContent =
+      patch.title !== undefined || patch.summary !== undefined || patch.body !== undefined || patch.tags !== undefined;
     const note = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const before = await this.assertOwnedTx(tx, workspaceId, noteId);
@@ -523,6 +525,7 @@ type NoteRow = {
   workspaceId: string;
   projectId: string | null;
   title: string;
+  summary: string;
   body: string;
   tags: string[];
   pinnedAt: Date | null;
@@ -594,6 +597,7 @@ function toDto(note: NoteRow): Note {
     workspaceId: note.workspaceId,
     projectId: note.projectId,
     title: note.title,
+    summary: note.summary,
     body: note.body,
     tags: note.tags,
     pinnedAt: note.pinnedAt ? note.pinnedAt.toISOString() : null,

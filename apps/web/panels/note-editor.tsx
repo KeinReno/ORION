@@ -51,6 +51,7 @@ export function contentTime(note: Note): string {
 
 export interface NoteEditorInput {
   title: string;
+  summary: string;
   body: string;
   tags: string[];
   eventAt: string | null;
@@ -107,6 +108,7 @@ export function NoteEditor({
   const titleLookup = useMemo(() => new Map((titles ?? []).map((t) => [t.title.toLowerCase(), t])), [titles]);
 
   const [title, setTitle] = useState(note?.title ?? "");
+  const [summary, setSummary] = useState(note?.summary ?? "");
   const [body, setBody] = useState(note?.body ?? "");
   const [tags, setTags] = useState<string[]>(note?.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
@@ -123,6 +125,7 @@ export function NoteEditor({
   // *server* has acknowledged the latest content, which a local diff can't.
   const initial = useRef({
     title: note?.title ?? "",
+    summary: note?.summary ?? "",
     body: note?.body ?? "",
     tags: note?.tags ?? [],
     eventAt: note?.eventAt ?? null,
@@ -130,6 +133,7 @@ export function NoteEditor({
   });
   const composeDirty =
     title !== initial.current.title ||
+    summary !== initial.current.summary ||
     body !== initial.current.body ||
     eventAt !== toDatetimeLocal(initial.current.eventAt) ||
     (projectId || null) !== initial.current.projectId ||
@@ -158,11 +162,11 @@ export function NoteEditor({
       {
         debounceMs: 900,
         revision: note.revision,
-        initial: { title: note.title, body: note.body, tags: note.tags, eventAt: note.eventAt, projectId: note.projectId },
+        initial: { title: note.title, summary: note.summary, body: note.body, tags: note.tags, eventAt: note.eventAt, projectId: note.projectId },
         save: async (identity, snapshot, expectedRevision) => {
           const saved = await onSaveRef.current(
             identity.noteId,
-            { title: snapshot.title, body: snapshot.body, tags: snapshot.tags, eventAt: snapshot.eventAt, projectId: snapshot.projectId },
+            { title: snapshot.title, summary: snapshot.summary, body: snapshot.body, tags: snapshot.tags, eventAt: snapshot.eventAt, projectId: snapshot.projectId },
             expectedRevision,
             { silent: true }
           );
@@ -215,8 +219,8 @@ export function NoteEditor({
   // `runSave`). No effect for the compose form — `note` is null there.
   useEffect(() => {
     if (!note || !title.trim()) return;
-    autosaveRef.current?.setSnapshot({ title, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
-  }, [note, title, body, tags, eventAt, projectId]);
+    autosaveRef.current?.setSnapshot({ title, summary, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
+  }, [note, title, summary, body, tags, eventAt, projectId]);
 
   /** Explicit save (Submit button / Ctrl+S in the editor) — skips the debounce wait. */
   function runSave(): void {
@@ -228,6 +232,7 @@ export function NoteEditor({
   function acceptServerVersion(): void {
     if (!conflict) return;
     setTitle(conflict.current.title);
+    setSummary(conflict.current.summary);
     setBody(conflict.current.body);
     setTags(conflict.current.tags);
     setEventAt(toDatetimeLocal(conflict.current.eventAt));
@@ -287,7 +292,7 @@ export function NoteEditor({
     if (note) {
       runSave();
     } else {
-      await onCreate({ title, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
+      await onCreate({ title, summary, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
     }
   }
 
@@ -375,6 +380,19 @@ export function NoteEditor({
               {note.isTemplate ? "Шаблон · " : ""}Создано {relativeTime(note.createdAt)} · изменено{" "}
               {relativeTime(contentTime(note))}
             </p>
+          ) : null}
+
+          {mode === "edit" ? (
+            <input
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              maxLength={300}
+              aria-label="Краткое описание"
+              placeholder="Краткое описание — о чём заметка (необязательно)"
+              className="w-full bg-transparent text-label text-muted-foreground outline-none placeholder:text-subtle-foreground"
+            />
+          ) : summary.trim() ? (
+            <p className="text-label text-muted-foreground">{summary}</p>
           ) : null}
 
           {note && conflict ? (
