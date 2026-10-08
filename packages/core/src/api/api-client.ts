@@ -92,6 +92,9 @@ import {
   type CreateProjectInput,
   type CreateSavedTaskViewInput,
   type CreateTaskCommentInput,
+  type CreateProjectUpdateInput,
+  type ProjectUpdate,
+  projectUpdateSchema,
   type UpdateTaskCommentInput,
   type TaskActivity,
   type TaskComment,
@@ -720,6 +723,20 @@ export class ApiClient {
 
   async deleteTaskComment(workspaceId: string, taskId: string, commentId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/tasks/${taskId}/comments/${commentId}`, undefined, z.unknown());
+  }
+
+  // --- UI-05 обновления состояния проекта -----------------------------------
+
+  listProjectUpdates(workspaceId: string, projectId: string): Promise<ProjectUpdate[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/projects/${projectId}/updates`, undefined, z.array(projectUpdateSchema));
+  }
+
+  createProjectUpdate(workspaceId: string, projectId: string, input: CreateProjectUpdateInput): Promise<ProjectUpdate> {
+    return this.request("POST", `/workspaces/${workspaceId}/projects/${projectId}/updates`, input, projectUpdateSchema);
+  }
+
+  async deleteProjectUpdate(workspaceId: string, projectId: string, updateId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/updates/${updateId}`, undefined, z.unknown());
   }
 
   listTaskActivity(workspaceId: string, taskId: string): Promise<TaskActivity[]> {

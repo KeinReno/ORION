@@ -14,6 +14,7 @@ export * from "./document";
 export * from "./sync";
 export * from "./settings";
 export * from "./project";
+export * from "./project-update";
 export * from "./inbox";
 export * from "./capture";
 export * from "./today";

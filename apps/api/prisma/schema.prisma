@@ -27,6 +27,7 @@ model User {
   timeEntries       TimeEntry[]
   notifications     Notification[]
   taskComments      TaskComment[]
+  projectStatusUpdates ProjectStatusUpdate[]
   taskActivities    TaskActivity[]
   ownedReminders    EntityReminder[] @relation("EntityReminderOwner")
   receivedReminders EntityReminder[] @relation("EntityReminderRecipient")
@@ -165,6 +166,7 @@ model Workspace {
   savedTaskViews SavedTaskView[]
   taskDependencies TaskDependency[]
   taskComments  TaskComment[]
+  projectStatusUpdates ProjectStatusUpdate[]
   taskActivities TaskActivity[]
   entityLinks   EntityLink[]
   entityReminders EntityReminder[]
@@ -233,6 +235,7 @@ model Project {
   timeEntries  TimeEntry[]
   inventoryItems InventoryItem[]
   milestones   Milestone[]
+  projectStatusUpdates ProjectStatusUpdate[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -1559,4 +1562,33 @@ model CrossWorkspaceGrant {
   @@index([workspaceId])
   @@index([granteeUserId, objectType, objectId])
   @@map("cross_workspace_grants")
+}
+
+/// UI-05: a structured, manual status report on a project — "по плану / есть
+/// риск / задержка", what changed, the blocker, the next step. Append-only:
+/// the history of reports IS the feature, so there is no edit. It is a human
+/// statement and deliberately separate from the computed progress/overdue
+/// indicators — those stay machine-derived, this one has an author and a date.
+/// `authorId` is a User FK (like TaskComment.userId) so attribution survives
+/// the author leaving the workspace.
+model ProjectStatusUpdate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  projectId   String
+  authorId    String
+  /// "on_track" | "at_risk" | "delayed" — see PROJECT_HEALTH in shared-types.
+  health      String
+  /// What changed since the last report.
+  summary     String
+  blocker     String   @default("")
+  nextStep    String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+  @@map("project_status_updates")
 }

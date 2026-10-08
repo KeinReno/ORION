@@ -71,6 +71,7 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { PROJECT_STATUS_LABEL, ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
 import { ProjectGantt } from "./projects/gantt";
+import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "money" | "access";
@@ -514,6 +515,8 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
+        <ProjectStatusSection workspaceId={workspaceId} projectId={project.id} />
+
         <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
 
         {tasksOn ? (
