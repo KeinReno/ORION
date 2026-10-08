@@ -1,6 +1,12 @@
 "use client";
 
-import { useSetWorkspaceModule, useSetWorkspaceModuleRestriction, useWorkspaceModules } from "@orion/core-react";
+import {
+  usePreferences,
+  useSetWorkspaceModule,
+  useSetWorkspaceModuleRestriction,
+  useUpdatePreferences,
+  useWorkspaceModules
+} from "@orion/core-react";
 import type { ModuleKind, WorkspaceModuleState } from "@orion/shared-types";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton, useToast } from "@orion/ui";
 import { AlertCircle } from "lucide-react";
@@ -18,7 +24,10 @@ export function ModulesSettings(): React.ReactElement {
   const modules = useWorkspaceModules(workspace?.id);
   const setModule = useSetWorkspaceModule(workspace?.id);
   const setRestriction = useSetWorkspaceModuleRestriction(workspace?.id);
+  const preferences = usePreferences();
+  const updatePreferences = useUpdatePreferences();
   const { toast } = useToast();
+  const hiddenByMe = preferences.data?.hiddenModules ?? [];
   const [pending, setPending] = useState<WorkspaceModuleState | null>(null);
   const isOwner = workspace?.role === "owner";
 
@@ -33,6 +42,22 @@ export function ModulesSettings(): React.ReactElement {
       });
     } catch (error) {
       toast({ title: "Не удалось изменить модуль", description: describeAuthError(error), tone: "danger" });
+    }
+  }
+
+  /** Personal, navigation-only: nothing changes for the workspace and no data is touched. */
+  async function toggleHiddenByMe(item: WorkspaceModuleState): Promise<void> {
+    const hidden = hiddenByMe.includes(item.id);
+    const next = hidden ? hiddenByMe.filter((id) => id !== item.id) : [...hiddenByMe, item.id];
+    try {
+      await updatePreferences.mutateAsync({ hiddenModules: next });
+      toast({
+        title: hidden ? `«${item.label}» снова в вашем меню` : `«${item.label}» скрыт из вашего меню`,
+        description: hidden ? undefined : "Для остальных участников и для данных ничего не изменилось.",
+        tone: "success"
+      });
+    } catch (error) {
+      toast({ title: "Не удалось сохранить", description: describeAuthError(error), tone: "danger" });
     }
   }
 
@@ -94,10 +119,22 @@ export function ModulesSettings(): React.ReactElement {
                         {item.label}
                         <Badge tone={item.enabled ? "success" : "neutral"}>{item.enabled ? "Включён" : "Выключен"}</Badge>
                         {item.restricted ? <Badge tone="neutral">Только владелец и тимлид</Badge> : null}
+                        {hiddenByMe.includes(item.id) ? <Badge tone="neutral">Скрыт у вас</Badge> : null}
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{item.summary}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {item.enabled ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={updatePreferences.isPending || preferences.isLoading}
+                          onClick={() => void toggleHiddenByMe(item)}
+                          title="Только для вас: убирает пункт из вашего бокового меню, данные и доступ остальных не меняются"
+                        >
+                          {hiddenByMe.includes(item.id) ? "Показать у меня" : "Скрыть у меня"}
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="outline"

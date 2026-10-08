@@ -102,6 +102,8 @@ export const userPreferenceSchema = z.object({
   quietHoursStart: z.string().nullable(),
   quietHoursEnd: z.string().nullable(),
   dashboardWidgets: z.array(z.string()),
+  /** Module ids hidden from this user's own sidebar — never affects the workspace or its data. */
+  hiddenModules: z.array(z.string().max(40)).max(40),
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

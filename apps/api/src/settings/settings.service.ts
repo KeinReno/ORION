@@ -194,6 +194,7 @@ function toDto(preference: {
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
   dashboardWidgets: string[];
+  hiddenModules: string[];
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   return {

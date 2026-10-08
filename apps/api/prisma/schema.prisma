@@ -100,6 +100,9 @@ model UserPreference {
   quietHoursStart      String?
   quietHoursEnd        String?
   dashboardWidgets     String[]  @default(["focus", "calendar", "tasks", "finance", "notes", "projects"])
+  /// Module ids this user hides from their own sidebar. A view preference only:
+  /// the module stays on for the workspace and keeps all its data.
+  hiddenModules        String[]  @default([])
   /// When set, the first-run card on Today stays hidden. Null = not dismissed.
   onboardingCompletedAt DateTime?
   /// U05 (24-CONNECTED-CORE-BACKLOG.md) — personal grouping of the user's own

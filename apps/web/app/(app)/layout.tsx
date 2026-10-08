@@ -1,6 +1,6 @@
 "use client";
 
-import { useInbox, useLogout, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
+import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed, type Workspace, type WorkspaceOrganization } from "@orion/shared-types";
 import {
   AppBackground,
@@ -226,7 +226,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // Disabled for everyone, plus restricted-to-owner/lead modules when the
   // viewer is a plain member — see `effectiveDisabledModules`.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
-  const navPanels = visiblePanels(disabledModules);
+  const { data: preferences } = usePreferences();
+  const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
   useDesktopDueReminders(tasks);

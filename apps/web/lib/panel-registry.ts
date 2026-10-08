@@ -132,9 +132,20 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true }
 ];
 
-export function visiblePanels(disabledModules: readonly string[] | undefined): PanelDefinition[] {
+/**
+ * Sidebar entries. `disabledModules` is the workspace-level switch (also gates
+ * the API); `personallyHidden` is the viewer's own "don't show me this" list —
+ * navigation only, so it never drops shell panels (no `moduleId`) and never
+ * touches data or the panel if it is already open or reached another way.
+ */
+export function visiblePanels(
+  disabledModules: readonly string[] | undefined,
+  personallyHidden: readonly string[] = []
+): PanelDefinition[] {
   return panelRegistry.filter(
-    (panel) => !panel.hideFromNav && (!panel.moduleId || isModuleEnabled(disabledModules, panel.moduleId))
+    (panel) =>
+      !panel.hideFromNav &&
+      (!panel.moduleId || (isModuleEnabled(disabledModules, panel.moduleId) && !personallyHidden.includes(panel.moduleId)))
   );
 }
 
