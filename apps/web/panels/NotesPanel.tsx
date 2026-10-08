@@ -58,6 +58,7 @@ import { useFocusedNoteId } from "../lib/panel-bus";
 import { nextListId } from "../lib/list-nav";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
+import { noteListPreview } from "../lib/note-list-preview";
 import { NoteEditor, contentTime, type NoteEditorInput } from "./note-editor";
 
 type SortKey = "updated" | "created" | "title";
@@ -413,6 +414,7 @@ export function NotesPanel(): React.ReactElement {
           {visible.map((note) => {
             const active = note.id === selectedId;
             const project = note.projectId ? (projectList ?? []).find((p) => p.id === note.projectId) : undefined;
+            const preview = noteListPreview(note.body);
             return (
               <li key={note.id}>
                 <div
@@ -446,8 +448,8 @@ export function NotesPanel(): React.ReactElement {
                       {!trash && note.pinnedAt ? <Pin className="h-3 w-3 shrink-0 text-accent" /> : null}
                       <span className="truncate">{note.title || "Без заголовка"}</span>
                     </p>
-                    {note.body ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{note.body}</p>
+                    {preview ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
                     ) : null}
                     <p className="mt-1 flex items-center gap-1.5 text-2xs text-subtle-foreground">
                       {project ? (

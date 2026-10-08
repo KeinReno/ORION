@@ -91,6 +91,8 @@ export function DocumentsPanel(): React.ReactElement {
 
   const [wrapRef, width] = useResizeWidth<HTMLDivElement>();
   const twoPane = width >= TWO_PANE_MIN;
+  const compactList = twoPane || width < 600;
+  const compactActions = width < 740;
 
   const [cwd, setCwd] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -694,11 +696,22 @@ export function DocumentsPanel(): React.ReactElement {
         </div>
       ) : (
         <div className="rounded-xl border border-border">
-          <div className="grid grid-cols-[1.75rem_1fr_5rem_7rem_2rem] items-center gap-2 border-b border-border px-2.5 py-1.5 text-2xs uppercase tracking-wide text-subtle-foreground">
+          <div
+            className={cx(
+              "grid items-center gap-2 border-b border-border px-2.5 py-1.5 text-2xs uppercase tracking-wide text-subtle-foreground",
+              compactList
+                ? "grid-cols-[1.75rem_minmax(0,1fr)_2rem]"
+                : "grid-cols-[1.75rem_minmax(0,1fr)_5rem_7rem_2rem]"
+            )}
+          >
             <span />
             <span>Имя</span>
-            <span className="text-right">Размер</span>
-            <span className="hidden text-right sm:block">Изменён</span>
+            {!compactList ? (
+              <>
+                <span className="text-right">Размер</span>
+                <span className="text-right">Изменён</span>
+              </>
+            ) : null}
             <span />
           </div>
           <ul className="divide-y divide-border">
@@ -715,7 +728,10 @@ export function DocumentsPanel(): React.ReactElement {
                     onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
                     onClick={() => (isFolder ? !trash && openFolder(doc.id) : setSelectedFileId(doc.id))}
                     className={cx(
-                      "group grid grid-cols-[1.75rem_1fr_5rem_7rem_2rem] items-center gap-2 px-2.5 py-2 transition-colors",
+                      "group grid items-center gap-2 px-2.5 py-2 transition-colors",
+                      compactList
+                        ? "grid-cols-[1.75rem_minmax(0,1fr)_2rem]"
+                        : "grid-cols-[1.75rem_minmax(0,1fr)_5rem_7rem_2rem]",
                       trash ? "" : "cursor-pointer",
                       active ? "bg-accent/[0.07]" : "hover:bg-card-hover"
                     )}
@@ -732,17 +748,31 @@ export function DocumentsPanel(): React.ReactElement {
                     ) : (
                       <span />
                     )}
-                    <span className="flex min-w-0 items-center gap-2">
+                    <span className="flex min-w-0 items-start gap-2">
                       <Icon className={cx("h-4 w-4 shrink-0", isFolder ? "text-accent" : "text-muted-foreground")} />
-                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{doc.name}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-foreground" title={doc.name}>
+                          {doc.name}
+                        </span>
+                        {compactList ? (
+                          <span className="block truncate text-2xs text-subtle-foreground">
+                            {!isFolder && doc.sizeBytes != null ? `${formatBytes(doc.sizeBytes)} · ` : ""}
+                            {trash && doc.deletedAt ? `удалено ${relativeTime(doc.deletedAt)}` : relativeTime(doc.updatedAt)}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
-                    <span className="shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
-                      {isFolder ? "" : formatBytes(doc.sizeBytes)}
-                    </span>
-                    <span className="hidden shrink-0 text-right text-2xs tabular-nums text-subtle-foreground sm:block">
-                      {trash && doc.deletedAt ? `удалено ${relativeTime(doc.deletedAt)}` : relativeTime(doc.updatedAt)}
-                    </span>
-                    <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
+                    {!compactList ? (
+                      <>
+                        <span className="shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
+                          {isFolder ? "" : formatBytes(doc.sizeBytes)}
+                        </span>
+                        <span className="shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
+                          {trash && doc.deletedAt ? `удалено ${relativeTime(doc.deletedAt)}` : relativeTime(doc.updatedAt)}
+                        </span>
+                      </>
+                    ) : null}
+                    <div className={cx("flex justify-end transition-opacity", compactList ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>
                       <DropdownMenu
                         align="end"
                         trigger={({ toggle }) => (
@@ -858,23 +888,42 @@ export function DocumentsPanel(): React.ReactElement {
                   e.target.value = "";
                 }}
               />
-              <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
-                <FolderPlus className="h-4 w-4" /> Папка
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("docx")}>
-                <FileText className="h-4 w-4" /> Документ
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("xlsx")}>
-                <FileSpreadsheet className="h-4 w-4" /> Таблица
-              </Button>
-              <Button size="sm" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="h-4 w-4" /> Загрузить
-              </Button>
+              {compactActions ? (
+                <DropdownMenu
+                  align="end"
+                  trigger={({ toggle }) => (
+                    <Button size="sm" onClick={toggle} aria-label="Действия с документами">
+                      <FolderPlus className="h-4 w-4" /> Добавить
+                    </Button>
+                  )}
+                  items={[
+                    { label: "Новая папка", icon: FolderPlus, onSelect: () => setNewFolderOpen(true) },
+                    { label: "Новый документ", icon: FileText, onSelect: () => void createOfficeDocument("docx") },
+                    { label: "Новая таблица", icon: FileSpreadsheet, onSelect: () => void createOfficeDocument("xlsx") },
+                    { label: "Загрузить файлы", icon: Upload, onSelect: () => fileInputRef.current?.click() }
+                  ]}
+                />
+              ) : (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
+                    <FolderPlus className="h-4 w-4" /> Папка
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("docx")}>
+                    <FileText className="h-4 w-4" /> Документ
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("xlsx")}>
+                    <FileSpreadsheet className="h-4 w-4" /> Таблица
+                  </Button>
+                  <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-4 w-4" /> Загрузить
+                  </Button>
+                </>
+              )}
             </>
           )
         }
       >
-        <div className="relative flex-1 sm:max-w-xs">
+        <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" className="pl-8" />
         </div>
