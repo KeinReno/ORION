@@ -23,7 +23,8 @@ async function buildFixtureXlsx(): Promise<ArrayBuffer> {
   s2.getCell("B1").value = "2026-01-15";
 
   const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf).buffer.slice(0, Buffer.from(buf).byteLength) as ArrayBuffer;
+  const bytes = Buffer.from(buf);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 describe("xlsx-codec round trip", () => {
