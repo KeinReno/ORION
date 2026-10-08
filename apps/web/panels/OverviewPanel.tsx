@@ -125,7 +125,7 @@ export function OverviewPanel(): React.ReactElement {
   return (
     <PanelShell>
       <PanelHeader icon={Globe2} title="Обзор" subtitle="Мои задачи и счета из всех пространств" />
-      <PanelBody className="space-y-6">
+      <PanelBody className="space-y-6 [container-type:inline-size]">
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -148,12 +148,12 @@ export function OverviewPanel(): React.ReactElement {
           <>
             <section className="space-y-3 rounded-2xl border border-border bg-card/60 p-3">
               <h2 className="text-title text-foreground">Быстрая задача</h2>
-              <form onSubmit={submitCapture} className="flex flex-col gap-2 sm:flex-row">
+              <form onSubmit={submitCapture} className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row">
                 <Select
                   value={captureWsId}
                   onChange={(e) => setCaptureWsId(e.target.value)}
                   aria-label="Пространство для новой задачи"
-                  className="sm:w-48"
+                  className="[@container(min-width:576px)]:w-48"
                 >
                   {taskWorkspaces.length === 0 ? <option value="">Нет доступных пространств</option> : null}
                   {taskWorkspaces.map((w) => (
@@ -237,12 +237,12 @@ export function OverviewPanel(): React.ReactElement {
             {financeWorkspaces.length > 0 ? (
               <section className="space-y-3 rounded-2xl border border-border bg-card/60 p-3">
                 <h2 className="text-title text-foreground">Быстрый расход</h2>
-                <form onSubmit={submitExpense} className="flex flex-col gap-2 sm:flex-row">
+                <form onSubmit={submitExpense} className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row">
                   <Select
                     value={expenseWsId}
                     onChange={(e) => setExpenseWsId(e.target.value)}
                     aria-label="Пространство расхода"
-                    className="sm:w-36"
+                    className="[@container(min-width:576px)]:w-36"
                   >
                     {financeWorkspaces.map((w) => (
                       <option key={w.id} value={w.id}>
@@ -254,7 +254,7 @@ export function OverviewPanel(): React.ReactElement {
                     value={expenseAccountId}
                     onChange={(e) => setExpenseAccountId(e.target.value)}
                     aria-label="Счёт списания"
-                    className="sm:w-40"
+                    className="[@container(min-width:576px)]:w-40"
                     disabled={expenseAccounts.length === 0}
                   >
                     {expenseAccounts.length === 0 ? <option value="">Нет счетов</option> : null}

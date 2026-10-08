@@ -162,14 +162,14 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
   if (isLoading || !project) {
     return (
       <PanelShell>
-        <PanelBody>
+        <PanelBody className="[container-type:inline-size]">
           {isFetched && !project ? (
             <EmptyState icon={FolderKanban} title="Проект не найден" description="Возможно, он был удалён или недоступен." />
           ) : (
             <div className="space-y-3">
               <Skeleton className="h-8 w-64" />
               <Skeleton className="h-4 w-full max-w-xl" />
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <div className="grid gap-4 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
                 <Skeleton className="h-72 w-full" />
                 <Skeleton className="h-72 w-full" />
               </div>
@@ -350,7 +350,7 @@ function ProjectWorkspace({
         <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
       </PanelHeader>
 
-      <PanelBody>
+      <PanelBody className="[container-type:inline-size]">
         {tab === "overview" ? (
           <OverviewTab
             workspaceId={workspaceId}
@@ -486,7 +486,7 @@ function OverviewTab({
   const fire = [...focus.overdue, ...focus.blocked];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
         <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
 
@@ -847,7 +847,7 @@ function MaterialsTab({
   const other = project.activity.filter((item) => item.type === "event" || item.type === "transaction" || item.type === "inventory");
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 [@container(min-width:896px)]:grid-cols-2">
       {notesOn ? (
         <PanelSection
           title={`Заметки · ${projectNotes.length}`}
@@ -1013,7 +1013,7 @@ function MoneyTab({
             </p>
           </div>
         ) : null}
-        <dl className="grid gap-3 text-label sm:grid-cols-3">
+        <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
           <Field label="Начало" value={project.startAt ? shortDateTime(project.startAt) : "—"} />
           <Field label="Срок" value={project.dueAt ? shortDateTime(project.dueAt) : "—"} tone={overdue ? "danger" : undefined} />
           {tasksOn ? (
@@ -1036,7 +1036,7 @@ function MoneyTab({
               </p>
             </div>
           ) : null}
-          <dl className="grid gap-3 text-label sm:grid-cols-3">
+          <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
             <Field
               label="Бюджет"
               value={project.budgetAmount !== null ? formatMoney(project.budgetAmount, project.currency) : "не задан"}
@@ -1051,7 +1051,7 @@ function MoneyTab({
 
       {timeOn ? (
         <PanelSection title="Время">
-          <dl className="grid gap-3 text-label sm:grid-cols-3">
+          <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
             <Field label="Учтено" value={formatDuration(project.trackedMinutes)} />
             <Field label="Стоимость времени" value={timeCostLabel(project)} />
           </dl>

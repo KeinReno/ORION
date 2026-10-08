@@ -153,7 +153,7 @@ export function ListsPanel(): React.ReactElement {
         </label>
       </PanelHeader>
 
-      <PanelBody>
+      <PanelBody className="[container-type:inline-size]">
         {workspaceId === undefined ? (
           workspaceLoading ? (
             <div className="space-y-2">
@@ -169,7 +169,7 @@ export function ListsPanel(): React.ReactElement {
             />
           )
         ) : listsQuery.isLoading ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-40 w-full" />
             ))}
@@ -199,7 +199,7 @@ export function ListsPanel(): React.ReactElement {
           />
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
               {activeLists.map((list) => (
                 <ListCard
                   key={list.id}

@@ -183,7 +183,7 @@ export function TaskCard({
           </Tooltip>
         ) : null}
       </div>
-      <div className="hidden gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 sm:flex" onClick={(event) => event.stopPropagation()} role="presentation">
+      <div className="hidden flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 sm:flex" onClick={(event) => event.stopPropagation()} role="presentation">
         {TASK_STATUS_ORDER.filter((status) => status !== task.status).map((status) => <button key={status} type="button" onClick={() => onMove(status)} className="rounded-md border border-border px-1.5 py-0.5 text-micro text-muted-foreground hover:bg-white/5 hover:text-foreground">→ {TASK_STATUS_LABEL[status]}</button>)}
       </div>
     </div>

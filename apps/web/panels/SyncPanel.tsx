@@ -171,7 +171,7 @@ export function SyncPanel(): React.ReactElement {
   return (
     <PanelShell>
       <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки через WebDAV" />
-      <PanelBody className="max-w-5xl">
+      <PanelBody className="max-w-5xl [container-type:inline-size]">
         {remote.isError ? (
           <EmptyState
             icon={TriangleAlert}
@@ -190,15 +190,15 @@ export function SyncPanel(): React.ReactElement {
             {remote.isLoading ? (
               <Skeleton className="h-56" />
             ) : (
-              <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
-                <Field className="md:col-span-2" label="Адрес WebDAV">
+              <form className="grid gap-4 [@container(min-width:640px)]:grid-cols-2" onSubmit={submit}>
+                <Field className="[@container(min-width:640px)]:col-span-2" label="Адрес WebDAV">
                   <Input id="sync-webdav-url" type="url" required value={form.url} placeholder="https://cloud.example.com/webdav" onChange={(event) => setForm({ ...form, url: event.target.value })} />
                 </Field>
                 <Field label="Пользователь"><Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} /></Field>
                 <Field label="Пароль приложения"><Input type="password" value={form.password} placeholder={remote.data?.hasPassword ? "Оставьте пустым, чтобы не менять" : "Введите пароль"} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
                 <Field label="Каталог"><Input required value={form.baseDir} onChange={(event) => setForm({ ...form, baseDir: event.target.value })} /></Field>
                 <Field label="Имена файлов"><Select className="w-full" value={form.encAlgo} onChange={(event) => setForm({ ...form, encAlgo: event.target.value as SyncRemoteInput["encAlgo"] })}><option value="rclone-base64">Совместимые с rclone</option><option value="openssl-base64">Base64</option><option value="none">Без маскировки</option></Select></Field>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground md:col-span-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground [@container(min-width:640px)]:col-span-2">
                   <Switch
                     checked={form.depthInfinity}
                     onChange={(depthInfinity) => setForm({ ...form, depthInfinity })}
@@ -206,7 +206,7 @@ export function SyncPanel(): React.ReactElement {
                   />
                   Сервер поддерживает рекурсивный Depth: infinity
                 </div>
-                <div className="flex flex-wrap gap-2 md:col-span-2">
+                <div className="flex flex-wrap gap-2 [@container(min-width:640px)]:col-span-2">
                   <Button type="submit" status={saveRemote.isPending ? "pending" : saveRemote.isSuccess ? "success" : saveRemote.isError ? "error" : "idle"}>
                     Сохранить
                   </Button>
@@ -306,7 +306,7 @@ export function SyncPanel(): React.ReactElement {
                 <StatCard label="Удалено" value={String(diff?.removed ?? 0)} />
                 <StatCard label="Изменено" value={String(diff?.changed ?? 0)} />
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 [@container(min-width:576px)]:grid-cols-2">
                 <CountList title="В бэкапе" counts={preview.incoming} />
                 <CountList title="Сейчас" counts={preview.current} />
               </div>

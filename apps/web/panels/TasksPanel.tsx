@@ -455,9 +455,9 @@ export function TasksPanel(): React.ReactElement {
         </div>
       </PanelHeader>
 
-      <div className="orion-scroll flex-1 overflow-auto p-6">
+      <div className="orion-scroll flex-1 overflow-auto p-6 [container-type:inline-size]">
         {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 [@container(min-width:640px)]:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="space-y-2">
                 <Skeleton className="h-5 w-24" />
@@ -511,7 +511,7 @@ export function TasksPanel(): React.ReactElement {
           <div
             className={cx(
               view === "board"
-                ? cx("grid gap-4", columns.length <= 3 ? "md:grid-cols-3" : "md:grid-cols-3 xl:grid-cols-4")
+                ? cx("grid gap-4", columns.length <= 3 ? "[@container(min-width:640px)]:grid-cols-3" : "[@container(min-width:640px)]:grid-cols-3 [@container(min-width:1152px)]:grid-cols-4")
                 : "flex flex-col gap-4"
             )}
           >

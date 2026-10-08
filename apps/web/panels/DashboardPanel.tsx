@@ -324,7 +324,7 @@ export function DashboardPanel(): React.ReactElement {
         title={`${greeting()}, ${user?.name ?? "коллега"}`}
         subtitle={headerNow.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
       />
-      <PanelBody className="space-y-6">
+      <PanelBody className="space-y-6 [container-type:inline-size]">
         {loading ? (
           <DashboardSkeleton />
         ) : (
@@ -334,7 +334,7 @@ export function DashboardPanel(): React.ReactElement {
                 chip ribbon is what the card replaces (it returns null once dismissed). */}
             <header className="space-y-3">
               <form onSubmit={submitCapture} className="space-y-1.5">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row [@container(min-width:576px)]:items-center">
                   <Input
                     id="orion-quick-capture"
                     value={capture}
@@ -415,7 +415,7 @@ export function DashboardPanel(): React.ReactElement {
             ) : null}
 
             {showFocus ? (
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="grid gap-6 [@container(min-width:640px)]:grid-cols-2">
                 {tasksOn && focusShown.length > 0 ? (
                   <Section title="Фокус" icon={Sparkles} onOpen={() => openPanel("tasks")}>
                     <ActionList
@@ -463,7 +463,7 @@ export function DashboardPanel(): React.ReactElement {
             ) : null}
 
             {showSecondary ? (
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="grid gap-6 [@container(min-width:640px)]:grid-cols-2">
                 {showToday ? (
                   <Section
                     title="Сегодня"
@@ -626,11 +626,11 @@ function DashboardSkeleton(): React.ReactElement {
           <Skeleton className="h-7 w-24 rounded-full" />
         </div>
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 [@container(min-width:640px)]:grid-cols-2">
         <Skeleton className="h-36" />
         <Skeleton className="h-36" />
       </div>
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 [@container(min-width:640px)]:grid-cols-2">
         <Skeleton className="h-24" />
         <Skeleton className="h-24" />
         <Skeleton className="h-24" />

@@ -131,9 +131,9 @@ export function ProjectsPanel(): React.ReactElement {
         />
       </PanelHeader>
 
-      <PanelBody>
+      <PanelBody className="[container-type:inline-size]">
         {loading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:1152px)]:grid-cols-3 [@container(min-width:1408px)]:grid-cols-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-40 w-full" />
             ))}
@@ -200,7 +200,7 @@ export function ProjectsPanel(): React.ReactElement {
                 }
               />
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:1152px)]:grid-cols-3 [@container(min-width:1408px)]:grid-cols-4">
                 {list.map((project) => (
                   <ProjectCard key={project.id} project={project} onOpen={() => openProject(project.id, project.name)} />
                 ))}

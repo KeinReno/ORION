@@ -62,7 +62,7 @@ export interface BackgroundEffectSettingsFormProps {
  * generic speed/density/color triple shared across all four.
  */
 export function BackgroundEffectSettingsForm({ variant, settings, accentHex, onChange }: BackgroundEffectSettingsFormProps): React.ReactElement | null {
-  const grid = "grid gap-4 rounded-lg border border-border p-3 sm:grid-cols-3";
+  const grid = "grid gap-4 rounded-lg border border-border p-3 [@container(min-width:576px)]:grid-cols-3";
 
   if (variant === "liquid-ether") {
     const cfg = settings["liquid-ether"];

@@ -110,13 +110,13 @@ export function AccountsView(): React.ReactElement {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
       ) : accounts && accounts.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
           {accounts.map((account) => (
             <Card key={account.id} elevate className={`flex flex-col gap-2 ${account.archivedAt ? "opacity-60" : ""}`}>
               <div className="flex items-start justify-between gap-2">

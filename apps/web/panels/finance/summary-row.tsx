@@ -49,7 +49,7 @@ export function FinanceSummaryRow(): React.ReactElement | null {
   const overBudgetCount = (budgets ?? []).filter((b) => b.spent > b.limitAmount).length;
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 [@container(min-width:576px)]:grid-cols-4">
       {balancesByCurrency.map(([currency, total]) => (
         <StatCard
           key={currency}

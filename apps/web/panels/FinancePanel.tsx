@@ -57,7 +57,7 @@ export function FinancePanel(): React.ReactElement {
           ]}
         />
       </PanelHeader>
-      <PanelBody>
+      <PanelBody className="[container-type:inline-size]">
         <FinanceSummaryRow />
         {tab === "transactions" ? <TransactionsView onOpenAccounts={() => setTabOverride("accounts")} /> : null}
         {tab === "accounts" ? <AccountsView /> : null}

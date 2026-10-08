@@ -126,7 +126,7 @@ export function ModulesSettings(): React.ReactElement {
                       )}
                     </div>
                   </div>
-                  <dl className="grid gap-2 text-2xs text-subtle-foreground sm:grid-cols-2">
+                  <dl className="grid gap-2 text-2xs text-subtle-foreground [@container(min-width:576px)]:grid-cols-2">
                     <div>
                       <dt className="font-medium text-muted-foreground">Отвечает за</dt>
                       <dd>{item.owns}</dd>
@@ -135,18 +135,18 @@ export function ModulesSettings(): React.ReactElement {
                       <dt className="font-medium text-muted-foreground">Без соседей</dt>
                       <dd>{item.livesWithout}</dd>
                     </div>
-                    <div className="sm:col-span-2">
+                    <div className="[@container(min-width:576px)]:col-span-2">
                       <dt className="font-medium text-muted-foreground">При выключении</dt>
                       <dd>{item.disableBehavior}</dd>
                     </div>
                     {item.provides.length > 0 ? (
-                      <div className="sm:col-span-2">
+                      <div className="[@container(min-width:576px)]:col-span-2">
                         <dt className="font-medium text-muted-foreground">Даёт другим</dt>
                         <dd>{item.provides.join(" · ")}</dd>
                       </div>
                     ) : null}
                     {item.optionalDependencies.length > 0 ? (
-                      <div className="sm:col-span-2">
+                      <div className="[@container(min-width:576px)]:col-span-2">
                         <dt className="font-medium text-muted-foreground">Необязательные связи</dt>
                         <dd>
                           {item.optionalDependencies

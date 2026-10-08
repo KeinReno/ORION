@@ -259,7 +259,7 @@ export function EntityLinksSection({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setPicking((v) => !v)}
@@ -269,7 +269,7 @@ export function EntityLinksSection({
           <Link2 className="h-3.5 w-3.5" /> Связанные записи
           {others.length > 0 ? <span className="text-subtle-foreground">· {others.length}</span> : null}
         </button>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             type="button"
             variant="subtle"

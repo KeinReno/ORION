@@ -305,12 +305,12 @@ export function SettingsPanel(): React.ReactElement {
     <PanelShell>
       <PanelHeader icon={Settings} title="Настройки" subtitle="Профиль, модули, безопасность и внешний вид" />
 
-      <PanelBody className="max-w-5xl">
-        <div className="flex flex-col gap-6 md:flex-row md:items-start">
+      <PanelBody className="max-w-5xl [container-type:inline-size]">
+        <div className="flex flex-col gap-6 [@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start">
           <Select
             value={tab}
             onChange={(event) => setTab(event.target.value as Tab)}
-            className="md:hidden"
+            className="[@container(min-width:640px)]:hidden"
             aria-label="Раздел настроек"
           >
             {TABS.map((item) => (
@@ -319,7 +319,7 @@ export function SettingsPanel(): React.ReactElement {
               </option>
             ))}
           </Select>
-          <nav className="hidden w-48 shrink-0 flex-col gap-0.5 md:flex" aria-label="Разделы настроек">
+          <nav className="hidden w-48 shrink-0 flex-col gap-0.5 [@container(min-width:640px)]:flex" aria-label="Разделы настроек">
             {TABS.map((item) => (
               <button
                 key={item.value}
@@ -385,10 +385,10 @@ export function SettingsPanel(): React.ReactElement {
                   <> · без email</>
                 )}
               </p>
-              <form className="grid gap-4 sm:grid-cols-2" onSubmit={saveProfile}>
+              <form className="grid gap-4 [@container(min-width:576px)]:grid-cols-2" onSubmit={saveProfile}>
                 <Field label="Имя"><Input required value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
                 <Field label="Email (необязательно)"><Input type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></Field>
-                <div className="sm:col-span-2">
+                <div className="[@container(min-width:576px)]:col-span-2">
                   <Button
                     type="submit"
                     status={updateProfile.isPending ? "pending" : updateProfile.isSuccess ? "success" : updateProfile.isError ? "error" : "idle"}
@@ -405,8 +405,8 @@ export function SettingsPanel(): React.ReactElement {
           <>
             <PanelSection title="Смена пароля или PIN">
               <Card>
-                <form className="grid gap-4 sm:grid-cols-2" onSubmit={savePassword}>
-                  <div className="flex gap-2 sm:col-span-2">
+                <form className="grid gap-4 [@container(min-width:576px)]:grid-cols-2" onSubmit={savePassword}>
+                  <div className="flex gap-2 [@container(min-width:576px)]:col-span-2">
                     <Button type="button" size="sm" variant={unlock === "password" ? "primary" : "outline"} onClick={() => setUnlock("password")}>
                       Пароль
                     </Button>
@@ -428,10 +428,10 @@ export function SettingsPanel(): React.ReactElement {
                   ) : (
                     <Field label="Новый пароль"><Input type="password" required minLength={8} autoComplete="new-password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} /></Field>
                   )}
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground [@container(min-width:576px)]:col-span-2">
                     <input type="checkbox" checked={passwords.revokeOtherSessions} onChange={(e) => setPasswords({ ...passwords, revokeOtherSessions: e.target.checked })} /> Завершить другие сессии
                   </label>
-                  <div className="sm:col-span-2">
+                  <div className="[@container(min-width:576px)]:col-span-2">
                     <Button
                       type="submit"
                       status={changePassword.isPending ? "pending" : changePassword.isSuccess ? "success" : changePassword.isError ? "error" : "idle"}
@@ -485,7 +485,7 @@ export function SettingsPanel(): React.ReactElement {
                 <Toggle label="Напоминания о событиях" checked={form.eventReminders} onChange={(eventReminders) => setForm({ ...form, eventReminders })} />
                 <Toggle label="Предупреждения о финансах" checked={form.financeAlerts} onChange={(financeAlerts) => setForm({ ...form, financeAlerts })} />
                 <Toggle label="Низкий остаток на складе" checked={form.inventoryAlerts} onChange={(inventoryAlerts) => setForm({ ...form, inventoryAlerts })} />
-                <div className="grid gap-4 border-t border-border pt-3 sm:grid-cols-2">
+                <div className="grid gap-4 border-t border-border pt-3 [@container(min-width:576px)]:grid-cols-2">
                   <Field label="Тихие часы — начало"><Input type="time" value={form.quietHoursStart ?? ""} onChange={(e) => setForm({ ...form, quietHoursStart: e.target.value || null })} /></Field>
                   <Field label="Тихие часы — конец"><Input type="time" value={form.quietHoursEnd ?? ""} onChange={(e) => setForm({ ...form, quietHoursEnd: e.target.value || null })} /></Field>
                 </div>
@@ -603,7 +603,7 @@ export function SettingsPanel(): React.ReactElement {
                   </p>
                 ) : null}
                 {form.surfaceStyle === "glass" ? (
-                  <div className="grid gap-4 rounded-lg border border-border p-3 sm:grid-cols-3">
+                  <div className="grid gap-4 rounded-lg border border-border p-3 [@container(min-width:576px)]:grid-cols-3">
                     <Field label={`Прозрачность панелей: ${Math.round(form.panelOpacity * 100)}%`}>
                       <input
                         type="range"
@@ -658,7 +658,7 @@ export function SettingsPanel(): React.ReactElement {
                     <span className="text-xs text-muted-foreground">Рамка вокруг курсора, сужается на кнопках и ссылках</span>
                   </div>
                 </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 [@container(min-width:576px)]:grid-cols-2">
                   <Field label="Часовой пояс"><Input placeholder="Europe/Moscow" value={form.timeZone ?? ""} onChange={(e) => setForm({ ...form, timeZone: e.target.value.trim() || null })} /></Field>
                   <Field label="Начало недели">
                     <Select className="w-full" value={form.weekStartsOn} onChange={(e) => setForm({ ...form, weekStartsOn: Number(e.target.value) })}>
@@ -713,12 +713,12 @@ export function SettingsPanel(): React.ReactElement {
                 {appInfo.isLoading ? (
                   <Skeleton className="h-28" />
                 ) : appInfo.data ? (
-                  <dl className="grid gap-3 sm:grid-cols-2">
+                  <dl className="grid gap-3 [@container(min-width:576px)]:grid-cols-2">
                     <Row label="Название" value={appInfo.data.name} />
                     <Row label="Версия" value={appInfo.data.version} />
                     <Row label="Версия API" value={appInfo.data.apiVersion} />
                     <Row label="Окружение" value={appInfo.data.environment} />
-                    <Row className="sm:col-span-2" label="Манифест обновлений" value={appInfo.data.updateManifestUrl ?? "не задан"} />
+                    <Row className="[@container(min-width:576px)]:col-span-2" label="Манифест обновлений" value={appInfo.data.updateManifestUrl ?? "не задан"} />
                   </dl>
                 ) : (
                   <EmptyState
