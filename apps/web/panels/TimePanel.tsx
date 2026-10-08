@@ -288,7 +288,7 @@ export function TimePanel(): React.ReactElement {
         }
       />
 
-      <PanelBody className="mx-auto w-full max-w-6xl">
+      <PanelBody measure="wide">
         <div ref={layoutRef}>
         {workspaceId === undefined ? (
           workspaceLoading ? (

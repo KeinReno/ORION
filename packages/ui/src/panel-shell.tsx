@@ -97,10 +97,25 @@ export function PanelShell({
 /**
  * The scrolling content region for the common single-column panel.
  *
- * `measure` caps line length so short cards and prose don't stretch with the
- * dock. Header stays full-bleed; calendar / kanban / tables omit this on
- * purpose — their width *is* the data.
+ * `measure` caps content width by the *kind of work* (see «Контракт ширины»
+ * in docs/UI_UX_DESIGN.md), so short cards and prose don't stretch with the
+ * dock. Header stays full-bleed; calendar / kanban / tables / Gantt omit it on
+ * purpose — their width *is* the data. Don't hand-write `max-w-*` in a panel:
+ * pick a step of this scale, so every panel reads at the same widths.
  */
+export const PANEL_MEASURE_CLASS = {
+  /** ≈ 36rem, left-aligned: a feed of short items (inbox). */
+  feed: "max-w-xl",
+  /** ≈ 42rem, left-aligned: prose and single-column cards (habits, inventory). */
+  prose: "max-w-2xl",
+  /** ≈ 64rem, left-aligned: forms and settings sections. */
+  settings: "max-w-5xl",
+  /** ≈ 72rem, centered: a working area that may split into two columns (time). */
+  wide: "mx-auto w-full max-w-6xl"
+} as const;
+
+export type PanelMeasure = keyof typeof PANEL_MEASURE_CLASS;
+
 export function PanelBody({
   children,
   className,
@@ -108,15 +123,13 @@ export function PanelBody({
 }: {
   children: ReactNode;
   className?: string;
-  /** `feed` ≈ 36rem (inbox). `prose` ≈ 42rem (dashboard, habits, time). */
-  measure?: "feed" | "prose";
+  measure?: PanelMeasure;
 }): React.ReactElement {
   return (
     <div
       className={clsx(
         "orion-scroll relative z-10 flex-1 space-y-6 overflow-y-auto p-6",
-        measure === "feed" && "max-w-xl",
-        measure === "prose" && "max-w-2xl",
+        measure && PANEL_MEASURE_CLASS[measure],
         className
       )}
     >

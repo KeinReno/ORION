@@ -157,7 +157,7 @@ export function SyncPanel(): React.ReactElement {
     return (
       <PanelShell>
         <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки через WebDAV" />
-        <PanelBody className="max-w-5xl">
+        <PanelBody measure="settings">
           <EmptyState
             icon={Lock}
             title="Доступно только владельцу"
@@ -171,7 +171,7 @@ export function SyncPanel(): React.ReactElement {
   return (
     <PanelShell>
       <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки через WebDAV" />
-      <PanelBody className="max-w-5xl [container-type:inline-size]">
+      <PanelBody measure="settings" className="[container-type:inline-size]">
         {remote.isError ? (
           <EmptyState
             icon={TriangleAlert}

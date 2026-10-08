@@ -305,7 +305,7 @@ export function SettingsPanel(): React.ReactElement {
     <PanelShell>
       <PanelHeader icon={Settings} title="Настройки" subtitle="Профиль, модули, безопасность и внешний вид" />
 
-      <PanelBody className="max-w-5xl [container-type:inline-size]">
+      <PanelBody measure="settings" className="[container-type:inline-size]">
         <div className="flex flex-col gap-6 [@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start">
           <Select
             value={tab}
