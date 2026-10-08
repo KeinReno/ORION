@@ -27,6 +27,7 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  SlidersHorizontal,
   Trash2,
   X
 } from "lucide-react";
@@ -113,6 +114,7 @@ export function NoteEditor({
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
   const [mode, setMode] = useState<EditorMode>("edit");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
   // "compare current fields to what was last saved" dirty check. An
@@ -423,6 +425,9 @@ export function NoteEditor({
                   }))}
                 />
               ) : null}
+              <IconButton label="Свойства, связи и доступ" size="sm" onClick={() => setInspectorOpen(true)}>
+                <SlidersHorizontal className="h-4 w-4" />
+              </IconButton>
               {note ? (
                 <IconButton label="История версий" size="sm" onClick={() => setHistoryOpen(true)}>
                   <History className="h-4 w-4" />
@@ -489,8 +494,30 @@ export function NoteEditor({
               className="min-w-[6rem] flex-1 bg-transparent text-micro text-foreground outline-none placeholder:text-subtle-foreground"
             />
           </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
+        <span />
+        <div className="flex gap-2">
+          <Button type="button" variant="subtle" size="sm" onClick={requestClose}>
+            Закрыть
+          </Button>
+          {composing ? (
+            <Button type="submit" variant="primary" size="sm" disabled={createDisabled} title={!title.trim() ? "Введите заголовок" : undefined}>
+              Создать
+            </Button>
+          ) : (
+            <Button type="submit" size="sm" disabled={busy || saving || !title.trim() || !dirty}>
+              Сохранить
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <Sheet open={inspectorOpen} onClose={() => setInspectorOpen(false)} title="Свойства" width="26rem">
+        <div className="space-y-4">
           {calendarOn ? (
-            <label className="flex items-center gap-2 text-label text-subtle-foreground">
+            <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
               Показать в календаре
               <input
                 type="datetime-local"
@@ -506,7 +533,7 @@ export function NoteEditor({
             </label>
           ) : null}
           {projects ? (
-            <label className="flex items-center gap-2 text-label text-subtle-foreground">
+            <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
               Проект
               <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
                 <option value="">Без проекта</option>
@@ -561,24 +588,7 @@ export function NoteEditor({
             </div>
           ) : null}
         </div>
-      </div>
-      <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
-        <span />
-        <div className="flex gap-2">
-          <Button type="button" variant="subtle" size="sm" onClick={requestClose}>
-            Закрыть
-          </Button>
-          {composing ? (
-            <Button type="submit" variant="primary" size="sm" disabled={createDisabled} title={!title.trim() ? "Введите заголовок" : undefined}>
-              Создать
-            </Button>
-          ) : (
-            <Button type="submit" size="sm" disabled={busy || saving || !title.trim() || !dirty}>
-              Сохранить
-            </Button>
-          )}
-        </div>
-      </div>
+      </Sheet>
 
       {note ? (
         <Sheet open={historyOpen} onClose={() => setHistoryOpen(false)} title="История версий" width="40rem" bare>
