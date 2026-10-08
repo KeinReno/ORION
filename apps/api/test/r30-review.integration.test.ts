@@ -78,22 +78,6 @@ describe("U09 cross-workspace grants", () => {
     return { status: response.status, data };
   }
 
-  // R29-01 acceptance addendum: document grant fixtures need a real
-  // multipart upload (FilesInterceptor), so this bypasses request()'s
-  // JSON-only Content-Type instead of duplicating fetch plumbing everywhere.
-  async function uploadDocument(workspaceId: string, token: string, name: string, content: string): Promise<{ status: number; data: Array<{ id: string }> }> {
-    const form = new FormData();
-    form.append("files", new Blob([content], { type: "text/plain" }), name);
-    const response = await fetch(`${baseUrl}/workspaces/${workspaceId}/documents/upload`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form
-    });
-    const text = await response.text();
-    const data = (text ? JSON.parse(text) : null) as Array<{ id: string }>;
-    return { status: response.status, data };
-  }
-
 
   async function fixture(label: string, member = false) {
     const owner = await register(`${label}-owner`);

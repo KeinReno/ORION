@@ -532,6 +532,16 @@ Bank import, exchange-rate providers, tax/report exports and similar capabilitie
 
 Finance ↔ Projects is a cross-module relation.
 
+## External project work after the parity refactor
+
+The separate Compass Vertex source becomes an optional Investments/Markets
+domain module, with a public Finance ↔ Investments bridge. FinControl does
+not become a second ledger: its quick entry, import, obligations and analytics
+are candidate Finance plugins, subject to explicit extension points. These
+are future additions, not part of the current parity extraction. Source
+inventory, migration rules and acceptance tests are specified in
+[`INTEGRATIONS_COMPASS_FINCONTROL.md`](INTEGRATIONS_COMPASS_FINCONTROL.md).
+
 ---
 
 # 12. Habits

@@ -558,7 +558,7 @@ async function main() {
       assigneeId: leadMember.id
     }
   });
-  const tBacklog = await prisma.task.create({
+  await prisma.task.create({
     data: {
       workspaceId: ws,
       projectId: studio.id,

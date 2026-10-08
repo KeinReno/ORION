@@ -8,7 +8,6 @@ out
 *.tsbuildinfo
 .env
 .env.local
-pnpm-lock.yaml
 target
 **/src-tauri/gen
 **/src-tauri/target

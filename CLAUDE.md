@@ -1,6 +1,13 @@
-# CLAUDE.md — ориентация для агентов
+# CLAUDE.md — историческая ориентация по существующему коду
 
-ORION — ядро для соло-разработчика: модульный монолит **NestJS + Prisma + Postgres**
+> Актуальные правила изменений: [`AGENTS.md`](AGENTS.md) →
+> [`ORION_CONSTITUTION.md`](ORION_CONSTITUTION.md) →
+> [`docs/AI_REFACTOR_MIGRATION_MAP.md`](docs/AI_REFACTOR_MIGRATION_MAP.md).
+> Этот файл описывает сложившуюся реализацию и историю решений; при расхождении
+> с новой архитектурой следуйте указанным документам. ORION рассчитан и на
+> личное/семейное использование, и на небольшие команды.
+
+ORION — платформа для личных пространств и небольших команд: модульный монолит **NestJS + Prisma + Postgres**
 (`apps/api`) и общий **TypeScript-core**, переиспользуемый веб-клиентом
 (`apps/web`, Next.js) и десктопом (`apps/desktop`, тонкая Tauri-обёртка).
 
@@ -36,7 +43,7 @@ pnpm quality          # typecheck + lint + unit tests + build
 pnpm clean            # удалить регенерируемые артефакты (target/.next/out/dist); --dry-run, --deps
 ```
 
-Локальный гейт перед коммитом — `pnpm quality`. CI дополнительно запускает
+Локальный гейт перед коммитом — `pnpm quality`. Workflow CI при публикации в GitHub дополнительно запускает
 `pnpm test:integration` на чистой PostgreSQL после всех Prisma-миграций.
 `pnpm test` покрывает только чистую логику в `packages/` (zod-схемы =
 контракт, `ApiClient` 401→refresh→retry, `TokenStore`, движок повторений,
@@ -296,8 +303,9 @@ workspace-scoped, а не per-user, см. `docs/PLAN.md` v0.16.
     первое не-JSON тело (`multipart/form-data`, `FilesInterceptor`);
     в `ApiClient.request()` для `FormData` не ставится `Content-Type`.
 
-`/.autopilot.json` в корне — заглушечный конфиг от стороннего инструмента,
-код ORION его **не читает**. Не опираться на него.
+Заглушечный `/.autopilot.json` стороннего инструмента удалён при чистке
+репозитория: код ORION его не использовал. Не восстанавливать его как
+конфигурацию уведомлений.
 
 ---
 

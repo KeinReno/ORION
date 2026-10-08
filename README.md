@@ -5,11 +5,18 @@ ORION — персональное рабочее пространство дл�
 PostgreSQL обслуживают общий TypeScript-клиент, который используется Next.js
 веб-приложением и тонкой Tauri-обёрткой.
 
+Актуальные архитектурные правила — в [`AGENTS.md`](AGENTS.md) и
+[`ORION_CONSTITUTION.md`](ORION_CONSTITUTION.md); карта поэтапного перехода —
+[`docs/AI_REFACTOR_MIGRATION_MAP.md`](docs/AI_REFACTOR_MIGRATION_MAP.md).
 Архитектурные решения и история этапов описаны в [`docs/PLAN.md`](docs/PLAN.md),
 устройство резервного копирования — в [`docs/SYNC.md`](docs/SYNC.md), правила
-работы с репозиторием — в [`CLAUDE.md`](CLAUDE.md). Статус готовности к
-релизу, известные ограничения и процедура backup/restore — в
-[`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md).
+работы с существующим кодом — в [`CLAUDE.md`](CLAUDE.md). Текущие ворота
+развёртывания — в [`docs/DEPLOYMENT_READINESS.md`](docs/DEPLOYMENT_READINESS.md),
+история релизных проверок — в [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md),
+план интеграции Compass/FinControl — в
+[`docs/INTEGRATIONS_COMPASS_FINCONTROL.md`](docs/INTEGRATIONS_COMPASS_FINCONTROL.md).
+Документы о plugin SDK и новой архитектуре описывают **целевое состояние**:
+текущий код ещё проходит поэтапный переход и должен сохранить существующий UX.
 
 ## Возможности
 

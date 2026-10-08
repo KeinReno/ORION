@@ -13,6 +13,10 @@ Read in this order:
 5. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
 6. the public contracts / SDK / extension points used by the task
 
+For deployment work, also read `docs/DEPLOYMENT_READINESS.md`. For Compass
+Vertex or FinControl work, read `docs/INTEGRATIONS_COMPASS_FINCONTROL.md` and
+recheck the external source revision before copying behavior or data.
+
 Do not treat missing context as permission to infer architecture from nearby implementation code.
 
 ## Core rule
