@@ -75,6 +75,10 @@ import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues }
 
 type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "money" | "access";
 
+const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "money", "access"];
+/** Per-viewer, per-project: which view of the project this person last used. */
+const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
+
 const ACTIVITY_ICON: Record<ProjectActivity["type"], React.ComponentType<{ className?: string }>> = {
   task: ListTodo,
   note: FileText,
@@ -208,7 +212,7 @@ function ProjectWorkspace({
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<ProjectTab>("overview");
+  const [chosenTab, setChosenTab] = useState<ProjectTab>("overview");
   const [editing, setEditing] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [adding, setAdding] = useState<"task" | "note" | null>(null);
@@ -231,6 +235,28 @@ function ProjectWorkspace({
     ...(showMoney ? [{ value: "money" as const, label: "Сроки и деньги" }] : []),
     { value: "access", label: "Доступ" }
   ];
+
+  // A remembered tab can name a module that is off now — fall back to the overview
+  // instead of rendering a view whose data this project can't show.
+  const tab: ProjectTab = tabs.some((item) => item.value === chosenTab) ? chosenTab : "overview";
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(projectTabKey(project.id));
+      if (saved && (PROJECT_TABS as readonly string[]).includes(saved)) setChosenTab(saved as ProjectTab);
+    } catch {
+      /* storage is a convenience only */
+    }
+  }, [project.id]);
+
+  function setTab(next: ProjectTab): void {
+    setChosenTab(next);
+    try {
+      localStorage.setItem(projectTabKey(project.id), next);
+    } catch {
+      /* storage is a convenience only */
+    }
+  }
 
   function refreshProject(): void {
     void queryClient.invalidateQueries({ queryKey: ["project", workspaceId, project.id] });
