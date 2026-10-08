@@ -128,7 +128,8 @@ export class ProjectsService {
       expenseLines,
       timeRows,
       estimatedTaskGroups,
-      activityMaxes
+      activityMaxes,
+      latestReports
     ] = await Promise.all([
         enabled.has("tasks")
           ? tx.task.groupBy({ by: ["projectId", "status"], where: { projectId: { in: ids } }, _count: true })
@@ -171,8 +172,17 @@ export class ProjectsService {
         // "Открывали N дней назад" (lastActivityAt) — newest touch across
         // every enabled neighbour module, computed once here rather than
         // separately in list() and get(), so the two never disagree.
-        this.activityMaxByProjectTx(tx, ids, enabled)
+        this.activityMaxByProjectTx(tx, ids, enabled),
+        // Newest manual status report per project (UI-05). It belongs to the
+        // projects module itself, so it is not gated by a neighbour module.
+        tx.projectStatusUpdate.findMany({
+          where: { projectId: { in: ids } },
+          orderBy: [{ projectId: "asc" }, { createdAt: "desc" }, { id: "desc" }],
+          distinct: ["projectId"],
+          select: { projectId: true, health: true, createdAt: true }
+        })
       ]);
+    const reportByProject = new Map(latestReports.map((report) => [report.projectId, report]));
 
     const tasksByProject = new Map<string, Array<{ status: string; count: number }>>();
     for (const entry of taskGroups) {
@@ -226,6 +236,8 @@ export class ProjectsService {
         hourlyRate: row.hourlyRate,
         currency: row.currency,
         contextNote: row.contextNote,
+        reportedHealth: (reportByProject.get(row.id)?.health as Project["reportedHealth"]) ?? null,
+        reportedAt: reportByProject.get(row.id)?.createdAt.toISOString() ?? null,
         archivedAt: row.archivedAt?.toISOString() ?? null,
         progress: tasksRollup.progress,
         counts: {

@@ -69,7 +69,7 @@ import { groupTasksByMilestone, isTaskOverdue, projectFocus } from "../lib/proje
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { PROJECT_STATUS_LABEL, ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
-import { Meter, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
+import { Meter, ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
 import { ProjectGantt } from "./projects/gantt";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
@@ -356,6 +356,7 @@ function ProjectWorkspace({
         actions={
           <>
             {project.archivedAt ? <Badge>В архиве</Badge> : null}
+            <ReportedHealthBadge project={project} />
             <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
             {overdue ? <Badge tone="danger">Просрочен</Badge> : null}
             {tasksOn ? (

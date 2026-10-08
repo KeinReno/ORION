@@ -23,12 +23,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
 import { relativeTime } from "../../lib/format";
-
-const HEALTH_TONE: Record<ProjectHealth, "success" | "warning" | "danger"> = {
-  on_track: "success",
-  at_risk: "warning",
-  delayed: "danger"
-};
+import { HEALTH_TONE } from "./project-bits";
 
 interface UpdateValues {
   health: ProjectHealth;

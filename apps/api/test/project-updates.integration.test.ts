@@ -135,4 +135,27 @@ describe("Project status updates (UI-05)", () => {
     expect((await request(`${base}/${created.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
     expect((await request<UpdateDto[]>(base, { method: "GET", token: alice.accessToken })).data).toEqual([]);
   });
+
+  it("the project itself carries the newest reported health, and null when nobody reported", async () => {
+    const alice = await register("health");
+    const projectId = await makeProject(alice.workspaceId, alice.accessToken, "Проект");
+    const base = `/workspaces/${alice.workspaceId}/projects`;
+    type ProjectDto = { id: string; reportedHealth: string | null; reportedAt: string | null };
+
+    const before = await request<ProjectDto[]>(base, { method: "GET", token: alice.accessToken });
+    expect(before.data.find((p) => p.id === projectId)).toMatchObject({ reportedHealth: null, reportedAt: null });
+
+    await request(`${base}/${projectId}/updates`, { method: "POST", token: alice.accessToken, body: { health: "on_track", summary: "Старт" } });
+    const newest = await request<UpdateDto>(`${base}/${projectId}/updates`, { method: "POST", token: alice.accessToken, body: { health: "at_risk", summary: "Риск по срокам" } });
+
+    const list = await request<ProjectDto[]>(base, { method: "GET", token: alice.accessToken });
+    expect(list.data.find((p) => p.id === projectId)?.reportedHealth).toBe("at_risk");
+    const detail = await request<ProjectDto>(`${base}/${projectId}`, { method: "GET", token: alice.accessToken });
+    expect(detail.data.reportedHealth).toBe("at_risk");
+
+    // Deleting the newest report falls back to the previous one.
+    await request(`${base}/${projectId}/updates/${newest.data.id}`, { method: "DELETE", token: alice.accessToken });
+    const after = await request<ProjectDto>(`${base}/${projectId}`, { method: "GET", token: alice.accessToken });
+    expect(after.data.reportedHealth).toBe("on_track");
+  });
 });

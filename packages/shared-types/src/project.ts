@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isTaskClosed, type TaskStatus } from "./task";
+import { projectHealthSchema } from "./project-update";
 import { timeCostMinor } from "./time";
 
 export const projectStatusSchema = z.enum(["active", "on_hold", "completed"]);
@@ -108,6 +109,13 @@ export const projectSchema = z.object({
   currency: z.string(),
   /** «Где я остановился» — operational scratchpad, not a Notes document. See schema.prisma. */
   contextNote: z.string(),
+  /**
+   * The author-reported health from the newest status update (UI-05), or null
+   * when nobody has reported. Deliberately separate from `progress`/overdue,
+   * which are computed: this one is a person's statement with a date.
+   */
+  reportedHealth: projectHealthSchema.nullable(),
+  reportedAt: z.string().nullable(),
   archivedAt: z.string().nullable(),
   progress: z.number().min(0).max(100),
   counts: z.object({

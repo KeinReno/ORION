@@ -34,7 +34,7 @@ import {
   type ProjectBoardSort,
   type ProjectBoardSummary
 } from "./projects/board";
-import { STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
+import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
 
 /**
  * «Проекты» (v0.14) — a project is what a task's free-form `projectTag` grew
@@ -262,7 +262,10 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
     >
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-title text-foreground">{project.name}</span>
-        <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <ReportedHealthBadge project={project} />
+          <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
+        </span>
       </div>
 
       {overdue ? (

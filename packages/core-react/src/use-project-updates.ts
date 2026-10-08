@@ -19,7 +19,12 @@ export function useCreateProjectUpdate(workspaceId: string | undefined, projectI
   const queryClient = useQueryClient();
   return useMutation<ProjectUpdate, Error, CreateProjectUpdateInput>({
     mutationFn: (input) => api.createProjectUpdate(workspaceId as string, projectId as string, input),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["project-updates", workspaceId, projectId] })
+    // The newest report also feeds `reportedHealth` on the project itself (header badge, board card).
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["project-updates", workspaceId, projectId] });
+      void queryClient.invalidateQueries({ queryKey: ["project", workspaceId, projectId] });
+      void queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+    }
   });
 }
 
@@ -28,6 +33,10 @@ export function useDeleteProjectUpdate(workspaceId: string | undefined, projectI
   const queryClient = useQueryClient();
   return useMutation<void, Error, string>({
     mutationFn: (updateId) => api.deleteProjectUpdate(workspaceId as string, projectId as string, updateId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["project-updates", workspaceId, projectId] })
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["project-updates", workspaceId, projectId] });
+      void queryClient.invalidateQueries({ queryKey: ["project", workspaceId, projectId] });
+      void queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+    }
   });
 }
