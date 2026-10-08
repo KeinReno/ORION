@@ -18,7 +18,7 @@ FinControl не входят в первый релиз; их план — `INTE
 
 | Ворота | Наблюдение на 2026-10-08 | Готово, когда |
 | --- | --- | --- |
-| Git/CI | Локальный CI-коммит перенесён поверх новых документов `origin/master`; в GitHub на момент проверки workflows/runs = 0. Ранее `ci.yml` требовал `--frozen-lockfile`, но lockfile был исключён из Git; это исправлено в данной рабочей копии. | Изменения отправлены в remote, workflow с чистой PostgreSQL успешно завершился, его запуск обязателен для релизного ref. |
+| Git/CI | Workflow и lockfile опубликованы. Первый запуск GitHub Actions прошёл установку, миграции, typecheck и lint, но unit-тесты упали из-за Node 20: зафиксированный `jsdom@30.1.1` требует Node 22.22.2+ или 24.15+. CI переведён на Node 24; повторный прогон нужно принять отдельно. | Workflow с чистой PostgreSQL полностью завершился успешно, а его запуск обязателен для релизного ref. |
 | Изоляция прав | `r30-review.integration.test.ts` содержит отрицательный тест на изменение grant получателем, который одновременно является member исходного workspace. Предыдущая независимая проверка видела FAIL; миграция с member-веткой UPDATE сама по себе не доказывает запрет. | На **новой отдельной** БД проверить фактические `pg_policies`, `ENABLE/FORCE RLS`, роль `orion_app`, затем HTTP и SQL отрицательные сценарии UPDATE/DELETE/INSERT, отзыв и restrictedModules. Все проходят. |
 | Публичный API | `login-rate-limit.guard.ts` и `register-rate-limit.guard.ts` берут первый `X-Forwarded-For` прямо из запроса. Клиент может подставить его, если периметр не гарантирует очистку заголовка. | Приложение берёт клиентский IP только через доверенную proxy-конфигурацию либо прокси переписывает/удаляет входящий заголовок; повторные попытки с подменой проходят негативный тест. |
 | Конфигурация | `apps/web/lib/api-base.ts` имеет fallback `localhost:4000`; `apps/api/.env.example` по умолчанию `ORION_MODE=local`. | На staging заданы `NEXT_PUBLIC_API_URL`, `PUBLIC_API_URL`, `WEB_ORIGIN(S)`, `ORION_MODE=server`, раздельные сильные секреты и непубличные URL/роли БД. Удалённый браузер работает без localhost-fallback. |
@@ -53,7 +53,7 @@ FinControl не входят в первый релиз; их план — `INTE
 
 ## Проверка этого документа
 
-Проверены текущие файлы, Git-расхождение и отсутствие запусков GitHub Actions.
+Проверены текущие файлы и первый запуск GitHub Actions (run 37738491525).
 Локально `pnpm install --frozen-lockfile --lockfile-only`, `pnpm typecheck`,
 `pnpm lint` и `pnpm test` прошли (35 файлов / 271 unit tests; в линтере после
 чистки остаются только два прежних предупреждения `react-hooks/exhaustive-deps`
