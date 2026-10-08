@@ -432,14 +432,18 @@ export function NoteEditor({
           </div>
 
           {mode === "edit" ? (
-            <MarkdownEditor
-              value={body}
-              onChange={setBody}
-              onSave={() => void runSave()}
-              placeholder="Текст заметки… Markdown и [[ссылки]] поддерживаются"
-              className="min-h-[18rem]"
-              wikiLinkTargets={wikiTargets}
-            />
+            // Поле правки видно рамкой и фоном, а при фокусе подсвечивается;
+            // в «Просмотре» рамки нет — там это уже не поле ввода.
+            <div className="rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
+              <MarkdownEditor
+                value={body}
+                onChange={setBody}
+                onSave={() => void runSave()}
+                placeholder="Текст заметки… Markdown и [[ссылки]] поддерживаются"
+                className="min-h-[18rem]"
+                wikiLinkTargets={wikiTargets}
+              />
+            </div>
           ) : body.trim() ? (
             <MarkdownView
               source={body}
