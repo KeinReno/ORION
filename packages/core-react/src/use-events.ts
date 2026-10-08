@@ -1,7 +1,7 @@
 "use client";
 
 import type { CalendarFeedInfo, CreateEventInput, Event, EventScope, UpdateEventInput } from "@orion/shared-types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
 export interface EventRange {
@@ -28,7 +28,11 @@ export function useEvents(workspaceId: string | undefined, range: EventRange | u
   return useQuery<Event[]>({
     queryKey: ["events", workspaceId, range?.from ?? "", range?.to ?? ""],
     queryFn: () => api.listEvents(workspaceId as string, (range as EventRange).from, (range as EventRange).to),
-    enabled: Boolean(workspaceId && range)
+    enabled: Boolean(workspaceId && range),
+    // Смена месяца меняет ключ окна. Без предыдущих данных `isLoading` снова
+    // становится true, панель подменяет календарь скелетоном и он монтируется
+    // заново на сегодняшней дате — выбранный месяц «откатывался» к текущему.
+    placeholderData: keepPreviousData
   });
 }
 
