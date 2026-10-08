@@ -1,7 +1,7 @@
 "use client";
 
 import { useCreateTask, useDeleteTask, useMilestones, useProjects, useTasks, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
-import type { CreateTaskInput, Task, TaskPriority, TaskStatus } from "@orion/shared-types";
+import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import {
   Button,
@@ -12,11 +12,11 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
-  Sheet,
   Skeleton,
   cx,
   isTypingTarget,
   usePanelVisible,
+  useResizeWidth,
   useToast
 } from "@orion/ui";
 import { motion, useReducedMotion } from "framer-motion";
@@ -26,7 +26,6 @@ import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
-import { EntityLinksSection } from "../components/entity-links";
 import { useFocusedTaskId, useTasksProjectSignal } from "../lib/panel-bus";
 import {
   TASK_PRIORITY_LABEL,
@@ -42,14 +41,13 @@ import { useEnabledPlugins } from "../lib/use-enabled-plugins";
 import { TaskCard, type TaskAssignee } from "./tasks/task-card";
 import { SavedViewsBar } from "./tasks/saved-views";
 import {
-  SubtaskList,
   canMoveNeighbor,
   orderColumnTasks,
   parentOptions,
   subtaskProgressMap,
   useTaskReorder
 } from "./tasks/subtasks";
-import { TaskCommentsSection } from "./tasks/task-comments";
+import { TaskDetail } from "./tasks/task-detail";
 
 type GroupBy = "status" | "project" | "due" | "priority";
 type BoardView = "board" | "list";
@@ -80,6 +78,8 @@ const PRIORITY_COLUMN_DOT: Record<TaskPriority, string> = {
 };
 const DUE_ORDER: DueBucket[] = ["overdue", "today", "tomorrow", "week", "later", "none"];
 const DONE_COLLAPSE = 5;
+/** Panel width from which the task details sit beside the list/board instead of replacing it. */
+const DETAIL_SPLIT_MIN = 900;
 
 /** Collapsed «Готово»: last N by completedAt desc (freshly closed first). */
 function lastCompleted(tasks: Task[], limit: number): Task[] {
@@ -149,6 +149,11 @@ export function TasksPanel(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const editingIdRef = useRef<string | null>(null);
+  editingIdRef.current = editingId;
+  const [bodyRef, bodyWidth] = useResizeWidth<HTMLDivElement>();
+  // Wide panel: list/board and details side by side. Narrow: details replace the list ("back" returns).
+  const splitDetail = bodyWidth >= DETAIL_SPLIT_MIN;
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
 
@@ -282,8 +287,12 @@ export function TasksPanel(): React.ReactElement {
   // Skip while a modal/sheet/field is open so we don't steal keys from the form.
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
-      if (!panelVisible || creating || editingId || pendingDelete) return;
+      if (!panelVisible || creating || pendingDelete) return;
       if (isTypingTarget(event.target)) return;
+      if (event.key === "Escape" && editingIdRef.current) {
+        setEditingId(null);
+        return;
+      }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         if (event.shiftKey) return;
         event.preventDefault();
@@ -291,6 +300,8 @@ export function TasksPanel(): React.ReactElement {
         if (next) {
           selectedIdRef.current = next;
           setSelectedId(next);
+          // The detail pane follows the selection instead of staying on the old task.
+          if (editingIdRef.current) setEditingId(next);
         }
         return;
       }
@@ -311,7 +322,7 @@ export function TasksPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, creating, editingId, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds]);
+  }, [panelVisible, creating, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds]);
 
   function confirmDelete(): void {
     const task = pendingDelete;
@@ -346,27 +357,9 @@ export function TasksPanel(): React.ReactElement {
     toast({ title: "Задача создана", tone: "success" });
   }
 
-  async function saveEdit(taskId: string, values: TaskFormValues): Promise<void> {
-    await updateTask.mutateAsync({
-      taskId,
-      input: {
-        title: values.title,
-        description: values.description,
-        dueAt: values.dueAt,
-        projectId: values.projectId,
-        parentId: values.parentId,
-        priority: values.priority,
-        status: values.status,
-        recurrence: values.recurrence,
-        dependencyIds: values.dependencyIds,
-        startAt: values.startAt,
-        estimatedMinutes: values.estimatedMinutes,
-        milestoneId: values.milestoneId,
-        ...(values.assigneeId !== undefined ? { assigneeId: values.assigneeId } : {})
-      }
-    });
-    setEditingId(null);
-    toast({ title: "Сохранено", tone: "success" });
+  /** Autosave from the detail pane: only the changed fields travel, no toast per keystroke. */
+  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<void> {
+    await updateTask.mutateAsync({ taskId, input: patch });
   }
 
   const total = tasks?.length ?? 0;
@@ -455,7 +448,9 @@ export function TasksPanel(): React.ReactElement {
         </div>
       </PanelHeader>
 
-      <div className="orion-scroll flex-1 overflow-auto p-6 [container-type:inline-size]">
+      <div ref={bodyRef} className="flex min-h-0 flex-1">
+      {!editing || splitDetail ? (
+      <div className="orion-scroll min-w-0 flex-1 overflow-auto p-6 [container-type:inline-size]">
         {isLoading ? (
           <div className="grid gap-4 [@container(min-width:640px)]:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -625,6 +620,28 @@ export function TasksPanel(): React.ReactElement {
           </div>
         )}
       </div>
+      ) : null}
+      {editing ? (
+        <div className={cx("min-h-0 min-w-0", splitDetail ? "w-[26rem] shrink-0 border-l border-border" : "flex-1")}>
+          <TaskDetail
+            key={editing.id}
+            task={editing}
+            workspaceId={workspace?.id}
+            projects={isEnabled("projects") ? (projectList ?? []) : undefined}
+            members={teamOn ? (memberList ?? []) : undefined}
+            tasks={tasks ?? []}
+            milestones={isEnabled("projects") ? (milestoneList ?? []) : undefined}
+            parentOptions={parentSelectOptions}
+            timeOn={isEnabled("time")}
+            compact={!splitDetail}
+            onSave={saveTaskPatch}
+            onClose={() => setEditingId(null)}
+            onDelete={() => setPendingDelete(editing)}
+            onOpenTask={setEditingId}
+          />
+        </div>
+      ) : null}
+      </div>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Новая задача" size="md">
         <TaskForm
@@ -639,41 +656,6 @@ export function TasksPanel(): React.ReactElement {
           onSubmit={(values) => create(values)}
         />
       </Modal>
-
-      <Sheet open={Boolean(editing)} onClose={() => setEditingId(null)} title="Задача">
-        {editing ? (
-          <div className="flex flex-col">
-            <TaskForm
-              key={editing.id}
-              projects={isEnabled("projects") ? (projectList ?? []) : undefined}
-              members={teamOn ? (memberList ?? []) : undefined}
-              tasks={tasks ?? []}
-              milestones={isEnabled("projects") ? (milestoneList ?? []) : undefined}
-              parentOptions={parentSelectOptions}
-              initial={editing}
-              withStatus
-              busy={updateTask.isPending}
-              submitLabel="Сохранить"
-              onCancel={() => setEditingId(null)}
-              onDelete={() => setPendingDelete(editing)}
-              onSubmit={(values) => saveEdit(editing.id, values)}
-            />
-            <SubtaskList
-              key={editing.id}
-              workspaceId={workspace?.id}
-              parent={editing}
-              tasks={tasks ?? []}
-              onOpen={setEditingId}
-            />
-            <div className="mt-4 border-t border-border pt-3">
-              <EntityLinksSection workspaceId={workspace?.id} type="task" id={editing.id} />
-            </div>
-            <div className="mt-4 border-t border-border pt-3">
-              <TaskCommentsSection workspaceId={workspace?.id} taskId={editing.id} />
-            </div>
-          </div>
-        ) : null}
-      </Sheet>
 
       <ConfirmDialog
         open={pendingDelete !== null}

@@ -47,7 +47,7 @@ export const TASK_RECURRENCE_LABEL: Record<TaskRecurrence["freq"], string> = {
 const RECURRENCE_FREQS: TaskRecurrence["freq"][] = ["daily", "weekly", "monthly", "yearly"];
 
 /** 400 about a parent cycle → human copy; anything else goes through describeError. */
-function describeTaskFormError(error: unknown): string {
+export function describeTaskFormError(error: unknown): string {
   if (error instanceof ApiError && error.status === 400 && /подзадач|родител/i.test(error.message)) {
     return "Нельзя выбрать родителем свою подзадачу";
   }
