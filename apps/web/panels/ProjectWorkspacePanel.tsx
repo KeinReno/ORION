@@ -72,10 +72,10 @@ import type { PanelComponentProps } from "../lib/panel-registry";
 import { groupTasksByMilestone, isTaskOverdue, projectFocus } from "../lib/project-focus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
-import { PROJECT_STATUS_LABEL, ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
-import { Meter, ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
+import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
+import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
 import { ProjectGantt } from "./projects/gantt";
-import { DueChip, PlanEmptyHint, PlanStrip } from "./projects/project-vitals";
+import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
@@ -388,9 +388,16 @@ function ProjectWorkspace({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {project.archivedAt ? <Badge>В архиве</Badge> : null}
             <ReportedHealthBadge project={project} />
-            {project.status !== "active" ? (
-              <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
-            ) : null}
+            <ProjectStatusMenu
+              status={project.status}
+              disabled={updateProject.isPending || Boolean(project.archivedAt)}
+              onChange={(status) =>
+                updateProject.mutate(
+                  { projectId: project.id, input: { status } },
+                  { onError: () => toast({ title: "Не удалось изменить статус", tone: "danger" }) }
+                )
+              }
+            />
             <DueChip project={project} />
             {tasksOn ? (
               <span className="flex items-center gap-2">

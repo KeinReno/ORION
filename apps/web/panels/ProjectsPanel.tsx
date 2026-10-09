@@ -19,7 +19,7 @@ import {
   useToast
 } from "@orion/ui";
 import { FolderKanban, Plus, Search, TriangleAlert } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { describeError } from "../lib/error-message";
 import { formatMoney } from "../lib/format";
 import { openProject } from "../lib/panel-bus";
@@ -35,7 +35,8 @@ import {
   type ProjectBoardSummary
 } from "./projects/board";
 import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
-import { DueChip } from "./projects/project-vitals";
+import { ProjectListHeader, ProjectRow } from "./projects/project-row";
+import { DueChip, NextLine } from "./projects/project-vitals";
 import { nextActionByProject, pluralDays, reportFreshness, type ProjectNextAction } from "../lib/project-status";
 
 /**
@@ -46,6 +47,17 @@ import { nextActionByProject, pluralDays, reportFreshness, type ProjectNextActio
  * `openProject`) — it used to be a 40rem Sheet over this board, which showed
  * counters instead of the work.
  */
+type BoardLayout = "list" | "cards";
+const LAYOUT_KEY = "orion.projects.layout";
+
+function loadLayout(): BoardLayout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === "cards" ? "cards" : "list";
+  } catch {
+    return "list";
+  }
+}
+
 export function ProjectsPanel(): React.ReactElement {
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const workspaceId = workspace?.id;
@@ -62,6 +74,17 @@ export function ProjectsPanel(): React.ReactElement {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null);
   const [sort, setSort] = useState<ProjectBoardSort>("lifecycle");
+  const [layout, setLayout] = useState<BoardLayout>("list");
+  // Read after mount: the first paint must match the server-rendered markup.
+  useEffect(() => setLayout(loadLayout()), []);
+  function chooseLayout(next: BoardLayout): void {
+    setLayout(next);
+    try {
+      localStorage.setItem(LAYOUT_KEY, next);
+    } catch {
+      /* a remembered layout is a convenience only */
+    }
+  }
 
   const source = useMemo(() => projects ?? [], [projects]);
   const summary = useMemo(() => summariseProjectBoard(source), [source]);
@@ -124,6 +147,16 @@ export function ProjectsPanel(): React.ReactElement {
             </option>
           ))}
         </Select>
+        <SegmentedControl<BoardLayout>
+          value={layout}
+          onChange={chooseLayout}
+          size="sm"
+          aria-label="Вид списка"
+          options={[
+            { value: "list", label: "Список" },
+            { value: "cards", label: "Карточки" }
+          ]}
+        />
         <SegmentedControl<"active" | "archive">
           value={archived ? "archive" : "active"}
           onChange={(value) => {
@@ -206,6 +239,22 @@ export function ProjectsPanel(): React.ReactElement {
                 }
               />
             ) : (
+              layout === "list" ? (
+                <div className="rounded-xl border border-border bg-card/40 py-2">
+                  <ProjectListHeader />
+                  <ul className="flex flex-col divide-y divide-border/60">
+                    {list.map((project) => (
+                      <ProjectRow
+                        key={project.id}
+                        project={project}
+                        nextAction={nextActions.get(project.id)}
+                        tasksOn={isEnabled("tasks")}
+                        onOpen={() => openProject(project.id, project.name)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ) : (
               <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:1152px)]:grid-cols-3 [@container(min-width:1408px)]:grid-cols-4">
                 {list.map((project) => (
                   <ProjectCard
@@ -216,6 +265,7 @@ export function ProjectsPanel(): React.ReactElement {
                   />
                 ))}
               </div>
+              )
             )}
           </div>
         )}
@@ -262,21 +312,6 @@ function ProjectCard({
         ? `${formatMoney(project.spentAmount, project.currency)} / ${formatMoney(project.budgetAmount, project.currency)}`
         : formatMoney(project.spentAmount, project.currency)
     );
-  }
-
-  // The card's answer to "what is happening here?" — without opening the project.
-  let nextLine: React.ReactNode = null;
-  if (tasksOn && live) {
-    if (project.counts.tasks === 0) nextLine = <span className="text-subtle-foreground">Задач пока нет</span>;
-    else if (nextAction?.next) {
-      nextLine = (
-        <>
-          <span className="text-subtle-foreground">Дальше · </span>
-          <span className="text-foreground">{nextAction.next.title}</span>
-        </>
-      );
-    } else if (nextAction && nextAction.open > 0) nextLine = <span className="text-subtle-foreground">Всё открытое ждёт зависимостей</span>;
-    else nextLine = <span className="text-success">Все задачи закрыты</span>;
   }
 
   return (
@@ -330,7 +365,11 @@ function ProjectCard({
         </div>
       ) : null}
 
-      {nextLine ? <p className="truncate text-label">{nextLine}</p> : null}
+      {tasksOn && live ? (
+        <p className="truncate text-label">
+          <NextLine live={live} tasksCount={project.counts.tasks} nextAction={nextAction} />
+        </p>
+      ) : null}
 
       {meta.length > 0 || freshness.kind === "stale" ? (
         <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

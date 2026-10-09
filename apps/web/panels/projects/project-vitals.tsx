@@ -1,10 +1,12 @@
 "use client";
 
-import type { Milestone, Task } from "@orion/shared-types";
-import { Badge, cx } from "@orion/ui";
-import { Flag } from "lucide-react";
+import { PROJECT_STATUS_ORDER, type Milestone, type ProjectStatus, type Task } from "@orion/shared-types";
+import { Badge, DropdownMenu, cx } from "@orion/ui";
+import { Check, ChevronDown, Flag } from "lucide-react";
 import { shortDate } from "../../lib/format";
-import { planStrip, projectDueLabel, type PlanStepState } from "../../lib/project-status";
+import { planStrip, projectDueLabel, type PlanStepState, type ProjectNextAction } from "../../lib/project-status";
+import { PROJECT_STATUS_LABEL } from "../project-form";
+import { STATUS_TONE } from "./project-bits";
 
 /**
  * Small, reusable pieces that let a project say how it is doing in the same
@@ -108,4 +110,73 @@ export function PlanEmptyHint({ onOpenPlan }: { onOpenPlan: () => void }): React
       Разбейте проект на этапы-вехи — здесь появится лента плана.
     </button>
   );
+}
+
+/**
+ * The project's status as a control, not a label: one click changes it
+ * (active / paused / finished) without opening the edit form. Shown in the
+ * header on every project, including the default "active" one, because the
+ * affordance matters more than hiding the norm there.
+ */
+export function ProjectStatusMenu({
+  status,
+  disabled,
+  onChange
+}: {
+  status: ProjectStatus;
+  disabled?: boolean;
+  onChange: (status: ProjectStatus) => void;
+}): React.ReactElement {
+  return (
+    <DropdownMenu
+      align="start"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={disabled}
+          aria-label={`Статус проекта: ${PROJECT_STATUS_LABEL[status]}. Изменить`}
+          className="inline-flex items-center gap-0.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-60"
+        >
+          <Badge tone={STATUS_TONE[status]}>{PROJECT_STATUS_LABEL[status]}</Badge>
+          <ChevronDown className="h-3 w-3 text-subtle-foreground" aria-hidden />
+        </button>
+      )}
+      items={PROJECT_STATUS_ORDER.map((value) => ({
+        label: PROJECT_STATUS_LABEL[value],
+        icon: value === status ? Check : undefined,
+        onSelect: () => {
+          if (value !== status) onChange(value);
+        }
+      }))}
+    />
+  );
+}
+
+/**
+ * "What is happening here" in one line, for a board row or card: the next
+ * actionable task, or an honest reason there is none. Silent for paused,
+ * finished or archived projects (nothing is expected of them).
+ */
+export function NextLine({
+  live,
+  tasksCount,
+  nextAction
+}: {
+  live: boolean;
+  tasksCount: number;
+  nextAction: ProjectNextAction | undefined;
+}): React.ReactElement | null {
+  if (!live) return null;
+  if (tasksCount === 0) return <span className="text-subtle-foreground">Задач пока нет</span>;
+  if (nextAction?.next) {
+    return (
+      <>
+        <span className="text-subtle-foreground">Дальше · </span>
+        <span className="text-foreground">{nextAction.next.title}</span>
+      </>
+    );
+  }
+  if (nextAction && nextAction.open > 0) return <span className="text-subtle-foreground">Всё открытое ждёт зависимостей</span>;
+  return <span className="text-success">Все задачи закрыты</span>;
 }
