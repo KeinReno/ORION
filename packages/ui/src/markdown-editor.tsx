@@ -6,14 +6,15 @@ import {
   type CompletionContext,
   type CompletionResult
 } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { tags as t } from "@lezer/highlight";
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
+import { applyFormat, type FormatCommand } from "./markdown-format";
 
 /** Autocomplete note titles right after a `[[`. Reads the ref so a title-list refresh needs no view rebuild. */
 function wikiLinkCompletionSource(targetsRef: { current: string[] }) {
@@ -72,6 +73,25 @@ const editorTheme = EditorView.theme(
   { dark: true }
 );
 
+/** Imperative handle for the formatting toolbar: it never touches CodeMirror itself. */
+export interface MarkdownEditorApi {
+  format: (command: FormatCommand) => void;
+  focus: () => void;
+}
+
+/** One undoable transaction: the replacement and the restored selection together. */
+function formatView(view: EditorView, command: FormatCommand): void {
+  const range = view.state.selection.main;
+  const result = applyFormat(view.state.doc.toString(), { from: range.from, to: range.to }, command);
+  view.dispatch({
+    changes: { from: result.from, to: result.to, insert: result.insert },
+    selection: EditorSelection.range(result.anchor, result.head),
+    userEvent: "input.format",
+    scrollIntoView: true
+  });
+  view.focus();
+}
+
 export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -83,6 +103,8 @@ export interface MarkdownEditorProps {
   className?: string;
   /** Note titles to offer as `[[wiki link]]` autocomplete. Omit to disable it. */
   wikiLinkTargets?: string[];
+  /** Filled with the toolbar handle once the view exists; cleared on unmount. */
+  apiRef?: MutableRefObject<MarkdownEditorApi | null>;
 }
 
 /**
@@ -100,7 +122,8 @@ export function MarkdownEditor({
   autoFocus,
   readOnly,
   className,
-  wikiLinkTargets
+  wikiLinkTargets,
+  apiRef
 }: MarkdownEditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -128,6 +151,24 @@ export function MarkdownEditor({
               return true;
             }
           },
+          // Same commands as the toolbar. Mod-K is taken by the command palette,
+          // so the link shortcut is Mod-Shift-K.
+          ...(
+            [
+              ["Mod-b", "bold"],
+              ["Mod-i", "italic"],
+              ["Mod-e", "code"],
+              ["Mod-Shift-x", "strike"],
+              ["Mod-Shift-k", "link"]
+            ] as const
+          ).map(([key, command]) => ({
+            key,
+            preventDefault: true,
+            run: (target: EditorView) => {
+              formatView(target, command);
+              return true;
+            }
+          })),
           indentWithTab,
           ...defaultKeymap,
           ...historyKeymap
@@ -148,8 +189,10 @@ export function MarkdownEditor({
     });
     const instance = new EditorView({ state, parent: host.current });
     view.current = instance;
+    if (apiRef) apiRef.current = { format: (command) => formatView(instance, command), focus: () => instance.focus() };
     if (autoFocus) instance.focus();
     return () => {
+      if (apiRef) apiRef.current = null;
       instance.destroy();
       view.current = null;
     };

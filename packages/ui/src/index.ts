@@ -25,6 +25,8 @@ export * from "./calendar";
 export * from "./workbench";
 export * from "./markdown";
 export * from "./markdown-editor";
+export * from "./markdown-format";
+export * from "./markdown-toolbar";
 export * from "./file-preview";
 export * from "./diff-view";
 export * from "./webgl-backgrounds";

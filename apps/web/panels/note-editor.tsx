@@ -8,12 +8,14 @@ import {
   DropdownMenu,
   IconButton,
   MarkdownEditor,
+  MarkdownToolbar,
   MarkdownView,
   SegmentedControl,
   Select,
   Sheet,
   markdownOutline,
-  useToast
+  useToast,
+  type MarkdownEditorApi
 } from "@orion/ui";
 import {
   Archive,
@@ -116,6 +118,7 @@ export function NoteEditor({
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
   const [mode, setMode] = useState<EditorMode>("edit");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const editorApi = useRef<MarkdownEditorApi | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
@@ -457,8 +460,10 @@ export function NoteEditor({
           {mode === "edit" ? (
             // Поле правки видно рамкой и фоном, а при фокусе подсвечивается;
             // в «Просмотре» рамки нет — там это уже не поле ввода.
-            <div className="rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
+            <div className="space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
+              <MarkdownToolbar apiRef={editorApi} />
               <MarkdownEditor
+                apiRef={editorApi}
                 value={body}
                 onChange={setBody}
                 onSave={() => void runSave()}
