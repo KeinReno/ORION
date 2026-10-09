@@ -3,6 +3,8 @@
 import {
   useCalendarFeed,
   useCreateEvent,
+  useCreateNote,
+  useCreateTask,
   useDeleteEvent,
   useEvents,
   useNotes,
@@ -18,8 +20,10 @@ import type { CreateEventInput, Event, EventScope, UpdateEventInput } from "@ori
 import {
   Button,
   Calendar,
+  DropdownMenu,
   EmptyState,
   IconButton,
+  Input,
   Modal,
   PanelBody,
   PanelHeader,
@@ -37,9 +41,10 @@ import {
   type ReschedulePayload,
   type SlotCreatePayload
 } from "@orion/ui";
-import { CalendarDays, CircleHelp, Plus, TriangleAlert } from "lucide-react";
+import { CalendarDays, CircleHelp, FileText, ListTodo, Plus, Search, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { fromDatetimeLocal, toDatetimeLocal } from "../lib/format";
 import { nextListId } from "../lib/list-nav";
 import { describeAuthError, describeError } from "../lib/error-message";
 import {
@@ -184,7 +189,7 @@ export function CalendarPanel(): React.ReactElement {
     });
   }
 
-  const items: CalendarItem[] = useMemo(() => {
+  const allItems: CalendarItem[] = useMemo(() => {
     const out: CalendarItem[] = [];
     if (enabled.has("events")) out.push(...eventItems(events));
     if (enabled.has("tasks")) out.push(...taskItems(tasks));
@@ -192,6 +197,13 @@ export function CalendarPanel(): React.ReactElement {
     if (enabled.has("finance")) out.push(...financeItems(recurring));
     return out;
   }, [enabled, events, tasks, notes, recurring]);
+
+  // Search narrows what is drawn, never what is loaded: clearing it brings everything back.
+  const [filter, setFilter] = useState("");
+  const items: CalendarItem[] = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    return needle ? allItems.filter((item) => item.label.toLowerCase().includes(needle)) : allItems;
+  }, [allItems, filter]);
 
   const sourceQueries = [
     eventsQuery,
@@ -205,6 +217,10 @@ export function CalendarPanel(): React.ReactElement {
 
   const [newSlot, setNewSlot] = useState<SlotCreatePayload | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  // Tasks and notes are created through their own modules' API — never as a second Event.
+  const [quick, setQuick] = useState<"task" | "note" | null>(null);
+  const createTask = useCreateTask(tasksOn ? wsId : undefined);
+  const createNote = useCreateNote(notesOn ? wsId : undefined);
   const [selected, setSelected] = useState<Event | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focusedIdRef = useRef<string | null>(null);
@@ -420,7 +436,7 @@ export function CalendarPanel(): React.ReactElement {
       <PanelHeader
         icon={CalendarDays}
         title="Календарь"
-        subtitle={`${items.length} на экране`}
+        subtitle={filter.trim() ? `${items.length} из ${allItems.length} на экране` : `${items.length} на экране`}
         actions={
           <>
             <IconButton
@@ -435,9 +451,34 @@ export function CalendarPanel(): React.ReactElement {
             <Button size="sm" onClick={() => setNewSlot({ start: new Date().toISOString(), allDay: false })}>
               <Plus className="h-4 w-4" /> Событие
             </Button>
+            {tasksOn || notesOn ? (
+              <DropdownMenu
+                align="end"
+                trigger={({ toggle }) => (
+                  <IconButton label="Создать задачу или заметку" size="sm" onClick={toggle}>
+                    <Plus className="h-4 w-4" />
+                  </IconButton>
+                )}
+                items={[
+                  ...(tasksOn ? [{ label: "Задачу со сроком…", icon: ListTodo, onSelect: () => setQuick("task") }] : []),
+                  ...(notesOn ? [{ label: "Заметку на дату…", icon: FileText, onSelect: () => setQuick("note") }] : [])
+                ]}
+              />
+            ) : null}
           </>
         }
-      />
+      >
+        <div className="relative w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
+          <Input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Найти на календаре"
+            aria-label="Найти на календаре"
+            className="pl-8"
+          />
+        </div>
+      </PanelHeader>
       <PanelBody className="flex flex-col">
         {failedQueries.length > 0 ? (
           <EmptyState
@@ -508,6 +549,27 @@ export function CalendarPanel(): React.ReactElement {
           </>
         )}
       </PanelBody>
+
+      <Modal open={quick !== null} onClose={() => setQuick(null)} title={quick === "task" ? "Новая задача" : "Новая заметка"} size="sm">
+        {quick ? (
+          <QuickCreateForm
+            key={quick}
+            kind={quick}
+            busy={createTask.isPending || createNote.isPending}
+            onCancel={() => setQuick(null)}
+            onSubmit={async (title, whenIso) => {
+              try {
+                if (quick === "task") await createTask.mutateAsync({ title, description: "", priority: "normal", dueAt: whenIso });
+                else await createNote.mutateAsync({ title, body: "", tags: [], eventAt: whenIso });
+                setQuick(null);
+                toast({ title: quick === "task" ? "Задача создана" : "Заметка создана", tone: "success" });
+              } catch (error) {
+                toast({ title: "Не удалось создать", description: describeError(error), tone: "danger" });
+              }
+            }}
+          />
+        ) : null}
+      </Modal>
 
       <Modal open={newSlot !== null} onClose={() => setNewSlot(null)} title="Новое событие" size="md">
         <EventForm
@@ -607,5 +669,51 @@ function CalendarSkeleton(): React.ReactElement {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Title + date for a task or a note placed straight onto the calendar. The date is required: that is the point. */
+function QuickCreateForm({
+  kind,
+  busy,
+  onCancel,
+  onSubmit
+}: {
+  kind: "task" | "note";
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (title: string, whenIso: string) => void | Promise<void>;
+}): React.ReactElement {
+  const [title, setTitle] = useState("");
+  const [when, setWhen] = useState(() => {
+    const next = new Date();
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    return toDatetimeLocal(next.toISOString());
+  });
+  const whenIso = fromDatetimeLocal(when);
+  const ready = title.trim().length > 0 && whenIso !== null;
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (ready && whenIso) void onSubmit(title.trim(), whenIso);
+      }}
+    >
+      <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название" aria-label="Название" autoFocus required />
+      <label className="flex flex-col gap-1 text-label text-subtle-foreground">
+        {kind === "task" ? "Срок" : "Показать в календаре"}
+        <Input type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} required />
+      </label>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
+          Отмена
+        </Button>
+        <Button type="submit" size="sm" disabled={busy || !ready}>
+          Создать
+        </Button>
+      </div>
+    </form>
   );
 }
