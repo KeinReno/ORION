@@ -186,4 +186,47 @@ describe("Note summary (UI-03)", () => {
     const inActive = await request<NoteDto[]>(`${base}?search=${term}`, { method: "GET", token: alice.accessToken });
     expect(inActive.data).toEqual([]);
   });
+
+  it("gives every note a stable per-workspace number, even when created concurrently", async () => {
+    const alice = await register("numbers");
+    const base = `/workspaces/${alice.workspaceId}/notes`;
+    type Numbered = NoteDto & { number: number | null };
+
+    const batch = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        request<Numbered>(base, { method: "POST", token: alice.accessToken, body: { title: `Параллельная ${i}` } })
+      )
+    );
+    expect(batch.every((r) => r.status === 201)).toBe(true);
+    const numbers = batch.map((r) => r.data.number);
+    expect(numbers.every((n) => typeof n === "number")).toBe(true);
+    // No two concurrent inserts may share a number — the trigger serialises per workspace.
+    expect(new Set(numbers).size).toBe(8);
+
+    // A later note continues the sequence, and an edit never renumbers.
+    const later = await request<Numbered>(base, { method: "POST", token: alice.accessToken, body: { title: "Позже" } });
+    expect(later.data.number).toBeGreaterThan(Math.max(...(numbers as number[])));
+    const edited = await request<Numbered>(`${base}/${later.data.id}`, {
+      method: "PATCH",
+      token: alice.accessToken,
+      body: { title: "Переименована", expectedRevision: later.data.revision }
+    });
+    expect(edited.data.number).toBe(later.data.number);
+
+    // The id is searchable: "N-<n>", "n<n>" and the bare digits all find it.
+    for (const q of [`N-${later.data.number}`, `n${later.data.number}`, String(later.data.number)]) {
+      const found = await request<Numbered[]>(`${base}?search=${encodeURIComponent(q)}`, { method: "GET", token: alice.accessToken });
+      expect(found.data.map((n) => n.id)).toContain(later.data.id);
+    }
+  });
+
+  it("numbers are independent per workspace", async () => {
+    const alice = await register("numbers-a");
+    const bob = await register("numbers-b");
+    const make = (w: { workspaceId: string; accessToken: string }) =>
+      request<NoteDto & { number: number }>(`/workspaces/${w.workspaceId}/notes`, { method: "POST", token: w.accessToken, body: { title: "Одна" } });
+    const [a1, b1] = await Promise.all([make(alice), make(bob)]);
+    // Both start from the same place (their own seed notes), not from a shared global counter.
+    expect(Math.abs((a1.data.number as number) - (b1.data.number as number))).toBeLessThanOrEqual(1);
+  });
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { useNoteBacklinks, useNoteTitles } from "@orion/core-react";
-import type { Note, Project } from "@orion/shared-types";
+import { useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
+import { noteNumberLabel, type Note, type Project } from "@orion/shared-types";
 import {
   AutosaveStatus,
   Button,
@@ -105,6 +105,7 @@ export function NoteEditor({
   const { toast } = useToast();
   const { isEnabled } = useEnabledModules();
   const calendarOn = isEnabled("calendar");
+  const showIds = usePreferences().data?.showNoteIds ?? false;
   const { data: titles } = useNoteTitles(workspaceId);
   const { data: backlinks } = useNoteBacklinks(workspaceId, note?.id);
   const titleLookup = useMemo(() => new Map((titles ?? []).map((t) => [t.title.toLowerCase(), t])), [titles]);
@@ -378,7 +379,23 @@ export function NoteEditor({
             </div>
           </div>
           {note ? (
-            <p className="text-micro text-subtle-foreground">
+            <p className="flex flex-wrap items-center gap-x-1 text-micro text-subtle-foreground">
+              {showIds && note.number !== null ? (
+                <button
+                  type="button"
+                  title="Скопировать короткий номер"
+                  onClick={() => {
+                    const label = noteNumberLabel(note.number) ?? "";
+                    void navigator.clipboard?.writeText(label).then(
+                      () => toast({ title: `${label} скопирован`, tone: "success" }),
+                      () => undefined
+                    );
+                  }}
+                  className="rounded border border-border px-1 font-mono text-subtle-foreground hover:text-foreground"
+                >
+                  {noteNumberLabel(note.number)}
+                </button>
+              ) : null}
               {note.dailyOn ? `Ежедневная · ${formatDayTitle(note.dailyOn)} · ` : ""}
               {note.isTemplate ? "Шаблон · " : ""}Создано {relativeTime(note.createdAt)} · изменено{" "}
               {relativeTime(contentTime(note))}

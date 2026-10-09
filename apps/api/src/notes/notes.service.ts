@@ -9,6 +9,7 @@ import {
   type NoteRevisionSummary,
   type NoteTitleRef,
   type NoteView,
+  parseNoteNumber,
   type RenameNoteTagInput,
   type UpdateNoteInput
 } from "@orion/shared-types";
@@ -64,6 +65,8 @@ export class NotesService {
       }
 
       const query = search?.trim();
+      // "N-104" / "104" also finds the note with that short id (OR-ed with the text match).
+      const idNumber = query ? parseNoteNumber(query) : null;
 
       if (view === "archive") {
         // Search works in the archive too (it used to be silently ignored there,
@@ -76,8 +79,8 @@ export class NotesService {
               AND "deletedAt" IS NULL
               AND "archivedAt" IS NOT NULL
               AND "isTemplate" = ${templates}
-              AND to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
-                  @@ websearch_to_tsquery('russian', ${query})
+              AND (to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
+                  @@ websearch_to_tsquery('russian', ${query}) OR "number" = ${idNumber})
             ORDER BY ts_rank(
               to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' ')),
               websearch_to_tsquery('russian', ${query})
@@ -97,8 +100,8 @@ export class NotesService {
             AND "deletedAt" IS NULL
             AND "archivedAt" IS NULL
             AND "isTemplate" = ${templates}
-            AND to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
-                @@ websearch_to_tsquery('russian', ${query})
+            AND (to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' '))
+                @@ websearch_to_tsquery('russian', ${query}) OR "number" = ${idNumber})
           ORDER BY ts_rank(
             to_tsvector('russian', "title" || ' ' || "summary" || ' ' || "body" || ' ' || immutable_array_to_string("tags", ' ')),
             websearch_to_tsquery('russian', ${query})
@@ -546,6 +549,7 @@ type NoteRow = {
   workspaceId: string;
   projectId: string | null;
   title: string;
+  number: number | null;
   summary: string;
   body: string;
   tags: string[];
@@ -619,6 +623,7 @@ function toDto(note: NoteRow): Note {
     workspaceId: note.workspaceId,
     projectId: note.projectId,
     title: note.title,
+    number: note.number,
     summary: note.summary,
     body: note.body,
     tags: note.tags,

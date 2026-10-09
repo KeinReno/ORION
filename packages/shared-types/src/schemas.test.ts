@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTaskInputSchema, isTaskClosed, TASK_CLOSED_STATUSES, taskStatusSchema, updateTaskInputSchema } from "./task";
-import { createNoteInputSchema } from "./note";
+import { createNoteInputSchema, noteNumberLabel, parseNoteNumber } from "./note";
 import { authResponseSchema, loginInputSchema, refreshInputSchema, registerInputSchema } from "./auth";
 
 // The zod schemas in this package are the single source of truth for the
@@ -89,5 +89,23 @@ describe("auth schemas", () => {
     // The password fields are part of the contract, not optional extras —
     // dropping them must fail loudly instead of being defaulted away.
     expect(authResponseSchema.safeParse({ ...ok, user: { id: "1", email: "a@b.co", name: "A" } }).success).toBe(false);
+  });
+});
+
+describe("note short id", () => {
+  it("writes the id the same way everywhere", () => {
+    expect(noteNumberLabel(104)).toBe("N-104");
+    expect(noteNumberLabel(null)).toBeNull();
+  });
+
+  it("recognises an id typed into the search box, and only that", () => {
+    expect(parseNoteNumber("N-104")).toBe(104);
+    expect(parseNoteNumber("n104")).toBe(104);
+    expect(parseNoteNumber(" N 7 ")).toBe(7);
+    expect(parseNoteNumber("104")).toBe(104);
+    expect(parseNoteNumber("0")).toBeNull();
+    expect(parseNoteNumber("N-")).toBeNull();
+    expect(parseNoteNumber("отчёт 104")).toBeNull();
+    expect(parseNoteNumber("")).toBeNull();
   });
 });

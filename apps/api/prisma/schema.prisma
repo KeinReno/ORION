@@ -103,6 +103,8 @@ model UserPreference {
   /// Module ids this user hides from their own sidebar. A view preference only:
   /// the module stays on for the workspace and keeps all its data.
   hiddenModules        String[]  @default([])
+  /// Show the short note id ("N-104") in the list and the editor. Personal, off by default.
+  showNoteIds          Boolean   @default(false)
   /// When set, the first-run card on Today stays hidden. Null = not dismissed.
   onboardingCompletedAt DateTime?
   /// U05 (24-CONNECTED-CORE-BACKLOG.md) — personal grouping of the user's own
@@ -308,6 +310,9 @@ model Note {
   workspaceId String
   projectId   String?
   title       String
+  /// Short stable id within the workspace ("N-104"). Assigned by the `notes_assign_number`
+  /// trigger on insert (migration 20261010100000_note_number) — never set by application code.
+  number      Int?
   /// Optional one/two-line "what this note is about" (UI-03). Empty = none:
   /// the list then shows a plain-text excerpt of `body`. Part of the full-text
   /// index `notes_search_idx` (see migration 20261008210000_note_summary).
@@ -369,6 +374,7 @@ model Note {
   attachments   NoteAttachment[]
 
   @@unique([workspaceId, dailyOn])
+  @@unique([workspaceId, number])
   @@index([workspaceId])
   @@index([projectId])
   @@index([eventAt])

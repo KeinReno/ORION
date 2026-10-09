@@ -5,6 +5,9 @@ export const noteSchema = z.object({
   workspaceId: z.string(),
   projectId: z.string().nullable(),
   title: z.string(),
+  /// Short stable id within the workspace — shown as "N-<number>". Null only for a row that
+  /// predates the trigger and was not backfilled (should not occur after the migration).
+  number: z.number().int().nullable(),
   /// Optional short description ("о чём заметка"); empty string = none, and the
   /// list falls back to a plain-text excerpt of `body`.
   summary: z.string(),
@@ -38,6 +41,24 @@ export const noteSchema = z.object({
   updatedAt: z.string()
 });
 export type Note = z.infer<typeof noteSchema>;
+
+/** "N-104" — how a note's short id is written everywhere (list, editor, search). */
+export function noteNumberLabel(number: number | null): string | null {
+  return number === null ? null : `N-${number}`;
+}
+
+/**
+ * A search box entry that is really a note id: "N-104", "n104", "N 104" or a
+ * bare "104". Returns the number, or null for ordinary text. A bare number is
+ * accepted on purpose — people type the digits — and still searches the text
+ * too (the caller ORs the two), so a note that merely contains "2026" is found.
+ */
+export function parseNoteNumber(query: string): number | null {
+  const match = /^\s*(?:n[-\s]?)?(\d{1,9})\s*$/i.exec(query);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
 
 /// Lightweight `{ id, title }` used to feed the `[[wiki link]]` autocomplete
 /// without shipping every note body — `GET .../notes/titles`.

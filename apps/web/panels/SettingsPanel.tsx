@@ -89,6 +89,7 @@ const APPEARANCE_KEYS: readonly PreferenceKey[] = [
   "backgroundIntensity",
   "backgroundEffectSettings",
   "targetCursorEnabled",
+  "showNoteIds",
   "surfaceStyle",
   "panelOpacity",
   "panelBlur",
@@ -649,6 +650,14 @@ export function SettingsPanel(): React.ReactElement {
                     </Field>
                   </div>
                 ) : null}
+                <Field label="Номера заметок">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.showNoteIds} onChange={(showNoteIds) => setForm({ ...form, showNoteIds })} />
+                    <span className="text-xs text-muted-foreground">
+                      Короткий номер вида N-104 в списке и в заметке — для ссылок и разговоров; в поиске находится по номеру
+                    </span>
+                  </div>
+                </Field>
                 <Field label="Курсор-цель">
                   <div className="flex items-center gap-2">
                     <Switch

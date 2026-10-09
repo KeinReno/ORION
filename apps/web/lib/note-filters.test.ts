@@ -8,6 +8,7 @@ function note(id: string, patch: Partial<Note> = {}): Note {
     workspaceId: "ws",
     projectId: null,
     title: id,
+    number: null,
     summary: "",
     body: "",
     tags: [],

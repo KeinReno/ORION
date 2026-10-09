@@ -104,6 +104,8 @@ export const userPreferenceSchema = z.object({
   dashboardWidgets: z.array(z.string()),
   /** Module ids hidden from this user's own sidebar — never affects the workspace or its data. */
   hiddenModules: z.array(z.string().max(40)).max(40),
+  /** Show the short note id ("N-104") in the notes list and editor. Personal, off by default. */
+  showNoteIds: z.boolean(),
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

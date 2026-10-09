@@ -5,6 +5,7 @@ import {
   useDeleteNote,
   useNotes,
   useOpenDailyNote,
+  usePreferences,
   useProjects,
   usePurgeNote,
   useRestoreNote,
@@ -53,6 +54,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { noteNumberLabel } from "@orion/shared-types";
 import { formatDayTitle, projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
@@ -85,6 +87,7 @@ export function NotesPanel(): React.ReactElement {
   // Active projects of this workspace — the editor's "Проект" select and the
   // project chip in the list. Same source as TasksPanel.
   const { data: projectList } = useProjects(isEnabled("projects") ? workspace?.id : undefined);
+  const showIds = usePreferences().data?.showNoteIds ?? false;
   const createNote = useCreateNote(workspace?.id);
   const updateNote = useUpdateNote(workspace?.id);
   const deleteNote = useDeleteNote(workspace?.id);
@@ -497,6 +500,9 @@ export function NotesPanel(): React.ReactElement {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
                       {!trash && note.pinnedAt ? <Pin className="h-3 w-3 shrink-0 text-accent" /> : null}
+                      {showIds && note.number !== null ? (
+                        <span className="shrink-0 font-mono text-2xs font-normal text-subtle-foreground">{noteNumberLabel(note.number)}</span>
+                      ) : null}
                       <span className="truncate">{note.title || "Без заголовка"}</span>
                     </p>
                     {preview ? (
@@ -639,9 +645,9 @@ export function NotesPanel(): React.ReactElement {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={trash ? "В корзине поиск отключён" : "Название, описание, текст, теги"}
+            placeholder={trash ? "В корзине поиск отключён" : "Название, описание, текст, теги, N-104"}
             aria-label="Поиск по заметкам"
-            title="Ищет по названию, краткому описанию, тексту и тегам"
+            title="Ищет по названию, краткому описанию, тексту, тегам и короткому номеру (N-104)"
             className="pl-8"
             disabled={trash}
           />
