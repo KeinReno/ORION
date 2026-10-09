@@ -1,7 +1,7 @@
 "use client";
 
-import { useCreateProject, useProjects } from "@orion/core-react";
-import { formatDuration, isProjectOverdue, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
+import { useCreateProject, useProjects, useTasks } from "@orion/core-react";
+import { formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
 import {
   Badge,
   Button,
@@ -35,6 +35,8 @@ import {
   type ProjectBoardSummary
 } from "./projects/board";
 import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
+import { DueChip } from "./projects/project-vitals";
+import { nextActionByProject, pluralDays, reportFreshness, type ProjectNextAction } from "../lib/project-status";
 
 /**
  * «Проекты» (v0.14) — a project is what a task's free-form `projectTag` grew
@@ -50,6 +52,10 @@ export function ProjectsPanel(): React.ReactElement {
   const [archived, setArchived] = useState(false);
   const { data: projects, isLoading, isError, error, refetch } = useProjects(workspaceId, archived);
   const createProject = useCreateProject(workspaceId);
+  const { isEnabled } = useEnabledModules();
+  // One workspace task list feeds "Дальше" on every card — no per-project requests.
+  const { data: allTasks } = useTasks(isEnabled("tasks") ? workspaceId : undefined);
+  const nextActions = useMemo(() => nextActionByProject(allTasks ?? []), [allTasks]);
   const { toast } = useToast();
 
   const [creating, setCreating] = useState(false);
@@ -202,7 +208,12 @@ export function ProjectsPanel(): React.ReactElement {
             ) : (
               <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:1152px)]:grid-cols-3 [@container(min-width:1408px)]:grid-cols-4">
                 {list.map((project) => (
-                  <ProjectCard key={project.id} project={project} onOpen={() => openProject(project.id, project.name)} />
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    nextAction={nextActions.get(project.id)}
+                    onOpen={() => openProject(project.id, project.name)}
+                  />
                 ))}
               </div>
             )}
@@ -223,15 +234,24 @@ export function ProjectsPanel(): React.ReactElement {
   );
 }
 
-function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }): React.ReactElement {
+function ProjectCard({
+  project,
+  nextAction,
+  onOpen
+}: {
+  project: Project;
+  nextAction: ProjectNextAction | undefined;
+  onOpen: () => void;
+}): React.ReactElement {
   const { isEnabled } = useEnabledModules();
   const tasksOn = isEnabled("tasks");
   const timeOn = isEnabled("time");
   const financeOn = isEnabled("finance");
   const swatch = projectSwatchColor(project.color);
   const progress = Math.min(100, Math.max(0, project.progress));
-  const overdue = isProjectOverdue(project);
   const overspent = financeOn && project.budgetAmount !== null && project.spentAmount > project.budgetAmount;
+  const freshness = reportFreshness(project);
+  const live = project.status === "active" && !project.archivedAt;
 
   // One mono line, only the modules that are actually on — not five equal chips.
   const meta: string[] = [];
@@ -244,12 +264,28 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
     );
   }
 
+  // The card's answer to "what is happening here?" — without opening the project.
+  let nextLine: React.ReactNode = null;
+  if (tasksOn && live) {
+    if (project.counts.tasks === 0) nextLine = <span className="text-subtle-foreground">Задач пока нет</span>;
+    else if (nextAction?.next) {
+      nextLine = (
+        <>
+          <span className="text-subtle-foreground">Дальше · </span>
+          <span className="text-foreground">{nextAction.next.title}</span>
+        </>
+      );
+    } else if (nextAction && nextAction.open > 0) nextLine = <span className="text-subtle-foreground">Всё открытое ждёт зависимостей</span>;
+    else nextLine = <span className="text-success">Все задачи закрыты</span>;
+  }
+
   return (
     <Card
       interactive
       elevate
       role="button"
       tabIndex={0}
+      aria-label={`Открыть проект «${project.name}»`}
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -257,23 +293,30 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
           onOpen();
         }
       }}
-      className="flex flex-col gap-2 overflow-hidden py-card-row"
+      className={cx("flex flex-col gap-3 overflow-hidden py-card-row", !live && "opacity-80")}
       style={swatch ? { borderLeftWidth: 3, borderLeftColor: swatch } : undefined}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-title text-foreground">{project.name}</span>
         <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
           <ReportedHealthBadge project={project} />
-          <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
+          {project.status !== "active" ? <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge> : null}
         </span>
       </div>
 
-      {overdue ? (
-        <p className="inline-flex items-center gap-1 text-micro text-destructive">
-          <TriangleAlert className="h-3 w-3" aria-hidden />
-          Просрочен
-        </p>
+      {project.description ? (
+        <p className="-mt-1.5 line-clamp-2 text-label text-muted-foreground">{project.description}</p>
       ) : null}
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <DueChip project={project} />
+        {nextAction && nextAction.overdue > 0 ? (
+          <span className="inline-flex items-center gap-1 text-micro text-destructive">
+            <TriangleAlert className="h-3 w-3" aria-hidden />
+            просрочено задач: {nextAction.overdue}
+          </span>
+        ) : null}
+      </div>
 
       {tasksOn ? (
         <div>
@@ -287,15 +330,23 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         </div>
       ) : null}
 
-      {meta.length > 0 ? (
-        <p
-          className={cx(
-            "mt-auto font-mono text-label tabular-nums",
-            overspent ? "text-destructive" : "text-muted-foreground"
+      {nextLine ? <p className="truncate text-label">{nextLine}</p> : null}
+
+      {meta.length > 0 || freshness.kind === "stale" ? (
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          {meta.length > 0 ? (
+            <p className={cx("font-mono text-label tabular-nums", overspent ? "text-destructive" : "text-muted-foreground")}>
+              {meta.join(" · ")}
+            </p>
+          ) : (
+            <span />
           )}
-        >
-          {meta.join(" · ")}
-        </p>
+          {freshness.kind === "stale" ? (
+            <span className="text-micro text-warning" title="Автор давно не обновлял состояние проекта">
+              отчёту {pluralDays(freshness.daysOld)}
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );

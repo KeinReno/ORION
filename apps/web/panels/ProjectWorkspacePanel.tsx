@@ -17,6 +17,7 @@ import {
   formatDuration,
   isProjectOverdue,
   isTaskClosed,
+  type Milestone,
   type ProjectActivity,
   type ProjectDetail,
   type Task,
@@ -29,7 +30,9 @@ import {
   CheckToggle,
   ConfirmDialog,
   ContextNoteField,
+  DropdownMenu,
   EmptyState,
+  IconButton,
   Input,
   Modal,
   PanelBody,
@@ -51,6 +54,7 @@ import {
   FolderOpen,
   ListTodo,
   Milestone as MilestoneIcon,
+  MoreHorizontal,
   Package,
   Pencil,
   Plus,
@@ -71,6 +75,7 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { PROJECT_STATUS_LABEL, ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
 import { ProjectGantt } from "./projects/gantt";
+import { DueChip, PlanEmptyHint, PlanStrip } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
@@ -340,7 +345,7 @@ function ProjectWorkspace({
   }
 
   const swatch = projectSwatchColor(project.color);
-  const overdue = isProjectOverdue(project);
+  const progress = Math.min(100, Math.max(0, project.progress));
 
   return (
     <PanelShell>
@@ -355,27 +360,49 @@ function ProjectWorkspace({
         subtitle={project.description || undefined}
         actions={
           <>
-            {project.archivedAt ? <Badge>В архиве</Badge> : null}
-            <ReportedHealthBadge project={project} />
-            <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
-            {overdue ? <Badge tone="danger">Просрочен</Badge> : null}
             {tasksOn ? (
               <Button size="sm" onClick={() => setAdding("task")}>
                 <Plus className="h-4 w-4" /> Задача
               </Button>
             ) : null}
-            {notesOn ? (
-              <Button size="sm" variant="subtle" onClick={() => setAdding("note")}>
-                <Plus className="h-4 w-4" /> Заметка
-              </Button>
-            ) : null}
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-              <Pencil className="h-4 w-4" /> Изменить
-            </Button>
+            <DropdownMenu
+              align="end"
+              trigger={({ toggle }) => (
+                <IconButton label="Действия с проектом" size="sm" onClick={toggle}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </IconButton>
+              )}
+              items={[
+                ...(notesOn ? [{ label: "Новая заметка", icon: FileText, onSelect: () => setAdding("note") }] : []),
+                { label: "Изменить проект", icon: Pencil, onSelect: () => setEditing(true) },
+                "separator" as const,
+                project.archivedAt
+                  ? { label: "Восстановить из архива", icon: ArchiveRestore, onSelect: restore }
+                  : { label: "В архив", icon: Archive, onSelect: () => setConfirmArchive(true) }
+              ]}
+            />
           </>
         }
       >
-        <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
+        <div className="flex w-full flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {project.archivedAt ? <Badge>В архиве</Badge> : null}
+            <ReportedHealthBadge project={project} />
+            {project.status !== "active" ? (
+              <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge>
+            ) : null}
+            <DueChip project={project} />
+            {tasksOn ? (
+              <span className="flex items-center gap-2">
+                <span className="w-24">
+                  <Meter value={progress} tone={progress === 100 ? "success" : "accent"} color={swatch} />
+                </span>
+                <span className="text-micro text-subtle-foreground">{taskProgressLabel(project)}</span>
+              </span>
+            ) : null}
+          </div>
+          <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
+        </div>
       </PanelHeader>
 
       <PanelBody className="[container-type:inline-size]">
@@ -384,6 +411,8 @@ function ProjectWorkspace({
             workspaceId={workspaceId}
             project={project}
             focus={focus}
+            milestones={milestoneList}
+            tasks={tasks}
             tasksOn={tasksOn}
             tasksLoading={tasksOn && tasksLoading}
             timeOn={timeOn}
@@ -486,6 +515,8 @@ function OverviewTab({
   workspaceId,
   project,
   focus,
+  milestones,
+  tasks,
   tasksOn,
   tasksLoading,
   timeOn,
@@ -499,6 +530,8 @@ function OverviewTab({
   workspaceId: string | undefined;
   project: ProjectDetail;
   focus: ReturnType<typeof projectFocus>;
+  milestones: Milestone[];
+  tasks: Task[];
   tasksOn: boolean;
   tasksLoading: boolean;
   timeOn: boolean;
@@ -516,9 +549,41 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
-        <ProjectStatusSection workspaceId={workspaceId} projectId={project.id} />
+        <ProjectStatusSection
+          workspaceId={workspaceId}
+          projectId={project.id}
+          project={project}
+          overdueTasks={focus.overdue.length}
+        />
 
-        <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
+        {tasksOn ? (
+          <PanelSection
+            title="План"
+            actions={
+              <Button size="sm" variant="ghost" onClick={() => onGoTo("plan")}>
+                Открыть план
+              </Button>
+            }
+          >
+            {milestones.length > 0 ? (
+              <PlanStrip milestones={milestones} tasks={tasks} onOpenPlan={() => onGoTo("plan")} />
+            ) : (
+              <PlanEmptyHint onOpenPlan={() => onGoTo("plan")} />
+            )}
+          </PanelSection>
+        ) : null}
+
+        {tasksOn && fire.length > 0 ? (
+          <PanelSection title={`Горит · ${fire.length}`}>
+            <Card className="border-destructive/30 px-2 py-1">
+              <ul className="flex flex-col">
+                {fire.map((task) => (
+                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
+                ))}
+              </ul>
+            </Card>
+          </PanelSection>
+        ) : null}
 
         {tasksOn ? (
           <PanelSection
@@ -558,17 +623,7 @@ function OverviewTab({
           </PanelSection>
         ) : null}
 
-        {tasksOn && fire.length > 0 ? (
-          <PanelSection title={`Горит · ${fire.length}`}>
-            <Card className="border-destructive/30 px-2 py-1">
-              <ul className="flex flex-col">
-                {fire.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
-                ))}
-              </ul>
-            </Card>
-          </PanelSection>
-        ) : null}
+        <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
 
         <PanelSection title="Последние изменения">
           <ActivityList items={project.activity.slice(0, 8)} onPlan={() => onGoTo("plan")} />
@@ -588,39 +643,6 @@ function OverviewTab({
                 {focus.overdue.length > 0 ? ` · просрочено ${focus.overdue.length}` : ""}
               </p>
             ) : null}
-          </Card>
-        ) : null}
-
-        {tasksOn ? (
-          <Card className="space-y-2 px-4 py-3">
-            <SideTitle>Ближайшая веха</SideTitle>
-            {focus.nextMilestone ? (
-              <button type="button" onClick={() => onGoTo("plan")} className="block w-full text-left">
-                <p className="truncate text-label text-foreground">{focus.nextMilestone.milestone.title}</p>
-                <p className="mt-0.5 text-micro text-subtle-foreground">
-                  {focus.nextMilestone.milestone.dueAt ? `до ${shortDate(focus.nextMilestone.milestone.dueAt)} · ` : ""}
-                  {focus.nextMilestone.total === 0
-                    ? "задач пока нет"
-                    : `осталось ${focus.nextMilestone.open} из ${focus.nextMilestone.total}`}
-                </p>
-                {focus.nextMilestone.total > 0 ? (
-                  <div className="mt-2">
-                    <Meter
-                      value={Math.round(
-                        ((focus.nextMilestone.total - focus.nextMilestone.open) / focus.nextMilestone.total) * 100
-                      )}
-                    />
-                  </div>
-                ) : null}
-              </button>
-            ) : (
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-label text-subtle-foreground">Вех нет</p>
-                <Button size="sm" variant="ghost" onClick={() => onGoTo("plan")}>
-                  <Plus className="h-4 w-4" /> Веха
-                </Button>
-              </div>
-            )}
           </Card>
         ) : null}
 

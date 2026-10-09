@@ -17,12 +17,14 @@ import {
   SegmentedControl,
   Skeleton,
   Textarea,
+  cx,
   useToast
 } from "@orion/ui";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
 import { relativeTime } from "../../lib/format";
+import { pluralDays, reportContradicted, reportFreshness } from "../../lib/project-status";
 import { HEALTH_TONE } from "./project-bits";
 
 interface UpdateValues {
@@ -38,12 +40,23 @@ interface UpdateValues {
  * those indicators stay on the overview as computed facts, and this block is a
  * human statement with a name and a date, so the two never read as one number.
  */
+const HEALTH_EDGE: Record<ProjectHealth, string> = {
+  on_track: "border-l-success",
+  at_risk: "border-l-warning",
+  delayed: "border-l-destructive"
+};
+
 export function ProjectStatusSection({
   workspaceId,
-  projectId
+  projectId,
+  project,
+  overdueTasks
 }: {
   workspaceId: string | undefined;
   projectId: string;
+  /** Computed facts the report is compared against (never overwritten by them). */
+  project: { status: string; dueAt: string | null; reportedHealth: string | null; reportedAt: string | null };
+  overdueTasks: number;
 }): React.ReactElement {
   const { toast } = useToast();
   const { data: updates, isLoading, isError, error } = useProjectUpdates(workspaceId, projectId);
@@ -55,6 +68,8 @@ export function ProjectStatusSection({
 
   const latest = updates?.[0];
   const older = updates?.slice(1) ?? [];
+  const freshness = reportFreshness(project);
+  const contradicted = reportContradicted(project, overdueTasks);
 
   function submit(values: UpdateValues): void {
     create.mutate(values, {
@@ -92,8 +107,21 @@ export function ProjectStatusSection({
         </p>
       ) : (
         <div className="space-y-3">
+          {freshness.kind === "stale" ? (
+            <p className="rounded-lg border border-warning/30 bg-warning/[0.06] px-3 py-2 text-label text-foreground">
+              Отчёту уже {pluralDays(freshness.daysOld)} — проект в работе, обновите состояние.
+            </p>
+          ) : null}
+          {contradicted ? (
+            <p className="rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-label text-muted-foreground">
+              В отчёте «по плану», но{" "}
+              {overdueTasks > 0 ? `просрочено задач: ${overdueTasks}` : "срок проекта уже прошёл"}. Это расчёт по данным, отчёт
+              остаётся словами автора.
+            </p>
+          ) : null}
           <UpdateCard
             update={latest}
+            featured
             confirming={confirmId === latest.id}
             busy={remove.isPending}
             onAskDelete={() => setConfirmId(latest.id)}
@@ -137,6 +165,7 @@ export function ProjectStatusSection({
 function UpdateCard({
   update,
   compact = false,
+  featured = false,
   confirming,
   busy,
   onAskDelete,
@@ -145,6 +174,8 @@ function UpdateCard({
 }: {
   update: ProjectUpdate;
   compact?: boolean;
+  /** The newest report: a coloured edge says at a glance how the author sees the project. */
+  featured?: boolean;
   confirming: boolean;
   busy: boolean;
   onAskDelete: () => void;
@@ -152,7 +183,12 @@ function UpdateCard({
   onConfirmDelete: () => void;
 }): React.ReactElement {
   return (
-    <article className="rounded-xl border border-border bg-card px-4 py-3">
+    <article
+      className={cx(
+        "rounded-xl border border-border bg-card px-4 py-3",
+        featured && cx("border-l-4", HEALTH_EDGE[update.health])
+      )}
+    >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Badge tone={HEALTH_TONE[update.health]}>{PROJECT_HEALTH_LABEL[update.health]}</Badge>
         <span className="text-micro text-subtle-foreground">
