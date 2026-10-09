@@ -27,6 +27,7 @@ import {
   Select,
   Skeleton,
   Textarea,
+  cx,
   useToast
 } from "@orion/ui";
 import { ArrowLeft, MoreHorizontal, Play, Square, Trash2, X } from "lucide-react";
@@ -212,7 +213,7 @@ export function TaskDetail({
           aria-label="Статус"
           value={fields.status}
           onChange={(event) => set("status", event.target.value as TaskStatus)}
-          className="w-auto min-w-[8.5rem]"
+          className="w-auto !min-w-[10.5rem]"
         >
           {TASK_STATUS_ORDER.map((status) => (
             <option key={status} value={status}>
@@ -222,7 +223,6 @@ export function TaskDetail({
         </Select>
         {timeOn ? <TaskTimer workspaceId={workspaceId} task={task} /> : null}
         <div className="ml-auto flex items-center gap-1">
-          <AutosaveStatus state={saveState} className="hidden sm:inline-flex" />
           <DropdownMenu
             align="end"
             trigger={({ toggle }) => (
@@ -249,6 +249,11 @@ export function TaskDetail({
             </Button>
           </div>
         ) : null}
+
+        {/* The save state sits above the title, not in the cramped header, so it never wraps. */}
+        <div className="-mb-2 flex min-h-4 justify-end">
+          <AutosaveStatus state={saveState} className="whitespace-nowrap" />
+        </div>
 
         <input
           value={fields.title}
@@ -284,7 +289,7 @@ export function TaskDetail({
             </Prop>
           ) : null}
           {projects ? (
-            <Prop label="Проект">
+            <Prop label="Проект" wide>
               <Select value={fields.projectId} onChange={(event) => setProject(event.target.value)}>
                 <option value="">Без проекта</option>
                 {projects.map((project) => (
@@ -428,9 +433,18 @@ export function TaskDetail({
   );
 }
 
-function Prop({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
+function Prop({
+  label,
+  wide,
+  children
+}: {
+  label: string;
+  /** Takes the whole row of the two-column grid — for values that read long (a project name). */
+  wide?: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
   return (
-    <label className="flex min-w-0 flex-col gap-1 text-label text-subtle-foreground">
+    <label className={cx("flex min-w-0 flex-col gap-1 text-label text-subtle-foreground", wide && "col-span-2")}>
       {label}
       {children}
     </label>
