@@ -225,7 +225,8 @@ function ProjectWorkspace({
 
   const tasks = useMemo(() => (allTasks ?? []).filter((task) => task.projectId === project.id), [allTasks, project.id]);
   const milestoneList = useMemo(() => milestones ?? [], [milestones]);
-  const focus = useMemo(() => projectFocus(tasks, milestoneList), [tasks, milestoneList]);
+  // Ask for more than the five shown: the overview drops tasks already listed under «Горит».
+  const focus = useMemo(() => projectFocus(tasks, milestoneList, new Date(), 12), [tasks, milestoneList]);
 
   const projectOptions = useMemo(() => {
     const list = workspaceProjects ?? [];
@@ -552,6 +553,9 @@ function OverviewTab({
   const progress = Math.min(100, Math.max(0, project.progress));
   const now = new Date();
   const fire = [...focus.overdue, ...focus.blocked];
+  // A task on fire is shown there once; «Дальше» lists the rest of the actionable work.
+  const fireIds = new Set(fire.map((task) => task.id));
+  const upNext = focus.next.filter((task) => !fireIds.has(task.id)).slice(0, 5);
 
   return (
     <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
@@ -596,7 +600,7 @@ function OverviewTab({
           <PanelSection
             title="Дальше"
             actions={
-              focus.open > focus.next.length + focus.blocked.length ? (
+              focus.open > upNext.length + fire.length ? (
                 <Button size="sm" variant="ghost" onClick={() => onGoTo("tasks")}>
                   Все открытые · {focus.open}
                 </Button>
@@ -605,14 +609,14 @@ function OverviewTab({
           >
             {tasksLoading ? (
               <Skeleton className="h-32 w-full" />
-            ) : focus.next.length === 0 ? (
+            ) : upNext.length === 0 ? (
               <EmptyState
                 icon={ListTodo}
-                title={focus.open === 0 ? "Открытых задач нет" : "Всё открытое ждёт зависимостей"}
+                title={focus.open === 0 ? "Открытых задач нет" : "Всё открытое уже в блоке «Горит»"}
                 description={
                   focus.open === 0
                     ? "Добавьте следующий шаг — он появится здесь первым."
-                    : "Закройте блокирующие задачи — остальное разблокируется."
+                    : "Разберите просроченные и заблокированные задачи — следующие появятся здесь."
                 }
                 action={
                   <Button size="sm" onClick={onAddTask}>
@@ -622,7 +626,7 @@ function OverviewTab({
               />
             ) : (
               <ul className="flex flex-col">
-                {focus.next.map((task) => (
+                {upNext.map((task) => (
                   <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
                 ))}
               </ul>

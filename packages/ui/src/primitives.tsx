@@ -175,7 +175,9 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
         // py-2 matches Input/Button(md) — Select used to carry its own
         // py-1.5, ~4px shorter at default density than every other control
         // it sits next to in a form row (S12 control-height audit).
-        "rounded-lg border border-border bg-white/[0.03] px-2.5 py-2 text-body text-foreground transition-colors",
+        // A native select is as wide as its longest option; min-w-0/max-w-full keep a
+        // long option from stretching the card or form it sits in.
+        "min-w-0 max-w-full rounded-lg border border-border bg-white/[0.03] px-2.5 py-2 text-body text-foreground transition-colors",
         "outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
         "[&>option]:bg-card [&>option]:text-foreground",
         className

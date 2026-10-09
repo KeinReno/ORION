@@ -340,7 +340,7 @@ export function NotesPanel(): React.ReactElement {
               value={projectFilter ?? ""}
               onChange={(event) => setProjectFilter(event.target.value || null)}
               aria-label="Фильтр по проекту"
-              className="h-6 w-auto max-w-[9rem] rounded-full py-0 text-2xs"
+              className="w-auto min-w-[7.5rem] max-w-[11rem] rounded-full !py-1 !text-2xs"
             >
               <option value="">Все проекты</option>
               <option value={NO_PROJECT}>Без проекта</option>

@@ -214,7 +214,7 @@ export function HabitsPanel(): React.ReactElement {
         </label>
       </PanelHeader>
 
-      <PanelBody measure="prose">
+      <PanelBody measure="wide" className="[container-type:inline-size]">
         {workspaceId === undefined ? (
           workspaceLoading ? (
             <div className="space-y-2">
@@ -259,7 +259,11 @@ export function HabitsPanel(): React.ReactElement {
             }
           />
         ) : (
-          <>
+          // Today's tick is the daily action, so it leads and stays in the first column; the
+          // week grid and heatmap are history and sit beside it on a wide panel (by the
+          // panel's own width, not the window's) instead of leaving half the screen empty.
+          <div className="grid grid-cols-1 gap-6 [@container(min-width:880px)]:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-6">
             <PanelSection title="Сегодня">
               {dueHabits.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
@@ -298,7 +302,9 @@ export function HabitsPanel(): React.ReactElement {
                 />
               </div>
             </PanelSection>
+            </div>
 
+            <div className="min-w-0 space-y-6">
             <PanelSection
               title="Неделя"
               actions={
@@ -341,8 +347,10 @@ export function HabitsPanel(): React.ReactElement {
                 )}
               </PanelSection>
             ) : null}
+            </div>
 
             {showArchive ? (
+              <div className="min-w-0 [@container(min-width:880px)]:col-span-2">
               <PanelSection title="Архив">
                 {archivedHabits.length === 0 ? (
                   <p className="text-xs text-muted-foreground">В архиве пусто.</p>
@@ -356,8 +364,9 @@ export function HabitsPanel(): React.ReactElement {
                   </ul>
                 )}
               </PanelSection>
+              </div>
             ) : null}
-          </>
+          </div>
         )}
       </PanelBody>
 

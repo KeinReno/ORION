@@ -154,7 +154,7 @@ export function TimerWidget({
       </div>
 
       {(tasks || projects) ? (
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
         {tasks ? (
         <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
           Задача

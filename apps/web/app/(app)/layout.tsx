@@ -1,7 +1,7 @@
 "use client";
 
 import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
-import { effectiveDisabledModules, isModuleEnabled, isTaskClosed, type Workspace, type WorkspaceOrganization } from "@orion/shared-types";
+import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
   AppBackground,
   IconButton,
@@ -27,6 +27,7 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState, type 
 import { AccountAvatar } from "../../components/account-avatar";
 import { CommandCenter } from "../../lib/command-center";
 import { NotificationBell } from "../../components/notification-bell";
+import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
 import { dockLayoutStorageKey } from "../../lib/dock-layout-key";
 import { isTauri } from "../../lib/is-tauri";
@@ -42,6 +43,7 @@ import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
 import { getPanelDefinition, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
+import { buildSwitcherGroups } from "../../lib/workspace-order";
 
 const NO_DISABLED_MODULES: string[] = [];
 
@@ -52,44 +54,6 @@ const NO_DISABLED_MODULES: string[] = [];
  * the package boundary — see `packages/ui/src/workbench.tsx`'s U06 comment.
  */
 type PanelSplitPosition = { referenceGroup: DockviewGroupPanel; direction: "left" | "right" | "above" | "below" | "within" };
-
-interface SwitcherGroup {
-  label: string;
-  workspaces: Workspace[];
-}
-
-/**
- * Pure (unit-tested indirectly via the layout, no network/storage) — turns
- * the flat `workspaces` list plus U05's personal `organization` into
- * `<optgroup>`-ready groups: "Избранное" first (independent of sphere, can
- * repeat a workspace also shown under its sphere — quick access is the
- * point), then each sphere in the user's own order, then "Другое" for
- * workspaces in no sphere. No spheres/favorites at all (new account, or an
- * old one that never created any) collapses to a single ungrouped list —
- * the U05 done-criterion "старый аккаунт без сфер продолжает работать".
- */
-function buildSwitcherGroups(workspaces: Workspace[], organization: WorkspaceOrganization | undefined): SwitcherGroup[] {
-  if (!organization || (organization.spheres.length === 0 && organization.favoriteWorkspaceIds.length === 0)) {
-    return [{ label: "", workspaces }];
-  }
-  const byId = new Map(workspaces.map((w) => [w.id, w]));
-  const groups: SwitcherGroup[] = [];
-
-  const favorites = organization.favoriteWorkspaceIds.map((id) => byId.get(id)).filter((w): w is Workspace => Boolean(w));
-  if (favorites.length > 0) groups.push({ label: "Избранное", workspaces: favorites });
-
-  const sphered = new Set<string>();
-  for (const sphere of [...organization.spheres].sort((a, b) => a.order - b.order)) {
-    const sphereWorkspaces = sphere.workspaceIds.map((id) => byId.get(id)).filter((w): w is Workspace => Boolean(w));
-    for (const w of sphereWorkspaces) sphered.add(w.id);
-    if (sphereWorkspaces.length > 0) groups.push({ label: sphere.name, workspaces: sphereWorkspaces });
-  }
-
-  const rest = workspaces.filter((w) => !sphered.has(w.id));
-  if (rest.length > 0) groups.push({ label: organization.spheres.length > 0 ? "Другое" : "", workspaces: rest });
-
-  return groups;
-}
 
 /**
  * Closes every open tab whose module is off — walking the dock's open panels
@@ -132,6 +96,22 @@ function NextLink({ href, className, children }: { href: string; className?: str
  * dockview's own built-in popout already uses there, just reachable
  * without first placing the panel in this window's dock.
  */
+/**
+ * "Открыть пространство в новом окне" — a whole new shell for another workspace
+ * (the second-monitor case). The id travels in `?workspaceId=` because a new
+ * window's sessionStorage, and with it its active workspace, starts empty; the
+ * new window seeds from it once (see the seed effect in AppLayout).
+ */
+async function openWorkspaceInNewWindow(workspaceId: string, title: string): Promise<void> {
+  const url = `/dashboard?workspaceId=${encodeURIComponent(workspaceId)}`;
+  if (isTauri()) {
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    new WebviewWindow(`workspace-${Date.now()}`, { url, title: `ORION — ${title}`, width: 1280, height: 800 });
+  } else {
+    window.open(url, `orion-workspace-${Date.now()}`, "width=1280,height=800");
+  }
+}
+
 async function detachPanelToWindow(panelId: string, title: string): Promise<void> {
   const workspaceId = getActiveWorkspaceId();
   const url = panelWindowUrl(panelId, workspaceId);
@@ -216,6 +196,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const router = useRouter();
   const { user, isLoading, status, previousUser, retry: retrySession } = useSession();
   const logout = useLogout();
+  // A window opened with `?workspaceId=` starts on that workspace. Only when this window has no
+  // choice of its own yet (a reload keeps its own), and before the "no workspace → /spaces"
+  // redirect below can fire.
+  useEffect(() => {
+    if (getActiveWorkspaceId()) return;
+    const seed = new URLSearchParams(window.location.search).get("workspaceId");
+    if (seed) setActiveWorkspaceId(seed);
+  }, []);
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   // U05 (24-CONNECTED-CORE-BACKLOG.md) — the sidebar switcher groups the
   // `<select>` by the user's own spheres via `<optgroup>` (native, keyboard-
@@ -520,61 +508,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         drawerOpen={drawerOpen}
         onDrawerClose={() => setDrawerOpen(false)}
         header={({ open }) => (
-          <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-            <button
-              type="button"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/15 text-xs font-bold text-accent"
-              title="Сменить пространство"
-              onClick={() => router.push("/spaces")}
-            >
-              {(workspace?.name ?? "O").slice(0, 1).toUpperCase()}
-            </button>
+          <div className="flex items-center gap-1 rounded-lg px-1 py-1.5">
             {/*
-             * Collapsed rail = icon-only. The workspace switcher only renders
-             * once there's room (pinned, hovered, or the always-expanded
-             * drawer). Notifications live in the dockview tab strip — putting
-             * the bell here used to clip it out of the 60px rail, and hiding
-             * it while collapsed left no way to reach the list on desktop.
+             * Collapsed rail = avatar only (it still opens the list); expanded adds the
+             * previous/next arrows and the name. Notifications live in the dockview tab
+             * strip — the bell used to be clipped out of the 60px rail here.
              */}
-            {open ? (
-              <>
-                {workspaces.length > 1 ? (
-                  <select
-                    value={workspace?.id ?? ""}
-                    onChange={(e) => setActiveWorkspaceId(e.target.value)}
-                    title="Переключить пространство"
-                    className="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-foreground outline-none"
-                  >
-                    {switcherGroups.map((group, index) =>
-                      group.label ? (
-                        <optgroup key={group.label || index} label={group.label}>
-                          {group.workspaces.map((w) => (
-                            <option key={`${group.label}:${w.id}`} value={w.id}>
-                              {w.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ) : (
-                        group.workspaces.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
-                          </option>
-                        ))
-                      )
-                    )}
-                  </select>
-                ) : (
-                  <button
-                    type="button"
-                    title="Сменить пространство"
-                    onClick={() => router.push("/spaces")}
-                    className="min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground"
-                  >
-                    {workspace?.name ?? "ORION"}
-                  </button>
-                )}
-              </>
-            ) : null}
+            <WorkspaceSwitcher
+              groups={switcherGroups}
+              active={workspace}
+              expanded={open}
+              onSelect={setActiveWorkspaceId}
+              onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
+              onOpenSpaces={() => router.push("/spaces")}
+            />
           </div>
         )}
         links={navPanels.map((panel) => ({

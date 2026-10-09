@@ -199,9 +199,12 @@ export function Calendar({
             {periodLabel}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {headerExtra}
-          <SegmentedControl<CalendarView> value={view} onChange={setView} options={VIEW_OPTIONS} />
+          {/* Never let the view switch be squeezed into a column when the source chips wrap. */}
+          <div className="shrink-0">
+            <SegmentedControl<CalendarView> value={view} onChange={setView} options={VIEW_OPTIONS} />
+          </div>
         </div>
       </div>
 
