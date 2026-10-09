@@ -24,6 +24,7 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
+  Select,
   Sheet,
   Skeleton,
   cx,
@@ -48,7 +49,8 @@ import {
   Search,
   Tags,
   Trash2,
-  TriangleAlert
+  TriangleAlert,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDayTitle, projectColor, relativeTime } from "../lib/format";
@@ -59,6 +61,7 @@ import { nextListId } from "../lib/list-nav";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { noteListPreview } from "../lib/note-list-preview";
+import { NO_PROJECT, activeFilterCount, filterNotes } from "../lib/note-filters";
 import { NoteEditor, contentTime, type NoteEditorInput } from "./note-editor";
 
 type SortKey = "updated" | "created" | "title";
@@ -96,6 +99,8 @@ export function NotesPanel(): React.ReactElement {
   const [sort, setSort] = useState<SortKey>("updated");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<"any" | "all">("any");
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -134,12 +139,7 @@ export function NotesPanel(): React.ReactElement {
   // archive: newest-archived first; both without pinning. Otherwise pinned
   // notes lead, then the chosen sort ("updated" = content edit time).
   const visible = useMemo(() => {
-    const filtered = (notes ?? []).filter((n) => {
-      if (tagFilters.length === 0) return true;
-      return tagMode === "all"
-        ? tagFilters.every((t) => n.tags.includes(t))
-        : tagFilters.some((t) => n.tags.includes(t));
-    });
+    const filtered = filterNotes(notes ?? [], { tags: tagFilters, tagMode, projectId: projectFilter, pinnedOnly });
     if (trash) {
       return [...filtered].sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
     }
@@ -153,7 +153,15 @@ export function NotesPanel(): React.ReactElement {
       if (sort === "created") return b.createdAt.localeCompare(a.createdAt);
       return contentTime(b).localeCompare(contentTime(a));
     });
-  }, [notes, tagFilters, tagMode, sort, trash, view]);
+  }, [notes, tagFilters, tagMode, projectFilter, pinnedOnly, sort, trash, view]);
+
+  const filtersOn = activeFilterCount({ tags: tagFilters, tagMode, projectId: projectFilter, pinnedOnly });
+  const projectName = (id: string): string => (projectList ?? []).find((p) => p.id === id)?.name ?? "проект";
+  function resetFilters(): void {
+    setTagFilters([]);
+    setProjectFilter(null);
+    setPinnedOnly(false);
+  }
 
   const selected = selectedId && selectedId !== NEW_NOTE ? (notes ?? []).find((n) => n.id === selectedId) ?? null : null;
   const composing = selectedId === NEW_NOTE;
@@ -315,12 +323,33 @@ export function NotesPanel(): React.ReactElement {
 
   const list = (
     <div className="orion-scroll flex-1 overflow-y-auto p-3">
-      {!trash && (activeView || allTags.length > 0) ? (
+      {!trash && (activeView || allTags.length > 0 || (projectList ?? []).length > 0) ? (
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
           {activeView ? (
             <FilterChip active={templatesView} onClick={() => setTemplatesView((v) => !v)}>
               Шаблоны{templates && templates.length > 0 ? ` · ${templates.length}` : ""}
             </FilterChip>
+          ) : null}
+          {activeView ? (
+            <FilterChip active={pinnedOnly} onClick={() => setPinnedOnly((v) => !v)}>
+              Закреплённые
+            </FilterChip>
+          ) : null}
+          {(projectList ?? []).length > 0 ? (
+            <Select
+              value={projectFilter ?? ""}
+              onChange={(event) => setProjectFilter(event.target.value || null)}
+              aria-label="Фильтр по проекту"
+              className="h-6 w-auto max-w-[9rem] rounded-full py-0 text-2xs"
+            >
+              <option value="">Все проекты</option>
+              <option value={NO_PROJECT}>Без проекта</option>
+              {(projectList ?? []).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
           ) : null}
           {allTags.length > 0 ? (
             <>
@@ -348,6 +377,24 @@ export function NotesPanel(): React.ReactElement {
               </IconButton>
             </>
           ) : null}
+        </div>
+      ) : null}
+      {filtersOn > 0 && !trash ? (
+        <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-2xs text-subtle-foreground" aria-live="polite">
+          <span>Показано {visible.length}{notes ? ` из ${notes.length}` : ""} ·</span>
+          {pinnedOnly ? <ActiveFilter label="закреплённые" onClear={() => setPinnedOnly(false)} /> : null}
+          {projectFilter !== null ? (
+            <ActiveFilter
+              label={projectFilter === NO_PROJECT ? "без проекта" : projectName(projectFilter)}
+              onClear={() => setProjectFilter(null)}
+            />
+          ) : null}
+          {tagFilters.map((tag) => (
+            <ActiveFilter key={tag} label={`#${tag}`} onClear={() => toggleTagFilter(tag)} />
+          ))}
+          <button type="button" onClick={resetFilters} className="ml-1 text-accent hover:underline">
+            Сбросить всё
+          </button>
         </div>
       ) : null}
       {isLoading ? (
@@ -379,7 +426,7 @@ export function NotesPanel(): React.ReactElement {
                 ? "Корзина пуста"
                 : view === "archive"
                   ? "В архиве пусто"
-                  : query || tagFilters.length > 0
+                  : query || filtersOn > 0
                     ? "Ничего не найдено"
                     : templatesView
                       ? "Шаблонов пока нет"
@@ -390,20 +437,20 @@ export function NotesPanel(): React.ReactElement {
                 ? "Удалённые заметки хранятся здесь 30 дней, потом стираются насовсем."
                 : view === "archive"
                   ? "Заметки из архива не показываются в общем списке, но их не удаляют."
-                  : query || tagFilters.length > 0
-                    ? "Сбросьте поиск или фильтр по тегам — в этом списке заметки есть."
+                  : query || filtersOn > 0
+                    ? "Сбросьте поиск или фильтры — в этом списке заметки есть."
                     : templatesView
                       ? "Создайте шаблон кнопкой сверху или отметьте существующую заметку как шаблон."
                       : "Создайте первую заметку кнопкой сверху."
             }
             action={
-              query || tagFilters.length > 0 ? (
+              query || filtersOn > 0 ? (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => {
                     setQuery("");
-                    setTagFilters([]);
+                    resetFilters();
                   }}
                 >
                   Сбросить фильтры
@@ -670,5 +717,20 @@ export function NotesPanel(): React.ReactElement {
         onClose={() => setTagManagerOpen(false)}
       />
     </PanelShell>
+  );
+}
+
+/** One removable active-filter pill: the way to see (and undo) exactly what narrows the list. */
+function ActiveFilter({ label, onClear }: { label: string; onClear: () => void }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      aria-label={`Убрать фильтр: ${label}`}
+      className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-accent hover:bg-accent/20"
+    >
+      {label}
+      <X className="h-3 w-3" aria-hidden />
+    </button>
   );
 }
