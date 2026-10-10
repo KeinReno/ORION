@@ -405,11 +405,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       api.onDidDrop((drop: DockviewDidDropEvent) => {
         if (drop.getData()) return; // dockview's own internal panel/tab drag — not ours to handle
         const panelId = readDraggedPanelId(drop.nativeEvent);
-        const known = new Set(panelRegistry.map((p) => p.id));
+        // Plain ids and instance ids (`browsertab:<id>`) both resolve through the registry.
+        const definition = panelId ? getPanelDefinition(panelId) : undefined;
+        const known = new Set(definition && panelId ? [panelId] : []);
         const disabledIds = new Set(
-          panelRegistry
-            .filter((p) => !isPanelAvailable(p, disabledModulesRef.current, pluginOverridesRef.current))
-            .map((p) => p.id)
+          definition && panelId && !isPanelAvailable(definition, disabledModulesRef.current, pluginOverridesRef.current) ? [panelId] : []
         );
         const openIds = new Set(api.panels.map((p) => p.id));
         const action = resolveDropAction(panelId, known, disabledIds, openIds);

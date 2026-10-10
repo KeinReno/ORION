@@ -1,12 +1,13 @@
 "use client";
 
-import { useCreateNote } from "@orion/core-react";
-import { Button, IconButton, PanelShell, useToast } from "@orion/ui";
-import { ClipboardCopy, ExternalLink, FileText, Globe, Plus, RotateCw, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { IconButton, PanelShell, useToast } from "@orion/ui";
+import { Globe, PanelRightOpen, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BrowserPage } from "../components/browser-page";
+import { browserPanelId, savePage } from "../lib/browser-pages";
 import { isSameOrigin, resolveBrowserInput, tabLabel } from "../lib/browser-url";
-import { useBrowserRequest } from "../lib/panel-bus";
-import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { openPanel, useBrowserRequest } from "../lib/panel-bus";
+import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 
 interface BrowserTab {
   id: string;
@@ -45,24 +46,21 @@ function load(): BrowserState {
 }
 
 /**
- * Встроенный браузер (как «Веб-просмотр» в Obsidian): страницы открываются вкладкой рабочего пространства, рядом
- * с заметками и задачами. Страница показывается во фрейме — сайты, запрещающие встраивание, останутся пустыми;
- * для них есть «Открыть во внешнем браузере». Принимаются только http(s)-адреса; фрейм песочный и без реферера.
+ * Встроенный браузер (как «Веб-просмотр» в Obsidian): страницы открываются вкладками внутри панели. Вкладку можно
+ * перетащить за её название в рабочую область ORION — она станет отдельной вкладкой дока (рядом, сверху или снизу
+ * от других панелей), как и разделы из меню; то же делает кнопка «Вынести во вкладку ORION». Принимаются только
+ * http(s)-адреса; фрейм песочный и без реферера.
  */
 export function BrowserPanel(): React.ReactElement {
-  const { workspace } = useActiveWorkspace();
-  const createNote = useCreateNote(workspace?.id);
   const { toast } = useToast();
   const [state, setState] = useState<BrowserState>(() => ({ tabs: [{ id: "init", url: null }], active: "init" }));
   const [hydrated, setHydrated] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [reloads, setReloads] = useState<Record<string, number>>({});
-  const input = useRef<HTMLInputElement>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // localStorage is read after mount, so server and first client render agree.
   useEffect(() => {
-    const loaded = load();
-    setState(loaded);
+    setState(load());
     setHydrated(true);
   }, []);
   useEffect(() => {
@@ -75,7 +73,6 @@ export function BrowserPanel(): React.ReactElement {
   }, [state, hydrated]);
 
   const active = state.tabs.find((tab) => tab.id === state.active) ?? state.tabs[0]!;
-  useEffect(() => setDraft(active.url ?? ""), [active.id, active.url]);
 
   const navigate = useCallback((url: string, inNewTab = false) => {
     if (isSameOrigin(url, window.location.origin)) {
@@ -104,16 +101,6 @@ export function BrowserPanel(): React.ReactElement {
     if (target.kind === "url") navigate(target.url, true);
   }, [request, hydrated, navigate]);
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    const target = resolveBrowserInput(draft);
-    if (target.kind === "refused") {
-      toast({ title: target.reason, tone: "danger" });
-      return;
-    }
-    navigate(target.url);
-  }
-
   function addTab(): void {
     if (state.tabs.length >= MAX_TABS) {
       toast({ title: `Не больше ${MAX_TABS} вкладок`, tone: "default" });
@@ -121,33 +108,32 @@ export function BrowserPanel(): React.ReactElement {
     }
     const tab = newTab();
     setState({ tabs: [...state.tabs, tab], active: tab.id });
-    setTimeout(() => input.current?.focus(), 0);
   }
 
   function closeTab(id: string): void {
-    const rest = state.tabs.filter((tab) => tab.id !== id);
+    const current = stateRef.current;
+    const rest = current.tabs.filter((tab) => tab.id !== id);
     if (rest.length === 0) {
       const tab = newTab();
       setState({ tabs: [tab], active: tab.id });
       return;
     }
-    setState({ tabs: rest, active: state.active === id ? rest[Math.max(0, state.tabs.findIndex((tab) => tab.id === id) - 1)]!.id : state.active });
+    const index = current.tabs.findIndex((tab) => tab.id === id);
+    setState({ tabs: rest, active: current.active === id ? rest[Math.max(0, index - 1)]!.id : current.active });
   }
 
-  async function clip(): Promise<void> {
-    if (!active.url) return;
-    try {
-      await createNote.mutateAsync({ title: tabLabel(active.url), summary: "", body: `[${tabLabel(active.url)}](${active.url})\n`, tags: ["веб"] });
-      toast({ title: "Ссылка сохранена заметкой", tone: "success" });
-    } catch {
-      toast({ title: "Не удалось создать заметку", description: "Модуль «Заметки» может быть выключен.", tone: "danger" });
-    }
+  /** Make a tab a dock panel of its own: the page is remembered under the tab's id, the dock opens `browsertab:<id>`. */
+  function tearOut(tab: BrowserTab): void {
+    if (!tab.url) return;
+    savePage(localStorage, tab.id, tab.url);
+    openPanel(browserPanelId(tab.id), tabLabel(tab.url));
+    closeTab(tab.id);
   }
 
   return (
     <PanelShell>
       <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 pt-1.5">
-        {/* Plain buttons in a labelled group (the close button sits beside its tab: a button cannot live inside a tab role). */}
+        {/* Plain buttons in a labelled group (the buttons beside a tab cannot live inside a tab role). */}
         <div role="group" aria-label="Вкладки браузера" className="flex items-center gap-1">
           {state.tabs.map((tab) => (
             <div
@@ -158,19 +144,43 @@ export function BrowserPanel(): React.ReactElement {
                   closeTab(tab.id);
                 }
               }}
-              className={`group flex max-w-[12rem] shrink-0 items-center rounded-t-lg border border-b-0 text-xs ${
+              className={`group flex max-w-[13rem] shrink-0 items-center rounded-t-lg border border-b-0 text-xs ${
                 tab.id === state.active ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <button
                 type="button"
                 aria-current={tab.id === state.active ? "true" : undefined}
+                draggable={Boolean(tab.url)}
+                title={tab.url ? "Перетащите в рабочую область, чтобы открыть отдельной вкладкой ORION" : undefined}
+                onDragStart={(event) => {
+                  if (!tab.url) return;
+                  // The same drag the sidebar uses: the dock recognises the payload and opens `browsertab:<id>` where it is dropped.
+                  savePage(localStorage, tab.id, tab.url);
+                  event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, browserPanelId(tab.id));
+                  event.dataTransfer.effectAllowed = "copy";
+                }}
+                onDragEnd={(event) => {
+                  // Accepted by the dock → the page now lives in its own panel, so it leaves this strip.
+                  if (event.dataTransfer.dropEffect !== "none" && tab.url) closeTab(tab.id);
+                }}
                 onClick={() => setState({ ...state, active: tab.id })}
                 className="flex min-w-0 items-center gap-1.5 py-1 pl-2.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
               >
                 <Globe className="h-3 w-3 shrink-0" aria-hidden />
                 <span className="truncate">{tabLabel(tab.url)}</span>
               </button>
+              {tab.url ? (
+                <button
+                  type="button"
+                  aria-label={`Вынести во вкладку ORION: ${tabLabel(tab.url)}`}
+                  title="Вынести во вкладку ORION"
+                  onClick={() => tearOut(tab)}
+                  className="rounded p-0.5 opacity-0 hover:bg-white/10 group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <PanelRightOpen className="h-3 w-3" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 aria-label={`Закрыть вкладку ${tabLabel(tab.url)}`}
@@ -187,52 +197,12 @@ export function BrowserPanel(): React.ReactElement {
         </IconButton>
       </div>
 
-      <form onSubmit={submit} className="flex shrink-0 items-center gap-1.5 border-b border-border px-2 py-1.5">
-        <IconButton label="Обновить" size="sm" disabled={!active.url} onClick={() => setReloads({ ...reloads, [active.id]: (reloads[active.id] ?? 0) + 1 })}>
-          <RotateCw className="h-4 w-4" />
-        </IconButton>
-        <input
-          ref={input}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-label="Адрес или запрос"
-          placeholder="Адрес сайта или запрос для поиска"
-          className="min-w-0 flex-1 rounded-lg border border-border bg-white/[0.03] px-3 py-1.5 text-sm text-foreground outline-none focus:border-accent/70"
-        />
-        <Button type="submit" size="sm" variant="outline">
-          Перейти
-        </Button>
-        <IconButton label="Скопировать адрес" size="sm" disabled={!active.url} onClick={() => void navigator.clipboard?.writeText(active.url ?? "").then(() => toast({ title: "Адрес скопирован", tone: "success" }))}>
-          <ClipboardCopy className="h-4 w-4" />
-        </IconButton>
-        <IconButton label="Сохранить ссылку заметкой" size="sm" disabled={!active.url || createNote.isPending} onClick={() => void clip()}>
-          <FileText className="h-4 w-4" />
-        </IconButton>
-        <IconButton label="Открыть во внешнем браузере" size="sm" disabled={!active.url} onClick={() => active.url && window.open(active.url, "_blank", "noopener,noreferrer")}>
-          <ExternalLink className="h-4 w-4" />
-        </IconButton>
-      </form>
-
-      <div className="relative min-h-0 flex-1 bg-white">
-        {active.url ? (
-          <iframe
-            key={`${active.id}:${reloads[active.id] ?? 0}:${active.url}`}
-            src={active.url}
-            title={tabLabel(active.url)}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
-            referrerPolicy="no-referrer"
-            className="h-full w-full border-0"
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-background px-6 text-center text-sm text-muted-foreground">
-            <Globe className="h-8 w-8" aria-hidden />
-            <p className="text-foreground">Введите адрес сайта или запрос в строке выше</p>
-            <p className="max-w-md text-xs">
-              Страница откроется здесь, во вкладке ORION. Некоторые сайты запрещают встраивание — тогда область останется пустой: нажмите «Открыть во внешнем браузере».
-            </p>
-          </div>
-        )}
-      </div>
+      <BrowserPage
+        key={active.id}
+        url={active.url}
+        autoFocusBar={active.url === null}
+        onNavigate={(url) => setState((current) => ({ ...current, tabs: current.tabs.map((tab) => (tab.id === current.active ? { ...tab, url } : tab)) }))}
+      />
     </PanelShell>
   );
 }

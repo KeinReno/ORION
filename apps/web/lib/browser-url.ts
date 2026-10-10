@@ -1,17 +1,43 @@
 /**
  * What the address bar of the built-in browser accepts. Only http(s) pages are ever put into a frame: `javascript:`,
  * `data:`, `file:`, `about:` and the like are refused outright, so a pasted or linked string can never run script in
- * ORION's window or read local files. A bare word or phrase is not a URL — it becomes a web search.
+ * ORION's window or read local files. A bare word or phrase is not a URL — it becomes a web search in the engine the
+ * person chose.
  */
 
-export const SEARCH_URL = "https://duckduckgo.com/?q=";
+export type SearchEngineId = "google" | "yandex" | "bing" | "duckduckgo";
+
+export interface SearchEngine {
+  id: SearchEngineId;
+  label: string;
+  /** The query is appended encoded. */
+  url: string;
+  /**
+   * Whether the engine's results page lets itself be shown in a frame. Google allows it with `igu=1`, Bing does; Yandex
+   * and DuckDuckGo answer `X-Frame-Options`/`frame-ancestors` for framed pages in most setups, so they usually stay blank.
+   */
+  embeds: "yes" | "maybe" | "no";
+}
+
+export const SEARCH_ENGINES: readonly SearchEngine[] = [
+  { id: "google", label: "Google", url: "https://www.google.com/search?igu=1&q=", embeds: "yes" },
+  { id: "yandex", label: "Яндекс", url: "https://yandex.ru/search/?text=", embeds: "maybe" },
+  { id: "bing", label: "Bing", url: "https://www.bing.com/search?q=", embeds: "yes" },
+  { id: "duckduckgo", label: "DuckDuckGo", url: "https://duckduckgo.com/?q=", embeds: "no" }
+];
+
+export const DEFAULT_SEARCH_ENGINE: SearchEngineId = "google";
+
+export function searchEngine(id: string | null | undefined): SearchEngine {
+  return SEARCH_ENGINES.find((engine) => engine.id === id) ?? SEARCH_ENGINES.find((engine) => engine.id === DEFAULT_SEARCH_ENGINE)!;
+}
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
 const LOOKS_LIKE_HOST = /^(localhost|\d{1,3}(?:\.\d{1,3}){3}|\[[0-9a-f:]+\]|[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+)(?::\d{1,5})?(?:[/?#].*)?$/iu;
 
 export type BrowserTarget = { kind: "url"; url: string } | { kind: "search"; url: string } | { kind: "refused"; reason: string };
 
-export function resolveBrowserInput(input: string): BrowserTarget {
+export function resolveBrowserInput(input: string, engine: SearchEngineId = DEFAULT_SEARCH_ENGINE): BrowserTarget {
   const text = input.trim();
   if (!text) return { kind: "refused", reason: "Введите адрес или запрос" };
 
@@ -37,7 +63,7 @@ export function resolveBrowserInput(input: string): BrowserTarget {
       return { kind: "refused", reason: "Не удалось разобрать адрес" };
     }
   }
-  return { kind: "search", url: `${SEARCH_URL}${encodeURIComponent(text)}` };
+  return { kind: "search", url: `${searchEngine(engine).url}${encodeURIComponent(text)}` };
 }
 
 /**

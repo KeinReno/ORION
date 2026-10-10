@@ -81,6 +81,7 @@ const LazyListsPanel = dynamic(() => import("../panels/ListsPanel").then((module
 const LazyFinancePanel = dynamic(() => import("../panels/FinancePanel").then((module) => module.FinancePanel), { ssr: false });
 const LazyInventoryPanel = dynamic(() => import("../panels/InventoryPanel").then((module) => module.InventoryPanel), { ssr: false });
 const LazyBrowserPanel = dynamic(() => import("../panels/BrowserPanel").then((module) => module.BrowserPanel), { ssr: false });
+const LazyBrowserPagePanel = dynamic(() => import("../panels/BrowserPagePanel").then((module) => module.BrowserPagePanel), { ssr: false });
 const LazyMarketsPanel = dynamic(() => import("../panels/MarketsPanel").then((module) => module.MarketsPanel), { ssr: false });
 const LazyDocumentsPanel = dynamic(() => import("../panels/DocumentsPanel").then((module) => module.DocumentsPanel), { ssr: false });
 const LazySyncPanel = dynamic(() => import("../panels/SyncPanel").then((module) => module.SyncPanel), { ssr: false });
@@ -106,6 +107,7 @@ const FinancePanel: FunctionComponent = () => createElement(LazyFinancePanel);
 const InventoryPanel: FunctionComponent = () => createElement(LazyInventoryPanel);
 const MarketsPanel: FunctionComponent = () => createElement(LazyMarketsPanel);
 const BrowserPanel: FunctionComponent = () => createElement(LazyBrowserPanel);
+const BrowserPagePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPagePanel, props);
 const DocumentsPanel: FunctionComponent = () => createElement(LazyDocumentsPanel);
 const SyncPanel: FunctionComponent = () => createElement(LazySyncPanel);
 const SettingsPanel: FunctionComponent = () => createElement(LazySettingsPanel);
@@ -170,6 +172,16 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "markets", label: "Рынки", icon: CandlestickChart, component: MarketsPanel, moduleId: "markets", group: "Деньги и склад" },
   // A shell tool, not a domain module: always available, no data of its own in the database.
   { id: "browser", label: "Браузер", icon: Globe, component: BrowserPanel, group: "Инструменты" },
+  // A page torn out of the browser panel (or dragged from its tab strip) into a dock tab of its own.
+  {
+    id: "browsertab",
+    label: "Страница",
+    icon: Globe,
+    component: BrowserPagePanel,
+    hideFromNav: true,
+    instanced: true,
+    navParent: "browser"
+  },
   { id: "documents", label: "Документы", icon: FolderOpen, component: DocumentsPanel, moduleId: "documents", group: "Файлы и система" },
   { id: "sync", label: "Резервные копии", icon: RefreshCw, component: SyncPanel, group: "Файлы и система" },
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true }

@@ -374,6 +374,7 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   `lib/browser-url.ts` (`javascript:`, `data:`, `file:`… отклоняются, не-URL превращается в поиск). Сайты, запрещающие
   встраивание, остаются пустыми — для них «Открыть во внешнем браузере»; настоящего веб-вью Tauri тут нет (Rust недоступен).
   Клик по ссылке в просмотре заметки открывает её здесь (`openInBrowser`), Ctrl/Cmd+клик — как обычно. CSP десктопа получил `frame-src http: https:`.
+- **Поиск и вкладки браузера:** поисковик выбирается в строке адреса (Google по умолчанию, Яндекс, Bing, DuckDuckGo; `lib/browser-url.ts`, выбор — `lib/browser-pages.ts`). Вкладку браузера можно перетащить в док ORION (MIME панели, `browsertab:<id>`, адрес хранится в `orion.browser.pages.v1`) или вынести кнопкой. Выдача Google (`igu=1`) и Bing во фрейме показывается; Яндекс/DuckDuckGo запрещают встраивание и могут остаться пустыми.
 - **Плагины** описаны в `docs/PLUGIN_EXTRACTION_LOG.md`; слоты — `apps/web/lib/extensions/contracts.ts`, регистрация —
   `apps/web/plugins/index.ts`. Сервер уважает выключенный плагин: `@RequirePlugin(id)` (409), `pluginOffWhere` в кронах.
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
