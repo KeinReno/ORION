@@ -8,7 +8,13 @@ import { useState, type FormEvent } from "react";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { useSlotContributions } from "../lib/extensions/slot";
-import { TASK_RECURRENCE_LABEL } from "../lib/task-labels";
+import {
+  TASK_PRIORITY_LABEL,
+  TASK_PRIORITY_ORDER,
+  TASK_RECURRENCE_LABEL,
+  TASK_STATUS_LABEL,
+  TASK_STATUS_ORDER
+} from "../lib/task-labels";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 
 /**
@@ -18,29 +24,7 @@ import { useUnsavedDraft } from "../lib/unsaved-drafts";
  * lines). Reused by both the "new task" Modal and the detail Sheet.
  */
 
-/**
- * Board columns and select order. `backlog`/`canceled` joined the contract in
- * v0.14 (PLAN) — backlog sorts first (nothing decided yet), canceled sits after
- * `done`. "Is it still open" is decided by `isTaskClosed` from
- * `@orion/shared-types`, not by a local copy of the rule.
- */
-export const TASK_STATUS_ORDER: TaskStatus[] = ["backlog", "todo", "in_progress", "done", "canceled"];
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: "Бэклог",
-  todo: "К выполнению",
-  in_progress: "В работе",
-  done: "Готово",
-  canceled: "Отменено"
-};
-
-/** High-to-low — the order that reads naturally in a priority column/select. */
-export const TASK_PRIORITY_ORDER: TaskPriority[] = ["high", "normal", "low"];
-export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
-  high: "Высокий",
-  normal: "Обычный",
-  low: "Низкий"
-};
-
+export { TASK_PRIORITY_LABEL, TASK_PRIORITY_ORDER, TASK_STATUS_LABEL, TASK_STATUS_ORDER };
 export { TASK_RECURRENCE_LABEL };
 
 /** 400 about a parent cycle → human copy; anything else goes through describeError. */
@@ -126,6 +110,7 @@ export function TaskForm({
   const [priority, setPriority] = useState<TaskPriority>(initial?.priority ?? "normal");
   const [status, setStatus] = useState<TaskStatus>(initial?.status ?? "todo");
   const recurrenceApi = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
+  const planning = useSlotContributions("tasks.planning")[0]?.meta?.api;
   const [recurrenceFreq, setRecurrenceFreq] = useState<TaskRecurrence["freq"] | "">(initial?.recurrence?.freq ?? "");
   const [recurrenceInterval, setRecurrenceInterval] = useState(String(initial?.recurrence?.interval ?? 1));
   const [dependencyIds, setDependencyIds] = useState<string[]>(initial?.dependencyIds ?? []);
@@ -194,18 +179,12 @@ export function TaskForm({
         onChange={(e) => setDescription(e.target.value)}
       />
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Начало (план)
-          <Input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-        </label>
+        {planning ? <planning.StartAt variant="form" value={startAt} onChange={setStartAt} /> : null}
         <label className="flex flex-col gap-1 text-label text-subtle-foreground">
           Срок
           <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
         </label>
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          План, часы
-          <Input inputMode="decimal" placeholder="Не оценено" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
-        </label>
+        {planning ? <planning.EstimatedHours variant="form" value={estimatedHours} onChange={setEstimatedHours} /> : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-label text-subtle-foreground">
@@ -281,41 +260,9 @@ export function TaskForm({
           </label>
         ) : null}
       </div>
-      {showParent ? (
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Родительская задача
-          <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
-            <option value="">Нет</option>
-            {parentChoices.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.title}
-              </option>
-            ))}
-          </Select>
-        </label>
-      ) : null}
-      {dependencyOptions.length > 0 ? (
-        <details className="rounded-lg border border-border bg-white/[0.02] px-3 py-2">
-          <summary className="cursor-pointer text-micro text-subtle-foreground">
-            Зависит от {dependencyIds.length > 0 ? `· ${dependencyIds.length}` : ""}
-          </summary>
-          <div className="orion-scroll mt-2 max-h-40 space-y-1 overflow-y-auto pr-1">
-            {dependencyOptions.map((task) => (
-              <label key={task.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-current"
-                  checked={dependencyIds.includes(task.id)}
-                  onChange={(e) => toggleDependency(task.id, e.target.checked)}
-                />
-                <span className="truncate">{task.title}</span>
-              </label>
-            ))}
-          </div>
-          <p className="mt-1 text-micro text-subtle-foreground">
-            Пока зависимость не закрыта, задача помечается как заблокированная.
-          </p>
-        </details>
+      {planning && showParent ? <planning.Parent variant="form" value={parentId} options={parentChoices} onChange={setParentId} /> : null}
+      {planning && dependencyOptions.length > 0 ? (
+        <planning.Dependencies variant="form" selected={dependencyIds} options={dependencyOptions} onToggle={toggleDependency} />
       ) : null}
       {initial ? (
         <p className="text-micro text-subtle-foreground">

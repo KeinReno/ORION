@@ -1,8 +1,9 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+import { taskPlanningApi } from "./tasks-planning/planning";
 import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
 import { isOfficeFile } from "../lib/office/office-kind";
@@ -137,4 +138,10 @@ contribute("tasks.recurrence", {
   pluginId: "tasks-recurrence",
   component: NoVisual as unknown as ComponentType<TasksRecurrenceSlotProps>,
   meta: { api: taskRecurrenceApi }
+});
+
+contribute("tasks.planning", {
+  pluginId: "tasks-planning",
+  component: NoVisual as unknown as ComponentType<TasksPlanningSlotProps>,
+  meta: { api: taskPlanningApi }
 });

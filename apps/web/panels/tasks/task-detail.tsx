@@ -44,7 +44,6 @@ import {
   describeTaskFormError
 } from "../task-form";
 import { useSlotContributions } from "../../lib/extensions/slot";
-import { SubtaskList } from "./subtasks";
 import { buildPatch, fieldsFromTask, sameFields, type Fields } from "../../lib/task-fields";
 
 /** "history" and "links" are the module's own; every other id is a tab a plugin adds via `tasks.detail.tabs`. */
@@ -116,6 +115,7 @@ export function TaskDetail({
   const revisionRef = useRef(task.revision);
   const [tab, setTab] = useState<DetailTab | null>(null);
   const recurrenceApi = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
+  const planning = useSlotContributions("tasks.planning")[0]?.meta?.api;
   const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta !== undefined);
   const tabOptions: { value: DetailTab; label: string }[] = [
     ...pluginTabs.filter((c) => c.meta?.before).map((c) => ({ value: c.meta!.tabId, label: c.meta!.label })),
@@ -373,22 +373,18 @@ export function TaskDetail({
           onChange={(event) => set("description", event.target.value)}
         />
 
-        <SubtaskList workspaceId={workspaceId} parent={task} tasks={tasks} onOpen={onOpenTask} />
+        {planning ? <planning.SubtaskSection workspaceId={workspaceId} parent={task} tasks={tasks} onOpen={onOpenTask} /> : null}
 
+        {planning || recurrenceApi || milestoneOptions.length > 0 ? (
         <details className="rounded-lg border border-border bg-white/[0.02] px-3 py-2">
           <summary className="cursor-pointer text-label text-muted-foreground">Планирование и повтор</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <Prop label="Начало (план)">
-              <Input type="datetime-local" value={fields.startAt} onChange={(event) => set("startAt", event.target.value)} />
-            </Prop>
-            <Prop label="План, часы">
-              <Input
-                inputMode="decimal"
-                placeholder="Не оценено"
-                value={fields.estimatedHours}
-                onChange={(event) => set("estimatedHours", event.target.value)}
-              />
-            </Prop>
+            {planning ? (
+              <>
+                <planning.StartAt variant="detail" value={fields.startAt} onChange={(value) => set("startAt", value)} />
+                <planning.EstimatedHours variant="detail" value={fields.estimatedHours} onChange={(value) => set("estimatedHours", value)} />
+              </>
+            ) : null}
             {recurrenceApi ? (
               <recurrenceApi.Fields
                 variant="detail"
@@ -410,51 +406,22 @@ export function TaskDetail({
                 </Select>
               </Prop>
             ) : null}
-            {showParent ? (
-              <Prop label="Родительская задача">
-                <Select value={fields.parentId} onChange={(event) => set("parentId", event.target.value)}>
-                  <option value="">Нет</option>
-                  {(parentOptions ?? []).map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.title}
-                    </option>
-                  ))}
-                </Select>
-              </Prop>
+            {planning && showParent ? (
+              <planning.Parent variant="detail" value={fields.parentId} options={parentOptions ?? []} onChange={(value) => set("parentId", value)} />
             ) : null}
           </div>
-          {dependencyOptions.length > 0 ? (
-            <div className="mt-3">
-              <p className="text-label text-subtle-foreground">
-                Зависит от{fields.dependencyIds.length > 0 ? ` · ${fields.dependencyIds.length}` : ""}
-              </p>
-              <div className="orion-scroll mt-1 max-h-40 space-y-1 overflow-y-auto pr-1">
-                {dependencyOptions.map((other) => (
-                  <label key={other.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-current"
-                      checked={fields.dependencyIds.includes(other.id)}
-                      onChange={(event) =>
-                        set(
-                          "dependencyIds",
-                          (event.target.checked
-                            ? [...fields.dependencyIds, other.id]
-                            : fields.dependencyIds.filter((id) => id !== other.id)
-                          ).sort()
-                        )
-                      }
-                    />
-                    <span className="truncate">{other.title}</span>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1 text-micro text-subtle-foreground">
-                Пока зависимость не закрыта, задача помечается как заблокированная.
-              </p>
-            </div>
+          {planning && dependencyOptions.length > 0 ? (
+            <planning.Dependencies
+              variant="detail"
+              selected={fields.dependencyIds}
+              options={dependencyOptions}
+              onToggle={(id, checked) =>
+                set("dependencyIds", (checked ? [...fields.dependencyIds, id] : fields.dependencyIds.filter((other) => other !== id)).sort())
+              }
+            />
           ) : null}
         </details>
+        ) : null}
 
         <section className="space-y-3">
           <SegmentedControl<DetailTab> value={activeTab} onChange={setTab} size="sm" options={tabOptions} />

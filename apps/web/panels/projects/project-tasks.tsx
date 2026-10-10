@@ -10,7 +10,7 @@ import { shortDate } from "../../lib/format";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
 import { TASK_STATUS_LABEL } from "../task-form";
 import { TaskCard } from "../tasks/task-card";
-import { parentOptions, subtaskProgressMap } from "../tasks/subtasks";
+import { parentOptions, subtaskProgressMap } from "../../lib/task-structure";
 import { TaskDetail } from "../tasks/task-detail";
 import { TaskMatrix } from "./task-matrix";
 import { TaskRow } from "./task-row";

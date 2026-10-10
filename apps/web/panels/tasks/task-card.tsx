@@ -1,11 +1,11 @@
 import type { Task, TaskPriority, TaskStatus } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import { CheckToggle, DropdownMenu, IconButton, StatusMark, Tooltip, cx, type MenuItem } from "@orion/ui";
-import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, ListTree, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { projectColor, shortDateTime } from "../../lib/format";
-import type { SubtaskProgress } from "./subtasks";
+import type { SubtaskProgress } from "../../lib/task-structure";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "../task-form";
 
 /** Just enough of `WorkspaceMember` for the assignee avatar + tooltip. */
@@ -58,10 +58,12 @@ export function TaskCard({
 }): React.ReactElement {
   // The repeat mark belongs to the tasks-recurrence plugin.
   const recurrence = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
+  // Subtask marks, the «blocked» mark and hand-made order belong to the tasks-planning plugin.
+  const planning = useSlotContributions("tasks.planning")[0]?.meta?.api;
   const done = task.status === "done";
   const canceled = task.status === "canceled";
   const closed = isTaskClosed(task.status);
-  const nested = task.parentId !== null;
+  const nested = task.parentId !== null && planning !== undefined;
   const overdue = !closed && task.dueAt !== null && new Date(task.dueAt).getTime() < Date.now();
 
   const items: (MenuItem | "separator")[] = [{ label: "Открыть", icon: Pencil, onSelect: onOpen }];
@@ -160,22 +162,8 @@ export function TaskCard({
           </span>
         ) : null}
         {task.recurrence && recurrence ? <recurrence.CardMark /> : null}
-        {subtasks && subtasks.total > 0 ? (
-          <span
-            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-micro text-subtle-foreground"
-            title={`Подзадачи: сделано ${subtasks.done} из ${subtasks.total}`}
-          >
-            <ListTree className="h-3 w-3" /> {subtasks.done}/{subtasks.total}
-          </span>
-        ) : null}
-        {task.blocked ? (
-          <span
-            className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-micro text-warning"
-            title="Заблокирована: есть незакрытые зависимости"
-          >
-            <Lock className="h-3 w-3" /> заблокирована
-          </span>
-        ) : null}
+        {planning && subtasks && subtasks.total > 0 ? <planning.SubtaskBadge progress={subtasks} /> : null}
+        {planning && task.blocked ? <planning.BlockedBadge /> : null}
         {assignee ? (
           <Tooltip label={`Исполнитель: ${assignee.name}`}>
             <AccountAvatar userId={assignee.userId} name={assignee.name} hasAvatar={assignee.hasAvatar} size={22} />

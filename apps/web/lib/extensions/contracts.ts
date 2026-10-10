@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Note, Project, TaskRecurrence, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Note, Project, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -218,6 +218,32 @@ export interface TaskRecurrenceApi {
 
 export type TasksRecurrenceSlotProps = Record<string, never>;
 
+/**
+ * tasks.planning — subtasks, dependencies, planned start, estimate, hand-made order. A set of small
+ * presentational parts (see `TaskRecurrenceApi` for the same idea): the forms interleave these fields
+ * with the module's own, so the host places each piece where it always was. `variant` picks the label
+ * style of the surrounding form (detail pane vs create form).
+ */
+export interface TaskPlanningApi {
+  StartAt: ComponentType<{ variant: "detail" | "form"; value: string; onChange: (value: string) => void }>;
+  EstimatedHours: ComponentType<{ variant: "detail" | "form"; value: string; onChange: (value: string) => void }>;
+  Parent: ComponentType<{ variant: "detail" | "form"; value: string; options: { id: string; title: string }[]; onChange: (value: string) => void }>;
+  Dependencies: ComponentType<{
+    variant: "detail" | "form";
+    selected: string[];
+    options: { id: string; title: string }[];
+    onToggle: (taskId: string, checked: boolean) => void;
+  }>;
+  /** The «Подзадачи» section of the detail pane. */
+  SubtaskSection: ComponentType<{ workspaceId: string | undefined; parent: Task; tasks: Task[]; onOpen: (taskId: string) => void }>;
+  /** «3/5» on a card whose task has children. */
+  SubtaskBadge: ComponentType<{ progress: { total: number; done: number } }>;
+  /** «заблокирована» on a card with unfinished dependencies. */
+  BlockedBadge: ComponentType<Record<string, never>>;
+}
+
+export type TasksPlanningSlotProps = Record<string, never>;
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -239,6 +265,7 @@ export interface SlotContracts {
   "finance.summary": FinanceSummarySlotProps;
   "dashboard.finance": DashboardFinanceSlotProps;
   "tasks.recurrence": TasksRecurrenceSlotProps;
+  "tasks.planning": TasksPlanningSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -258,6 +285,7 @@ export interface SlotMeta {
   "tasks.views": TasksViewMeta;
   "notes.templates": { toggleLabel: (note: Note) => string };
   "tasks.recurrence": { api: TaskRecurrenceApi };
+  "tasks.planning": { api: TaskPlanningApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

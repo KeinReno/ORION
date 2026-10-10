@@ -28,7 +28,8 @@ export const ORION_PLUGIN_IDS = [
   "tasks-kanban",
   "notes-daily",
   "notes-templates",
-  "tasks-recurrence"
+  "tasks-recurrence",
+  "tasks-planning"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -259,6 +260,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Поля повтора в форме и карточке задачи", "Значок повтора на карточке"],
     disableBehavior:
       "Поля и значок скрываются, правило повтора нельзя менять; уже заданные правила сохраняются, и сервер по-прежнему создаёт следующую копию при завершении такой задачи.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-planning",
+    extendsModuleId: "tasks",
+    label: "Планирование задач",
+    summary: "Подзадачи, зависимости между задачами, плановое начало, оценка в часах и ручной порядок карточек.",
+    provides: ["Секция «Подзадачи»", "Поля начала, оценки, родителя и зависимостей", "Значки «3/5» и «заблокирована»", "Вверх / вниз и перетаскивание порядка"],
+    disableBehavior:
+      "Поля, секция, значки и ручной порядок скрываются; подзадачи, зависимости, даты и порядок хранятся и вернутся при повторном включении (сервер по-прежнему считает «заблокирована»).",
     defaultEnabled: true
   }
 ];

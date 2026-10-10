@@ -46,7 +46,7 @@ import {
   parentOptions,
   subtaskProgressMap,
   useTaskReorder
-} from "./tasks/subtasks";
+} from "../lib/task-structure";
 import { TaskDetail } from "./tasks/task-detail";
 
 type GroupBy = "status" | "project" | "due" | "priority";
@@ -243,6 +243,8 @@ export function TasksPanel(): React.ReactElement {
     [tasks, creating, editing?.id]
   );
   const childProgress = useMemo(() => subtaskProgressMap(tasks ?? []), [tasks]);
+  // Hand-made order (up / down, drop on a card) is part of the tasks-planning plugin.
+  const planningOn = useSlotContributions("tasks.planning").length > 0;
   const memberById = useMemo(() => new Map((memberList ?? []).map((m) => [m.id, m])), [memberList]);
   function assigneeOf(task: Task): TaskAssignee | undefined {
     const m = task.assigneeId ? memberById.get(task.assigneeId) : undefined;
@@ -628,11 +630,12 @@ export function TasksPanel(): React.ReactElement {
                             onMove={(status) => updateTask.mutate({ taskId: task.id, input: { status } })}
                             onDelete={() => setPendingDelete(task)}
                             onMoveUp={
-                              groupBy === "status" && canMoveNeighbor(column.tasks, task.id, -1)
+                              planningOn && groupBy === "status" && canMoveNeighbor(column.tasks, task.id, -1)
                                 ? () => moveToNeighbor(column.tasks, task.id, -1)
                                 : undefined
                             }
                             onMoveDown={
+                              planningOn &&
                               groupBy === "status" &&
                               index < shown.length - 1 &&
                               canMoveNeighbor(column.tasks, task.id, 1)
@@ -640,7 +643,7 @@ export function TasksPanel(): React.ReactElement {
                                 : undefined
                             }
                             onDropTask={
-                              groupBy === "status" && column.droppable
+                              planningOn && groupBy === "status" && column.droppable
                                 ? (draggedId) => dropOnTask(column.key, column.tasks, draggedId, task.id)
                                 : undefined
                             }
