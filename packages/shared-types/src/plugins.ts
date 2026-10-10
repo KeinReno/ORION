@@ -18,7 +18,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-recurring",
   "finance-reports",
   "tasks-saved-views",
-  "documents-history"
+  "documents-history",
+  "documents-office"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -155,6 +156,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Пункт «История версий…» в меню файла", "Восстановление прежней версии"],
     disableBehavior:
       "Пункт меню и окно истории скрываются; версии продолжают сохраняться при замене содержимого, поэтому история будет на месте при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "documents-office",
+    extendsModuleId: "documents",
+    label: "Редакторы документов и таблиц",
+    summary: "Создание и правка файлов Word (DOCX) и Excel (XLSX) прямо в приложении.",
+    provides: ["Кнопки «Документ» и «Таблица»", "Редактор DOCX и XLSX при открытии файла"],
+    disableBehavior:
+      "Кнопки создания скрываются, а DOCX и XLSX открываются обычным просмотром без правки; файлы не затрагиваются.",
     defaultEnabled: true
   }
 ];

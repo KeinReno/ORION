@@ -7,7 +7,7 @@ import { AlertCircle, Download } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatBytes } from "../../lib/document-icons";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
-import { isOfficeDocument, OfficeEditor } from "../../components/office/OfficeEditor";
+import { useSlotContributions } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
 
@@ -23,6 +23,8 @@ export function PreviewPane({
   renameBusy?: boolean;
 }): React.ReactElement {
   const { workspace } = useActiveWorkspace();
+  // An editor plugin (office) that claims this file replaces the plain viewer; none claims it → viewer only.
+  const Editor = useSlotContributions("documents.editor").find((contribution) => contribution.meta?.handles(doc))?.component;
   const { data: blob, isLoading, isError, refetch } = useDocumentBlob(workspace?.id, doc.id);
   const [url, setUrl] = useState<string | null>(null);
   const [name, setName] = useState(doc.name);
@@ -97,8 +99,8 @@ export function PreviewPane({
             <Skeleton className="h-6 w-1/2" />
             <Skeleton className="h-64 w-full" />
           </div>
-        ) : workspace?.id && isOfficeDocument(doc) ? (
-          <OfficeEditor
+        ) : workspace?.id && Editor ? (
+          <Editor
             workspaceId={workspace.id}
             doc={doc}
             fallback={<FilePreview mime={doc.mimeType ?? ""} name={doc.name} url={url} onDownload={onDownload} className="h-full" />}

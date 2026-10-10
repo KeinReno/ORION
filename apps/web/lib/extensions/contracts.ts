@@ -1,4 +1,5 @@
 import type { DocumentItem, Habit, Project } from "@orion/shared-types";
+import type { ComponentType, ReactNode } from "react";
 
 /**
  * The typed contract of every extension slot: exactly the props a host module hands to
@@ -51,12 +52,40 @@ export interface DocumentsHistorySlotProps {
   onClose: () => void;
 }
 
+/**
+ * documents.editor — an in-app editor for some kinds of files. The contribution's `meta.handles`
+ * tells the host which documents it opens; for those the host renders it instead of the plain
+ * viewer, and `fallback` is what to show if the editor cannot open the file.
+ */
+export interface DocumentsEditorSlotProps {
+  workspaceId: string;
+  doc: DocumentItem;
+  fallback: ReactNode;
+}
+
+/** documents.create — contributes "new file" actions; it draws nothing, the host owns upload and selection. */
+export type DocumentsCreateSlotProps = Record<string, never>;
+
+export interface DocumentCreateAction {
+  id: string;
+  /** Label in the compact "Добавить" menu, e.g. «Новый документ». */
+  menuLabel: string;
+  /** Label on the toolbar button, e.g. «Документ». */
+  buttonLabel: string;
+  icon: ComponentType<{ className?: string }>;
+  successTitle: string;
+  /** Builds the empty file; the host uploads it into the current folder. */
+  createFile: () => Promise<File>;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
   "finance.tabs": FinanceTabSlotProps;
   "tasks.views.bar": TasksViewsBarSlotProps;
   "documents.history": DocumentsHistorySlotProps;
+  "documents.editor": DocumentsEditorSlotProps;
+  "documents.create": DocumentsCreateSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -68,6 +97,8 @@ export type SlotName = keyof SlotContracts;
 export interface SlotMeta {
   "finance.tabs": { tabId: string; label: string };
   "documents.history": { actionLabel: string };
+  "documents.editor": { handles: (doc: DocumentItem) => boolean };
+  "documents.create": { actions: DocumentCreateAction[] };
 }
 
 export type MetaOf<S extends SlotName> = S extends keyof SlotMeta ? SlotMeta[S] : undefined;

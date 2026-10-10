@@ -7,27 +7,11 @@
  * ordinary files from `POST .../documents/upload`'s point of view).
  */
 
-import type { DocumentItem } from "@orion/shared-types";
 import { tiptapJsonToDocx } from "./docx-codec";
 import { workbookStateToXlsx } from "./xlsx-codec";
 
-export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-export const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-function ext(name: string): string {
-  return name.toLowerCase().split(".").pop() ?? "";
-}
-
-/** Same "MIME first, extension fallback" rule as `documentGroup`/`previewKind` (`document-icons.ts`, `@orion/ui`'s `FilePreview`). */
-export function isDocxDocument(doc: Pick<DocumentItem, "mimeType" | "name">): boolean {
-  const m = (doc.mimeType ?? "").toLowerCase();
-  return m === DOCX_MIME || (!m && ext(doc.name) === "docx") || ext(doc.name) === "docx";
-}
-
-export function isXlsxDocument(doc: Pick<DocumentItem, "mimeType" | "name">): boolean {
-  const m = (doc.mimeType ?? "").toLowerCase();
-  return m === XLSX_MIME || (!m && ext(doc.name) === "xlsx") || ext(doc.name) === "xlsx";
-}
+export { DOCX_MIME, XLSX_MIME, isDocxDocument, isXlsxDocument } from "./office-kind";
+import { DOCX_MIME, XLSX_MIME } from "./office-kind";
 
 /** A brand-new, valid, empty DOCX — same call the O02 integration test proves round-trips through upload/download. */
 export async function createEmptyDocxFile(name = "Новый документ.docx"): Promise<File> {

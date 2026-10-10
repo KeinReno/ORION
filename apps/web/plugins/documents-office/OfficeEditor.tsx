@@ -24,7 +24,7 @@ import type { DocumentItem } from "@orion/shared-types";
 import { Button, EmptyState, Spinner } from "@orion/ui";
 import { AlertTriangle, FileWarning } from "lucide-react";
 import { Suspense, lazy, useState } from "react";
-import { isDocxDocument, isXlsxDocument } from "../../lib/office/office-files";
+import { isDocxDocument, isXlsxDocument } from "../../lib/office/office-kind";
 
 const DocxEditor = lazy(() => import("./docx-editor"));
 const XlsxEditor = lazy(() => import("./xlsx-editor"));
@@ -34,11 +34,6 @@ export interface OfficeEditorProps {
   doc: DocumentItem;
   /** Falls back to plain download/preview when the file isn't DOCX/XLSX, or parsing fails. */
   fallback: React.ReactNode;
-}
-
-/** True when `doc` is a file `OfficeEditor` knows how to open (DOCX/XLSX). */
-export function isOfficeDocument(doc: Pick<DocumentItem, "kind" | "mimeType" | "name">): boolean {
-  return doc.kind === "file" && (isDocxDocument(doc) || isXlsxDocument(doc));
 }
 
 export function OfficeEditor({ workspaceId, doc, fallback }: OfficeEditorProps): React.ReactElement {
@@ -96,7 +91,7 @@ export function OfficeEditor({ workspaceId, doc, fallback }: OfficeEditorProps):
   }
 
   // Not actually an office document — shouldn't be reached if the caller
-  // checks `isOfficeDocument` first, but degrade gracefully rather than
+  // checks `isOfficeFile` first, but degrade gracefully rather than
   // rendering nothing.
   return (
     <div className="p-6">

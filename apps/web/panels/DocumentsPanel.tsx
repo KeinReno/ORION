@@ -40,8 +40,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ChevronRight,
   Download,
-  FileSpreadsheet,
-  FileText,
   FolderPlus,
   FolderOpen,
   History,
@@ -61,6 +59,7 @@ import { FilterChip } from "../components/filter-chip";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { nextListId } from "../lib/list-nav";
 import { DocThumbnail } from "./documents/thumbnail";
+import type { DocumentCreateAction } from "../lib/extensions/contracts";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
 import { useFocusedDocumentId } from "../lib/panel-bus";
@@ -127,6 +126,7 @@ export function DocumentsPanel(): React.ReactElement {
   const [pendingBulkMove, setPendingBulkMove] = useState<{ ids: string[]; parentId: string | null } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<DocumentItem | null>(null);
   // Menu entries a plugin adds for the history dialog it draws itself (none with the plugin off).
+  const createActions = useSlotContributions("documents.create").flatMap((c) => c.meta?.actions ?? []);
   const historyActions = useSlotContributions("documents.history").flatMap((c) => (c.meta ? [c.meta.actionLabel] : []));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -321,12 +321,11 @@ export function DocumentsPanel(): React.ReactElement {
    * Deferring the import to the click handler keeps it a true on-demand
    * chunk — checked via `pnpm --filter @orion/web build` build output.
    */
-  async function createOfficeDocument(kind: "docx" | "xlsx"): Promise<void> {
+  async function createOfficeDocument(action: DocumentCreateAction): Promise<void> {
     try {
-      const { createEmptyDocxFile, createEmptyXlsxFile } = await import("../lib/office/office-files");
-      const file = kind === "docx" ? await createEmptyDocxFile() : await createEmptyXlsxFile();
+      const file = await action.createFile();
       const created = await uploadDocs.mutateAsync({ parentId: cwd, files: [file] });
-      toast({ title: kind === "docx" ? "Документ создан" : "Таблица создана", tone: "success" });
+      toast({ title: action.successTitle, tone: "success" });
       if (created[0]) setSelectedFileId(created[0].id);
     } catch (e) {
       toast({ title: "Не удалось создать файл", description: (e as Error).message, tone: "danger" });
@@ -900,8 +899,7 @@ export function DocumentsPanel(): React.ReactElement {
                   )}
                   items={[
                     { label: "Новая папка", icon: FolderPlus, onSelect: () => setNewFolderOpen(true) },
-                    { label: "Новый документ", icon: FileText, onSelect: () => void createOfficeDocument("docx") },
-                    { label: "Новая таблица", icon: FileSpreadsheet, onSelect: () => void createOfficeDocument("xlsx") },
+                    ...createActions.map((action) => ({ label: action.menuLabel, icon: action.icon, onSelect: () => void createOfficeDocument(action) })),
                     { label: "Загрузить файлы", icon: Upload, onSelect: () => fileInputRef.current?.click() }
                   ]}
                 />
@@ -910,12 +908,11 @@ export function DocumentsPanel(): React.ReactElement {
                   <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
                     <FolderPlus className="h-4 w-4" /> Папка
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("docx")}>
-                    <FileText className="h-4 w-4" /> Документ
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => void createOfficeDocument("xlsx")}>
-                    <FileSpreadsheet className="h-4 w-4" /> Таблица
-                  </Button>
+                  {createActions.map((action) => (
+                    <Button key={action.id} size="sm" variant="outline" onClick={() => void createOfficeDocument(action)}>
+                      <action.icon className="h-4 w-4" /> {action.buttonLabel}
+                    </Button>
+                  ))}
                   <Button size="sm" onClick={() => fileInputRef.current?.click()}>
                     <Upload className="h-4 w-4" /> Загрузить
                   </Button>

@@ -71,7 +71,7 @@ describe("plugin catalog invariants (default-full parity)", () => {
   });
 
   it("each later extracted built-in is tied to its module and on by default", () => {
-    const expected = { "tasks-saved-views": "tasks", "documents-history": "documents" } as const;
+    const expected = { "tasks-saved-views": "tasks", "documents-history": "documents", "documents-office": "documents" } as const;
     for (const [id, moduleId] of Object.entries(expected)) {
       expect(PLUGIN_CATALOG.find((p) => p.id === id)?.extendsModuleId).toBe(moduleId);
       expect(isPluginEnabled([], id as keyof typeof expected)).toBe(true);

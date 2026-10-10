@@ -1,6 +1,9 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps } from "../lib/extensions/contracts";
+import { FileSpreadsheet, FileText } from "lucide-react";
+import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+import { isOfficeFile } from "../lib/office/office-kind";
 
 /**
  * Every compiled-in plugin registers here, once, what it adds to which slot. The components
@@ -41,3 +44,36 @@ contribute("tasks.views.bar", { pluginId: "tasks-saved-views", component: SavedV
 
 const DocumentHistorySheet = dynamic<DocumentsHistorySlotProps>(() => import("./documents-history/history-sheet").then((m) => m.DocumentHistorySheet), { ssr: false });
 contribute("documents.history", { pluginId: "documents-history", component: DocumentHistorySheet, meta: { actionLabel: "История версий…" } });
+
+/** Documents office plugin. The codecs load on demand (first click / first office file), never with the panel. */
+const OfficeEditorSlot = dynamic<DocumentsEditorSlotProps>(() => import("./documents-office/OfficeEditor").then((m) => m.OfficeEditor), { ssr: false });
+const NoVisual = (): null => null;
+contribute("documents.editor", {
+  pluginId: "documents-office",
+  component: OfficeEditorSlot,
+  meta: { handles: isOfficeFile }
+});
+contribute("documents.create", {
+  pluginId: "documents-office",
+  component: NoVisual as unknown as ComponentType<DocumentsCreateSlotProps>,
+  meta: {
+    actions: [
+      {
+        id: "docx",
+        menuLabel: "Новый документ",
+        buttonLabel: "Документ",
+        icon: FileText,
+        successTitle: "Документ создан",
+        createFile: async () => (await import("../lib/office/office-files")).createEmptyDocxFile()
+      },
+      {
+        id: "xlsx",
+        menuLabel: "Новая таблица",
+        buttonLabel: "Таблица",
+        icon: FileSpreadsheet,
+        successTitle: "Таблица создана",
+        createFile: async () => (await import("../lib/office/office-files")).createEmptyXlsxFile()
+      }
+    ]
+  }
+});
