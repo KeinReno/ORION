@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/.next-desktop/**",
       "**/out/**",
       "**/target/**",
+      "apps/compass-engine/**",
       "**/src-tauri/gen/**",
       "**/generated/**",
       // Vendored pdf.js worker, copied into public/ by copy-pdf-worker.mjs.
