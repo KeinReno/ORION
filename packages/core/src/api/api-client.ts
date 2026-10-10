@@ -128,6 +128,8 @@ import {
   type RecordTradeFeeInput,
   type CompassEngineStatus,
   compassEngineStatusSchema,
+  compassJournalSyncResultSchema,
+  type CompassJournalSyncResult,
   type TradeImportInput,
   type TradeImportResult,
   type TradeMode,
@@ -910,6 +912,10 @@ export class ApiClient {
     return action === "status"
       ? this.request("GET", `/workspaces/${workspaceId}/markets/engine`, undefined, compassEngineStatusSchema)
       : this.request("POST", `/workspaces/${workspaceId}/markets/engine/${action}`, {}, compassEngineStatusSchema);
+  }
+
+  syncCompassJournal(workspaceId: string): Promise<CompassJournalSyncResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/markets/engine/sync-journal`, {}, compassJournalSyncResultSchema);
   }
 
   importInvestmentTrades(workspaceId: string, input: TradeImportInput): Promise<TradeImportResult> {

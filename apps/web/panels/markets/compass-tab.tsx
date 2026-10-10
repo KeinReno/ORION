@@ -1,8 +1,8 @@
 "use client";
 
-import { useCompassEngine } from "@orion/core-react";
-import { Button, EmptyState, Skeleton } from "@orion/ui";
-import { CandlestickChart, Play, Square } from "lucide-react";
+import { useCompassEngine, useSyncCompassJournal } from "@orion/core-react";
+import { Button, EmptyState, Skeleton, useToast } from "@orion/ui";
+import { CandlestickChart, DatabaseBackup, Play, Square } from "lucide-react";
 
 /**
  * Весь Compass внутри «Рынков»: движок (Python, `apps/compass-engine`) запускает сам ORION, окно Compass показывается
@@ -11,6 +11,8 @@ import { CandlestickChart, Play, Square } from "lucide-react";
  */
 export function CompassTab({ workspaceId }: { workspaceId: string | undefined }): React.ReactElement {
   const { status, run } = useCompassEngine(workspaceId);
+  const sync = useSyncCompassJournal(workspaceId);
+  const { toast } = useToast();
   const data = status.data;
 
   // Остановленный движок не стартует молча (процесс Python и запросы к биржам) — только по кнопке.
@@ -22,6 +24,25 @@ export function CompassTab({ workspaceId }: { workspaceId: string | undefined })
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center justify-end gap-2 border-b border-border px-3 py-1">
           <span className="mr-auto text-xs text-muted-foreground">Compass работает на этом компьютере</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={sync.isPending}
+            title="Перенести сделки из журнала Compass во вкладку «Сделки» ORION"
+            onClick={() =>
+              sync.mutate(undefined, {
+                onSuccess: (result) =>
+                  toast({
+                    title: result.imported > 0 ? `Из Compass перенесено сделок: ${result.imported}` : "Новых сделок в журнале Compass нет",
+                    description: result.duplicates > 0 ? `Уже были в ORION: ${result.duplicates}.` : undefined,
+                    tone: "success"
+                  }),
+                onError: (error) => toast({ title: "Не удалось забрать журнал", description: error.message, tone: "danger" })
+              })
+            }
+          >
+            <DatabaseBackup className="h-4 w-4" /> Забрать журнал в ORION
+          </Button>
           <Button size="sm" variant="outline" onClick={() => window.open(data.url ?? "", "_blank", "noopener")}>
             В отдельном окне
           </Button>

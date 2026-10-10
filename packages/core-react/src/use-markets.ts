@@ -2,6 +2,7 @@
 
 import type {
   CompassEngineStatus,
+  CompassJournalSyncResult,
   CreateWatchItemInput,
   InvestmentTrade,
   RecordTradeFeeInput,
@@ -109,4 +110,14 @@ export function useCompassEngine(workspaceId: string | undefined, enabled = true
     onSuccess: (next) => queryClient.setQueryData(key, next)
   });
   return { status, run };
+}
+
+/** Забрать журнал из работающего Compass в «Сделки» ORION (без файла резервной копии). */
+export function useSyncCompassJournal(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<CompassJournalSyncResult, Error, void>({
+    mutationFn: () => api.syncCompassJournal(workspaceId as string),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["markets-trades", workspaceId] })
+  });
 }

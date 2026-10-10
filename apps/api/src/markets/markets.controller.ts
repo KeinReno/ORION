@@ -5,6 +5,7 @@ import {
   tradeImportInputSchema,
   tradeModeSchema,
   updateWatchItemInputSchema,
+  compassBackupToEntries,
   type CompassEngineStatus,
   type CreateWatchItemInput,
   type InvestmentTrade,
@@ -34,21 +35,32 @@ export class MarketsController {
   @Get("engine")
   async engineStatus(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
     await this.workspaces.assertMember(user.userId, workspaceId);
-    return this.engine.status();
+    return this.engine.status(workspaceId);
   }
 
   @Post("engine/start")
   @HttpCode(200)
   async engineStart(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
     await this.workspaces.assertMember(user.userId, workspaceId);
-    return this.engine.start();
+    return this.engine.start(workspaceId);
+  }
+
+  /** Забрать журнал из работающего Compass (без файла резервной копии): те же правила, что у импорта — идемпотентность по uid, режим сделки сохраняется. */
+  @Post("engine/sync-journal")
+  @HttpCode(200)
+  async engineSyncJournal(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<TradeImportResult & { skippedDeleted: number; problems: string[] }> {
+    await this.workspaces.assertMember(user.userId, workspaceId);
+    const parsed = compassBackupToEntries(await this.engine.journalBackup(workspaceId));
+    if (parsed.entries.length === 0) return { dryRun: false, imported: 0, duplicates: 0, byMode: { real: 0, paper: 0, historical: 0 }, skippedDeleted: parsed.skippedDeleted, problems: parsed.problems };
+    const result = await this.markets.importTrades(user.userId, workspaceId, { source: "compass", dryRun: false, entries: parsed.entries });
+    return { ...result, skippedDeleted: parsed.skippedDeleted, problems: parsed.problems };
   }
 
   @Post("engine/stop")
   @HttpCode(200)
   async engineStop(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
     await this.workspaces.assertMember(user.userId, workspaceId);
-    return this.engine.stop();
+    return this.engine.stop(workspaceId);
   }
 
   @Get("watchlist")

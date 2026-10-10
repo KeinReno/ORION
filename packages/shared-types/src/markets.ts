@@ -201,3 +201,10 @@ export const compassEngineStatusSchema = z.object({
   url: z.string().nullable()
 });
 export type CompassEngineStatus = z.infer<typeof compassEngineStatusSchema>;
+
+/** Итог «забрать журнал из Compass»: как импорт файла, плюс сколько удалённых записей пропущено и что не прочиталось. */
+export const compassJournalSyncResultSchema = tradeImportResultSchema.extend({
+  skippedDeleted: z.number().int(),
+  problems: z.array(z.string())
+});
+export type CompassJournalSyncResult = z.infer<typeof compassJournalSyncResultSchema>;

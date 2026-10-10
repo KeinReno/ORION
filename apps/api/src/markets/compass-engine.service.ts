@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from "@nestjs/common";
 import type { CompassEngineStatus } from "@orion/shared-types";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -16,7 +16,7 @@ const HOST = "127.0.0.1";
  * - только режим `local`: у Compass один пользователь и один набор данных (журнал, счета, настройки), а не изоляция по
  *   пространствам — в `server`-режиме его запуск отклоняется;
  * - слушает только 127.0.0.1, API закрыт случайным токеном сессии (куки HttpOnly) — это защита от чужих веб-страниц;
- * - данные движка лежат в `COMPASS_DATA_DIR` (по умолчанию `apps/api/.data/compass`) и не затрагивают Postgres.
+ * - данные движка лежат в `<COMPASS_DATA_DIR>/<workspaceId>` (по умолчанию `apps/api/.data/compass`) — свой каталог у каждого пространства, Postgres не затрагивается; движок один на машину, смена пространства его перезапускает.
  */
 @Injectable()
 export class CompassEngineService implements OnModuleDestroy {
@@ -24,23 +24,29 @@ export class CompassEngineService implements OnModuleDestroy {
   private child: ChildProcess | null = null;
   private token = "";
   private failure: string | null = null;
+  /** Пространство, чьи данные сейчас открыты в движке: у каждого пространства свой каталог данных Compass. */
+  private forWorkspace: string | null = null;
   private starting: Promise<void> | null = null;
 
   private get port(): number {
     return Number(process.env.COMPASS_ENGINE_PORT ?? 8766);
   }
 
-  private get dataDir(): string {
-    return process.env.COMPASS_DATA_DIR ?? path.resolve(process.cwd(), ".data", "compass");
+  private dataDir(workspaceId: string): string {
+    return path.join(process.env.COMPASS_DATA_DIR ?? path.resolve(process.cwd(), ".data", "compass"), workspaceId);
   }
 
   private engineDir(): string {
     return process.env.COMPASS_ENGINE_DIR ?? path.resolve(process.cwd(), "..", "compass-engine");
   }
 
-  status(): CompassEngineStatus {
+  status(workspaceId: string): CompassEngineStatus {
     if (isServerMode()) {
       return { state: "unavailable", message: "В режиме server движок Compass не запускается: он рассчитан на одного пользователя на этом компьютере.", url: null };
+    }
+    // Движок, открытый на данных другого пространства, для этого пространства «не запущен»: чужой журнал и счета не показываем.
+    if (this.forWorkspace !== null && this.forWorkspace !== workspaceId && (this.starting || (this.child && this.child.exitCode === null))) {
+      return { state: "stopped", message: null, url: null };
     }
     if (this.starting) return { state: "starting", message: null, url: null };
     if (this.child && this.child.exitCode === null) {
@@ -51,20 +57,36 @@ export class CompassEngineService implements OnModuleDestroy {
   }
 
   /** Запускает движок (если не запущен) и ждёт, пока он ответит. Повторный вызов при работающем движке ничего не делает. */
-  async start(): Promise<CompassEngineStatus> {
-    if (isServerMode()) return this.status();
-    if (this.child && this.child.exitCode === null) return this.status();
-    this.starting ??= this.spawnAndWait().finally(() => {
+  async start(workspaceId: string): Promise<CompassEngineStatus> {
+    if (isServerMode()) return this.status(workspaceId);
+    if (this.child && this.child.exitCode === null && this.forWorkspace === workspaceId) return this.status(workspaceId);
+    // Один движок на машину: переключение пространства перезапускает его на каталоге данных нового.
+    if (this.starting) await this.starting.catch(() => undefined);
+    if (this.child && this.child.exitCode === null && this.forWorkspace === workspaceId) return this.status(workspaceId);
+    this.kill();
+    this.forWorkspace = workspaceId;
+    this.starting = this.spawnAndWait(workspaceId).finally(() => {
       this.starting = null;
     });
     await this.starting.catch(() => undefined);
-    return this.status();
+    return this.status(workspaceId);
   }
 
-  stop(): CompassEngineStatus {
-    this.kill();
+  /** Журнал Compass целиком в формате резервной копии (то, что ORION разбирает при импорте). Движок должен работать для этого пространства. */
+  async journalBackup(workspaceId: string): Promise<unknown> {
+    if (this.status(workspaceId).state !== "running") throw new ServiceUnavailableException("Compass не запущен: запустите его во вкладке «Compass».");
+    const response = await fetch(`http://${HOST}:${this.port}/api/journal/backup.json`, {
+      headers: { Cookie: `compass_session=${this.token}` },
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!response.ok) throw new ServiceUnavailableException(`Compass не отдал журнал (код ${response.status}).`);
+    return response.json();
+  }
+
+  stop(workspaceId: string): CompassEngineStatus {
+    if (this.forWorkspace === workspaceId || this.forWorkspace === null) this.kill();
     this.failure = null;
-    return this.status();
+    return this.status(workspaceId);
   }
 
   onModuleDestroy(): void {
@@ -76,10 +98,10 @@ export class CompassEngineService implements OnModuleDestroy {
     this.child = null;
   }
 
-  private async spawnAndWait(): Promise<void> {
+  private async spawnAndWait(workspaceId: string): Promise<void> {
     this.failure = null;
     this.token = randomBytes(24).toString("base64url");
-    mkdirSync(this.dataDir, { recursive: true });
+    mkdirSync(this.dataDir(workspaceId), { recursive: true });
     if (await this.portInUse()) {
       this.failure = `Порт ${this.port} занят другой программой. Задайте COMPASS_ENGINE_PORT.`;
       return;
@@ -89,7 +111,7 @@ export class CompassEngineService implements OnModuleDestroy {
       cwd: this.engineDir(),
       env: {
         ...process.env,
-        COMPASS_DATA_DIR: this.dataDir,
+        COMPASS_DATA_DIR: this.dataDir(workspaceId),
         COMPASS_PORT: String(this.port),
         COMPASS_SESSION_TOKEN: this.token,
         PYTHONIOENCODING: "utf-8"
