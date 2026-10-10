@@ -91,6 +91,9 @@ export const sidebarFoldersSchema = z.array(sidebarFolderSchema).max(SIDEBAR_FOL
 
 export const sidebarPositionSchema = z.enum(["left", "right", "top", "bottom"]);
 export type SidebarPosition = z.infer<typeof sidebarPositionSchema>;
+/** What a click on a menu section does to the tab strip: add a tab (they pile up) or replace the current one. */
+export const openTabsModeSchema = z.enum(["accumulate", "replace"]);
+export type OpenTabsMode = z.infer<typeof openTabsModeSchema>;
 export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 
 export const userPreferenceSchema = z.object({
@@ -128,6 +131,8 @@ export const userPreferenceSchema = z.object({
   sidebarOrder: sidebarOrderSchema,
   /** Which edge of the window the menu sits on. Personal. */
   sidebarPosition: sidebarPositionSchema,
+  /** Whether opening sections keeps adding tabs on top, or reuses the current tab. Personal. */
+  openTabsMode: openTabsModeSchema,
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

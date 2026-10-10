@@ -4,6 +4,7 @@ import {
   sidebarFoldersSchema,
   sidebarOrderSchema,
   sidebarPositionSchema,
+  openTabsModeSchema,
   type BackgroundEffectSettings,
   type UpdateUserPreferenceInput,
   type UserPreference,
@@ -204,6 +205,7 @@ function toDto(preference: {
   sidebarFolders: Prisma.JsonValue;
   sidebarOrder: Prisma.JsonValue;
   sidebarPosition: string;
+  openTabsMode: string;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   return {
@@ -213,6 +215,7 @@ function toDto(preference: {
     sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],
     sidebarOrder: sidebarOrderSchema.safeParse(preference.sidebarOrder).success ? (preference.sidebarOrder as string[]) : [],
     sidebarPosition: sidebarPositionSchema.safeParse(preference.sidebarPosition).success ? (preference.sidebarPosition as UserPreference["sidebarPosition"]) : "left",
+    openTabsMode: openTabsModeSchema.safeParse(preference.openTabsMode).success ? (preference.openTabsMode as UserPreference["openTabsMode"]) : "accumulate",
     onboardingCompletedAt: preference.onboardingCompletedAt?.toISOString() ?? null
   } as UserPreference;
 }

@@ -232,6 +232,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const compact = useMediaQuery("(max-width: 767px)");
   const compactRef = useRef(compact);
   compactRef.current = compact;
+  const openTabsModeRef = useRef<"accumulate" | "replace">("accumulate");
+  openTabsModeRef.current = preferences?.openTabsMode ?? "accumulate";
   // U04: which `dockLayoutStorageKey` the currently-loaded layout came from,
   // so the workspace-switch effect below can tell "this is the very first
   // load" (null) apart from "the user just switched workspace in this same
@@ -271,6 +273,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     (panelId: string, position?: PanelSplitPosition, title?: string) => {
       const api = apiRef.current;
       if (!api) return;
+      const previous = api.activePanel;
       const existing = api.getPanel(panelId);
       if (existing) {
         existing.api.setActive();
@@ -294,6 +297,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           if (panel.id !== panelId) panel.api.close();
         }
         setDrawerOpen(false);
+      } else if (openTabsModeRef.current === "replace" && !position && previous && previous.id !== panelId) {
+        // «Заменять текущую»: the section takes the place of the tab you were on instead of adding one.
+        previous.api.close();
       }
     },
     []

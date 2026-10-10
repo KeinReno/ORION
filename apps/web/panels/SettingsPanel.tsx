@@ -87,6 +87,7 @@ const APPEARANCE_KEYS: readonly PreferenceKey[] = [
   "accent",
   "density",
   "sidebarPosition",
+  "openTabsMode",
   "backgroundStyle",
   "backgroundIntensity",
   "backgroundEffectSettings",
@@ -548,6 +549,19 @@ export function SettingsPanel(): React.ReactElement {
                       { value: "bottom", label: "Снизу" }
                     ]}
                   />
+                </Field>
+                <Field label="Вкладки сверху">
+                  <SegmentedControl<UserPreference["openTabsMode"]>
+                    value={form.openTabsMode}
+                    onChange={(openTabsMode) => setForm({ ...form, openTabsMode })}
+                    options={[
+                      { value: "accumulate", label: "Копить открытые" },
+                      { value: "replace", label: "Заменять текущую" }
+                    ]}
+                  />
+                  <p className="mt-1 text-2xs text-subtle-foreground">
+                    «Копить» — каждый открытый раздел остаётся вкладкой. «Заменять» — раздел открывается на месте текущей вкладки; закрепить другую рядом можно перетаскиванием из меню или через «⋯».
+                  </p>
                 </Field>
                 <Field label="Фон">
                   <SegmentedControl<UserPreference["backgroundStyle"]>
