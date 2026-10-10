@@ -60,8 +60,9 @@ export function WorkspaceSwitcher({
         onOpenChange={(open) => {
           if (!open) setQuery("");
         }}
-        trigger={({ toggle, open }) => (
+        trigger={({ toggle, open, ref }) => (
           <button
+            ref={ref}
             type="button"
             onClick={order.length < 2 ? onOpenSpaces : toggle}
             aria-haspopup="listbox"

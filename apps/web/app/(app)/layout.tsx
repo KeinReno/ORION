@@ -18,15 +18,17 @@ import {
   type DockviewWillShowOverlayLocationEvent,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelProps,
-  type MenuItem
+  type MenuItem,
+  type SidebarFolderView
 } from "@orion/ui";
-import { LogOut, Menu, Settings } from "lucide-react";
+import { Folder, FolderPlus, LogOut, Menu, Settings } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { CommandCenter } from "../../lib/command-center";
 import { NotificationBell } from "../../components/notification-bell";
+import { FolderNameDialog } from "../../components/folder-name-dialog";
 import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
 import { dockLayoutStorageKey } from "../../lib/dock-layout-key";
@@ -43,6 +45,8 @@ import { getPanelDefinition, panelInstanceId, panelRegistry, visiblePanels } fro
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
+import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, renameFolder, toggleFolder } from "../../lib/sidebar-folders";
+import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
 const NO_DISABLED_MODULES: string[] = [];
@@ -168,6 +172,29 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
   const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
+
+  // The user's own sidebar folders: personal, saved with their preferences.
+  const { folders: sidebarFolders, save: saveFolders } = useSidebarFolders();
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
+  const folderViews = useMemo<SidebarFolderView[]>(() => {
+    const visible = new Set(navPanels.map((panel) => panel.id));
+    return sidebarFolders.map((folder, index) => ({
+      id: folder.id,
+      name: folder.name,
+      collapsed: folder.collapsed,
+      // A hidden or switched-off module stays recorded in the folder, it just isn't drawn.
+      linkIds: folder.items.filter((id) => visible.has(id)),
+      menuItems: [
+        { label: "Переименовать…", onSelect: () => setFolderDialog({ mode: "rename", id: folder.id, name: folder.name }) },
+        { label: "Выше", disabled: index === 0, onSelect: () => saveFolders(moveFolder(sidebarFolders, folder.id, -1)) },
+        { label: "Ниже", disabled: index === sidebarFolders.length - 1, onSelect: () => saveFolders(moveFolder(sidebarFolders, folder.id, 1)) },
+        "separator",
+        { label: "Удалить папку", tone: "danger", onSelect: () => saveFolders(deleteFolder(sidebarFolders, folder.id)) }
+      ] satisfies (MenuItem | "separator")[]
+    }));
+    // navPanels is rebuilt every render; its ids are what matter, so key the memo on them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarFolders, navPanels.map((panel) => panel.id).join("|"), saveFolders]);
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
   useDesktopDueReminders(tasks);
@@ -447,6 +474,23 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   return (
     <div className={compact ? "orion-shell--compact flex h-dvh bg-background" : "flex h-dvh bg-background"}>
       <AppBackground />
+      <FolderNameDialog
+        open={folderDialog !== null}
+        title={folderDialog?.mode === "rename" ? "Переименовать папку" : "Новая папка"}
+        initial={folderDialog?.mode === "rename" ? folderDialog.name : ""}
+        submitLabel={folderDialog?.mode === "rename" ? "Сохранить" : "Создать"}
+        onClose={() => setFolderDialog(null)}
+        onSubmit={(name) => {
+          const dialog = folderDialog;
+          setFolderDialog(null);
+          if (!dialog) return;
+          const next =
+            dialog.mode === "rename"
+              ? renameFolder(sidebarFolders, dialog.id, name)
+              : addFolder(sidebarFolders, name, newFolderId(), dialog.panelId);
+          if (next) saveFolders(next);
+        }}
+      />
       {compact && drawerOpen ? (
         <button
           type="button"
@@ -456,6 +500,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         />
       ) : null}
       <Sidebar
+        folders={folderViews}
+        onToggleFolder={(id) => saveFolders(toggleFolder(sidebarFolders, id))}
+        onCreateFolder={() => setFolderDialog({ mode: "create" })}
         variant={compact ? "drawer" : "rail"}
         drawerOpen={drawerOpen}
         onDrawerClose={() => setDrawerOpen(false)}
@@ -477,6 +524,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           </div>
         )}
         links={navPanels.map((panel) => ({
+          id: panel.id,
           label: panel.label,
           icon: panel.icon,
           isActive: panel.id === (activeDefinition?.navParent ?? activeDefinition?.id),
@@ -508,8 +556,21 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           menuItems: [
             { label: "Открыть", onSelect: () => openPanel(panel.id) },
             { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
-            { label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) }
-          ] satisfies MenuItem[]
+            { label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) },
+            "separator",
+            // Folders: the same list a user sees, reachable without dragging anything.
+            ...sidebarFolders
+              .filter((folder) => folder.id !== folderOf(sidebarFolders, panel.id)?.id)
+              .map((folder) => ({
+                label: `В папку «${folder.name}»`,
+                icon: Folder,
+                onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, folder.id))
+              })),
+            ...(folderOf(sidebarFolders, panel.id)
+              ? [{ label: "Убрать из папки", onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, null)) }]
+              : []),
+            { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", panelId: panel.id }) }
+          ] satisfies (MenuItem | "separator")[]
         }))}
         LinkComponent={NextLink}
         footer={({ open }) =>

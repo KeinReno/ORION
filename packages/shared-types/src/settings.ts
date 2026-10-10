@@ -77,6 +77,18 @@ export const DEFAULT_BACKGROUND_EFFECT_SETTINGS: BackgroundEffectSettings = {
   "shape-waves": { speed: 1, color: null, density: 1, gap: 0, waveAmplitude: 1, shape: "circle" }
 };
 
+/** A user-made folder in the left sidebar; `items` are panel ids (a panel is in at most one folder). */
+export const SIDEBAR_FOLDERS_MAX = 12;
+export const SIDEBAR_FOLDER_NAME_MAX = 40;
+export const sidebarFolderSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(SIDEBAR_FOLDER_NAME_MAX),
+  collapsed: z.boolean(),
+  items: z.array(z.string().min(1).max(40)).max(60)
+});
+export type SidebarFolder = z.infer<typeof sidebarFolderSchema>;
+export const sidebarFoldersSchema = z.array(sidebarFolderSchema).max(SIDEBAR_FOLDERS_MAX);
+
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
   accent: z.enum(["violet", "blue", "green", "amber", "rose"]),
@@ -106,6 +118,8 @@ export const userPreferenceSchema = z.object({
   hiddenModules: z.array(z.string().max(40)).max(40),
   /** Show the short note id ("N-104") in the notes list and editor. Personal, off by default. */
   showNoteIds: z.boolean(),
+  /** The user's own sidebar folders. Personal: other participants and the workspace are untouched. */
+  sidebarFolders: sidebarFoldersSchema,
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

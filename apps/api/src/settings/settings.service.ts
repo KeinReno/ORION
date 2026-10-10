@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   DEFAULT_BACKGROUND_EFFECT_SETTINGS,
+  sidebarFoldersSchema,
   type BackgroundEffectSettings,
   type UpdateUserPreferenceInput,
   type UserPreference,
@@ -35,7 +36,8 @@ export class SettingsService {
     // object the zod schema gives us — everything else passes through as-is.
     const data = {
       ...input,
-      ...(input.backgroundEffectSettings ? { backgroundEffectSettings: input.backgroundEffectSettings as Prisma.InputJsonValue } : {})
+      ...(input.backgroundEffectSettings ? { backgroundEffectSettings: input.backgroundEffectSettings as Prisma.InputJsonValue } : {}),
+      ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {})
     };
     const preference = await this.prisma.userPreference.upsert({
       where: { userId },
@@ -196,11 +198,14 @@ function toDto(preference: {
   dashboardWidgets: string[];
   hiddenModules: string[];
   showNoteIds: boolean;
+  sidebarFolders: Prisma.JsonValue;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   return {
     ...preference,
     backgroundEffectSettings: mergeBackgroundEffectSettings(preference.backgroundEffectSettings),
+    // A damaged value must not break the settings screen: read it defensively, fall back to no folders.
+    sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],
     onboardingCompletedAt: preference.onboardingCompletedAt?.toISOString() ?? null
   } as UserPreference;
 }

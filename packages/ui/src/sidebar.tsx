@@ -2,14 +2,16 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
-import { ChevronDown, MoreHorizontal, PanelLeft, PanelLeftClose } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, FolderPlus, MoreHorizontal, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
 import { SPRING_SMOOTH } from "./motion";
-import { DropdownMenu, type MenuItem } from "./overlays";
+import { DropdownMenu, Popover, type MenuItem } from "./overlays";
 
 export interface SidebarLinkItem {
+  /** Stable id (the panel id) — what a user folder refers to. Optional: a link without one cannot sit in a folder. */
+  id?: string;
   /**
    * Both are optional so a module can be either a routed page (`href`,
    * navigated via `LinkComponent`) or a panel that opens/focuses in the
@@ -57,7 +59,21 @@ export interface SidebarLinkItem {
    * renders once the rail is expanded (mirrors the badge/label, which are
    * `sr-only` while collapsed too — the collapsed rail stays icon-only).
    */
-  menuItems?: MenuItem[];
+  menuItems?: (MenuItem | "separator")[];
+}
+
+/**
+ * A folder the user made. The sidebar only DRAWS it: which links are in it, whether it is
+ * folded and what its menu offers are decided by the host (it owns storage and rules).
+ */
+export interface SidebarFolderView {
+  id: string;
+  name: string;
+  collapsed: boolean;
+  /** Ids of the links inside, in order — already limited to links that exist right now. */
+  linkIds: string[];
+  /** Folder actions (rename, move, delete), shown behind a «⋯» next to the name. */
+  menuItems?: (MenuItem | "separator")[];
 }
 
 export interface SidebarLinkComponentProps {
@@ -98,6 +114,11 @@ export interface SidebarProps {
   variant?: "rail" | "drawer";
   drawerOpen?: boolean;
   onDrawerClose?: () => void;
+  /** The user's own folders. Links named here leave their default place and show inside the folder. */
+  folders?: SidebarFolderView[];
+  onToggleFolder?: (folderId: string) => void;
+  /** Shows a «Новая папка» row at the end of the list when given. */
+  onCreateFolder?: () => void;
 }
 
 function DefaultLink({
@@ -131,7 +152,10 @@ export function Sidebar({
   LinkComponent = DefaultLink,
   variant = "rail",
   drawerOpen = false,
-  onDrawerClose
+  onDrawerClose,
+  folders = [],
+  onToggleFolder,
+  onCreateFolder
 }: SidebarProps): React.ReactElement {
   const [pinned, setPinned] = useState(false);
   const isDrawer = variant === "drawer";
@@ -299,16 +323,150 @@ export function Sidebar({
     );
   }
 
-  // Grouping only matters once labels are visible — the collapsed rail stays
-  // one flat icon column regardless of `group`. Groups render in the order
-  // their first member first appears in `links`; items without a `group`
-  // ("Сегодня": Dashboard, Inbox) come first, ungrouped, above every section.
-  const ungrouped = links.filter((l) => !l.group);
+  // Links the user put into a folder leave their default place. Grouping (default sections and
+  // folders) only matters once labels are visible — the collapsed rail stays a flat icon column,
+  // where each folder is ONE folder icon that opens its links in a small list.
+  const inFolder = new Set(folders.flatMap((folder) => folder.linkIds));
+  const free = links.filter((l) => !(l.id && inFolder.has(l.id)));
+  const ungrouped = free.filter((l) => !l.group);
   const groupOrder: string[] = [];
-  for (const link of links) {
+  for (const link of free) {
     if (link.group && !groupOrder.includes(link.group)) groupOrder.push(link.group);
   }
-  const grouped = open && groupOrder.length > 0;
+  const hasSections = groupOrder.length > 0 || folders.length > 0;
+  const grouped = open && hasSections;
+  const linkById = new Map(links.filter((l) => l.id).map((l) => [l.id as string, l]));
+  const iconButtonClass = clsx(
+    "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+  );
+
+  /** Collapsed rail: one icon for the whole folder; its links open in a popover list. */
+  function renderFolderRail(folder: SidebarFolderView): React.ReactElement {
+    const members = folder.linkIds.map((id) => linkById.get(id)).filter((l): l is SidebarLinkItem => Boolean(l));
+    return (
+      <Popover
+        key={`folder:${folder.id}`}
+        align="start"
+        width={232}
+        trigger={({ toggle, open: isOpen, ref }) => (
+          <button
+            ref={ref}
+            type="button"
+            onClick={toggle}
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            aria-label={`Папка «${folder.name}», разделов: ${members.length}`}
+            title={`${folder.name} · ${members.length}`}
+            className={iconButtonClass}
+          >
+            <span className="relative shrink-0">
+              {isOpen ? <FolderOpen className="h-5 w-5" aria-hidden /> : <Folder className="h-5 w-5" aria-hidden />}
+              {members.some((m) => m.badge) ? <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-background" /> : null}
+            </span>
+          </button>
+        )}
+      >
+        {({ close }) => (
+          <div className="p-1.5">
+            <p className="px-2 pb-1 pt-0.5 text-2xs font-medium uppercase tracking-wide text-subtle-foreground">{folder.name}</p>
+            {members.length === 0 ? <p className="px-2 py-1.5 text-label text-subtle-foreground">В папке пока пусто</p> : null}
+            {members.map((member) => {
+              const MemberIcon = member.icon;
+              return (
+                <button
+                  key={member.id ?? member.label}
+                  type="button"
+                  onClick={() => {
+                    close();
+                    handleNavigate(member.onClick);
+                  }}
+                  className={clsx(
+                    "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                    member.isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <MemberIcon className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate">{member.label}</span>
+                  {member.badge ? <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text">{member.badge}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Popover>
+    );
+  }
+
+  function renderFolder(folder: SidebarFolderView): React.ReactElement {
+    const members = folder.linkIds.map((id) => linkById.get(id)).filter((l): l is SidebarLinkItem => Boolean(l));
+    return (
+      <div key={`folder:${folder.id}`} className="flex flex-col gap-1">
+        <div className="group/folder flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => onToggleFolder?.(folder.id)}
+            aria-expanded={!folder.collapsed}
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          >
+            <motion.span
+              animate={{ rotate: folder.collapsed ? -90 : 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.15 }}
+              className="flex h-3 w-3 shrink-0 items-center justify-center"
+            >
+              <ChevronDown className="h-3 w-3" aria-hidden />
+            </motion.span>
+            {folder.collapsed ? <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden /> : <FolderOpen className="h-3.5 w-3.5 shrink-0" aria-hidden />}
+            <span className="min-w-0 flex-1 truncate text-left">{folder.name}</span>
+            <span className="shrink-0 font-mono text-2xs normal-case tabular-nums">{members.length}</span>
+          </button>
+          {folder.menuItems && folder.menuItems.length > 0 ? (
+            <DropdownMenu
+              align="end"
+              items={folder.menuItems}
+              trigger={({ toggle }) => (
+                <button
+                  type="button"
+                  aria-label={`Действия с папкой «${folder.name}»`}
+                  onClick={toggle}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-subtle-foreground opacity-0 transition-opacity hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 group-hover/folder:opacity-100"
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden />
+                </button>
+              )}
+            />
+          ) : null}
+        </div>
+        {!folder.collapsed ? (
+          <div className="ml-[19px] flex flex-col gap-1 border-l border-border pl-2">
+            {members.length === 0 ? (
+              <p className="px-3 py-1 text-2xs text-subtle-foreground">Пусто — добавьте раздел через «⋯» у него в списке</p>
+            ) : (
+              members.map(renderLink)
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Collapsed rail: original order, with each folder standing in at the place of its first link.
+  function renderRail(): React.ReactNode[] {
+    const emitted = new Set<string>();
+    const out: React.ReactNode[] = [];
+    for (const link of links) {
+      const folder = link.id ? folders.find((f) => f.linkIds.includes(link.id as string)) : undefined;
+      if (!folder) {
+        out.push(renderLink(link));
+      } else if (!emitted.has(folder.id)) {
+        emitted.add(folder.id);
+        out.push(renderFolderRail(folder));
+      }
+    }
+    // A folder with nothing visible in it still gets its icon, after the links.
+    for (const folder of folders) if (!emitted.has(folder.id)) out.push(renderFolderRail(folder));
+    return out;
+  }
 
   return (
     <motion.aside
@@ -329,12 +487,16 @@ export function Sidebar({
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
         <nav id="orion-sidebar-nav" aria-label="Разделы" className="flex flex-col gap-1">
           {!grouped
-            ? links.map(renderLink)
+            ? hasSections
+              ? renderRail()
+              : links.map(renderLink)
             : [
                 ...ungrouped.map(renderLink),
                 ungrouped.length > 0 ? <div key="__sep" className="my-1 h-px bg-border" aria-hidden /> : null,
+                ...folders.map(renderFolder),
+                folders.length > 0 && groupOrder.length > 0 ? <div key="__sep2" className="my-1 h-px bg-border" aria-hidden /> : null,
                 ...groupOrder.map((groupName) => {
-                  const items = links.filter((l) => l.group === groupName);
+                  const items = free.filter((l) => l.group === groupName);
                   const isCollapsed = collapsedGroups.has(groupName);
                   return (
                     <div key={groupName} className="flex flex-col gap-1">
@@ -363,7 +525,18 @@ export function Sidebar({
                       ) : null}
                     </div>
                   );
-                })
+                }),
+                onCreateFolder ? (
+                  <button
+                    key="__new-folder"
+                    type="button"
+                    onClick={onCreateFolder}
+                    className="mt-1 flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-1.5 text-left text-2xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                  >
+                    <FolderPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Новая папка
+                  </button>
+                ) : null
               ]}
         </nav>
       </div>

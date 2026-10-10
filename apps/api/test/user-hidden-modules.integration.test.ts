@@ -103,4 +103,33 @@ describe("Personal hidden modules", () => {
     });
     expect(response.status).toBe(400);
   });
+
+  it("keeps personal sidebar folders per user and validates them", async () => {
+    const alice = await register("folders-a");
+    const bob = await register("folders-b");
+    const folders = [
+      { id: "f1", name: "Работа", collapsed: false, items: ["tasks", "calendar"] },
+      { id: "f2", name: "Дом", collapsed: true, items: [] }
+    ];
+    const saved = await request<{ sidebarFolders: typeof folders }>("/settings/preferences", {
+      method: "PATCH",
+      token: alice.accessToken,
+      body: { sidebarFolders: folders }
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.data.sidebarFolders).toEqual(folders);
+
+    const again = await request<{ sidebarFolders: typeof folders }>("/settings/preferences", { method: "GET", token: alice.accessToken });
+    expect(again.data.sidebarFolders).toEqual(folders);
+
+    // Personal: another user starts with none, and a fresh account has an empty list.
+    const other = await request<{ sidebarFolders: unknown[] }>("/settings/preferences", { method: "GET", token: bob.accessToken });
+    expect(other.data.sidebarFolders).toEqual([]);
+
+    // An empty name, too many folders and an oversized item list are all rejected.
+    const patch = (value: unknown) => request("/settings/preferences", { method: "PATCH", token: alice.accessToken, body: { sidebarFolders: value } });
+    expect((await patch([{ id: "x", name: "", collapsed: false, items: [] }])).status).toBe(400);
+    expect((await patch(Array.from({ length: 13 }, (_, i) => ({ id: `f${i}`, name: "n", collapsed: false, items: [] })))).status).toBe(400);
+    expect((await patch([{ id: "x", name: "n", collapsed: false, items: Array.from({ length: 61 }, (_, i) => `p${i}`) }])).status).toBe(400);
+  });
 });
