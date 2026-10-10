@@ -152,6 +152,13 @@ describe("Personal hidden modules", () => {
     const back = await request<State[]>(`${base}/habits-insights`, { method: "PATCH", token: alice.accessToken, body: { enabled: true } });
     expect(back.data.find((p) => p.id === "habits-insights")?.enabled).toBe(true);
 
+    for (const id of ["finance-budgeting", "finance-goals", "finance-recurring", "finance-reports"]) {
+      expect(initial.data.find((p) => p.id === id)).toMatchObject({ enabled: true, defaultEnabled: true, extendsModuleId: "finance" });
+    }
+    const financeOff = await request<State[]>(`${base}/finance-reports`, { method: "PATCH", token: alice.accessToken, body: { enabled: false } });
+    expect(financeOff.data.find((p) => p.id === "finance-reports")?.enabled).toBe(false);
+    expect(financeOff.data.find((p) => p.id === "finance-budgeting")?.enabled).toBe(true);
+
     const unknown = await request(`${base}/no-such-plugin`, { method: "PATCH", token: alice.accessToken, body: { enabled: true } });
     expect(unknown.status).toBe(404);
   });

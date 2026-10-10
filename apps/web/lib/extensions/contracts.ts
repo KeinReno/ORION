@@ -26,9 +26,25 @@ export interface HabitDetailSlotProps {
   onArchiveHabit: (habit: Habit) => void;
 }
 
+/** finance.tabs — a tab of the Finance panel. The host draws the tab strip from each contribution's `meta`. */
+export interface FinanceTabSlotProps {
+  workspaceId: string | undefined;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
+  "finance.tabs": FinanceTabSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
+
+/**
+ * Extra, typed information a contribution gives the HOST about itself (not props for the
+ * component). Only slots that need it are listed; for the rest `meta` is absent.
+ */
+export interface SlotMeta {
+  "finance.tabs": { tabId: string; label: string };
+}
+
+export type MetaOf<S extends SlotName> = S extends keyof SlotMeta ? SlotMeta[S] : undefined;

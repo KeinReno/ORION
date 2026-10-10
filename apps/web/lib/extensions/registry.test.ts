@@ -61,6 +61,15 @@ describe("plugin catalog invariants (default-full parity)", () => {
     expect(isPluginEnabled(["habits-insights"], "habits-insights")).toBe(false);
   });
 
+  it("the four finance plugins are extracted built-ins: on by default, each tied to the finance module", () => {
+    for (const id of ["finance-budgeting", "finance-goals", "finance-recurring", "finance-reports"]) {
+      const manifest = PLUGIN_CATALOG.find((p) => p.id === id);
+      expect(manifest?.extendsModuleId).toBe("finance");
+      expect(manifest?.defaultEnabled).toBe(true);
+      expect(isPluginEnabled([], id)).toBe(true);
+    }
+  });
+
   it("the pre-existing optional plugin keeps its default (team stays off)", () => {
     expect(PLUGIN_CATALOG.find((p) => p.id === "team")?.defaultEnabled).toBe(false);
     expect(isPluginEnabled([], "team")).toBe(false);

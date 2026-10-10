@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { OrionPluginId } from "@orion/shared-types";
-import type { SlotContracts, SlotName } from "./contracts";
+import type { MetaOf, SlotContracts, SlotName } from "./contracts";
 
 /**
  * The extension registry: which plugin contributes which component to which slot.
@@ -19,6 +19,8 @@ export interface Contribution<S extends SlotName> {
   component: ComponentType<SlotContracts[S]>;
   /** Lower first. Ties keep registration order. */
   order?: number;
+  /** What the host needs to know to place it (e.g. a tab's id and label) — typed per slot, see `SlotMeta`. */
+  meta?: MetaOf<S>;
 }
 
 export interface ExtensionRegistry {

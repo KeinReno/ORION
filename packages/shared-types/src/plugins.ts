@@ -10,7 +10,14 @@ import { orionModuleIdSchema, type OrionModuleId } from "./modules";
  * (PLUGIN_CATALOG mirrors MODULE_CATALOG) — the only extra rule is
  * `extendsModuleId` and auto-disable when that module is off.
  */
-export const ORION_PLUGIN_IDS = ["team", "habits-insights"] as const;
+export const ORION_PLUGIN_IDS = [
+  "team",
+  "habits-insights",
+  "finance-budgeting",
+  "finance-goals",
+  "finance-recurring",
+  "finance-reports"
+] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
 export type OrionPluginId = z.infer<typeof orionPluginIdSchema>;
@@ -90,6 +97,43 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     disableBehavior:
       "Блоки «Неделя» и «Активность» скрываются; отметки, серии и список «Сегодня» работают как прежде, данные не удаляются.",
     // Extracted from the base panel without changing what anyone sees: on by default.
+    defaultEnabled: true
+  },
+  {
+    id: "finance-budgeting",
+    extendsModuleId: "finance",
+    label: "Бюджеты",
+    summary: "Месячные лимиты по категориям расходов и контроль «потрачено из лимита».",
+    provides: ["Вкладка «Бюджеты»", "Лимит на месяц по категории"],
+    disableBehavior: "Вкладка «Бюджеты» скрывается; лимиты сохраняются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-goals",
+    extendsModuleId: "finance",
+    label: "Цели накоплений",
+    summary: "Цели с суммой и сроком, привязанные к счёту, и прогресс к ним.",
+    provides: ["Вкладка «Цели»", "Прогресс накоплений по счёту"],
+    disableBehavior: "Вкладка «Цели» скрывается; цели сохраняются.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-recurring",
+    extendsModuleId: "finance",
+    label: "Повторяющиеся платежи",
+    summary: "Правила регулярных платежей и доходов, которые создают операции по расписанию.",
+    provides: ["Вкладка «Повторяющиеся»", "Правила платежей"],
+    disableBehavior:
+      "Вкладка «Повторяющиеся» скрывается (правила нельзя смотреть и править); уже созданные операции остаются, а фоновое создание по расписанию на сервере продолжается — правила не удаляются.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-reports",
+    extendsModuleId: "finance",
+    label: "Отчёты по финансам",
+    summary: "Доходы и расходы по месяцам, чистый капитал, расходы по категориям.",
+    provides: ["Вкладка «Отчёты»", "Графики по месяцам и категориям"],
+    disableBehavior: "Вкладка «Отчёты» скрывается; данные не затрагиваются.",
     defaultEnabled: true
   }
 ];

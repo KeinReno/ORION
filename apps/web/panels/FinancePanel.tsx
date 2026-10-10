@@ -4,24 +4,23 @@ import { useAccounts } from "@orion/core-react";
 import { Button, PanelBody, PanelHeader, PanelShell, SegmentedControl } from "@orion/ui";
 import { Tags, Wallet } from "lucide-react";
 import { useState } from "react";
+import { useSlotContributions } from "../lib/extensions/slot";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { AccountsView } from "./finance/accounts-view";
-import { BudgetsView } from "./finance/budgets-view";
 import { CategoryManagerModal } from "./finance/category-manager";
-import { GoalsView } from "./finance/goals-view";
-import { RecurringView } from "./finance/recurring-view";
-import { ReportsView } from "./finance/reports-view";
 import { FinanceSummaryRow } from "./finance/summary-row";
 import { TransactionsView } from "./finance/transactions-view";
 
-type FinanceTab = "transactions" | "reports" | "budgets" | "accounts" | "goals" | "recurring";
+/** "transactions" and "accounts" are the module's own; every other id comes from a plugin via `finance.tabs`. */
+type FinanceTab = string;
 
 /**
  * One module = one panel (see CLAUDE.md "Модульный контракт") even though
  * "Финансы" spans five entities — the tabs here mirror how TasksPanel hides
  * its groupBy switch and Calendar its Month/Week/List views behind the same
  * SegmentedControl, rather than registering four separate sidebar entries
- * for one product surface. Categories are shared infrastructure used by
+ * for one product surface. Transactions and accounts are the module itself; budgets,
+ * goals, recurring payments and reports are plugins that add their own tab. Categories are shared infrastructure used by
  * three of the four tabs, so they get their own modal off the header
  * instead of a fifth tab (see docs/PLAN.md v0.8).
  */
@@ -31,7 +30,16 @@ export function FinancePanel(): React.ReactElement {
   const [tabOverride, setTabOverride] = useState<FinanceTab | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const hasAccounts = (accounts.data ?? []).some((account) => !account.archivedAt);
-  const tab = tabOverride ?? (accounts.isSuccess && !hasAccounts ? "accounts" : "transactions");
+  const pluginTabs = useSlotContributions("finance.tabs").filter((contribution) => contribution.meta !== undefined);
+  const options: { value: FinanceTab; label: string }[] = [
+    { value: "transactions", label: "Транзакции" },
+    { value: "accounts", label: "Счета" },
+    ...pluginTabs.map((contribution) => ({ value: contribution.meta!.tabId, label: contribution.meta!.label }))
+  ];
+  // A tab whose plugin has been switched off (or was never on) is not selectable: fall back to the default.
+  const requested = tabOverride !== null && options.some((option) => option.value === tabOverride) ? tabOverride : null;
+  const tab: FinanceTab = requested ?? (accounts.isSuccess && !hasAccounts ? "accounts" : "transactions");
+  const activePluginTab = pluginTabs.find((contribution) => contribution.meta?.tabId === tab);
 
   return (
     <PanelShell>
@@ -47,24 +55,14 @@ export function FinancePanel(): React.ReactElement {
         <SegmentedControl<FinanceTab>
           value={tab}
           onChange={setTabOverride}
-          options={[
-            { value: "transactions", label: "Транзакции" },
-            { value: "accounts", label: "Счета" },
-            { value: "budgets", label: "Бюджеты" },
-            { value: "goals", label: "Цели" },
-            { value: "recurring", label: "Повторяющиеся" },
-            { value: "reports", label: "Отчёты" }
-          ]}
+          options={options}
         />
       </PanelHeader>
       <PanelBody className="[container-type:inline-size]">
         <FinanceSummaryRow />
         {tab === "transactions" ? <TransactionsView onOpenAccounts={() => setTabOverride("accounts")} /> : null}
         {tab === "accounts" ? <AccountsView /> : null}
-        {tab === "budgets" ? <BudgetsView /> : null}
-        {tab === "goals" ? <GoalsView /> : null}
-        {tab === "recurring" ? <RecurringView /> : null}
-        {tab === "reports" ? <ReportsView /> : null}
+        {activePluginTab ? <activePluginTab.component workspaceId={workspace?.id} /> : null}
       </PanelBody>
 
       <CategoryManagerModal open={categoriesOpen} onClose={() => setCategoriesOpen(false)} />
