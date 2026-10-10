@@ -53,6 +53,14 @@ type GroupBy = "status" | "project" | "due" | "priority";
 type BoardView = "board" | "list";
 
 const NO_PROJECT = "__none__";
+
+/**
+ * Which tasks this panel is about. «Все» is everything in the workspace, project work
+ * included; «Без проекта» is only the loose ones — home, personal, errands — which are
+ * not part of any project and so never show up on a project's own screen.
+ */
+type TaskScope = "all" | "loose";
+const SCOPE_KEY = "orion.tasks.scope";
 const VIEW_KEY = "orion.tasks.view";
 
 function loadView(fallback: BoardView): BoardView {
@@ -144,6 +152,24 @@ export function TasksPanel(): React.ReactElement {
   const [query, setQuery] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const [scope, setScope] = useState<TaskScope>("all");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SCOPE_KEY) === "loose") setScope("loose");
+    } catch {
+      /* a remembered scope is a convenience only */
+    }
+  }, []);
+  function chooseScope(next: TaskScope): void {
+    setScope(next);
+    // A project filter makes no sense among tasks that have no project.
+    if (next === "loose") setProjectFilter(null);
+    try {
+      localStorage.setItem(SCOPE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -194,11 +220,12 @@ export function TasksPanel(): React.ReactElement {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (tasks ?? []).filter((task) => {
+      if (scope === "loose" && task.projectId !== null) return false;
       if (projectFilter && (task.projectId ?? NO_PROJECT) !== projectFilter) return false;
       if (q && !task.title.toLowerCase().includes(q) && !task.description.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [tasks, query, projectFilter]);
+  }, [tasks, query, projectFilter, scope]);
 
   const editing = editingId ? (tasks ?? []).find((t) => t.id === editingId) ?? null : null;
   // Варианты для селекта «Родительская задача»: без самой задачи и её потомков —
@@ -394,7 +421,19 @@ export function TasksPanel(): React.ReactElement {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск задач" className="pl-8" />
           </div>
-          {projectChips.length > 0 ? (
+          {isEnabled("projects") && (projectChips.length > 0 || scope === "loose") ? (
+            <SegmentedControl<TaskScope>
+              aria-label="Какие задачи показывать"
+              value={scope}
+              onChange={chooseScope}
+              size="sm"
+              options={[
+                { value: "all", label: "Все задачи" },
+                { value: "loose", label: "Без проекта" }
+              ]}
+            />
+          ) : null}
+          {scope === "all" && projectChips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1">
               <FilterChip active={projectFilter === null} onClick={() => setProjectFilter(null)}>
                 Все

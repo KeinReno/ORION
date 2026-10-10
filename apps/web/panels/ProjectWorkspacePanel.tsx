@@ -16,7 +16,6 @@ import {
 import {
   formatDuration,
   isProjectOverdue,
-  isTaskClosed,
   type Milestone,
   type ProjectActivity,
   type ProjectDetail,
@@ -27,7 +26,6 @@ import {
   Badge,
   Button,
   Card,
-  CheckToggle,
   ConfirmDialog,
   ContextNoteField,
   DropdownMenu,
@@ -69,23 +67,23 @@ import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
-import { focusDocument, focusNote, focusTask, focusTransaction, focusEvent, openPanel, showTasksForProject } from "../lib/panel-bus";
+import { focusDocument, focusNote, focusTask, focusTransaction, focusEvent, openPanel } from "../lib/panel-bus";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
-import { groupTasksByMilestone, isTaskOverdue, projectFocus } from "../lib/project-focus";
+import { projectFocus } from "../lib/project-focus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
 import { ProjectPlan } from "./projects/plan-views";
-import { TaskMatrix } from "./projects/task-matrix";
+import { ProjectTasks } from "./projects/project-tasks";
+import { TaskRow } from "./projects/task-row";
 import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
-import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
+import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "money" | "access";
 
-const TASKS_LAYOUT_KEY = "orion.project-tasks-layout";
 const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "money", "access"];
 /** Per-viewer, per-project: which view of the project this person last used. */
 const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
@@ -227,6 +225,8 @@ function ProjectWorkspace({
   const [editing, setEditing] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [adding, setAdding] = useState<"task" | "note" | null>(null);
+  // The task open in this project's detail pane. Lifted here so the overview rows can open it too.
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   const tasks = useMemo(() => (allTasks ?? []).filter((task) => task.projectId === project.id), [allTasks, project.id]);
   const milestoneList = useMemo(() => milestones ?? [], [milestones]);
@@ -273,17 +273,6 @@ function ProjectWorkspace({
   function refreshProject(): void {
     void queryClient.invalidateQueries({ queryKey: ["project", workspaceId, project.id] });
     void queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
-  }
-
-  /** Move a task to another direction (milestone) of this project; null = «Без вехи». */
-  function moveTask(task: Task, milestoneId: string | null): void {
-    updateTask.mutate(
-      { taskId: task.id, input: { milestoneId } },
-      {
-        onSuccess: refreshProject,
-        onError: () => toast({ title: "Не удалось перенести задачу", tone: "danger" })
-      }
-    );
   }
 
   function toggleTask(task: Task): void {
@@ -456,19 +445,28 @@ function ProjectWorkspace({
             onSaveNote={(contextNote) => updateProject.mutate({ projectId: project.id, input: { contextNote } })}
             onToggle={toggleTask}
             onGoTo={setTab}
+            onOpenTask={(task) => {
+              setOpenTaskId(task.id);
+              setTab("tasks");
+            }}
             onAddTask={() => setAdding("task")}
           />
         ) : null}
 
         {tab === "tasks" ? (
-          <TasksTab
+          <ProjectTasks
+            workspaceId={workspaceId}
             tasks={tasks}
+            allTasks={allTasks ?? []}
             milestones={milestoneList}
+            projects={projectOptions}
             loading={tasksLoading}
+            timeOn={timeOn}
+            openTaskId={openTaskId}
+            onOpenTask={setOpenTaskId}
             onToggle={toggleTask}
-            onMove={moveTask}
             onAddTask={() => setAdding("task")}
-            onOpenBoard={() => showTasksForProject(project.id)}
+            onChanged={refreshProject}
           />
         ) : null}
 
@@ -561,6 +559,7 @@ function OverviewTab({
   onSaveNote,
   onToggle,
   onGoTo,
+  onOpenTask,
   onAddTask
 }: {
   workspaceId: string | undefined;
@@ -576,6 +575,7 @@ function OverviewTab({
   onSaveNote: (value: string) => void;
   onToggle: (task: Task) => void;
   onGoTo: (tab: ProjectTab) => void;
+  onOpenTask: (task: Task) => void;
   onAddTask: () => void;
 }): React.ReactElement {
   const progress = Math.min(100, Math.max(0, project.progress));
@@ -617,7 +617,7 @@ function OverviewTab({
             <Card className="border-destructive/30 px-2 py-1">
               <ul className="flex flex-col">
                 {fire.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
+                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
                 ))}
               </ul>
             </Card>
@@ -655,7 +655,7 @@ function OverviewTab({
             ) : (
               <ul className="flex flex-col">
                 {upNext.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
+                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
                 ))}
               </ul>
             )}
@@ -777,174 +777,6 @@ function CompositionRow({
         <span className="text-label text-muted-foreground">{label}</span>
         <span className={cx("font-mono text-label tabular-nums", danger ? "text-destructive" : "text-foreground")}>{value}</span>
       </button>
-    </li>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Задачи
-// ---------------------------------------------------------------------------
-
-function TasksTab({
-  tasks,
-  milestones,
-  loading,
-  onToggle,
-  onMove,
-  onAddTask,
-  onOpenBoard
-}: {
-  tasks: Task[];
-  milestones: Parameters<typeof groupTasksByMilestone>[1];
-  loading: boolean;
-  onToggle: (task: Task) => void;
-  onMove: (task: Task, milestoneId: string | null) => void;
-  onAddTask: () => void;
-  onOpenBoard: () => void;
-}): React.ReactElement {
-  const [showClosed, setShowClosed] = useState(false);
-  // Matrix by default: it shows direction and urgency together. Remembered per browser.
-  const [layout, setLayout] = useState<"matrix" | "list">("matrix");
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(TASKS_LAYOUT_KEY) === "list") setLayout("list");
-    } catch {
-      /* a remembered layout is a convenience only */
-    }
-  }, []);
-  function chooseLayout(next: "matrix" | "list"): void {
-    setLayout(next);
-    try {
-      localStorage.setItem(TASKS_LAYOUT_KEY, next);
-    } catch {
-      /* ignore */
-    }
-  }
-  const groups = useMemo(() => groupTasksByMilestone(tasks, milestones, showClosed), [tasks, milestones, showClosed]);
-  const now = new Date();
-
-  if (loading) return <Skeleton className="h-64 w-full" />;
-  if (tasks.length === 0) {
-    return (
-      <EmptyState
-        icon={ListTodo}
-        title="В проекте нет задач"
-        description="Разбейте проект на шаги — прогресс и «Дальше» считаются по ним."
-        action={
-          <Button size="sm" onClick={onAddTask}>
-            <Plus className="h-4 w-4" /> Задача
-          </Button>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className={cx("flex flex-col gap-5", layout === "list" && "max-w-4xl")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <SegmentedControl<"matrix" | "list">
-            aria-label="Вид задач"
-            value={layout}
-            onChange={chooseLayout}
-            size="sm"
-            options={[
-              { value: "matrix", label: "Матрица" },
-              { value: "list", label: "Список" }
-            ]}
-          />
-          <SegmentedControl<"open" | "all">
-            aria-label="Какие задачи показывать"
-            value={showClosed ? "all" : "open"}
-            onChange={(value) => setShowClosed(value === "all")}
-            size="sm"
-            options={[
-              { value: "open", label: "Открытые" },
-              { value: "all", label: "Все" }
-            ]}
-          />
-        </div>
-        <Button size="sm" variant="outline" onClick={onOpenBoard}>
-          <ListTodo className="h-4 w-4" /> На доске задач
-        </Button>
-      </div>
-      {layout === "matrix" ? (
-        <TaskMatrix
-          tasks={tasks}
-          milestones={milestones}
-          includeClosed={showClosed}
-          onToggle={onToggle}
-          onOpen={(task) => focusTask(task.id)}
-          onMove={onMove}
-        />
-      ) : null}
-      {layout === "list" ? groups.map((group) => {
-        const total = group.open + group.closed;
-        return (
-          <PanelSection
-            key={group.milestone?.id ?? "none"}
-            title={
-              <span className="inline-flex items-center gap-1.5">
-                {group.milestone ? <MilestoneIcon className="h-3 w-3" aria-hidden /> : null}
-                {group.milestone?.title ?? "Без вехи"}
-                <span className="font-mono normal-case tabular-nums">
-                  · {group.closed}/{total}
-                </span>
-                {group.milestone?.dueAt ? <span className="normal-case">· до {shortDate(group.milestone.dueAt)}</span> : null}
-              </span>
-            }
-          >
-            {group.tasks.length === 0 ? (
-              <p className="px-2 text-label text-subtle-foreground">
-                {total === 0 ? "Задач у вехи пока нет." : "Всё закрыто."}
-              </p>
-            ) : (
-              <ul className="flex flex-col">
-                {group.tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} />
-                ))}
-              </ul>
-            )}
-          </PanelSection>
-        );
-      }) : null}
-    </div>
-  );
-}
-
-function TaskRow({ task, now, onToggle }: { task: Task; now: Date; onToggle: () => void }): React.ReactElement {
-  const closed = isTaskClosed(task.status);
-  const overdue = isTaskOverdue(task, now);
-  return (
-    <li className="flex items-center gap-2 rounded-lg px-2 py-row transition-colors hover:bg-card-hover">
-      <CheckToggle
-        checked={task.status === "done"}
-        onClick={onToggle}
-        label={task.status === "done" ? "Вернуть в работу" : "Отметить выполненной"}
-        disabled={task.status === "canceled"}
-        size="sm"
-      />
-      <button
-        type="button"
-        onClick={() => focusTask(task.id)}
-        title="Открыть задачу"
-        className={cx(
-          "min-w-0 flex-1 truncate text-left text-label",
-          closed ? "text-subtle-foreground line-through" : "text-foreground hover:underline"
-        )}
-      >
-        {task.title}
-      </button>
-      {task.status === "in_progress" || task.status === "backlog" || task.status === "canceled" ? (
-        <Badge tone={task.status === "in_progress" ? "accent" : "neutral"}>{TASK_STATUS_LABEL[task.status]}</Badge>
-      ) : null}
-      {!closed && task.blocked ? <Badge tone="warning">Ждёт зависимость</Badge> : null}
-      {!closed && task.priority === "high" ? <Badge tone="warning" icon={false}>{TASK_PRIORITY_LABEL.high}</Badge> : null}
-      {task.dueAt ? (
-        <span className={cx("shrink-0 font-mono text-micro tabular-nums", overdue ? "text-destructive" : "text-subtle-foreground")}>
-          {shortDate(task.dueAt)}
-        </span>
-      ) : null}
     </li>
   );
 }

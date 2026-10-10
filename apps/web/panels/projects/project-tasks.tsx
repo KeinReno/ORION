@@ -1,0 +1,389 @@
+"use client";
+
+import { useDeleteTask, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
+import type { Milestone, Project, Task, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
+import { Button, ConfirmDialog, EmptyState, PanelSection, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
+import { ListTodo, Milestone as MilestoneIcon, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { groupTasksByMilestone } from "../../lib/project-focus";
+import { shortDate } from "../../lib/format";
+import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
+import { TASK_STATUS_LABEL } from "../task-form";
+import { TaskCard } from "../tasks/task-card";
+import { parentOptions, subtaskProgressMap } from "../tasks/subtasks";
+import { TaskDetail } from "../tasks/task-detail";
+import { TaskMatrix } from "./task-matrix";
+import { TaskRow } from "./task-row";
+
+type TasksLayout = "matrix" | "board" | "list";
+const LAYOUT_KEY = "orion.project-tasks-layout";
+/** Panel width from which the open task sits beside the view instead of replacing it. */
+const DETAIL_SPLIT_MIN = 980;
+
+const BOARD_COLUMNS: TaskStatus[] = ["backlog", "todo", "in_progress", "done"];
+const DONE_VISIBLE = 5;
+
+/**
+ * A project's tasks, in the project: matrix (direction × urgency), board (by status)
+ * or list (by milestone). A task opens in a detail pane here — the same pane the
+ * general Tasks panel uses — so working on a project never throws you out to another
+ * panel. The general panel stays the place for "all tasks"; this one is this project's.
+ */
+export function ProjectTasks({
+  workspaceId,
+  tasks,
+  allTasks,
+  milestones,
+  projects,
+  loading,
+  timeOn,
+  openTaskId,
+  onOpenTask,
+  onToggle,
+  onAddTask,
+  onChanged
+}: {
+  workspaceId: string | undefined;
+  /** Only this project's tasks. */
+  tasks: Task[];
+  /** Every task of the workspace — dependencies and subtasks may point outside the project. */
+  allTasks: Task[];
+  milestones: Milestone[];
+  projects: Project[];
+  loading: boolean;
+  timeOn: boolean;
+  openTaskId: string | null;
+  onOpenTask: (taskId: string | null) => void;
+  onToggle: (task: Task) => void;
+  onAddTask: () => void;
+  /** Called after a change that affects project rollups (progress, counts). */
+  onChanged: () => void;
+}): React.ReactElement {
+  const { toast } = useToast();
+  const updateTask = useUpdateTask(workspaceId);
+  const deleteTask = useDeleteTask(workspaceId);
+  const { isEnabled: isPluginEnabled } = useEnabledPlugins();
+  const teamOn = isPluginEnabled("team");
+  const { data: members } = useWorkspaceMembers(teamOn ? workspaceId : undefined);
+
+  const [layout, setLayout] = useState<TasksLayout>("matrix");
+  const [showClosed, setShowClosed] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAYOUT_KEY);
+      if (saved === "list" || saved === "board" || saved === "matrix") setLayout(saved);
+    } catch {
+      /* a remembered layout is a convenience only */
+    }
+  }, []);
+  function chooseLayout(next: TasksLayout): void {
+    setLayout(next);
+    try {
+      localStorage.setItem(LAYOUT_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
+  const split = frameWidth >= DETAIL_SPLIT_MIN;
+  const opened = openTaskId ? allTasks.find((task) => task.id === openTaskId) ?? null : null;
+  const showDetail = opened !== null;
+  const hideMain = showDetail && !split;
+
+  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<void> {
+    await updateTask.mutateAsync({ taskId, input: patch });
+    onChanged();
+  }
+  function setStatus(task: Task, status: TaskStatus): void {
+    if (task.status === status) return;
+    updateTask.mutate(
+      { taskId: task.id, input: { status } },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось изменить статус", tone: "danger" }) }
+    );
+  }
+  function moveToMilestone(task: Task, milestoneId: string | null): void {
+    updateTask.mutate(
+      { taskId: task.id, input: { milestoneId } },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось перенести задачу", tone: "danger" }) }
+    );
+  }
+  function confirmDelete(): void {
+    const task = pendingDelete;
+    if (!task) return;
+    setPendingDelete(null);
+    deleteTask.mutate(task.id, {
+      onSuccess: () => {
+        if (openTaskId === task.id) onOpenTask(null);
+        onChanged();
+        toast({ title: "Задача удалена" });
+      },
+      onError: () => toast({ title: "Не удалось удалить задачу", tone: "danger" })
+    });
+  }
+
+  const parentChoices = useMemo(() => parentOptions(allTasks, opened?.id), [allTasks, opened?.id]);
+
+  if (loading) return <Skeleton className="h-64 w-full" />;
+  if (tasks.length === 0) {
+    return (
+      <EmptyState
+        icon={ListTodo}
+        title="В проекте нет задач"
+        description="Разбейте проект на шаги — прогресс и «Дальше» считаются по ним."
+        action={
+          <Button size="sm" onClick={onAddTask}>
+            <Plus className="h-4 w-4" /> Задача
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div ref={frameRef} className={cx("flex min-h-0 gap-4", split && showDetail ? "items-start" : "flex-col")}>
+      {!hideMain ? (
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedControl<TasksLayout>
+              aria-label="Вид задач"
+              value={layout}
+              onChange={chooseLayout}
+              size="sm"
+              options={[
+                { value: "matrix", label: "Матрица" },
+                { value: "board", label: "Доска" },
+                { value: "list", label: "Список" }
+              ]}
+            />
+            <SegmentedControl<"open" | "all">
+              aria-label="Какие задачи показывать"
+              value={showClosed ? "all" : "open"}
+              onChange={(value) => setShowClosed(value === "all")}
+              size="sm"
+              options={[
+                { value: "open", label: "Открытые" },
+                { value: "all", label: "Все" }
+              ]}
+            />
+          </div>
+
+          {layout === "matrix" ? (
+            <TaskMatrix
+              tasks={tasks}
+              milestones={milestones}
+              includeClosed={showClosed}
+              onToggle={onToggle}
+              onOpen={(task) => onOpenTask(task.id)}
+              onMove={moveToMilestone}
+            />
+          ) : layout === "board" ? (
+            <ProjectBoard
+              tasks={tasks}
+              showClosed={showClosed}
+              openTaskId={openTaskId}
+              onOpen={(task) => onOpenTask(task.id)}
+              onToggle={onToggle}
+              onStatus={setStatus}
+              onDelete={setPendingDelete}
+            />
+          ) : (
+            <ProjectList tasks={tasks} milestones={milestones} showClosed={showClosed} onToggle={onToggle} onOpen={(task) => onOpenTask(task.id)} />
+          )}
+        </div>
+      ) : null}
+
+      {opened ? (
+        <div
+          className={cx(
+            "min-w-0 overflow-hidden rounded-xl border border-border",
+            split ? "sticky top-0 h-[calc(100dvh-14rem)] min-h-[28rem] w-[26rem] shrink-0" : "min-h-[28rem] flex-1"
+          )}
+        >
+          <TaskDetail
+            key={opened.id}
+            task={opened}
+            workspaceId={workspaceId}
+            projects={projects}
+            members={teamOn ? (members ?? []) : undefined}
+            tasks={allTasks}
+            milestones={milestones}
+            parentOptions={parentChoices}
+            timeOn={timeOn}
+            compact={!split}
+            onSave={saveTaskPatch}
+            onClose={() => onOpenTask(null)}
+            onDelete={() => setPendingDelete(opened)}
+            onOpenTask={(id) => onOpenTask(id)}
+          />
+        </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Удалить задачу?"
+        description={pendingDelete ? `«${pendingDelete.title}» — действие необратимо.` : undefined}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Доска
+// ---------------------------------------------------------------------------
+
+function ProjectBoard({
+  tasks,
+  showClosed,
+  openTaskId,
+  onOpen,
+  onToggle,
+  onStatus,
+  onDelete
+}: {
+  tasks: Task[];
+  showClosed: boolean;
+  openTaskId: string | null;
+  onOpen: (task: Task) => void;
+  onToggle: (task: Task) => void;
+  onStatus: (task: Task, status: TaskStatus) => void;
+  onDelete: (task: Task) => void;
+}): React.ReactElement {
+  const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
+  const [expandedDone, setExpandedDone] = useState(false);
+  const progress = useMemo(() => subtaskProgressMap(tasks), [tasks]);
+  const columns: TaskStatus[] = showClosed ? [...BOARD_COLUMNS, "canceled"] : BOARD_COLUMNS;
+
+  const byStatus = (status: TaskStatus): Task[] =>
+    tasks
+      .filter((task) => task.status === status)
+      .sort((a, b) =>
+        status === "done" || status === "canceled"
+          ? (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt)
+          : a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)
+      );
+
+  function drop(status: TaskStatus, event: React.DragEvent): void {
+    event.preventDefault();
+    setOverStatus(null);
+    const task = tasks.find((candidate) => candidate.id === event.dataTransfer.getData("text/plain"));
+    if (task) onStatus(task, status);
+  }
+
+  return (
+    <div className="orion-scroll overflow-x-auto pb-1">
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(15rem, 1fr))` }}>
+        {columns.map((status) => {
+          const all = byStatus(status);
+          // «Готово» keeps to the latest few unless asked for more: the open work is the point of the board.
+          const collapsed = status === "done" && !showClosed && !expandedDone && all.length > DONE_VISIBLE;
+          const shown = collapsed ? all.slice(0, DONE_VISIBLE) : all;
+          return (
+            <section
+              key={status}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setOverStatus(status);
+              }}
+              onDragLeave={() => setOverStatus((cur) => (cur === status ? null : cur))}
+              onDrop={(event) => drop(status, event)}
+              aria-label={TASK_STATUS_LABEL[status]}
+              className={cx(
+                "flex min-h-[8rem] flex-col gap-2 rounded-2xl border p-2 transition-colors",
+                overStatus === status ? "border-accent bg-accent/[0.05]" : "border-border"
+              )}
+            >
+              <h3 className="flex items-center gap-2 px-1 py-1 text-label text-muted-foreground">
+                {TASK_STATUS_LABEL[status]}
+                <span className="text-micro text-subtle-foreground">{all.length}</span>
+              </h3>
+              {shown.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border px-3 py-5 text-center text-micro text-subtle-foreground">Пусто</p>
+              ) : (
+                shown.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    draggable
+                    focused={task.id === openTaskId}
+                    subtasks={progress.get(task.id)}
+                    onOpen={() => onOpen(task)}
+                    onToggleDone={() => onToggle(task)}
+                    onMove={(next) => onStatus(task, next)}
+                    onDelete={() => onDelete(task)}
+                  />
+                ))
+              )}
+              {collapsed ? (
+                <button
+                  type="button"
+                  onClick={() => setExpandedDone(true)}
+                  className="rounded-lg border border-dashed border-border px-3 py-2 text-micro text-muted-foreground hover:text-foreground"
+                >
+                  Показать все ({all.length - shown.length} ещё)
+                </button>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Список
+// ---------------------------------------------------------------------------
+
+function ProjectList({
+  tasks,
+  milestones,
+  showClosed,
+  onToggle,
+  onOpen
+}: {
+  tasks: Task[];
+  milestones: Milestone[];
+  showClosed: boolean;
+  onToggle: (task: Task) => void;
+  onOpen: (task: Task) => void;
+}): React.ReactElement {
+  const groups = useMemo(() => groupTasksByMilestone(tasks, milestones, showClosed), [tasks, milestones, showClosed]);
+  const now = new Date();
+  return (
+    <div className="flex max-w-4xl flex-col gap-5">
+      {groups.map((group) => {
+        const total = group.open + group.closed;
+        return (
+          <PanelSection
+            key={group.milestone?.id ?? "none"}
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                {group.milestone ? <MilestoneIcon className="h-3 w-3" aria-hidden /> : null}
+                {group.milestone?.title ?? "Без вехи"}
+                <span className="font-mono normal-case tabular-nums">
+                  · {group.closed}/{total}
+                </span>
+                {group.milestone?.dueAt ? <span className="normal-case">· до {shortDate(group.milestone.dueAt)}</span> : null}
+              </span>
+            }
+          >
+            {group.tasks.length === 0 ? (
+              <p className="px-2 text-label text-subtle-foreground">{total === 0 ? "Задач у вехи пока нет." : "Всё закрыто."}</p>
+            ) : (
+              <ul className="flex flex-col">
+                {group.tasks.map((task) => (
+                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpen(task)} />
+                ))}
+              </ul>
+            )}
+          </PanelSection>
+        );
+      })}
+    </div>
+  );
+}
+
