@@ -1,0 +1,160 @@
+"""Уведомления о сигналах. Отправка никогда не роняет скан: сбой канала
+логируется, сигнал при этом уже сохранён в базе и виден в ленте."""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Protocol
+
+import httpx
+
+from compass.models import feed_delay_s
+from compass.signals import Signal
+from compass.strategies import STRATEGIES
+from compass.swing import outcome as swing_outcome
+
+log = logging.getLogger("compass.notify")
+
+DISCLAIMER = "Не инвестиционная рекомендация."
+
+
+def _price_label(s: Signal) -> str:
+    if s.fill_at == "next_open":
+        return "Открытие следующей свечи"
+    return "Цена закрытия"
+
+
+def _direction_head(s: Signal) -> str:
+    if s.direction == "short":
+        return f"🔴 Сигнал в ШОРТ: {s.symbol} ({s.tf})"
+    if s.direction == "long":
+        return f"🟢 Сигнал в ЛОНГ: {s.symbol} ({s.tf})"
+    if s.side == "buy":
+        return f"🟢 Сигнал на ВХОД: {s.symbol} ({s.tf})"
+    if s.role == "note":
+        return f"🔴 Стратегия вышла из {s.symbol} ({s.tf})"
+    return f"🔴 Сигнал на ВЫХОД: {s.symbol} ({s.tf})"
+
+
+def format_signal(s: Signal) -> str:
+    name = STRATEGIES[s.strategy].name if s.strategy in STRATEGIES else s.strategy
+    head = _direction_head(s)
+    opened = f"\nЦена открытия: {s.open_px:g}" if s.open_px else ""
+    stop = f"\nСтоп риска потери: {s.stop:g}" if s.stop else ""
+    body = f"{_price_label(s)}: {s.price:g}{opened}{stop}"
+    swing = swing_outcome(s.price, s.stop, s.target, s.leverage, s.stake)
+    if swing:
+        where = "стоп выше цены открытия" if s.direction == "short" else "стоп ниже цены открытия"
+        body += (
+            f"\nМаржа: {swing['stake']:g} USDT, плечо {swing['leverage']:g}×"
+            f"\nЦель: {s.target:g} (около +{swing['profit_pct']:g}% маржи, +{swing['profit_usdt']:g} USDT)"
+            f"\nПотеря при стопе: около −{swing['loss_pct']:g}% маржи (−{swing['loss_usdt']:g} USDT)"
+            f"\n{swing['risk_note']}"
+            f"\n{'Шорт' if s.direction == 'short' else 'Лонг'}: {where}. "
+            "Маржа изолированная: сделка забирает только эти деньги."
+        )
+    elif s.role == "note" and s.direction is None:
+        body += "\nОткрытого плана или позиции нет: идея закрылась, это не просьба продавать."
+    elif s.side == "exit" and s.direction is None:
+        body += "\nВыход по правилу: сверьте с открытым планом или позицией."
+    src = f"\nИсточник: {s.source}" if s.source else ""
+    delay = feed_delay_s(s.market, s.tf)
+    late = f"\n⚠ Данные с задержкой ~{delay // 60} мин: цена на бирже уже могла уйти." if delay else ""
+    return f"{head}\nСтратегия: {name}\n{body}{src}{late}\n{DISCLAIMER}"
+
+
+def format_digest(signals: list[Signal]) -> str:
+    lines = [f"🔔 Сигналы, накопившиеся за тихие часы: {len(signals)}"]
+    for s in signals[:10]:
+        if s.side == "buy":
+            lines.append(f"🟢 вход: {s.symbol} ({s.tf}) по {s.price:g}")
+        elif s.role == "note":
+            lines.append(f"🔴 идея закрылась: {s.symbol} ({s.tf}) по {s.price:g}")
+        else:
+            lines.append(f"🔴 выход: {s.symbol} ({s.tf}) по {s.price:g}")
+    if len(signals) > 10:
+        lines.append(f"…и ещё {len(signals) - 10}")
+    lines.append("Подробности — в приложении.")
+    lines.append(DISCLAIMER)
+    return "\n".join(lines)
+
+
+class Notifier(Protocol):
+    def send(self, signal: Signal) -> None: ...
+
+
+class TelegramNotifier:
+    """Без токена работает в dry-run (пишет в лог) — как и в ORION."""
+
+    def __init__(
+        self,
+        token: str | None = None,
+        chat_id: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> None:
+        self._token = token if token is not None else os.environ.get("TELEGRAM_BOT_TOKEN")
+        self._chat = chat_id if chat_id is not None else os.environ.get("TELEGRAM_CHAT_ID")
+        self._client = client or httpx.Client(timeout=10.0)
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self._token and self._chat)
+
+    def send(self, signal: Signal) -> None:
+        self._post(format_signal(signal))
+
+    def send_digest(self, signals: list[Signal]) -> None:
+        self._post(format_digest(signals))
+
+    def send_text(self, text: str) -> None:
+        """Произвольное сообщение (оповещения о цене)."""
+        self._post(text)
+
+    def _post(self, text: str) -> None:
+        if not self.enabled:
+            log.info("[telegram dry-run]\n%s", text)
+            return
+        try:
+            r = self._client.post(
+                f"https://api.telegram.org/bot{self._token}/sendMessage",
+                json={"chat_id": self._chat, "text": text},
+            )
+            r.raise_for_status()
+        except httpx.HTTPError as e:
+            # URL содержит токен — в лог кладём только тип ошибки и статус
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            log.warning("Telegram: не удалось отправить (%s, статус %s)", type(e).__name__, status)
+
+
+class CompositeNotifier:
+    def __init__(self, *notifiers: Notifier) -> None:
+        self._notifiers = notifiers
+
+    def send(self, signal: Signal) -> None:
+        for n in self._notifiers:
+            try:
+                n.send(signal)
+            except Exception:
+                log.exception("Сбой канала уведомлений %s", type(n).__name__)
+
+    def send_text(self, text: str) -> None:
+        for n in self._notifiers:
+            try:
+                fn = getattr(n, "send_text", None)
+                if fn is not None:
+                    fn(text)
+            except Exception:
+                log.exception("Сбой канала уведомлений %s", type(n).__name__)
+
+    def send_digest(self, signals: list[Signal]) -> None:
+        for n in self._notifiers:
+            try:
+                digest = getattr(n, "send_digest", None)
+                if digest is not None:
+                    digest(signals)
+                else:
+                    for s in signals:
+                        n.send(s)
+            except Exception:
+                log.exception("Сбой канала уведомлений %s", type(n).__name__)

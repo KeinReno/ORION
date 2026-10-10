@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
+import { CompassEngineService } from "./compass-engine.service";
 import { MarketsController } from "./markets.controller";
 import { MarketsService } from "./markets.service";
 
@@ -8,6 +9,6 @@ import { MarketsService } from "./markets.service";
 @Module({
   imports: [AuthModule, WorkspacesModule],
   controllers: [MarketsController],
-  providers: [MarketsService]
+  providers: [MarketsService, CompassEngineService]
 })
 export class MarketsModule {}

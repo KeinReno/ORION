@@ -5,6 +5,7 @@ import {
   tradeImportInputSchema,
   tradeModeSchema,
   updateWatchItemInputSchema,
+  type CompassEngineStatus,
   type CreateWatchItemInput,
   type InvestmentTrade,
   type RecordTradeFeeInput,
@@ -17,12 +18,38 @@ import { CurrentUser } from "../common/current-user.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { RequireModule } from "../modules/require-module";
+import { WorkspacesService } from "../workspaces/workspaces.service";
+import { CompassEngineService } from "./compass-engine.service";
 import { MarketsService } from "./markets.service";
 
 @RequireModule("markets")
 @Controller("workspaces/:workspaceId/markets")
 export class MarketsController {
-  constructor(private readonly markets: MarketsService) {}
+  constructor(
+    private readonly markets: MarketsService,
+    private readonly engine: CompassEngineService,
+    private readonly workspaces: WorkspacesService
+  ) {}
+
+  @Get("engine")
+  async engineStatus(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
+    await this.workspaces.assertMember(user.userId, workspaceId);
+    return this.engine.status();
+  }
+
+  @Post("engine/start")
+  @HttpCode(200)
+  async engineStart(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
+    await this.workspaces.assertMember(user.userId, workspaceId);
+    return this.engine.start();
+  }
+
+  @Post("engine/stop")
+  @HttpCode(200)
+  async engineStop(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<CompassEngineStatus> {
+    await this.workspaces.assertMember(user.userId, workspaceId);
+    return this.engine.stop();
+  }
 
   @Get("watchlist")
   listWatch(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<WatchItem[]> {

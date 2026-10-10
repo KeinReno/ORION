@@ -191,3 +191,13 @@ export function computePositions(trades: readonly Pick<InvestmentTrade, "mode" |
   }
   return [...map.values()].map(({ cost: _cost, ...position }) => position);
 }
+
+/** Состояние движка Compass, запущенного ORION. `url` с токеном сессии есть только у работающего движка. */
+export const compassEngineStatusSchema = z.object({
+  state: z.enum(["stopped", "starting", "running", "failed", "unavailable"]),
+  /** Почему движок недоступен или упал (по-русски, для показа). */
+  message: z.string().nullable(),
+  /** Адрес окна Compass на этом компьютере (с токеном сессии); только при state = running. */
+  url: z.string().nullable()
+});
+export type CompassEngineStatus = z.infer<typeof compassEngineStatusSchema>;

@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  CompassEngineStatus,
   CreateWatchItemInput,
   InvestmentTrade,
   RecordTradeFeeInput,
@@ -90,4 +91,22 @@ export function useDeleteInvestmentTrade(workspaceId: string | undefined) {
     mutationFn: (tradeId: string) => api.deleteInvestmentTrade(workspaceId as string, tradeId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["markets-trades", workspaceId] })
   });
+}
+
+/** Движок Compass, запущенный ORION: пока он стартует, состояние опрашивается. */
+export function useCompassEngine(workspaceId: string | undefined, enabled = true) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const key = ["markets-engine", workspaceId];
+  const status = useQuery<CompassEngineStatus>({
+    queryKey: key,
+    queryFn: () => api.compassEngine(workspaceId as string),
+    enabled: Boolean(workspaceId) && enabled,
+    refetchInterval: (query) => (query.state.data?.state === "starting" ? 1500 : false)
+  });
+  const run = useMutation<CompassEngineStatus, Error, "start" | "stop">({
+    mutationFn: (action) => api.compassEngine(workspaceId as string, action),
+    onSuccess: (next) => queryClient.setQueryData(key, next)
+  });
+  return { status, run };
 }

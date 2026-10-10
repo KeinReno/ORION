@@ -43,11 +43,12 @@ import {
 import { CandlestickChart, ExternalLink, FileUp, MoreHorizontal, Plus, Star } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { compassInstrumentLink, DEFAULT_COMPASS_URL, normalizeCompassUrl, readCompassUrl, saveCompassUrl, useCompassStatus } from "../lib/compass-link";
+import { CompassTab } from "./markets/compass-tab";
 import { describeAuthError } from "../lib/error-message";
 import { formatMoney, shortDateTime, toKopecks } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
-type Tab = "watch" | "trades" | "import";
+type Tab = "compass" | "watch" | "trades" | "import";
 
 const MARKET_HINTS = ["moex", "crypto"];
 
@@ -64,7 +65,7 @@ function num(value: number, digits = 8): string {
 export function MarketsPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const workspaceId = workspace?.id;
-  const [tab, setTab] = useState<Tab>("watch");
+  const [tab, setTab] = useState<Tab>("compass");
   const [compassUrl, setCompassUrl] = useState(() => readCompassUrl());
   const [editingUrl, setEditingUrl] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
@@ -83,8 +84,9 @@ export function MarketsPanel(): React.ReactElement {
       <PanelHeader
         icon={CandlestickChart}
         title="Рынки"
-        subtitle="Наблюдение и журнал сделок. Графики и стратегии — в Compass."
+        subtitle="Compass целиком: графики, сигналы, бэктесты, журнал. Рядом — наблюдение и сделки в ORION."
         actions={
+          tab === "compass" ? undefined : (
           <div className="flex items-center gap-2">
             <Badge tone={state === "running" ? "success" : state === "offline" ? "neutral" : "neutral"}>
               {state === "running" ? "Compass запущен" : state === "checking" ? "Проверяю Compass…" : "Compass не запущен"}
@@ -96,23 +98,31 @@ export function MarketsPanel(): React.ReactElement {
               <MoreHorizontal className="h-4 w-4" />
             </IconButton>
           </div>
+          )
         }
       >
         <SegmentedControl<Tab>
           value={tab}
           onChange={setTab}
           options={[
+            { value: "compass", label: "Compass" },
             { value: "watch", label: "Наблюдение" },
             { value: "trades", label: "Сделки" },
             { value: "import", label: "Импорт из Compass" }
           ]}
         />
       </PanelHeader>
+      {tab === "compass" ? (
+        <div className="min-h-0 flex-1">
+          <CompassTab workspaceId={workspaceId} />
+        </div>
+      ) : (
       <PanelBody className="[container-type:inline-size]">
         {tab === "watch" ? <WatchTab workspaceId={workspaceId} compassUrl={compassUrl} compassRunning={state === "running"} /> : null}
         {tab === "trades" ? <TradesTab workspaceId={workspaceId} /> : null}
         {tab === "import" ? <ImportTab workspaceId={workspaceId} onDone={() => setTab("trades")} /> : null}
       </PanelBody>
+      )}
 
       <Modal open={editingUrl} onClose={() => setEditingUrl(false)} title="Адрес Compass" size="sm">
         <div className="flex flex-col gap-3">

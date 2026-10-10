@@ -126,6 +126,8 @@ import {
   type CreateWatchItemInput,
   type InvestmentTrade,
   type RecordTradeFeeInput,
+  type CompassEngineStatus,
+  compassEngineStatusSchema,
   type TradeImportInput,
   type TradeImportResult,
   type TradeMode,
@@ -902,6 +904,12 @@ export class ApiClient {
 
   listInvestmentTrades(workspaceId: string, mode?: TradeMode): Promise<InvestmentTrade[]> {
     return this.request("GET", `/workspaces/${workspaceId}/markets/trades${mode ? `?mode=${mode}` : ""}`, undefined, z.array(investmentTradeSchema));
+  }
+
+  compassEngine(workspaceId: string, action: "status" | "start" | "stop" = "status"): Promise<CompassEngineStatus> {
+    return action === "status"
+      ? this.request("GET", `/workspaces/${workspaceId}/markets/engine`, undefined, compassEngineStatusSchema)
+      : this.request("POST", `/workspaces/${workspaceId}/markets/engine/${action}`, {}, compassEngineStatusSchema);
   }
 
   importInvestmentTrades(workspaceId: string, input: TradeImportInput): Promise<TradeImportResult> {
