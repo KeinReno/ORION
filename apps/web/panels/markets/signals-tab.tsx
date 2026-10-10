@@ -115,8 +115,54 @@ export function SignalsTab({ workspaceId }: { workspaceId: string | undefined })
         </ul>
       </section>
 
+      <ScreenerSection workspaceId={workspaceId} />
+
       <AlertsSection workspaceId={workspaceId} />
     </div>
+  );
+}
+
+function ScreenerSection({ workspaceId }: { workspaceId: string | undefined }): React.ReactElement | null {
+  const screener = useCompassQuery(workspaceId, ["screener"], () => api.screener(), { refetchMs: 120_000 });
+  if (!screener.data || screener.data.rows.length === 0) return null;
+  return (
+    <section aria-label="Скринер наблюдения">
+      <h3 className="mb-2 text-sm font-medium">Скринер списка наблюдения</h3>
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full text-sm">
+          <thead className="text-left text-label text-subtle-foreground">
+            <tr>
+              <th className="px-3 py-2 font-normal">Инструмент</th>
+              <th className="px-3 py-2 text-right font-normal">Цена</th>
+              <th className="px-3 py-2 text-right font-normal">20 свечей</th>
+              <th className="px-3 py-2 text-right font-normal">RSI</th>
+              <th className="px-3 py-2 text-right font-normal">ATR, %</th>
+              <th className="px-3 py-2 font-normal">Сигналы</th>
+            </tr>
+          </thead>
+          <tbody>
+            {screener.data.rows.map((row) => (
+              <tr key={`${row.market}:${row.symbol}`} className="border-t border-border">
+                <td className="px-3 py-1.5">
+                  {row.symbol} <span className="text-label text-subtle-foreground">{row.tf}</span>
+                  {row.status !== "ok" ? <span className="ml-1 text-label text-warning">{row.message || row.status}</span> : null}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{fmtPrice(row.last)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{row.change_20_pct == null ? "—" : `${row.change_20_pct > 0 ? "+" : ""}${row.change_20_pct.toFixed(1)}%`}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{row.rsi14 == null ? "—" : row.rsi14.toFixed(0)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{row.atr_pct == null ? "—" : row.atr_pct.toFixed(1)}</td>
+                <td className="px-3 py-1.5">{row.signals.length === 0 ? "—" : row.signals.map((item) => (item.side === "buy" ? "вход" : "выход")).join(", ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {screener.data.notes.map((note) => (
+        <p key={note} className="mt-1 text-label text-subtle-foreground">
+          {note}
+        </p>
+      ))}
+    </section>
   );
 }
 

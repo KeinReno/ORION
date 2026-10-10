@@ -5,11 +5,12 @@ import { FlaskConical } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../../lib/compass/api";
 import { fmtDateTime, fmtNum, fmtPct, fmtPrice, pnlClass } from "../../lib/compass/format";
-import type { BacktestResponse, ForecastDto, MarketId, OosResponse } from "../../lib/compass/types";
+import { parseGrid, suggestGrid } from "../../lib/compass/grid";
+import type { BacktestResponse, ForecastDto, LabResponse, MarketId, OosResponse, Strategy } from "../../lib/compass/types";
 import { describeAuthError } from "../../lib/error-message";
 import { useCompassQuery, useInvalidateCompass } from "./engine-gate";
 
-type Mode = "backtest" | "validate" | "forecast";
+type Mode = "backtest" | "validate" | "lab" | "forecast";
 
 const TIMEFRAMES: Record<MarketId, string[]> = {
   moex: ["1h", "1d"],
@@ -35,6 +36,7 @@ export function ResearchTab({ workspaceId }: { workspaceId: string | undefined }
           options={[
             { value: "backtest", label: "Бэктест" },
             { value: "validate", label: "Вне выборки" },
+            { value: "lab", label: "Лаборатория" },
             { value: "forecast", label: "Прогноз" }
           ]}
         />
@@ -81,6 +83,7 @@ export function ResearchTab({ workspaceId }: { workspaceId: string | undefined }
       </div>
       {mode === "backtest" ? <Backtest market={market} symbol={symbol.trim().toUpperCase()} tf={tf} strategy={chosenStrategy} /> : null}
       {mode === "validate" ? <Validate market={market} symbol={symbol.trim().toUpperCase()} tf={tf} strategy={chosenStrategy} /> : null}
+      {mode === "lab" ? <Lab market={market} symbol={symbol.trim().toUpperCase()} tf={tf} strategy={chosenStrategy} strategies={strategies.data ?? []} /> : null}
       {mode === "forecast" ? <Forecast workspaceId={workspaceId} market={market} symbol={symbol.trim().toUpperCase()} tf={tf} /> : null}
     </div>
   );
@@ -209,6 +212,117 @@ function Validate({ market, symbol, tf, strategy }: RunProps): React.ReactElemen
               {note}
             </p>
           ))}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+const LAB_VERDICT: Record<LabResponse["verdict"]["status"], { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
+  robust: { label: "Устойчиво", tone: "success" },
+  mixed: { label: "Смешанная картина", tone: "warning" },
+  fragile: { label: "Хрупко", tone: "danger" },
+  insufficient: { label: "Мало данных", tone: "neutral" }
+};
+
+/** Лаборатория: проверка скользящим окном (walk-forward), карта параметров, устойчивость. Тяжёлый расчёт — ждите до минуты. */
+function Lab({ market, symbol, tf, strategy, strategies }: RunProps & { strategies: Strategy[] }): React.ReactElement {
+  const current = strategies.find((item) => item.id === strategy);
+  const [grid, setGrid] = useState<Record<string, string>>({});
+  const [folds, setFolds] = useState("4");
+  const effectiveGrid = current ? { ...suggestGrid(current), ...grid } : {};
+  const names = current ? current.params.slice(0, 2).map((param) => param.name) : [];
+  const runner = useRunner<LabResponse>(async () => {
+    if (!current) throw new Error("Выберите правило");
+    return api.lab({
+      market,
+      symbol,
+      tf,
+      strategy,
+      params: {},
+      limit: 1000,
+      capital: 100000,
+      fee_pct: 0.05,
+      slippage_pct: 0.05,
+      grid: parseGrid(current, effectiveGrid, names),
+      folds: Number(folds),
+      mode: "rolling"
+    });
+  });
+  const data = runner.result;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-2">
+        {current
+          ? names.map((name) => (
+              <label key={name} className="flex flex-col gap-1 text-label text-subtle-foreground">
+                {current.params.find((param) => param.name === name)?.label ?? name}
+                <Input value={effectiveGrid[name] ?? ""} onChange={(event) => setGrid({ ...grid, [name]: event.target.value })} className="w-40" title="Целые числа через запятую" />
+              </label>
+            ))
+          : null}
+        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
+          Окон
+          <Input type="number" min="2" max="12" value={folds} onChange={(event) => setFolds(event.target.value)} className="w-20" />
+        </label>
+        <Button size="sm" disabled={runner.pending || !symbol || !current} onClick={runner.start}>
+          <FlaskConical className="h-4 w-4" /> {runner.pending ? "Считаю…" : "Запустить лабораторию"}
+        </Button>
+      </div>
+      {runner.error ? <EmptyState tone="danger" title="Лаборатория не отработала" description={runner.error} /> : null}
+      {runner.pending ? <Skeleton className="h-32" /> : null}
+      {data ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={LAB_VERDICT[data.verdict.status].tone}>{LAB_VERDICT[data.verdict.status].label}</Badge>
+            <span className="text-sm">{data.verdict.headline}</span>
+          </div>
+          <ul className="list-disc pl-5 text-label text-muted-foreground">
+            {data.verdict.findings.map((finding) => (
+              <li key={finding.title}>
+                <b>{finding.title}.</b> {finding.text}
+              </li>
+            ))}
+          </ul>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+            <Metric label="Окон с прибылью" value={`${data.walk_forward.summary.profitable_folds} из ${data.walk_forward.summary.usable_folds}`} />
+            <Metric label="Сшитая доходность" value={data.walk_forward.summary.stitched_return_pct == null ? "—" : fmtPct(data.walk_forward.summary.stitched_return_pct)} tone={data.walk_forward.summary.stitched_return_pct ?? 0} />
+            <Metric label="Худшее окно" value={data.walk_forward.summary.worst_fold_pct == null ? "—" : fmtPct(data.walk_forward.summary.worst_fold_pct)} tone={data.walk_forward.summary.worst_fold_pct ?? 0} />
+            <Metric label="Сделок" value={String(data.walk_forward.summary.trades)} />
+            <Metric label="Риск переобучения (PBO)" value={data.multiple_testing.pbo.value == null ? "—" : fmtPct(data.multiple_testing.pbo.value * 100, 0, false)} />
+            <Metric label="DSR" value={data.multiple_testing.dsr.value == null ? "—" : fmtNum(data.multiple_testing.dsr.value)} />
+          </dl>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead className="text-left text-label text-subtle-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-normal">Окно</th>
+                  <th className="px-3 py-2 text-right font-normal">Проверка</th>
+                  <th className="px-3 py-2 text-right font-normal">Просадка</th>
+                  <th className="px-3 py-2 text-right font-normal">Сделок</th>
+                  <th className="px-3 py-2 text-right font-normal">Держать</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.walk_forward.folds.map((fold) => (
+                  <tr key={fold.index} className="border-t border-border">
+                    <td className="px-3 py-1.5">{fold.index + 1}</td>
+                    <td className={`px-3 py-1.5 text-right tabular-nums ${pnlClass(fold.test_return_pct)}`}>{fmtPct(fold.test_return_pct)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{fmtPct(fold.test_max_drawdown_pct, 2, false)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{fold.test_trades}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{fold.buy_hold_pct == null ? "—" : fmtPct(fold.buy_hold_pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data.parameter_map.stability ? <p className="text-label text-muted-foreground">{data.parameter_map.stability.text}</p> : null}
+          {[...data.notes, ...data.warnings].map((note) => (
+            <p key={note} className="text-label text-subtle-foreground">
+              {note}
+            </p>
+          ))}
+          <p className="text-label text-subtle-foreground">{data.verdict.disclaimer}</p>
         </>
       ) : null}
     </div>

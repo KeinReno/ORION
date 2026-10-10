@@ -27,6 +27,7 @@ export function ChartTab({ workspaceId }: { workspaceId: string | undefined }): 
   const candles = useCompassQuery(workspaceId, ["candles", market, symbol, tf], () => api.candles(market, symbol, tf, 500), { enabled: Boolean(symbol), refetchMs: 60_000 });
   const watchlist = useCompassQuery(workspaceId, ["watchlist"], () => api.watchlist());
   const levels = useCompassQuery(workspaceId, ["levels", market, symbol], () => api.levels(market, symbol), { enabled: Boolean(symbol) });
+  const presets = useCompassQuery(workspaceId, ["presets", market], () => api.presets(market));
   const found = useCompassQuery(workspaceId, ["search", market, query], () => api.search(market, query), { enabled: query.trim().length >= 2 });
 
   const watched = (watchlist.data ?? []).some((item) => item.market === market && item.symbol === symbol);
@@ -144,6 +145,37 @@ export function ChartTab({ workspaceId }: { workspaceId: string | undefined }): 
             {candles.data.quality && candles.data.quality.status !== "ok" ? ` · качество ряда: ${candles.data.quality.issues.map((issue) => issue.message).join("; ")}` : ""}
           </p>
         </>
+      ) : null}
+
+      {presets.data && presets.data.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-sm text-muted-foreground">Наборы по темам: добавить в наблюдение</summary>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {presets.data.map((group) => (
+              <li key={group.id} className="rounded-xl border border-border px-3 py-2 text-sm">
+                <div className="font-medium">{group.title}</div>
+                <div className="text-label text-subtle-foreground">{group.instruments.length} инструментов{group.note ? ` · ${group.note}` : ""}</div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-1"
+                  onClick={() =>
+                    void api
+                      .addPreset(market, group.id)
+                      .then(async (result) => {
+                        await invalidate(["watchlist"]);
+                        await invalidate(["presets"]);
+                        toast({ title: `Добавлено: ${result.added}`, description: result.already > 0 ? `Уже были: ${result.already}` : undefined, tone: "success" });
+                      })
+                      .catch((error: unknown) => toast({ title: "Не получилось", description: describeAuthError(error), tone: "danger" }))
+                  }
+                >
+                  Добавить набор
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
 
       <section aria-label="Уровни" className="flex flex-wrap items-center gap-2">
