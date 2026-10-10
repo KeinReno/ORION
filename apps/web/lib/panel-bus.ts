@@ -99,6 +99,16 @@ const noteChannel = makeFocusChannel("notes");
 const eventChannel = makeFocusChannel("calendar");
 const documentChannel = makeFocusChannel("documents");
 const transactionChannel = makeFocusChannel("finance");
+const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
+let browserNonce = 0;
+
+/** Open a web page in ORION's built-in browser (a new tab there; the panel is opened/focused first). */
+export function openInBrowser(url: string): void {
+  browserNonce += 1;
+  browserChannel.emit({ url, nonce: browserNonce });
+}
+/** BrowserPanel reads the latest request; `nonce` tells a repeated URL from an old one. */
+export const useBrowserRequest = browserChannel.useIntent;
 
 /** Calendar (or anything else) calls this to jump to a task in the Tasks panel. */
 export const focusTask = taskChannel.focus;

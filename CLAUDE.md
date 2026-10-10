@@ -367,6 +367,18 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   (dockview `themeAbyss`), переключателя в панели поэтому нет. Не добавляй
   контрол, который ничего не делает.
 
+### Встроенный браузер, интеграции, плагины (v0.21)
+
+- **Браузер** (`panels/BrowserPanel.tsx`, панель `browser`, группа «Инструменты») — страницы http(s) во вкладках внутри
+  панели, как «Веб-просмотр» в Obsidian. Фрейм песочный (`sandbox`, без реферера); адреса проходят через
+  `lib/browser-url.ts` (`javascript:`, `data:`, `file:`… отклоняются, не-URL превращается в поиск). Сайты, запрещающие
+  встраивание, остаются пустыми — для них «Открыть во внешнем браузере»; настоящего веб-вью Tauri тут нет (Rust недоступен).
+  Клик по ссылке в просмотре заметки открывает её здесь (`openInBrowser`), Ctrl/Cmd+клик — как обычно. CSP десктопа получил `frame-src http: https:`.
+- **Плагины** описаны в `docs/PLUGIN_EXTRACTION_LOG.md`; слоты — `apps/web/lib/extensions/contracts.ts`, регистрация —
+  `apps/web/plugins/index.ts`. Сервер уважает выключенный плагин: `@RequirePlugin(id)` (409), `pluginOffWhere` в кронах.
+- **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
+  (`Workspace.disabledModules` по умолчанию `["markets"]`).
+
 ### Связи, подзадачи, вложения (v0.17)
 
 - Связи между сущностями — `apps/web/components/entity-links.tsx`

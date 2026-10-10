@@ -43,6 +43,7 @@ import { NoteAutosave, type AutosaveConflict, type AutosaveState as NoteAutosave
 import { focusNote } from "../lib/panel-bus";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { NoteAttachmentsSection } from "./note-attachments";
+import { openInBrowser } from "../lib/panel-bus";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 type EditorMode = "edit" | "preview";
@@ -499,6 +500,7 @@ export function NoteEditor({
               source={body}
               className="min-h-[18rem]"
               onWikiLink={navigateWikiLink}
+              onExternalLink={openInBrowser}
               getWikiLinkPreview={(target) => titleLookup.get(target.toLowerCase())}
             />
           ) : (

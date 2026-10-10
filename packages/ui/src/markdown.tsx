@@ -40,6 +40,18 @@ md.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
   return self.renderToken(tokens, idx, options);
 };
 
+// External links never replace the app's own page: they open in a new tab (and drop the opener), unless the host
+// intercepts the click (see `onExternalLink`).
+const defaultLinkOpen = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  const href = String(tokens[idx].attrGet("href") ?? "");
+  if (/^https?:\/\//i.test(href)) {
+    tokens[idx].attrSet("target", "_blank");
+    tokens[idx].attrSet("rel", "noopener noreferrer");
+  }
+  return defaultLinkOpen(tokens, idx, options, env, self);
+};
+
 // `[[Target]]` / `[[Target|alias]]` → <a data-wikilink="Target" class="orion-wikilink">alias</a>.
 // Registered before "link" so it wins on the leading `[`. No nested brackets.
 const OPEN_BRACKET = 0x5b; // "["
@@ -121,12 +133,18 @@ export function MarkdownView({
   source,
   className,
   onWikiLink,
+  onExternalLink,
   getWikiLinkPreview
 }: {
   source: string;
   className?: string;
   /** Called with the target title when a `[[wiki link]]` in the rendered body is clicked. */
   onWikiLink?: (target: string) => void;
+  /**
+   * A plain click on an http(s) link in the rendered body: the host takes it (ORION opens it in its built-in browser). Not
+   * called for a click with Ctrl/Cmd/Shift/Alt or the middle button — those keep the browser's own behaviour (a new tab).
+   */
+  onExternalLink?: (href: string) => void;
   /** Resolves a hovered `[[wiki link]]`'s target to a preview, if the note exists — no preview shown if it doesn't. */
   getWikiLinkPreview?: (target: string) => { title: string; snippet: string } | undefined;
 }): React.ReactElement {
@@ -163,12 +181,20 @@ export function MarkdownView({
     <>
       <div
         onClick={
-          onWikiLink
+          onWikiLink || onExternalLink
             ? (e) => {
-                const target = wikiLinkFromEvent(e.nativeEvent);
-                if (target) {
+                const target = onWikiLink ? wikiLinkFromEvent(e.nativeEvent) : null;
+                if (target && onWikiLink) {
                   e.preventDefault();
                   onWikiLink(target);
+                  return;
+                }
+                if (!onExternalLink || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+                const anchor = e.target instanceof Element ? e.target.closest("a[href]") : null;
+                const href = anchor?.getAttribute("href") ?? "";
+                if (anchor && !anchor.classList.contains("orion-wikilink") && /^https?:\/\//i.test(href)) {
+                  e.preventDefault();
+                  onExternalLink(href);
                 }
               }
             : undefined
