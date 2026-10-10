@@ -2,7 +2,7 @@
 
 import { isHabitScheduled, type Habit } from "@orion/shared-types";
 import { cx } from "@orion/ui";
-import { WEEKDAY_SHORT, weekdayTitle, type WeekDay } from "./week";
+import { WEEKDAY_SHORT, weekdayTitle, type WeekDay } from "../../lib/habit-days";
 
 /** Same 5-step scale for every cell, independent of how many habits are scheduled that day. */
 function levelClass(ratio: number | null): string {

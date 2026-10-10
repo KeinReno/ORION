@@ -3,7 +3,7 @@
 import type { Habit } from "@orion/shared-types";
 import { Button, Input, PALETTE_SWATCHES, Textarea, cx } from "@orion/ui";
 import { useState, type FormEvent } from "react";
-import { WEEKDAY_SHORT } from "./week";
+import { WEEKDAY_SHORT } from "../../lib/habit-days";
 
 /**
  * Habit create form lives in a Modal; the detail workspace (week, heatmap,
@@ -17,10 +17,8 @@ import { WEEKDAY_SHORT } from "./week";
  */
 export const HABIT_COLOR_ORDER = PALETTE_SWATCHES.slice(0, 6).map((swatch) => swatch.key);
 
-/** Palette key → fill, for the dot next to a habit's name. */
-export function habitSwatchColor(key: string | null | undefined): string | undefined {
-  return key ? PALETTE_SWATCHES.find((swatch) => swatch.key === key)?.color : undefined;
-}
+export { habitSwatchColor } from "../../lib/habit-days";
+import { habitSwatchColor } from "../../lib/habit-days";
 
 export interface HabitFormValues {
   name: string;

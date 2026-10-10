@@ -10,7 +10,7 @@ import { orionModuleIdSchema, type OrionModuleId } from "./modules";
  * (PLUGIN_CATALOG mirrors MODULE_CATALOG) — the only extra rule is
  * `extendsModuleId` and auto-disable when that module is off.
  */
-export const ORION_PLUGIN_IDS = ["team"] as const;
+export const ORION_PLUGIN_IDS = ["team", "habits-insights"] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
 export type OrionPluginId = z.infer<typeof orionPluginIdSchema>;
@@ -70,7 +70,7 @@ export function pluginStates(
   }));
 }
 
-/** Compiled-in catalog — same posture as MODULE_CATALOG, proven on exactly one plugin so far. */
+/** Compiled-in catalog — same posture as MODULE_CATALOG, now two plugins: the original optional `team` and the first extraction, `habits-insights`. */
 export const PLUGIN_CATALOG: readonly PluginManifest[] = [
   {
     id: "team",
@@ -80,5 +80,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Assignee у задачи", "Фильтр «Мои задачи»", "Роль «Тимлид»"],
     disableBehavior: "Назначение скрывается из интерфейса и не проверяется API; уже расставленные исполнители сохраняются.",
     defaultEnabled: false
+  },
+  {
+    id: "habits-insights",
+    extendsModuleId: "habits",
+    label: "Аналитика привычек",
+    summary: "Неделя по каждой привычке и 12-недельная карта активности рядом с ежедневным списком.",
+    provides: ["Блок «Неделя»", "Блок «Активность» (12 недель)", "Отметка любого дня недели"],
+    disableBehavior:
+      "Блоки «Неделя» и «Активность» скрываются; отметки, серии и список «Сегодня» работают как прежде, данные не удаляются.",
+    // Extracted from the base panel without changing what anyone sees: on by default.
+    defaultEnabled: true
   }
 ];

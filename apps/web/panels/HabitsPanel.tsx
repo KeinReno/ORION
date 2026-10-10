@@ -21,6 +21,7 @@ import {
   Sheet,
   Skeleton,
   StatCard,
+  cx,
   useToast
 } from "@orion/ui";
 import { Archive, Plus, Target, TriangleAlert } from "lucide-react";
@@ -30,27 +31,18 @@ import { useLocalNow } from "../lib/use-day-boundary";
 import { describeError } from "../lib/error-message";
 import { ArchiveRow, TodayRow } from "./habits/habit-row";
 import { HabitForm, type HabitFormValues } from "./habits/habit-form";
-import { HabitsHeatmap } from "./habits/heatmap";
-import { WeekGrid } from "./habits/week-grid";
-import {
-  buildHeatmapWeeks,
-  buildWeek,
-  entryDaysByHabit,
-  isDueToday,
-  pluralDays,
-  pluralHabits,
-  streakLabel
-} from "./habits/week";
-
-const HEATMAP_WEEKS = 12;
+import { buildWeek, entryDaysByHabit, isDueToday, pluralDays, pluralHabits, streakLabel } from "../lib/habit-days";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 /**
- * Привычки (v0.19): the daily checklist, the week at a glance and the archive.
+ * Привычки (v0.19): the daily checklist, the summary and the archive. The week grid and
+ * the 12-week activity map are the `habits-insights` plugin: they arrive through the
+ * `habits.insights` slot, and with the plugin off this panel is simply the checklist.
  *
  * Two caches feed it — `["habits", ws, includeArchived]` (the one list the panel
- * splits into today / week / archive) and `["habit-entries", ws, {from, to}]`
- * (the current week's ticks, which is what the grid paints). Every mutation
- * invalidates both; `toggle` additionally patches them optimistically.
+ * splits into today / archive) and `["habit-entries", ws, {from, to}]` (this week's
+ * ticks, which is what "done today" reads). Every mutation invalidates both; `toggle`
+ * additionally patches them optimistically.
  *
  * The panel always works in the **user's** days: the visible week is the local
  * week, and every tick is sent with `habitLocalDayKey(...)` so the server never
@@ -73,7 +65,6 @@ export function HabitsPanel(): React.ReactElement {
   // staying frozen on the day it was opened on.
   const now = useLocalNow();
   const week = useMemo(() => buildWeek(now), [now]);
-  const heatmapWeeks = useMemo(() => buildHeatmapWeeks(now, HEATMAP_WEEKS), [now]);
   const todayKey = habitLocalDayKey(now);
 
   // The user's own day goes to the API as `?today=`, so its `dueToday`,
@@ -82,12 +73,6 @@ export function HabitsPanel(): React.ReactElement {
   // reconciliation.
   const habitsQuery = useHabits(workspaceId, showArchive, todayKey);
   const entriesQuery = useHabitEntries(workspaceId, { from: week[0].key, to: week[6].key });
-  // Separate cache key (wider range) for the heatmap only — the weekly grid
-  // above stays a cheap one-week fetch even while 12 weeks load underneath it.
-  const heatmapEntriesQuery = useHabitEntries(workspaceId, {
-    from: heatmapWeeks[0][0].key,
-    to: heatmapWeeks[HEATMAP_WEEKS - 1][6].key
-  });
 
   const createHabit = useCreateHabit(workspaceId);
   const updateHabit = useUpdateHabit(workspaceId);
@@ -104,7 +89,6 @@ export function HabitsPanel(): React.ReactElement {
 
   const entryDays = entryDaysByHabit(entriesQuery.data);
   const entriesLoaded = entriesQuery.data !== undefined;
-  const heatmapDays = useMemo(() => entryDaysByHabit(heatmapEntriesQuery.data), [heatmapEntriesQuery.data]);
 
   /**
    * The checkbox reads the tick list (the source of truth for the visible week)
@@ -120,6 +104,8 @@ export function HabitsPanel(): React.ReactElement {
   const doneToday = dueHabits.filter(isDoneToday).length;
   const bestStreak = activeHabits.reduce((best, habit) => Math.max(best, habit.streak), 0);
   const toggling = toggleHabit.isPending;
+  // The layout adapts to whether anything fills the insights slot: two columns when it does, one when not.
+  const hasInsights = useSlotContributions("habits.insights").length > 0;
 
   function toggle(habitId: string, day: string): void {
     toggleHabit.mutate(
@@ -262,7 +248,12 @@ export function HabitsPanel(): React.ReactElement {
           // Today's tick is the daily action, so it leads and stays in the first column; the
           // week grid and heatmap are history and sit beside it on a wide panel (by the
           // panel's own width, not the window's) instead of leaving half the screen empty.
-          <div className="grid grid-cols-1 gap-6 [@container(min-width:880px)]:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
+          <div
+            className={cx(
+              "grid grid-cols-1 gap-6",
+              hasInsights && "[@container(min-width:880px)]:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]"
+            )}
+          >
             <div className="min-w-0 space-y-6">
             <PanelSection title="Сегодня">
               {dueHabits.length === 0 ? (
@@ -304,50 +295,11 @@ export function HabitsPanel(): React.ReactElement {
             </PanelSection>
             </div>
 
-            <div className="min-w-0 space-y-6">
-            <PanelSection
-              title="Неделя"
-              actions={
-                activeHabits.length > 0 ? (
-                  <span className="text-2xs text-subtle-foreground">
-                    {bestStreak > 0 ? `Лучшая серия: ${streakLabel(bestStreak)}` : "клик по клетке — отметка"}
-                  </span>
-                ) : undefined
-              }
-            >
-              {activeHabits.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Все привычки в архиве — включите «Показать архив», чтобы вернуть нужную.
-                </p>
-              ) : entriesQuery.isLoading ? (
-                <div className="space-y-1.5">
-                  {Array.from({ length: activeHabits.length }).map((_, index) => (
-                    <Skeleton key={index} className="h-7 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <WeekGrid
-                  habits={activeHabits}
-                  week={week}
-                  days={entryDays}
-                  busy={toggling}
-                  onToggle={toggle}
-                  onEdit={setEditing}
-                  onArchive={doArchive}
-                />
-              )}
-            </PanelSection>
-
-            {activeHabits.length > 0 ? (
-              <PanelSection title="Активность" actions={<span className="text-2xs text-subtle-foreground">{HEATMAP_WEEKS} недель</span>}>
-                {heatmapEntriesQuery.isLoading ? (
-                  <Skeleton className="h-24 w-full" />
-                ) : (
-                  <HabitsHeatmap weeks={heatmapWeeks} habits={activeHabits} days={heatmapDays} />
-                )}
-              </PanelSection>
-            ) : null}
-            </div>
+            <ExtensionSlot
+              name="habits.insights"
+              wrapperClassName="min-w-0 space-y-6"
+              props={{ workspaceId, habits: activeHabits, onEditHabit: setEditing, onArchiveHabit: doArchive }}
+            />
 
             {showArchive ? (
               <div className="min-w-0 [@container(min-width:880px)]:col-span-2">
@@ -406,28 +358,10 @@ export function HabitsPanel(): React.ReactElement {
                 hint={editing.weekdays.length === 0 ? "каждый день" : undefined}
               />
             </div>
-            {entriesQuery.isLoading ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              <WeekGrid
-                habits={[habits.find((habit) => habit.id === editing.id) ?? editing]}
-                week={week}
-                days={entryDays}
-                busy={toggling}
-                onToggle={toggle}
-                onEdit={() => undefined}
-                onArchive={doArchive}
-              />
-            )}
-            {heatmapEntriesQuery.isLoading ? (
-              <Skeleton className="h-20 w-full" />
-            ) : (
-              <HabitsHeatmap
-                weeks={heatmapWeeks}
-                habits={[habits.find((habit) => habit.id === editing.id) ?? editing]}
-                days={heatmapDays}
-              />
-            )}
+            <ExtensionSlot
+              name="habits.detail"
+              props={{ workspaceId, habit: habits.find((habit) => habit.id === editing.id) ?? editing, onArchiveHabit: doArchive }}
+            />
             <HabitForm
               key={editing.id}
               initial={habits.find((habit) => habit.id === editing.id) ?? editing}

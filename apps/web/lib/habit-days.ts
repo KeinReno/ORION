@@ -1,4 +1,5 @@
 import { habitLocalDayKey, habitWeekdayOf, type Habit, type HabitEntry } from "@orion/shared-types";
+import { PALETTE_SWATCHES } from "@orion/ui";
 
 /**
  * Pure helpers behind the habits panel: the visible week, the tick lookup and
@@ -108,4 +109,9 @@ export function pluralHabits(count: number): string {
 /** "5 дней подряд" — the streak badge's accessible/tooltip text. */
 export function streakLabel(streak: number): string {
   return `${streak} ${pluralDays(streak)} подряд`;
+}
+
+/** Palette key → fill, for the dot next to a habit's name. */
+export function habitSwatchColor(key: string | null | undefined): string | undefined {
+  return key ? PALETTE_SWATCHES.find((swatch) => swatch.key === key)?.color : undefined;
 }

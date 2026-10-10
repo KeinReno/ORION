@@ -3,8 +3,7 @@
 import { isHabitScheduled, type Habit } from "@orion/shared-types";
 import { IconButton, cx } from "@orion/ui";
 import { Archive, Check } from "lucide-react";
-import { habitSwatchColor } from "./habit-form";
-import { WEEKDAY_SHORT, weekdayTitle, type WeekDay } from "./week";
+import { WEEKDAY_SHORT, habitSwatchColor, weekdayTitle, type WeekDay } from "../../lib/habit-days";
 
 /**
  * The week at a glance: one row per active habit, seven columns Пн…Вс.

@@ -3,8 +3,8 @@
 import type { Habit } from "@orion/shared-types";
 import { Button, CheckToggle, IconButton, cx } from "@orion/ui";
 import { Archive, ArchiveRestore } from "lucide-react";
-import { habitSwatchColor } from "./habit-form";
-import { scheduleLabel, streakLabel } from "./week";
+import { habitSwatchColor } from "../../lib/habit-days";
+import { scheduleLabel, streakLabel } from "../../lib/habit-days";
 
 /**
  * The two row shapes of the habits panel: the daily checklist (a checkbox that

@@ -132,4 +132,27 @@ describe("Personal hidden modules", () => {
     expect((await patch(Array.from({ length: 13 }, (_, i) => ({ id: `f${i}`, name: "n", collapsed: false, items: [] })))).status).toBe(400);
     expect((await patch([{ id: "x", name: "n", collapsed: false, items: Array.from({ length: 61 }, (_, i) => `p${i}`) }])).status).toBe(400);
   });
+
+  it("the extracted built-in plugin is ON for an existing-style workspace and can be switched off and back", async () => {
+    const alice = await register("plugin-toggle");
+    type State = { id: string; enabled: boolean; defaultEnabled: boolean; extendsModuleId: string };
+    const base = `/workspaces/${alice.workspaceId}/plugins`;
+
+    const initial = await request<State[]>(base, { method: "GET", token: alice.accessToken });
+    const insights = initial.data.find((p) => p.id === "habits-insights");
+    // Default-full parity: a workspace that never touched plugins keeps what it had before the extraction.
+    expect(insights).toMatchObject({ enabled: true, defaultEnabled: true, extendsModuleId: "habits" });
+    // The pre-existing optional plugin did not change its default.
+    expect(initial.data.find((p) => p.id === "team")?.enabled).toBe(false);
+
+    const off = await request<State[]>(`${base}/habits-insights`, { method: "PATCH", token: alice.accessToken, body: { enabled: false } });
+    expect(off.status).toBe(200);
+    expect(off.data.find((p) => p.id === "habits-insights")?.enabled).toBe(false);
+
+    const back = await request<State[]>(`${base}/habits-insights`, { method: "PATCH", token: alice.accessToken, body: { enabled: true } });
+    expect(back.data.find((p) => p.id === "habits-insights")?.enabled).toBe(true);
+
+    const unknown = await request(`${base}/no-such-plugin`, { method: "PATCH", token: alice.accessToken, body: { enabled: true } });
+    expect(unknown.status).toBe(404);
+  });
 });
