@@ -1,7 +1,15 @@
 "use client";
 
 import "dockview-react/dist/styles/dockview.css";
-import { DockviewReact, themeAbyss, type DockviewReadyEvent, type IDockviewHeaderActionsProps, type IDockviewPanelProps } from "dockview-react";
+import {
+  DockviewDefaultTab,
+  DockviewReact,
+  themeAbyss,
+  type DockviewReadyEvent,
+  type IDockviewHeaderActionsProps,
+  type IDockviewPanelHeaderProps,
+  type IDockviewPanelProps
+} from "dockview-react";
 import type { FunctionComponent } from "react";
 
 export type { DockviewApi, DockviewReadyEvent, IDockviewHeaderActionsProps, IDockviewPanelProps } from "dockview-react";
@@ -21,6 +29,30 @@ export {
   type DockviewWillShowOverlayLocationEvent,
   type DockviewDidDropEvent
 } from "dockview-react";
+
+/**
+ * The standard tab plus "middle button closes it". Dockview's own middle-click handling relies
+ * on pointer events that its drag machinery swallows, so it never fired here; the browser's
+ * `auxclick` is not affected. `display: contents` keeps the wrapper out of the tab's layout.
+ */
+function OrionTab(props: IDockviewPanelHeaderProps): React.ReactElement {
+  return (
+    <div
+      style={{ display: "contents" }}
+      onMouseDown={(event) => {
+        // Stops the browser's middle-button autoscroll from starting on the tab.
+        if (event.button === 1) event.preventDefault();
+      }}
+      onAuxClick={(event) => {
+        if (event.button !== 1) return;
+        event.preventDefault();
+        props.api.close();
+      }}
+    >
+      <DockviewDefaultTab {...props} />
+    </div>
+  );
+}
 
 export interface WorkbenchProps {
   /** Panel id -> component. Mirrors the module registry: adding a module means adding one entry here. */
@@ -42,6 +74,7 @@ export function Workbench({ components, onReady, rightHeaderActionsComponent }: 
       <DockviewReact
         theme={themeAbyss}
         components={components}
+        defaultTabComponent={OrionTab}
         onReady={onReady}
         rightHeaderActionsComponent={rightHeaderActionsComponent}
       />
