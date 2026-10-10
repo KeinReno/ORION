@@ -46,6 +46,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EntryForm, type EntryFormDraft, type EntryFormValues } from "./time/entry-form";
 import { dayLabel, groupEntriesByDay, summariseEntries, timeRange } from "./time/summary";
+import { TimeDynamics } from "./time/time-charts";
 import { TimerWidget } from "./time/timer-widget";
 import { useNowTick } from "./time/use-now";
 
@@ -420,6 +421,8 @@ export function TimePanel(): React.ReactElement {
                 </div>
               ) : null}
             </PanelSection>
+
+            <TimeDynamics workspaceId={workspaceId} projects={allProjects} />
             </div>
 
             <div className="min-w-0">
