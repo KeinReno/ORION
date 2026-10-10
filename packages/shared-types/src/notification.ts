@@ -19,6 +19,7 @@ export const notificationSchema = z.object({
     "finance_alert",
     "inventory_low_stock",
     "task_comment",
+    "project_update",
     "entity_reminder",
     "system"
   ]),

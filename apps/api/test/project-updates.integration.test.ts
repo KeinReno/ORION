@@ -136,6 +136,30 @@ describe("Project status updates (UI-05)", () => {
     expect((await request<UpdateDto[]>(base, { method: "GET", token: alice.accessToken })).data).toEqual([]);
   });
 
+  it("a risky report notifies the other members (not the author); a routine one notifies nobody", async () => {
+    const alice = await register("notify-author");
+    const bob = await register("notify-member");
+    await prisma.asSystem(async (tx) => {
+      await tx.workspaceMember.create({ data: { workspaceId: alice.workspaceId, userId: bob.user.id, role: "member" } });
+    });
+    const projectId = await makeProject(alice.workspaceId, alice.accessToken, "Сайт");
+    const base = `/workspaces/${alice.workspaceId}/projects/${projectId}/updates`;
+    type Item = { kind: string; title: string; entityType: string | null; entityId: string | null };
+    const inbox = async (token: string): Promise<Item[]> =>
+      (await request<Item[]>(`/workspaces/${alice.workspaceId}/notifications`, { method: "GET", token })).data.filter((n) => n.kind === "project_update");
+
+    expect((await request(base, { method: "POST", token: alice.accessToken, body: { health: "on_track", summary: "Всё по плану" } })).status).toBe(201);
+    expect(await inbox(bob.accessToken)).toHaveLength(0);
+
+    expect((await request(base, { method: "POST", token: alice.accessToken, body: { health: "delayed", summary: "Сдвигаем релиз" } })).status).toBe(201);
+    const forBob = await inbox(bob.accessToken);
+    expect(forBob).toHaveLength(1);
+    expect(forBob[0]).toMatchObject({ entityType: "project", entityId: projectId });
+    expect(forBob[0].title).toContain("Сайт");
+    // Your own report never notifies you.
+    expect(await inbox(alice.accessToken)).toHaveLength(0);
+  });
+
   it("the project itself carries the newest reported health, and null when nobody reported", async () => {
     const alice = await register("health");
     const projectId = await makeProject(alice.workspaceId, alice.accessToken, "Проект");

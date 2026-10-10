@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { ProjectStatusUpdate as UpdateRow, User } from "@prisma/client";
-import type { CreateProjectUpdateInput, ProjectHealth, ProjectUpdate } from "@orion/shared-types";
+import { PROJECT_HEALTH_LABEL, type CreateProjectUpdateInput, type ProjectHealth, type ProjectUpdate } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { NotificationCenterService } from "../notifications/notification-center.service";
+import { NotificationPolicyService } from "../notifications/notification-policy.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 /** Newest first; the overview shows the latest and a short history, not an archive browser. */
@@ -23,7 +25,9 @@ type RowWithAuthor = UpdateRow & { author: Pick<User, "id" | "name"> };
 export class ProjectUpdatesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly notifications: NotificationCenterService,
+    private readonly policy: NotificationPolicyService
   ) {}
 
   async list(userId: string, workspaceId: string, projectId: string): Promise<ProjectUpdate[]> {
@@ -40,10 +44,18 @@ export class ProjectUpdatesService {
     });
   }
 
+  /**
+   * A report that says the project is `at_risk` or `delayed` tells the other members of the
+   * workspace (never the author); a routine «по плану» does not — it would be noise. The
+   * notification is written in its own `asSystem` transaction, outside the author's `withUser`
+   * one, because RLS only lets a session insert a row addressed to itself (same reasoning as task
+   * comments). `eventKey` makes a retried request a no-op; quiet hours of each recipient apply.
+   */
   async create(userId: string, workspaceId: string, projectId: string, input: CreateProjectUpdateInput): Promise<ProjectUpdate> {
-    return this.prisma.withUser(userId, async (tx) => {
+    const { dto, recipients, projectName } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertProjectTx(tx, workspaceId, projectId);
+      const project = await tx.project.findUnique({ where: { id: projectId }, select: { workspaceId: true, name: true } });
+      if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
       const created = await tx.projectStatusUpdate.create({
         data: {
           workspaceId,
@@ -56,8 +68,30 @@ export class ProjectUpdatesService {
         },
         include: { author: { select: { id: true, name: true } } }
       });
-      return toDto(created, userId);
+      const members =
+        input.health === "on_track"
+          ? []
+          : await tx.workspaceMember.findMany({ where: { workspaceId, NOT: { userId } }, select: { userId: true } });
+      return { dto: toDto(created, userId), recipients: members.map((member) => member.userId), projectName: project.name };
     });
+
+    for (const recipientId of recipients) {
+      if (!(await this.policy.allowsForUser(recipientId, "entity"))) continue;
+      await this.prisma.asSystem((tx) =>
+        this.notifications.createTx(tx, {
+          workspaceId,
+          recipientId,
+          kind: "project_update",
+          eventKey: `project_update:${dto.id}`,
+          actorId: userId,
+          title: `${projectName}: ${PROJECT_HEALTH_LABEL[input.health].toLowerCase()}`,
+          body: input.summary.length > 200 ? `${input.summary.slice(0, 200)}…` : input.summary,
+          entityType: "project",
+          entityId: projectId
+        })
+      );
+    }
+    return dto;
   }
 
   async remove(userId: string, workspaceId: string, projectId: string, updateId: string): Promise<void> {

@@ -8,7 +8,7 @@ import {
 } from "@orion/core-react";
 import type { Notification } from "@orion/shared-types";
 import { Button, EmptyState, IconButton, Popover, Skeleton, cx, useToast } from "@orion/ui";
-import { Bell, BellRing, Boxes, CalendarClock, Info, ListTodo, MessageSquare, Trash2, Wallet } from "lucide-react";
+import { Bell, BellRing, Boxes, CalendarClock, FolderKanban, Info, ListTodo, MessageSquare, Trash2, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { relativeTime } from "../lib/format";
 import { focusEvent, focusNote, focusTask, openPanel } from "../lib/panel-bus";
@@ -20,6 +20,7 @@ const KIND_ICON: Record<Notification["kind"], React.ComponentType<{ className?: 
   finance_alert: Wallet,
   inventory_low_stock: Boxes,
   task_comment: MessageSquare,
+  project_update: FolderKanban,
   entity_reminder: BellRing,
   system: Info
 };
@@ -30,6 +31,7 @@ const KIND_LABEL: Record<Notification["kind"], string> = {
   finance_alert: "Финансы",
   inventory_low_stock: "Склад",
   task_comment: "Комментарий",
+  project_update: "Проект",
   entity_reminder: "Напоминание",
   system: "Система"
 };
