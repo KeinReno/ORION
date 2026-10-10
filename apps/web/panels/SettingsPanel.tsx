@@ -34,7 +34,7 @@ import {
   useToast
 } from "@orion/ui";
 import { AlertCircle, LogOut, Settings } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describeAuthError } from "../lib/error-message";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
@@ -126,6 +126,15 @@ function diffPreferences(
   return patch;
 }
 
+/** Replaces the Save button on tabs that apply changes at once. */
+function LiveSaveHint({ pending }: { pending: boolean }): React.ReactElement {
+  return (
+    <span className="text-2xs text-subtle-foreground" aria-live="polite">
+      {pending ? "Применяю…" : "Применяется сразу"}
+    </span>
+  );
+}
+
 export function SettingsPanel(): React.ReactElement {
   const { api } = useCore();
   const { user } = useSession();
@@ -155,35 +164,45 @@ export function SettingsPanel(): React.ReactElement {
 
   // The query cache is the source of truth: a save invalidates ["preferences"]
   // and this reseeds the form with exactly what the server stored.
+  // Appearance and notifications save themselves as you change them, so a response can arrive while
+  // you are already on the next value (a slider mid-drag): a field you changed since the last seed
+  // keeps your value, every other field takes the server's.
+  const seededFrom = useRef<UserPreference | null>(null);
   useEffect(() => {
-    if (preferences.data) setForm(preferences.data);
+    const incoming = preferences.data;
+    if (!incoming) return;
+    const last = seededFrom.current;
+    seededFrom.current = incoming;
+    setForm((prev) => {
+      if (!prev || !last) return incoming;
+      const merged: Record<string, unknown> = { ...incoming };
+      for (const key of Object.keys(incoming) as PreferenceKey[]) {
+        if (prev[key] !== last[key]) merged[key] = prev[key];
+      }
+      return merged as unknown as UserPreference;
+    });
   }, [preferences.data]);
+
+  // Live apply: a short pause after the last change, then the changed fields are saved quietly
+  // (no toast per click); only a failure is reported.
+  useEffect(() => {
+    if (!form || !preferences.data) return;
+    const patch = diffPreferences(form, preferences.data, [...APPEARANCE_KEYS, ...NOTIFICATION_KEYS]);
+    if (Object.keys(patch).length === 0) return;
+    const timer = setTimeout(() => {
+      updatePreferences.mutate(patch, {
+        onError: (error) => toast({ title: "Не удалось сохранить настройки", description: describeAuthError(error), tone: "danger" })
+      });
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, preferences.data]);
   useEffect(() => {
     if (user) {
       setProfile({ name: user.name, email: user.email ?? "" });
       setUnlock(user.unlockKind);
     }
   }, [user]);
-
-  function isDirty(keys: readonly PreferenceKey[]): boolean {
-    if (!form || !preferences.data) return false;
-    return Object.keys(diffPreferences(form, preferences.data, keys)).length > 0;
-  }
-
-  async function savePreferences(keys: readonly PreferenceKey[], title: string): Promise<void> {
-    if (!form || !preferences.data) return;
-    const patch = diffPreferences(form, preferences.data, keys);
-    if (Object.keys(patch).length === 0) {
-      toast({ title: "Изменений нет", tone: "default" });
-      return;
-    }
-    try {
-      await updatePreferences.mutateAsync(patch);
-      toast({ title, tone: "success" });
-    } catch (error) {
-      toast({ title: "Не удалось сохранить настройки", description: describeAuthError(error), tone: "danger" });
-    }
-  }
 
   async function saveProfile(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -251,17 +270,6 @@ export function SettingsPanel(): React.ReactElement {
       setHealthBusy(false);
     }
   }
-
-  const saveButton = (keys: readonly PreferenceKey[], title: string): React.ReactElement => (
-    <Button
-      size="sm"
-      disabled={!isDirty(keys)}
-      status={updatePreferences.isPending ? "pending" : updatePreferences.isSuccess ? "success" : updatePreferences.isError ? "error" : "idle"}
-      onClick={() => void savePreferences(keys, title)}
-    >
-      Сохранить
-    </Button>
-  );
 
   // A failed GET /settings/preferences (API down) leaves `form` null — say so
   // instead of showing a skeleton that never resolves.
@@ -453,7 +461,7 @@ export function SettingsPanel(): React.ReactElement {
         ) : null}
 
         {tab === "notifications" ? (
-          <PanelSection title="Уведомления" actions={saveButton(NOTIFICATION_KEYS, "Уведомления сохранены")}>
+          <PanelSection title="Уведомления" actions={<LiveSaveHint pending={updatePreferences.isPending} />}>
             {preferences.isError ? preferencesError : !form ? (
               <Skeleton className="h-40" />
             ) : (
@@ -509,7 +517,7 @@ export function SettingsPanel(): React.ReactElement {
         ) : null}
 
         {tab === "appearance" ? (
-          <PanelSection title="Внешний вид" actions={saveButton(APPEARANCE_KEYS, "Внешний вид сохранён")}>
+          <PanelSection title="Внешний вид" actions={<LiveSaveHint pending={updatePreferences.isPending} />}>
             {preferences.isError ? preferencesError : !form ? (
               <Skeleton className="h-56" />
             ) : (
