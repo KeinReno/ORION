@@ -7,6 +7,7 @@ const NOW = new Date("2026-09-20T12:00:00.000Z");
 function task(id: string, patch: Partial<Task> = {}): Task {
   return {
     id,
+    revision: 1,
     workspaceId: "ws",
     projectId: "p",
     parentId: null,

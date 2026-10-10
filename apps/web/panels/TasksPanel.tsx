@@ -393,8 +393,8 @@ export function TasksPanel(): React.ReactElement {
   }
 
   /** Autosave from the detail pane: only the changed fields travel, no toast per keystroke. */
-  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<void> {
-    await updateTask.mutateAsync({ taskId, input: patch });
+  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<Task> {
+    return updateTask.mutateAsync({ taskId, input: patch });
   }
 
   const total = tasks?.length ?? 0;

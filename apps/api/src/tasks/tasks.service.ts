@@ -110,7 +110,8 @@ export class TasksService {
     return tx.task.findUniqueOrThrow({ where: { id: created.id }, include: taskInclude });
   }
 
-  async update(userId: string, workspaceId: string, taskId: string, input: UpdateTaskInput): Promise<Task> {
+  async update(userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput): Promise<Task> {
+    const { expectedRevision, ...input } = rawInput;
     const task = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const current = await this.assertOwnedTx(tx, workspaceId, taskId);
@@ -180,7 +181,22 @@ export class TasksService {
         }
       }
 
-      await tx.task.update({ where: { id: taskId }, data });
+      // Optimistic concurrency, like notes: the revision check is part of the UPDATE's WHERE, so two editors that
+      // both read the same revision cannot both win. Callers that send no `expectedRevision` (board drag, quick
+      // actions) keep last-write-wins but still bump the revision, so an open detail pane notices the change.
+      const written = await tx.task.updateMany({
+        where: { id: taskId, ...(expectedRevision !== undefined ? { revision: expectedRevision } : {}) },
+        data: { ...data, revision: { increment: 1 } }
+      });
+      if (written.count === 0) {
+        const latest = await tx.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
+        throw new ConflictException({
+          code: "task_revision_conflict",
+          message: "Задачу изменил кто-то другой, пока вы редактировали — загрузите последнюю версию",
+          currentRevision: latest.revision,
+          current: toDto(latest)
+        });
+      }
       if (activityRows.length) await tx.taskActivity.createMany({ data: activityRows });
 
       if (datesChanged) await cascadeRescheduleTx(tx, taskId);
@@ -443,6 +459,7 @@ function toDto(task: TaskModel): Task {
   const dependencyIds = task.dependsOn.map((dependency) => dependency.dependsOnTaskId);
   return {
     id: task.id,
+    revision: task.revision,
     workspaceId: task.workspaceId,
     projectId: task.projectId,
     parentId: task.parentId,

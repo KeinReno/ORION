@@ -82,6 +82,7 @@ export class OverviewService {
           if (isTaskClosed(task.status)) continue;
           tasks.push({
             id: task.id,
+            revision: task.revision,
             workspaceId: task.workspaceId,
             workspaceName: ws.name,
             projectId: task.projectId,

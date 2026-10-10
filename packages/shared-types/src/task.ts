@@ -27,6 +27,8 @@ export type TaskRecurrence = z.infer<typeof taskRecurrenceSchema>;
 
 export const taskSchema = z.object({
   id: z.string(),
+  /** Concurrency token — send it back as `expectedRevision` when saving an edit made on top of this copy. */
+  revision: z.number().int(),
   workspaceId: z.string(),
   projectId: z.string().nullable(),
   parentId: z.string().nullable(),
@@ -85,9 +87,19 @@ export const updateTaskInputSchema = z.object({
   assigneeId: z.string().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
   estimatedMinutes: z.number().int().min(0).nullable().optional(),
-  milestoneId: z.string().nullable().optional()
+  milestoneId: z.string().nullable().optional(),
+  /** The `revision` this edit was based on. Omitted by drag/quick actions (last write wins); the detail pane's autosave sends it. A mismatch is a 409. */
+  expectedRevision: z.number().int().optional()
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskInputSchema>;
+
+/// Body of the 409 thrown by `PATCH .../tasks/:id` when `expectedRevision` is stale.
+export const taskConflictSchema = z.object({
+  code: z.literal("task_revision_conflict"),
+  currentRevision: z.number().int(),
+  current: taskSchema
+});
+export type TaskConflict = z.infer<typeof taskConflictSchema>;
 
 export const taskViewFiltersSchema = z.object({
   statuses: z.array(taskStatusSchema).optional(),

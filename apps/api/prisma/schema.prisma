@@ -453,6 +453,8 @@ enum TaskPriority {
 
 model Task {
   id          String       @id @default(uuid())
+  /// Optimistic-concurrency token: +1 on every write through TasksService.update (like Note.revision).
+  revision    Int          @default(1)
   workspaceId String
   projectId   String?
   parentId    String?

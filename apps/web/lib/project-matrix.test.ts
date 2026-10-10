@@ -9,6 +9,7 @@ const at = (dayOffset: number, hour = 12): string => new Date(2026, 8, 20 + dayO
 function task(id: string, patch: Partial<Task> = {}): Task {
   return {
     id,
+    revision: 1,
     workspaceId: "ws",
     projectId: "p",
     parentId: null,

@@ -4,6 +4,7 @@ import type { Task } from "./task";
 
 function task(partial: Partial<Task> & Pick<Task, "id" | "title" | "status">): Task {
   return {
+    revision: 1,
     workspaceId: "ws",
     projectId: null,
     parentId: null,

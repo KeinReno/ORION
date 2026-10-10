@@ -1,5 +1,7 @@
 "use client";
 
+import { ApiError } from "@orion/core";
+import { taskConflictSchema } from "@orion/shared-types";
 import {
   useRunningTimer,
   useStartTimer,
@@ -100,7 +102,8 @@ export function TaskDetail({
   timeOn: boolean;
   /** Narrow panel: the pane replaces the list, so "close" reads as "back". */
   compact: boolean;
-  onSave: (taskId: string, patch: UpdateTaskInput) => Promise<void>;
+  /** Resolves with the saved task (its new revision is the base of the next edit). */
+  onSave: (taskId: string, patch: UpdateTaskInput) => Promise<Task | void>;
   onClose: () => void;
   onDelete: () => void;
   onOpenTask: (taskId: string) => void;
@@ -108,6 +111,12 @@ export function TaskDetail({
   const [fields, setFields] = useState<Fields>(() => fieldsFromTask(task));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Another editor saved this task first: autosave stops until you choose which version to keep.
+  const [conflict, setConflict] = useState<Task | null>(null);
+  const conflictRef = useRef<Task | null>(null);
+  conflictRef.current = conflict;
+  // The revision the next save is based on: what this pane last loaded or saved.
+  const revisionRef = useRef(task.revision);
   const [tab, setTab] = useState<DetailTab | null>(null);
   const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta !== undefined);
   const tabOptions: { value: DetailTab; label: string }[] = [
@@ -136,6 +145,7 @@ export function TaskDetail({
       timer.current = null;
     }
     if (inFlight.current) return; // the running save re-checks for newer edits when it ends
+    if (conflictRef.current) return; // waiting for the user to resolve a conflict
     const sent = fieldsRef.current;
     const patch = buildPatch(baseline.current, sent, withAssignee);
     if (Object.keys(patch).length === 0) {
@@ -146,10 +156,17 @@ export function TaskDetail({
     setSaveState("saving");
     setSaveError(null);
     try {
-      await onSaveRef.current(taskId, patch);
+      const saved = await onSaveRef.current(taskId, { ...patch, expectedRevision: revisionRef.current });
       baseline.current = sent;
+      if (saved) revisionRef.current = saved.revision;
     } catch (error) {
       inFlight.current = false;
+      const parsed = error instanceof ApiError && error.status === 409 ? taskConflictSchema.safeParse(error.details) : null;
+      if (parsed?.success) {
+        setConflict(parsed.data.current);
+        setSaveState("dirty");
+        return;
+      }
       setSaveError(describeTaskFormError(error));
       setSaveState("error");
       return;
@@ -177,6 +194,7 @@ export function TaskDetail({
   useEffect(() => {
     if (inFlight.current) return;
     if (Object.keys(buildPatch(baseline.current, fieldsRef.current, withAssignee)).length > 0) return;
+    revisionRef.current = task.revision;
     const fresh = fieldsFromTask(task);
     if (sameFields(fresh, fieldsRef.current)) return;
     baseline.current = fresh;
@@ -192,6 +210,28 @@ export function TaskDetail({
     },
     []
   );
+
+  /** Conflict: take the server's copy (drops this pane's unsaved edits). */
+  function loadServerVersion(): void {
+    const latest = conflict;
+    if (!latest) return;
+    const fresh = fieldsFromTask(latest);
+    baseline.current = fresh;
+    revisionRef.current = latest.revision;
+    setConflict(null);
+    setFields(fresh);
+    setSaveState("saved");
+  }
+
+  /** Conflict: keep my edits and write them over the server's copy. */
+  function keepMine(): void {
+    const latest = conflict;
+    if (!latest) return;
+    revisionRef.current = latest.revision;
+    conflictRef.current = null;
+    setConflict(null);
+    void flushRef.current();
+  }
 
   function set<K extends keyof Fields>(key: K, value: Fields[K]): void {
     setFields((current) => ({ ...current, [key]: value }));
@@ -252,6 +292,20 @@ export function TaskDetail({
       </header>
 
       <div className="orion-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        {conflict ? (
+          <div role="alert" className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-label text-foreground">
+            <p>Эту задачу изменил кто-то другой, пока вы редактировали. Что оставить?</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="subtle" onClick={loadServerVersion}>
+                Загрузить версию сервера
+              </Button>
+              <Button size="sm" variant="outline" onClick={keepMine}>
+                Сохранить мою поверх
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {saveState === "error" && saveError ? (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-label text-foreground">
             <span>{saveError}</span>
