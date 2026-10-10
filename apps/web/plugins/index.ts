@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -93,3 +93,6 @@ contribute("time.billing", {
 
 const CalendarExternalButton = dynamic<CalendarToolbarSlotProps>(() => import("./calendar-external/toolbar-button").then((m) => m.CalendarExternalButton), { ssr: false });
 contribute("calendar.toolbar", { pluginId: "calendar-external", component: CalendarExternalButton });
+
+const TaskCommentsTab = dynamic<TaskDetailTabSlotProps>(() => import("./tasks-comments/tab").then((m) => m.TaskCommentsTab), { ssr: false });
+contribute("tasks.detail.tabs", { pluginId: "tasks-comments", component: TaskCommentsTab, order: 10, meta: { tabId: "comments", label: "Комментарии", before: true } });

@@ -43,11 +43,12 @@ import {
   TASK_STATUS_ORDER,
   describeTaskFormError
 } from "../task-form";
-import { TaskCommentsSection } from "./task-comments";
+import { useSlotContributions } from "../../lib/extensions/slot";
 import { SubtaskList } from "./subtasks";
 import { buildPatch, fieldsFromTask, sameFields, type Fields } from "../../lib/task-fields";
 
-type DetailTab = "comments" | "history" | "links";
+/** "history" and "links" are the module's own; every other id is a tab a plugin adds via `tasks.detail.tabs`. */
+type DetailTab = string;
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
 const RECURRENCE_FREQS: TaskRecurrence["freq"][] = ["daily", "weekly", "monthly", "yearly"];
@@ -107,7 +108,17 @@ export function TaskDetail({
   const [fields, setFields] = useState<Fields>(() => fieldsFromTask(task));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [tab, setTab] = useState<DetailTab>("comments");
+  const [tab, setTab] = useState<DetailTab | null>(null);
+  const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta !== undefined);
+  const tabOptions: { value: DetailTab; label: string }[] = [
+    ...pluginTabs.filter((c) => c.meta?.before).map((c) => ({ value: c.meta!.tabId, label: c.meta!.label })),
+    { value: "history", label: "История" },
+    { value: "links", label: "Связи" },
+    ...pluginTabs.filter((c) => !c.meta?.before).map((c) => ({ value: c.meta!.tabId, label: c.meta!.label }))
+  ];
+  // First tab by default (comments, when that plugin is on); a chosen tab whose plugin was switched off falls back to it.
+  const activeTab = tabOptions.some((option) => option.value === tab) ? tab! : tabOptions[0]!.value;
+  const activePluginTab = pluginTabs.find((c) => c.meta?.tabId === activeTab);
 
   const withAssignee = members !== undefined;
   const baseline = useRef<Fields>(fields);
@@ -409,19 +420,10 @@ export function TaskDetail({
         </details>
 
         <section className="space-y-3">
-          <SegmentedControl<DetailTab>
-            value={tab}
-            onChange={setTab}
-            size="sm"
-            options={[
-              { value: "comments", label: "Комментарии" },
-              { value: "history", label: "История" },
-              { value: "links", label: "Связи" }
-            ]}
-          />
-          {tab === "comments" ? <TaskCommentsSection workspaceId={workspaceId} taskId={task.id} /> : null}
-          {tab === "history" ? <TaskHistory workspaceId={workspaceId} taskId={task.id} /> : null}
-          {tab === "links" ? <EntityLinksSection workspaceId={workspaceId} type="task" id={task.id} /> : null}
+          <SegmentedControl<DetailTab> value={activeTab} onChange={setTab} size="sm" options={tabOptions} />
+          {activePluginTab ? <activePluginTab.component workspaceId={workspaceId} taskId={task.id} /> : null}
+          {activeTab === "history" ? <TaskHistory workspaceId={workspaceId} taskId={task.id} /> : null}
+          {activeTab === "links" ? <EntityLinksSection workspaceId={workspaceId} type="task" id={task.id} /> : null}
         </section>
 
         <p className="text-micro text-subtle-foreground">

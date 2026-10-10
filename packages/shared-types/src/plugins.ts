@@ -23,7 +23,8 @@ export const ORION_PLUGIN_IDS = [
   "notes-history",
   "time-insights",
   "time-billing",
-  "calendar-external"
+  "calendar-external",
+  "tasks-comments"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -208,6 +209,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Кнопка «Ссылка» в шапке календаря", "Подписки на ICS и ссылка-фид"],
     disableBehavior:
       "Кнопка скрывается, управлять подписками и ссылкой нельзя. Уже загруженные внешние события остаются в календаре, фоновая синхронизация подписок на сервере продолжается; подписки не удаляются.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-comments",
+    extendsModuleId: "tasks",
+    label: "Комментарии к задачам",
+    summary: "Обсуждение задачи: комментарии с Markdown, правка и удаление своих, уведомление исполнителю.",
+    provides: ["Вкладка «Комментарии» в карточке задачи", "Уведомление исполнителю о новом комментарии"],
+    disableBehavior: "Вкладка скрывается; комментарии сохраняются и вернутся при повторном включении.",
     defaultEnabled: true
   }
 ];

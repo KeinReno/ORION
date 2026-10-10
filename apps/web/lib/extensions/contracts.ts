@@ -136,6 +136,15 @@ export interface CalendarToolbarSlotProps {
   workspaceId: string | undefined;
 }
 
+/**
+ * tasks.detail.tabs — a tab in the lower part of the task detail pane (next to the built-in
+ * «История» and «Связи»). The host draws the tab strip from each contribution's `meta`.
+ */
+export interface TaskDetailTabSlotProps {
+  workspaceId: string | undefined;
+  taskId: string;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -148,6 +157,7 @@ export interface SlotContracts {
   "time.insights": TimeInsightsSlotProps;
   "time.billing": TimeBillingSlotProps;
   "calendar.toolbar": CalendarToolbarSlotProps;
+  "tasks.detail.tabs": TaskDetailTabSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -162,6 +172,8 @@ export interface SlotMeta {
   "documents.editor": { handles: (doc: DocumentItem) => boolean };
   "notes.history": { buttonLabel: string };
   "time.billing": { api: TimeBillingApi };
+  /** `before`: the tab goes before the built-in ones (default after them). */
+  "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 
