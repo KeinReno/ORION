@@ -78,12 +78,14 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
 import { ProjectGantt } from "./projects/gantt";
+import { TaskMatrix } from "./projects/task-matrix";
 import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "money" | "access";
 
+const TASKS_LAYOUT_KEY = "orion.project-tasks-layout";
 const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "money", "access"];
 /** Per-viewer, per-project: which view of the project this person last used. */
 const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
@@ -273,6 +275,17 @@ function ProjectWorkspace({
     void queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
   }
 
+  /** Move a task to another direction (milestone) of this project; null = «Без вехи». */
+  function moveTask(task: Task, milestoneId: string | null): void {
+    updateTask.mutate(
+      { taskId: task.id, input: { milestoneId } },
+      {
+        onSuccess: refreshProject,
+        onError: () => toast({ title: "Не удалось перенести задачу", tone: "danger" })
+      }
+    );
+  }
+
   function toggleTask(task: Task): void {
     updateTask.mutate(
       { taskId: task.id, input: { status: task.status === "done" ? "todo" : "done" } },
@@ -453,6 +466,7 @@ function ProjectWorkspace({
             milestones={milestoneList}
             loading={tasksLoading}
             onToggle={toggleTask}
+            onMove={moveTask}
             onAddTask={() => setAdding("task")}
             onOpenBoard={() => showTasksForProject(project.id)}
           />
@@ -776,6 +790,7 @@ function TasksTab({
   milestones,
   loading,
   onToggle,
+  onMove,
   onAddTask,
   onOpenBoard
 }: {
@@ -783,10 +798,28 @@ function TasksTab({
   milestones: Parameters<typeof groupTasksByMilestone>[1];
   loading: boolean;
   onToggle: (task: Task) => void;
+  onMove: (task: Task, milestoneId: string | null) => void;
   onAddTask: () => void;
   onOpenBoard: () => void;
 }): React.ReactElement {
   const [showClosed, setShowClosed] = useState(false);
+  // Matrix by default: it shows direction and urgency together. Remembered per browser.
+  const [layout, setLayout] = useState<"matrix" | "list">("matrix");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TASKS_LAYOUT_KEY) === "list") setLayout("list");
+    } catch {
+      /* a remembered layout is a convenience only */
+    }
+  }, []);
+  function chooseLayout(next: "matrix" | "list"): void {
+    setLayout(next);
+    try {
+      localStorage.setItem(TASKS_LAYOUT_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
   const groups = useMemo(() => groupTasksByMilestone(tasks, milestones, showClosed), [tasks, milestones, showClosed]);
   const now = new Date();
 
@@ -807,22 +840,45 @@ function TasksTab({
   }
 
   return (
-    <div className="flex max-w-4xl flex-col gap-5">
+    <div className={cx("flex flex-col gap-5", layout === "list" && "max-w-4xl")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <SegmentedControl<"open" | "all">
-          value={showClosed ? "all" : "open"}
-          onChange={(value) => setShowClosed(value === "all")}
-          size="sm"
-          options={[
-            { value: "open", label: "Открытые" },
-            { value: "all", label: "Все" }
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl<"matrix" | "list">
+            aria-label="Вид задач"
+            value={layout}
+            onChange={chooseLayout}
+            size="sm"
+            options={[
+              { value: "matrix", label: "Матрица" },
+              { value: "list", label: "Список" }
+            ]}
+          />
+          <SegmentedControl<"open" | "all">
+            aria-label="Какие задачи показывать"
+            value={showClosed ? "all" : "open"}
+            onChange={(value) => setShowClosed(value === "all")}
+            size="sm"
+            options={[
+              { value: "open", label: "Открытые" },
+              { value: "all", label: "Все" }
+            ]}
+          />
+        </div>
         <Button size="sm" variant="outline" onClick={onOpenBoard}>
           <ListTodo className="h-4 w-4" /> На доске задач
         </Button>
       </div>
-      {groups.map((group) => {
+      {layout === "matrix" ? (
+        <TaskMatrix
+          tasks={tasks}
+          milestones={milestones}
+          includeClosed={showClosed}
+          onToggle={onToggle}
+          onOpen={(task) => focusTask(task.id)}
+          onMove={onMove}
+        />
+      ) : null}
+      {layout === "list" ? groups.map((group) => {
         const total = group.open + group.closed;
         return (
           <PanelSection
@@ -851,7 +907,7 @@ function TasksTab({
             )}
           </PanelSection>
         );
-      })}
+      }) : null}
     </div>
   );
 }
