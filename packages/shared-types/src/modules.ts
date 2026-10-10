@@ -17,7 +17,8 @@ export const ORION_MODULE_IDS = [
   "finance",
   "habits",
   "lists",
-  "inventory"
+  "inventory",
+  "markets"
 ] as const;
 
 export const orionModuleIdSchema = z.enum(ORION_MODULE_IDS);
@@ -274,5 +275,19 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     disableBehavior: "Панель и API скрываются. Позиции и движения сохраняются.",
     panelId: "inventory",
     defaultEnabled: true
+  },
+  {
+    id: "markets",
+    kind: "additional",
+    required: false,
+    label: "Рынки",
+    summary: "Список наблюдения и журнал сделок из Compass; графики и стратегии остаются в Compass.",
+    owns: "Список наблюдения, загруженные сделки (реальные, бумажные, исторические), позиции по реальным сделкам.",
+    livesWithout: "Полностью независим: Compass может быть не установлен, а финансы работают сами по себе.",
+    provides: ["Панель «Рынки»", "Импорт журнала Compass с проверкой", "Запись комиссии сделки в финансы по явному действию"],
+    optionalDependencies: ["finance"],
+    disableBehavior: "Панель и API скрываются. Список наблюдения и сделки сохраняются и вернутся при включении.",
+    panelId: "markets",
+    defaultEnabled: false
   }
 ];

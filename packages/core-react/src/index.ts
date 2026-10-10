@@ -16,6 +16,7 @@ export * from "./use-finance-reports";
 export * from "./use-finance-category-rules";
 export * from "./use-finance-goals";
 export * from "./use-finance-obligations";
+export * from "./use-markets";
 export * from "./use-sync";
 export * from "./use-settings";
 export * from "./use-workspace-organization";

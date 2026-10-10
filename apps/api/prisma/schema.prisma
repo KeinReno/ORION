@@ -150,7 +150,7 @@ model Workspace {
   /// catalog modules stay on. Disable never deletes rows; re-enable restores
   /// the panel and API. Shell surfaces (dashboard/inbox/settings/sync) are
   /// not stored here — they are core, not modules.
-  disabledModules String[]    @default([])
+  disabledModules String[]    @default(["markets"])
   /// Plugin ids whose enabled state was flipped away from PLUGIN_CATALOG's
   /// `defaultEnabled` — NOT a flat "disabled" list like disabledModules,
   /// because a plugin can default off (see isPluginEnabled). Same
@@ -191,6 +191,8 @@ model Workspace {
   categoryRules         CategoryRule[]
   savingsGoals          SavingsGoal[]
   financeObligations    FinanceObligation[]
+  marketWatchItems      MarketWatchItem[]
+  investmentTrades      InvestmentTrade[]
   documents             Document[]
   documentVersions      DocumentVersion[]
   documentAnnotations   DocumentAnnotation[]
@@ -988,6 +990,7 @@ model Transaction {
   /// SetNull (not Cascade): deleting a recurring rule must not erase the
   /// transactions it already produced — only the future schedule dies.
   recurringRule RecurringTransaction? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  investmentTrades InvestmentTrade[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -1122,6 +1125,52 @@ model FinanceObligation {
 
   @@index([workspaceId])
   @@map("finance_obligations")
+}
+
+/// «Рынки»: an instrument the workspace watches. A reference only — quotes and charts live in Compass.
+model MarketWatchItem {
+  id          String   @id @default(uuid())
+  workspaceId String
+  market      String
+  symbol      String
+  name        String   @default("")
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, market, symbol])
+  @@index([workspaceId])
+  @@map("market_watch_items")
+}
+
+/// A journal trade the user loaded from a Compass backup. `mode` (real | paper | historical) is kept for ever:
+/// only real trades make positions, and none of them is ever a transaction by itself (see InvestmentsService).
+model InvestmentTrade {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  /// Id of the record in the source (Compass uid). Unique per workspace: the same backup twice adds nothing.
+  externalUid      String
+  source           String   @default("compass")
+  mode             String   @default("real")
+  market           String
+  symbol           String
+  side             String
+  qty              Float
+  price            Float
+  fee              Float    @default(0)
+  tradedAt         DateTime
+  note             String   @default("")
+  /// The finance transaction the user recorded this trade's fee as (explicit action), if any.
+  feeTransactionId String?
+  importedAt       DateTime @default(now())
+
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feeTransaction Transaction? @relation(fields: [feeTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, externalUid])
+  @@index([workspaceId, tradedAt])
+  @@map("investment_trades")
 }
 
 model SavingsGoal {

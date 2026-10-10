@@ -60,6 +60,9 @@ import {
   transactionSchema,
   financeImportResultSchema,
   obligationSchema,
+  watchItemSchema,
+  investmentTradeSchema,
+  tradeImportResultSchema,
   userPreferenceSchema,
   workspaceOrganizationSchema,
   workspaceModuleStateSchema,
@@ -120,6 +123,14 @@ import {
   type CreateTransactionInput,
   type FinanceImportInput,
   type CreateObligationInput,
+  type CreateWatchItemInput,
+  type InvestmentTrade,
+  type RecordTradeFeeInput,
+  type TradeImportInput,
+  type TradeImportResult,
+  type TradeMode,
+  type UpdateWatchItemInput,
+  type WatchItem,
   type Obligation,
   type PayObligationInput,
   type UpdateObligationInput,
@@ -871,6 +882,38 @@ export class ApiClient {
 
   createTransaction(workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {
     return this.request("POST", `/workspaces/${workspaceId}/finance/transactions`, input, transactionSchema);
+  }
+
+  listWatchItems(workspaceId: string): Promise<WatchItem[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/markets/watchlist`, undefined, z.array(watchItemSchema));
+  }
+
+  addWatchItem(workspaceId: string, input: CreateWatchItemInput): Promise<WatchItem> {
+    return this.request("POST", `/workspaces/${workspaceId}/markets/watchlist`, input, watchItemSchema);
+  }
+
+  updateWatchItem(workspaceId: string, itemId: string, input: UpdateWatchItemInput): Promise<WatchItem> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/markets/watchlist/${itemId}`, input, watchItemSchema);
+  }
+
+  async deleteWatchItem(workspaceId: string, itemId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/markets/watchlist/${itemId}`, undefined, z.unknown());
+  }
+
+  listInvestmentTrades(workspaceId: string, mode?: TradeMode): Promise<InvestmentTrade[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/markets/trades${mode ? `?mode=${mode}` : ""}`, undefined, z.array(investmentTradeSchema));
+  }
+
+  importInvestmentTrades(workspaceId: string, input: TradeImportInput): Promise<TradeImportResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/markets/trades/import`, input, tradeImportResultSchema);
+  }
+
+  recordTradeFee(workspaceId: string, tradeId: string, input: RecordTradeFeeInput): Promise<InvestmentTrade> {
+    return this.request("POST", `/workspaces/${workspaceId}/markets/trades/${tradeId}/fee`, input, investmentTradeSchema);
+  }
+
+  async deleteInvestmentTrade(workspaceId: string, tradeId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/markets/trades/${tradeId}`, undefined, z.unknown());
   }
 
   listObligations(workspaceId: string): Promise<Obligation[]> {

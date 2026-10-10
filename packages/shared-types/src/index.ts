@@ -11,6 +11,7 @@ export * from "./event";
 export * from "./recurrence";
 export * from "./finance";
 export * from "./finance-obligations";
+export * from "./markets";
 export * from "./document";
 export * from "./sync";
 export * from "./settings";

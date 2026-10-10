@@ -41,7 +41,7 @@ export class WorkspacesService {
           name,
           icsToken: randomBytes(24).toString("base64url"),
           // Solo-dev kernel: money/stock stay in the catalog but out of the way.
-          disabledModules: template === "solo-dev" ? ["finance", "inventory"] : []
+          disabledModules: template === "solo-dev" ? ["finance", "inventory", "markets"] : ["markets"]
         }
       });
       await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, role: "owner" } });

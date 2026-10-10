@@ -19,6 +19,7 @@ import { InboxModule } from "./inbox/inbox.module";
 import { TimeModule } from "./time/time.module";
 import { HabitsModule } from "./habits/habits.module";
 import { ListsModule } from "./lists/lists.module";
+import { MarketsModule } from "./markets/markets.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { MilestonesModule } from "./milestones/milestones.module";
 import { ModulesModule } from "./modules/modules.module";
@@ -51,6 +52,7 @@ import { UsersModule } from "./users/users.module";
     TimeModule,
     HabitsModule,
     ListsModule,
+    MarketsModule,
     InventoryModule,
     MilestonesModule,
     OverviewModule,
