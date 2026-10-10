@@ -9,7 +9,8 @@ import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
-export function PluginsSettings(): React.ReactElement {
+/** `moduleId` narrows the list to the plugins of one module (the per-module settings sheet). */
+export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const plugins = useWorkspacePlugins(workspace?.id);
   const setPlugin = useSetWorkspacePlugin(workspace?.id);
@@ -58,7 +59,9 @@ export function PluginsSettings(): React.ReactElement {
       ) : null}
 
       <div className="space-y-2">
-        {plugins.data.map((item) => {
+        {plugins.data
+          .filter((item) => moduleId === undefined || item.extendsModuleId === moduleId)
+          .map((item) => {
           const hostLabel = MODULE_CATALOG.find((m) => m.id === item.extendsModuleId)?.label ?? item.extendsModuleId;
           return (
             <Card key={item.id} className="space-y-2 py-3">
@@ -93,7 +96,10 @@ export function PluginsSettings(): React.ReactElement {
               </dl>
             </Card>
           );
-        })}
+          })}
+        {moduleId !== undefined && !plugins.data.some((item) => item.extendsModuleId === moduleId) ? (
+          <p className="text-xs text-muted-foreground">У этого модуля пока нет плагинов.</p>
+        ) : null}
       </div>
 
       <ConfirmDialog

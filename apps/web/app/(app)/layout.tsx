@@ -22,7 +22,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { Folder, FolderPlus, LogOut, Menu, Settings } from "lucide-react";
+import { Folder, FolderPlus, LogOut, Menu, Settings, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -30,6 +30,7 @@ import { AccountAvatar } from "../../components/account-avatar";
 import { CommandCenter } from "../../lib/command-center";
 import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
+import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
 import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
 import { dockLayoutStorageKey } from "../../lib/dock-layout-key";
@@ -131,9 +132,31 @@ function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React
  */
 function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement | null {
   const compact = useMediaQuery("(max-width: 767px)");
+  const [moduleSettingsFor, setModuleSettingsFor] = useState<string | null>(null);
   if (compact) return null;
+  const activeId = props.activePanel?.id;
   return (
     <div className="flex items-center gap-1 overflow-visible">
+      {activeId && activeId !== "settings" ? (
+        <button
+          type="button"
+          onClick={() => setModuleSettingsFor(activeId)}
+          title="Настройки модуля: внешний вид и плагины"
+          aria-label="Настройки модуля"
+          className="flex h-6 w-6 items-center justify-center rounded text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+      <ModuleSettingsSheet
+        panelId={moduleSettingsFor}
+        open={moduleSettingsFor !== null}
+        onClose={() => setModuleSettingsFor(null)}
+        onOpenAllSettings={() => {
+          setModuleSettingsFor(null);
+          focusPanel("settings");
+        }}
+      />
       <DetachHeaderAction {...props} />
       <RunningTimerChip />
       <NotificationBell size="sm" />
