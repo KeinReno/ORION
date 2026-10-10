@@ -60,6 +60,7 @@ import {
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { OnboardingCard } from "../components/onboarding-card";
 import { ExtensionSlot } from "../lib/extensions/slot";
+import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
 import { focusNote, focusTask, openPanel } from "../lib/panel-bus";
@@ -136,6 +137,7 @@ export function DashboardPanel(): React.ReactElement {
   const tick = useNowTick(Boolean(running));
 
   const [capture, setCapture] = useState("");
+  useUnsavedDraft(capture.trim() !== "");
   const captureRef = useRef(capture);
   captureRef.current = capture;
   const [timerSwitch, setTimerSwitch] = useState<Task | null>(null);

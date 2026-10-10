@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
+import { useUnsavedDraft } from "../lib/unsaved-drafts";
 
 /**
  * The task create/edit form — deliberately split out of TasksPanel.tsx
@@ -122,6 +123,7 @@ export function TaskForm({
 }): React.ReactElement {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  useUnsavedDraft(title.trim() !== (initial?.title ?? "").trim() || description.trim() !== (initial?.description ?? "").trim());
   const [dueAt, setDueAt] = useState(toDatetimeLocal(initial?.dueAt ?? defaultDueAt ?? null));
   const [projectId, setProjectId] = useState(initial?.projectId ?? defaultProjectId ?? "");
   const [parentId, setParentId] = useState(initial?.parentId ?? "");

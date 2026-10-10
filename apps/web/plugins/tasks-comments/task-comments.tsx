@@ -12,6 +12,7 @@ import { Button, IconButton, MarkdownView, Skeleton, Textarea, useToast } from "
 import { Pencil, Trash2 } from "lucide-react";
 import { relativeTime } from "../../lib/format";
 import { describeError } from "../../lib/error-message";
+import { useUnsavedDraft } from "../../lib/unsaved-drafts";
 
 /**
  * S17 «Комментарии задачи». Plain REST CRUD + react-query refetch — no
@@ -35,6 +36,7 @@ export function TaskCommentsSection({
   const { toast } = useToast();
 
   const [draft, setDraft] = useState("");
+  useUnsavedDraft(draft.trim() !== "");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
 

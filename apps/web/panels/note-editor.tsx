@@ -38,6 +38,7 @@ import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { formatDayTitle, fromDatetimeLocal, projectColor, relativeTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
+import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { NoteAutosave, type AutosaveConflict, type AutosaveState as NoteAutosaveState } from "../lib/note-autosave";
 import { focusNote } from "../lib/panel-bus";
 import { useEnabledModules } from "../lib/use-enabled-modules";
@@ -197,6 +198,8 @@ export function NoteEditor({
   }, [note?.id, workspaceId]);
 
   const dirty = note ? autosaveState !== "saved" : composeDirty;
+  // A new, not-yet-created note is a draft (an open note autosaves and needs no guard).
+  useUnsavedDraft(!note && composeDirty);
 
   const words = useMemo(() => {
     const m = body.trim().match(/[^\s]+/g);

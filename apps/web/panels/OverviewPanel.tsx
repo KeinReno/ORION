@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { describeError } from "../lib/error-message";
 import { formatMoney, shortDateTime } from "../lib/format";
 import { focusTask } from "../lib/panel-bus";
-import { setActiveWorkspaceId } from "../lib/use-active-workspace";
+import { requestWorkspaceSwitch } from "../lib/unsaved-drafts";
 
 /**
  * U08 "Личный межпространственный обзор" (24-CONNECTED-CORE-BACKLOG.md).
@@ -118,7 +118,7 @@ export function OverviewPanel(): React.ReactElement {
   function openTask(workspaceId: string, taskId: string): void {
     // Explicit, user-triggered switch (a click), not a silent fallback —
     // same pattern U04's window model expects for cross-workspace navigation.
-    setActiveWorkspaceId(workspaceId);
+    requestWorkspaceSwitch(workspaceId);
     focusTask(taskId);
   }
 

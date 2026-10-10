@@ -18,6 +18,7 @@ import {
   type DockviewWillShowOverlayLocationEvent,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelProps,
+  ConfirmDialog,
   cx,
   type MenuItem,
   type SidebarFolderView
@@ -48,6 +49,7 @@ import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
+import { cancelPendingSwitch, confirmPendingSwitch, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
@@ -200,6 +202,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // The user's own sidebar folders: personal, saved with their preferences.
   const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
   const sidebarPosition = preferences?.sidebarPosition ?? "left";
+  const pendingSwitch = usePendingSwitch();
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
@@ -569,7 +572,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               groups={switcherGroups}
               active={workspace}
               expanded={open}
-              onSelect={setActiveWorkspaceId}
+              onSelect={requestWorkspaceSwitch}
               onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
               onOpenSpaces={() => router.push("/spaces")}
             />
@@ -691,6 +694,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           <Workbench components={panelComponents} onReady={onReady} rightHeaderActionsComponent={HeaderActions} />
         </main>
       </div>
+      <ConfirmDialog
+        open={pendingSwitch !== null}
+        title="Есть несохранённый текст"
+        description="При переходе в другое пространство введённое, но ещё не сохранённое пропадёт. Перейти?"
+        confirmLabel="Перейти"
+        danger={false}
+        onConfirm={confirmPendingSwitch}
+        onCancel={cancelPendingSwitch}
+      />
       <CommandCenter />
       {children}
     </div>
