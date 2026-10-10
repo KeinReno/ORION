@@ -53,6 +53,7 @@ function obligation(over: Partial<Obligation>): Obligation {
     payment: 10_000,
     interval: "monthly",
     nextDueAt: "2026-10-15T09:00:00.000Z",
+    dueDay: 15,
     accountId: null,
     categoryId: null,
     note: "",
@@ -67,6 +68,10 @@ describe("plannedPayments", () => {
   it("unrolls a monthly obligation through the horizon, in date order", () => {
     const list = plannedPayments([obligation({})], new Date("2026-12-31T00:00:00.000Z"));
     expect(list.map((p) => p.dueAt.slice(0, 10))).toEqual(["2026-10-15", "2026-11-15", "2026-12-15"]);
+  });
+  it("keeps the 31st through February", () => {
+    const list = plannedPayments([obligation({ nextDueAt: "2027-01-31T09:00:00.000Z", dueDay: 31 })], new Date("2027-04-30T23:59:00.000Z"));
+    expect(list.map((p) => p.dueAt.slice(0, 10))).toEqual(["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30"]);
   });
   it("stops when a tracked principal runs out and shrinks the last payment", () => {
     const list = plannedPayments([obligation({ principal: 25_000 })], new Date("2027-12-31T00:00:00.000Z"));

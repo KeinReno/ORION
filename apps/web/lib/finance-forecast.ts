@@ -101,7 +101,7 @@ export function plannedPayments(obligations: readonly Obligation[], horizonEnd: 
       if (amount <= 0) break;
       out.push({ obligationId: obligation.id, name: obligation.name, dueAt: due.toISOString(), amount, direction: obligation.direction });
       if (remaining !== null) remaining -= amount;
-      due = advanceObligationDue(due, obligation.interval);
+      due = advanceObligationDue(due, obligation.interval, obligation.dueDay);
       guard += 1;
     }
   }

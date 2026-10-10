@@ -92,7 +92,10 @@ describe("Finance obligations (plan vs ledger)", () => {
     expect(paid.data.obligation.principal).toBe(500000);
     // 31 Jan + 1 month clamps to the last day of February.
     expect(paid.data.obligation.nextDueAt).toBe("2026-02-28T09:00:00.000Z");
-    expect(await balanceOf(base, alice.accessToken, accountId)).toBe(900000);
+    // ...and the second payment goes back to the 31st: the anchor day survives the short month.
+    const second = await request<Pay>(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId } });
+    expect(second.data.obligation.nextDueAt).toBe("2026-03-31T09:00:00.000Z");
+    expect(await balanceOf(base, alice.accessToken, accountId)).toBe(800000);
   });
 
   it("the same due date cannot be paid twice", async () => {

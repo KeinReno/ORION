@@ -52,6 +52,7 @@ export class ObligationsService {
           payment: input.payment,
           interval: input.interval,
           nextDueAt: input.nextDueAt ? new Date(input.nextDueAt) : null,
+          dueDay: input.nextDueAt ? new Date(input.nextDueAt).getUTCDate() : null,
           accountId: input.accountId ?? null,
           categoryId: input.categoryId ?? null,
           note: input.note
@@ -72,7 +73,8 @@ export class ObligationsService {
         where: { id: obligationId },
         data: {
           ...rest,
-          ...(nextDueAt !== undefined ? { nextDueAt: nextDueAt ? new Date(nextDueAt) : null } : {}),
+          // Editing the date also moves the anchor: «the 15th from now on».
+          ...(nextDueAt !== undefined ? { nextDueAt: nextDueAt ? new Date(nextDueAt) : null, dueDay: nextDueAt ? new Date(nextDueAt).getUTCDate() : null } : {}),
           ...(closedAt !== undefined ? { closedAt: closedAt ? new Date(closedAt) : null } : {})
         }
       });
@@ -131,7 +133,7 @@ export class ObligationsService {
         });
 
         const remaining = obligation.principal === null ? null : Math.max(0, obligation.principal - amount);
-        const next = obligation.nextDueAt ? advanceObligationDue(obligation.nextDueAt, obligation.interval as ObligationInterval) : null;
+        const next = obligation.nextDueAt ? advanceObligationDue(obligation.nextDueAt, obligation.interval as ObligationInterval, obligation.dueDay) : null;
         const finished = obligation.interval === "once" || (remaining !== null && remaining === 0);
         const updated = await tx.financeObligation.update({
           where: { id: obligation.id },
@@ -183,6 +185,7 @@ type ObligationRow = {
   payment: number;
   interval: string;
   nextDueAt: Date | null;
+  dueDay: number | null;
   accountId: string | null;
   categoryId: string | null;
   note: string;
@@ -202,6 +205,7 @@ function toDto(row: ObligationRow): Obligation {
     payment: row.payment,
     interval: row.interval as ObligationInterval,
     nextDueAt: row.nextDueAt?.toISOString() ?? null,
+    dueDay: row.dueDay,
     accountId: row.accountId,
     categoryId: row.categoryId,
     note: row.note,

@@ -103,7 +103,7 @@ export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => vo
       <ExtensionSlot name="finance.transactions.top" props={{ workspaceId: workspace?.id }} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+          <Select aria-label="Фильтр по счёту" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
             <option value="">Все счета</option>
             {(accounts ?? []).map((account) => (
               <option key={account.id} value={account.id}>
@@ -111,7 +111,7 @@ export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => vo
               </option>
             ))}
           </Select>
-          <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <Select aria-label="Фильтр по категории" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
             <option value="">Все категории</option>
             {(categories ?? []).map((category) => (
               <option key={category.id} value={category.id}>

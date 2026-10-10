@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccounts, useCreateFinanceCategory, useFinanceCategories, useImportTransactions } from "@orion/core-react";
-import type { FinanceCategory, FinanceImportResult } from "@orion/shared-types";
+import { FINANCE_IMPORT_MAX_ROWS, type FinanceCategory, type FinanceImportResult } from "@orion/shared-types";
 import { Button, Card, EmptyState, Select, Textarea, useToast } from "@orion/ui";
 import { FileUp } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -116,6 +116,7 @@ export function ImportView({ workspaceId }: FinanceTabSlotProps): React.ReactEle
   const account = accounts?.find((item) => item.id === accountId);
   const currency = account?.currency ?? "RUB";
   const needsAccount = !accountId;
+  const tooMany = (parsed?.rows.length ?? 0) > FINANCE_IMPORT_MAX_ROWS;
   const clientErrors = parsed?.errors ?? [];
 
   if (accounts && accounts.length === 0) {
@@ -208,13 +209,13 @@ export function ImportView({ workspaceId }: FinanceTabSlotProps): React.ReactEle
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" disabled={busy || needsAccount || parsed.rows.length === 0} onClick={() => void run(true)}>
+            <Button size="sm" variant="outline" disabled={busy || needsAccount || parsed.rows.length === 0 || tooMany} onClick={() => void run(true)}>
               Проверить
             </Button>
             <Button size="sm" disabled={busy || needsAccount || !report || report.dryRun === false || report.imported === 0} onClick={() => void run(false)}>
               Импортировать{report && report.dryRun ? ` (${report.imported})` : ""}
             </Button>
-            {needsAccount ? <span className="text-xs text-subtle-foreground">Выберите счёт назначения</span> : null}
+            {tooMany ? <span className="text-xs text-destructive">За один раз — не больше {FINANCE_IMPORT_MAX_ROWS} строк: разделите файл</span> : needsAccount ? <span className="text-xs text-subtle-foreground">Выберите счёт назначения</span> : null}
           </div>
         </Card>
       ) : null}

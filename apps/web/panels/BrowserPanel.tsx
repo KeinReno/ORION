@@ -142,42 +142,42 @@ export function BrowserPanel(): React.ReactElement {
 
   return (
     <PanelShell>
-      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 pt-1.5" role="tablist" aria-label="Вкладки браузера">
-        {state.tabs.map((tab) => (
-          <div
-            key={tab.id}
-            role="tab"
-            aria-selected={tab.id === state.active}
-            tabIndex={0}
-            onClick={() => setState({ ...state, active: tab.id })}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") setState({ ...state, active: tab.id });
-            }}
-            onAuxClick={(event) => {
-              if (event.button === 1) {
-                event.preventDefault();
-                closeTab(tab.id);
-              }
-            }}
-            className={`group flex max-w-[11rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border border-b-0 px-2.5 py-1 text-xs ${
-              tab.id === state.active ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Globe className="h-3 w-3 shrink-0" aria-hidden />
-            <span className="truncate">{tabLabel(tab.url)}</span>
-            <button
-              type="button"
-              aria-label={`Закрыть вкладку ${tabLabel(tab.url)}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                closeTab(tab.id);
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 pt-1.5">
+        {/* Plain buttons in a labelled group (the close button sits beside its tab: a button cannot live inside a tab role). */}
+        <div role="group" aria-label="Вкладки браузера" className="flex items-center gap-1">
+          {state.tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onAuxClick={(event) => {
+                if (event.button === 1) {
+                  event.preventDefault();
+                  closeTab(tab.id);
+                }
               }}
-              className="rounded p-0.5 opacity-0 hover:bg-white/10 group-hover:opacity-100 focus-visible:opacity-100"
+              className={`group flex max-w-[12rem] shrink-0 items-center rounded-t-lg border border-b-0 text-xs ${
+                tab.id === state.active ? "border-border bg-card text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ))}
+              <button
+                type="button"
+                aria-current={tab.id === state.active ? "true" : undefined}
+                onClick={() => setState({ ...state, active: tab.id })}
+                className="flex min-w-0 items-center gap-1.5 py-1 pl-2.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              >
+                <Globe className="h-3 w-3 shrink-0" aria-hidden />
+                <span className="truncate">{tabLabel(tab.url)}</span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Закрыть вкладку ${tabLabel(tab.url)}`}
+                onClick={() => closeTab(tab.id)}
+                className="mr-1 rounded p-0.5 opacity-0 hover:bg-white/10 group-hover:opacity-100 focus-visible:opacity-100"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
         <IconButton label="Новая вкладка" size="sm" onClick={addTab}>
           <Plus className="h-4 w-4" />
         </IconButton>

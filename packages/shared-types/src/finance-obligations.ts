@@ -32,6 +32,8 @@ export const obligationSchema = z.object({
   payment: z.number().int(),
   interval: obligationIntervalSchema,
   nextDueAt: z.string().nullable(),
+  /** День месяца (1–31), на который выпадают платежи: после февраля 31-е снова 31-е, а не 28-е. */
+  dueDay: z.number().int().min(1).max(31).nullable(),
   accountId: z.string().nullable(),
   categoryId: z.string().nullable(),
   note: z.string(),
@@ -79,12 +81,16 @@ export const payObligationInputSchema = z.object({
 });
 export type PayObligationInput = z.infer<typeof payObligationInputSchema>;
 
-/** Следующий срок после платежа: месяц/год вперёд с тем же числом (31 → последний день короткого месяца). */
-export function advanceObligationDue(due: Date, interval: ObligationInterval): Date | null {
+/**
+ * Следующий срок после платежа: месяц/год вперёд. День берётся из `anchorDay` (на какое число выпадают платежи), а не из
+ * уже сдвинутой даты, поэтому 31-е после февраля снова 31-е; в коротком месяце — последний его день.
+ */
+export function advanceObligationDue(due: Date, interval: ObligationInterval, anchorDay: number | null = null): Date | null {
   if (interval === "once") return null;
   const months = interval === "monthly" ? 1 : 12;
   const year = due.getUTCFullYear();
   const month = due.getUTCMonth() + months;
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(year, month, Math.min(due.getUTCDate(), lastDay), due.getUTCHours(), due.getUTCMinutes(), due.getUTCSeconds()));
+  const day = Math.min(anchorDay ?? due.getUTCDate(), lastDay);
+  return new Date(Date.UTC(year, month, day, due.getUTCHours(), due.getUTCMinutes(), due.getUTCSeconds()));
 }
