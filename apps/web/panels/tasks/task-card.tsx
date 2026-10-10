@@ -1,8 +1,9 @@
 import type { Task, TaskPriority, TaskStatus } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import { CheckToggle, DropdownMenu, IconButton, StatusMark, Tooltip, cx, type MenuItem } from "@orion/ui";
-import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, ListTree, Lock, MoreHorizontal, Pencil, Repeat, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, ListTree, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { AccountAvatar } from "../../components/account-avatar";
+import { useSlotContributions } from "../../lib/extensions/slot";
 import { projectColor, shortDateTime } from "../../lib/format";
 import type { SubtaskProgress } from "./subtasks";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "../task-form";
@@ -55,6 +56,8 @@ export function TaskCard({
   /** Исполнитель — только когда плагин «Команда» включён и задача назначена (см. TasksPanel). */
   assignee?: TaskAssignee;
 }): React.ReactElement {
+  // The repeat mark belongs to the tasks-recurrence plugin.
+  const recurrence = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
   const done = task.status === "done";
   const canceled = task.status === "canceled";
   const closed = isTaskClosed(task.status);
@@ -156,11 +159,7 @@ export function TaskCard({
             {shortDateTime(task.dueAt)}
           </span>
         ) : null}
-        {task.recurrence ? (
-          <span className="inline-flex items-center gap-1 text-micro text-subtle-foreground" title="Повторяющаяся задача">
-            <Repeat className="h-3 w-3" />
-          </span>
-        ) : null}
+        {task.recurrence && recurrence ? <recurrence.CardMark /> : null}
         {subtasks && subtasks.total > 0 ? (
           <span
             className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-micro text-subtle-foreground"

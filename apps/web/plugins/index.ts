@@ -1,8 +1,9 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
 import { isOfficeFile } from "../lib/office/office-kind";
 
@@ -130,3 +131,10 @@ const BudgetSummaryStat = dynamic<FinanceSummarySlotProps>(() => import("./finan
 const BudgetDashboardLine = dynamic<DashboardFinanceSlotProps>(() => import("./finance-budgeting/summary").then((m) => m.BudgetDashboardLine), { ssr: false });
 contribute("finance.summary", { pluginId: "finance-budgeting", component: BudgetSummaryStat, order: 10 });
 contribute("dashboard.finance", { pluginId: "finance-budgeting", component: BudgetDashboardLine, order: 10 });
+
+// Like billing: presentational pieces in `meta.api`, nothing drawn by the contribution itself.
+contribute("tasks.recurrence", {
+  pluginId: "tasks-recurrence",
+  component: NoVisual as unknown as ComponentType<TasksRecurrenceSlotProps>,
+  meta: { api: taskRecurrenceApi }
+});

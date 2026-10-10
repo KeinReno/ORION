@@ -7,6 +7,8 @@ import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
+import { useSlotContributions } from "../lib/extensions/slot";
+import { TASK_RECURRENCE_LABEL } from "../lib/task-labels";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 
 /**
@@ -39,13 +41,7 @@ export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: "Низкий"
 };
 
-export const TASK_RECURRENCE_LABEL: Record<TaskRecurrence["freq"], string> = {
-  daily: "Каждый день",
-  weekly: "Каждую неделю",
-  monthly: "Каждый месяц",
-  yearly: "Каждый год"
-};
-const RECURRENCE_FREQS: TaskRecurrence["freq"][] = ["daily", "weekly", "monthly", "yearly"];
+export { TASK_RECURRENCE_LABEL };
 
 /** 400 about a parent cycle → human copy; anything else goes through describeError. */
 export function describeTaskFormError(error: unknown): string {
@@ -129,6 +125,7 @@ export function TaskForm({
   const [parentId, setParentId] = useState(initial?.parentId ?? "");
   const [priority, setPriority] = useState<TaskPriority>(initial?.priority ?? "normal");
   const [status, setStatus] = useState<TaskStatus>(initial?.status ?? "todo");
+  const recurrenceApi = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
   const [recurrenceFreq, setRecurrenceFreq] = useState<TaskRecurrence["freq"] | "">(initial?.recurrence?.freq ?? "");
   const [recurrenceInterval, setRecurrenceInterval] = useState(String(initial?.recurrence?.interval ?? 1));
   const [dependencyIds, setDependencyIds] = useState<string[]>(initial?.dependencyIds ?? []);
@@ -262,31 +259,14 @@ export function TaskForm({
         </label>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Повтор
-          <Select
-            value={recurrenceFreq}
-            onChange={(e) => setRecurrenceFreq(e.target.value as TaskRecurrence["freq"] | "")}
-          >
-            <option value="">Не повторяется</option>
-            {RECURRENCE_FREQS.map((freq) => (
-              <option key={freq} value={freq}>
-                {TASK_RECURRENCE_LABEL[freq]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        {recurrenceFreq ? (
-          <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-            Каждые N
-            <Input
-              type="number"
-              min={1}
-              max={365}
-              value={recurrenceInterval}
-              onChange={(e) => setRecurrenceInterval(e.target.value)}
-            />
-          </label>
+        {recurrenceApi ? (
+          <recurrenceApi.Fields
+            variant="form"
+            freq={recurrenceFreq}
+            interval={recurrenceInterval}
+            onFreqChange={setRecurrenceFreq}
+            onIntervalChange={setRecurrenceInterval}
+          />
         ) : null}
         {withStatus ? (
           <label className="flex flex-col gap-1 text-label text-subtle-foreground">

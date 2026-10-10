@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Note, Project, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Note, Project, TaskRecurrence, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -198,6 +198,26 @@ export interface DashboardFinanceSlotProps {
   month: string;
 }
 
+/**
+ * tasks.recurrence — the repeat controls of a task. Draws nothing by itself: `meta.api` holds the two
+ * presentational pieces the host places (the form fields, the mark on a card). The stored rule and the
+ * server's «next copy on completion» do not depend on it.
+ */
+export interface TaskRecurrenceApi {
+  /** Renders «Повтор» (+ «Каждые N»); `variant` picks the surrounding form's label style. */
+  Fields: ComponentType<{
+    variant: "detail" | "form";
+    freq: TaskRecurrence["freq"] | "";
+    interval: string;
+    onFreqChange: (freq: TaskRecurrence["freq"] | "") => void;
+    onIntervalChange: (interval: string) => void;
+  }>;
+  /** The small repeat icon on a task card. */
+  CardMark: ComponentType<Record<string, never>>;
+}
+
+export type TasksRecurrenceSlotProps = Record<string, never>;
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -218,6 +238,7 @@ export interface SlotContracts {
   "notes.templates": NotesTemplatesSlotProps;
   "finance.summary": FinanceSummarySlotProps;
   "dashboard.finance": DashboardFinanceSlotProps;
+  "tasks.recurrence": TasksRecurrenceSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -236,6 +257,7 @@ export interface SlotMeta {
   "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
   "tasks.views": TasksViewMeta;
   "notes.templates": { toggleLabel: (note: Note) => string };
+  "tasks.recurrence": { api: TaskRecurrenceApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

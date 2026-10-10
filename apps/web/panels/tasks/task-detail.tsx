@@ -14,7 +14,6 @@ import type {
   Task,
   TaskActivity,
   TaskPriority,
-  TaskRecurrence,
   TaskStatus,
   UpdateTaskInput,
   WorkspaceMember
@@ -40,7 +39,6 @@ import { relativeTime } from "../../lib/format";
 import {
   TASK_PRIORITY_LABEL,
   TASK_PRIORITY_ORDER,
-  TASK_RECURRENCE_LABEL,
   TASK_STATUS_LABEL,
   TASK_STATUS_ORDER,
   describeTaskFormError
@@ -53,7 +51,6 @@ import { buildPatch, fieldsFromTask, sameFields, type Fields } from "../../lib/t
 type DetailTab = string;
 type SaveState = "saved" | "dirty" | "saving" | "error";
 
-const RECURRENCE_FREQS: TaskRecurrence["freq"][] = ["daily", "weekly", "monthly", "yearly"];
 const AUTOSAVE_DELAY_MS = 800;
 
 const ACTIVITY_FIELD_LABEL: Record<string, string> = {
@@ -118,6 +115,7 @@ export function TaskDetail({
   // The revision the next save is based on: what this pane last loaded or saved.
   const revisionRef = useRef(task.revision);
   const [tab, setTab] = useState<DetailTab | null>(null);
+  const recurrenceApi = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
   const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta !== undefined);
   const tabOptions: { value: DetailTab; label: string }[] = [
     ...pluginTabs.filter((c) => c.meta?.before).map((c) => ({ value: c.meta!.tabId, label: c.meta!.label })),
@@ -391,29 +389,14 @@ export function TaskDetail({
                 onChange={(event) => set("estimatedHours", event.target.value)}
               />
             </Prop>
-            <Prop label="Повтор">
-              <Select
-                value={fields.recurrenceFreq}
-                onChange={(event) => set("recurrenceFreq", event.target.value as TaskRecurrence["freq"] | "")}
-              >
-                <option value="">Не повторяется</option>
-                {RECURRENCE_FREQS.map((freq) => (
-                  <option key={freq} value={freq}>
-                    {TASK_RECURRENCE_LABEL[freq]}
-                  </option>
-                ))}
-              </Select>
-            </Prop>
-            {fields.recurrenceFreq ? (
-              <Prop label="Каждые N">
-                <Input
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={fields.recurrenceInterval}
-                  onChange={(event) => set("recurrenceInterval", event.target.value)}
-                />
-              </Prop>
+            {recurrenceApi ? (
+              <recurrenceApi.Fields
+                variant="detail"
+                freq={fields.recurrenceFreq}
+                interval={fields.recurrenceInterval}
+                onFreqChange={(freq) => set("recurrenceFreq", freq)}
+                onIntervalChange={(interval) => set("recurrenceInterval", interval)}
+              />
             ) : null}
             {milestoneOptions.length > 0 ? (
               <Prop label="Веха">

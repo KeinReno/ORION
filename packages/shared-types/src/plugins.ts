@@ -27,7 +27,8 @@ export const ORION_PLUGIN_IDS = [
   "tasks-comments",
   "tasks-kanban",
   "notes-daily",
-  "notes-templates"
+  "notes-templates",
+  "tasks-recurrence"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -248,6 +249,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Заметки-шаблоны: отдельный список «Шаблоны», создание заметки из шаблона, команда «Сделать шаблоном».",
     provides: ["Фильтр «Шаблоны»", "Кнопка «Из шаблона»", "Команда «Сделать шаблоном»"],
     disableBehavior: "Фильтр, кнопка и команда скрываются; шаблоны остаются обычными заметками с пометкой и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-recurrence",
+    extendsModuleId: "tasks",
+    label: "Повторяющиеся задачи",
+    summary: "Поля «Повтор» и «Каждые N» в задаче и значок повтора на карточке.",
+    provides: ["Поля повтора в форме и карточке задачи", "Значок повтора на карточке"],
+    disableBehavior:
+      "Поля и значок скрываются, правило повтора нельзя менять; уже заданные правила сохраняются, и сервер по-прежнему создаёт следующую копию при завершении такой задачи.",
     defaultEnabled: true
   }
 ];
