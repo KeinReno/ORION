@@ -70,10 +70,12 @@ describe("plugin catalog invariants (default-full parity)", () => {
     }
   });
 
-  it("tasks-saved-views is an extracted built-in of the tasks module, on by default", () => {
-    const manifest = PLUGIN_CATALOG.find((p) => p.id === "tasks-saved-views");
-    expect(manifest?.extendsModuleId).toBe("tasks");
-    expect(isPluginEnabled([], "tasks-saved-views")).toBe(true);
+  it("each later extracted built-in is tied to its module and on by default", () => {
+    const expected = { "tasks-saved-views": "tasks", "documents-history": "documents" } as const;
+    for (const [id, moduleId] of Object.entries(expected)) {
+      expect(PLUGIN_CATALOG.find((p) => p.id === id)?.extendsModuleId).toBe(moduleId);
+      expect(isPluginEnabled([], id as keyof typeof expected)).toBe(true);
+    }
   });
 
   it("the pre-existing optional plugin keeps its default (team stays off)", () => {

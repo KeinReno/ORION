@@ -61,7 +61,7 @@ import { FilterChip } from "../components/filter-chip";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { nextListId } from "../lib/list-nav";
 import { DocThumbnail } from "./documents/thumbnail";
-import { DocumentHistory } from "./documents/document-history";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
 import { useFocusedDocumentId } from "../lib/panel-bus";
 
@@ -126,6 +126,8 @@ export function DocumentsPanel(): React.ReactElement {
   const [pendingPurge, setPendingPurge] = useState<{ ids: string[]; label: string } | null>(null);
   const [pendingBulkMove, setPendingBulkMove] = useState<{ ids: string[]; parentId: string | null } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<DocumentItem | null>(null);
+  // Menu entries a plugin adds for the history dialog it draws itself (none with the plugin off).
+  const historyActions = useSlotContributions("documents.history").flatMap((c) => (c.meta ? [c.meta.actionLabel] : []));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
@@ -498,7 +500,7 @@ export function DocumentsPanel(): React.ReactElement {
             : [
                 { label: "Скачать", icon: Download, onSelect: () => void download(doc) },
                 { label: "Заменить содержимое…", icon: Upload, onSelect: () => triggerReplace(doc) },
-                { label: "История версий…", icon: History, onSelect: () => setHistoryTarget(doc) }
+                ...historyActions.map((label) => ({ label, icon: History, onSelect: () => setHistoryTarget(doc) }))
               ]),
           {
             label: "Переименовать",
@@ -1085,16 +1087,7 @@ export function DocumentsPanel(): React.ReactElement {
         onCancel={() => setPendingBulkMove(null)}
       />
 
-      <Sheet
-        open={historyTarget !== null}
-        onClose={() => setHistoryTarget(null)}
-        title={historyTarget ? `История: ${historyTarget.name}` : "История версий"}
-        bare
-      >
-        {historyTarget ? (
-          <DocumentHistory workspaceId={workspaceId} doc={historyTarget} onRestored={() => setHistoryTarget(null)} />
-        ) : null}
-      </Sheet>
+      <ExtensionSlot name="documents.history" props={{ workspaceId, doc: historyTarget, onClose: () => setHistoryTarget(null) }} />
     </PanelShell>
   );
 }

@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps } from "../lib/extensions/contracts";
 import { contribute } from "../lib/extensions/registry";
 
 /**
@@ -38,3 +38,6 @@ contribute("finance.tabs", { pluginId: "finance-reports", component: ReportsTab,
 
 const SavedViews = dynamic<TasksViewsBarSlotProps>(() => import("./tasks-saved-views/saved-views").then((m) => m.SavedViewsBar), { ssr: false });
 contribute("tasks.views.bar", { pluginId: "tasks-saved-views", component: SavedViews });
+
+const DocumentHistorySheet = dynamic<DocumentsHistorySlotProps>(() => import("./documents-history/history-sheet").then((m) => m.DocumentHistorySheet), { ssr: false });
+contribute("documents.history", { pluginId: "documents-history", component: DocumentHistorySheet, meta: { actionLabel: "История версий…" } });

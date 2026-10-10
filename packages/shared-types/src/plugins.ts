@@ -17,7 +17,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-goals",
   "finance-recurring",
   "finance-reports",
-  "tasks-saved-views"
+  "tasks-saved-views",
+  "documents-history"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -144,6 +145,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Именованные наборы фильтров (поиск, проект) одним нажатием в шапке панели задач.",
     provides: ["Полоса видов в шапке «Задач»", "Кнопка «Сохранить вид»"],
     disableBehavior: "Полоса видов скрывается; сохранённые виды остаются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "documents-history",
+    extendsModuleId: "documents",
+    label: "История версий файлов",
+    summary: "Список прежних версий файла с загрузкой и восстановлением.",
+    provides: ["Пункт «История версий…» в меню файла", "Восстановление прежней версии"],
+    disableBehavior:
+      "Пункт меню и окно истории скрываются; версии продолжают сохраняться при замене содержимого, поэтому история будет на месте при повторном включении.",
     defaultEnabled: true
   }
 ];

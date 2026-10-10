@@ -1,4 +1,4 @@
-import type { Habit, Project } from "@orion/shared-types";
+import type { DocumentItem, Habit, Project } from "@orion/shared-types";
 
 /**
  * The typed contract of every extension slot: exactly the props a host module hands to
@@ -41,11 +41,22 @@ export interface TasksViewsBarSlotProps {
   onApply: (criteria: { search: string; projectId: string | null }) => void;
 }
 
+/**
+ * documents.history — a dialog the host opens for one file. The host adds the menu entry
+ * (label from `meta`) and keeps `doc` (null = closed); the plugin draws the dialog itself.
+ */
+export interface DocumentsHistorySlotProps {
+  workspaceId: string | undefined;
+  doc: DocumentItem | null;
+  onClose: () => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
   "finance.tabs": FinanceTabSlotProps;
   "tasks.views.bar": TasksViewsBarSlotProps;
+  "documents.history": DocumentsHistorySlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -56,6 +67,7 @@ export type SlotName = keyof SlotContracts;
  */
 export interface SlotMeta {
   "finance.tabs": { tabId: string; label: string };
+  "documents.history": { actionLabel: string };
 }
 
 export type MetaOf<S extends SlotName> = S extends keyof SlotMeta ? SlotMeta[S] : undefined;
