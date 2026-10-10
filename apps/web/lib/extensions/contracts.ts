@@ -78,6 +78,22 @@ export interface DocumentCreateAction {
   createFile: () => Promise<File>;
 }
 
+/**
+ * notes.history — the version-history dialog of one note. The host shows a button when a plugin
+ * fills the slot (label from `meta.buttonLabel`) and keeps `open`; the plugin draws the dialog.
+ */
+export interface NotesHistorySlotProps {
+  workspaceId: string | undefined;
+  noteId: string;
+  /** The text in the editor right now (maybe unsaved) — the history diffs against it. */
+  currentTitle: string;
+  currentBody: string;
+  open: boolean;
+  onClose: () => void;
+  /** A past version was restored: the host reloads the note. */
+  onRestored: () => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -86,6 +102,7 @@ export interface SlotContracts {
   "documents.history": DocumentsHistorySlotProps;
   "documents.editor": DocumentsEditorSlotProps;
   "documents.create": DocumentsCreateSlotProps;
+  "notes.history": NotesHistorySlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -98,6 +115,7 @@ export interface SlotMeta {
   "finance.tabs": { tabId: string; label: string };
   "documents.history": { actionLabel: string };
   "documents.editor": { handles: (doc: DocumentItem) => boolean };
+  "notes.history": { buttonLabel: string };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

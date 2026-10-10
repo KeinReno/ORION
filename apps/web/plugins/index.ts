@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -77,3 +77,6 @@ contribute("documents.create", {
     ]
   }
 });
+
+const NoteHistorySheet = dynamic<NotesHistorySlotProps>(() => import("./notes-history/history-sheet").then((m) => m.NoteHistorySheet), { ssr: false });
+contribute("notes.history", { pluginId: "notes-history", component: NoteHistorySheet, meta: { buttonLabel: "История версий" } });

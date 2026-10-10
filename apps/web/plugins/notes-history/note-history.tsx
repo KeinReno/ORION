@@ -5,7 +5,7 @@ import { Button, ConfirmDialog, DiffView, EmptyState, Skeleton, cx, useToast } f
 import { motion, useReducedMotion } from "framer-motion";
 import { History } from "lucide-react";
 import { useEffect, useState } from "react";
-import { relativeTime } from "../lib/format";
+import { relativeTime } from "../../lib/format";
 
 /**
  * Version history for one note, rendered inside a Sheet from NoteEditor.

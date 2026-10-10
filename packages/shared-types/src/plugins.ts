@@ -19,7 +19,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-reports",
   "tasks-saved-views",
   "documents-history",
-  "documents-office"
+  "documents-office",
+  "notes-history"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -166,6 +167,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Кнопки «Документ» и «Таблица»", "Редактор DOCX и XLSX при открытии файла"],
     disableBehavior:
       "Кнопки создания скрываются, а DOCX и XLSX открываются обычным просмотром без правки; файлы не затрагиваются.",
+    defaultEnabled: true
+  },
+  {
+    id: "notes-history",
+    extendsModuleId: "notes",
+    label: "История версий заметок",
+    summary: "Прежние версии заметки, отличия от текущей и откат.",
+    provides: ["Кнопка «История версий» в редакторе заметки", "Сравнение и восстановление версии"],
+    disableBehavior:
+      "Кнопка и окно истории скрываются; версии продолжают сохраняться на сервере при правках, поэтому история будет на месте при повторном включении.",
     defaultEnabled: true
   }
 ];

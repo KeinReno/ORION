@@ -42,7 +42,7 @@ import { NoteAutosave, type AutosaveConflict, type AutosaveState as NoteAutosave
 import { focusNote } from "../lib/panel-bus";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { NoteAttachmentsSection } from "./note-attachments";
-import { NoteHistory } from "./note-history";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 type EditorMode = "edit" | "preview";
 
@@ -119,6 +119,8 @@ export function NoteEditor({
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
   const [mode, setMode] = useState<EditorMode>("edit");
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The history button exists only while a plugin fills `notes.history`.
+  const historyButton = useSlotContributions("notes.history")[0]?.meta;
   const editorApi = useRef<MarkdownEditorApi | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   // S11: the compose form (note === null) always saves explicitly via the
@@ -466,8 +468,8 @@ export function NoteEditor({
               <IconButton label="Свойства, связи и доступ" size="sm" onClick={() => setInspectorOpen(true)}>
                 <SlidersHorizontal className="h-4 w-4" />
               </IconButton>
-              {note ? (
-                <IconButton label="История версий" size="sm" onClick={() => setHistoryOpen(true)}>
+              {note && historyButton ? (
+                <IconButton label={historyButton.buttonLabel} size="sm" onClick={() => setHistoryOpen(true)}>
                   <History className="h-4 w-4" />
                 </IconButton>
               ) : null}
@@ -631,18 +633,21 @@ export function NoteEditor({
       </Sheet>
 
       {note ? (
-        <Sheet open={historyOpen} onClose={() => setHistoryOpen(false)} title="История версий" width="40rem" bare>
-          <NoteHistory
-            workspaceId={workspaceId}
-            noteId={note.id}
-            currentTitle={title}
-            currentBody={body}
-            onRestored={() => {
+        <ExtensionSlot
+          name="notes.history"
+          props={{
+            workspaceId,
+            noteId: note.id,
+            currentTitle: title,
+            currentBody: body,
+            open: historyOpen,
+            onClose: () => setHistoryOpen(false),
+            onRestored: () => {
               setHistoryOpen(false);
               onReload();
-            }}
-          />
-        </Sheet>
+            }
+          }}
+        />
       ) : null}
     </form>
   );
