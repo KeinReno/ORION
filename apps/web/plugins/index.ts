@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -124,3 +124,9 @@ contribute("notes.templates", {
   component: NoVisual as unknown as ComponentType<NotesTemplatesSlotProps>,
   meta: { toggleLabel: (note) => (note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном") }
 });
+
+// finance-budgeting also shows its numbers where the module summarises itself: the Finance summary row and the dashboard card.
+const BudgetSummaryStat = dynamic<FinanceSummarySlotProps>(() => import("./finance-budgeting/summary").then((m) => m.BudgetSummaryStat), { ssr: false });
+const BudgetDashboardLine = dynamic<DashboardFinanceSlotProps>(() => import("./finance-budgeting/summary").then((m) => m.BudgetDashboardLine), { ssr: false });
+contribute("finance.summary", { pluginId: "finance-budgeting", component: BudgetSummaryStat, order: 10 });
+contribute("dashboard.finance", { pluginId: "finance-budgeting", component: BudgetDashboardLine, order: 10 });

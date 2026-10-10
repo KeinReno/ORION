@@ -3,7 +3,6 @@
 import { ApiError } from "@orion/core";
 import {
   useAccounts,
-  useBudgets,
   useCaptureInboxItem,
   useCreateNote,
   useCreateTask,
@@ -60,6 +59,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { OnboardingCard } from "../components/onboarding-card";
+import { ExtensionSlot } from "../lib/extensions/slot";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
 import { focusNote, focusTask, openPanel } from "../lib/panel-bus";
@@ -121,7 +121,6 @@ export function DashboardPanel(): React.ReactElement {
     refetch: refetchTasks
   } = useTasks(tasksOn ? wsId : undefined);
   const { data: accounts } = useAccounts(financeOn ? wsId : undefined);
-  const { data: budgets } = useBudgets(financeOn ? wsId : undefined, todayKey.slice(0, 7));
   const { data: events } = useEvents(calendarOn ? wsId : undefined, calendarOn ? eventRange : undefined);
   const { data: habits } = useHabits(habitsOn ? wsId : undefined, false, todayKey);
   const { data: inboxQueue } = useInbox(wsId, false);
@@ -181,9 +180,8 @@ export function DashboardPanel(): React.ReactElement {
     // ₽ — a confident-looking but wrong figure for any multi-currency
     // workspace, same bug class `FinanceSummaryRow` already guards against.
     const balancesByCurrency = sumByCurrency(accounts ?? [], (a) => a.currency, (a) => a.balance);
-    const overBudgetCount = (budgets ?? []).filter((b) => b.spent > b.limitAmount).length;
-    return { balancesByCurrency, hasAccounts: (accounts?.length ?? 0) > 0, budgetCount: budgets?.length ?? 0, overBudgetCount };
-  }, [accounts, budgets]);
+    return { balancesByCurrency, hasAccounts: (accounts?.length ?? 0) > 0 };
+  }, [accounts]);
 
   const loading = (notesOn && notesLoading) || (tasksOn && tasksLoading);
   // Block-level, not panel-level (04-UX «Реестр состояний»: «Ошибка
@@ -556,18 +554,7 @@ export function DashboardPanel(): React.ReactElement {
                             {formatMoney(total, currency)}
                           </p>
                         ))}
-                        {financeStats.budgetCount > 0 ? (
-                          <p
-                            className={cx(
-                              "mt-1 text-micro",
-                              financeStats.overBudgetCount > 0 ? "text-destructive" : "text-muted-foreground"
-                            )}
-                          >
-                            {financeStats.overBudgetCount > 0
-                              ? `Превышено бюджетов: ${financeStats.overBudgetCount} из ${financeStats.budgetCount}`
-                              : `Бюджеты месяца в норме (${financeStats.budgetCount})`}
-                          </p>
-                        ) : null}
+                        <ExtensionSlot name="dashboard.finance" props={{ workspaceId: wsId, month: todayKey.slice(0, 7) }} />
                       </div>
                     ) : (
                       <p className="text-micro text-muted-foreground">Заведите счёт, чтобы видеть баланс здесь.</p>

@@ -187,6 +187,17 @@ export interface NotesTemplatePickerSlotProps {
  */
 export type NotesTemplatesSlotProps = Record<string, never>;
 
+/** finance.summary — extra cards in the Finance panel's summary row (grid children). */
+export interface FinanceSummarySlotProps {
+  workspaceId: string | undefined;
+}
+
+/** dashboard.finance — extra lines in the dashboard's «Финансы» card; `month` is «YYYY-MM» of today. */
+export interface DashboardFinanceSlotProps {
+  workspaceId: string | undefined;
+  month: string;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -205,6 +216,8 @@ export interface SlotContracts {
   "notes.filters": NotesFilterSlotProps;
   "notes.header.actions.end": NotesTemplatePickerSlotProps;
   "notes.templates": NotesTemplatesSlotProps;
+  "finance.summary": FinanceSummarySlotProps;
+  "dashboard.finance": DashboardFinanceSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;

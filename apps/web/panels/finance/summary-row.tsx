@@ -1,14 +1,11 @@
 "use client";
 
-import { useAccounts, useBudgets, useMonthlyFinanceSummary } from "@orion/core-react";
+import { useAccounts, useMonthlyFinanceSummary } from "@orion/core-react";
 import { StatCard } from "@orion/ui";
 import { useMemo } from "react";
+import { ExtensionSlot } from "../../lib/extensions/slot";
 import { formatMoney, sumByCurrency } from "../../lib/format";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
-
-function currentMonthKey(): string {
-  return new Date().toISOString().slice(0, 7);
-}
 
 /**
  * Always-visible balance/spend/budget glance above the tab switcher — so
@@ -36,7 +33,6 @@ export function FinanceSummaryRow(): React.ReactElement | null {
   const workspaceId = workspace?.id;
   const { data: accounts } = useAccounts(workspaceId);
   const { data: monthly } = useMonthlyFinanceSummary(workspaceId, 1);
-  const { data: budgets } = useBudgets(workspaceId, currentMonthKey());
 
   const balancesByCurrency = useMemo(
     () => sumByCurrency(accounts ?? [], (a) => a.currency, (a) => a.balance),
@@ -46,7 +42,6 @@ export function FinanceSummaryRow(): React.ReactElement | null {
   if (!accounts || accounts.length === 0) return null;
 
   const currentMonth = monthly?.[0];
-  const overBudgetCount = (budgets ?? []).filter((b) => b.spent > b.limitAmount).length;
 
   return (
     <div className="grid grid-cols-2 gap-3 [@container(min-width:576px)]:grid-cols-4">
@@ -63,18 +58,7 @@ export function FinanceSummaryRow(): React.ReactElement | null {
           value={formatMoney(currentMonth.expense, balancesByCurrency[0]?.[0])}
         />
       ) : null}
-      {budgets && budgets.length > 0 ? (
-        <StatCard
-          label="Бюджеты"
-          value={
-            <span className={overBudgetCount > 0 ? "text-destructive" : undefined}>
-              {budgets.length - overBudgetCount} / {budgets.length}
-            </span>
-          }
-          hint={overBudgetCount > 0 ? `превышено: ${overBudgetCount}` : "в норме"}
-          className={overBudgetCount > 0 ? "border-destructive/30" : undefined}
-        />
-      ) : null}
+      <ExtensionSlot name="finance.summary" props={{ workspaceId }} />
     </div>
   );
 }
