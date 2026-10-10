@@ -1,9 +1,10 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
 import { inventoryAlertsApi } from "./inventory-alerts/alerts";
+import { inventoryCostingApi } from "./inventory-costing/costing";
 import { taskPlanningApi } from "./tasks-planning/planning";
 import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
@@ -174,3 +175,8 @@ const ObligationsTab = dynamic<FinanceTabSlotProps>(() => import("./finance-obli
 const ForecastTab = dynamic<FinanceTabSlotProps>(() => import("./finance-forecast/forecast-view").then((m) => m.ForecastView), { ssr: false });
 contribute("finance.tabs", { pluginId: "finance-obligations", component: ObligationsTab, order: 35, meta: { tabId: "obligations", label: "Обязательства" } });
 contribute("finance.tabs", { pluginId: "finance-forecast", component: ForecastTab, order: 45, meta: { tabId: "forecast", label: "Прогноз" } });
+contribute("inventory.costing", {
+  pluginId: "inventory-costing",
+  component: NoVisual as unknown as ComponentType<InventoryCostingSlotProps>,
+  meta: { api: inventoryCostingApi }
+});

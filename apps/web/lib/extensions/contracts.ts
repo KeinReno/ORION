@@ -293,6 +293,18 @@ export interface FinanceTransactionsTopSlotProps {
   workspaceId: string | undefined;
 }
 
+/**
+ * inventory.costing — prices of receipts and the average cost. Draws nothing by itself: `meta.api` holds the
+ * presentational parts the host places (a line on the card, the stat in the item's window, the price field of a receipt).
+ */
+export interface InventoryCostingApi {
+  CardLine: ComponentType<{ avgCostMinor: number | null }>;
+  DetailStat: ComponentType<{ avgCostMinor: number | null }>;
+  UnitCostField: ComponentType<{ value: string; onChange: (value: string) => void }>;
+}
+
+export type InventoryCostingSlotProps = Record<string, never>;
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -318,6 +330,7 @@ export interface SlotContracts {
   "projects.tabs": ProjectTabSlotProps;
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
   "inventory.alerts": InventoryAlertsSlotProps;
+  "inventory.costing": InventoryCostingSlotProps;
   "calendar.event.recurrence": EventRecurrenceSlotProps;
   "calendar.event.reminders": EventRemindersSlotProps;
   "finance.transactions.top": FinanceTransactionsTopSlotProps;
@@ -343,6 +356,7 @@ export interface SlotMeta {
   "tasks.planning": { api: TaskPlanningApi };
   "projects.tabs": { tabId: string; label: string; needsModule?: OrionModuleId };
   "inventory.alerts": { api: InventoryAlertsApi };
+  "inventory.costing": { api: InventoryCostingApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

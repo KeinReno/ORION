@@ -3,6 +3,7 @@
 import type { InventoryMovementType } from "@orion/shared-types";
 import { AutosaveStatus, Button, Input, Select } from "@orion/ui";
 import { useState, type FormEvent } from "react";
+import { useSlotContributions } from "../../lib/extensions/slot";
 import { parseMoneyInput } from "../../lib/format";
 
 const TYPE_LABEL: Record<InventoryMovementType, string> = {
@@ -39,6 +40,7 @@ export function InventoryMovementForm({
   const [type, setType] = useState<InventoryMovementType>("receipt");
   const [quantity, setQuantity] = useState("");
   const [direction, setDirection] = useState<"+" | "-">("+");
+  const costing = useSlotContributions("inventory.costing")[0]?.meta?.api;
   const [unitCost, setUnitCost] = useState("");
   const [note, setNote] = useState("");
 
@@ -83,10 +85,7 @@ export function InventoryMovementForm({
             </Select>
           </label>
         ) : type === "receipt" ? (
-          <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-            Цена за единицу, ₽ (необязательно)
-            <Input inputMode="decimal" placeholder="0" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-          </label>
+          costing ? <costing.UnitCostField value={unitCost} onChange={setUnitCost} /> : null
         ) : null}
       </div>
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">

@@ -30,7 +30,7 @@ import { Archive, ArchiveRestore, Boxes, MoreHorizontal, Pencil, Plus, TriangleA
 import { useState } from "react";
 import { useSlotContributions } from "../lib/extensions/slot";
 import { describeAuthError } from "../lib/error-message";
-import { formatMoney, shortDateTime } from "../lib/format";
+import { shortDateTime } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { InventoryItemForm, type InventoryItemFormValues } from "./inventory/item-form";
@@ -73,6 +73,7 @@ export function InventoryPanel(): React.ReactElement {
   const lowStockCount = activeItems.filter((item) => item.lowStock).length;
   // The threshold and its marks are the inventory-alerts plugin's.
   const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
+  const costing = useSlotContributions("inventory.costing")[0]?.meta?.api;
 
   async function create(values: InventoryItemFormValues): Promise<void> {
     try {
@@ -244,9 +245,7 @@ export function InventoryPanel(): React.ReactElement {
                     </p>
                     {alerts && item.lowStock ? <alerts.ItemBadge /> : null}
                   </div>
-                  {item.avgCostMinor !== null ? (
-                    <p className="text-2xs text-subtle-foreground">Средняя себестоимость: {formatMoney(item.avgCostMinor)}</p>
-                  ) : null}
+                  {costing ? <costing.CardLine avgCostMinor={item.avgCostMinor} /> : null}
                 </Card>
               ))}
             </div>
@@ -324,6 +323,7 @@ function InventoryItemDetail({
   const { workspace } = useActiveWorkspace();
   const movementsQuery = useInventoryMovements(workspace?.id, item.id);
   const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
+  const costing = useSlotContributions("inventory.costing")[0]?.meta?.api;
   const movements = movementsQuery.data ?? [];
 
   return (
@@ -334,11 +334,7 @@ function InventoryItemDetail({
           value={<span className={alerts && item.lowStock ? "text-destructive" : undefined}>{`${item.balance} ${item.unit}`}</span>}
           hint={alerts ? alerts.balanceHint(item.lowStock) : undefined}
         />
-        <StatCard
-          label="Средняя себестоимость"
-          value={item.avgCostMinor !== null ? formatMoney(item.avgCostMinor) : "—"}
-          hint={item.avgCostMinor !== null ? "по приходам" : "нет данных"}
-        />
+        {costing ? <costing.DetailStat avgCostMinor={item.avgCostMinor} /> : null}
       </div>
 
       {recording ? (

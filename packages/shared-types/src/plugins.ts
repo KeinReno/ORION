@@ -37,7 +37,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-quick-entry",
   "finance-import",
   "finance-obligations",
-  "finance-forecast"
+  "finance-forecast",
+  "inventory-costing"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -355,6 +356,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Куда идёт остаток: средний месяц вашей истории, коридор от худшего до лучшего и плановые платежи отдельно — с описанием метода.",
     provides: ["Вкладка «Прогноз»"],
     disableBehavior: "Вкладка скрывается; данные не затрагиваются.",
+    defaultEnabled: true
+  },
+  {
+    id: "inventory-costing",
+    extendsModuleId: "inventory",
+    label: "Себестоимость склада",
+    summary: "Цена прихода и средняя себестоимость позиции — в карточке и в окне позиции.",
+    provides: ["Поле «Цена за единицу» у прихода", "Средняя себестоимость"],
+    disableBehavior: "Поле цены и средняя себестоимость скрываются; остатки и движения не затрагиваются, прежние цены приходов сохраняются.",
     defaultEnabled: true
   }
 ];
