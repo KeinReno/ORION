@@ -54,7 +54,7 @@ export function parseCsv(input: string): string[][] {
  * More than two fractional digits is refused (it would silently round money).
  */
 export function parseAmount(raw: string): { minor: number; negative: boolean } | null {
-  let text = raw.trim().replace(/[\s ]/g, "");
+  let text = raw.trim().replace(/[\s00a0]/g, "");
   if (!text) return null;
   let negative = false;
   if (/^\(.*\)$/.test(text)) {
