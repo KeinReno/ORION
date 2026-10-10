@@ -4,6 +4,7 @@ import { PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/s
 import { Button, Input, PALETTE_SWATCHES, Select, Textarea } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { fromKopecks, parseMoneyInput } from "../lib/format";
+import { projectSwatchColor } from "../lib/project-colors";
 
 /**
  * Project create/edit form — split out of ProjectsPanel.tsx for the same
@@ -29,10 +30,7 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
  */
 export const PROJECT_COLOR_ORDER = PALETTE_SWATCHES.slice(0, 6).map((swatch) => swatch.key);
 
-/** Palette key → fill, for the colour dot on a project card. */
-export function projectSwatchColor(key: string | null | undefined): string | undefined {
-  return key ? PALETTE_SWATCHES.find((swatch) => swatch.key === key)?.color : undefined;
-}
+export { projectSwatchColor };
 
 /** Same five codes the account form offers — ORION never converts between them. */
 export const PROJECT_CURRENCY_ORDER = ["RUB", "USD", "EUR", "KZT", "BYN"] as const;

@@ -1,5 +1,6 @@
-import type { DocumentItem, Habit, Project } from "@orion/shared-types";
+import type { DocumentItem, Habit, Project, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
+import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
 /**
  * The typed contract of every extension slot: exactly the props a host module hands to
@@ -94,6 +95,42 @@ export interface NotesHistorySlotProps {
   onRestored: () => void;
 }
 
+/**
+ * time.billing — money for tracked time. A plugin fills it with the presentational pieces the host
+ * and the insights block use when they show a cost; it draws nothing by itself (the contribution's
+ * component is a placeholder, the substance is `meta.api`). Without it no money is shown anywhere.
+ */
+export interface TimeBillingApi {
+  /** Cost lines under the totals, or the «not priced» note. */
+  SummaryCosts: ComponentType<{ summary: TimeSummary; ratesKnown: boolean; projectsOn: boolean }>;
+  /** The «*» next to a project name when part of its time has no rate. */
+  ProjectMark: ComponentType<{ item: TimeProjectTotal; summary: TimeSummary }>;
+  /** The cost (or «—») at the end of a per-project row. */
+  ProjectCost: ComponentType<{ item: TimeProjectTotal; ratesKnown: boolean }>;
+  /** What a log row shows as its cost; null = nothing. */
+  entryCost: (entry: TimeEntry, projects: Project[], now: Date) => { text: string; title?: string; partial?: boolean } | null;
+}
+
+export type TimeBillingSlotProps = Record<string, never>;
+
+/** time.insights — the «Итоги» block and the «Динамика» charts of the Time panel. */
+export interface TimeInsightsSlotProps {
+  workspaceId: string | undefined;
+  /** Active and archived projects (rates and names live there). */
+  allProjects: Project[];
+  projectNames: Map<string, string>;
+  /** The loaded log — breakdowns are computed from it. */
+  entries: TimeEntry[];
+  summary: TimeSummary;
+  /** False until the projects have loaded — until then no money and no «rate missing» is shown. */
+  ratesKnown: boolean;
+  projectsOn: boolean;
+  /** Exact server-side totals in minutes (undefined while loading). */
+  headline: { today: number | undefined; week: number | undefined; total: number | undefined };
+  /** The money pieces, only when a billing plugin is on. */
+  billing: TimeBillingApi | null;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -103,6 +140,8 @@ export interface SlotContracts {
   "documents.editor": DocumentsEditorSlotProps;
   "documents.create": DocumentsCreateSlotProps;
   "notes.history": NotesHistorySlotProps;
+  "time.insights": TimeInsightsSlotProps;
+  "time.billing": TimeBillingSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -116,6 +155,7 @@ export interface SlotMeta {
   "documents.history": { actionLabel: string };
   "documents.editor": { handles: (doc: DocumentItem) => boolean };
   "notes.history": { buttonLabel: string };
+  "time.billing": { api: TimeBillingApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

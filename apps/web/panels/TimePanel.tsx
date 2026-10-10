@@ -15,8 +15,6 @@ import {
 import {
   entryMinutes,
   formatDuration,
-  summarizeByAuthorship,
-  timeCostMinor,
   timeEntryDay,
   type TimeEntry
 } from "@orion/shared-types";
@@ -33,20 +31,19 @@ import {
   PanelSection,
   PanelShell,
   Skeleton,
-  StatCard,
   useResizeWidth,
   useToast
 } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoreVertical, Pencil, Play, Plus, Timer, Trash2, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { formatMoney, toDatetimeLocal } from "../lib/format";
+import { toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
+import { dayLabel, groupEntriesByDay, summariseEntries, timeRange } from "../lib/time-summary";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EntryForm, type EntryFormDraft, type EntryFormValues } from "./time/entry-form";
-import { dayLabel, groupEntriesByDay, summariseEntries, timeRange } from "./time/summary";
-import { TimeDynamics } from "./time/time-charts";
 import { TimerWidget } from "./time/timer-widget";
 import { useNowTick } from "./time/use-now";
 
@@ -184,15 +181,9 @@ export function TimePanel(): React.ReactElement {
   const list = entriesQuery.entries;
   const summary = useMemo(() => summariseEntries(list, allProjects, now), [list, allProjects, now]);
   const groups = useMemo(() => groupEntriesByDay(list, now), [list, now]);
-  const costs = ratesKnown ? summary.costs : [];
-  const nothingPriced = ratesKnown && summary.costs.length === 0 && summary.total > 0;
-  // Разрез «мои / команда / автор неизвестен» — по уже загруженной странице
-  // (как и «По проектам» ниже), а не отдельный серверный агрегат: то же
-  // допущение, что и у project totals, отдельного эндпоинта для него нет.
-  const authorship = useMemo(() => summarizeByAuthorship(list), [list]);
-  // Соло-пространство почти всегда даёт team=0/unknown=0 — тогда разрез не
-  // несёт информации и просто дублирует «Всего», поэтому его прячем.
-  const showAuthorship = authorship.teamMinutes > 0 || authorship.unknownAuthorMinutes > 0;
+  // Money is shown only while a billing plugin is on; the insights block gets the same pieces.
+  const billing = useSlotContributions("time.billing")[0]?.meta?.api ?? null;
+  const hasInsights = useSlotContributions("time.insights").length > 0;
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<TimeEntry | null>(null);
@@ -205,11 +196,8 @@ export function TimePanel(): React.ReactElement {
   }
 
   function entryCost(entry: TimeEntry): { text: string; title?: string; partial?: boolean } | null {
-    if (!ratesKnown) return null;
-    const project = entry.projectId ? allProjects.find((item) => item.id === entry.projectId) : undefined;
-    const cost = timeCostMinor(entryMinutes(entry, now), project?.hourlyRate ?? null);
-    if (cost === null) return { text: "—", title: "Ставка не указана" };
-    return { text: formatMoney(cost, project?.currency ?? "RUB") };
+    if (!billing || !ratesKnown) return null;
+    return billing.entryCost(entry, allProjects, now);
   }
 
   function reportConflict(): void {
@@ -306,7 +294,7 @@ export function TimePanel(): React.ReactElement {
             />
           )
         ) : (
-          <div className={wideLayout ? "grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-6" : "mx-auto max-w-2xl space-y-6"}>
+          <div className={wideLayout && hasInsights ? "grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-6" : "mx-auto max-w-2xl space-y-6"}>
             <div className="min-w-0 space-y-6">
             <TimerWidget
               key={running?.id ?? "idle"}
@@ -316,113 +304,24 @@ export function TimePanel(): React.ReactElement {
               projects={projectsOn ? (projects ?? []) : undefined}
             />
 
-            <PanelSection title="Итоги">
-              <div className="grid grid-cols-3 gap-2">
-                <StatCard
-                  label="Сегодня"
-                  value={todaySummaryQuery.data ? formatDuration(todaySummaryQuery.data.minutes) : "…"}
-                />
-                <StatCard
-                  label="7 дней"
-                  value={weekSummaryQuery.data ? formatDuration(weekSummaryQuery.data.minutes) : "…"}
-                />
-                <StatCard
-                  label="Всего"
-                  value={totalSummaryQuery.data ? formatDuration(totalSummaryQuery.data.minutes) : "…"}
-                />
-              </div>
-
-              {showAuthorship ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro text-subtle-foreground">
-                  <span>
-                    Мои:{" "}
-                    <span className="font-mono tabular-nums text-foreground">
-                      {formatDuration(authorship.mineMinutes)}
-                    </span>
-                  </span>
-                  <span>
-                    Команда:{" "}
-                    <span className="font-mono tabular-nums text-foreground">
-                      {formatDuration(authorship.teamMinutes)}
-                    </span>
-                  </span>
-                  {authorship.unknownAuthorMinutes > 0 ? (
-                    <span>
-                      Автор неизвестен:{" "}
-                      <span className="font-mono tabular-nums text-foreground">
-                        {formatDuration(authorship.unknownAuthorMinutes)}
-                      </span>
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {costs.length > 0 ? (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  {costs.map((cost) => (
-                    <span key={cost.currency} className="flex items-baseline gap-1.5">
-                      <span className="text-2xs text-subtle-foreground">Стоимость времени:</span>
-                      <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                        {formatMoney(cost.costMinor, cost.currency)}
-                        {summary.unratedMinutes > 0 ? (
-                          <span className="text-label text-subtle-foreground" title="частично оценено">
-                            *
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  ))}
-                  {summary.unratedMinutes > 0 ? (
-                    <span className="text-micro text-subtle-foreground">
-                      частично оценено: {formatDuration(summary.ratedMinutes)} из{" "}
-                      {formatDuration(summary.total)}
-                    </span>
-                  ) : null}
-                </div>
-              ) : nothingPriced ? (
-                <p className="text-2xs text-subtle-foreground">
-                  {projectsOn
-                    ? "Стоимость не посчитана: у проектов со временем не задана ставка."
-                    : "Стоимость не посчитана: модуль «Проекты» выключен."}
-                </p>
-              ) : null}
-
-              {summary.projectTotals.length > 0 ? (
-                <div className="space-y-1">
-                  <p className="text-2xs text-subtle-foreground">По проектам</p>
-                  <ul className="divide-y divide-border rounded-xl border border-border">
-                    {summary.projectTotals.map((item) => (
-                      <li key={item.projectId} className="flex items-center justify-between gap-3 px-3 py-row">
-                        <span className="min-w-0 truncate text-body text-foreground">
-                          {projectNames.get(item.projectId) ?? "Проект"}
-                          {item.costMinor !== null && summary.unratedMinutes > 0 ? (
-                            <span className="text-subtle-foreground" title="частично оценено">
-                              *
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-baseline gap-2">
-                          <span className="font-mono text-micro tabular-nums text-muted-foreground">
-                            {formatDuration(item.minutes)}
-                          </span>
-                          {!ratesKnown ? null : item.costMinor !== null ? (
-                            <span className="font-mono text-sm tabular-nums text-foreground">
-                              {formatMoney(item.costMinor, item.currency)}
-                            </span>
-                          ) : (
-                            <span className="font-mono text-micro tabular-nums text-subtle-foreground" title="Ставка не указана">
-                              —
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </PanelSection>
-
-            <TimeDynamics workspaceId={workspaceId} projects={allProjects} />
+            <ExtensionSlot
+              name="time.insights"
+              props={{
+                workspaceId,
+                allProjects,
+                projectNames,
+                entries: list,
+                summary,
+                ratesKnown,
+                projectsOn,
+                headline: {
+                  today: todaySummaryQuery.data?.minutes,
+                  week: weekSummaryQuery.data?.minutes,
+                  total: totalSummaryQuery.data?.minutes
+                },
+                billing
+              }}
+            />
             </div>
 
             <div className="min-w-0">

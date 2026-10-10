@@ -20,7 +20,9 @@ export const ORION_PLUGIN_IDS = [
   "tasks-saved-views",
   "documents-history",
   "documents-office",
-  "notes-history"
+  "notes-history",
+  "time-insights",
+  "time-billing"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -177,6 +179,24 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Кнопка «История версий» в редакторе заметки", "Сравнение и восстановление версии"],
     disableBehavior:
       "Кнопка и окно истории скрываются; версии продолжают сохраняться на сервере при правках, поэтому история будет на месте при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "time-insights",
+    extendsModuleId: "time",
+    label: "Итоги и динамика времени",
+    summary: "Часы за сегодня, 7 дней и всё время, разрез «мои / команда», время по проектам и графики динамики.",
+    provides: ["Блок «Итоги»", "Блок «Динамика»"],
+    disableBehavior: "Блоки скрываются; остаются таймер и журнал записей, данные не затрагиваются.",
+    defaultEnabled: true
+  },
+  {
+    id: "time-billing",
+    extendsModuleId: "time",
+    label: "Стоимость времени",
+    summary: "Перевод часов в деньги по ставке проекта: итоговая стоимость, по проектам и у каждой записи.",
+    provides: ["Строки «Стоимость времени»", "Стоимость у записей и проектов"],
+    disableBehavior: "Деньги нигде не показываются; ставки проектов и записи времени сохраняются.",
     defaultEnabled: true
   }
 ];

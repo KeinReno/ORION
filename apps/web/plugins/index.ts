@@ -1,8 +1,9 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+import { timeBillingApi } from "./time-billing/billing";
 import { isOfficeFile } from "../lib/office/office-kind";
 
 /**
@@ -80,3 +81,12 @@ contribute("documents.create", {
 
 const NoteHistorySheet = dynamic<NotesHistorySlotProps>(() => import("./notes-history/history-sheet").then((m) => m.NoteHistorySheet), { ssr: false });
 contribute("notes.history", { pluginId: "notes-history", component: NoteHistorySheet, meta: { buttonLabel: "История версий" } });
+
+const TimeInsights = dynamic<TimeInsightsSlotProps>(() => import("./time-insights/insights").then((m) => m.TimeInsights), { ssr: false });
+contribute("time.insights", { pluginId: "time-insights", component: TimeInsights });
+// Billing draws nothing itself; its substance is `meta.api` (small, so it is not lazy).
+contribute("time.billing", {
+  pluginId: "time-billing",
+  component: NoVisual as unknown as ComponentType<TimeBillingSlotProps>,
+  meta: { api: timeBillingApi }
+});
