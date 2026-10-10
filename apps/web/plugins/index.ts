@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps } from "../lib/extensions/contracts";
 import { contribute } from "../lib/extensions/registry";
 
 /**
@@ -35,3 +35,6 @@ contribute("finance.tabs", { pluginId: "finance-budgeting", component: BudgetsTa
 contribute("finance.tabs", { pluginId: "finance-goals", component: GoalsTab, order: 20, meta: { tabId: "goals", label: "Цели" } });
 contribute("finance.tabs", { pluginId: "finance-recurring", component: RecurringTab, order: 30, meta: { tabId: "recurring", label: "Повторяющиеся" } });
 contribute("finance.tabs", { pluginId: "finance-reports", component: ReportsTab, order: 40, meta: { tabId: "reports", label: "Отчёты" } });
+
+const SavedViews = dynamic<TasksViewsBarSlotProps>(() => import("./tasks-saved-views/saved-views").then((m) => m.SavedViewsBar), { ssr: false });
+contribute("tasks.views.bar", { pluginId: "tasks-saved-views", component: SavedViews });

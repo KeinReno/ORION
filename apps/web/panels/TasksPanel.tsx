@@ -39,7 +39,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../lib/use-enabled-plugins";
 import { TaskCard, type TaskAssignee } from "./tasks/task-card";
-import { SavedViewsBar } from "./tasks/saved-views";
+import { ExtensionSlot } from "../lib/extensions/slot";
 import {
   canMoveNeighbor,
   orderColumnTasks,
@@ -404,16 +404,16 @@ export function TasksPanel(): React.ReactElement {
           </Button>
         }
       >
-        <SavedViewsBar
-          workspaceId={workspace?.id}
-          projects={projectList ?? []}
-          current={{
-            search: query,
-            projectId: projectFilter
-          }}
-          onApply={(criteria) => {
-            setQuery(criteria.search);
-            setProjectFilter(criteria.projectId);
+        <ExtensionSlot
+          name="tasks.views.bar"
+          props={{
+            workspaceId: workspace?.id,
+            projects: projectList ?? [],
+            current: { search: query, projectId: projectFilter },
+            onApply: (criteria) => {
+              setQuery(criteria.search);
+              setProjectFilter(criteria.projectId);
+            }
           }}
         />
         <div className="ml-auto flex flex-wrap items-center gap-2">

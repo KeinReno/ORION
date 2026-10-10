@@ -16,7 +16,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-budgeting",
   "finance-goals",
   "finance-recurring",
-  "finance-reports"
+  "finance-reports",
+  "tasks-saved-views"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -134,6 +135,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Доходы и расходы по месяцам, чистый капитал, расходы по категориям.",
     provides: ["Вкладка «Отчёты»", "Графики по месяцам и категориям"],
     disableBehavior: "Вкладка «Отчёты» скрывается; данные не затрагиваются.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-saved-views",
+    extendsModuleId: "tasks",
+    label: "Сохранённые виды задач",
+    summary: "Именованные наборы фильтров (поиск, проект) одним нажатием в шапке панели задач.",
+    provides: ["Полоса видов в шапке «Задач»", "Кнопка «Сохранить вид»"],
+    disableBehavior: "Полоса видов скрывается; сохранённые виды остаются и вернутся при повторном включении.",
     defaultEnabled: true
   }
 ];

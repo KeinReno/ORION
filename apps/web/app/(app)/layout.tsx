@@ -270,7 +270,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // `resolveDropAction` doc for why the drop path doesn't try to relocate
   // an existing tab either.
   const placePanel = useCallback(
-    (panelId: string, position?: PanelSplitPosition, title?: string) => {
+    (panelId: string, position?: PanelSplitPosition, title?: string, fromMenu = false) => {
       const api = apiRef.current;
       if (!api) return;
       const previous = api.activePanel;
@@ -297,7 +297,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           if (panel.id !== panelId) panel.api.close();
         }
         setDrawerOpen(false);
-      } else if (openTabsModeRef.current === "replace" && !position && previous && previous.id !== panelId) {
+      } else if (openTabsModeRef.current === "replace" && fromMenu && !position && previous && previous.id !== panelId) {
         // «Заменять текущую»: the section takes the place of the tab you were on instead of adding one.
         previous.api.close();
       }
@@ -306,6 +306,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   );
 
   const openPanel = useCallback((panelId: string, title?: string) => placePanel(panelId, undefined, title), [placePanel]);
+  // A click in the menu is the only open that may replace the current tab («Заменять текущую»);
+  // moving between panels from inside a panel (open a project from the list) always adds a tab.
+  const openFromMenu = useCallback((panelId: string) => placePanel(panelId, undefined, undefined, true), [placePanel]);
 
   /**
    * Non-drag alternative to "drop on an edge" (U06 done-criterion:
@@ -590,7 +593,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               : panel.id === "tasks" && overdueCount > 0
                 ? `просрочено: ${overdueCount}`
                 : undefined,
-          onClick: () => openPanel(panel.id),
+          onClick: () => openFromMenu(panel.id),
           // U06: drag the icon/label straight onto Dockview — the custom
           // mime type is how onReady's onWillShowOverlay/onDidDrop (above)
           // recognize this as a sidebar drag rather than dockview's own
@@ -603,7 +606,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           // (U06 done-criterion): plain click already opens/focuses
           // (`onClick` above); this menu adds split and new-window.
           menuItems: [
-            { label: "Открыть", onSelect: () => openPanel(panel.id) },
+            { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
             { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
             { label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) },
             "separator",

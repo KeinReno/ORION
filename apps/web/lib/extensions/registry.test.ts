@@ -70,6 +70,12 @@ describe("plugin catalog invariants (default-full parity)", () => {
     }
   });
 
+  it("tasks-saved-views is an extracted built-in of the tasks module, on by default", () => {
+    const manifest = PLUGIN_CATALOG.find((p) => p.id === "tasks-saved-views");
+    expect(manifest?.extendsModuleId).toBe("tasks");
+    expect(isPluginEnabled([], "tasks-saved-views")).toBe(true);
+  });
+
   it("the pre-existing optional plugin keeps its default (team stays off)", () => {
     expect(PLUGIN_CATALOG.find((p) => p.id === "team")?.defaultEnabled).toBe(false);
     expect(isPluginEnabled([], "team")).toBe(false);

@@ -275,7 +275,7 @@ export function Sidebar({
         {isActive ? (
           <motion.span
             layoutId={isDrawer ? "orion-sidebar-bar-drawer" : "orion-sidebar-bar"}
-            className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+            className={clsx("absolute rounded-full bg-accent", horizontal ? "inset-x-2 bottom-0 h-0.5" : "inset-y-1.5 left-0 w-0.5")}
             transition={reduceMotion ? { duration: 0 } : SPRING_SMOOTH}
             aria-hidden
           />

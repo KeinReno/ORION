@@ -1,4 +1,4 @@
-import type { Habit } from "@orion/shared-types";
+import type { Habit, Project } from "@orion/shared-types";
 
 /**
  * The typed contract of every extension slot: exactly the props a host module hands to
@@ -31,10 +31,21 @@ export interface FinanceTabSlotProps {
   workspaceId: string | undefined;
 }
 
+/** tasks.views.bar — named filter presets in the Tasks panel header. The host owns the filters; the plugin saves and re-applies them. */
+export interface TasksViewsBarSlotProps {
+  workspaceId: string | undefined;
+  projects: Project[];
+  /** The filters the panel currently has. */
+  current: { search: string; projectId: string | null };
+  /** Ask the host to take these filters. */
+  onApply: (criteria: { search: string; projectId: string | null }) => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
   "finance.tabs": FinanceTabSlotProps;
+  "tasks.views.bar": TasksViewsBarSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
