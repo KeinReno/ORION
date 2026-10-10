@@ -31,7 +31,9 @@ export const ORION_PLUGIN_IDS = [
   "tasks-recurrence",
   "tasks-planning",
   "projects-planning",
-  "inventory-alerts"
+  "inventory-alerts",
+  "calendar-recurrence",
+  "calendar-reminders"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -292,6 +294,26 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Поле «Порог низкого остатка»", "Карточка и значок «низкий остаток»"],
     disableBehavior:
       "Поле порога, карточка и значки скрываются; пороги сохраняются, а уведомление о низком остатке на сервере продолжает приходить по ним (его отключают в настройках уведомлений).",
+    defaultEnabled: true
+  },
+  {
+    id: "calendar-recurrence",
+    extendsModuleId: "calendar",
+    label: "Повторяющиеся события",
+    summary: "Раздел «Повтор» в форме события: ежедневно, по дням недели, ежемесячно, ежегодно, до даты или N раз.",
+    provides: ["Раздел «Повтор» в форме события"],
+    disableBehavior:
+      "Раздел скрывается и правило нельзя менять; уже созданные повторяющиеся события остаются и показываются в календаре по своему правилу.",
+    defaultEnabled: true
+  },
+  {
+    id: "calendar-reminders",
+    extendsModuleId: "calendar",
+    label: "Напоминания о событиях",
+    summary: "Раздел «Напоминания» в форме события: уведомление за N минут до начала.",
+    provides: ["Раздел «Напоминания» в форме события"],
+    disableBehavior:
+      "Раздел скрывается и напоминания нельзя менять; заданные ранее напоминания продолжают приходить (их отключают в настройках уведомлений).",
     defaultEnabled: true
   }
 ];

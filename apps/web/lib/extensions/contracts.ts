@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, RecurrenceSpec, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -276,6 +276,18 @@ export interface InventoryAlertsApi {
 
 export type InventoryAlertsSlotProps = Record<string, never>;
 
+/** calendar.event.recurrence — the «Повтор» section of the event form. `value` is the starting rule; changes come back through `onChange`. */
+export interface EventRecurrenceSlotProps {
+  value: RecurrenceSpec | null;
+  onChange: (value: RecurrenceSpec | null) => void;
+}
+
+/** calendar.event.reminders — the «Напоминания» section of the event form (minutes before the start). */
+export interface EventRemindersSlotProps {
+  value: number[];
+  onChange: (value: number[]) => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -301,6 +313,8 @@ export interface SlotContracts {
   "projects.tabs": ProjectTabSlotProps;
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
   "inventory.alerts": InventoryAlertsSlotProps;
+  "calendar.event.recurrence": EventRecurrenceSlotProps;
+  "calendar.event.reminders": EventRemindersSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;

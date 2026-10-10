@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -158,3 +158,8 @@ contribute("inventory.alerts", {
   component: NoVisual as unknown as ComponentType<InventoryAlertsSlotProps>,
   meta: { api: inventoryAlertsApi }
 });
+
+const EventRecurrenceFields = dynamic<EventRecurrenceSlotProps>(() => import("./calendar-recurrence/recurrence-fields").then((m) => m.EventRecurrenceFields), { ssr: false });
+const EventReminderFields = dynamic<EventRemindersSlotProps>(() => import("./calendar-reminders/reminder-fields").then((m) => m.EventReminderFields), { ssr: false });
+contribute("calendar.event.recurrence", { pluginId: "calendar-recurrence", component: EventRecurrenceFields, order: 10 });
+contribute("calendar.event.reminders", { pluginId: "calendar-reminders", component: EventReminderFields, order: 10 });
