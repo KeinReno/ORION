@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { noteNumberLabel } from "@orion/shared-types";
-import { ExtensionSlot } from "../lib/extensions/slot";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
@@ -77,12 +77,13 @@ export function NotesPanel(): React.ReactElement {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 300);
   const [view, setView] = useState<NoteView>("active");
-  const [templatesView, setTemplatesView] = useState(false);
+  // «Шаблоны» is the notes-templates plugin's list: without it the template view is never on.
+  const templatesApi = useSlotContributions("notes.templates")[0]?.meta;
+  const [templatesViewRaw, setTemplatesView] = useState(false);
+  const templatesView = templatesApi !== undefined && templatesViewRaw;
   const trash = view === "trash";
   const activeView = view === "active";
   const { data: notes, isLoading, isError, error, refetch } = useNotes(workspace?.id, debouncedQuery, view, templatesView);
-  // Templates for the "Новая из шаблона" menu — a small, always-loaded list.
-  const { data: templates } = useNotes(workspace?.id, "", "active", true);
   // Active projects of this workspace — the editor's "Проект" select and the
   // project chip in the list. Same source as TasksPanel.
   const { data: projectList } = useProjects(isEnabled("projects") ? workspace?.id : undefined);
@@ -196,18 +197,6 @@ export function NotesPanel(): React.ReactElement {
     toast({ title: templatesView ? "Шаблон создан" : "Заметка создана", tone: "success" });
   }
 
-  async function createFromTemplate(template: Note): Promise<void> {
-    const created = await createNote.mutateAsync({
-      title: template.title,
-      summary: template.summary,
-      body: template.body,
-      tags: template.tags
-    });
-    setTemplatesView(false);
-    setSelectedId(created.id);
-    toast({ title: "Заметка из шаблона", tone: "success" });
-  }
-
   function handleToggleTemplate(note: Note): void {
     updateNote.mutate(
       { noteId: note.id, input: { isTemplate: !note.isTemplate } },
@@ -317,9 +306,10 @@ export function NotesPanel(): React.ReactElement {
       {!trash && (activeView || allTags.length > 0 || (projectList ?? []).length > 0) ? (
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
           {activeView ? (
-            <FilterChip active={templatesView} onClick={() => setTemplatesView((v) => !v)}>
-              Шаблоны{templates && templates.length > 0 ? ` · ${templates.length}` : ""}
-            </FilterChip>
+            <ExtensionSlot
+              name="notes.filters"
+              props={{ workspaceId: workspace?.id, active: templatesView, onToggle: () => setTemplatesView((v) => !v) }}
+            />
           ) : null}
           {activeView ? (
             <FilterChip active={pinnedOnly} onClick={() => setPinnedOnly((v) => !v)}>
@@ -550,11 +540,9 @@ export function NotesPanel(): React.ReactElement {
                                 onSelect: () => handleToggleArchive(note)
                               },
                               { label: "Дублировать", icon: Copy, onSelect: () => void handleDuplicate(note) },
-                              {
-                                label: note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном",
-                                icon: FileStack,
-                                onSelect: () => handleToggleTemplate(note)
-                              },
+                              ...(templatesApi
+                                ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => handleToggleTemplate(note) }]
+                                : []),
                               "separator",
                               { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(note) }
                             ]
@@ -585,7 +573,7 @@ export function NotesPanel(): React.ReactElement {
         onTogglePin={handleTogglePin}
         onToggleArchive={handleToggleArchive}
         onDuplicate={(n) => void handleDuplicate(n)}
-        onToggleTemplate={handleToggleTemplate}
+        onToggleTemplate={templatesApi ? handleToggleTemplate : undefined}
         onDelete={setPendingDelete}
       />
     ) : (
@@ -616,19 +604,16 @@ export function NotesPanel(): React.ReactElement {
               <Button size="sm" onClick={() => setSelectedId(NEW_NOTE)}>
                 <Plus className="h-4 w-4" /> {templatesView ? "Новый шаблон" : "Новая"}
               </Button>
-              {!templatesView && templates && templates.length > 0 ? (
-                <DropdownMenu
-                  align="end"
-                  trigger={({ toggle }) => (
-                    <IconButton label="Из шаблона" size="sm" onClick={toggle}>
-                      <FileStack className="h-4 w-4" />
-                    </IconButton>
-                  )}
-                  items={templates.map((t) => ({
-                    label: t.title || "Без заголовка",
-                    icon: FileText,
-                    onSelect: () => void createFromTemplate(t)
-                  }))}
+              {!templatesView ? (
+                <ExtensionSlot
+                  name="notes.header.actions.end"
+                  props={{
+                    workspaceId: workspace?.id,
+                    onOpenNote: (noteId) => {
+                      setView("active");
+                      setSelectedId(noteId);
+                    }
+                  }}
                 />
               ) : null}
             </div>

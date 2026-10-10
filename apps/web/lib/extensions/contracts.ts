@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Project, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Note, Project, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -168,6 +168,25 @@ export interface NotesHeaderActionSlotProps {
   onOpenNote: (noteId: string) => void;
 }
 
+/** notes.filters — a chip at the start of the filter row of the notes list. */
+export interface NotesFilterSlotProps {
+  workspaceId: string | undefined;
+  active: boolean;
+  onToggle: () => void;
+}
+
+/** notes.header.actions.end — a control after «Новая» in the Notes header (shown outside the template list). */
+export interface NotesTemplatePickerSlotProps {
+  workspaceId: string | undefined;
+  onOpenNote: (noteId: string) => void;
+}
+
+/**
+ * notes.templates — «a note can be a template». Draws nothing: its presence tells the host to offer the
+ * template list view and the row/editor command; `meta.toggleLabel` is that command's wording.
+ */
+export type NotesTemplatesSlotProps = Record<string, never>;
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -183,6 +202,9 @@ export interface SlotContracts {
   "tasks.detail.tabs": TaskDetailTabSlotProps;
   "tasks.views": TasksViewSlotProps;
   "notes.header.actions": NotesHeaderActionSlotProps;
+  "notes.filters": NotesFilterSlotProps;
+  "notes.header.actions.end": NotesTemplatePickerSlotProps;
+  "notes.templates": NotesTemplatesSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -200,6 +222,7 @@ export interface SlotMeta {
   /** `before`: the tab goes before the built-in ones (default after them). */
   "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
   "tasks.views": TasksViewMeta;
+  "notes.templates": { toggleLabel: (note: Note) => string };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

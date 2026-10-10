@@ -26,7 +26,8 @@ export const ORION_PLUGIN_IDS = [
   "calendar-external",
   "tasks-comments",
   "tasks-kanban",
-  "notes-daily"
+  "notes-daily",
+  "notes-templates"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -238,6 +239,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Кнопка «Сегодня»: открывает или создаёт заметку на сегодняшний день.",
     provides: ["Кнопка «Сегодня» в шапке заметок"],
     disableBehavior: "Кнопка скрывается; уже созданные ежедневные заметки остаются обычными заметками.",
+    defaultEnabled: true
+  },
+  {
+    id: "notes-templates",
+    extendsModuleId: "notes",
+    label: "Шаблоны заметок",
+    summary: "Заметки-шаблоны: отдельный список «Шаблоны», создание заметки из шаблона, команда «Сделать шаблоном».",
+    provides: ["Фильтр «Шаблоны»", "Кнопка «Из шаблона»", "Команда «Сделать шаблоном»"],
+    disableBehavior: "Фильтр, кнопка и команда скрываются; шаблоны остаются обычными заметками с пометкой и вернутся при повторном включении.",
     defaultEnabled: true
   }
 ];

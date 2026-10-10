@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -114,3 +114,13 @@ contribute("tasks.views", {
 
 const DailyNoteButton = dynamic<NotesHeaderActionSlotProps>(() => import("./notes-daily/daily-button").then((m) => m.DailyNoteButton), { ssr: false });
 contribute("notes.header.actions", { pluginId: "notes-daily", component: DailyNoteButton, order: 10 });
+
+const TemplatesChip = dynamic<NotesFilterSlotProps>(() => import("./notes-templates/templates").then((m) => m.TemplatesChip), { ssr: false });
+const TemplatePicker = dynamic<NotesTemplatePickerSlotProps>(() => import("./notes-templates/templates").then((m) => m.TemplatePicker), { ssr: false });
+contribute("notes.filters", { pluginId: "notes-templates", component: TemplatesChip, order: 10 });
+contribute("notes.header.actions.end", { pluginId: "notes-templates", component: TemplatePicker, order: 10 });
+contribute("notes.templates", {
+  pluginId: "notes-templates",
+  component: NoVisual as unknown as ComponentType<NotesTemplatesSlotProps>,
+  meta: { toggleLabel: (note) => (note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном") }
+});
