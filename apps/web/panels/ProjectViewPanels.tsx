@@ -9,7 +9,7 @@ import { openPanel } from "../lib/panel-bus";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
-import { ProjectGantt } from "./projects/gantt";
+import { ProjectPlan } from "./projects/plan-views";
 import { MaterialsTab } from "./ProjectWorkspacePanel";
 
 /**
@@ -114,7 +114,7 @@ export function ProjectPlanPanel({ params, api }: PanelComponentProps): React.Re
     <ViewFrame icon={GanttChartSquare} label="План" query={query}>
       {(project) => (
         <PanelBody className="[container-type:inline-size]">
-          <ProjectGantt projectId={project.id} />
+          <ProjectPlan projectId={project.id} />
         </PanelBody>
       )}
     </ViewFrame>

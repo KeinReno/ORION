@@ -77,7 +77,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
-import { ProjectGantt } from "./projects/gantt";
+import { ProjectPlan } from "./projects/plan-views";
 import { TaskMatrix } from "./projects/task-matrix";
 import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
@@ -472,7 +472,7 @@ function ProjectWorkspace({
           />
         ) : null}
 
-        {tab === "plan" ? <ProjectGantt projectId={project.id} /> : null}
+        {tab === "plan" ? <ProjectPlan projectId={project.id} /> : null}
 
         {tab === "materials" ? (
           <MaterialsTab workspaceId={workspaceId} project={project} notesOn={notesOn} documentsOn={documentsOn} onAddNote={() => setAdding("note")} />
