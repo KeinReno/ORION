@@ -59,6 +59,7 @@ import {
   toggleHabitResultSchema,
   transactionSchema,
   financeImportResultSchema,
+  obligationSchema,
   userPreferenceSchema,
   workspaceOrganizationSchema,
   workspaceModuleStateSchema,
@@ -118,6 +119,10 @@ import {
   type CreateTimeEntryInput,
   type CreateTransactionInput,
   type FinanceImportInput,
+  type CreateObligationInput,
+  type Obligation,
+  type PayObligationInput,
+  type UpdateObligationInput,
   type FinanceImportResult,
   type BulkDocumentInput,
   type CreateFolderInput,
@@ -866,6 +871,32 @@ export class ApiClient {
 
   createTransaction(workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {
     return this.request("POST", `/workspaces/${workspaceId}/finance/transactions`, input, transactionSchema);
+  }
+
+  listObligations(workspaceId: string): Promise<Obligation[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/obligations`, undefined, z.array(obligationSchema));
+  }
+
+  createObligation(workspaceId: string, input: CreateObligationInput): Promise<Obligation> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/obligations`, input, obligationSchema);
+  }
+
+  updateObligation(workspaceId: string, obligationId: string, input: UpdateObligationInput): Promise<Obligation> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/finance/obligations/${obligationId}`, input, obligationSchema);
+  }
+
+  async deleteObligation(workspaceId: string, obligationId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/finance/obligations/${obligationId}`, undefined, z.unknown());
+  }
+
+  /** Records the payment as a real transaction and moves the plan on (a repeat for the same due date is a 409). */
+  payObligation(workspaceId: string, obligationId: string, input: PayObligationInput): Promise<{ obligation: Obligation; transaction: Transaction }> {
+    return this.request(
+      "POST",
+      `/workspaces/${workspaceId}/finance/obligations/${obligationId}/pay`,
+      input,
+      z.object({ obligation: obligationSchema, transaction: transactionSchema })
+    );
   }
 
   /** Batch import into one account; `dryRun: true` (the default) only reports what would happen. */

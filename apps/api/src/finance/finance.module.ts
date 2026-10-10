@@ -19,6 +19,8 @@ import { CategoryRulesController } from "./category-rules/category-rules.control
 import { CategoryRulesService } from "./category-rules/category-rules.service";
 import { GoalsController } from "./goals/goals.controller";
 import { GoalsService } from "./goals/goals.service";
+import { ObligationsController } from "./obligations/obligations.controller";
+import { ObligationsService } from "./obligations/obligations.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
 
 /**
@@ -39,7 +41,8 @@ import { BudgetAlertsService } from "./budget-alerts.service";
     RecurringController,
     ReportsController,
     CategoryRulesController,
-    GoalsController
+    GoalsController,
+    ObligationsController
   ],
   providers: [
     AccountsService,
@@ -51,6 +54,7 @@ import { BudgetAlertsService } from "./budget-alerts.service";
     ReportsService,
     CategoryRulesService,
     GoalsService,
+    ObligationsService,
     BudgetAlertsService
   ]
 })

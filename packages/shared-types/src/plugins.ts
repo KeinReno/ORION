@@ -35,7 +35,9 @@ export const ORION_PLUGIN_IDS = [
   "calendar-recurrence",
   "calendar-reminders",
   "finance-quick-entry",
-  "finance-import"
+  "finance-import",
+  "finance-obligations",
+  "finance-forecast"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -334,6 +336,25 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Загрузка банковской выписки или выгрузки FinControl в выбранный счёт: проверка без записи, пропуск повторов, отчёт об ошибках.",
     provides: ["Вкладка «Импорт»"],
     disableBehavior: "Вкладка скрывается; уже импортированные операции остаются, повторный импорт того же файла по-прежнему не дублирует их.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-obligations",
+    extendsModuleId: "finance",
+    label: "Обязательства",
+    summary: "Долги, кредиты, коммунальные платежи и подписки: план платежей и кнопка «Оплатить», которая записывает настоящую операцию.",
+    provides: ["Вкладка «Обязательства»", "Оплата с записью операции и переносом срока"],
+    disableBehavior:
+      "Вкладка скрывается; обязательства и уже записанные платежи остаются (платёж — обычная операция). План сам баланс не меняет.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-forecast",
+    extendsModuleId: "finance",
+    label: "Прогноз остатка",
+    summary: "Куда идёт остаток: средний месяц вашей истории, коридор от худшего до лучшего и плановые платежи отдельно — с описанием метода.",
+    provides: ["Вкладка «Прогноз»"],
+    disableBehavior: "Вкладка скрывается; данные не затрагиваются.",
     defaultEnabled: true
   }
 ];

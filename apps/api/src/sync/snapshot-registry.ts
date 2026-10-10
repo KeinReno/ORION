@@ -105,6 +105,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "RecurringTransaction", snapshotKey: "financeRecurring", policy: "included", reason: "Правила повторяющихся платежей." },
   { model: "CategoryRule", snapshotKey: "financeCategoryRules", policy: "included", reason: "Правила авто-категоризации." },
   { model: "SavingsGoal", snapshotKey: "financeSavingsGoals", policy: "included", reason: "Цели накоплений." },
+  { model: "FinanceObligation", snapshotKey: "financeObligations", policy: "included", reason: "Долги, кредиты, коммунальные платежи и подписки (план платежей; деньги двигает только записанная операция)." },
   { model: "TimeEntry", snapshotKey: "timeEntries", policy: "included", reason: "Записи учёта времени (v0.18)." },
   { model: "Habit", snapshotKey: "habits", policy: "included", reason: "Привычки (v0.19)." },
   { model: "HabitEntry", snapshotKey: "habitEntries", policy: "included", reason: "Отметки привычек." },

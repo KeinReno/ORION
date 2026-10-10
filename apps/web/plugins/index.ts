@@ -169,3 +169,8 @@ const QuickEntry = dynamic<FinanceTransactionsTopSlotProps>(() => import("./fina
 const ImportTab = dynamic<FinanceTabSlotProps>(() => import("./finance-import/import-view").then((m) => m.ImportView), { ssr: false });
 contribute("finance.transactions.top", { pluginId: "finance-quick-entry", component: QuickEntry, order: 10 });
 contribute("finance.tabs", { pluginId: "finance-import", component: ImportTab, order: 50, meta: { tabId: "import", label: "Импорт" } });
+
+const ObligationsTab = dynamic<FinanceTabSlotProps>(() => import("./finance-obligations/obligations-view").then((m) => m.ObligationsView), { ssr: false });
+const ForecastTab = dynamic<FinanceTabSlotProps>(() => import("./finance-forecast/forecast-view").then((m) => m.ForecastView), { ssr: false });
+contribute("finance.tabs", { pluginId: "finance-obligations", component: ObligationsTab, order: 35, meta: { tabId: "obligations", label: "Обязательства" } });
+contribute("finance.tabs", { pluginId: "finance-forecast", component: ForecastTab, order: 45, meta: { tabId: "forecast", label: "Прогноз" } });

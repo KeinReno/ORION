@@ -10,6 +10,7 @@ export * from "./task-comment";
 export * from "./event";
 export * from "./recurrence";
 export * from "./finance";
+export * from "./finance-obligations";
 export * from "./document";
 export * from "./sync";
 export * from "./settings";

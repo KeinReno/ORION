@@ -190,6 +190,7 @@ model Workspace {
   recurringTransactions RecurringTransaction[]
   categoryRules         CategoryRule[]
   savingsGoals          SavingsGoal[]
+  financeObligations    FinanceObligation[]
   documents             Document[]
   documentVersions      DocumentVersion[]
   documentAnnotations   DocumentAnnotation[]
@@ -903,6 +904,7 @@ model Account {
   transactionsIn Transaction[]          @relation("TransactionTo")
   recurring      RecurringTransaction[]
   savingsGoals   SavingsGoal[]
+  obligations    FinanceObligation[]
 
   @@index([workspaceId])
   @@map("finance_accounts")
@@ -927,6 +929,7 @@ model FinanceCategory {
   budgets           Budget[]
   recurring         RecurringTransaction[]
   rules             CategoryRule[]
+  obligations       FinanceObligation[]
 
   @@index([workspaceId])
   @@map("finance_categories")
@@ -1088,6 +1091,39 @@ model CategoryRule {
 /// A savings goal tied to one account — "progress" is simply that account's
 /// already-computed balance (see AccountsService/computeNetByAccount), not
 /// a second, separately-tracked ledger of contributions.
+/// A debt, credit, utility bill or subscription the workspace owes (or is owed). A PLAN, not money: nothing here
+/// moves a balance. Paying records a real Transaction (see ObligationsService.pay), and only that changes balances.
+model FinanceObligation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  /// debt | credit | utility | subscription | other
+  kind        String    @default("debt")
+  /// owe — the workspace pays; owed — someone pays the workspace.
+  direction   String    @default("owe")
+  /// Remaining amount in minor units; null when the total is not tracked (a utility bill, a subscription).
+  principal   Int?
+  /// The planned payment of one period, minor units.
+  payment     Int
+  /// once | monthly | yearly
+  interval    String    @default("monthly")
+  nextDueAt   DateTime?
+  /// Account paid from by default (the payer still confirms it).
+  accountId   String?
+  categoryId  String?
+  note        String    @default("")
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account   Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  category  FinanceCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@map("finance_obligations")
+}
+
 model SavingsGoal {
   id           String    @id @default(uuid())
   workspaceId  String

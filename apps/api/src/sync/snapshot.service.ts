@@ -101,6 +101,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("financeRecurring", (tx) => tx.recurringTransaction),
   spec("financeCategoryRules", (tx) => tx.categoryRule),
   spec("financeSavingsGoals", (tx) => tx.savingsGoal),
+  spec("financeObligations", (tx) => tx.financeObligation),
   spec("timeEntries", (tx) => tx.timeEntry),
   spec("habitEntries", (tx) => tx.habitEntry),
   spec("listItems", (tx) => tx.listItem),
