@@ -10,7 +10,7 @@ import type { PanelComponentProps } from "../lib/panel-registry";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectPlan } from "./projects/plan-views";
-import { MaterialsTab } from "./ProjectWorkspacePanel";
+import { ProjectMaterials } from "./projects/materials";
 
 /**
  * Large views of ONE project as panels of their own (UI-06 / ADR-0003): the plan
@@ -128,7 +128,7 @@ export function ProjectMaterialsPanel({ params, api }: PanelComponentProps): Rea
     <ViewFrame icon={FolderOpen} label="Материалы" query={query}>
       {(project) => (
         <PanelBody className="[container-type:inline-size]">
-          <MaterialsTab
+          <ProjectMaterials
             workspaceId={query.workspaceId}
             project={project}
             notesOn={isEnabled("notes")}

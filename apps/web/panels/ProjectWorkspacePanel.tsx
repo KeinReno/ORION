@@ -4,9 +4,7 @@ import {
   useArchiveProject,
   useCreateNote,
   useCreateTask,
-  useDocuments,
   useMilestones,
-  useNotes,
   useProject,
   useProjects,
   useTasks,
@@ -59,6 +57,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Timer,
   TriangleAlert
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -76,15 +75,16 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
 import { ProjectPlan } from "./projects/plan-views";
+import { ProjectMaterials } from "./projects/materials";
 import { ProjectTasks } from "./projects/project-tasks";
 import { TaskRow } from "./projects/task-row";
 import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
-type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "money" | "access";
+type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "access";
 
-const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "money", "access"];
+const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "access"];
 /** Per-viewer, per-project: which view of the project this person last used. */
 const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
 
@@ -127,7 +127,8 @@ function activityStatusLabel(item: ProjectActivity): string | null {
  * container you work inside, and the Sheet showed counters ("1/5",
  * "Заметки: 3") in 40rem instead of the work itself. The overview leads
  * with what's next, what's on fire and the nearest milestone; tasks, the
- * plan, materials and money each get the full panel width in their own tab.
+ * plan and materials each get the full panel width in their own tab; deadline, money
+ * and time live on the overview as one card each instead of a tab of mostly empty fields.
  */
 export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): React.ReactElement {
   const projectId = params?.instanceId;
@@ -238,13 +239,11 @@ function ProjectWorkspace({
     return list.some((item) => item.id === project.id) ? list : [project, ...list];
   }, [workspaceProjects, project]);
 
-  const showMoney = financeOn || timeOn || project.startAt !== null || project.dueAt !== null;
   const tabs: { value: ProjectTab; label: React.ReactNode }[] = [
     { value: "overview", label: "Обзор" },
     ...(tasksOn ? [{ value: "tasks" as const, label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}` }] : []),
     ...(tasksOn ? [{ value: "plan" as const, label: "План" }] : []),
     { value: "materials", label: "Материалы" },
-    ...(showMoney ? [{ value: "money" as const, label: "Сроки и деньги" }] : []),
     { value: "access", label: "Доступ" }
   ];
 
@@ -424,6 +423,20 @@ function ProjectWorkspace({
                 <span className="text-micro text-subtle-foreground">{taskProgressLabel(project)}</span>
               </span>
             ) : null}
+            {/* One line of the numbers that matter, shown only where there is something to show. */}
+            {financeOn && (project.budgetAmount !== null || project.spentAmount > 0) ? (
+              <span title="Потрачено по проекту">
+                <Badge tone={project.budgetAmount !== null && project.spentAmount > project.budgetAmount ? "danger" : "neutral"}>
+                  {formatMoney(project.spentAmount, project.currency)}
+                  {project.budgetAmount !== null ? ` из ${formatMoney(project.budgetAmount, project.currency)}` : ""}
+                </Badge>
+              </span>
+            ) : null}
+            {timeOn && project.trackedMinutes > 0 ? (
+              <span title="Учтено времени">
+                <Badge tone="neutral">{formatDuration(project.trackedMinutes)}</Badge>
+              </span>
+            ) : null}
           </div>
           <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
         </div>
@@ -445,6 +458,7 @@ function ProjectWorkspace({
             onSaveNote={(contextNote) => updateProject.mutate({ projectId: project.id, input: { contextNote } })}
             onToggle={toggleTask}
             onGoTo={setTab}
+            onEditProject={() => setEditing(true)}
             onOpenTask={(task) => {
               setOpenTaskId(task.id);
               setTab("tasks");
@@ -473,10 +487,14 @@ function ProjectWorkspace({
         {tab === "plan" ? <ProjectPlan projectId={project.id} /> : null}
 
         {tab === "materials" ? (
-          <MaterialsTab workspaceId={workspaceId} project={project} notesOn={notesOn} documentsOn={documentsOn} onAddNote={() => setAdding("note")} />
+          <ProjectMaterials
+            workspaceId={workspaceId}
+            project={project}
+            notesOn={notesOn}
+            documentsOn={documentsOn}
+            onAddNote={() => setAdding("note")}
+          />
         ) : null}
-
-        {tab === "money" ? <MoneyTab project={project} financeOn={financeOn} timeOn={timeOn} tasksOn={tasksOn} /> : null}
 
         {tab === "access" ? (
           <div className="flex max-w-3xl flex-col gap-6">
@@ -559,6 +577,7 @@ function OverviewTab({
   onSaveNote,
   onToggle,
   onGoTo,
+  onEditProject,
   onOpenTask,
   onAddTask
 }: {
@@ -575,6 +594,7 @@ function OverviewTab({
   onSaveNote: (value: string) => void;
   onToggle: (task: Task) => void;
   onGoTo: (tab: ProjectTab) => void;
+  onEditProject: () => void;
   onOpenTask: (task: Task) => void;
   onAddTask: () => void;
 }): React.ReactElement {
@@ -687,6 +707,8 @@ function OverviewTab({
 
         <DeadlineCard project={project} />
 
+        <MoneyTimeCard project={project} financeOn={financeOn} timeOn={timeOn} tasksOn={tasksOn} onEdit={onEditProject} />
+
         <Card className="px-4 py-3">
           <SideTitle>Состав</SideTitle>
           <ul className="mt-2 flex flex-col">
@@ -695,21 +717,6 @@ function OverviewTab({
             <CompositionRow label="События" value={String(project.counts.events)} onClick={() => onGoTo("materials")} />
             {project.counts.inventory > 0 ? (
               <CompositionRow label="Склад" value={String(project.counts.inventory)} onClick={() => openPanel("inventory")} />
-            ) : null}
-            {timeOn ? (
-              <CompositionRow label="Время" value={formatDuration(project.trackedMinutes)} onClick={() => onGoTo("money")} />
-            ) : null}
-            {financeOn ? (
-              <CompositionRow
-                label="Потрачено"
-                value={
-                  project.budgetAmount !== null
-                    ? `${formatMoney(project.spentAmount, project.currency)} / ${formatMoney(project.budgetAmount, project.currency)}`
-                    : formatMoney(project.spentAmount, project.currency)
-                }
-                danger={project.budgetAmount !== null && project.spentAmount > project.budgetAmount}
-                onClick={() => onGoTo("money")}
-              />
             ) : null}
           </ul>
           <p className="mt-2 text-micro text-subtle-foreground">
@@ -781,132 +788,6 @@ function CompositionRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Материалы
-// ---------------------------------------------------------------------------
-
-export function MaterialsTab({
-  workspaceId,
-  project,
-  notesOn,
-  documentsOn,
-  onAddNote
-}: {
-  workspaceId: string | undefined;
-  project: ProjectDetail;
-  notesOn: boolean;
-  documentsOn: boolean;
-  onAddNote: () => void;
-}): React.ReactElement {
-  const { data: notes, isLoading: notesLoading } = useNotes(notesOn ? workspaceId : undefined);
-  const { data: documents, isLoading: documentsLoading } = useDocuments(documentsOn ? workspaceId : undefined);
-  const projectNotes = useMemo(
-    () =>
-      (notes ?? [])
-        .filter((note) => note.projectId === project.id)
-        .sort((a, b) => (b.editedAt ?? b.updatedAt).localeCompare(a.editedAt ?? a.updatedAt)),
-    [notes, project.id]
-  );
-  const projectFiles = useMemo(
-    () => (documents ?? []).filter((doc) => doc.projectId === project.id && doc.kind === "file" && !doc.deletedAt),
-    [documents, project.id]
-  );
-  // Events, operations and stock have no cheap per-project list on the client;
-  // the project's own activity feed already carries them.
-  const other = project.activity.filter((item) => item.type === "event" || item.type === "transaction" || item.type === "inventory");
-
-  return (
-    <div className="grid grid-cols-1 gap-6 [@container(min-width:896px)]:grid-cols-2">
-      {notesOn ? (
-        <PanelSection
-          title={`Заметки · ${projectNotes.length}`}
-          actions={
-            <Button size="sm" variant="ghost" onClick={onAddNote}>
-              <Plus className="h-4 w-4" /> Заметка
-            </Button>
-          }
-        >
-          {notesLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : projectNotes.length === 0 ? (
-            <p className="text-label text-subtle-foreground">Заметок, привязанных к проекту, нет.</p>
-          ) : (
-            <ul className="flex flex-col">
-              {projectNotes.map((note) => (
-                <MaterialRow
-                  key={note.id}
-                  icon={FileText}
-                  title={note.title || "Без заголовка"}
-                  meta={relativeTime(note.editedAt ?? note.updatedAt)}
-                  onClick={() => focusNote(note.id)}
-                />
-              ))}
-            </ul>
-          )}
-        </PanelSection>
-      ) : null}
-
-      {documentsOn ? (
-        <PanelSection title={`Файлы · ${projectFiles.length}`}>
-          {documentsLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : projectFiles.length === 0 ? (
-            <p className="text-label text-subtle-foreground">Файлов, привязанных к проекту, нет.</p>
-          ) : (
-            <ul className="flex flex-col">
-              {projectFiles.map((doc) => (
-                <MaterialRow
-                  key={doc.id}
-                  icon={FolderOpen}
-                  title={doc.name}
-                  meta={relativeTime(doc.updatedAt)}
-                  onClick={() => focusDocument(doc.id)}
-                />
-              ))}
-            </ul>
-          )}
-        </PanelSection>
-      ) : null}
-
-      {other.length > 0 ? (
-        <PanelSection title="События, операции, склад">
-          <ActivityList items={other} />
-        </PanelSection>
-      ) : null}
-
-      <PanelSection title="Связи">
-        <EntityLinksSection workspaceId={workspaceId} type="project" id={project.id} />
-      </PanelSection>
-    </div>
-  );
-}
-
-function MaterialRow({
-  icon: Icon,
-  title,
-  meta,
-  onClick
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  meta: string;
-  onClick: () => void;
-}): React.ReactElement {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-row text-left transition-colors hover:bg-card-hover"
-      >
-        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-label text-foreground">{title}</span>
-        <span className="shrink-0 text-micro text-subtle-foreground">{meta}</span>
-      </button>
-    </li>
-  );
-}
-
 /** A row is a link into whatever panel owns that record; a milestone lives in this tab's own "План". */
 function ActivityList({ items, onPlan }: { items: ProjectActivity[]; onPlan?: () => void }): React.ReactElement {
   if (items.length === 0) {
@@ -949,93 +830,77 @@ function ActivityList({ items, onPlan }: { items: ProjectActivity[]; onPlan?: ()
 }
 
 // ---------------------------------------------------------------------------
-// Сроки и деньги
+// Деньги и время (карточка обзора)
 // ---------------------------------------------------------------------------
 
-function MoneyTab({
+/**
+ * Money and time as one card on the overview, each half shown only when its module is on.
+ * An unset budget or estimate says what to do about it instead of printing «не задан».
+ */
+function MoneyTimeCard({
   project,
   financeOn,
   timeOn,
-  tasksOn
+  tasksOn,
+  onEdit
 }: {
   project: ProjectDetail;
   financeOn: boolean;
   timeOn: boolean;
   tasksOn: boolean;
-}): React.ReactElement {
-  const overdue = isProjectOverdue(project);
-  const overspent = financeOn && project.budgetAmount !== null && project.spentAmount > project.budgetAmount;
-  const schedule = schedulePercent(project.startAt, project.dueAt);
-  const budgetPercent =
-    project.budgetAmount && project.budgetAmount > 0
-      ? Math.min(100, Math.round((project.spentAmount / project.budgetAmount) * 100))
-      : null;
+  onEdit: () => void;
+}): React.ReactElement | null {
+  if (!financeOn && !timeOn) return null;
+  const budget = project.budgetAmount;
+  const overspent = budget !== null && budget > 0 && project.spentAmount > budget;
+  const budgetPercent = budget && budget > 0 ? Math.min(100, Math.round((project.spentAmount / budget) * 100)) : null;
+  const planned = tasksOn ? project.plannedMinutes : null;
+  const timePercent = planned && planned > 0 ? Math.min(100, Math.round((project.trackedMinutes / planned) * 100)) : null;
+  const overtime = planned !== null && planned > 0 && project.trackedMinutes > planned;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
-      <PanelSection title="Сроки">
-        {schedule !== null ? (
-          <div>
-            <Meter value={schedule} tone={overdue ? "danger" : "accent"} />
-            <p className="mt-1 text-micro text-subtle-foreground">
-              {overdue ? "Срок уже прошёл" : `Прошло ${schedule}% окна проекта`}
-            </p>
-          </div>
-        ) : null}
-        <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
-          <Field label="Начало" value={project.startAt ? shortDateTime(project.startAt) : "—"} />
-          <Field label="Срок" value={project.dueAt ? shortDateTime(project.dueAt) : "—"} tone={overdue ? "danger" : undefined} />
-          {tasksOn ? (
-            <Field
-              label="План, часы"
-              value={project.plannedMinutes !== null ? formatDuration(project.plannedMinutes) : "не оценено"}
-            />
-          ) : null}
-        </dl>
-      </PanelSection>
-
+    <Card className="space-y-4 px-4 py-3">
       {financeOn ? (
-        <PanelSection title="Деньги">
-          {budgetPercent !== null ? (
-            <div>
+        <div className="space-y-1.5">
+          <SideTitle>Деньги</SideTitle>
+          {budgetPercent !== null && budget !== null ? (
+            <>
               <Meter value={budgetPercent} tone={overspent ? "danger" : "accent"} />
-              <p className={cx("mt-1 font-mono text-micro tabular-nums", overspent ? "text-destructive" : "text-subtle-foreground")}>
-                {formatMoney(project.spentAmount, project.currency)} из {formatMoney(project.budgetAmount as number, project.currency)}
+              <p className={cx("font-mono text-label tabular-nums", overspent ? "text-destructive" : "text-foreground")}>
+                {formatMoney(project.spentAmount, project.currency)} из {formatMoney(budget, project.currency)}
                 {overspent ? " · перерасход" : ""}
               </p>
-            </div>
-          ) : null}
-          <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
-            <Field
-              label="Бюджет"
-              value={project.budgetAmount !== null ? formatMoney(project.budgetAmount, project.currency) : "не задан"}
-            />
-            <Field label="Потрачено" value={formatMoney(project.spentAmount, project.currency)} tone={overspent ? "danger" : undefined} />
-          </dl>
-          <Button size="sm" variant="outline" onClick={() => openPanel("finance")}>
-            <Receipt className="h-4 w-4" /> Операции в финансах
-          </Button>
-        </PanelSection>
+            </>
+          ) : (
+            <p className="text-label text-foreground">
+              <span className="font-mono tabular-nums">{formatMoney(project.spentAmount, project.currency)}</span> потрачено{" "}
+              <button type="button" onClick={onEdit} className="text-accent-text hover:underline">
+                Задать бюджет
+              </button>
+            </p>
+          )}
+          <button type="button" onClick={() => openPanel("finance")} className="inline-flex items-center gap-1 text-micro text-subtle-foreground hover:text-foreground">
+            <Receipt className="h-3 w-3" aria-hidden /> Операции в финансах
+          </button>
+        </div>
       ) : null}
 
       {timeOn ? (
-        <PanelSection title="Время">
-          <dl className="grid gap-3 text-label [@container(min-width:576px)]:grid-cols-3">
-            <Field label="Учтено" value={formatDuration(project.trackedMinutes)} />
-            <Field label="Стоимость времени" value={timeCostLabel(project)} />
-          </dl>
-        </PanelSection>
+        <div className="space-y-1.5">
+          <SideTitle>Время</SideTitle>
+          {timePercent !== null && planned !== null ? <Meter value={timePercent} tone={overtime ? "danger" : "accent"} /> : null}
+          <p className={cx("font-mono text-label tabular-nums", overtime ? "text-destructive" : "text-foreground")}>
+            {project.trackedMinutes === 0 ? "Пока не учтено" : formatDuration(project.trackedMinutes)}
+            {planned !== null ? ` из плана ${formatDuration(planned)}` : ""}
+            {overtime ? " · больше плана" : ""}
+          </p>
+          {project.trackedMinutes > 0 ? <p className="text-micro text-subtle-foreground">Стоимость времени: {timeCostLabel(project)}</p> : null}
+          <button type="button" onClick={() => openPanel("time")} className="inline-flex items-center gap-1 text-micro text-subtle-foreground hover:text-foreground">
+            <Timer className="h-3 w-3" aria-hidden /> Открыть учёт времени
+          </button>
+        </div>
       ) : null}
-    </div>
-  );
-}
-
-function Field({ label, value, tone }: { label: string; value: string; tone?: "danger" }): React.ReactElement {
-  return (
-    <div>
-      <dt className="text-2xs text-subtle-foreground">{label}</dt>
-      <dd className={tone === "danger" ? "text-destructive" : "text-foreground"}>{value}</dd>
-    </div>
+    </Card>
   );
 }
 
