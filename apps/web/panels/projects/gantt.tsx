@@ -10,9 +10,9 @@ import {
   useUpdateTask
 } from "@orion/core-react";
 import { formatDuration, isTaskClosed, type Milestone, type MilestoneCascadeImpact, type Task } from "@orion/shared-types";
-import { Button, ConfirmDialog, EmptyState, IconButton, Modal, Skeleton, cx, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
 import { Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { focusTask, openPanel } from "../../lib/panel-bus";
 import { shortDateTime } from "../../lib/format";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -32,7 +32,24 @@ import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
  * vertical, days instead of minutes.
  */
 
-const PX_PER_DAY = 32;
+/**
+ * Horizontal scale: pixels per day. The chart used to be fixed at 32, which is
+ * unreadable for a month-long trip squeezed into a corner and for a year-long
+ * plan alike. Remembered per browser.
+ */
+type GanttScale = "close" | "normal" | "far";
+const SCALE_PX: Record<GanttScale, number> = { close: 56, normal: 32, far: 14 };
+const SCALE_LABEL: Record<GanttScale, string> = { close: "Дни", normal: "Недели", far: "Месяцы" };
+const SCALE_KEY = "orion.gantt.scale";
+
+function loadScale(): GanttScale {
+  try {
+    const saved = localStorage.getItem(SCALE_KEY);
+    return saved === "close" || saved === "far" ? saved : "normal";
+  } catch {
+    return "normal";
+  }
+}
 const ROW_H = 32;
 const LABEL_W = 220;
 /** Wide enough for both resize handles without collapsing into a one-glyph chip. */
@@ -80,6 +97,19 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   const [pendingDeleteMilestone, setPendingDeleteMilestone] = useState<Milestone | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [scale, setScale] = useState<GanttScale>("normal");
+  // Read after mount so the first paint matches the server-rendered markup.
+  useEffect(() => setScale(loadScale()), []);
+  const pxPerDay = SCALE_PX[scale];
+  const scrollRef = useRef<HTMLDivElement>(null);
+  function chooseScale(next: GanttScale): void {
+    setScale(next);
+    try {
+      localStorage.setItem(SCALE_KEY, next);
+    } catch {
+      /* the remembered scale is a convenience only */
+    }
+  }
   // S14a — cascade preview. A date edit on a milestone with dependents is
   // held here instead of applied immediately: `applyMilestoneDates` always
   // asks the read-only preview endpoint first, and only routes through this
@@ -98,7 +128,30 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   const tasks = useMemo(() => (tasksQuery.data ?? []).filter((task) => task.projectId === projectId), [tasksQuery.data, projectId]);
 
   const rows = useMemo(() => buildRows(milestones, tasks), [milestones, tasks]);
-  const range = useMemo(() => computeRange(rows), [rows]);
+  // The time axis is at least as wide as the panel, so the plan fills the space instead of
+  // ending in the middle of an empty frame; a longer plan simply scrolls.
+  const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
+  const baseRange = useMemo(() => computeRange(rows), [rows]);
+  const range = useMemo(() => {
+    const fillDays = frameWidth > LABEL_W ? Math.ceil((frameWidth - LABEL_W) / pxPerDay) : 0;
+    return fillDays > baseRange.totalDays ? { ...baseRange, totalDays: fillDays } : baseRange;
+  }, [baseRange, frameWidth, pxPerDay]);
+
+  function scrollToToday(behavior: ScrollBehavior): void {
+    const el = scrollRef.current;
+    if (!el) return;
+    const offset = ((Date.now() - range.start.getTime()) / DAY_MS) * pxPerDay;
+    el.scrollTo({ left: Math.max(0, offset - el.clientWidth / 3), behavior });
+  }
+  // First time the chart has rows: bring today into view (a plan far in the past or future would otherwise open on its left edge).
+  const scrolledOnce = useRef(false);
+  useEffect(() => {
+    if (scrolledOnce.current || rows.length === 0) return;
+    scrolledOnce.current = true;
+    const id = window.setTimeout(() => scrollToToday("auto"), 0);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
 
   // Mirrors the calendar's `time-grid.tsx`: a local drag state, window-level
   // move/up listeners while dragging, commit on release. Horizontal + days
@@ -108,7 +161,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   useEffect(() => {
     if (!drag) return;
     function onMove(e: PointerEvent): void {
-      setDrag((prev) => (prev ? { ...prev, deltaDays: Math.round((e.clientX - prev.anchorX) / PX_PER_DAY) } : prev));
+      setDrag((prev) => (prev ? { ...prev, deltaDays: Math.round((e.clientX - prev.anchorX) / pxPerDay) } : prev));
     }
     function onUp(): void {
       setDrag((prev) => {
@@ -123,7 +176,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
       window.removeEventListener("pointerup", onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Boolean(drag)]);
+  }, [Boolean(drag), pxPerDay]);
 
   async function commitDrag(state: DragState): Promise<void> {
     const { node, deltaDays } = state;
@@ -277,11 +330,29 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
     <section className="space-y-2 border-t border-border pt-3">
       <div className="flex items-center justify-between gap-2">
         <h4 className="text-xs font-medium text-foreground">План</h4>
-        <Button size="sm" variant="subtle" onClick={() => setCreatingMilestone(true)}>
-          <Plus className="h-4 w-4" /> Веха
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {rows.length > 0 ? (
+            <>
+              <SegmentedControl<GanttScale>
+                aria-label="Масштаб плана"
+                size="sm"
+                value={scale}
+                onChange={chooseScale}
+                options={(Object.keys(SCALE_PX) as GanttScale[]).map((value) => ({ value, label: SCALE_LABEL[value] }))}
+              />
+              <Button size="sm" variant="outline" onClick={() => scrollToToday("smooth")}>
+                К сегодня
+              </Button>
+            </>
+          ) : null}
+          <Button size="sm" variant="subtle" onClick={() => setCreatingMilestone(true)}>
+            <Plus className="h-4 w-4" /> Веха
+          </Button>
+        </div>
       </div>
 
+      {/* Always mounted: the width measurement attaches once, before the chart itself exists. */}
+      <div ref={frameRef}>
       {loading ? (
         <Skeleton className="h-40 w-full" />
       ) : rows.length === 0 ? (
@@ -299,6 +370,8 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
         <GanttChart
           rows={rows}
           range={range}
+          pxPerDay={pxPerDay}
+          scrollRef={scrollRef}
           drag={drag}
           onStartDrag={(kind, node, clientX) => setDrag({ kind, node, anchorX: clientX, deltaDays: 0 })}
           onEditMilestone={(id) => setEditingMilestone(milestones.find((m) => m.id === id) ?? null)}
@@ -309,6 +382,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
           }}
         />
       )}
+      </div>
 
       <Modal open={creatingMilestone} onClose={() => setCreatingMilestone(false)} title="Новая веха" size="md">
         <MilestoneForm
@@ -458,12 +532,12 @@ function previewNode(node: GanttNode, drag: DragState | null): GanttNode {
   return { ...node, dueAt: shift(node.dueAt ?? node.startAt) };
 }
 
-function barGeometry(node: GanttNode, range: { start: Date }): { left: number; width: number } | null {
+function barGeometry(node: GanttNode, range: { start: Date }, pxPerDay: number): { left: number; width: number } | null {
   const start = node.startAt ?? node.dueAt;
   const end = node.dueAt ?? node.startAt;
   if (!start || !end) return null;
-  const left = ((start.getTime() - range.start.getTime()) / DAY_MS) * PX_PER_DAY;
-  const width = Math.max(MIN_BAR_PX, ((end.getTime() - start.getTime()) / DAY_MS) * PX_PER_DAY);
+  const left = ((start.getTime() - range.start.getTime()) / DAY_MS) * pxPerDay;
+  const width = Math.max(MIN_BAR_PX, ((end.getTime() - start.getTime()) / DAY_MS) * pxPerDay);
   return { left, width };
 }
 
@@ -481,6 +555,8 @@ function weekTicks(range: { start: Date; totalDays: number }): { dayOffset: numb
 function GanttChart({
   rows,
   range,
+  pxPerDay,
+  scrollRef,
   drag,
   onStartDrag,
   onEditMilestone,
@@ -489,13 +565,18 @@ function GanttChart({
 }: {
   rows: GanttNode[];
   range: { start: Date; totalDays: number };
+  pxPerDay: number;
+  scrollRef: React.RefObject<HTMLDivElement>;
   drag: DragState | null;
   onStartDrag: (kind: DragState["kind"], node: GanttNode, clientX: number) => void;
   onEditMilestone: (id: string) => void;
   onDeleteMilestone: (id: string) => void;
   onOpenTask: (id: string) => void;
 }): React.ReactElement {
-  const chartWidth = range.totalDays * PX_PER_DAY;
+  const chartWidth = range.totalDays * pxPerDay;
+  // Where "today" falls on the time axis; absent when the plan lies entirely before or after it.
+  const todayOffset = (Date.now() - range.start.getTime()) / DAY_MS;
+  const todayX = todayOffset >= 0 && todayOffset <= range.totalDays ? todayOffset * pxPerDay : null;
   const chartHeight = rows.length * ROW_H;
   const ticks = weekTicks(range);
 
@@ -504,12 +585,12 @@ function GanttChart({
 
   const arrows = rows.flatMap((row, index) => {
     if (row.kind === "header") return [];
-    const rowGeo = barGeometry(previewNode(row, drag), range);
+    const rowGeo = barGeometry(previewNode(row, drag), range, pxPerDay);
     if (!rowGeo) return [];
     return row.dependencyIds.flatMap((depId) => {
       const depIndex = rowIndexByKey.get(`${row.kind}:${depId}`);
       if (depIndex === undefined) return [];
-      const depGeo = barGeometry(previewNode(rows[depIndex], drag), range);
+      const depGeo = barGeometry(previewNode(rows[depIndex], drag), range, pxPerDay);
       if (!depGeo) return [];
       const x1 = depGeo.left + depGeo.width;
       const y1 = depIndex * ROW_H + ROW_H / 2;
@@ -557,22 +638,34 @@ function GanttChart({
         </div>
 
         {/* One scroll region for ticks + bars together — a separate header scroller would desync from the body on scroll. */}
-        <div className="orion-scroll min-w-0 flex-1 overflow-x-auto">
+        <div ref={scrollRef} className="orion-scroll min-w-0 flex-1 overflow-x-auto">
           <div style={{ width: chartWidth }} className="relative h-6 border-b border-border">
             {ticks.map((tick) => (
               <div
                 key={tick.dayOffset}
                 className="absolute top-0 h-full border-l border-white/5 pl-1 text-2xs leading-6 text-subtle-foreground"
-                style={{ left: tick.dayOffset * PX_PER_DAY }}
+                style={{ left: tick.dayOffset * pxPerDay }}
               >
                 {tick.label}
               </div>
             ))}
+            {todayX !== null ? (
+              <div
+                className="absolute top-0 z-10 h-full -translate-x-1/2 rounded-b bg-accent px-1 text-2xs font-medium leading-6 text-accent-foreground"
+                style={{ left: todayX }}
+              >
+                сегодня
+              </div>
+            ) : null}
           </div>
           <div style={{ width: chartWidth, height: chartHeight }} className="relative">
             {Array.from({ length: rows.length + 1 }, (_, i) => (
               <div key={i} className="absolute inset-x-0 border-t border-white/5" style={{ top: i * ROW_H }} />
             ))}
+
+            {todayX !== null ? (
+              <div className="pointer-events-none absolute inset-y-0 w-px bg-accent/70" style={{ left: todayX }} aria-hidden />
+            ) : null}
 
             <svg className="pointer-events-none absolute inset-0" width={chartWidth} height={chartHeight}>
               <defs>
@@ -588,7 +681,7 @@ function GanttChart({
             {rows.map((row, index) => {
               if (row.kind === "header") return null;
               const display = previewNode(row, drag);
-              const geo = barGeometry(display, range);
+              const geo = barGeometry(display, range, pxPerDay);
               if (!geo) return null;
               const isDragging = drag?.node.kind === row.kind && drag?.node.id === row.id;
               const barTitle =
