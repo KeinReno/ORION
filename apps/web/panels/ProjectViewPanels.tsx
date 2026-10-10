@@ -9,7 +9,7 @@ import { openPanel } from "../lib/panel-bus";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
-import { ProjectPlan } from "./projects/plan-views";
+import { useSlotContributions } from "../lib/extensions/slot";
 import { ProjectMaterials } from "./projects/materials";
 
 /**
@@ -110,11 +110,13 @@ function ViewFrame({
 
 export function ProjectPlanPanel({ params, api }: PanelComponentProps): React.ReactElement {
   const query = useProjectView(params, api, "План");
+  // The plan is the projects-planning plugin's tab; this panel only hosts the very same component.
+  const PlanView = useSlotContributions("projects.tabs").find((contribution) => contribution.meta?.tabId === "plan")?.component;
   return (
     <ViewFrame icon={GanttChartSquare} label="План" query={query}>
       {(project) => (
         <PanelBody className="[container-type:inline-size]">
-          <ProjectPlan projectId={project.id} />
+          {PlanView ? <PlanView workspaceId={query.workspaceId} projectId={project.id} /> : null}
         </PanelBody>
       )}
     </ViewFrame>

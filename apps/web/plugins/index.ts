@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -145,3 +145,9 @@ contribute("tasks.planning", {
   component: NoVisual as unknown as ComponentType<TasksPlanningSlotProps>,
   meta: { api: taskPlanningApi }
 });
+
+// Plan of a project: a tab, the overview block, and (through the panel registry) the detached plan panel.
+const ProjectPlanTab = dynamic<ProjectTabSlotProps>(() => import("./projects-planning/plan-tab").then((m) => m.ProjectPlanTab), { ssr: false });
+const ProjectOverviewPlan = dynamic<ProjectOverviewPlanSlotProps>(() => import("./projects-planning/overview-plan").then((m) => m.ProjectOverviewPlan), { ssr: false });
+contribute("projects.tabs", { pluginId: "projects-planning", component: ProjectPlanTab, order: 20, meta: { tabId: "plan", label: "План", needsModule: "tasks" } });
+contribute("projects.overview.plan", { pluginId: "projects-planning", component: ProjectOverviewPlan, order: 10 });

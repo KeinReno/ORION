@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Note, Project, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -244,6 +244,23 @@ export interface TaskPlanningApi {
 
 export type TasksPlanningSlotProps = Record<string, never>;
 
+/**
+ * projects.tabs — a tab of a project's own page (next to Обзор / Задачи / Материалы / Доступ). The host draws the
+ * tab strip from each contribution's `meta`; `needsModule` hides the tab when that module is off. The same
+ * contribution is what the detached «План проекта» panel renders, so the plan is one component in both places.
+ */
+export interface ProjectTabSlotProps {
+  workspaceId: string | undefined;
+  projectId: string;
+}
+
+/** projects.overview.plan — the «План» block of the project overview; shown only when a plan plugin is on. */
+export interface ProjectOverviewPlanSlotProps {
+  milestones: Milestone[];
+  tasks: Task[];
+  onOpenPlan: () => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -266,6 +283,8 @@ export interface SlotContracts {
   "dashboard.finance": DashboardFinanceSlotProps;
   "tasks.recurrence": TasksRecurrenceSlotProps;
   "tasks.planning": TasksPlanningSlotProps;
+  "projects.tabs": ProjectTabSlotProps;
+  "projects.overview.plan": ProjectOverviewPlanSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -286,6 +305,7 @@ export interface SlotMeta {
   "notes.templates": { toggleLabel: (note: Note) => string };
   "tasks.recurrence": { api: TaskRecurrenceApi };
   "tasks.planning": { api: TaskPlanningApi };
+  "projects.tabs": { tabId: string; label: string; needsModule?: OrionModuleId };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

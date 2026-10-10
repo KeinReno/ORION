@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@orion/core-react";
+import { isPluginEnabled } from "@orion/shared-types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { getPanelDefinition, instancePanelId } from "../../../lib/panel-registry";
@@ -82,10 +83,11 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
     );
   }
 
-  if (definition.moduleId && !isEnabled(definition.moduleId)) {
+  if ((definition.moduleId && !isEnabled(definition.moduleId)) || (definition.pluginId && !isPluginEnabled(workspace?.pluginOverrides ?? [], definition.pluginId))) {
     return (
       <div className="flex h-screen items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Модуль «{definition.label}» выключен в этом пространстве. Данные сохранены — включите его в Настройках.
+        {definition.moduleId && !isEnabled(definition.moduleId) ? "Модуль" : "Плагин"} «{definition.label}» выключен в этом пространстве. Данные
+        сохранены — включите его в Настройках.
       </div>
     );
   }

@@ -24,7 +24,7 @@ import { daysUntil, planStrip, pluralDays, type PlanStepState } from "../../lib/
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ProjectGantt } from "./gantt";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
-import { Meter } from "./project-bits";
+import { Meter } from "../../components/project-bits";
 
 type PlanView = "timeline" | "roadmap" | "calendar" | "gantt";
 const VIEW_KEY = "orion.project-plan-view";

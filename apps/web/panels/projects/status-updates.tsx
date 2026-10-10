@@ -25,7 +25,7 @@ import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
 import { relativeTime } from "../../lib/format";
 import { pluralDays, reportContradicted, reportFreshness } from "../../lib/project-status";
-import { HEALTH_TONE } from "./project-bits";
+import { HEALTH_TONE } from "../../components/project-bits";
 
 interface UpdateValues {
   health: ProjectHealth;

@@ -1,6 +1,6 @@
 import { PROJECT_HEALTH_LABEL, type Project, type ProjectHealth, type ProjectStatus } from "@orion/shared-types";
 import { Badge, cx } from "@orion/ui";
-import { relativeTime } from "../../lib/format";
+import { relativeTime } from "../lib/format";
 
 /** Shared by the project board (`ProjectsPanel`) and a project's own tab (`ProjectWorkspacePanel`). */
 export const STATUS_TONE: Record<ProjectStatus, "accent" | "warning" | "success"> = {

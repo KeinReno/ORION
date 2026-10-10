@@ -34,7 +34,7 @@ import {
   type ProjectBoardSort,
   type ProjectBoardSummary
 } from "./projects/board";
-import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "./projects/project-bits";
+import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "../components/project-bits";
 import { ProjectListHeader, ProjectRow } from "./projects/project-row";
 import { DueChip, NextLine } from "./projects/project-vitals";
 import { nextActionByProject, pluralDays, reportFreshness, type ProjectNextAction } from "../lib/project-status";

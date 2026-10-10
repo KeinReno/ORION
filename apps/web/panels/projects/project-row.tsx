@@ -5,7 +5,7 @@ import { Badge, cx } from "@orion/ui";
 import { TriangleAlert } from "lucide-react";
 import { pluralDays, reportFreshness, type ProjectNextAction } from "../../lib/project-status";
 import { PROJECT_STATUS_LABEL, projectSwatchColor } from "../project-form";
-import { Meter, ReportedHealthBadge, STATUS_TONE } from "./project-bits";
+import { Meter, ReportedHealthBadge, STATUS_TONE } from "../../components/project-bits";
 import { DueChip, NextLine } from "./project-vitals";
 
 /**

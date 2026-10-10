@@ -29,7 +29,8 @@ export const ORION_PLUGIN_IDS = [
   "notes-daily",
   "notes-templates",
   "tasks-recurrence",
-  "tasks-planning"
+  "tasks-planning",
+  "projects-planning"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -270,6 +271,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Секция «Подзадачи»", "Поля начала, оценки, родителя и зависимостей", "Значки «3/5» и «заблокирована»", "Вверх / вниз и перетаскивание порядка"],
     disableBehavior:
       "Поля, секция, значки и ручной порядок скрываются; подзадачи, зависимости, даты и порядок хранятся и вернутся при повторном включении (сервер по-прежнему считает «заблокирована»).",
+    defaultEnabled: true
+  },
+  {
+    id: "projects-planning",
+    extendsModuleId: "projects",
+    label: "План проекта",
+    summary: "Вехи и план проекта: таймлайн, дорожная карта, календарь и диаграмма Ганта, лента вех в обзоре.",
+    provides: ["Вкладка «План» в проекте", "Блок «План» в обзоре", "Панель и окно «План проекта»"],
+    disableBehavior:
+      "Вкладка, блок в обзоре и панель плана скрываются (открытая панель плана закрывается); вехи и даты задач сохраняются и вернутся при повторном включении.",
     defaultEnabled: true
   }
 ];

@@ -44,7 +44,7 @@ import {
   resolveDropAction
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
-import { getPanelDefinition, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
+import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
@@ -54,6 +54,7 @@ import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
 const NO_DISABLED_MODULES: string[] = [];
+const NO_PLUGIN_OVERRIDES: string[] = [];
 
 /**
  * dockview-core's own `Direction` type isn't part of its public export
@@ -68,10 +69,10 @@ type PanelSplitPosition = { referenceGroup: DockviewGroupPanel; direction: "left
  * rather than the registry, so instanced tabs (`project:<id>`) are caught too
  * and not just the one tab per registry id.
  */
-function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[]): void {
+function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[], pluginOverrides: readonly string[]): void {
   for (const panel of [...api.panels]) {
     const definition = getPanelDefinition(panel.id);
-    if (definition?.moduleId && !isModuleEnabled(disabledModules, definition.moduleId)) panel.api.close();
+    if (definition && !isPanelAvailable(definition, disabledModules, pluginOverrides)) panel.api.close();
   }
 }
 
@@ -232,6 +233,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const apiRef = useRef<DockviewApi | null>(null);
   const disabledModulesRef = useRef(disabledModules);
   disabledModulesRef.current = disabledModules;
+  const pluginOverrides = workspace?.pluginOverrides ?? NO_PLUGIN_OVERRIDES;
+  const pluginOverridesRef = useRef(pluginOverrides);
+  pluginOverridesRef.current = pluginOverrides;
   const compact = useMediaQuery("(max-width: 767px)");
   const compactRef = useRef(compact);
   compactRef.current = compact;
@@ -283,7 +287,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       } else {
         const definition = getPanelDefinition(panelId);
         if (!definition) return;
-        if (definition.moduleId && !isModuleEnabled(disabledModulesRef.current, definition.moduleId)) return;
+        if (!isPanelAvailable(definition, disabledModulesRef.current, pluginOverridesRef.current)) return;
         // Instanced panels (`project:<id>`) share one component; the record id
         // travels in `params` and is persisted by dockview's own toJSON.
         const instanceId = panelInstanceId(panelId);
@@ -351,7 +355,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       if (!restored) {
         openPanel("dashboard");
       } else {
-        closeDisabledPanels(api, disabledModulesRef.current);
+        closeDisabledPanels(api, disabledModulesRef.current, pluginOverridesRef.current);
         if (compactRef.current) {
           const keep = api.activePanel?.id ?? "dashboard";
           for (const panel of api.panels) {
@@ -404,7 +408,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         const known = new Set(panelRegistry.map((p) => p.id));
         const disabledIds = new Set(
           panelRegistry
-            .filter((p) => p.moduleId && !isModuleEnabled(disabledModulesRef.current, p.moduleId))
+            .filter((p) => !isPanelAvailable(p, disabledModulesRef.current, pluginOverridesRef.current))
             .map((p) => p.id)
         );
         const openIds = new Set(api.panels.map((p) => p.id));
@@ -471,8 +475,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   useEffect(() => {
     const api = apiRef.current;
     if (!api) return;
-    closeDisabledPanels(api, disabledModules);
-  }, [disabledModules]);
+    closeDisabledPanels(api, disabledModules, pluginOverrides);
+  }, [disabledModules, pluginOverrides]);
 
   useEffect(() => {
     // Only a confirmed logged-out session sends the user to /login.

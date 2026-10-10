@@ -1,4 +1,4 @@
-import { isModuleEnabled, type OrionModuleId } from "@orion/shared-types";
+import { isModuleEnabled, isPluginEnabled, type OrionModuleId, type OrionPluginId } from "@orion/shared-types";
 import {
   Boxes,
   CalendarDays,
@@ -40,6 +40,8 @@ export interface PanelDefinition {
   component: FunctionComponent<PanelComponentProps>;
   /** Domain module that owns this panel. Absent = core shell, always visible. */
   moduleId?: OrionModuleId;
+  /** Plugin that owns this panel: with the plugin off it can't be opened and an open one is closed. */
+  pluginId?: OrionPluginId;
   /** Opened from elsewhere (e.g. the settings gear), not from the sidebar link list. */
   hideFromNav?: boolean;
   /** Sidebar section (see `Sidebar`'s `SidebarLinkItem.group`). Absent = the ungrouped "Сегодня" cluster at the top. */
@@ -139,6 +141,7 @@ export const panelRegistry: PanelDefinition[] = [
     icon: GanttChartSquare,
     component: ProjectPlanPanel,
     moduleId: "projects",
+    pluginId: "projects-planning",
     hideFromNav: true,
     instanced: true,
     navParent: "projects"
@@ -169,6 +172,17 @@ export const panelRegistry: PanelDefinition[] = [
  * navigation only, so it never drops shell panels (no `moduleId`) and never
  * touches data or the panel if it is already open or reached another way.
  */
+/** Is this panel usable here: its module is on and, if a plugin owns it, the plugin is on too. */
+export function isPanelAvailable(
+  definition: PanelDefinition,
+  disabledModules: readonly string[] | undefined,
+  pluginOverrides: readonly string[] | undefined
+): boolean {
+  if (definition.moduleId && !isModuleEnabled(disabledModules, definition.moduleId)) return false;
+  if (definition.pluginId && !isPluginEnabled(pluginOverrides ?? [], definition.pluginId)) return false;
+  return true;
+}
+
 export function visiblePanels(
   disabledModules: readonly string[] | undefined,
   personallyHidden: readonly string[] = []

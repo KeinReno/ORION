@@ -73,18 +73,18 @@ import { projectFocus } from "../lib/project-focus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
-import { Meter, ReportedHealthBadge, taskProgressLabel } from "./projects/project-bits";
-import { ProjectPlan } from "./projects/plan-views";
+import { Meter, ReportedHealthBadge, taskProgressLabel } from "../components/project-bits";
 import { ProjectMaterials } from "./projects/materials";
 import { ProjectTasks } from "./projects/project-tasks";
 import { TaskRow } from "./projects/task-row";
-import { DueChip, PlanEmptyHint, PlanStrip, ProjectStatusMenu } from "./projects/project-vitals";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
+import { DueChip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
 import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
-type ProjectTab = "overview" | "tasks" | "plan" | "materials" | "access";
+/** "overview", "tasks", "materials", "access" are the module's own; any other id (the plan) is a tab a plugin adds via `projects.tabs`. */
+type ProjectTab = string;
 
-const PROJECT_TABS: readonly ProjectTab[] = ["overview", "tasks", "plan", "materials", "access"];
 /** Per-viewer, per-project: which view of the project this person last used. */
 const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
 
@@ -239,10 +239,15 @@ function ProjectWorkspace({
     return list.some((item) => item.id === project.id) ? list : [project, ...list];
   }, [workspaceProjects, project]);
 
+  // Tabs a plugin adds (the plan): drawn between «Задачи» and «Материалы», where the plan always was.
+  const pluginTabs = useSlotContributions("projects.tabs").filter(
+    (contribution) => contribution.meta !== undefined && (contribution.meta.needsModule === undefined || (contribution.meta.needsModule === "tasks" ? tasksOn : true))
+  );
+  const planPlugin = pluginTabs.some((contribution) => contribution.meta?.tabId === "plan");
   const tabs: { value: ProjectTab; label: React.ReactNode }[] = [
     { value: "overview", label: "Обзор" },
     ...(tasksOn ? [{ value: "tasks" as const, label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}` }] : []),
-    ...(tasksOn ? [{ value: "plan" as const, label: "План" }] : []),
+    ...pluginTabs.map((contribution) => ({ value: contribution.meta!.tabId, label: contribution.meta!.label })),
     { value: "materials", label: "Материалы" },
     { value: "access", label: "Доступ" }
   ];
@@ -250,11 +255,13 @@ function ProjectWorkspace({
   // A remembered tab can name a module that is off now — fall back to the overview
   // instead of rendering a view whose data this project can't show.
   const tab: ProjectTab = tabs.some((item) => item.value === chosenTab) ? chosenTab : "overview";
+  const activePluginTab = pluginTabs.find((contribution) => contribution.meta?.tabId === tab);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(projectTabKey(project.id));
-      if (saved && (PROJECT_TABS as readonly string[]).includes(saved)) setChosenTab(saved as ProjectTab);
+      // Any remembered id is fine: one that is no longer a tab (plugin off) falls back to the overview below.
+      if (saved) setChosenTab(saved);
     } catch {
       /* storage is a convenience only */
     }
@@ -383,7 +390,7 @@ function ProjectWorkspace({
                 "separator" as const,
                 // The same plan / materials the tabs show, as panels of their own: beside the
                 // overview, or in a separate window (second monitor). Same data, no copies.
-                ...(tasksOn
+                ...(tasksOn && planPlugin
                   ? [
                       { label: "План панелью", icon: GanttChartSquare, onSelect: () => openPanel(`projectplan:${project.id}`, `План · ${project.name}`) },
                       { label: "План окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectplan:${project.id}`, `План · ${project.name}`) }
@@ -484,7 +491,7 @@ function ProjectWorkspace({
           />
         ) : null}
 
-        {tab === "plan" ? <ProjectPlan projectId={project.id} /> : null}
+        {activePluginTab ? <activePluginTab.component workspaceId={workspaceId} projectId={project.id} /> : null}
 
         {tab === "materials" ? (
           <ProjectMaterials
@@ -599,6 +606,8 @@ function OverviewTab({
   onAddTask: () => void;
 }): React.ReactElement {
   const progress = Math.min(100, Math.max(0, project.progress));
+  const projectTabPlugins = useSlotContributions("projects.tabs");
+  const hasPlan = tasksOn && projectTabPlugins.some((contribution) => contribution.meta?.tabId === "plan");
   const now = new Date();
   const fire = [...focus.overdue, ...focus.blocked];
   // A task on fire is shown there once; «Дальше» lists the rest of the actionable work.
@@ -615,22 +624,7 @@ function OverviewTab({
           overdueTasks={focus.overdue.length}
         />
 
-        {tasksOn ? (
-          <PanelSection
-            title="План"
-            actions={
-              <Button size="sm" variant="ghost" onClick={() => onGoTo("plan")}>
-                Открыть план
-              </Button>
-            }
-          >
-            {milestones.length > 0 ? (
-              <PlanStrip milestones={milestones} tasks={tasks} onOpenPlan={() => onGoTo("plan")} />
-            ) : (
-              <PlanEmptyHint onOpenPlan={() => onGoTo("plan")} />
-            )}
-          </PanelSection>
-        ) : null}
+        {tasksOn ? <ExtensionSlot name="projects.overview.plan" props={{ milestones, tasks, onOpenPlan: () => onGoTo("plan") }} /> : null}
 
         {tasksOn && fire.length > 0 ? (
           <PanelSection title={`Горит · ${fire.length}`}>
@@ -685,7 +679,7 @@ function OverviewTab({
         <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
 
         <PanelSection title="Последние изменения">
-          <ActivityList items={project.activity.slice(0, 8)} onPlan={() => onGoTo("plan")} />
+          <ActivityList items={project.activity.slice(0, 8)} onPlan={hasPlan ? () => onGoTo("plan") : undefined} />
         </PanelSection>
       </div>
 
