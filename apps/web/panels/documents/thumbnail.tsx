@@ -38,7 +38,7 @@ export function DocThumbnail({ doc, isImage }: { doc: DocumentItem; isImage: boo
   const Icon = documentIcon(doc);
   return (
     <div className="flex h-full w-full items-center justify-center">
-      <Icon className={cx("h-8 w-8", doc.kind === "folder" ? "text-accent" : "text-muted-foreground")} />
+      <Icon className={cx("h-8 w-8", doc.kind === "folder" ? "text-accent-text" : "text-muted-foreground")} />
     </div>
   );
 }

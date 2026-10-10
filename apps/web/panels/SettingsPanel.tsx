@@ -107,11 +107,11 @@ const WEBGL_BACKGROUND_STYLES = new Set<UserPreference["backgroundStyle"]>([
 
 /** Swatch hex per accent — mirrors the `--orion-accent` values in globals.css, for the picker dots only. */
 const ACCENT_HEX: Record<UserPreference["accent"], string> = {
-  violet: "#6366f1",
-  blue: "#3b82f6",
+  violet: "#5b5ee8",
+  blue: "#2563eb",
   green: "#22c55e",
   amber: "#f59e0b",
-  rose: "#f43f5e"
+  rose: "#e11d48"
 };
 const ACCENT_LABEL: Record<UserPreference["accent"], string> = {
   violet: "Фиолетовый",
@@ -345,7 +345,7 @@ export function SettingsPanel(): React.ReactElement {
                 <div className="flex items-center gap-3">
                   <AccountAvatar userId={user.id} name={profile.name || user.name} hasAvatar={user.hasAvatar} size={56} bust={avatarBust} />
                   <div className="flex flex-col gap-1">
-                    <label className="cursor-pointer text-xs text-accent hover:underline">
+                    <label className="cursor-pointer text-xs text-accent-text hover:underline">
                       Загрузить фото
                       <input
                         type="file"
@@ -638,7 +638,7 @@ export function SettingsPanel(): React.ReactElement {
                         {form.panelAccent ? (
                           <button
                             type="button"
-                            className="text-2xs text-accent hover:underline"
+                            className="text-2xs text-accent-text hover:underline"
                             onClick={() => setForm({ ...form, panelAccent: null })}
                           >
                             Нейтральный

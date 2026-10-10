@@ -220,7 +220,7 @@ function NotificationRow({
         title={canOpen ? "Открыть" : undefined}
         className="flex w-full items-start gap-2 text-left"
       >
-        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${unread ? "text-accent" : "text-muted-foreground"}`} />
+        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${unread ? "text-accent-text" : "text-muted-foreground"}`} />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-xs font-medium text-foreground">{item.title}</span>

@@ -94,7 +94,7 @@ export function HabitForm({
                   "h-8 w-8 rounded-lg border text-xs font-medium transition-colors outline-none",
                   "focus-visible:ring-2 focus-visible:ring-accent/60",
                   active
-                    ? "border-accent/40 bg-accent/15 text-accent"
+                    ? "border-accent/40 bg-accent/15 text-accent-text"
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
               >

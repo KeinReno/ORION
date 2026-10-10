@@ -675,7 +675,7 @@ function OverviewTab({
 
         <Card className="px-4 py-3">
           <SideTitle>Состав</SideTitle>
-          <dl className="mt-2 flex flex-col">
+          <ul className="mt-2 flex flex-col">
             <CompositionRow label="Заметки" value={String(project.counts.notes)} onClick={() => onGoTo("materials")} />
             <CompositionRow label="Файлы" value={String(project.counts.documents)} onClick={() => onGoTo("materials")} />
             <CompositionRow label="События" value={String(project.counts.events)} onClick={() => onGoTo("materials")} />
@@ -697,7 +697,7 @@ function OverviewTab({
                 onClick={() => onGoTo("money")}
               />
             ) : null}
-          </dl>
+          </ul>
           <p className="mt-2 text-micro text-subtle-foreground">
             {project.lastActivityAt ? `Последнее изменение ${relativeTime(project.lastActivityAt)}` : "Ещё не трогали"}
           </p>
@@ -751,15 +751,19 @@ function CompositionRow({
   danger?: boolean;
   onClick: () => void;
 }): React.ReactElement {
+  // A list of buttons, not a <dl>: a definition list may only contain term/description pairs,
+  // and these rows are controls that jump to the matching tab.
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1 text-left transition-colors hover:bg-card-hover"
-    >
-      <dt className="text-label text-muted-foreground">{label}</dt>
-      <dd className={cx("font-mono text-label tabular-nums", danger ? "text-destructive" : "text-foreground")}>{value}</dd>
-    </button>
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="-mx-2 flex w-[calc(100%+1rem)] items-center justify-between gap-3 rounded-md px-2 py-1 text-left transition-colors hover:bg-card-hover"
+      >
+        <span className="text-label text-muted-foreground">{label}</span>
+        <span className={cx("font-mono text-label tabular-nums", danger ? "text-destructive" : "text-foreground")}>{value}</span>
+      </button>
+    </li>
   );
 }
 

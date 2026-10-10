@@ -542,7 +542,7 @@ export function DocumentsPanel(): React.ReactElement {
               <motion.span
                 animate={reducedMotion ? undefined : { y: [0, -6, 0] }}
                 transition={reducedMotion ? undefined : { duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 text-accent"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 text-accent-text"
               >
                 <Upload className="h-6 w-6" />
               </motion.span>
@@ -749,7 +749,7 @@ export function DocumentsPanel(): React.ReactElement {
                       <span />
                     )}
                     <span className="flex min-w-0 items-start gap-2">
-                      <Icon className={cx("h-4 w-4 shrink-0", isFolder ? "text-accent" : "text-muted-foreground")} />
+                      <Icon className={cx("h-4 w-4 shrink-0", isFolder ? "text-accent-text" : "text-muted-foreground")} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-foreground" title={doc.name}>
                           {doc.name}
@@ -941,12 +941,13 @@ export function DocumentsPanel(): React.ReactElement {
           />
         ) : null}
         <SegmentedControl<Layout>
+          aria-label="Вид файлов"
           value={layout}
           onChange={setLayout}
           size="sm"
           options={[
-            { value: "list", label: <List className="h-3.5 w-3.5" /> },
-            { value: "grid", label: <LayoutGrid className="h-3.5 w-3.5" /> }
+            { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
+            { value: "grid", label: <LayoutGrid className="h-3.5 w-3.5" />, ariaLabel: "Плиткой" }
           ]}
         />
         <SegmentedControl<DocumentView>
@@ -1150,7 +1151,7 @@ function MoveDialog({
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-sm text-foreground hover:bg-card-hover disabled:opacity-40 disabled:hover:bg-transparent"
         >
-          <FolderOpen className="h-4 w-4 shrink-0 text-accent" />
+          <FolderOpen className="h-4 w-4 shrink-0 text-accent-text" />
           <span className="truncate">{folder.name}</span>
         </button>
         {renderLevel(folder.id, depth + 1)}
@@ -1166,7 +1167,7 @@ function MoveDialog({
           onClick={() => onPick(null)}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-foreground hover:bg-card-hover"
         >
-          <FolderOpen className="h-4 w-4 shrink-0 text-accent" /> Все файлы (корень)
+          <FolderOpen className="h-4 w-4 shrink-0 text-accent-text" /> Все файлы (корень)
         </button>
         {renderLevel(null, 1)}
       </div>

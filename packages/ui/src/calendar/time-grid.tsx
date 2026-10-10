@@ -252,7 +252,7 @@ export function TimeGrid({
             <div
               className={clsx(
                 "text-sm tabular-nums",
-                sameDay(day, today) ? "font-semibold text-accent" : "text-muted-foreground"
+                sameDay(day, today) ? "font-semibold text-accent-text" : "text-muted-foreground"
               )}
             >
               {day.getDate()} {MONTH_SHORT[day.getMonth()]}
@@ -503,7 +503,7 @@ function DayColumn({
       {isToday && nowMin >= 0 && nowMin <= DAY_MIN ? (
         <div className="pointer-events-none absolute inset-x-0 z-[3]" style={{ top: (nowMin / 60) * HOUR_PX }}>
           <div className="h-px bg-accent" />
-          <LiveDot className="absolute -left-1 -top-1 text-accent" />
+          <LiveDot className="absolute -left-1 -top-1 text-accent-text" />
         </div>
       ) : null}
     </div>

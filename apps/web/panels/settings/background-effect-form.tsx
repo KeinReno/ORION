@@ -37,7 +37,7 @@ function ColorField({ label, value, fallbackHex, onChange }: { label: string; va
           className="h-9 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
         />
         {value ? (
-          <button type="button" className="text-2xs text-accent hover:underline" onClick={() => onChange(null)}>
+          <button type="button" className="text-2xs text-accent-text hover:underline" onClick={() => onChange(null)}>
             По акценту
           </button>
         ) : (

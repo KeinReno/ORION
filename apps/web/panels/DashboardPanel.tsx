@@ -655,7 +655,7 @@ function StatusChip({
       className={cx(
         "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-micro font-medium",
         tone === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
-        tone === "accent" && "border-accent/30 bg-accent/10 text-accent",
+        tone === "accent" && "border-accent/30 bg-accent/10 text-accent-text",
         tone === "neutral" && "border-border text-muted-foreground hover:bg-white/[0.03]"
       )}
     >
@@ -761,7 +761,11 @@ function TaskRow({
       <button type="button" onClick={() => focusTask(task.id)} className="min-w-0 flex-1 truncate text-left text-body text-foreground">
         {task.title}
       </button>
-      {task.projectTag ? <Badge tone="neutral">{task.projectTag}</Badge> : null}
+      {task.projectTag ? (
+        <span className="hidden shrink-0 [@container(min-width:480px)]:inline-flex">
+          <Badge tone="neutral">{task.projectTag}</Badge>
+        </span>
+      ) : null}
       {withDate && task.dueAt ? (
         <span className="shrink-0 text-micro text-subtle-foreground">{shortDateTime(task.dueAt)}</span>
       ) : null}
@@ -773,11 +777,11 @@ function TaskRow({
           aria-label={running ? "Открыть таймер" : `Запустить таймер для «${task.title}»`}
           className={cx(
             "flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-label",
-            running ? "text-accent" : "text-subtle-foreground hover:text-foreground"
+            running ? "text-accent-text" : "text-subtle-foreground hover:text-foreground"
           )}
         >
           <Timer className="h-3.5 w-3.5" />
-          {running ? null : <span>Запустить таймер</span>}
+          {running ? null : <span className="hidden [@container(min-width:560px)]:inline">Запустить таймер</span>}
         </button>
       ) : null}
     </li>

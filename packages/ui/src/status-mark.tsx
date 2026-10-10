@@ -16,7 +16,7 @@ const ICON: Record<StatusMarkValue, ComponentType<{ className?: string }>> = {
 
 const TONE: Record<StatusMarkValue, string> = {
   pending: "text-subtle-foreground",
-  running: "text-accent",
+  running: "text-accent-text",
   cancelled: "text-muted-foreground"
 };
 

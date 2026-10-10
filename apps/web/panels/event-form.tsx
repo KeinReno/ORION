@@ -277,7 +277,7 @@ export function EventForm({
                 }
                 className={
                   byWeekday.includes(wd)
-                    ? "rounded border border-accent bg-accent/15 px-1.5 py-0.5 text-2xs text-accent"
+                    ? "rounded border border-accent bg-accent/15 px-1.5 py-0.5 text-2xs text-accent-text"
                     : "rounded border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
                 }
               >
@@ -332,7 +332,7 @@ export function EventForm({
               }
               className={
                 reminders.includes(preset.minutes)
-                  ? "rounded border border-accent bg-accent/15 px-1.5 py-0.5 text-2xs text-accent"
+                  ? "rounded border border-accent bg-accent/15 px-1.5 py-0.5 text-2xs text-accent-text"
                   : "rounded border border-border px-1.5 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
               }
             >

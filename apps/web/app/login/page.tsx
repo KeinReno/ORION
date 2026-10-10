@@ -94,7 +94,7 @@ function LoginContent(): React.ReactElement {
       >
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
               <Sparkles className="h-4 w-4" />
             </span>
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>

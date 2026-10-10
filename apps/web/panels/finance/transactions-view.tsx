@@ -194,7 +194,7 @@ export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => vo
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                         isTransfer
-                          ? "bg-accent/15 text-accent"
+                          ? "bg-accent/15 text-accent-text"
                           : isIncome
                             ? "bg-success/15 text-success"
                             : "bg-destructive/15 text-destructive"

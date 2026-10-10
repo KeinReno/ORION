@@ -24,7 +24,7 @@ export function FilterChip({
         active
           ? color
             ? ""
-            : "border-accent/40 bg-accent/10 text-accent"
+            : "border-accent/40 bg-accent/10 text-accent-text"
           : "border-border text-muted-foreground hover:text-foreground"
       )}
     >

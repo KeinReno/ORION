@@ -395,7 +395,7 @@ export function NotesPanel(): React.ReactElement {
           {tagFilters.map((tag) => (
             <ActiveFilter key={tag} label={`#${tag}`} onClear={() => toggleTagFilter(tag)} />
           ))}
-          <button type="button" onClick={resetFilters} className="ml-1 text-accent hover:underline">
+          <button type="button" onClick={resetFilters} className="ml-1 text-accent-text hover:underline">
             Сбросить всё
           </button>
         </div>
@@ -472,19 +472,10 @@ export function NotesPanel(): React.ReactElement {
             return (
               <li key={note.id}>
                 <div
-                  role={trash ? undefined : "button"}
-                  tabIndex={trash ? undefined : 0}
+                  // The whole row is clickable for the mouse; keyboard and assistive tech use the
+                  // button around the text below. The row itself must not be a button: it also
+                  // holds the actions menu, and interactive controls cannot nest.
                   onClick={trash ? undefined : () => setSelectedId(note.id)}
-                  onKeyDown={
-                    trash
-                      ? undefined
-                      : (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setSelectedId(note.id);
-                          }
-                        }
-                  }
                   className={cx(
                     "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
                     trash
@@ -497,18 +488,27 @@ export function NotesPanel(): React.ReactElement {
                         )
                   )}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
-                      {!trash && note.pinnedAt ? <Pin className="h-3 w-3 shrink-0 text-accent" /> : null}
+                  <button
+                    type="button"
+                    disabled={trash}
+                    aria-current={active ? "true" : undefined}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedId(note.id);
+                    }}
+                    className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-default"
+                  >
+                    <span className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
+                      {!trash && note.pinnedAt ? <Pin className="h-3 w-3 shrink-0 text-accent-text" /> : null}
                       {showIds && note.number !== null ? (
                         <span className="shrink-0 font-mono text-2xs font-normal text-subtle-foreground">{noteNumberLabel(note.number)}</span>
                       ) : null}
                       <span className="truncate">{note.title || "Без заголовка"}</span>
-                    </p>
+                    </span>
                     {preview ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</p>
+                      <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{preview}</span>
                     ) : null}
-                    <p className="mt-1 flex items-center gap-1.5 text-2xs text-subtle-foreground">
+                    <span className="mt-1 flex items-center gap-1.5 text-2xs text-subtle-foreground">
                       {project ? (
                         <span
                           style={projectColor(project.name)}
@@ -522,8 +522,8 @@ export function NotesPanel(): React.ReactElement {
                           ? `Удалено ${relativeTime(note.deletedAt)}`
                           : relativeTime(contentTime(note))}
                       </span>
-                    </p>
-                  </div>
+                    </span>
+                  </button>
                   <div className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
                     <DropdownMenu
                       trigger={({ toggle }) => (
@@ -733,7 +733,7 @@ function ActiveFilter({ label, onClear }: { label: string; onClear: () => void }
       type="button"
       onClick={onClear}
       aria-label={`Убрать фильтр: ${label}`}
-      className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-accent hover:bg-accent/20"
+      className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-accent-text hover:bg-accent/20"
     >
       {label}
       <X className="h-3 w-3" aria-hidden />

@@ -8,8 +8,9 @@
      rgb(var(--orion-accent) / <alpha-value>)). The default is exactly the
      violet that used to be a hardcoded token, so nothing changes for anyone
      who never opens the appearance settings. */
-  --orion-accent: 99 102 241;
+  --orion-accent: 91 94 232;
   --orion-accent-hover: 124 127 243;
+  --orion-accent-foreground: 255 255 255;
   /* Semantic tones — fixed, independent of the accent preset. Same channel
      form so `text-success/80` and `bg-destructive/10` keep working. */
   --orion-success: 16 185 129;
@@ -38,24 +39,30 @@
    values are hue swaps at the default violet's lightness, so contrast against
    the dark surface stays where it was. */
 [data-accent="violet"] {
-  --orion-accent: 99 102 241;
+  --orion-accent: 91 94 232;
   --orion-accent-hover: 124 127 243;
+  --orion-accent-foreground: 255 255 255;
 }
 [data-accent="blue"] {
-  --orion-accent: 59 130 246;
+  --orion-accent: 37 99 235;
   --orion-accent-hover: 96 165 250;
+  --orion-accent-foreground: 255 255 255;
 }
 [data-accent="green"] {
   --orion-accent: 34 197 94;
   --orion-accent-hover: 74 222 128;
+  /* A light fill: white text on it is ~2.3:1, so the text on it is near-black. */
+  --orion-accent-foreground: 8 8 12;
 }
 [data-accent="amber"] {
   --orion-accent: 245 158 11;
   --orion-accent-hover: 251 191 36;
+  --orion-accent-foreground: 8 8 12;
 }
 [data-accent="rose"] {
-  --orion-accent: 244 63 94;
+  --orion-accent: 225 29 72;
   --orion-accent-hover: 251 113 133;
+  --orion-accent-foreground: 255 255 255;
 }
 
 /* Density scales the root font size, and every Tailwind spacing/text utility in

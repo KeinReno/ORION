@@ -195,7 +195,7 @@ export function ShareGrantSection({
                     type="button"
                     onClick={() => setPickerMode("member")}
                     className={`rounded-full border px-2.5 py-0.5 ${
-                      pickerMode === "member" ? "border-accent text-accent" : "border-border text-subtle-foreground"
+                      pickerMode === "member" ? "border-accent text-accent-text" : "border-border text-subtle-foreground"
                     }`}
                   >
                     Участник этого пространства
@@ -204,7 +204,7 @@ export function ShareGrantSection({
                     type="button"
                     onClick={() => setPickerMode("email")}
                     className={`rounded-full border px-2.5 py-0.5 ${
-                      pickerMode === "email" ? "border-accent text-accent" : "border-border text-subtle-foreground"
+                      pickerMode === "email" ? "border-accent text-accent-text" : "border-border text-subtle-foreground"
                     }`}
                   >
                     По email
@@ -309,7 +309,7 @@ export function ShareGrantSection({
                   type="button"
                   onClick={() => setDuration(opt.kind)}
                   className={`rounded-full border px-3 py-1 text-xs ${
-                    duration === opt.kind ? "border-accent text-accent" : "border-border text-subtle-foreground"
+                    duration === opt.kind ? "border-accent text-accent-text" : "border-border text-subtle-foreground"
                   }`}
                 >
                   {opt.label}

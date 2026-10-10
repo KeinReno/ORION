@@ -44,7 +44,7 @@ export function TodayRow({
             onClick={onEdit}
             title="Изменить привычку"
             className={cx(
-              "max-w-full truncate text-left text-sm outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/60",
+              "max-w-full truncate text-left text-sm outline-none hover:text-accent-text focus-visible:ring-2 focus-visible:ring-accent/60",
               !checked && new Date().getHours() >= 20 ? "text-warning" : "text-foreground"
             )}
           >

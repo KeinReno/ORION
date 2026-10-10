@@ -177,14 +177,14 @@ export function MarkdownView({
         onMouseOut={getWikiLinkPreview ? handleMouseOut : undefined}
         className={clsx(
           "text-sm leading-relaxed text-foreground",
-          "[&_a.orion-wikilink]:cursor-pointer [&_a.orion-wikilink]:text-accent [&_a.orion-wikilink]:decoration-dotted [&_a.orion-wikilink]:underline-offset-2",
+          "[&_a.orion-wikilink]:cursor-pointer [&_a.orion-wikilink]:text-accent-text [&_a.orion-wikilink]:decoration-dotted [&_a.orion-wikilink]:underline-offset-2",
           "[&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-xl [&_h1]:font-semibold [&_h1]:tracking-tight first:[&_h1]:mt-0",
           "[&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-lg [&_h2]:font-semibold first:[&_h2]:mt-0",
           "[&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold first:[&_h3]:mt-0",
           "[&_h4]:mb-1 [&_h4]:mt-3 [&_h4]:text-sm [&_h4]:font-semibold",
           "[&_p]:my-2.5 [&_ul]:my-2.5 [&_ol]:my-2.5 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5",
           "[&_li]:my-1 [&_li>ul]:my-1 [&_li>ol]:my-1",
-          "[&_a]:text-accent [&_a]:underline [&_a]:decoration-accent/40 hover:[&_a]:decoration-accent",
+          "[&_a]:text-accent-text [&_a]:underline [&_a]:decoration-accent/40 hover:[&_a]:decoration-accent",
           "[&_strong]:font-semibold [&_em]:italic",
           "[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border-strong [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground",
           "[&_code]:rounded [&_code]:bg-white/[0.06] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em]",

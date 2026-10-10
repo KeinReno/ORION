@@ -44,7 +44,7 @@ export function WeekGrid({
             title={day.key}
             className={cx(
               "flex w-7 flex-col items-center text-2xs leading-tight",
-              day.isToday ? "font-semibold text-accent" : "text-subtle-foreground"
+              day.isToday ? "font-semibold text-accent-text" : "text-subtle-foreground"
             )}
           >
             {WEEKDAY_SHORT[day.weekday]}
@@ -60,7 +60,7 @@ export function WeekGrid({
             type="button"
             onClick={() => onEdit(habit)}
             title="Изменить привычку"
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm text-foreground outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm text-foreground outline-none hover:text-accent-text focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             {habit.color ? (
               <span

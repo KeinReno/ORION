@@ -197,7 +197,7 @@ export function TransactionForm({
                   ? "bg-destructive/15 text-destructive"
                   : t === "income"
                     ? "bg-success/15 text-success"
-                    : "bg-accent/15 text-accent"
+                    : "bg-accent/15 text-accent-text"
                 : "text-muted-foreground"
             }`}
           >
@@ -298,7 +298,7 @@ export function TransactionForm({
               <button
                 type="button"
                 onClick={addLine}
-                className="inline-flex items-center gap-1 text-2xs font-medium text-accent hover:text-accent-hover"
+                className="inline-flex items-center gap-1 text-2xs font-medium text-accent-text hover:text-accent-hover"
               >
                 <Plus className="h-3.5 w-3.5" /> Разбить по категориям
               </button>

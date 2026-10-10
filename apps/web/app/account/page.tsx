@@ -104,7 +104,7 @@ export default function AccountPage(): React.ReactElement {
       >
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
               <Sparkles className="h-4 w-4" />
             </span>
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
@@ -115,7 +115,7 @@ export default function AccountPage(): React.ReactElement {
           <div className="mb-6 flex items-center gap-3">
             <AccountAvatar userId={user.id} name={profile.name || user.name} hasAvatar={user.hasAvatar} size={64} bust={bust} />
             <div className="flex flex-col gap-2">
-              <label className="cursor-pointer text-xs text-accent hover:underline">
+              <label className="cursor-pointer text-xs text-accent-text hover:underline">
                 Загрузить фото
                 <input
                   type="file"

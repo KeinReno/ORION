@@ -103,7 +103,7 @@ export function TimerWidget({
       <Card className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-accent">
+            <div className="flex items-center gap-2 text-accent-text">
               <LiveDot />
               <span className="font-mono text-display tabular-nums text-foreground">
                 {formatDuration(minutes)}

@@ -39,7 +39,7 @@ export function AuthShell({
           className="hidden flex-col gap-6 lg:flex"
         >
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
               <Sparkles className="h-5 w-5" />
             </span>
             <span className="text-lg font-semibold tracking-tight text-foreground">ORION</span>
@@ -56,7 +56,7 @@ export function AuthShell({
           <ul className="space-y-3 pt-2">
             {FEATURES.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-start gap-3 text-sm text-muted-foreground">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-accent">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-accent-text">
                   <Icon className="h-3.5 w-3.5" />
                 </span>
                 <span>{text}</span>
@@ -72,7 +72,7 @@ export function AuthShell({
         >
           <SpotlightCard className="w-full max-w-sm lg:ml-auto">
             <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
                 <Sparkles className="h-4 w-4" />
               </span>
               <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>

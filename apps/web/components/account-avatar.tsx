@@ -19,7 +19,7 @@ export function AccountAvatar({
   if (!hasAvatar) {
     return (
       <span
-        className="flex shrink-0 items-center justify-center rounded-xl bg-accent/15 text-sm font-bold text-accent"
+        className="flex shrink-0 items-center justify-center rounded-xl bg-accent/15 text-sm font-bold text-accent-text"
         style={{ width: size, height: size }}
       >
         {initial}

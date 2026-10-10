@@ -430,7 +430,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed }: Of
               onClick={() => setActiveSheet(i)}
               className={cx(
                 "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                i === activeSheet ? "bg-accent/15 text-accent" : "text-muted-foreground hover:text-foreground"
+                i === activeSheet ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {s.name}

@@ -385,7 +385,7 @@ export function EntityLinksSection({
                     onClick={() => setTypeFilter(null)}
                     className={cx(
                       "rounded-full border px-2 py-0.5 text-2xs",
-                      typeFilter === null ? "border-accent text-accent" : "border-border text-subtle-foreground"
+                      typeFilter === null ? "border-accent text-accent-text" : "border-border text-subtle-foreground"
                     )}
                   >
                     Все
@@ -397,7 +397,7 @@ export function EntityLinksSection({
                       onClick={() => setTypeFilter((cur) => (cur === t ? null : t))}
                       className={cx(
                         "rounded-full border px-2 py-0.5 text-2xs",
-                        typeFilter === t ? "border-accent text-accent" : "border-border text-subtle-foreground"
+                        typeFilter === t ? "border-accent text-accent-text" : "border-border text-subtle-foreground"
                       )}
                     >
                       {TYPE_LABEL[t]}

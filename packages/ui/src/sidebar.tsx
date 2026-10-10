@@ -229,7 +229,7 @@ export function Sidebar({
           {link.badge ? (
             <span
               title={link.badgeLabel}
-              className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent"
+              className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text"
             >
               {link.badge}
             </span>
@@ -415,7 +415,7 @@ export function Sidebar({
               >
                 {hoveredLink.label}
                 {hoveredLink.badge ? (
-                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent">
+                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text">
                     {hoveredLink.badge}
                   </span>
                 ) : null}

@@ -31,10 +31,15 @@ module.exports = {
         "border-strong": "#3c3c47",
         foreground: "#f4f4f5",
         "muted-foreground": "#a1a1aa",
-        "subtle-foreground": "#71717a",
+        // Was #71717a (4.0:1 on the panel — below the 4.5:1 AA floor for small text); 5.4:1 now.
+        "subtle-foreground": "#8a8a94",
         accent: "rgb(var(--orion-accent) / <alpha-value>)",
         "accent-hover": "rgb(var(--orion-accent-hover) / <alpha-value>)",
-        "accent-foreground": "#ffffff",
+        // Text ON an accent fill (white, or near-black for the light green/amber accents).
+        "accent-foreground": "rgb(var(--orion-accent-foreground) / <alpha-value>)",
+        // Accent-coloured TEXT on a dark surface: the lighter accent shade, which clears 4.5:1
+        // where the fill colour itself (4.3:1) does not.
+        "accent-text": "rgb(var(--orion-accent-hover) / <alpha-value>)",
         destructive: "rgb(var(--orion-danger) / <alpha-value>)",
         "destructive-hover": "rgb(var(--orion-danger-hover) / <alpha-value>)",
         success: "rgb(var(--orion-success) / <alpha-value>)",

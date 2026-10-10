@@ -255,7 +255,7 @@ function ToolbarButton({
       onClick={onClick}
       className={cx(
         "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40",
-        active && "bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent"
+        active && "bg-accent/15 text-accent-text hover:bg-accent/20 hover:text-accent-text"
       )}
     >
       {children}

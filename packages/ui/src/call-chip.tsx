@@ -69,7 +69,7 @@ export function CallChip({ label, sublabel, status, onRetry, className }: CallCh
             ? "bg-success/20 text-success"
             : status === "error"
               ? "bg-destructive/20 text-destructive"
-              : "bg-accent/20 text-accent"
+              : "bg-accent/20 text-accent-text"
         )}
       >
         {status === "done" ? (

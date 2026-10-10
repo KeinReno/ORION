@@ -44,7 +44,7 @@ export function WorkspaceSwitcher({
   const [query, setQuery] = useState("");
 
   const avatarClass =
-    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/15 text-xs font-bold text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/15 text-xs font-bold text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -162,11 +162,11 @@ function SwitcherList({
                       onClick={() => onSelect(workspace.id)}
                       className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                     >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/15 text-2xs font-bold text-accent" aria-hidden>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/15 text-2xs font-bold text-accent-text" aria-hidden>
                         {workspace.name.slice(0, 1).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-label text-foreground">{workspace.name}</span>
-                      {isActive ? <Check className="h-3.5 w-3.5 shrink-0 text-accent" aria-label="Текущее" /> : null}
+                      {isActive ? <Check className="h-3.5 w-3.5 shrink-0 text-accent-text" aria-label="Текущее" /> : null}
                     </button>
                     <IconButton
                       label={`Открыть «${workspace.name}» в новом окне`}

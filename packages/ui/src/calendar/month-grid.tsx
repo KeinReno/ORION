@@ -216,7 +216,7 @@ function WeekRow({
                 <span
                   className={clsx(
                     "text-2xs",
-                    sameDay(day, today) ? "font-semibold text-accent" : "text-subtle-foreground"
+                    sameDay(day, today) ? "font-semibold text-accent-text" : "text-subtle-foreground"
                   )}
                 >
                   {day.getDate()}

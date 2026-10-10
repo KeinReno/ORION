@@ -101,7 +101,7 @@ export default function SpacesPage(): React.ReactElement {
       >
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
               <Sparkles className="h-4 w-4" />
             </span>
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
@@ -128,7 +128,7 @@ export default function SpacesPage(): React.ReactElement {
                       onClick={() => enter(space.id)}
                       className="flex w-full items-center gap-3 rounded-xl border border-border bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-accent/40 hover:bg-white/[0.06]"
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold text-accent">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold text-accent-text">
                         {space.name.slice(0, 1).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1">

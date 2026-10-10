@@ -244,7 +244,7 @@ export function Badge({
       className={clsx(
         "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium leading-none",
         tone === "neutral" && "border-border text-muted-foreground",
-        tone === "accent" && "border-accent/30 bg-accent/10 text-accent",
+        tone === "accent" && "border-accent/30 bg-accent/10 text-accent-text",
         tone === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
         tone === "success" && "border-success/30 bg-success/10 text-success",
         tone === "warning" && "border-warning/30 bg-warning/10 text-warning",
@@ -301,7 +301,7 @@ export function EmptyState({
           className={clsx(
             "flex h-11 w-11 items-center justify-center rounded-full",
             tone === "danger" && "bg-destructive/10 text-destructive",
-            tone === "success" && "bg-accent/10 text-accent",
+            tone === "success" && "bg-accent/10 text-accent-text",
             tone === "neutral" && "bg-white/[0.04] text-muted-foreground"
           )}
         >
@@ -320,6 +320,8 @@ export function EmptyState({
 export interface SegmentedOption<T extends string> {
   value: T;
   label: ReactNode;
+  /** Required when `label` is only an icon: the button's accessible name (also shown as a tooltip). */
+  ariaLabel?: string;
 }
 
 /** Compact tab-like switch (view modes, sort order). Fully keyboard-operable. */
@@ -328,17 +330,21 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   size = "md",
-  className
+  className,
+  "aria-label": groupLabel
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
   size?: "sm" | "md";
   className?: string;
+  /** Names the group for assistive tech ("Вид списка"). */
+  "aria-label"?: string;
 }): React.ReactElement {
   return (
     <div
       role="tablist"
+      aria-label={groupLabel}
       className={clsx("inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-white/[0.02] p-0.5", className)}
     >
       {options.map((option) => {
@@ -349,6 +355,8 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={option.ariaLabel}
+            title={option.ariaLabel}
             onClick={() => onChange(option.value)}
             className={clsx(
               "rounded-md font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/60",

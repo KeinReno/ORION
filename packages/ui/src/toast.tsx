@@ -114,7 +114,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                               t.action?.onClick();
                               dismiss(t.id);
                             }}
-                            className="mt-1.5 text-2xs font-medium text-accent hover:text-accent-hover"
+                            className="mt-1.5 text-2xs font-medium text-accent-text hover:text-accent-hover"
                           >
                             {t.action.label}
                           </button>

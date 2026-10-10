@@ -76,7 +76,7 @@ export default function SheetView({
               onClick={() => setActive(i)}
               className={cx(
                 "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                i === active ? "bg-accent/15 text-accent" : "text-muted-foreground hover:text-foreground"
+                i === active ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {s.name}
