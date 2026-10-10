@@ -40,6 +40,18 @@ export function resolveBrowserInput(input: string): BrowserTarget {
   return { kind: "search", url: `${SEARCH_URL}${encodeURIComponent(text)}` };
 }
 
+/**
+ * ORION's own address is never framed inside ORION: the frame is sandboxed WITH `allow-same-origin` (pages need their own
+ * storage to work), and a same-origin page in such a frame can lift its own sandbox and reach the app around it.
+ */
+export function isSameOrigin(url: string, origin: string): boolean {
+  try {
+    return new URL(url).origin === new URL(origin).origin;
+  } catch {
+    return false;
+  }
+}
+
 /** The short label of a tab: the site, without `www.`. */
 export function tabLabel(url: string | null): string {
   if (!url) return "Новая вкладка";

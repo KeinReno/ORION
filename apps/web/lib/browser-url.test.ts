@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isWebUrl, resolveBrowserInput, tabLabel } from "./browser-url";
+import { isSameOrigin, isWebUrl, resolveBrowserInput, tabLabel } from "./browser-url";
 
 describe("resolveBrowserInput", () => {
   it("opens http(s) addresses as they are", () => {
@@ -25,6 +25,15 @@ describe("resolveBrowserInput", () => {
   });
   it("refuses empty input", () => {
     expect(resolveBrowserInput("   ").kind).toBe("refused");
+  });
+});
+
+describe("isSameOrigin", () => {
+  it("spots ORION's own address, in any path, and nothing else", () => {
+    expect(isSameOrigin("http://localhost:3010/panel/tasks", "http://localhost:3010")).toBe(true);
+    expect(isSameOrigin("http://localhost:3011/", "http://localhost:3010")).toBe(false);
+    expect(isSameOrigin("https://example.com", "http://localhost:3010")).toBe(false);
+    expect(isSameOrigin("not a url", "http://localhost:3010")).toBe(false);
   });
 });
 

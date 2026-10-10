@@ -4,7 +4,7 @@ import { useCreateNote } from "@orion/core-react";
 import { Button, IconButton, PanelShell, useToast } from "@orion/ui";
 import { ClipboardCopy, ExternalLink, FileText, Globe, Plus, RotateCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { resolveBrowserInput, tabLabel } from "../lib/browser-url";
+import { isSameOrigin, resolveBrowserInput, tabLabel } from "../lib/browser-url";
 import { useBrowserRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
@@ -78,6 +78,10 @@ export function BrowserPanel(): React.ReactElement {
   useEffect(() => setDraft(active.url ?? ""), [active.id, active.url]);
 
   const navigate = useCallback((url: string, inNewTab = false) => {
+    if (isSameOrigin(url, window.location.origin)) {
+      toast({ title: "Это адрес самого ORION", description: "Страницы приложения во встроенном браузере не открываются.", tone: "default" });
+      return;
+    }
     setState((current) => {
       const target = current.tabs.find((tab) => tab.id === current.active) ?? current.tabs[0]!;
       // A request from outside (a link in a note) fills an empty tab, otherwise opens a new one.
@@ -88,7 +92,7 @@ export function BrowserPanel(): React.ReactElement {
       }
       return { ...current, tabs: current.tabs.map((tab) => (tab.id === target.id ? { ...tab, url } : tab)) };
     });
-  }, []);
+  }, [toast]);
 
   // A link someone clicked elsewhere in ORION ("open in the built-in browser").
   const request = useBrowserRequest();

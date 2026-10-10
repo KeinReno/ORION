@@ -202,6 +202,17 @@ describe("snapshot coverage and restore preflight (S03)", () => {
         data: { workspaceId, documentId: file.id, versionNumber: 1, storageKey: "s03/v1", sizeBytes: 3, checksum: "abc" }
       });
       await tx.documentAnnotation.create({ data: { workspaceId, documentId: file.id, body: "note" } });
+      // Newer finance / markets tables: an obligation pointing at an account, a watch item, and a trade whose
+      // fee is a real transaction (a foreign key that restore order must respect).
+      const account = await tx.account.create({ data: { workspaceId, name: "S03 account" } });
+      await tx.financeObligation.create({ data: { workspaceId, name: "S03 obligation", payment: 1000, dueDay: 15, accountId: account.id } });
+      await tx.marketWatchItem.create({ data: { workspaceId, market: "moex", symbol: "SBER" } });
+      const feeTx = await tx.transaction.create({
+        data: { workspaceId, accountId: account.id, type: "expense", occurredAt: new Date(), lines: { create: [{ workspaceId, amount: 100 }] } }
+      });
+      await tx.investmentTrade.create({
+        data: { workspaceId, externalUid: "compass:s03", mode: "real", market: "moex", symbol: "SBER", side: "buy", qty: 1, price: 1, tradedAt: new Date(), feeTransactionId: feeTx.id }
+      });
     });
 
     const before = await prisma.withUser(userId, (tx) => snapshots.counts(tx, workspaceId));
@@ -246,6 +257,11 @@ describe("snapshot coverage and restore preflight (S03)", () => {
 
     const after = await prisma.withUser(userId, (tx) => snapshots.counts(tx, workspaceId));
     expect(after).toEqual(before);
+    expect(after.financeObligations).toBe(1);
+    expect(after.marketWatchItems).toBe(1);
+    expect(after.investmentTrades).toBe(1);
+    const trade = await prisma.withUser(userId, (tx) => tx.investmentTrade.findFirst({ where: { workspaceId } }));
+    expect(trade?.feeTransactionId).not.toBeNull();
 
     const restoredTasks = await prisma.withUser(userId, (tx) =>
       tx.task.findMany({ where: { workspaceId }, select: { id: true, parentId: true, title: true } })
