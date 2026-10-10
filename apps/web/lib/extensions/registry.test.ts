@@ -62,7 +62,7 @@ describe("plugin catalog invariants (default-full parity)", () => {
   });
 
   it("the four finance plugins are extracted built-ins: on by default, each tied to the finance module", () => {
-    for (const id of ["finance-budgeting", "finance-goals", "finance-recurring", "finance-reports"]) {
+    for (const id of ["finance-budgeting", "finance-goals", "finance-recurring", "finance-reports"] as const) {
       const manifest = PLUGIN_CATALOG.find((p) => p.id === id);
       expect(manifest?.extendsModuleId).toBe("finance");
       expect(manifest?.defaultEnabled).toBe(true);

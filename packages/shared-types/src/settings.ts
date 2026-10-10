@@ -89,6 +89,10 @@ export const sidebarFolderSchema = z.object({
 export type SidebarFolder = z.infer<typeof sidebarFolderSchema>;
 export const sidebarFoldersSchema = z.array(sidebarFolderSchema).max(SIDEBAR_FOLDERS_MAX);
 
+export const sidebarPositionSchema = z.enum(["left", "right", "top", "bottom"]);
+export type SidebarPosition = z.infer<typeof sidebarPositionSchema>;
+export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
+
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
   accent: z.enum(["violet", "blue", "green", "amber", "rose"]),
@@ -120,6 +124,10 @@ export const userPreferenceSchema = z.object({
   showNoteIds: z.boolean(),
   /** The user's own sidebar folders. Personal: other participants and the workspace are untouched. */
   sidebarFolders: sidebarFoldersSchema,
+  /** The user's own order of sidebar sections (panel ids). Ids missing here keep their default place after the listed ones. */
+  sidebarOrder: sidebarOrderSchema,
+  /** Which edge of the window the menu sits on. Personal. */
+  sidebarPosition: sidebarPositionSchema,
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

@@ -108,6 +108,8 @@ model UserPreference {
   /// The user's own folders in the left sidebar: [{ id, name, collapsed, items: panelId[] }].
   /// Personal view state only — parsed defensively on read (see settings.service toDto).
   sidebarFolders       Json      @default("[]")
+  sidebarOrder         Json      @default("[]")
+  sidebarPosition      String    @default("left")
   /// When set, the first-run card on Today stays hidden. Null = not dismissed.
   onboardingCompletedAt DateTime?
   /// U05 (24-CONNECTED-CORE-BACKLOG.md) — personal grouping of the user's own

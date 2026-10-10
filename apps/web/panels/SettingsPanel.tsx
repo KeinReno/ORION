@@ -85,6 +85,7 @@ const APPEARANCE_KEYS: readonly PreferenceKey[] = [
   "theme",
   "accent",
   "density",
+  "sidebarPosition",
   "backgroundStyle",
   "backgroundIntensity",
   "backgroundEffectSettings",
@@ -551,6 +552,18 @@ export function SettingsPanel(): React.ReactElement {
                 </Field>
                 <Field label="Плотность">
                   <SegmentedControl<UserPreference["density"]> value={form.density} onChange={(density) => setForm({ ...form, density })} options={[{ value: "compact", label: "Компактная" }, { value: "comfortable", label: "Свободная" }]} />
+                </Field>
+                <Field label="Положение меню">
+                  <SegmentedControl<UserPreference["sidebarPosition"]>
+                    value={form.sidebarPosition}
+                    onChange={(sidebarPosition) => setForm({ ...form, sidebarPosition })}
+                    options={[
+                      { value: "left", label: "Слева" },
+                      { value: "right", label: "Справа" },
+                      { value: "top", label: "Сверху" },
+                      { value: "bottom", label: "Снизу" }
+                    ]}
+                  />
                 </Field>
                 <Field label="Фон">
                   <SegmentedControl<UserPreference["backgroundStyle"]>

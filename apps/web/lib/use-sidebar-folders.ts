@@ -16,7 +16,12 @@ export function newFolderId(): string {
  * at once (the cached preferences are updated first) and is then written to the server; if
  * the write fails the cache is refetched, so the screen returns to what is really stored.
  */
-export function useSidebarFolders(): { folders: SidebarFolder[]; save: (next: SidebarFolder[]) => void } {
+export function useSidebarFolders(): {
+  folders: SidebarFolder[];
+  save: (next: SidebarFolder[]) => void;
+  order: string[];
+  saveOrder: (next: string[]) => void;
+} {
   const { data } = usePreferences();
   const update = useUpdatePreferences();
   const queryClient = useQueryClient();
@@ -32,5 +37,13 @@ export function useSidebarFolders(): { folders: SidebarFolder[]; save: (next: Si
     },
     [queryClient, update]
   );
-  return { folders, save };
+  const order = useMemo(() => (Array.isArray(data?.sidebarOrder) ? data.sidebarOrder : []), [data?.sidebarOrder]);
+  const saveOrder = useCallback(
+    (next: string[]) => {
+      queryClient.setQueryData<UserPreference>(["preferences"], (current) => (current ? { ...current, sidebarOrder: next } : current));
+      update.mutate({ sidebarOrder: next }, { onError: () => void queryClient.invalidateQueries({ queryKey: ["preferences"] }) });
+    },
+    [queryClient, update]
+  );
+  return { folders, save, order, saveOrder };
 }

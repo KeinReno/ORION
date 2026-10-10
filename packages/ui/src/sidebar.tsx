@@ -117,9 +117,18 @@ export interface SidebarProps {
   /** The user's own folders. Links named here leave their default place and show inside the folder. */
   folders?: SidebarFolderView[];
   onToggleFolder?: (folderId: string) => void;
-  /** Shows a «Новая папка» row at the end of the list when given. */
-  onCreateFolder?: () => void;
+  /** Shows a «Новая папка» row at the end of the list when given; `linkId` is set when a link was dropped on it. */
+  onCreateFolder?: (linkId?: string) => void;
+  /**
+   * Drag-and-drop inside the sidebar: link `linkId` was dropped into folder `folderId` (before
+   * `beforeId`, or at the end), or out of its folder when `folderId` is null. Enables dragging.
+   */
+  onMoveLink?: (linkId: string, folderId: string | null, beforeId?: string) => void;
+  /** Which window edge the menu sits on. top/bottom make a horizontal icon bar. Ignored for the phone drawer. */
+  position?: "left" | "right" | "top" | "bottom";
 }
+
+const DRAG_TYPE = "application/x-orion-sidebar-link";
 
 function DefaultLink({
   href,
@@ -155,11 +164,14 @@ export function Sidebar({
   onDrawerClose,
   folders = [],
   onToggleFolder,
-  onCreateFolder
+  onCreateFolder,
+  onMoveLink,
+  position = "left"
 }: SidebarProps): React.ReactElement {
   const [pinned, setPinned] = useState(false);
   const isDrawer = variant === "drawer";
-  const open = isDrawer || pinned;
+  const horizontal = !isDrawer && (position === "top" || position === "bottom");
+  const open = isDrawer || (pinned && !horizontal);
   const reduceMotion = useReducedMotion();
   const duration = reduceMotion ? 0 : 0.2;
   const mounted = useMounted();
@@ -203,12 +215,42 @@ export function Sidebar({
   }
   const hoveredLink = hovered ? links.find((l) => l.label === hovered.id) : undefined;
 
+  // Dragging a link onto a folder / between links. `dragId` is set only for a drag that started
+  // in this sidebar, so files or dock tabs dragged over it are ignored. `dropKey` marks the target.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  function dropProps(key: string, folderId: string | null, beforeId?: string, onDropped?: (id: string) => void): React.HTMLAttributes<HTMLElement> {
+    if (!onMoveLink) return {};
+    return {
+      onDragOver: (event) => {
+        if (!dragId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        if (dropKey !== key) setDropKey(key);
+      },
+      onDragLeave: (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropKey((cur) => (cur === key ? null : cur));
+      },
+      onDrop: (event) => {
+        if (!dragId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const id = dragId;
+        setDragId(null);
+        setDropKey(null);
+        if (onDropped) onDropped(id);
+        else onMoveLink(id, folderId, beforeId);
+      }
+    };
+  }
+
   function handleNavigate(onClick?: () => void): void {
     onClick?.();
     if (isDrawer) onDrawerClose?.();
   }
 
-  function renderLink(link: SidebarLinkItem): React.ReactElement {
+  function renderLinkBase(link: SidebarLinkItem): React.ReactElement {
     const Icon = link.icon;
     const isActive = link.isActive ?? link.href === activeHref;
     const className = clsx(
@@ -283,8 +325,19 @@ export function Sidebar({
         key={link.label}
         type="button"
         aria-label={ariaLabel}
-        draggable={Boolean(link.onDragStart)}
-        onDragStart={link.onDragStart}
+        draggable={Boolean(link.onDragStart) || Boolean(onMoveLink && link.id)}
+        onDragStart={(event) => {
+          link.onDragStart?.(event);
+          if (onMoveLink && link.id) {
+            event.dataTransfer.setData(DRAG_TYPE, link.id);
+            event.dataTransfer.effectAllowed = "copyMove";
+            setDragId(link.id);
+          }
+        }}
+        onDragEnd={() => {
+          setDragId(null);
+          setDropKey(null);
+        }}
         onClick={() => handleNavigate(link.onClick)}
         onMouseEnter={(e) => handleEnter(link.label, e)}
         onMouseLeave={handleLeave}
@@ -323,6 +376,23 @@ export function Sidebar({
     );
   }
 
+  /** A link that is also a drop target: dropped here, a dragged link takes this link's place in its folder. */
+  function renderLink(link: SidebarLinkItem): React.ReactElement {
+    const base = renderLinkBase(link);
+    if (!onMoveLink || !link.id) return base;
+    const folder = folders.find((f) => f.linkIds.includes(link.id as string));
+    const key = `link:${link.id}`;
+    return (
+      <div
+        key={link.label}
+        {...dropProps(key, folder?.id ?? null, link.id)}
+        className={clsx("rounded-lg", dragId && dragId !== link.id && dropKey === key && "bg-accent/10 ring-1 ring-accent/60")}
+      >
+        {base}
+      </div>
+    );
+  }
+
   // Links the user put into a folder leave their default place. Grouping (default sections and
   // folders) only matters once labels are visible — the collapsed rail stays a flat icon column,
   // where each folder is ONE folder icon that opens its links in a small list.
@@ -347,7 +417,7 @@ export function Sidebar({
     return (
       <Popover
         key={`folder:${folder.id}`}
-        align="start"
+        align={position === "right" ? "end" : "start"}
         width={232}
         trigger={({ toggle, open: isOpen, ref }) => (
           <button
@@ -358,7 +428,8 @@ export function Sidebar({
             aria-expanded={isOpen}
             aria-label={`Папка «${folder.name}», разделов: ${members.length}`}
             title={`${folder.name} · ${members.length}`}
-            className={iconButtonClass}
+            {...dropProps(`folder:${folder.id}`, folder.id)}
+            className={clsx(iconButtonClass, dragId && dropKey === `folder:${folder.id}` && "bg-accent/10 ring-1 ring-accent/60")}
           >
             <span className="relative shrink-0">
               {isOpen ? <FolderOpen className="h-5 w-5" aria-hidden /> : <Folder className="h-5 w-5" aria-hidden />}
@@ -401,7 +472,11 @@ export function Sidebar({
   function renderFolder(folder: SidebarFolderView): React.ReactElement {
     const members = folder.linkIds.map((id) => linkById.get(id)).filter((l): l is SidebarLinkItem => Boolean(l));
     return (
-      <div key={`folder:${folder.id}`} className="flex flex-col gap-1">
+      <div
+        key={`folder:${folder.id}`}
+        {...dropProps(`folder:${folder.id}`, folder.id)}
+        className={clsx("flex flex-col gap-1 rounded-lg", dragId && dropKey === `folder:${folder.id}` && "bg-accent/10 ring-1 ring-accent/60")}
+      >
         <div className="group/folder flex items-center gap-0.5">
           <button
             type="button"
@@ -471,11 +546,14 @@ export function Sidebar({
   return (
     <motion.aside
       initial={false}
-      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : { width: open ? 240 : 60 }}
+      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : horizontal ? { width: "100%" } : { width: open ? 240 : 60 }}
       transition={{ duration, ease: "easeInOut" }}
       aria-hidden={isDrawer && !drawerOpen}
       className={clsx(
-        "z-40 flex h-dvh shrink-0 flex-col justify-between overflow-hidden border-r border-border px-2.5 py-4",
+        "z-40 flex shrink-0 justify-between overflow-hidden border-border",
+        horizontal ? "h-14 flex-row items-center px-3" : "h-dvh flex-col px-2.5 py-4",
+        !horizontal && (position === "right" ? "border-l" : "border-r"),
+        horizontal && (position === "top" ? "border-b" : "border-t"),
         // The drawer floats over page content (phone overlay) — glass reads
         // there; the desktop rail sits flush in the flex layout with nothing
         // ever behind it, so it stays flat like the rest of the shell.
@@ -483,9 +561,14 @@ export function Sidebar({
       )}
       style={isDrawer ? { width: 240, pointerEvents: drawerOpen ? "auto" : "none" } : undefined}
     >
-      <div className="flex flex-col gap-3">
+      <div className={clsx("flex gap-3", horizontal ? "min-w-0 flex-1 flex-row items-center" : "flex-col")}>
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
-        <nav id="orion-sidebar-nav" aria-label="Разделы" className="flex flex-col gap-1">
+        <nav
+          id="orion-sidebar-nav"
+          aria-label="Разделы"
+          className={clsx("flex gap-1", horizontal ? "min-w-0 flex-row items-center overflow-x-auto" : "flex-col")}
+          {...dropProps("nav", null)}
+        >
           {!grouped
             ? hasSections
               ? renderRail()
@@ -530,8 +613,12 @@ export function Sidebar({
                   <button
                     key="__new-folder"
                     type="button"
-                    onClick={onCreateFolder}
-                    className="mt-1 flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-1.5 text-left text-2xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    onClick={() => onCreateFolder()}
+                    {...dropProps("new-folder", null, undefined, (id) => onCreateFolder(id))}
+                    className={clsx(
+                      "mt-1 flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-1.5 text-left text-2xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                      dragId && dropKey === "new-folder" && "border-accent text-foreground"
+                    )}
                   >
                     <FolderPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Новая папка
@@ -540,9 +627,9 @@ export function Sidebar({
               ]}
         </nav>
       </div>
-      <div className="flex flex-col gap-2">
+      <div className={clsx("flex gap-2", horizontal ? "shrink-0 flex-row items-center" : "flex-col")}>
         {footer ? (
-          <div className="border-t border-border pt-3">{typeof footer === "function" ? footer({ open }) : footer}</div>
+          <div className={horizontal ? "border-l border-border pl-3" : "border-t border-border pt-3"}>{typeof footer === "function" ? footer({ open }) : footer}</div>
         ) : null}
         {isDrawer ? (
           <button
@@ -554,7 +641,7 @@ export function Sidebar({
             <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden />
             <span>Закрыть</span>
           </button>
-        ) : (
+        ) : horizontal ? null : (
           <button
             type="button"
             aria-expanded={open}
@@ -578,12 +665,15 @@ export function Sidebar({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -4 }}
                 transition={{ duration: reduceMotion ? 0 : 0.12 }}
-                style={{
-                  position: "fixed",
-                  left: hovered.rect.right + 8,
-                  top: hovered.rect.top + hovered.rect.height / 2,
-                  transform: "translateY(-50%)"
-                }}
+                style={
+                  position === "right"
+                    ? { position: "fixed", left: hovered.rect.left - 8, top: hovered.rect.top + hovered.rect.height / 2, transform: "translate(-100%, -50%)" }
+                    : position === "top"
+                      ? { position: "fixed", left: hovered.rect.left + hovered.rect.width / 2, top: hovered.rect.bottom + 8, transform: "translateX(-50%)" }
+                      : position === "bottom"
+                        ? { position: "fixed", left: hovered.rect.left + hovered.rect.width / 2, top: hovered.rect.top - 8, transform: "translate(-50%, -100%)" }
+                        : { position: "fixed", left: hovered.rect.right + 8, top: hovered.rect.top + hovered.rect.height / 2, transform: "translateY(-50%)" }
+                }
                 className="pointer-events-none z-[130] flex items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card/95 px-2.5 py-1.5 text-xs text-foreground shadow-xl shadow-black/40 backdrop-blur-md"
               >
                 {hoveredLink.label}

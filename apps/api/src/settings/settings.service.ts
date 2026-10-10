@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import {
   DEFAULT_BACKGROUND_EFFECT_SETTINGS,
   sidebarFoldersSchema,
+  sidebarOrderSchema,
+  sidebarPositionSchema,
   type BackgroundEffectSettings,
   type UpdateUserPreferenceInput,
   type UserPreference,
@@ -37,7 +39,8 @@ export class SettingsService {
     const data = {
       ...input,
       ...(input.backgroundEffectSettings ? { backgroundEffectSettings: input.backgroundEffectSettings as Prisma.InputJsonValue } : {}),
-      ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {})
+      ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {}),
+      ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {})
     };
     const preference = await this.prisma.userPreference.upsert({
       where: { userId },
@@ -199,6 +202,8 @@ function toDto(preference: {
   hiddenModules: string[];
   showNoteIds: boolean;
   sidebarFolders: Prisma.JsonValue;
+  sidebarOrder: Prisma.JsonValue;
+  sidebarPosition: string;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   return {
@@ -206,6 +211,8 @@ function toDto(preference: {
     backgroundEffectSettings: mergeBackgroundEffectSettings(preference.backgroundEffectSettings),
     // A damaged value must not break the settings screen: read it defensively, fall back to no folders.
     sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],
+    sidebarOrder: sidebarOrderSchema.safeParse(preference.sidebarOrder).success ? (preference.sidebarOrder as string[]) : [],
+    sidebarPosition: sidebarPositionSchema.safeParse(preference.sidebarPosition).success ? (preference.sidebarPosition as UserPreference["sidebarPosition"]) : "left",
     onboardingCompletedAt: preference.onboardingCompletedAt?.toISOString() ?? null
   } as UserPreference;
 }

@@ -18,6 +18,7 @@ import {
   type DockviewWillShowOverlayLocationEvent,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelProps,
+  cx,
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
@@ -45,7 +46,7 @@ import { getPanelDefinition, panelInstanceId, panelRegistry, visiblePanels } fro
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
-import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, renameFolder, toggleFolder } from "../../lib/sidebar-folders";
+import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
@@ -174,7 +175,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
 
   // The user's own sidebar folders: personal, saved with their preferences.
-  const { folders: sidebarFolders, save: saveFolders } = useSidebarFolders();
+  const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
+  const sidebarPosition = preferences?.sidebarPosition ?? "left";
+  const defaultNavIds = navPanels.map((panel) => panel.id);
+  const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
   const folderViews = useMemo<SidebarFolderView[]>(() => {
     const visible = new Set(navPanels.map((panel) => panel.id));
@@ -472,7 +476,16 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }
 
   return (
-    <div className={compact ? "orion-shell--compact flex h-dvh bg-background" : "flex h-dvh bg-background"}>
+    <div
+      className={cx(
+        "flex h-dvh bg-background",
+        compact && "orion-shell--compact",
+        // The phone always uses the left drawer; the menu's own edge applies to the desktop shell.
+        !compact && sidebarPosition === "right" && "flex-row-reverse",
+        !compact && sidebarPosition === "top" && "flex-col",
+        !compact && sidebarPosition === "bottom" && "flex-col-reverse"
+      )}
+    >
       <AppBackground />
       <FolderNameDialog
         open={folderDialog !== null}
@@ -502,8 +515,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       <Sidebar
         folders={folderViews}
         onToggleFolder={(id) => saveFolders(toggleFolder(sidebarFolders, id))}
-        onCreateFolder={() => setFolderDialog({ mode: "create" })}
+        onCreateFolder={(panelId) => setFolderDialog({ mode: "create", panelId })}
+        onMoveLink={(panelId, folderId, beforeId) => {
+          const nextFolders = placeInFolder(sidebarFolders, panelId, folderId, beforeId);
+          if (nextFolders.some((folder, index) => folder.items.join() !== sidebarFolders[index]?.items.join())) saveFolders(nextFolders);
+          // Dropped among the free sections: it also takes that place in the user's own order.
+          if (folderId === null && beforeId) saveOrder(reorderPanels(defaultNavIds, sidebarOrder, panelId, beforeId));
+        }}
         variant={compact ? "drawer" : "rail"}
+        position={sidebarPosition}
         drawerOpen={drawerOpen}
         onDrawerClose={() => setDrawerOpen(false)}
         header={({ open }) => (
@@ -523,7 +543,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             />
           </div>
         )}
-        links={navPanels.map((panel) => ({
+        links={orderedNav.map((panel) => ({
           id: panel.id,
           label: panel.label,
           icon: panel.icon,

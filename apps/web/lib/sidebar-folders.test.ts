@@ -1,6 +1,6 @@
 import type { SidebarFolder } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, normalizeFolders, renameFolder, toggleFolder } from "./sidebar-folders";
+import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, normalizeFolders, orderedIds, placeInFolder, reorderPanels, renameFolder, toggleFolder } from "./sidebar-folders";
 
 const f = (id: string, items: string[] = [], collapsed = false, name = id): SidebarFolder => ({ id, name, collapsed, items });
 
@@ -80,5 +80,52 @@ describe("rename, delete, toggle, order", () => {
     expect(moveFolder(list, "b", 1).map((x) => x.id)).toEqual(["a", "c", "b"]);
     expect(moveFolder(list, "a", -1).map((x) => x.id)).toEqual(["a", "b", "c"]);
     expect(moveFolder(list, "c", 1).map((x) => x.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("placeInFolder (drag and drop)", () => {
+  const base = [
+    { id: "a", name: "A", collapsed: false, items: ["tasks", "notes"] },
+    { id: "b", name: "B", collapsed: false, items: ["time"] }
+  ];
+  it("inserts before the target inside the same folder (reorder)", () => {
+    expect(placeInFolder(base, "notes", "a", "tasks")[0]!.items).toEqual(["notes", "tasks"]);
+  });
+  it("moves from another folder to a position, removing it from the first", () => {
+    const next = placeInFolder(base, "time", "a", "notes");
+    expect(next[0]!.items).toEqual(["tasks", "time", "notes"]);
+    expect(next[1]!.items).toEqual([]);
+  });
+  it("appends when dropped on the folder itself or on an unknown neighbour", () => {
+    expect(placeInFolder(base, "habits", "b")[1]!.items).toEqual(["time", "habits"]);
+    expect(placeInFolder(base, "habits", "b", "missing")[1]!.items).toEqual(["time", "habits"]);
+  });
+  it("takes the panel out of every folder when dropped outside", () => {
+    expect(placeInFolder(base, "tasks", null).map((f) => f.items)).toEqual([["notes"], ["time"]]);
+  });
+  it("dropping a panel on itself changes nothing", () => {
+    expect(placeInFolder(base, "tasks", "a", "tasks")).toEqual(base);
+  });
+});
+
+describe("own order of sections", () => {
+  const ids = ["dash", "tasks", "notes", "time"];
+  it("without a saved order the default order stands", () => {
+    expect(orderedIds(ids, [])).toEqual(ids);
+  });
+  it("listed ids come first, new ones after in default order, unknown ones are dropped", () => {
+    expect(orderedIds(ids, ["time", "gone", "tasks"])).toEqual(["time", "tasks", "dash", "notes"]);
+  });
+  it("moves a section before another, keeping the rest", () => {
+    expect(reorderPanels(ids, [], "time", "tasks")).toEqual(["dash", "time", "tasks", "notes"]);
+  });
+  it("moves to the end when there is no neighbour", () => {
+    expect(reorderPanels(ids, [], "dash")).toEqual(["tasks", "notes", "time", "dash"]);
+  });
+  it("keeps hidden modules recorded so they return to their place", () => {
+    expect(reorderPanels(["a", "b"], ["hidden", "b", "a"], "a", "b")).toEqual(["a", "b", "hidden"]);
+  });
+  it("dropping on itself changes nothing", () => {
+    expect(reorderPanels(ids, ["notes"], "tasks", "tasks")).toEqual(["notes"]);
   });
 });

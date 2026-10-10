@@ -67,6 +67,46 @@ export function moveToFolder(folders: readonly SidebarFolder[], panelId: string,
   return cleared.map((folder) => (folder.id === folderId ? { ...folder, items: [...folder.items, panelId] } : folder));
 }
 
+/**
+ * Drag-and-drop placement: puts a panel into `folderId` right before `beforeId` (appended
+ * when `beforeId` is absent or not in that folder), or takes it out of every folder when
+ * `folderId` is null. Dropping a panel on itself changes nothing.
+ */
+export function placeInFolder(folders: readonly SidebarFolder[], panelId: string, folderId: string | null, beforeId?: string): SidebarFolder[] {
+  if (panelId === beforeId) return [...folders];
+  const cleared = removeItem(folders, panelId);
+  if (folderId === null) return cleared;
+  return cleared.map((folder) => {
+    if (folder.id !== folderId) return folder;
+    const at = beforeId ? folder.items.indexOf(beforeId) : -1;
+    const items = [...folder.items];
+    items.splice(at < 0 ? items.length : at, 0, panelId);
+    return { ...folder, items };
+  });
+}
+
+/** Panel ids in the user's own order: the ids named in `order` first (as listed), the rest after in their default order. */
+export function orderedIds(defaultIds: readonly string[], order: readonly string[]): string[] {
+  const known = new Set(defaultIds);
+  const listed = order.filter((id, index) => known.has(id) && order.indexOf(id) === index);
+  const listedSet = new Set(listed);
+  return [...listed, ...defaultIds.filter((id) => !listedSet.has(id))];
+}
+
+/**
+ * Moves `panelId` to stand right before `beforeId` (or last when absent) in the user's order.
+ * The result names every currently visible id; ids of hidden panels stay recorded at the end,
+ * so turning a module back on returns it to where the user had put it.
+ */
+export function reorderPanels(defaultIds: readonly string[], order: readonly string[], panelId: string, beforeId?: string): string[] {
+  if (panelId === beforeId) return [...order];
+  const current = orderedIds(defaultIds, order).filter((id) => id !== panelId);
+  const at = beforeId ? current.indexOf(beforeId) : -1;
+  current.splice(at < 0 ? current.length : at, 0, panelId);
+  const visible = new Set(defaultIds);
+  return [...current, ...order.filter((id) => !visible.has(id))];
+}
+
 export function toggleFolder(folders: readonly SidebarFolder[], id: string): SidebarFolder[] {
   return folders.map((folder) => (folder.id === id ? { ...folder, collapsed: !folder.collapsed } : folder));
 }

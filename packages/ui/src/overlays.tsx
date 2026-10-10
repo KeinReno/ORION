@@ -427,7 +427,7 @@ export function Popover({
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width });
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width, maxHeight: 480 });
 
   const shown = useOverlayOpen(open);
   useOnClickOutside([triggerRef, panelRef], () => setOpen(false), shown);
@@ -442,8 +442,14 @@ export function Popover({
     if (align === "end") left = rect.right - boxWidth;
     if (align === "center") left = rect.left + rect.width / 2 - boxWidth / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - boxWidth - 8));
-    const top = Math.min(rect.bottom + 6, window.innerHeight - 8);
-    setPos({ top, left, width: boxWidth });
+    // Opens below the trigger; near the bottom edge (a menu bar docked at the bottom) it opens above instead.
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < 240 && rect.top > spaceBelow) {
+      setPos({ bottom: window.innerHeight - rect.top + 6, left, width: boxWidth, maxHeight: Math.max(120, rect.top - 14) });
+    } else {
+      const top = Math.min(rect.bottom + 6, window.innerHeight - 8);
+      setPos({ top, left, width: boxWidth, maxHeight: Math.max(120, window.innerHeight - top - 8) });
+    }
   }, [align, width]);
 
   useEffect(() => {
@@ -486,9 +492,10 @@ export function Popover({
                     style={{
                       position: "fixed",
                       top: pos.top,
+                      bottom: pos.bottom,
                       left: pos.left,
                       width: pos.width,
-                      maxHeight: `calc(100vh - ${pos.top + 8}px)`
+                      maxHeight: pos.maxHeight
                     }}
                     className="z-[90] overflow-y-auto rounded-xl border border-border bg-card/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md"
                   >
