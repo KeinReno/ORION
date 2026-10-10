@@ -51,7 +51,9 @@ import {
   CalendarDays,
   FileText,
   FolderKanban,
+  ExternalLink,
   FolderOpen,
+  GanttChartSquare,
   ListTodo,
   Milestone as MilestoneIcon,
   MoreHorizontal,
@@ -68,6 +70,7 @@ import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { focusDocument, focusNote, focusTask, focusTransaction, focusEvent, openPanel, showTasksForProject } from "../lib/panel-bus";
+import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { groupTasksByMilestone, isTaskOverdue, projectFocus } from "../lib/project-focus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
@@ -376,6 +379,17 @@ function ProjectWorkspace({
               items={[
                 ...(notesOn ? [{ label: "Новая заметка", icon: FileText, onSelect: () => setAdding("note") }] : []),
                 { label: "Изменить проект", icon: Pencil, onSelect: () => setEditing(true) },
+                "separator" as const,
+                // The same plan / materials the tabs show, as panels of their own: beside the
+                // overview, or in a separate window (second monitor). Same data, no copies.
+                ...(tasksOn
+                  ? [
+                      { label: "План панелью", icon: GanttChartSquare, onSelect: () => openPanel(`projectplan:${project.id}`, `План · ${project.name}`) },
+                      { label: "План окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectplan:${project.id}`, `План · ${project.name}`) }
+                    ]
+                  : []),
+                { label: "Материалы панелью", icon: FolderOpen, onSelect: () => openPanel(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
+                { label: "Материалы окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
                 "separator" as const,
                 project.archivedAt
                   ? { label: "Восстановить из архива", icon: ArchiveRestore, onSelect: restore }
@@ -879,7 +893,7 @@ function TaskRow({ task, now, onToggle }: { task: Task; now: Date; onToggle: () 
 // Материалы
 // ---------------------------------------------------------------------------
 
-function MaterialsTab({
+export function MaterialsTab({
   workspaceId,
   project,
   notesOn,

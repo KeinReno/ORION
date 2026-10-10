@@ -4,6 +4,7 @@ import {
   CalendarDays,
   FolderKanban,
   FolderOpen,
+  GanttChartSquare,
   Globe2,
   Inbox,
   LayoutDashboard,
@@ -62,6 +63,11 @@ const LazyProjectWorkspacePanel = dynamic(
   () => import("../panels/ProjectWorkspacePanel").then((module) => module.ProjectWorkspacePanel),
   { ssr: false }
 );
+const LazyProjectPlanPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectPlanPanel), { ssr: false });
+const LazyProjectMaterialsPanel = dynamic(
+  () => import("../panels/ProjectViewPanels").then((module) => module.ProjectMaterialsPanel),
+  { ssr: false }
+);
 const LazyInboxPanel = dynamic(() => import("../panels/InboxPanel").then((module) => module.InboxPanel), { ssr: false });
 const LazyOverviewPanel = dynamic(() => import("../panels/OverviewPanel").then((module) => module.OverviewPanel), { ssr: false });
 const LazySharedPanel = dynamic(() => import("../panels/SharedPanel").then((module) => module.SharedPanel), { ssr: false });
@@ -81,6 +87,9 @@ const NotesPanel: FunctionComponent = () => createElement(LazyNotesPanel);
 const ProjectsPanel: FunctionComponent = () => createElement(LazyProjectsPanel);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
+const ProjectPlanPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectPlanPanel, props);
+const ProjectMaterialsPanel: FunctionComponent<PanelComponentProps> = (props) =>
+  createElement(LazyProjectMaterialsPanel, props);
 const InboxPanel: FunctionComponent = () => createElement(LazyInboxPanel);
 const OverviewPanel: FunctionComponent = () => createElement(LazyOverviewPanel);
 const SharedPanel: FunctionComponent = () => createElement(LazySharedPanel);
@@ -117,6 +126,28 @@ export const panelRegistry: PanelDefinition[] = [
     label: "Проект",
     icon: FolderKanban,
     component: ProjectWorkspacePanel,
+    moduleId: "projects",
+    hideFromNav: true,
+    instanced: true,
+    navParent: "projects"
+  },
+  // Large views of one project as their own panels (UI-06, ADR-0003): the same components the
+  // project tabs render, so a plan can sit beside the overview or on a second monitor.
+  {
+    id: "projectplan",
+    label: "План проекта",
+    icon: GanttChartSquare,
+    component: ProjectPlanPanel,
+    moduleId: "projects",
+    hideFromNav: true,
+    instanced: true,
+    navParent: "projects"
+  },
+  {
+    id: "projectmaterials",
+    label: "Материалы проекта",
+    icon: FolderOpen,
+    component: ProjectMaterialsPanel,
     moduleId: "projects",
     hideFromNav: true,
     instanced: true,
