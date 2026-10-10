@@ -7,6 +7,7 @@ import { api } from "../../lib/compass/api";
 import { fmtDateTime, fmtNum, fmtPrice, pnlClass } from "../../lib/compass/format";
 import type { JournalEntry, JournalMode, MarketId } from "../../lib/compass/types";
 import { describeAuthError } from "../../lib/error-message";
+import { useSyncCompassJournal } from "@orion/core-react";
 import { useCompassQuery, useInvalidateCompass } from "./engine-gate";
 
 const MODE_LABEL: Record<JournalMode, string> = { real: "Реальная", paper: "Учебная", historical: "Историческая" };
@@ -15,6 +16,7 @@ const MODE_LABEL: Record<JournalMode, string> = { real: "Реальная", pape
 export function JournalTab({ workspaceId }: { workspaceId: string | undefined }): React.ReactElement {
   const { toast } = useToast();
   const invalidate = useInvalidateCompass(workspaceId);
+  const syncToOrion = useSyncCompassJournal(workspaceId);
   const [mode, setMode] = useState<JournalMode>("real");
   const [showDeleted, setShowDeleted] = useState(false);
   const entries = useCompassQuery(workspaceId, ["journal", mode], () => api.journal({ mode }));
@@ -26,6 +28,8 @@ export function JournalTab({ workspaceId }: { workspaceId: string | undefined })
     try {
       await action();
       await invalidate();
+      // Журнал Compass и «Сделки» ORION не расходятся: после каждого изменения записи переносятся (идемпотентно по uid).
+      syncToOrion.mutate();
       toast({ title: done, tone: "success" });
     } catch (error) {
       toast({ title: "Не получилось", description: describeAuthError(error), tone: "danger" });

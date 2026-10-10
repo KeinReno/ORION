@@ -45,6 +45,10 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import { compassInstrumentLink, DEFAULT_COMPASS_URL, normalizeCompassUrl, readCompassUrl, saveCompassUrl, useCompassStatus } from "../lib/compass-link";
 import { AccountsTab } from "./markets/accounts-tab";
 import { ChartTab } from "./markets/chart-tab";
+import { CompassSettingsTab } from "./markets/compass-settings-tab";
+import { CryptoTab } from "./markets/crypto-tab";
+import { ReviewTab } from "./markets/review-tab";
+import { TradeTab } from "./markets/trade-tab";
 import { CompassTab } from "./markets/compass-tab";
 import { EngineGate } from "./markets/engine-gate";
 import { JournalTab } from "./markets/journal-tab";
@@ -54,7 +58,7 @@ import { describeAuthError } from "../lib/error-message";
 import { formatMoney, shortDateTime, toKopecks } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
-type Tab = "compass" | "chart" | "day" | "journal" | "signals" | "research" | "watch" | "trades" | "import";
+type Tab = "compass" | "chart" | "day" | "journal" | "trade" | "signals" | "research" | "review" | "crypto" | "csettings" | "watch" | "trades" | "import";
 
 const MARKET_HINTS = ["moex", "crypto"];
 
@@ -107,6 +111,7 @@ export function MarketsPanel(): React.ReactElement {
           )
         }
       >
+        <div className="max-w-full overflow-x-auto">
         <SegmentedControl<Tab>
           value={tab}
           onChange={setTab}
@@ -115,13 +120,18 @@ export function MarketsPanel(): React.ReactElement {
             { value: "chart", label: "График" },
             { value: "day", label: "День" },
             { value: "journal", label: "Журнал" },
+            { value: "trade", label: "Сделка" },
             { value: "signals", label: "Сигналы" },
             { value: "research", label: "Проверка" },
+            { value: "review", label: "Разбор" },
+            { value: "crypto", label: "Крипта" },
+            { value: "csettings", label: "Настройки Compass" },
             { value: "watch", label: "Наблюдение" },
             { value: "trades", label: "Сделки" },
             { value: "import", label: "Импорт из Compass" }
           ]}
         />
+        </div>
       </PanelHeader>
       {tab === "compass" ? (
         <div className="min-h-0 flex-1">
@@ -132,6 +142,10 @@ export function MarketsPanel(): React.ReactElement {
         {tab === "chart" ? <EngineGate workspaceId={workspaceId}><ChartTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "day" ? <EngineGate workspaceId={workspaceId}><AccountsTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "journal" ? <EngineGate workspaceId={workspaceId}><JournalTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "trade" ? <EngineGate workspaceId={workspaceId}><TradeTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "review" ? <EngineGate workspaceId={workspaceId}><ReviewTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "crypto" ? <EngineGate workspaceId={workspaceId}><CryptoTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "csettings" ? <EngineGate workspaceId={workspaceId}><CompassSettingsTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "signals" ? <EngineGate workspaceId={workspaceId}><SignalsTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "research" ? <EngineGate workspaceId={workspaceId}><ResearchTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "watch" ? <WatchTab workspaceId={workspaceId} compassUrl={compassUrl} compassRunning={state === "running"} /> : null}
