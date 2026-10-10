@@ -11,7 +11,6 @@ import {
 } from "@orion/core-react";
 import type { InventoryItem, InventoryMovementType } from "@orion/shared-types";
 import {
-  Badge,
   Button,
   Card,
   ConfirmDialog,
@@ -29,6 +28,7 @@ import {
 } from "@orion/ui";
 import { Archive, ArchiveRestore, Boxes, MoreHorizontal, Pencil, Plus, TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { useSlotContributions } from "../lib/extensions/slot";
 import { describeAuthError } from "../lib/error-message";
 import { formatMoney, shortDateTime } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
@@ -71,6 +71,8 @@ export function InventoryPanel(): React.ReactElement {
   const items = itemsQuery.data ?? [];
   const activeItems = items.filter((item) => !item.archivedAt);
   const lowStockCount = activeItems.filter((item) => item.lowStock).length;
+  // The threshold and its marks are the inventory-alerts plugin's.
+  const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
 
   async function create(values: InventoryItemFormValues): Promise<void> {
     try {
@@ -195,11 +197,7 @@ export function InventoryPanel(): React.ReactElement {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-2 [@container(min-width:520px)]:grid-cols-3">
               <StatCard label="Активных позиций" value={String(activeItems.length)} hint="в работе" />
-              <StatCard
-                label="Низкий остаток"
-                value={<span className={lowStockCount > 0 ? "text-destructive" : undefined}>{String(lowStockCount)}</span>}
-                hint={lowStockCount > 0 ? "нужно пополнить" : "всё в порядке"}
-              />
+              {alerts ? <alerts.SummaryStat count={lowStockCount} /> : null}
             </div>
 
             <div className="grid gap-3 [@container(min-width:384px)]:grid-cols-2 [@container(min-width:520px)]:grid-cols-3">
@@ -241,10 +239,10 @@ export function InventoryPanel(): React.ReactElement {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className={`font-mono text-xl font-semibold tabular-nums ${item.lowStock ? "text-destructive" : "text-foreground"}`}>
+                    <p className={`font-mono text-xl font-semibold tabular-nums ${alerts && item.lowStock ? "text-destructive" : "text-foreground"}`}>
                       {item.balance} {item.unit}
                     </p>
-                    {item.lowStock ? <Badge tone="danger">низкий остаток</Badge> : null}
+                    {alerts && item.lowStock ? <alerts.ItemBadge /> : null}
                   </div>
                   {item.avgCostMinor !== null ? (
                     <p className="text-2xs text-subtle-foreground">Средняя себестоимость: {formatMoney(item.avgCostMinor)}</p>
@@ -325,6 +323,7 @@ function InventoryItemDetail({
 }): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const movementsQuery = useInventoryMovements(workspace?.id, item.id);
+  const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
   const movements = movementsQuery.data ?? [];
 
   return (
@@ -332,8 +331,8 @@ function InventoryItemDetail({
       <div className="grid grid-cols-2 gap-2">
         <StatCard
           label="Остаток"
-          value={<span className={item.lowStock ? "text-destructive" : undefined}>{`${item.balance} ${item.unit}`}</span>}
-          hint={item.lowStock ? "ниже порога" : "в норме"}
+          value={<span className={alerts && item.lowStock ? "text-destructive" : undefined}>{`${item.balance} ${item.unit}`}</span>}
+          hint={alerts ? alerts.balanceHint(item.lowStock) : undefined}
         />
         <StatCard
           label="Средняя себестоимость"

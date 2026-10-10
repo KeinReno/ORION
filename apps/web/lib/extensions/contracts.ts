@@ -261,6 +261,21 @@ export interface ProjectOverviewPlanSlotProps {
   onOpenPlan: () => void;
 }
 
+/**
+ * inventory.alerts — the low-stock threshold. Draws nothing by itself: `meta.api` holds the presentational
+ * parts the host places (summary card, item badge, hint, threshold field). The host still colours the
+ * balance red when an alerts plugin is on.
+ */
+export interface InventoryAlertsApi {
+  SummaryStat: ComponentType<{ count: number }>;
+  ItemBadge: ComponentType<Record<string, never>>;
+  /** The hint under the balance of one item. */
+  balanceHint: (lowStock: boolean) => string;
+  MinStockField: ComponentType<{ value: string; onChange: (value: string) => void }>;
+}
+
+export type InventoryAlertsSlotProps = Record<string, never>;
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -285,6 +300,7 @@ export interface SlotContracts {
   "tasks.planning": TasksPlanningSlotProps;
   "projects.tabs": ProjectTabSlotProps;
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
+  "inventory.alerts": InventoryAlertsSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -306,6 +322,7 @@ export interface SlotMeta {
   "tasks.recurrence": { api: TaskRecurrenceApi };
   "tasks.planning": { api: TaskPlanningApi };
   "projects.tabs": { tabId: string; label: string; needsModule?: OrionModuleId };
+  "inventory.alerts": { api: InventoryAlertsApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

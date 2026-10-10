@@ -30,7 +30,8 @@ export const ORION_PLUGIN_IDS = [
   "notes-templates",
   "tasks-recurrence",
   "tasks-planning",
-  "projects-planning"
+  "projects-planning",
+  "inventory-alerts"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -281,6 +282,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Вкладка «План» в проекте", "Блок «План» в обзоре", "Панель и окно «План проекта»"],
     disableBehavior:
       "Вкладка, блок в обзоре и панель плана скрываются (открытая панель плана закрывается); вехи и даты задач сохраняются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "inventory-alerts",
+    extendsModuleId: "inventory",
+    label: "Низкий остаток",
+    summary: "Порог остатка по позиции, карточка «Низкий остаток», значок на позиции и подсказка «ниже порога».",
+    provides: ["Поле «Порог низкого остатка»", "Карточка и значок «низкий остаток»"],
+    disableBehavior:
+      "Поле порога, карточка и значки скрываются; пороги сохраняются, а уведомление о низком остатке на сервере продолжает приходить по ним (его отключают в настройках уведомлений).",
     defaultEnabled: true
   }
 ];

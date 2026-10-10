@@ -1,8 +1,9 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+import { inventoryAlertsApi } from "./inventory-alerts/alerts";
 import { taskPlanningApi } from "./tasks-planning/planning";
 import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
@@ -151,3 +152,9 @@ const ProjectPlanTab = dynamic<ProjectTabSlotProps>(() => import("./projects-pla
 const ProjectOverviewPlan = dynamic<ProjectOverviewPlanSlotProps>(() => import("./projects-planning/overview-plan").then((m) => m.ProjectOverviewPlan), { ssr: false });
 contribute("projects.tabs", { pluginId: "projects-planning", component: ProjectPlanTab, order: 20, meta: { tabId: "plan", label: "План", needsModule: "tasks" } });
 contribute("projects.overview.plan", { pluginId: "projects-planning", component: ProjectOverviewPlan, order: 10 });
+
+contribute("inventory.alerts", {
+  pluginId: "inventory-alerts",
+  component: NoVisual as unknown as ComponentType<InventoryAlertsSlotProps>,
+  meta: { api: inventoryAlertsApi }
+});

@@ -3,6 +3,7 @@
 import type { InventoryItem, Project } from "@orion/shared-types";
 import { Button, Input, Select } from "@orion/ui";
 import { useState, type FormEvent } from "react";
+import { useSlotContributions } from "../../lib/extensions/slot";
 
 /** Create/edit form for one склад position — rendered in the "Новая позиция" / "Изменить позицию" Modals, same split as habit-form.tsx. */
 
@@ -35,6 +36,7 @@ export function InventoryItemForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [unit, setUnit] = useState(initial?.unit ?? "шт");
+  const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
   const [minStock, setMinStock] = useState(initial?.minStock !== null && initial?.minStock !== undefined ? String(initial.minStock) : "");
   const [projectId, setProjectId] = useState(initial?.projectId ?? "");
 
@@ -66,10 +68,7 @@ export function InventoryItemForm({
           </datalist>
         </label>
       </div>
-      <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-        Порог низкого остатка (необязательно)
-        <Input inputMode="numeric" placeholder="Не уведомлять" value={minStock} onChange={(e) => setMinStock(e.target.value)} />
-      </label>
+      {alerts ? <alerts.MinStockField value={minStock} onChange={setMinStock} /> : null}
       {projects ? (
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Проект
