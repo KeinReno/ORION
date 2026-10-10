@@ -13,6 +13,7 @@ import type { Transaction } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, Input, Modal, Select, Sheet, Skeleton, useToast } from "@orion/ui";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus, Receipt, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ExtensionSlot } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
 import { formatMoney, projectColor, shortDateTime } from "../../lib/format";
@@ -99,6 +100,7 @@ export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => vo
 
   return (
     <div className="flex flex-col gap-4">
+      <ExtensionSlot name="finance.transactions.top" props={{ workspaceId: workspace?.id }} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CreateTransactionInput, Transaction, UpdateTransactionInput } from "@orion/shared-types";
+import type { CreateTransactionInput, FinanceImportInput, FinanceImportResult, Transaction, UpdateTransactionInput } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
@@ -47,6 +47,18 @@ export function useCreateTransaction(workspaceId: string | undefined) {
   return useMutation({
     mutationFn: (input: CreateTransactionInput) => api.createTransaction(workspaceId as string, input),
     onSuccess: () => invalidateTransactionEffects(queryClient, workspaceId)
+  });
+}
+
+/** Dry run or real import of a file's rows; a real run refreshes everything a transaction touches. */
+export function useImportTransactions(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<FinanceImportResult, Error, FinanceImportInput>({
+    mutationFn: (input) => api.importTransactions(workspaceId as string, input),
+    onSuccess: (result) => {
+      if (!result.dryRun) invalidateTransactionEffects(queryClient, workspaceId);
+    }
   });
 }
 

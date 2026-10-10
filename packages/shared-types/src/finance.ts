@@ -169,18 +169,43 @@ export const reconcileAccountInputSchema = z.object({
 export type ReconcileAccountInput = z.infer<typeof reconcileAccountInputSchema>;
 
 /**
- * ЗАРЕЗЕРВИРОВАНО, кода нет. Схема импорта банковских выписок (CSV) была
- * написана в v0.13 как задел: под неё уже есть `Transaction.importedRef` с
- * уникальным индексом `(workspaceId, importedRef)` — то есть дедуп повторного
- * импорта продуман. Самого эндпоинта, парсера и UI пока не существует
- * (`docs/PLAN.md` v0.13: CSV-импорт отложен пользователем как отдельная
- * большая задача). Не считать реализованным и не ссылаться на схему как на
- * доказательство, что импорт есть.
+ * Import of operations from a file (CSV of a bank statement or of FinControl). One request is one
+ * atomic batch into ONE account: either every accepted row is written or none is. `ref` is the idempotency key
+ * of a row (`Transaction.importedRef`, unique per workspace): sending the same file twice writes nothing
+ * the second time. `dryRun` (the default) computes exactly what a real run would do, and writes nothing.
+ * The amount is in minor units and positive — the sign lives in `type`; transfers are never imported
+ * (a transfer needs two confirmed accounts).
  */
+export const financeImportRowSchema = z.object({
+  ref: z.string().min(1).max(200),
+  occurredAt: z.string().datetime(),
+  type: z.enum(["income", "expense"]),
+  amount: z.number().int().positive().max(2_000_000_000),
+  note: z.string().max(2000).default(""),
+  categoryId: z.string().nullable().optional(),
+  tags: z.array(z.string().min(1).max(40)).max(20).default([])
+});
+export type FinanceImportRow = z.infer<typeof financeImportRowSchema>;
+
+export const FINANCE_IMPORT_MAX_ROWS = 2000;
+
+export const financeImportInputSchema = z.object({
+  accountId: z.string(),
+  dryRun: z.boolean().default(true),
+  rows: z.array(financeImportRowSchema).min(1, "В файле нет строк").max(FINANCE_IMPORT_MAX_ROWS, `Не больше ${FINANCE_IMPORT_MAX_ROWS} строк за раз`)
+});
+export type FinanceImportInput = z.infer<typeof financeImportInputSchema>;
+
 export const financeImportResultSchema = z.object({
+  dryRun: z.boolean(),
+  /** Rows that were written (or, in a dry run, that would be). */
   imported: z.number().int(),
-  skipped: z.number().int(),
-  errors: z.array(z.string())
+  /** Rows already imported earlier (same `ref`) or repeated inside this request. */
+  duplicates: z.number().int(),
+  /** Rows refused, with the reason; `line` is the 1-based position in the request. */
+  errors: z.array(z.object({ line: z.number().int(), reason: z.string() })),
+  incomeTotal: z.number().int(),
+  expenseTotal: z.number().int()
 });
 export type FinanceImportResult = z.infer<typeof financeImportResultSchema>;
 

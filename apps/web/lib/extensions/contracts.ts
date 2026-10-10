@@ -288,6 +288,11 @@ export interface EventRemindersSlotProps {
   onChange: (value: number[]) => void;
 }
 
+/** finance.transactions.top — a block above the list of operations (the quick-entry line). */
+export interface FinanceTransactionsTopSlotProps {
+  workspaceId: string | undefined;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -315,6 +320,7 @@ export interface SlotContracts {
   "inventory.alerts": InventoryAlertsSlotProps;
   "calendar.event.recurrence": EventRecurrenceSlotProps;
   "calendar.event.reminders": EventRemindersSlotProps;
+  "finance.transactions.top": FinanceTransactionsTopSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;

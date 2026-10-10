@@ -1,8 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import {
   createTransactionInputSchema,
+  financeImportInputSchema,
   updateTransactionInputSchema,
   type CreateTransactionInput,
+  type FinanceImportInput,
+  type FinanceImportResult,
   type Transaction,
   type UpdateTransactionInput
 } from "@orion/shared-types";
@@ -49,6 +52,16 @@ export class TransactionsController {
     @Body(new ZodValidationPipe(createTransactionInputSchema)) body: CreateTransactionInput
   ): Promise<Transaction> {
     return this.transactions.create(user.userId, workspaceId, body);
+  }
+
+  /** Registered before `:transactionId` routes so "import" is never read as an id. */
+  @Post("import")
+  importRows(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(financeImportInputSchema)) body: FinanceImportInput
+  ): Promise<FinanceImportResult> {
+    return this.transactions.importRows(user.userId, workspaceId, body);
   }
 
   @Patch(":transactionId")

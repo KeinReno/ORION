@@ -58,6 +58,7 @@ import {
   timeSummarySchema,
   toggleHabitResultSchema,
   transactionSchema,
+  financeImportResultSchema,
   userPreferenceSchema,
   workspaceOrganizationSchema,
   workspaceModuleStateSchema,
@@ -116,6 +117,8 @@ import {
   type CreateTaskInput,
   type CreateTimeEntryInput,
   type CreateTransactionInput,
+  type FinanceImportInput,
+  type FinanceImportResult,
   type BulkDocumentInput,
   type CreateFolderInput,
   type DocumentItem,
@@ -863,6 +866,11 @@ export class ApiClient {
 
   createTransaction(workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {
     return this.request("POST", `/workspaces/${workspaceId}/finance/transactions`, input, transactionSchema);
+  }
+
+  /** Batch import into one account; `dryRun: true` (the default) only reports what would happen. */
+  importTransactions(workspaceId: string, input: FinanceImportInput): Promise<FinanceImportResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/transactions/import`, input, financeImportResultSchema);
   }
 
   updateTransaction(workspaceId: string, transactionId: string, input: UpdateTransactionInput): Promise<Transaction> {

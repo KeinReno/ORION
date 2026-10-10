@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import type { CreateTransactionInput, Transaction, UpdateTransactionInput } from "@orion/shared-types";
+import { randomUUID } from "node:crypto";
+import type {
+  CreateTransactionInput,
+  FinanceImportInput,
+  FinanceImportResult,
+  Transaction,
+  UpdateTransactionInput
+} from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { BudgetAlertsService } from "../budget-alerts.service";
@@ -104,6 +111,86 @@ export class TransactionsService {
     });
     await this.budgetAlerts.deliver(alerts);
     return toDto(transaction);
+  }
+
+  /**
+   * Batch import into one account (see `financeImportInputSchema`). Everything is checked inside ONE
+   * transaction: the account and every referenced category must belong to this workspace, a category's
+   * kind must match the row's type, a `ref` already in the workspace (or repeated in the payload) is a
+   * duplicate, not an error. Rows are written with two bulk statements (headers, then lines) so a few
+   * thousand rows stay well inside the transaction timeout. No budget alerts are sent for imported history.
+   */
+  async importRows(userId: string, workspaceId: string, input: FinanceImportInput): Promise<FinanceImportResult> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await assertAccountInWorkspace(tx, workspaceId, input.accountId);
+
+      const categoryIds = [...new Set(input.rows.map((row) => row.categoryId).filter((id): id is string => Boolean(id)))];
+      const categories = categoryIds.length
+        ? await tx.financeCategory.findMany({ where: { id: { in: categoryIds }, workspaceId }, select: { id: true, kind: true } })
+        : [];
+      const kindById = new Map(categories.map((category) => [category.id, category.kind as string]));
+
+      const existing = await tx.transaction.findMany({
+        where: { workspaceId, importedRef: { in: input.rows.map((row) => row.ref) } },
+        select: { importedRef: true }
+      });
+      const known = new Set(existing.map((row) => row.importedRef));
+
+      const errors: FinanceImportResult["errors"] = [];
+      const accepted: FinanceImportInput["rows"] = [];
+      let duplicates = 0;
+      input.rows.forEach((row, index) => {
+        const line = index + 1;
+        if (known.has(row.ref)) {
+          duplicates += 1;
+          return;
+        }
+        if (row.categoryId) {
+          const kind = kindById.get(row.categoryId);
+          if (kind === undefined) {
+            errors.push({ line, reason: "Категория не найдена в этом рабочем пространстве" });
+            return;
+          }
+          if (kind !== row.type) {
+            errors.push({ line, reason: "Категория не подходит к типу операции (доход/расход)" });
+            return;
+          }
+        }
+        known.add(row.ref);
+        accepted.push(row);
+      });
+
+      const incomeTotal = accepted.filter((row) => row.type === "income").reduce((sum, row) => sum + row.amount, 0);
+      const expenseTotal = accepted.filter((row) => row.type === "expense").reduce((sum, row) => sum + row.amount, 0);
+
+      if (!input.dryRun && accepted.length > 0) {
+        const ids = accepted.map(() => randomUUID());
+        await tx.transaction.createMany({
+          data: accepted.map((row, index) => ({
+            id: ids[index]!,
+            workspaceId,
+            accountId: input.accountId,
+            toAccountId: null,
+            type: row.type,
+            note: row.note,
+            tags: row.tags,
+            projectId: null,
+            importedRef: row.ref,
+            occurredAt: row.occurredAt
+          }))
+        });
+        await tx.transactionLine.createMany({
+          data: accepted.map((row, index) => ({
+            workspaceId,
+            transactionId: ids[index]!,
+            categoryId: row.categoryId ?? null,
+            amount: row.amount
+          }))
+        });
+      }
+      return { dryRun: input.dryRun, imported: accepted.length, duplicates, errors, incomeTotal, expenseTotal };
+    });
   }
 
   async update(

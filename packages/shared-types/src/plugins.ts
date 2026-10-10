@@ -33,7 +33,9 @@ export const ORION_PLUGIN_IDS = [
   "projects-planning",
   "inventory-alerts",
   "calendar-recurrence",
-  "calendar-reminders"
+  "calendar-reminders",
+  "finance-quick-entry",
+  "finance-import"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -314,6 +316,24 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Раздел «Напоминания» в форме события"],
     disableBehavior:
       "Раздел скрывается и напоминания нельзя менять; заданные ранее напоминания продолжают приходить (их отключают в настройках уведомлений).",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-quick-entry",
+    extendsModuleId: "finance",
+    label: "Быстрая запись операций",
+    summary: "Строка над операциями: «-500 хлеб #еда @вчера» → черновик, который вы подтверждаете (счёт, расход/доход, категория).",
+    provides: ["Строка быстрой записи в «Транзакциях»"],
+    disableBehavior: "Строка скрывается; записанные операции остаются.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-import",
+    extendsModuleId: "finance",
+    label: "Импорт операций из CSV",
+    summary: "Загрузка банковской выписки или выгрузки FinControl в выбранный счёт: проверка без записи, пропуск повторов, отчёт об ошибках.",
+    provides: ["Вкладка «Импорт»"],
+    disableBehavior: "Вкладка скрывается; уже импортированные операции остаются, повторный импорт того же файла по-прежнему не дублирует их.",
     defaultEnabled: true
   }
 ];

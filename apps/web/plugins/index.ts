@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -163,3 +163,9 @@ const EventRecurrenceFields = dynamic<EventRecurrenceSlotProps>(() => import("./
 const EventReminderFields = dynamic<EventRemindersSlotProps>(() => import("./calendar-reminders/reminder-fields").then((m) => m.EventReminderFields), { ssr: false });
 contribute("calendar.event.recurrence", { pluginId: "calendar-recurrence", component: EventRecurrenceFields, order: 10 });
 contribute("calendar.event.reminders", { pluginId: "calendar-reminders", component: EventReminderFields, order: 10 });
+
+// FinControl-inspired finance helpers: a quick-entry line over the operations and a CSV import tab.
+const QuickEntry = dynamic<FinanceTransactionsTopSlotProps>(() => import("./finance-quick-entry/quick-entry").then((m) => m.QuickEntry), { ssr: false });
+const ImportTab = dynamic<FinanceTabSlotProps>(() => import("./finance-import/import-view").then((m) => m.ImportView), { ssr: false });
+contribute("finance.transactions.top", { pluginId: "finance-quick-entry", component: QuickEntry, order: 10 });
+contribute("finance.tabs", { pluginId: "finance-import", component: ImportTab, order: 50, meta: { tabId: "import", label: "Импорт" } });
