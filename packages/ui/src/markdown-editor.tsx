@@ -15,6 +15,7 @@ import { tags as t } from "@lezer/highlight";
 import clsx from "clsx";
 import { useEffect, useRef, type MutableRefObject } from "react";
 import { applyFormat, type FormatCommand } from "./markdown-format";
+import { filterSlashCommands, isSlashTrigger, type SlashCommand } from "./markdown-slash";
 
 /** Autocomplete note titles right after a `[[`. Reads the ref so a title-list refresh needs no view rebuild. */
 function wikiLinkCompletionSource(targetsRef: { current: string[] }) {
@@ -28,6 +29,45 @@ function wikiLinkCompletionSource(targetsRef: { current: string[] }) {
       .map((title) => ({ label: title, type: "text", apply: `${title}]]` }));
     if (options.length === 0) return null;
     return { from: before.from + 2, options, validFor: /^[^[\]|]*$/ };
+  };
+}
+
+/**
+ * The «/» menu: after a `/` that starts a line (or follows a space) offer blocks to insert. Matching is done
+ * by `filterSlashCommands`, so CodeMirror's own fuzzy filter is off for this source.
+ */
+function slashCompletionSource(ctx: CompletionContext): CompletionResult | null {
+  const typed = ctx.matchBefore(/\/[^\s/]*/);
+  if (!typed) return null;
+  const line = ctx.state.doc.lineAt(typed.from);
+  const before = ctx.state.doc.sliceString(line.from, typed.from);
+  const charBefore = before.length === 0 ? undefined : before[before.length - 1];
+  if (!isSlashTrigger(charBefore)) return null;
+  const atLineStart = before.trim() === "";
+  const commands = filterSlashCommands(typed.text.slice(1), atLineStart);
+  if (commands.length === 0) return null;
+  return {
+    from: typed.from,
+    filter: false,
+    // No `validFor`: the list is narrowed by us, so it must be asked again after every keystroke.
+    options: commands.map((command) => slashOption(command))
+  };
+}
+
+function slashOption(command: SlashCommand): Completion {
+  return {
+    label: command.label,
+    detail: command.detail,
+    type: "keyword",
+    apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+      const caret = from + (command.caret ?? command.insert.length);
+      view.dispatch({
+        changes: { from, to, insert: command.insert },
+        selection: EditorSelection.range(caret, caret + (command.select ?? 0)),
+        userEvent: "input.complete",
+        scrollIntoView: true
+      });
+    }
   };
 }
 
@@ -68,7 +108,21 @@ const editorTheme = EditorView.theme(
     },
     ".cm-activeLine": { backgroundColor: "transparent" },
     ".cm-gutters": { display: "none" },
-    ".cm-placeholder": { color: "#52525b" }
+    ".cm-placeholder": { color: "#52525b" },
+    // The «/» and wiki-link menus: a card like the rest of the app, not CodeMirror's default grey box.
+    ".cm-tooltip": { border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", backgroundColor: "#16161a", overflow: "hidden", boxShadow: "0 12px 32px rgba(0,0,0,0.45)" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+      fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      fontSize: "13px",
+      minWidth: "16rem",
+      maxHeight: "16rem",
+      padding: "4px"
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "baseline", gap: "10px", padding: "5px 8px", borderRadius: "8px", color: "#d4d4d8", lineHeight: "1.4" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "rgba(99,102,241,0.22)", color: "#fafafa" },
+    ".cm-completionIcon": { display: "none" },
+    ".cm-completionLabel": { flexShrink: "0" },
+    ".cm-completionDetail": { marginLeft: "auto", fontStyle: "normal", color: "#71717a", fontSize: "12px", whiteSpace: "nowrap" }
   },
   { dark: true }
 );
@@ -175,9 +229,10 @@ export function MarkdownEditor({
         ]),
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(mdHighlight),
-        ...(wikiLinkTargets !== undefined
-          ? [autocompletion({ override: [wikiLinkCompletionSource(wikiTargetsRef)], closeOnBlur: true })]
-          : []),
+        autocompletion({
+          override: [...(wikiLinkTargets !== undefined ? [wikiLinkCompletionSource(wikiTargetsRef)] : []), slashCompletionSource],
+          closeOnBlur: true
+        }),
         cmPlaceholder(placeholder ?? ""),
         editorTheme,
         EditorState.readOnly.of(Boolean(readOnly)),
