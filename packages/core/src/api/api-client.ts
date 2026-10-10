@@ -914,6 +914,11 @@ export class ApiClient {
       : this.request("POST", `/workspaces/${workspaceId}/markets/engine/${action}`, {}, compassEngineStatusSchema);
   }
 
+  /** Запрос к движку Compass через прокси ORION. `apiPath` — путь движка, начиная с `/api/…`. */
+  compassRequest(workspaceId: string, method: string, apiPath: string, body?: unknown): Promise<unknown> {
+    return this.request(method, `/workspaces/${workspaceId}/markets/engine${apiPath}`, body, z.unknown());
+  }
+
   syncCompassJournal(workspaceId: string): Promise<CompassJournalSyncResult> {
     return this.request("POST", `/workspaces/${workspaceId}/markets/engine/sync-journal`, {}, compassJournalSyncResultSchema);
   }

@@ -524,19 +524,28 @@ export function TasksPanel(): React.ReactElement {
         ) : total === 0 ? (
           <EmptyState
             icon={ListTodo}
-            title="Пока нет задач"
-            description="Заведите первую — по ORION, Stella Mortis или GMap."
+            title={teamOn && onlyMine ? "На вас нет назначенных задач" : "Пока нет задач"}
+            description={teamOn && onlyMine ? "Проверьте задачи команды или создайте свою." : "Создайте первую задачу в этом пространстве."}
             action={
-              <Button size="sm" onClick={() => setCreating(true)}>
-                <Plus className="h-4 w-4" /> Новая задача
-              </Button>
+              teamOn && onlyMine ? (
+                <Button size="sm" variant="outline" onClick={() => {
+                  onlyMineTouched.current = true;
+                  setOnlyMine(false);
+                }}>
+                  Показать все задачи
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => setCreating(true)}>
+                  <Plus className="h-4 w-4" /> Новая задача
+                </Button>
+              )
             }
           />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={Search}
             title="Ничего не найдено"
-            description="Сбросьте поиск или фильтр по проекту — в этом пространстве задачи есть."
+            description="По текущим фильтрам задач нет. Сбросьте поиск, проект или область просмотра."
             action={
               <Button
                 size="sm"
@@ -544,6 +553,7 @@ export function TasksPanel(): React.ReactElement {
                 onClick={() => {
                   setQuery("");
                   setProjectFilter(null);
+                  chooseScope("all");
                 }}
               >
                 Сбросить фильтры

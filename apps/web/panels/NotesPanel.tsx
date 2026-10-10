@@ -446,7 +446,7 @@ export function NotesPanel(): React.ReactElement {
             const active = note.id === selectedId;
             const project = note.projectId ? (projectList ?? []).find((p) => p.id === note.projectId) : undefined;
             // The author's own description wins; otherwise a cleaned excerpt of the body.
-            const preview = note.summary.trim() || noteListPreview(note.body);
+            const preview = noteListPreview(note.summary.trim() || note.body);
             return (
               <li key={note.id}>
                 <div

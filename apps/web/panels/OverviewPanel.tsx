@@ -19,6 +19,7 @@ import { describeError } from "../lib/error-message";
 import { formatMoney, shortDateTime } from "../lib/format";
 import { focusTask } from "../lib/panel-bus";
 import { requestWorkspaceSwitch } from "../lib/unsaved-drafts";
+import { useActiveWorkspace } from "../lib/use-active-workspace";
 
 /**
  * U08 "Личный межпространственный обзор" (24-CONNECTED-CORE-BACKLOG.md).
@@ -31,13 +32,13 @@ import { requestWorkspaceSwitch } from "../lib/unsaved-drafts";
  * panel; this just collects them in one place with the source workspace
  * always labeled (done-criterion "источник каждой записи видим").
  *
- * Both quick-capture forms below require an EXPLICIT workspace pick before
- * they're usable — there is no "active workspace" to fall back to here by
- * definition, since this panel spans all of them (done-criterion "scope
- * создания явный").
+ * Both quick-capture forms show their target workspace before submission.
+ * The current workspace is preferred when eligible; the user can change it
+ * explicitly. The expense form prefers a workspace with an account.
  */
 export function OverviewPanel(): React.ReactElement {
   const { user } = useSession();
+  const { workspace: activeWorkspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const { data, isLoading, isError, error, refetch } = useMyOverview(Boolean(user));
   const { toast } = useToast();
 
@@ -57,8 +58,9 @@ export function OverviewPanel(): React.ReactElement {
   const [captureWsId, setCaptureWsId] = useState("");
   const [captureTitle, setCaptureTitle] = useState("");
   useEffect(() => {
-    if (!captureWsId && taskWorkspaces.length > 0) setCaptureWsId(taskWorkspaces[0].id);
-  }, [captureWsId, taskWorkspaces]);
+    if (workspaceLoading || captureWsId || taskWorkspaces.length === 0) return;
+    setCaptureWsId(taskWorkspaces.find((w) => w.id === activeWorkspace?.id)?.id ?? taskWorkspaces[0].id);
+  }, [workspaceLoading, activeWorkspace?.id, captureWsId, taskWorkspaces]);
   const createTask = useCreateTask(captureWsId || undefined);
 
   async function submitCapture(event: FormEvent): Promise<void> {
@@ -76,8 +78,10 @@ export function OverviewPanel(): React.ReactElement {
 
   const [expenseWsId, setExpenseWsId] = useState("");
   useEffect(() => {
-    if (!expenseWsId && financeWorkspaces.length > 0) setExpenseWsId(financeWorkspaces[0].id);
-  }, [expenseWsId, financeWorkspaces]);
+    if (workspaceLoading || expenseWsId || financeWorkspaces.length === 0) return;
+    const withAccounts = financeWorkspaces.filter((w) => data?.accounts.some((a) => a.workspaceId === w.id));
+    setExpenseWsId(withAccounts.find((w) => w.id === activeWorkspace?.id)?.id ?? withAccounts[0]?.id ?? financeWorkspaces[0].id);
+  }, [workspaceLoading, activeWorkspace?.id, expenseWsId, financeWorkspaces, data?.accounts]);
   // Accounts for the currently picked workspace only — ORION has no
   // read-only-account concept (workspace membership is the only access
   // level on Account), so every account belonging to a member workspace is

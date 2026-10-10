@@ -598,7 +598,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             panel.id === "inbox" && inboxCount > 0
               ? `к разбору: ${inboxCount}`
               : panel.id === "tasks" && overdueCount > 0
-                ? `просрочено: ${overdueCount}`
+                ? `просрочено в пространстве: ${overdueCount}`
                 : undefined,
           onClick: () => openFromMenu(panel.id),
           // U06: drag the icon/label straight onto Dockview — the custom

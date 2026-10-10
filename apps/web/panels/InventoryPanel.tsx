@@ -154,7 +154,7 @@ export function InventoryPanel(): React.ReactElement {
         </label>
       </PanelHeader>
 
-      <PanelBody measure="prose" className="[container-type:inline-size]">
+      <PanelBody measure="wide" className="[container-type:inline-size]">
         {workspaceId === undefined ? (
           workspaceLoading ? (
             <div className="space-y-2">
@@ -196,12 +196,12 @@ export function InventoryPanel(): React.ReactElement {
           />
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-2 [@container(min-width:520px)]:grid-cols-3">
+            <div className="grid max-w-lg grid-cols-2 gap-2">
               <StatCard label="Активных позиций" value={String(activeItems.length)} hint="в работе" />
               {alerts ? <alerts.SummaryStat count={lowStockCount} /> : null}
             </div>
 
-            <div className="grid gap-3 [@container(min-width:384px)]:grid-cols-2 [@container(min-width:520px)]:grid-cols-3">
+            <div className="grid gap-3 [@container(min-width:384px)]:grid-cols-2 [@container(min-width:760px)]:grid-cols-3 [@container(min-width:1040px)]:grid-cols-4">
               {items.map((item) => (
                 <Card
                   key={item.id}

@@ -43,12 +43,18 @@ import {
 import { CandlestickChart, ExternalLink, FileUp, MoreHorizontal, Plus, Star } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { compassInstrumentLink, DEFAULT_COMPASS_URL, normalizeCompassUrl, readCompassUrl, saveCompassUrl, useCompassStatus } from "../lib/compass-link";
+import { AccountsTab } from "./markets/accounts-tab";
+import { ChartTab } from "./markets/chart-tab";
 import { CompassTab } from "./markets/compass-tab";
+import { EngineGate } from "./markets/engine-gate";
+import { JournalTab } from "./markets/journal-tab";
+import { ResearchTab } from "./markets/research-tab";
+import { SignalsTab } from "./markets/signals-tab";
 import { describeAuthError } from "../lib/error-message";
 import { formatMoney, shortDateTime, toKopecks } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
-type Tab = "compass" | "watch" | "trades" | "import";
+type Tab = "compass" | "chart" | "day" | "journal" | "signals" | "research" | "watch" | "trades" | "import";
 
 const MARKET_HINTS = ["moex", "crypto"];
 
@@ -106,6 +112,11 @@ export function MarketsPanel(): React.ReactElement {
           onChange={setTab}
           options={[
             { value: "compass", label: "Compass" },
+            { value: "chart", label: "График" },
+            { value: "day", label: "День" },
+            { value: "journal", label: "Журнал" },
+            { value: "signals", label: "Сигналы" },
+            { value: "research", label: "Проверка" },
             { value: "watch", label: "Наблюдение" },
             { value: "trades", label: "Сделки" },
             { value: "import", label: "Импорт из Compass" }
@@ -118,6 +129,11 @@ export function MarketsPanel(): React.ReactElement {
         </div>
       ) : (
       <PanelBody className="[container-type:inline-size]">
+        {tab === "chart" ? <EngineGate workspaceId={workspaceId}><ChartTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "day" ? <EngineGate workspaceId={workspaceId}><AccountsTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "journal" ? <EngineGate workspaceId={workspaceId}><JournalTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "signals" ? <EngineGate workspaceId={workspaceId}><SignalsTab workspaceId={workspaceId} /></EngineGate> : null}
+        {tab === "research" ? <EngineGate workspaceId={workspaceId}><ResearchTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "watch" ? <WatchTab workspaceId={workspaceId} compassUrl={compassUrl} compassRunning={state === "running"} /> : null}
         {tab === "trades" ? <TradesTab workspaceId={workspaceId} /> : null}
         {tab === "import" ? <ImportTab workspaceId={workspaceId} onDone={() => setTab("trades")} /> : null}

@@ -115,7 +115,7 @@ export function BrowserPage({
         </IconButton>
       </form>
 
-      <div className="relative min-h-0 flex-1 bg-white">
+      <div className="relative min-h-0 flex-1 bg-background">
         {url ? (
           <iframe
             key={`${reload}:${url}`}
@@ -123,7 +123,7 @@ export function BrowserPage({
             title={tabLabel(url)}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
             referrerPolicy="no-referrer"
-            className="h-full w-full border-0"
+            className="h-full w-full border-0 bg-white"
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 bg-background px-6 text-center text-sm text-muted-foreground">
