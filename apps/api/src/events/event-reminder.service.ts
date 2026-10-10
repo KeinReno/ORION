@@ -5,6 +5,7 @@ import { expandRecurrence, recurrenceSpecSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { TelegramService } from "../notifications/telegram.service";
 import { NotificationCenterService } from "../notifications/notification-center.service";
+import { pluginOffWhere } from "../plugins/require-plugin";
 import { NotificationPolicyService } from "../notifications/notification-policy.service";
 
 type EventWithRelations = Prisma.EventGetPayload<{
@@ -43,7 +44,7 @@ export class EventReminderService {
     const now = Date.now();
     const events = await this.prisma.asSystem((tx) =>
       tx.event.findMany({
-        where: { reminders: { isEmpty: false }, workspace: { NOT: { disabledModules: { has: "calendar" } } } },
+        where: { reminders: { isEmpty: false }, workspace: { NOT: [{ disabledModules: { has: "calendar" } }, pluginOffWhere("calendar-reminders")] } },
         include: { workspace: true, overrides: true, sentReminders: true }
       })
     );

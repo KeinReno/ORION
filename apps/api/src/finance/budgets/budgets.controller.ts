@@ -10,9 +10,11 @@ import { RequireModule } from "../../modules/require-module";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import type { RequestUser } from "../../auth/jwt.strategy";
+import { RequirePlugin } from "../../plugins/require-plugin";
 import { BudgetsService } from "./budgets.service";
 
 @RequireModule("finance")
+@RequirePlugin("finance-budgeting")
 @Controller("workspaces/:workspaceId/finance/budgets")
 export class BudgetsController {
   constructor(private readonly budgets: BudgetsService) {}

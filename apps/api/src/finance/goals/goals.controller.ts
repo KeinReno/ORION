@@ -10,9 +10,11 @@ import { RequireModule } from "../../modules/require-module";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import type { RequestUser } from "../../auth/jwt.strategy";
+import { RequirePlugin } from "../../plugins/require-plugin";
 import { GoalsService } from "./goals.service";
 
 @RequireModule("finance")
+@RequirePlugin("finance-goals")
 @Controller("workspaces/:workspaceId/finance/goals")
 export class GoalsController {
   constructor(private readonly goals: GoalsService) {}

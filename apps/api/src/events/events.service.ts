@@ -244,7 +244,7 @@ export class EventsService {
   async feedByToken(token: string): Promise<{ name: string; body: string } | null> {
     return this.prisma.asSystem(async (tx) => {
       const workspace = await tx.workspace.findUnique({ where: { icsToken: token } });
-      if (!workspace || workspace.disabledModules.includes("calendar")) return null;
+      if (!workspace || workspace.disabledModules.includes("calendar") || workspace.pluginOverrides.includes("calendar-external")) return null;
 
       const events = await tx.event.findMany({
         where: { workspaceId: workspace.id },

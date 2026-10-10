@@ -43,6 +43,9 @@ export class BudgetAlertsService {
   ): Promise<string[]> {
     const unique = [...new Set(categoryIds.filter((id): id is string => Boolean(id)))];
     if (unique.length === 0) return [];
+    // With the finance-budgeting plugin off, limits stay stored but raise nothing.
+    const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { pluginOverrides: true } });
+    if (workspace?.pluginOverrides.includes("finance-budgeting")) return [];
 
     const month = new Date(Date.UTC(occurredAt.getUTCFullYear(), occurredAt.getUTCMonth(), 1));
     const budgets = await tx.budget.findMany({ where: { workspaceId, categoryId: { in: unique }, month } });

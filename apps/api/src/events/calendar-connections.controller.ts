@@ -4,9 +4,11 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { RequireModule } from "../modules/require-module";
+import { RequirePlugin } from "../plugins/require-plugin";
 import { CalendarConnectionsService } from "./calendar-connections.service";
 
 @RequireModule("calendar")
+@RequirePlugin("calendar-external")
 @Controller("workspaces/:workspaceId/calendar-connections")
 export class CalendarConnectionsController {
   constructor(private readonly connections: CalendarConnectionsService) {}

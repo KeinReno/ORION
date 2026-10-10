@@ -10,12 +10,14 @@ import {
   type UpdateObligationInput
 } from "@orion/shared-types";
 import { RequireModule } from "../../modules/require-module";
+import { RequirePlugin } from "../../plugins/require-plugin";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import type { RequestUser } from "../../auth/jwt.strategy";
 import { ObligationsService } from "./obligations.service";
 
 @RequireModule("finance")
+@RequirePlugin("finance-obligations")
 @Controller("workspaces/:workspaceId/finance/obligations")
 export class ObligationsController {
   constructor(private readonly obligations: ObligationsService) {}

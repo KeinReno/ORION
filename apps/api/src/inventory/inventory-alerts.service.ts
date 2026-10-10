@@ -36,6 +36,9 @@ export class InventoryAlertsService {
   /** Call inside an existing `withUser` transaction, right after the movement that changed `balance` landed. */
   async evaluateTx(tx: Prisma.TransactionClient, item: LowStockItem, balance: number): Promise<string | null> {
     if (item.minStock === null) return null;
+    // With the inventory-alerts plugin off the threshold stays stored but raises nothing.
+    const workspace = await tx.workspace.findUnique({ where: { id: item.workspaceId }, select: { pluginOverrides: true } });
+    if (workspace?.pluginOverrides.includes("inventory-alerts")) return null;
 
     if (balance > item.minStock) {
       if (item.lowStockNotifiedAt !== null) {

@@ -10,6 +10,7 @@ import {
   type UpdateTransactionInput
 } from "@orion/shared-types";
 import { RequireModule } from "../../modules/require-module";
+import { RequirePlugin } from "../../plugins/require-plugin";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import type { RequestUser } from "../../auth/jwt.strategy";
@@ -56,6 +57,7 @@ export class TransactionsController {
 
   /** Registered before `:transactionId` routes so "import" is never read as an id. */
   @Post("import")
+  @RequirePlugin("finance-import")
   importRows(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,

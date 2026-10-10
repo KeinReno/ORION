@@ -22,6 +22,7 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { RequireModule } from "../modules/require-module";
 import { TasksService } from "./tasks.service";
 import { TaskCommentsService } from "./task-comments.service";
+import { RequirePlugin } from "../plugins/require-plugin";
 import { TaskActivityService } from "./task-activity.service";
 
 @RequireModule("tasks")
@@ -53,11 +54,13 @@ export class TasksController {
   }
 
   @Get("views")
+  @RequirePlugin("tasks-saved-views")
   listViews(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<SavedTaskView[]> {
     return this.tasks.listViews(user.userId, workspaceId);
   }
 
   @Post("views")
+  @RequirePlugin("tasks-saved-views")
   createView(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -67,6 +70,7 @@ export class TasksController {
   }
 
   @Delete("views/:viewId")
+  @RequirePlugin("tasks-saved-views")
   removeView(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("viewId") viewId: string): Promise<void> {
     return this.tasks.deleteView(user.userId, workspaceId, viewId);
   }
@@ -93,6 +97,7 @@ export class TasksController {
   // --- S17 комментарии + журнал -------------------------------------------
 
   @Get(":taskId/comments")
+  @RequirePlugin("tasks-comments")
   listComments(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -104,6 +109,7 @@ export class TasksController {
   }
 
   @Post(":taskId/comments")
+  @RequirePlugin("tasks-comments")
   createComment(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -114,6 +120,7 @@ export class TasksController {
   }
 
   @Patch(":taskId/comments/:commentId")
+  @RequirePlugin("tasks-comments")
   updateComment(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -125,6 +132,7 @@ export class TasksController {
   }
 
   @Delete(":taskId/comments/:commentId")
+  @RequirePlugin("tasks-comments")
   @HttpCode(204)
   async removeComment(
     @CurrentUser() user: RequestUser,

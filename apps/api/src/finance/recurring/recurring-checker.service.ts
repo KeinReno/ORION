@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { Prisma, type RecurrenceInterval, type TransactionType } from "@prisma/client";
+import { pluginOffWhere } from "../../plugins/require-plugin";
 import { PrismaService } from "../../common/prisma.service";
 
 /**
@@ -64,7 +65,7 @@ export class RecurringCheckerService {
         where: {
           nextRunAt: { lte: new Date() },
           pausedAt: null,
-          workspace: { NOT: { disabledModules: { has: "finance" } } }
+          workspace: { NOT: [{ disabledModules: { has: "finance" } }, pluginOffWhere("finance-recurring")] }
         },
         // Oldest-due-first, so a starved rule under a long backlog isn't
         // perpetually pushed behind rules with a more recent nextRunAt.

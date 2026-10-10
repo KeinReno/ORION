@@ -5,6 +5,7 @@ import type { CalendarConnection, CalendarConnectionInput } from "@orion/shared-
 import { PrismaService } from "../common/prisma.service";
 import { openSecret, sealSecret, syncSecretAvailable } from "../sync/sync-crypto";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { pluginOffWhere } from "../plugins/require-plugin";
 import { assertPublicRemoteUrl, MAX_REMOTE_RESPONSE_BYTES, rejectRedirect } from "../common/remote-url-guard";
 
 /** Everything a sync pass needs, without caring whether it runs for a user or for the system. */
@@ -100,7 +101,7 @@ export class CalendarConnectionsService {
   async handleCron(): Promise<void> {
     const connections = await this.prisma.asSystem((tx) =>
       tx.calendarConnection.findMany({
-        where: { enabled: true, workspace: { NOT: { disabledModules: { has: "calendar" } } } },
+        where: { enabled: true, workspace: { NOT: [{ disabledModules: { has: "calendar" } }, pluginOffWhere("calendar-external")] } },
         select: {
           id: true,
           workspaceId: true,
