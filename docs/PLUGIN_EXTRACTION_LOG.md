@@ -167,7 +167,7 @@
 
 ## Итог и что осталось
 
-Вынесено по карте миграции (по умолчанию все включены, parity проверен на каждом): `habits-insights`; `finance-budgeting`, `finance-goals`, `finance-recurring`, `finance-reports`; `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`; `documents-history`, `documents-office`; `notes-history`, `notes-daily`, `notes-templates`; `time-insights`, `time-billing`; `calendar-external`, `calendar-recurrence`, `calendar-reminders`; `projects-planning`; `inventory-alerts`.
+Вынесено по карте миграции (по умолчанию все включены, parity проверен на каждом): `habits-insights`; `finance-budgeting`, `finance-goals`, `finance-recurring`, `finance-reports`; `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`; `documents-history`, `documents-office`; `notes-history`, `notes-daily`, `notes-templates`; `time-insights`, `time-billing`; `calendar-external`, `calendar-recurrence`, `calendar-reminders`; `projects-planning`; `inventory-alerts`; новые плагины интеграций (11 октября): `finance-quick-entry`, `finance-import`, `finance-obligations`, `finance-forecast` — см. `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`.
 
 Осталось сознательно — с причиной, а не «не дошли»:
 
