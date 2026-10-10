@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
+import { All, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
+import type { Request, Response } from "express";
 import {
   createWatchItemInputSchema,
   recordTradeFeeInputSchema,
@@ -54,6 +55,20 @@ export class MarketsController {
     if (parsed.entries.length === 0) return { dryRun: false, imported: 0, duplicates: 0, byMode: { real: 0, paper: 0, historical: 0 }, skippedDeleted: parsed.skippedDeleted, problems: parsed.problems };
     const result = await this.markets.importTrades(user.userId, workspaceId, { source: "compass", dryRun: false, entries: parsed.entries });
     return { ...result, skippedDeleted: parsed.skippedDeleted, problems: parsed.problems };
+  }
+
+  /** Весь API Compass для панелей ORION (`…/engine/api/journal`, `…/engine/api/backtest` …): проверка членства и модуля — здесь, дальше — движок. */
+  @All("engine/api/*")
+  async engineProxy(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Req() req: Request,
+    @Res() res: Response
+  ): Promise<void> {
+    await this.workspaces.assertMember(user.userId, workspaceId);
+    const rest = req.url.slice(req.url.indexOf("/engine/api/") + "/engine".length);
+    const result = await this.engine.proxy(workspaceId, req.method, rest, req.body);
+    res.status(result.status).type(result.contentType).send(result.body);
   }
 
   @Post("engine/stop")

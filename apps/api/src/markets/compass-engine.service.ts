@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import type { CompassEngineStatus } from "@orion/shared-types";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -8,6 +8,13 @@ import path from "node:path";
 import { isServerMode } from "../common/orion-mode";
 
 const HOST = "127.0.0.1";
+
+/** Что из API движка доступно панелям ORION: всё, кроме симуляции, потока котировок и управления окном приложения. */
+export function isProxiedPath(apiPath: string): boolean {
+  const pathOnly = apiPath.split("?")[0] ?? "";
+  if (!pathOnly.startsWith("/api/") || pathOnly.includes("..")) return false;
+  return !/^\/api\/(sim|app|live)(\/|$)/.test(pathOnly);
+}
 
 /**
  * Движок Compass (Python, `apps/compass-engine`) как служба ORION. ORION запускает его сам, по требованию, и гасит вместе с API.
@@ -70,6 +77,27 @@ export class CompassEngineService implements OnModuleDestroy {
     });
     await this.starting.catch(() => undefined);
     return this.status(workspaceId);
+  }
+
+  /**
+   * Запрос к API движка от имени пользователя ORION: ORION проверил членство в пространстве и модуль, движок видит только свой
+   * токен сессии. Симуляция фьючерсов и управление самим окном/автозапуском Compass наружу не пробрасываются.
+   */
+  async proxy(workspaceId: string, method: string, apiPath: string, body: unknown): Promise<{ status: number; contentType: string; body: Buffer }> {
+    if (this.status(workspaceId).state !== "running") throw new ServiceUnavailableException("Compass не запущен: запустите его во вкладке «Compass».");
+    if (!isProxiedPath(apiPath)) throw new NotFoundException("Этот раздел Compass в ORION недоступен.");
+    const hasBody = !["GET", "HEAD", "DELETE"].includes(method);
+    const response = await fetch(`http://${HOST}:${this.port}${apiPath}`, {
+      method,
+      headers: { Cookie: `compass_session=${this.token}`, ...(hasBody ? { "Content-Type": "application/json" } : {}) },
+      body: hasBody ? JSON.stringify(body ?? {}) : undefined,
+      signal: AbortSignal.timeout(120_000)
+    });
+    return {
+      status: response.status,
+      contentType: response.headers.get("content-type") ?? "application/json",
+      body: Buffer.from(await response.arrayBuffer())
+    };
   }
 
   /** Журнал Compass целиком в формате резервной копии (то, что ORION разбирает при импорте). Движок должен работать для этого пространства. */
