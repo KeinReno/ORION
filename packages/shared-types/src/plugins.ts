@@ -24,7 +24,9 @@ export const ORION_PLUGIN_IDS = [
   "time-insights",
   "time-billing",
   "calendar-external",
-  "tasks-comments"
+  "tasks-comments",
+  "tasks-kanban",
+  "notes-daily"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -218,6 +220,24 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Обсуждение задачи: комментарии с Markdown, правка и удаление своих, уведомление исполнителю.",
     provides: ["Вкладка «Комментарии» в карточке задачи", "Уведомление исполнителю о новом комментарии"],
     disableBehavior: "Вкладка скрывается; комментарии сохраняются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-kanban",
+    extendsModuleId: "tasks",
+    label: "Доска задач",
+    summary: "Вид «Доска»: колонки рядом, перетаскивание карточек между колонками.",
+    provides: ["Переключатель «Доска» в панели задач"],
+    disableBehavior: "Остаётся вид «Список»; статусы и задачи не меняются.",
+    defaultEnabled: true
+  },
+  {
+    id: "notes-daily",
+    extendsModuleId: "notes",
+    label: "Ежедневные заметки",
+    summary: "Кнопка «Сегодня»: открывает или создаёт заметку на сегодняшний день.",
+    provides: ["Кнопка «Сегодня» в шапке заметок"],
+    disableBehavior: "Кнопка скрывается; уже созданные ежедневные заметки остаются обычными заметками.",
     defaultEnabled: true
   }
 ];

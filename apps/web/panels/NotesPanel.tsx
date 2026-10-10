@@ -4,7 +4,6 @@ import {
   useCreateNote,
   useDeleteNote,
   useNotes,
-  useOpenDailyNote,
   usePreferences,
   useProjects,
   usePurgeNote,
@@ -38,7 +37,6 @@ import {
 import {
   Archive,
   ArchiveRestore,
-  CalendarDays,
   Copy,
   FileStack,
   FileText,
@@ -55,7 +53,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { noteNumberLabel } from "@orion/shared-types";
-import { formatDayTitle, projectColor, relativeTime } from "../lib/format";
+import { ExtensionSlot } from "../lib/extensions/slot";
+import { projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
 import { useFocusedNoteId } from "../lib/panel-bus";
@@ -93,7 +92,6 @@ export function NotesPanel(): React.ReactElement {
   const deleteNote = useDeleteNote(workspace?.id);
   const restoreNote = useRestoreNote(workspace?.id);
   const purgeNote = usePurgeNote(workspace?.id);
-  const openDaily = useOpenDailyNote(workspace?.id);
   const { toast } = useToast();
 
   const [wrapRef, width] = useResizeWidth<HTMLDivElement>();
@@ -312,16 +310,6 @@ export function NotesPanel(): React.ReactElement {
     if (!note) return;
     setPendingPurge(null);
     purgeNote.mutate(note.id, { onSuccess: () => toast({ title: "Удалено навсегда", tone: "default" }) });
-  }
-
-  function handleOpenDaily(): void {
-    openDaily.mutate(undefined, {
-      onSuccess: (note) => {
-        setView("active");
-        setSelectedId(note.id);
-        toast({ title: `Ежедневная: ${note.dailyOn ? formatDayTitle(note.dailyOn) : "сегодня"}`, tone: "success" });
-      }
-    });
   }
 
   const list = (
@@ -615,9 +603,16 @@ export function NotesPanel(): React.ReactElement {
         actions={
           !activeView ? undefined : (
             <div className="flex items-center gap-1.5">
-              <Button size="sm" variant="outline" onClick={handleOpenDaily} disabled={openDaily.isPending}>
-                <CalendarDays className="h-4 w-4" /> Сегодня
-              </Button>
+              <ExtensionSlot
+                name="notes.header.actions"
+                props={{
+                  workspaceId: workspace?.id,
+                  onOpenNote: (noteId) => {
+                    setView("active");
+                    setSelectedId(noteId);
+                  }
+                }}
+              />
               <Button size="sm" onClick={() => setSelectedId(NEW_NOTE)}>
                 <Plus className="h-4 w-4" /> {templatesView ? "Новый шаблон" : "Новая"}
               </Button>

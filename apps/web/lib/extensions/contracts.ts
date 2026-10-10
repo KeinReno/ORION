@@ -145,6 +145,29 @@ export interface TaskDetailTabSlotProps {
   taskId: string;
 }
 
+/**
+ * tasks.views — an extra way to lay out the task columns. Draws nothing itself (the contribution's
+ * component is a placeholder): the host keeps the columns and drag-and-drop and asks the view only
+ * for its label and the layout classes of the column container.
+ */
+export type TasksViewSlotProps = Record<string, never>;
+
+export interface TasksViewMeta {
+  viewId: string;
+  label: string;
+  /** Tailwind classes of the element that holds the columns, for `columnCount` columns. */
+  layoutClass: (columnCount: number) => string;
+  /** Layout of one column in this view (the host's own list view uses full width). */
+  columnClass?: string;
+}
+
+/** notes.header.actions — extra buttons in the Notes header, before «Новая». */
+export interface NotesHeaderActionSlotProps {
+  workspaceId: string | undefined;
+  /** Ask the host to show this note (switches to the active list and selects it). */
+  onOpenNote: (noteId: string) => void;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -158,6 +181,8 @@ export interface SlotContracts {
   "time.billing": TimeBillingSlotProps;
   "calendar.toolbar": CalendarToolbarSlotProps;
   "tasks.detail.tabs": TaskDetailTabSlotProps;
+  "tasks.views": TasksViewSlotProps;
+  "notes.header.actions": NotesHeaderActionSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;
@@ -174,6 +199,7 @@ export interface SlotMeta {
   "time.billing": { api: TimeBillingApi };
   /** `before`: the tab goes before the built-in ones (default after them). */
   "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
+  "tasks.views": TasksViewMeta;
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -96,3 +96,21 @@ contribute("calendar.toolbar", { pluginId: "calendar-external", component: Calen
 
 const TaskCommentsTab = dynamic<TaskDetailTabSlotProps>(() => import("./tasks-comments/tab").then((m) => m.TaskCommentsTab), { ssr: false });
 contribute("tasks.detail.tabs", { pluginId: "tasks-comments", component: TaskCommentsTab, order: 10, meta: { tabId: "comments", label: "Комментарии", before: true } });
+
+// «Доска»: columns side by side (3 up to 640px, 4 from 1152px of panel width — the container queries the list never used).
+contribute("tasks.views", {
+  pluginId: "tasks-kanban",
+  component: NoVisual as unknown as ComponentType<TasksViewSlotProps>,
+  order: 10,
+  meta: {
+    viewId: "board",
+    label: "Доска",
+    layoutClass: (columnCount) =>
+      columnCount <= 3
+        ? "grid gap-4 [@container(min-width:640px)]:grid-cols-3"
+        : "grid gap-4 [@container(min-width:640px)]:grid-cols-3 [@container(min-width:1152px)]:grid-cols-4"
+  }
+});
+
+const DailyNoteButton = dynamic<NotesHeaderActionSlotProps>(() => import("./notes-daily/daily-button").then((m) => m.DailyNoteButton), { ssr: false });
+contribute("notes.header.actions", { pluginId: "notes-daily", component: DailyNoteButton, order: 10 });

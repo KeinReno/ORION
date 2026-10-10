@@ -39,7 +39,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../lib/use-enabled-plugins";
 import { TaskCard, type TaskAssignee } from "./tasks/task-card";
-import { ExtensionSlot } from "../lib/extensions/slot";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import {
   canMoveNeighbor,
   orderColumnTasks,
@@ -50,7 +50,8 @@ import {
 import { TaskDetail } from "./tasks/task-detail";
 
 type GroupBy = "status" | "project" | "due" | "priority";
-type BoardView = "board" | "list";
+/** "list" is the module's own layout; any other id (the board) comes from a `tasks.views` plugin. */
+type BoardView = string;
 
 const NO_PROJECT = "__none__";
 
@@ -63,10 +64,10 @@ type TaskScope = "all" | "loose";
 const SCOPE_KEY = "orion.tasks.scope";
 const VIEW_KEY = "orion.tasks.view";
 
-function loadView(fallback: BoardView): BoardView {
+function loadView(fallback: BoardView, available: readonly string[]): BoardView {
   try {
     const raw = localStorage.getItem(VIEW_KEY);
-    if (raw === "board" || raw === "list") return raw;
+    if (raw !== null && available.includes(raw)) return raw;
   } catch {
     /* ignore */
   }
@@ -127,12 +128,19 @@ export function TasksPanel(): React.ReactElement {
   // cards/groups) — 06-MODULES/10-BACKLOG S13 require both to be reachable,
   // not just the board. Default follows scope like `onlyMine` above; the
   // user's explicit pick is remembered the same way inbox remembers groupBy.
-  const [view, setView] = useState<BoardView>(() => loadView(teamOn ? "board" : "list"));
+  const viewPlugins = useSlotContributions("tasks.views").filter((c) => c.meta !== undefined);
+  const availableViews = ["list", ...viewPlugins.map((c) => c.meta!.viewId)];
+  const defaultView = teamOn && availableViews.includes("board") ? "board" : "list";
+  const [view, setView] = useState<BoardView>(() => loadView(defaultView, availableViews));
   const viewTouched = useRef(false);
   useEffect(() => {
     if (viewTouched.current) return;
-    setView(loadView(teamOn ? "board" : "list"));
-  }, [teamOn]);
+    setView(loadView(defaultView, availableViews));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamOn, availableViews.join("|")]);
+  // A saved view whose plugin is off falls back to the list.
+  const activeView = availableViews.includes(view) ? view : "list";
+  const activeViewMeta = viewPlugins.find((c) => c.meta?.viewId === activeView)?.meta;
   useEffect(() => {
     if (!viewTouched.current) return;
     try {
@@ -461,18 +469,17 @@ export function TasksPanel(): React.ReactElement {
               { value: "due", label: "По сроку" }
             ]}
           />
-          <SegmentedControl<BoardView>
-            value={view}
-            onChange={(next) => {
-              viewTouched.current = true;
-              setView(next);
-            }}
-            size="sm"
-            options={[
-              { value: "board", label: "Доска" },
-              { value: "list", label: "Список" }
-            ]}
-          />
+          {viewPlugins.length > 0 ? (
+            <SegmentedControl<BoardView>
+              value={activeView}
+              onChange={(next) => {
+                viewTouched.current = true;
+                setView(next);
+              }}
+              size="sm"
+              options={[...viewPlugins.map((c) => ({ value: c.meta!.viewId, label: c.meta!.label })), { value: "list", label: "Список" }]}
+            />
+          ) : null}
           {teamOn ? (
             <FilterChip
               active={onlyMine}
@@ -544,9 +551,7 @@ export function TasksPanel(): React.ReactElement {
         ) : (
           <div
             className={cx(
-              view === "board"
-                ? cx("grid gap-4", columns.length <= 3 ? "[@container(min-width:640px)]:grid-cols-3" : "[@container(min-width:640px)]:grid-cols-3 [@container(min-width:1152px)]:grid-cols-4")
-                : "flex flex-col gap-4"
+              activeViewMeta ? activeViewMeta.layoutClass(columns.length) : "flex flex-col gap-4"
             )}
           >
             {columns.map((column) => (
@@ -566,7 +571,7 @@ export function TasksPanel(): React.ReactElement {
                 }}
                 className={cx(
                   "flex flex-col gap-2 rounded-2xl border p-2 transition-colors",
-                  view === "list" && "w-full",
+                  !activeViewMeta && "w-full",
                   dragOverKey === column.key ? "border-accent bg-accent/[0.05]" : "border-border"
                 )}
               >
