@@ -131,6 +131,11 @@ export interface TimeInsightsSlotProps {
   billing: TimeBillingApi | null;
 }
 
+/** calendar.toolbar — extra controls at the end of the source-chip row (the filter chips of the Calendar header). */
+export interface CalendarToolbarSlotProps {
+  workspaceId: string | undefined;
+}
+
 export interface SlotContracts {
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -142,6 +147,7 @@ export interface SlotContracts {
   "notes.history": NotesHistorySlotProps;
   "time.insights": TimeInsightsSlotProps;
   "time.billing": TimeBillingSlotProps;
+  "calendar.toolbar": CalendarToolbarSlotProps;
 }
 
 export type SlotName = keyof SlotContracts;

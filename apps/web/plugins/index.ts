@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -90,3 +90,6 @@ contribute("time.billing", {
   component: NoVisual as unknown as ComponentType<TimeBillingSlotProps>,
   meta: { api: timeBillingApi }
 });
+
+const CalendarExternalButton = dynamic<CalendarToolbarSlotProps>(() => import("./calendar-external/toolbar-button").then((m) => m.CalendarExternalButton), { ssr: false });
+contribute("calendar.toolbar", { pluginId: "calendar-external", component: CalendarExternalButton });

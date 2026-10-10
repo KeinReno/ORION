@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCalendarFeed,
   useCreateEvent,
   useCreateNote,
   useCreateTask,
@@ -10,7 +9,6 @@ import {
   useNotes,
   useProjects,
   useRecurringTransactions,
-  useRotateCalendarFeed,
   useTasks,
   useUpdateEvent,
   useUpdateTask,
@@ -60,7 +58,7 @@ import { focusNote, focusTask, openPanel, useFocusedEventId } from "../lib/panel
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
-import { CalendarConnectionsButton } from "./calendar-connections";
+import { ExtensionSlot } from "../lib/extensions/slot";
 
 const SOURCES_KEY = "orion.calendar.sources";
 
@@ -169,8 +167,6 @@ export function CalendarPanel(): React.ReactElement {
   const updateEvent = useUpdateEvent(wsId);
   const deleteEvent = useDeleteEvent(wsId);
   const updateTask = useUpdateTask(wsId);
-  const feed = useCalendarFeed(wsId);
-  const rotateFeed = useRotateCalendarFeed(wsId);
   const { toast } = useToast();
 
   const [enabled, setEnabled] = useState<Set<CalendarSourceId>>(() => new Set());
@@ -530,15 +526,7 @@ export function CalendarPanel(): React.ReactElement {
                       </button>
                     );
                   })}
-                  <CalendarConnectionsButton
-                    feedUrl={feed.data?.url}
-                    onRotateFeed={() =>
-                      rotateFeed.mutate(undefined, {
-                        onSuccess: () =>
-                          toast({ title: "Ссылка обновлена, старая больше не работает", tone: "success" })
-                      })
-                    }
-                  />
+                  <ExtensionSlot name="calendar.toolbar" props={{ workspaceId: wsId }} />
                 </div>
               }
             />

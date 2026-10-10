@@ -22,7 +22,8 @@ export const ORION_PLUGIN_IDS = [
   "documents-office",
   "notes-history",
   "time-insights",
-  "time-billing"
+  "time-billing",
+  "calendar-external"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -197,6 +198,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Перевод часов в деньги по ставке проекта: итоговая стоимость, по проектам и у каждой записи.",
     provides: ["Строки «Стоимость времени»", "Стоимость у записей и проектов"],
     disableBehavior: "Деньги нигде не показываются; ставки проектов и записи времени сохраняются.",
+    defaultEnabled: true
+  },
+  {
+    id: "calendar-external",
+    extendsModuleId: "calendar",
+    label: "Внешние календари",
+    summary: "Подписка на чужие ICS-календари (только чтение) и ссылка на экспорт календаря ORION.",
+    provides: ["Кнопка «Ссылка» в шапке календаря", "Подписки на ICS и ссылка-фид"],
+    disableBehavior:
+      "Кнопка скрывается, управлять подписками и ссылкой нельзя. Уже загруженные внешние события остаются в календаре, фоновая синхронизация подписок на сервере продолжается; подписки не удаляются.",
     defaultEnabled: true
   }
 ];
