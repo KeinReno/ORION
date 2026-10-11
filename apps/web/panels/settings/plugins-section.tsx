@@ -3,8 +3,8 @@
 import { useSetWorkspacePlugin, useWorkspacePlugins } from "@orion/core-react";
 import type { WorkspacePluginState } from "@orion/shared-types";
 import { MODULE_CATALOG } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton, useToast } from "@orion/ui";
-import { AlertCircle } from "lucide-react";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
+import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -16,6 +16,7 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
   const setPlugin = useSetWorkspacePlugin(workspace?.id);
   const { toast } = useToast();
   const [pending, setPending] = useState<WorkspacePluginState | null>(null);
+  const [query, setQuery] = useState("");
   const isOwner = workspace?.role === "owner";
 
   async function apply(item: WorkspacePluginState, enabled: boolean): Promise<void> {
@@ -48,6 +49,13 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
     );
   }
 
+  const search = query.trim().toLocaleLowerCase("ru");
+  const visiblePlugins = plugins.data.filter((item) => {
+    if (moduleId !== undefined && item.extendsModuleId !== moduleId) return false;
+    const hostLabel = MODULE_CATALOG.find((module) => module.id === item.extendsModuleId)?.label ?? item.extendsModuleId;
+    return `${item.label} ${item.summary} ${hostLabel}`.toLocaleLowerCase("ru").includes(search);
+  });
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
@@ -58,10 +66,21 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
         <p className="text-xs text-muted-foreground">Состав плагинов может менять только владелец пространства.</p>
       ) : null}
 
+      {moduleId === undefined ? (
+        <div className="relative max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" aria-hidden />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Найти плагин или модуль"
+            aria-label="Найти плагин или модуль"
+            className="pl-9"
+          />
+        </div>
+      ) : null}
+
       <div className="space-y-2">
-        {plugins.data
-          .filter((item) => moduleId === undefined || item.extendsModuleId === moduleId)
-          .map((item) => {
+        {visiblePlugins.map((item) => {
           const hostLabel = MODULE_CATALOG.find((m) => m.id === item.extendsModuleId)?.label ?? item.extendsModuleId;
           return (
             <Card key={item.id} className="space-y-2 py-3">
@@ -84,7 +103,11 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
                   </Button>
                 )}
               </div>
-              <dl className="grid gap-2 text-2xs text-subtle-foreground">
+              <details className="text-2xs text-muted-foreground">
+                <summary className="w-fit cursor-pointer rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" aria-label={`Подробнее о плагине «${item.label}»`}>
+                  Подробнее о плагине
+                </summary>
+              <dl className="mt-3 grid gap-2 text-2xs text-subtle-foreground">
                 <div>
                   <dt className="font-medium text-muted-foreground">Даёт</dt>
                   <dd>{item.provides.join(" · ")}</dd>
@@ -94,11 +117,15 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
                   <dd>{item.disableBehavior}</dd>
                 </div>
               </dl>
+              </details>
             </Card>
           );
           })}
         {moduleId !== undefined && !plugins.data.some((item) => item.extendsModuleId === moduleId) ? (
           <p className="text-xs text-muted-foreground">У этого модуля пока нет плагинов.</p>
+        ) : null}
+        {moduleId === undefined && visiblePlugins.length === 0 ? (
+          <EmptyState icon={Search} title="Плагин не найден" description="Попробуйте другое название." action={<Button size="sm" variant="outline" onClick={() => setQuery("")}>Сбросить поиск</Button>} />
         ) : null}
       </div>
 

@@ -44,7 +44,7 @@ export function FinanceSummaryRow(): React.ReactElement | null {
   const currentMonth = monthly?.[0];
 
   return (
-    <div className="grid grid-cols-2 gap-3 [@container(min-width:576px)]:grid-cols-4">
+    <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 15rem), 1fr))" }}>
       {balancesByCurrency.map(([currency, total]) => (
         <StatCard
           key={currency}

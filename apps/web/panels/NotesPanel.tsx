@@ -484,7 +484,7 @@ export function NotesPanel(): React.ReactElement {
                       <span className="truncate">{note.title || "Без заголовка"}</span>
                     </span>
                     {preview ? (
-                      <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{preview}</span>
+                      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</span>
                     ) : null}
                     <span className="mt-1 flex items-center gap-1.5 text-2xs text-subtle-foreground">
                       {project ? (

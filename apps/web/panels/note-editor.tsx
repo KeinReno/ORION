@@ -344,7 +344,7 @@ export function NoteEditor({
   return (
     <form onSubmit={submit} className="flex h-full flex-col">
       <div className="orion-scroll flex-1 overflow-y-auto p-5 lg:px-8">
-        <div className="w-full max-w-[65ch] space-y-3">
+        <div className="mx-auto w-full max-w-[65ch] space-y-3">
           <div className="flex items-start gap-3">
             <input
               value={title}

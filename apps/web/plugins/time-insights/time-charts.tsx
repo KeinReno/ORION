@@ -2,7 +2,7 @@
 
 import { useTimeEntries } from "@orion/core-react";
 import { formatDuration, type Project } from "@orion/shared-types";
-import { PanelSection, SegmentedControl, Skeleton, cx } from "@orion/ui";
+import { Button, PanelSection, SegmentedControl, Skeleton, cx } from "@orion/ui";
 import { useEffect, useMemo, useState } from "react";
 import { dailyTotals, localDayKey, periodStats, projectShares } from "../../lib/time-stats";
 import { projectSwatchColor } from "../../lib/project-colors";
@@ -59,11 +59,25 @@ export function TimeDynamics({
       </PanelSection>
     );
   }
-  // Nothing to draw yet: say so quietly rather than showing 30 empty bars.
+  if (query.isError) {
+    return (
+      <PanelSection title="Динамика">
+        <div className="flex items-center gap-3 text-label text-muted-foreground">
+          <span>Не удалось загрузить данные для графика.</span>
+          <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Повторить</Button>
+        </div>
+      </PanelSection>
+    );
+  }
+  // Historical records may exist even when the chart's recent window is empty.
   if (entries.length === 0 || stats.total === 0) {
     return (
       <PanelSection title="Динамика">
-        <p className="text-label text-subtle-foreground">График появится после первых записей времени.</p>
+        <p className="text-label text-subtle-foreground">
+          {entries.length === 0
+            ? "За последние 30 дней записей нет. Более ранние записи доступны ниже."
+            : `За последние ${span} дней записей нет. Более ранние записи доступны ниже.`}
+        </p>
       </PanelSection>
     );
   }

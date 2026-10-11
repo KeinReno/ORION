@@ -8,8 +8,8 @@ import {
   useWorkspaceModules
 } from "@orion/core-react";
 import type { ModuleKind, WorkspaceModuleState } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton, useToast } from "@orion/ui";
-import { AlertCircle } from "lucide-react";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
+import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -29,6 +29,7 @@ export function ModulesSettings(): React.ReactElement {
   const { toast } = useToast();
   const hiddenByMe = preferences.data?.hiddenModules ?? [];
   const [pending, setPending] = useState<WorkspaceModuleState | null>(null);
+  const [query, setQuery] = useState("");
   const isOwner = workspace?.role === "owner";
 
   async function apply(item: WorkspaceModuleState, enabled: boolean): Promise<void> {
@@ -92,6 +93,10 @@ export function ModulesSettings(): React.ReactElement {
   }
 
   const groups: ModuleKind[] = ["base", "additional"];
+  const search = query.trim().toLocaleLowerCase("ru");
+  const visibleModules = modules.data.filter((item) =>
+    `${item.label} ${item.summary}`.toLocaleLowerCase("ru").includes(search)
+  );
 
   return (
     <div className="space-y-6">
@@ -104,8 +109,27 @@ export function ModulesSettings(): React.ReactElement {
         <p className="text-xs text-muted-foreground">Состав модулей может менять только владелец пространства.</p>
       ) : null}
 
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" aria-hidden />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Найти модуль"
+          aria-label="Найти модуль"
+          className="pl-9"
+        />
+      </div>
+      {visibleModules.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title="Модуль не найден"
+          description="Попробуйте другое название."
+          action={<Button size="sm" variant="outline" onClick={() => setQuery("")}>Сбросить поиск</Button>}
+        />
+      ) : null}
+
       {groups.map((kind) => {
-        const items = modules.data?.filter((item) => item.kind === kind) ?? [];
+        const items = visibleModules.filter((item) => item.kind === kind);
         if (items.length === 0) return null;
         return (
           <section key={kind} className="space-y-2">
@@ -163,7 +187,11 @@ export function ModulesSettings(): React.ReactElement {
                       )}
                     </div>
                   </div>
-                  <dl className="grid gap-2 text-2xs text-subtle-foreground [@container(min-width:576px)]:grid-cols-2">
+                  <details className="text-2xs text-muted-foreground">
+                    <summary className="w-fit cursor-pointer rounded-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" aria-label={`Подробнее о модуле «${item.label}»`}>
+                      Подробнее о модуле
+                    </summary>
+                  <dl className="mt-3 grid gap-2 text-2xs text-subtle-foreground [@container(min-width:576px)]:grid-cols-2">
                     <div>
                       <dt className="font-medium text-muted-foreground">Отвечает за</dt>
                       <dd>{item.owns}</dd>
@@ -193,6 +221,7 @@ export function ModulesSettings(): React.ReactElement {
                       </div>
                     ) : null}
                   </dl>
+                  </details>
                 </Card>
               ))}
             </div>

@@ -451,9 +451,9 @@ export function CalendarPanel(): React.ReactElement {
               <DropdownMenu
                 align="end"
                 trigger={({ toggle }) => (
-                  <IconButton label="Создать задачу или заметку" size="sm" onClick={toggle}>
-                    <Plus className="h-4 w-4" />
-                  </IconButton>
+                  <Button size="sm" variant="outline" onClick={toggle} aria-label="Создать задачу или заметку">
+                    <Plus className="h-4 w-4" /> {tasksOn && notesOn ? "Задача / заметка" : tasksOn ? "Задача" : "Заметка"}
+                  </Button>
                 )}
                 items={[
                   ...(tasksOn ? [{ label: "Задачу со сроком…", icon: ListTodo, onSelect: () => setQuick("task") }] : []),

@@ -229,7 +229,7 @@ function NotificationRow({
             {unread ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="Не прочитано" /> : null}
           </span>
           {item.body ? (
-            <span className="mt-0.5 line-clamp-2 block text-2xs text-muted-foreground">{item.body}</span>
+            <span className="mt-0.5 line-clamp-2 text-2xs text-muted-foreground">{item.body}</span>
           ) : null}
           <span className="mt-0.5 block text-2xs text-subtle-foreground">
             {KIND_LABEL[item.kind]} · {relativeTime(item.createdAt)}
