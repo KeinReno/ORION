@@ -1,4 +1,4 @@
-import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, RecurrenceSpec, Task, TaskRecurrence, TimeEntry } from "@orion/shared-types";
+import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, RecurrenceSpec, Task, TaskPriority, TaskRecurrence, TaskStatus, TaskViewFilters, TimeEntry } from "@orion/shared-types";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -34,13 +34,21 @@ export interface FinanceTabSlotProps {
 }
 
 /** tasks.views.bar — named filter presets in the Tasks panel header. The host owns the filters; the plugin saves and re-applies them. */
+export interface TaskViewCriteria {
+  search: string;
+  projectId: string | null;
+  due: NonNullable<TaskViewFilters["due"]>;
+  statuses: TaskStatus[];
+  priorities: TaskPriority[];
+}
+
 export interface TasksViewsBarSlotProps {
   workspaceId: string | undefined;
   projects: Project[];
   /** The filters the panel currently has. */
-  current: { search: string; projectId: string | null };
+  current: TaskViewCriteria;
   /** Ask the host to take these filters. */
-  onApply: (criteria: { search: string; projectId: string | null }) => void;
+  onApply: (criteria: TaskViewCriteria) => void;
 }
 
 /**

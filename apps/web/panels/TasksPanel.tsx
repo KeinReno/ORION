@@ -1,7 +1,7 @@
 "use client";
 
 import { useCreateTask, useDeleteTask, useMilestones, useProjects, useTasks, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
-import type { CreateTaskInput, Task, TaskPriority, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
+import type { CreateTaskInput, Task, TaskPriority, TaskStatus, TaskViewFilters, UpdateTaskInput } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import {
   Button,
@@ -11,6 +11,7 @@ import {
   Modal,
   PanelHeader,
   PanelShell,
+  Select,
   SegmentedControl,
   Skeleton,
   cx,
@@ -20,7 +21,7 @@ import {
   useToast
 } from "@orion/ui";
 import { motion, useReducedMotion } from "framer-motion";
-import { ListTodo, Plus, Search, TriangleAlert } from "lucide-react";
+import { ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
@@ -48,6 +49,7 @@ import {
   useTaskReorder
 } from "../lib/task-structure";
 import { TaskDetail } from "./tasks/task-detail";
+import { matchesTaskView } from "../lib/task-view-filter";
 
 type GroupBy = "status" | "project" | "due" | "priority";
 /** "list" is the module's own layout; any other id (the board) comes from a `tasks.views` plugin. */
@@ -158,6 +160,9 @@ export function TasksPanel(): React.ReactElement {
   const { toast } = useToast();
 
   const [query, setQuery] = useState("");
+  const [dueFilter, setDueFilter] = useState<NonNullable<TaskViewFilters["due"]>>("all");
+  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority[]>([]);
   const [groupBy, setGroupBy] = useState<GroupBy>("status");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const [scope, setScope] = useState<TaskScope>("all");
@@ -226,14 +231,12 @@ export function TasksPanel(): React.ReactElement {
   }, [projectList, tasks, projectFilter]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const viewFilters: TaskViewFilters = { search: query, projectId: projectFilter, due: dueFilter, statuses: statusFilter, priorities: priorityFilter };
     return (tasks ?? []).filter((task) => {
       if (scope === "loose" && task.projectId !== null) return false;
-      if (projectFilter && (task.projectId ?? NO_PROJECT) !== projectFilter) return false;
-      if (q && !task.title.toLowerCase().includes(q) && !task.description.toLowerCase().includes(q)) return false;
-      return true;
+      return matchesTaskView(task, viewFilters);
     });
-  }, [tasks, query, projectFilter, scope]);
+  }, [tasks, query, projectFilter, scope, dueFilter, statusFilter, priorityFilter]);
 
   const editing = editingId ? (tasks ?? []).find((t) => t.id === editingId) ?? null : null;
   // Варианты для селекта «Родительская задача»: без самой задачи и её потомков —
@@ -419,10 +422,14 @@ export function TasksPanel(): React.ReactElement {
           props={{
             workspaceId: workspace?.id,
             projects: projectList ?? [],
-            current: { search: query, projectId: projectFilter },
+            current: { search: query, projectId: projectFilter, due: dueFilter, statuses: statusFilter, priorities: priorityFilter },
             onApply: (criteria) => {
               setQuery(criteria.search);
               setProjectFilter(criteria.projectId);
+              setDueFilter(criteria.due);
+              setStatusFilter(criteria.statuses);
+              setPriorityFilter(criteria.priorities);
+              chooseScope("all");
             }
           }}
         />
@@ -431,6 +438,28 @@ export function TasksPanel(): React.ReactElement {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск задач" className="pl-8" />
           </div>
+          <Select
+            aria-label="Фильтр по сроку"
+            value={dueFilter}
+            onChange={(event) => setDueFilter(event.target.value as NonNullable<TaskViewFilters["due"]>)}
+            className="w-auto min-w-[8rem] text-xs"
+          >
+            <option value="all">Все сроки</option>
+            <option value="overdue">Просрочено</option>
+            <option value="today">Сегодня</option>
+            <option value="week">Эта неделя</option>
+            <option value="none">Без срока</option>
+          </Select>
+          {statusFilter.length ? (
+            <Button size="sm" variant="subtle" onClick={() => setStatusFilter([])} title="Сбросить фильтр по статусу">
+              Статус: {statusFilter.map((status) => TASK_STATUS_LABEL[status]).join(", ")} <X className="h-3 w-3" />
+            </Button>
+          ) : null}
+          {priorityFilter.length ? (
+            <Button size="sm" variant="subtle" onClick={() => setPriorityFilter([])} title="Сбросить фильтр по приоритету">
+              Приоритет: {priorityFilter.map((priority) => TASK_PRIORITY_LABEL[priority]).join(", ")} <X className="h-3 w-3" />
+            </Button>
+          ) : null}
           {isEnabled("projects") && (projectChips.length > 0 || scope === "loose") ? (
             <SegmentedControl<TaskScope>
               aria-label="Какие задачи показывать"
@@ -545,7 +574,7 @@ export function TasksPanel(): React.ReactElement {
           <EmptyState
             icon={Search}
             title="Ничего не найдено"
-            description="По текущим фильтрам задач нет. Сбросьте поиск, проект или область просмотра."
+            description="По текущим фильтрам задач нет. Сбросьте поиск, проект, срок или область просмотра."
             action={
               <Button
                 size="sm"
@@ -553,6 +582,9 @@ export function TasksPanel(): React.ReactElement {
                 onClick={() => {
                   setQuery("");
                   setProjectFilter(null);
+                  setDueFilter("all");
+                  setStatusFilter([]);
+                  setPriorityFilter([]);
                   chooseScope("all");
                 }}
               >

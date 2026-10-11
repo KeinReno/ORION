@@ -1,23 +1,31 @@
 "use client";
 
 import { useCreateTaskView, useDeleteTaskView, useTaskViews } from "@orion/core-react";
-import type { Project, SavedTaskView } from "@orion/shared-types";
+import type { Project, SavedTaskView, TaskViewFilters } from "@orion/shared-types";
 import { Button, ConfirmDialog, Input, Modal, Skeleton, cx, useToast } from "@orion/ui";
 import { BookmarkPlus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import type { TaskViewCriteria } from "../../lib/extensions/contracts";
 
 /**
  * Saved task views (v0.14) — a named filter preset in the tasks panel header.
  *
- * Scope note: `taskViewFiltersSchema` also carries `statuses`/`priorities`/`due`,
- * but the board has no controls for those (it groups by them instead of
- * filtering), so a view saved here only stores what the panel can actually
- * restore — the search string and the project. Storing a filter the panel
- * can't apply back would be a lie the UI tells the user.
+ * A named preset restores every filter carried by the public task-view contract.
  */
-export interface SavedViewCriteria {
-  search: string;
-  projectId: string | null;
+function criteriaOf(filters: TaskViewFilters): TaskViewCriteria {
+  return {
+    search: filters.search ?? "",
+    projectId: filters.projectId ?? null,
+    due: filters.due ?? "all",
+    statuses: filters.statuses ?? [],
+    priorities: filters.priorities ?? []
+  };
+}
+
+function sameCriteria(a: TaskViewCriteria, b: TaskViewCriteria): boolean {
+  return a.search === b.search && a.projectId === b.projectId && a.due === b.due &&
+    [...a.statuses].sort().join("|") === [...b.statuses].sort().join("|") &&
+    [...a.priorities].sort().join("|") === [...b.priorities].sort().join("|");
 }
 
 export function SavedViewsBar({
@@ -28,8 +36,8 @@ export function SavedViewsBar({
 }: {
   workspaceId: string | undefined;
   projects: Project[];
-  current: SavedViewCriteria;
-  onApply: (criteria: SavedViewCriteria) => void;
+  current: TaskViewCriteria;
+  onApply: (criteria: TaskViewCriteria) => void;
 }): React.ReactElement {
   const { data: views, isLoading } = useTaskViews(workspaceId);
   const createView = useCreateTaskView(workspaceId);
@@ -39,13 +47,20 @@ export function SavedViewsBar({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<SavedTaskView | null>(null);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!name.trim()) return;
     await createView.mutateAsync({
       name: name.trim(),
-      filters: { search: current.search || undefined, projectId: current.projectId }
+      filters: {
+        search: current.search || undefined,
+        projectId: current.projectId,
+        due: current.due,
+        statuses: current.statuses,
+        priorities: current.priorities
+      }
     });
     setName("");
     setSaving(false);
@@ -67,8 +82,7 @@ export function SavedViewsBar({
     <div className="flex flex-wrap items-center gap-1.5">
       {isLoading ? <Skeleton className="h-6 w-24" /> : null}
       {(views ?? []).map((view) => {
-        const isActive =
-          (view.filters.search ?? "") === current.search && (view.filters.projectId ?? null) === current.projectId;
+        const isActive = view.id === activeViewId && sameCriteria(criteriaOf(view.filters), current);
         return (
           <span
             key={view.id}
@@ -80,9 +94,12 @@ export function SavedViewsBar({
             <button
               type="button"
               className="max-w-40 truncate hover:text-foreground"
-              onClick={() =>
-                onApply({ search: view.filters.search ?? "", projectId: view.filters.projectId ?? null })
-              }
+              aria-pressed={isActive}
+              title={`Применить вид «${view.name}»`}
+              onClick={() => {
+                onApply(criteriaOf(view.filters));
+                setActiveViewId(view.id);
+              }}
             >
               {view.name}
             </button>
@@ -120,9 +137,10 @@ export function SavedViewsBar({
             required
           />
           <p className="text-2xs text-subtle-foreground">
-            Вид запоминает текущий поиск и фильтр по проекту.
+            Вид запоминает текущий поиск, проект, срок, статус и приоритет.
             {current.search ? ` Поиск: «${current.search}».` : ""}
             {activeProjectName ? ` Проект: ${activeProjectName}.` : ""}
+            {current.due !== "all" ? ` Срок: ${current.due}.` : ""}
           </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="subtle" size="sm" onClick={() => setSaving(false)}>
