@@ -11,8 +11,8 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 /**
  * One page of the built-in browser: the address/search bar over a sandboxed frame. Used by the tabbed browser panel and by a
  * page torn out into a dock panel of its own — the same component, so they behave the same. The page is shown in a frame, so
- * sites that forbid being framed stay blank (Google, with its embeddable results, and Bing show; others may not): that is
- * what «Открыть во внешнем браузере» is for.
+ * sites that forbid being framed may stay blank. The visible «Открыть отдельно» action lets the user open the URL
+ * outside the frame; cross-origin framing failures cannot be detected reliably from this component.
  */
 export function BrowserPage({
   url,
@@ -110,9 +110,16 @@ export function BrowserPage({
         <IconButton label="Сохранить ссылку заметкой" size="sm" disabled={!url || createNote.isPending} onClick={() => void clip()}>
           <FileText className="h-4 w-4" />
         </IconButton>
-        <IconButton label="Открыть во внешнем браузере" size="sm" disabled={!url} onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}>
-          <ExternalLink className="h-4 w-4" />
-        </IconButton>
+        {url ? (
+          <Button
+            size="sm"
+            variant="subtle"
+            title="Если сайт не показывает страницу внутри ORION, откройте её отдельно"
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          >
+            <ExternalLink className="h-4 w-4" /> Открыть отдельно
+          </Button>
+        ) : null}
       </form>
 
       <div className="relative min-h-0 flex-1 bg-background">
@@ -130,8 +137,7 @@ export function BrowserPage({
             <Globe className="h-8 w-8" aria-hidden />
             <p className="text-foreground">Введите адрес сайта или запрос в строке выше</p>
             <p className="max-w-md text-xs">
-              Запрос уйдёт в {current.label}. Страница откроется здесь, во вкладке ORION; сайт, запрещающий встраивание, останется пустым — тогда нажмите
-              «Открыть во внешнем браузере».
+              Запрос уйдёт в {current.label}. Страница откроется здесь, во вкладке ORION. Если сайт не покажет содержимое, нажмите «Открыть отдельно».
             </p>
           </div>
         )}
