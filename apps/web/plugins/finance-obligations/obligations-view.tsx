@@ -12,11 +12,11 @@ import { OBLIGATION_KIND_LABEL, OBLIGATION_KINDS, type CreateObligationInput, ty
 import { Badge, Button, Card, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, Select, Skeleton, useToast } from "@orion/ui";
 import { HandCoins, MoreHorizontal, Plus } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
-import { describeAuthError } from "../../lib/error-message";
-import { dueState } from "../../lib/finance-forecast";
-import { formatMoney, fromKopecks, parseMoneyInput, shortDate, toKopecks } from "../../lib/format";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { dueState } from "../../lib/extensions/host-api";
+import { formatMoney, fromKopecks, parseMoneyInput, shortDate, toKopecks } from "../../lib/extensions/host-api";
 import type { FinanceTabSlotProps } from "../../lib/extensions/contracts";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 
 const INTERVAL_LABEL: Record<ObligationInterval, string> = { once: "разово", monthly: "каждый месяц", yearly: "каждый год" };
 

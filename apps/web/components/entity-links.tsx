@@ -31,7 +31,7 @@ import {
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { computeLinkOptions, type EntityLinkOption } from "../lib/entity-link-options";
 import { describeError } from "../lib/error-message";
-import { focusDocument, focusEvent, focusNote, focusProject, focusTask, focusTransaction } from "../lib/panel-bus";
+import { openEntity } from "../lib/panel-bus";
 
 const TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
   project: FolderKanban,
@@ -49,16 +49,6 @@ const TYPE_LABEL: Record<SearchableEntityType, string> = {
   event: "событие",
   document: "документ",
   transaction: "операция"
-};
-
-/** Opens the target's own panel — reuses the existing panel-bus focus channels, no new navigation. */
-const FOCUS_BY_TYPE: Partial<Record<SearchableEntityType, (id: string) => void>> = {
-  task: focusTask,
-  note: focusNote,
-  event: focusEvent,
-  document: focusDocument,
-  transaction: focusTransaction,
-  project: focusProject
 };
 
 /**
@@ -446,7 +436,6 @@ export function EntityLinksSection({
         <ul className="flex flex-wrap gap-1.5">
           {others.map((other) => {
             const Icon = TYPE_ICON[other.type];
-            const focus = FOCUS_BY_TYPE[other.type];
             return (
               <li
                 key={other.link.id}
@@ -454,10 +443,9 @@ export function EntityLinksSection({
               >
                 <button
                   type="button"
-                  onClick={() => focus?.(other.id)}
+                  onClick={() => openEntity(other.type, other.id, other.title)}
                   title={other.perspectiveLabel}
                   className="flex items-center gap-1 hover:text-foreground disabled:cursor-default"
-                  disabled={!focus}
                 >
                   <Icon className="h-3 w-3 shrink-0 text-subtle-foreground" />
                   <span className="max-w-48 truncate">{other.title || "Без названия"}</span>

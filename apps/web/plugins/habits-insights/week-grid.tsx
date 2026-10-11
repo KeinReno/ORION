@@ -1,9 +1,9 @@
 "use client";
 
 import { isHabitScheduled, type Habit } from "@orion/shared-types";
-import { IconButton, cx } from "@orion/ui";
+import { IconButton, cx, useResizeWidth } from "@orion/ui";
 import { Archive, Check } from "lucide-react";
-import { WEEKDAY_SHORT, habitSwatchColor, weekdayTitle, type WeekDay } from "../../lib/habit-days";
+import { WEEKDAY_SHORT, habitSwatchColor, weekdayTitle, type WeekDay } from "../../lib/extensions/host-api";
 
 /**
  * The week at a glance: one row per active habit, seven columns Пн…Вс.
@@ -33,10 +33,12 @@ export function WeekGrid({
   onEdit: (habit: Habit) => void;
   onArchive: (habit: Habit) => void;
 }): React.ReactElement {
+  const [gridRef, gridWidth] = useResizeWidth<HTMLDivElement>();
+  const compact = gridWidth > 0 && gridWidth < 400;
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="min-w-0 flex-1" />
+    <div ref={gridRef} className="space-y-1.5">
+      <div className={cx("flex items-center gap-1.5", compact && "justify-between px-2")}>
+        {!compact ? <span className="min-w-0 flex-1" /> : null}
         {week.map((day) => (
           <span
             key={day.key}
@@ -54,12 +56,18 @@ export function WeekGrid({
       </div>
 
       {habits.map((habit) => (
-        <div key={habit.id} className="flex items-center gap-1.5">
+        <div
+          key={habit.id}
+          className={cx("flex items-center gap-1.5", compact && "flex-col items-stretch rounded-lg border border-border/60 px-2 py-2")}
+        >
           <button
             type="button"
             onClick={() => onEdit(habit)}
             title="Изменить привычку"
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm text-foreground outline-none hover:text-accent-text focus-visible:ring-2 focus-visible:ring-accent/60"
+            className={cx(
+              "flex min-w-0 flex-1 items-center gap-1.5 text-left text-sm text-foreground outline-none hover:text-accent-text focus-visible:ring-2 focus-visible:ring-accent/60",
+              compact && "w-full"
+            )}
           >
             {habit.color ? (
               <span
@@ -71,39 +79,36 @@ export function WeekGrid({
             <span className="truncate">{habit.name}</span>
           </button>
 
-          {week.map((day) => {
-            const done = days.get(habit.id)?.has(day.key) ?? false;
-            const scheduled = isHabitScheduled(habit.weekdays, day.key);
-            if (!scheduled) {
-              return <span key={day.key} className="h-7 w-7 shrink-0" aria-hidden />;
-            }
-            return (
-              <button
-                key={day.key}
-                type="button"
-                aria-pressed={done}
-                aria-label={`${habit.name}: ${weekdayTitle(day.weekday)}, ${day.key} — ${
-                  done ? "снять отметку" : "отметить"
-                }`}
-                disabled={busy}
-                onClick={() => onToggle(habit.id, day.key)}
-                className={cx(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-[color,background-color,border-color,transform] outline-none active:scale-90",
-                  "focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50",
-                  done
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border-strong hover:border-accent",
-                  day.isToday && "ring-1 ring-accent/70 ring-offset-1 ring-offset-card"
-                )}
-              >
-                {done ? <Check className="h-3.5 w-3.5" /> : null}
-              </button>
-            );
-          })}
-
-          <IconButton label={`Убрать «${habit.name}» в архив`} size="sm" disabled={busy} onClick={() => onArchive(habit)}>
-            <Archive className="h-3.5 w-3.5" />
-          </IconButton>
+          <div className={compact ? "flex items-center justify-between gap-1" : "contents"}>
+            {week.map((day) => {
+              const done = days.get(habit.id)?.has(day.key) ?? false;
+              const scheduled = isHabitScheduled(habit.weekdays, day.key);
+              if (!scheduled) {
+                return <span key={day.key} className="h-7 w-7 shrink-0" aria-hidden />;
+              }
+              return (
+                <button
+                  key={day.key}
+                  type="button"
+                  aria-pressed={done}
+                  aria-label={`${habit.name}: ${weekdayTitle(day.weekday)}, ${day.key} — ${done ? "снять отметку" : "отметить"}`}
+                  disabled={busy}
+                  onClick={() => onToggle(habit.id, day.key)}
+                  className={cx(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-[color,background-color,border-color,transform] outline-none active:scale-90",
+                    "focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50",
+                    done ? "border-accent bg-accent text-accent-foreground" : "border-border-strong hover:border-accent",
+                    day.isToday && "ring-1 ring-accent/70 ring-offset-1 ring-offset-card"
+                  )}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" /> : null}
+                </button>
+              );
+            })}
+            <IconButton label={`Убрать «${habit.name}» в архив`} size="sm" disabled={busy} onClick={() => onArchive(habit)}>
+              <Archive className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
         </div>
       ))}
     </div>

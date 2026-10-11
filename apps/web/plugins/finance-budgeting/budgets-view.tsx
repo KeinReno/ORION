@@ -5,10 +5,10 @@ import type { Budget } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, IconButton, Modal, useToast } from "@orion/ui";
 import { ChevronLeft, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { describeAuthError } from "../../lib/error-message";
-import { formatMoney } from "../../lib/format";
-import { withArchivedFallback } from "../../lib/finance-options";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { formatMoney } from "../../lib/extensions/host-api";
+import { withArchivedFallback } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { BudgetForm, type BudgetFormValues } from "./budget-form";
 
 function currentMonth(): string {

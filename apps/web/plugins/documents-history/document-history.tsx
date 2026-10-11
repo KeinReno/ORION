@@ -6,8 +6,8 @@ import { Button, ConfirmDialog, EmptyState, Skeleton, cx, useToast } from "@orio
 import { motion, useReducedMotion } from "framer-motion";
 import { Download, History } from "lucide-react";
 import { useState } from "react";
-import { formatBytes } from "../../lib/document-icons";
-import { relativeTime } from "../../lib/format";
+import { formatBytes } from "../../lib/extensions/host-api";
+import { relativeTime } from "../../lib/extensions/host-api";
 
 /**
  * Version history for one file, rendered inside a Sheet from DocumentsPanel.

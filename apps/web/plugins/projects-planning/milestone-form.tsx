@@ -3,7 +3,7 @@
 import type { Milestone, MilestoneStatus } from "@orion/shared-types";
 import { Button, Input, Select, Textarea } from "@orion/ui";
 import { useState, type FormEvent } from "react";
-import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/format";
+import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/extensions/host-api";
 
 /** Create/edit form for one milestone — same split as `task-form.tsx`, rendered in a Modal by `gantt.tsx`. */
 

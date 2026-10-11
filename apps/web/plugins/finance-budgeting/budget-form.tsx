@@ -3,7 +3,7 @@
 import type { Budget, FinanceCategory } from "@orion/shared-types";
 import { Button, Input, Select } from "@orion/ui";
 import { useState, type FormEvent } from "react";
-import { fromKopecks, toKopecks } from "../../lib/format";
+import { fromKopecks, toKopecks } from "../../lib/extensions/host-api";
 
 export interface BudgetFormValues {
   categoryId: string;

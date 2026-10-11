@@ -6,7 +6,7 @@ import { isTaskClosed } from "@orion/shared-types";
 import { Button, Input, cx, useToast } from "@orion/ui";
 import { CornerUpLeft, Plus } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
-import { TASK_STATUS_LABEL } from "../../lib/task-labels";
+import { TASK_STATUS_LABEL } from "../../lib/extensions/host-api";
 
 export function SubtaskList({
   workspaceId,

@@ -3,7 +3,7 @@
 import { Input, Select, cx } from "@orion/ui";
 import { Repeat } from "lucide-react";
 import type { TaskRecurrenceApi } from "../../lib/extensions/contracts";
-import { TASK_RECURRENCE_LABEL } from "../../lib/task-labels";
+import { TASK_RECURRENCE_LABEL } from "../../lib/extensions/host-api";
 
 const FREQS = ["daily", "weekly", "monthly", "yearly"] as const;
 

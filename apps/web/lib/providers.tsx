@@ -4,9 +4,8 @@ import { BrowserLocalStorage } from "@orion/core";
 import { CoreProvider } from "@orion/core-react";
 import { ToastProvider } from "@orion/ui";
 import { useState, type ReactNode } from "react";
+import { API_BASE_URL } from "./api-base";
 import { PreferencesEffect } from "./preferences-effect";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function Providers({ children }: { children: ReactNode }): React.ReactElement {
   const [storage] = useState(() => new BrowserLocalStorage());

@@ -12,10 +12,10 @@ import type { RecurringTransaction } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, IconButton, Modal, Sheet, Skeleton, useToast } from "@orion/ui";
 import { ArrowDownLeft, ArrowUpRight, Pause, Play, Plus, Repeat } from "lucide-react";
 import { useMemo, useState } from "react";
-import { describeAuthError } from "../../lib/error-message";
-import { formatMoney, shortDateTime } from "../../lib/format";
-import { withArchivedFallback } from "../../lib/finance-options";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { formatMoney, shortDateTime } from "../../lib/extensions/host-api";
+import { withArchivedFallback } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { RecurringForm, type RecurringFormValues } from "./recurring-form";
 
 const INTERVAL_LABEL = { weekly: "каждую неделю", monthly: "каждый месяц" } as const;

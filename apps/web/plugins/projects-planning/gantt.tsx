@@ -10,12 +10,12 @@ import {
   useUpdateTask
 } from "@orion/core-react";
 import { formatDuration, isTaskClosed, type Milestone, type MilestoneCascadeImpact, type Task } from "@orion/shared-types";
-import { Button, ConfirmDialog, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
-import { Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
+import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
+import { Milestone as MilestoneIcon, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { focusTask, openPanel } from "../../lib/panel-bus";
-import { shortDateTime } from "../../lib/format";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { focusTask, openPanel } from "../../lib/extensions/host-api";
+import { shortDateTime } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
 
 /**
@@ -131,11 +131,14 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   // The time axis is at least as wide as the panel, so the plan fills the space instead of
   // ending in the middle of an empty frame; a longer plan simply scrolls.
   const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
+  // Leave a useful time axis in a narrow Dockview panel or phone viewport.
+  // The desktop label width remains unchanged.
+  const labelWidth = frameWidth > 0 ? Math.min(LABEL_W, Math.max(112, Math.round(frameWidth * 0.45))) : LABEL_W;
   const baseRange = useMemo(() => computeRange(rows), [rows]);
   const range = useMemo(() => {
-    const fillDays = frameWidth > LABEL_W ? Math.ceil((frameWidth - LABEL_W) / pxPerDay) : 0;
+    const fillDays = frameWidth > labelWidth ? Math.ceil((frameWidth - labelWidth) / pxPerDay) : 0;
     return fillDays > baseRange.totalDays ? { ...baseRange, totalDays: fillDays } : baseRange;
-  }, [baseRange, frameWidth, pxPerDay]);
+  }, [baseRange, frameWidth, labelWidth, pxPerDay]);
 
   function scrollToToday(behavior: ScrollBehavior): void {
     const el = scrollRef.current;
@@ -370,6 +373,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
         <GanttChart
           rows={rows}
           range={range}
+          labelWidth={labelWidth}
           pxPerDay={pxPerDay}
           scrollRef={scrollRef}
           drag={drag}
@@ -555,6 +559,7 @@ function weekTicks(range: { start: Date; totalDays: number }): { dayOffset: numb
 function GanttChart({
   rows,
   range,
+  labelWidth,
   pxPerDay,
   scrollRef,
   drag,
@@ -565,6 +570,7 @@ function GanttChart({
 }: {
   rows: GanttNode[];
   range: { start: Date; totalDays: number };
+  labelWidth: number;
   pxPerDay: number;
   scrollRef: React.RefObject<HTMLDivElement>;
   drag: DragState | null;
@@ -605,7 +611,7 @@ function GanttChart({
     <div className="overflow-hidden rounded-xl border border-border">
       <div className="flex">
         {/* Label column — the only place a milestone/task row is clickable; bars themselves are drag-only (see file comment). A blank spacer keeps it aligned under the ticks header, which lives in the scroll region on the right so it can never scroll out of sync with the bars. */}
-        <div style={{ width: LABEL_W }} className="shrink-0 border-r border-border">
+        <div style={{ width: labelWidth }} className="shrink-0 border-r border-border">
           <div className="h-6 border-b border-border" />
           {rows.map((row) => (
             <div key={`${row.kind}:${row.id}`} style={{ height: ROW_H }} className="flex items-center gap-1 px-2 text-2xs">
@@ -616,12 +622,28 @@ function GanttChart({
                   <span className="min-w-0 flex-1 truncate font-medium text-foreground" title={row.title}>
                     {row.title}
                   </span>
-                  <IconButton label="Изменить веху" size="sm" onClick={() => onEditMilestone(row.id)}>
-                    <Pencil className="h-3 w-3" />
-                  </IconButton>
-                  <IconButton label="Удалить веху" size="sm" tone="danger" onClick={() => onDeleteMilestone(row.id)}>
-                    <Trash2 className="h-3 w-3" />
-                  </IconButton>
+                  {labelWidth < 180 ? (
+                    <DropdownMenu
+                      trigger={({ toggle }) => (
+                        <IconButton label={`Действия вехи «${row.title}»`} size="sm" onClick={toggle}>
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </IconButton>
+                      )}
+                      items={[
+                        { label: "Изменить веху", icon: Pencil, onSelect: () => onEditMilestone(row.id) },
+                        { label: "Удалить веху", icon: Trash2, tone: "danger", onSelect: () => onDeleteMilestone(row.id) }
+                      ]}
+                    />
+                  ) : (
+                    <>
+                      <IconButton label="Изменить веху" size="sm" onClick={() => onEditMilestone(row.id)}>
+                        <Pencil className="h-3 w-3" />
+                      </IconButton>
+                      <IconButton label="Удалить веху" size="sm" tone="danger" onClick={() => onDeleteMilestone(row.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </IconButton>
+                    </>
+                  )}
                 </>
               ) : (
                 <button

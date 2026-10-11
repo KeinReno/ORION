@@ -3,7 +3,7 @@
 import type { Account, FinanceCategory, RecurrenceInterval, RecurringTransaction, TransactionType } from "@orion/shared-types";
 import { Button, Input, Select, Textarea } from "@orion/ui";
 import { useMemo, useState, type FormEvent } from "react";
-import { fromKopecks, toKopecks } from "../../lib/format";
+import { fromKopecks, toKopecks } from "../../lib/extensions/host-api";
 
 export interface RecurringFormValues {
   accountId: string;

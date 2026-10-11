@@ -4,8 +4,8 @@ import { useCategoryBreakdown, useMonthlyFinanceSummary } from "@orion/core-reac
 import { EmptyState, IconButton, Skeleton } from "@orion/ui";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { formatMoney, projectColor } from "../../lib/format";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { formatMoney, projectColor } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 
 const MONTHS = 6;
 

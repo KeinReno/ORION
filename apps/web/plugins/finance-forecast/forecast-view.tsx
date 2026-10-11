@@ -4,10 +4,10 @@ import { useAccounts, useMonthlyFinanceSummary, useObligations } from "@orion/co
 import { Card, EmptyState, Skeleton } from "@orion/ui";
 import { LineChart } from "lucide-react";
 import { useMemo } from "react";
-import { buildForecast, plannedPayments } from "../../lib/finance-forecast";
-import { formatMoney, shortDate } from "../../lib/format";
+import { buildForecast, plannedPayments } from "../../lib/extensions/host-api";
+import { formatMoney, shortDate } from "../../lib/extensions/host-api";
 import type { FinanceTabSlotProps } from "../../lib/extensions/contracts";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 
 const MONTH_NAMES = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 

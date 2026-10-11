@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { SearchableEntityType } from "@orion/shared-types";
 import { createIntentChannel, type IntentChannel } from "./intent-channel";
 import { getActiveWorkspaceId } from "./use-active-workspace";
 
@@ -96,9 +97,11 @@ function makeFocusChannel(panelId: string): {
 
 const taskChannel = makeFocusChannel("tasks");
 const noteChannel = makeFocusChannel("notes");
-const eventChannel = makeFocusChannel("calendar");
+export interface EntityFocusRequest { id: string; nonce: number; workspaceId: string | null }
+const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
-const transactionChannel = makeFocusChannel("finance");
+const transactionChannel = makeIntentChannel<EntityFocusRequest>("finance");
+let focusNonce = 0;
 const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
 let browserNonce = 0;
 
@@ -120,8 +123,8 @@ export const focusNote = noteChannel.focus;
 export const useFocusedNoteId = noteChannel.useFocusedId;
 
 /** Open the Calendar panel and select an event (notification bell, inbox). */
-export const focusEvent = eventChannel.focus;
-export const useFocusedEventId = eventChannel.useFocusedId;
+export function focusEvent(id: string): void { eventChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
+export const useEventFocusRequest = eventChannel.useIntent;
 
 /**
  * U02 (24-CONNECTED-CORE-BACKLOG.md) — the connected-materials block
@@ -133,12 +136,43 @@ export const useFocusedEventId = eventChannel.useFocusedId;
 export const focusDocument = documentChannel.focus;
 export const useFocusedDocumentId = documentChannel.useFocusedId;
 
-export const focusTransaction = transactionChannel.focus;
-export const useFocusedTransactionId = transactionChannel.useFocusedId;
+export function focusTransaction(id: string): void { transactionChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
+export const useTransactionFocusRequest = transactionChannel.useIntent;
 
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);
+}
+
+/**
+ * The one way to jump to a record of any searchable type: search hits,
+ * linked-record lists, notifications and project materials all used to carry
+ * their own `if (type === …)` chain (and the palette forgot events, documents
+ * and transactions — it opened the panel but never selected the record).
+ * Like every focus helper this is navigation only: the target panel loads the
+ * record through its own access-checked API, so a link never widens access.
+ */
+export function openEntity(type: SearchableEntityType, id: string, title?: string): void {
+  switch (type) {
+    case "task":
+      focusTask(id);
+      return;
+    case "note":
+      focusNote(id);
+      return;
+    case "event":
+      focusEvent(id);
+      return;
+    case "document":
+      focusDocument(id);
+      return;
+    case "transaction":
+      focusTransaction(id);
+      return;
+    case "project":
+      openProject(id, title);
+      return;
+  }
 }
 
 /**

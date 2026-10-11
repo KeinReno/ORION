@@ -5,9 +5,9 @@ import { Button, Card, Input, Select, useToast } from "@orion/ui";
 import { Zap } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { FinanceTransactionsTopSlotProps } from "../../lib/extensions/contracts";
-import { describeAuthError } from "../../lib/error-message";
-import { parseQuickEntry, type QuickEntryDraft } from "../../lib/finance-quick-entry";
-import { formatMoney } from "../../lib/format";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { parseQuickEntry, type QuickEntryDraft } from "../../lib/extensions/host-api";
+import { formatMoney } from "../../lib/extensions/host-api";
 
 function dateInput(date: Date): string {
   const pad = (n: number): string => String(n).padStart(2, "0");

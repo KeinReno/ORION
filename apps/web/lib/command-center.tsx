@@ -16,7 +16,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { focusNote, focusTask, openPanel, openProject } from "./panel-bus";
+import { focusNote, focusTask, openEntity, openPanel } from "./panel-bus";
 import { panelRegistry } from "./panel-registry";
 import { useActiveWorkspace } from "./use-active-workspace";
 import { useEnabledModules } from "./use-enabled-modules";
@@ -285,21 +285,7 @@ export function CommandCenter(): React.ReactElement {
         hint: SEARCH_RESULT_LABELS[hit.type] ?? hit.type,
         icon: SEARCH_RESULT_ICONS[hit.type] ?? FileText,
         serverResult: true,
-        run: () => {
-          if (hit.type === "task") {
-            focusTask(hit.id);
-            return;
-          }
-          if (hit.type === "note") {
-            focusNote(hit.id);
-            return;
-          }
-          if (hit.type === "project") {
-            openProject(hit.id, hit.title);
-            return;
-          }
-          openPanel(PANEL_FOR_TYPE[hit.type] ?? "dashboard");
-        }
+        run: () => openEntity(hit.type, hit.id, hit.title)
       });
     }
     return base;

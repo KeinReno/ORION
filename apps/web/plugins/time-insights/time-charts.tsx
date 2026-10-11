@@ -4,8 +4,8 @@ import { useTimeEntries } from "@orion/core-react";
 import { formatDuration, type Project } from "@orion/shared-types";
 import { Button, PanelSection, SegmentedControl, Skeleton, cx } from "@orion/ui";
 import { useEffect, useMemo, useState } from "react";
-import { dailyTotals, localDayKey, periodStats, projectShares } from "../../lib/time-stats";
-import { projectSwatchColor } from "../../lib/project-colors";
+import { dailyTotals, localDayKey, periodStats, projectShares } from "../../lib/extensions/host-api";
+import { projectSwatchColor } from "../../lib/extensions/host-api";
 
 type Span = 7 | 14 | 30;
 const SPAN_OPTIONS: { value: `${Span}`; label: string }[] = [

@@ -10,9 +10,9 @@ import {
 } from "@orion/core-react";
 import { Button, IconButton, MarkdownView, Skeleton, Textarea, useToast } from "@orion/ui";
 import { Pencil, Trash2 } from "lucide-react";
-import { relativeTime } from "../../lib/format";
-import { describeError } from "../../lib/error-message";
-import { useUnsavedDraft } from "../../lib/unsaved-drafts";
+import { relativeTime } from "../../lib/extensions/host-api";
+import { describeError } from "../../lib/extensions/host-api";
+import { useUnsavedDraft } from "../../lib/extensions/host-api";
 
 /**
  * S17 «Комментарии задачи». Plain REST CRUD + react-query refetch — no

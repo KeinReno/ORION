@@ -5,10 +5,10 @@ import { FINANCE_IMPORT_MAX_ROWS, type FinanceCategory, type FinanceImportResult
 import { Button, Card, EmptyState, Select, Textarea, useToast } from "@orion/ui";
 import { FileUp } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { describeAuthError } from "../../lib/error-message";
-import { buildImportRows, fileFingerprint, importRef, parseCsv, type ImportOptions } from "../../lib/finance-csv";
-import { formatMoney } from "../../lib/format";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { buildImportRows, fileFingerprint, importRef, parseCsv, type ImportOptions } from "../../lib/extensions/host-api";
+import { formatMoney } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import type { FinanceTabSlotProps } from "../../lib/extensions/contracts";
 
 const CREATE = "__create__";

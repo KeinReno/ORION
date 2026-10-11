@@ -66,7 +66,7 @@ import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
-import { focusDocument, focusNote, focusTask, focusTransaction, focusEvent, openPanel } from "../lib/panel-bus";
+import { openEntity, openPanel } from "../lib/panel-bus";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { projectFocus } from "../lib/project-focus";
@@ -789,13 +789,9 @@ function ActivityList({ items, onPlan }: { items: ProjectActivity[]; onPlan?: ()
   }
 
   function open(item: ProjectActivity): void {
-    if (item.type === "task") focusTask(item.id);
-    else if (item.type === "note") focusNote(item.id);
-    else if (item.type === "event") focusEvent(item.id);
-    else if (item.type === "document") focusDocument(item.id);
-    else if (item.type === "transaction") focusTransaction(item.id);
-    else if (item.type === "inventory") openPanel("inventory");
+    if (item.type === "inventory") openPanel("inventory");
     else if (item.type === "milestone") onPlan?.();
+    else openEntity(item.type, item.id);
   }
 
   return (

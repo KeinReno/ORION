@@ -3,7 +3,7 @@
 import { useCreateNote, useNotes } from "@orion/core-react";
 import { DropdownMenu, IconButton, useToast } from "@orion/ui";
 import { FileStack, FileText } from "lucide-react";
-import { FilterChip } from "../../components/filter-chip";
+import { FilterChip } from "../../lib/extensions/host-api";
 import type { NotesFilterSlotProps, NotesTemplatePickerSlotProps } from "../../lib/extensions/contracts";
 
 /** Plugin `notes-templates`: the «Шаблоны · N» filter chip of the notes list. */

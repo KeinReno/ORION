@@ -17,14 +17,14 @@ import {
 } from "@orion/ui";
 import { Milestone as MilestoneIcon, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { shortDate } from "../../lib/format";
-import { focusTask, openPanel } from "../../lib/panel-bus";
-import { dayOffset, planDates, planGroups, timelineRange, weekTicks, type PlanGroup, type PlanRow } from "../../lib/project-plan";
-import { daysUntil, planStrip, pluralDays, type PlanStepState } from "../../lib/project-status";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { shortDate } from "../../lib/extensions/host-api";
+import { focusTask, openPanel } from "../../lib/extensions/host-api";
+import { dayOffset, planDates, planGroups, timelineRange, weekTicks, type PlanGroup, type PlanRow } from "../../lib/extensions/host-api";
+import { daysUntil, planStrip, pluralDays, type PlanStepState } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { ProjectGantt } from "./gantt";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
-import { Meter } from "../../components/project-bits";
+import { Meter } from "../../lib/extensions/host-api";
 
 type PlanView = "timeline" | "roadmap" | "calendar" | "gantt";
 const VIEW_KEY = "orion.project-plan-view";

@@ -4,8 +4,8 @@ import type { Milestone, Task } from "@orion/shared-types";
 import { Button, PanelSection, cx } from "@orion/ui";
 import { Flag } from "lucide-react";
 import type { ProjectOverviewPlanSlotProps } from "../../lib/extensions/contracts";
-import { shortDate } from "../../lib/format";
-import { planStrip, type PlanStepState } from "../../lib/project-status";
+import { shortDate } from "../../lib/extensions/host-api";
+import { planStrip, type PlanStepState } from "../../lib/extensions/host-api";
 
 const STEP_BAR: Record<PlanStepState, string> = {
   done: "bg-success",

@@ -2,7 +2,7 @@
 
 import { Input, StatCard } from "@orion/ui";
 import type { InventoryCostingApi } from "../../lib/extensions/contracts";
-import { formatMoney } from "../../lib/format";
+import { formatMoney } from "../../lib/extensions/host-api";
 
 /**
  * Plugin `inventory-costing`: the price of a receipt and the average cost that grows out of it. The balance and the

@@ -11,8 +11,8 @@ import type { CalendarConnection, CalendarConnectionInput } from "@orion/shared-
 import { Badge, Button, ConfirmDialog, IconButton, Input, Modal, Popover, Select, Skeleton, cx, useToast } from "@orion/ui";
 import { Check, Link2, Pencil, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { relativeTime, shortDateTime } from "../../lib/format";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { relativeTime, shortDateTime } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 
 const KIND_LABEL: Record<CalendarConnection["kind"], string> = {
   ics: "ICS-ссылка",

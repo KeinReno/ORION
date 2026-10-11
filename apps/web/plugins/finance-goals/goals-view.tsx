@@ -11,10 +11,10 @@ import type { SavingsGoal } from "@orion/shared-types";
 import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, Skeleton, useToast } from "@orion/ui";
 import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { describeAuthError } from "../../lib/error-message";
-import { formatMoney } from "../../lib/format";
-import { withArchivedFallback } from "../../lib/finance-options";
-import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { describeAuthError } from "../../lib/extensions/host-api";
+import { formatMoney } from "../../lib/extensions/host-api";
+import { withArchivedFallback } from "../../lib/extensions/host-api";
+import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { GoalForm, type GoalFormValues } from "./goal-form";
 
 function daysLeft(targetDate: string): number {

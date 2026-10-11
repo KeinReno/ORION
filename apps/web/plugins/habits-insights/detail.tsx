@@ -4,8 +4,8 @@ import { useHabitEntries, useToggleHabit } from "@orion/core-react";
 import { Skeleton, useToast } from "@orion/ui";
 import { useMemo } from "react";
 import type { HabitDetailSlotProps } from "../../lib/extensions/contracts";
-import { buildHeatmapWeeks, buildWeek, entryDaysByHabit } from "../../lib/habit-days";
-import { useLocalNow } from "../../lib/use-day-boundary";
+import { buildHeatmapWeeks, buildWeek, entryDaysByHabit } from "../../lib/extensions/host-api";
+import { useLocalNow } from "../../lib/extensions/host-api";
 import { HabitsHeatmap } from "./heatmap";
 import { WeekGrid } from "./week-grid";
 

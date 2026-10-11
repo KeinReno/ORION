@@ -3,7 +3,7 @@
 import { describeRecurrence, WEEKDAY_RU_SHORT, type RecurrenceFreq, type RecurrenceSpec } from "@orion/shared-types";
 import { Input, Select } from "@orion/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fromDateInput, toDateInput } from "../../lib/date-input";
+import { fromDateInput, toDateInput } from "../../lib/extensions/host-api";
 import type { EventRecurrenceSlotProps } from "../../lib/extensions/contracts";
 
 const FREQ_OPTIONS: { value: RecurrenceFreq | "none"; label: string }[] = [

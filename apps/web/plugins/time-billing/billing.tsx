@@ -2,7 +2,7 @@
 
 import { entryMinutes, formatDuration, timeCostMinor, type Project, type TimeEntry } from "@orion/shared-types";
 import type { TimeBillingApi } from "../../lib/extensions/contracts";
-import { formatMoney } from "../../lib/format";
+import { formatMoney } from "../../lib/extensions/host-api";
 
 /**
  * Plugin `time-billing`: everything that turns hours into money — the «Стоимость времени» lines

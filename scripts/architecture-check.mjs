@@ -36,6 +36,18 @@ function importSpecifiers(file) {
   return found;
 }
 
+// Plugins reach the host only through contracts + host-api; the composition
+// registry alone may import registry. Everything else is a fixed legacy pair.
+// Known debt, shrink-only: the DOCX/XLSX codecs live in lib/office and the host's
+// DocumentsPanel shares them. A barrel would pull SheetJS into the main bundle,
+// so the office plugin keeps direct access until the codecs move into the plugin.
+const LEGACY_HOST_IMPORTS = new Map([
+  ["index.ts", new Set(["lib/office/office-kind", "lib/office/office-files"])],
+  ["documents-office/OfficeEditor.tsx", new Set(["lib/office/office-kind"])],
+  ["documents-office/docx-editor.tsx", new Set(["lib/office/docx-codec", "lib/office/editor-generation-guard", "lib/office/office-files"])],
+  ["documents-office/xlsx-editor.tsx", new Set(["lib/office/xlsx-codec", "lib/office/editor-generation-guard", "lib/office/office-files"])]
+]);
+
 export function architectureViolations(projectRoot = root) {
   const web = join(projectRoot, "apps", "web");
   const plugins = join(web, "plugins");
@@ -55,6 +67,16 @@ export function architectureViolations(projectRoot = root) {
       if (base === "plugin" && within(target, panels)) {
         violations.push(`${relative(projectRoot, file)}:${specifier.line} imports host panel ${specifier.value}`);
       }
+      if (base === "plugin" && !within(target, plugins) && !within(target, panels) && within(target, web)) {
+        const hostPath = relative(web, target).split(sep).join("/");
+        const pluginFile = relative(plugins, file).split(sep).join("/");
+        const publicSurface = hostPath === "lib/extensions/contracts" || hostPath === "lib/extensions/host-api" ||
+          (pluginFile === "index.ts" && hostPath === "lib/extensions/registry");
+        const legacy = LEGACY_HOST_IMPORTS.get(pluginFile)?.has(hostPath) ?? false;
+        if (!publicSurface && !legacy) {
+          violations.push(`${relative(projectRoot, file)}:${specifier.line} imports host internals ${specifier.value} (use lib/extensions/host-api)`);
+        }
+      }
       if (base === "plugin" && file !== join(plugins, "index.ts") && within(target, plugins)) {
         const owner = join(plugins, relative(plugins, file).split(sep)[0]);
         if (!within(target, owner)) {
@@ -72,6 +94,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(violations.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels or other plugins)");
+    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins)");
   }
 }

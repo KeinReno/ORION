@@ -6,6 +6,15 @@ import { Button, ConfirmDialog, Input, Modal, Skeleton, cx, useToast } from "@or
 import { BookmarkPlus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { TaskViewCriteria } from "../../lib/extensions/contracts";
+import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "../../lib/extensions/host-api";
+
+const DUE_LABEL: Record<TaskViewCriteria["due"], string> = {
+  all: "",
+  overdue: "Просрочено",
+  today: "Сегодня",
+  week: "На этой неделе",
+  none: "Без срока"
+};
 
 /**
  * Saved task views (v0.14) — a named filter preset in the tasks panel header.
@@ -28,15 +37,28 @@ function sameCriteria(a: TaskViewCriteria, b: TaskViewCriteria): boolean {
     [...a.priorities].sort().join("|") === [...b.priorities].sort().join("|");
 }
 
+function describeCriteria(filters: TaskViewCriteria, projects: Project[], onlyMine: boolean | undefined): string {
+  const parts: string[] = [];
+  if (filters.search) parts.push(`Поиск: «${filters.search}»`);
+  if (filters.projectId) parts.push(`Проект: ${projects.find((project) => project.id === filters.projectId)?.name ?? "недоступен"}`);
+  if (filters.due !== "all") parts.push(DUE_LABEL[filters.due]);
+  if (filters.statuses.length) parts.push(`Статус: ${filters.statuses.map((status) => TASK_STATUS_LABEL[status]).join(", ")}`);
+  if (filters.priorities.length) parts.push(`Приоритет: ${filters.priorities.map((priority) => TASK_PRIORITY_LABEL[priority]).join(", ")}`);
+  if (onlyMine !== undefined) parts.push(onlyMine ? "Только мои" : "Все участники");
+  return parts.length ? parts.join(" · ") : "Все задачи";
+}
+
 export function SavedViewsBar({
   workspaceId,
   projects,
   current,
+  onlyMine,
   onApply
 }: {
   workspaceId: string | undefined;
   projects: Project[];
   current: TaskViewCriteria;
+  onlyMine?: boolean;
   onApply: (criteria: TaskViewCriteria) => void;
 }): React.ReactElement {
   const { data: views, isLoading } = useTaskViews(workspaceId);
@@ -77,12 +99,14 @@ export function SavedViewsBar({
   const activeProjectName = current.projectId
     ? projects.find((project) => project.id === current.projectId)?.name ?? null
     : null;
+  const activeView = (views ?? []).find((view) => view.id === activeViewId && sameCriteria(criteriaOf(view.filters), current));
+  const activeScope = activeView ? describeCriteria(current, projects, onlyMine) : null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {isLoading ? <Skeleton className="h-6 w-24" /> : null}
       {(views ?? []).map((view) => {
-        const isActive = view.id === activeViewId && sameCriteria(criteriaOf(view.filters), current);
+        const isActive = view.id === activeView?.id;
         return (
           <span
             key={view.id}
@@ -114,6 +138,11 @@ export function SavedViewsBar({
           </span>
         );
       })}
+      {activeScope ? (
+        <span className="max-w-[20rem] truncate text-2xs text-subtle-foreground" title={activeScope} aria-live="polite">
+          {activeScope}
+        </span>
+      ) : null}
       <Button
         type="button"
         variant="subtle"
@@ -138,6 +167,7 @@ export function SavedViewsBar({
           />
           <p className="text-2xs text-subtle-foreground">
             Вид запоминает текущий поиск, проект, срок, статус и приоритет.
+            {onlyMine !== undefined ? " Режим «Только мои» выбирается отдельно." : ""}
             {current.search ? ` Поиск: «${current.search}».` : ""}
             {activeProjectName ? ` Проект: ${activeProjectName}.` : ""}
             {current.due !== "all" ? ` Срок: ${current.due}.` : ""}
