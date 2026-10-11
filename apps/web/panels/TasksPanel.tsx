@@ -574,7 +574,9 @@ export function TasksPanel(): React.ReactElement {
           <EmptyState
             icon={Search}
             title="Ничего не найдено"
-            description="По текущим фильтрам задач нет. Сбросьте поиск, проект, срок или область просмотра."
+            description={teamOn && onlyMine
+              ? "Сохранённое представление и фильтры применяются только к назначенным вам задачам. Сбросьте их или покажите все задачи команды."
+              : "По текущим фильтрам задач нет. Сбросьте поиск, проект, срок или область просмотра."}
             action={
               <Button
                 size="sm"
@@ -586,9 +588,13 @@ export function TasksPanel(): React.ReactElement {
                   setStatusFilter([]);
                   setPriorityFilter([]);
                   chooseScope("all");
+                  if (teamOn && onlyMine) {
+                    onlyMineTouched.current = true;
+                    setOnlyMine(false);
+                  }
                 }}
               >
-                Сбросить фильтры
+                {teamOn && onlyMine ? "Показать все и сбросить фильтры" : "Сбросить фильтры"}
               </Button>
             }
           />

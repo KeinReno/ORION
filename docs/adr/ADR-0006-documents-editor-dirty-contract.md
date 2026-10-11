@@ -10,7 +10,7 @@ The optional `documents-office` editor already warns on browser reload, but sele
 
 Extend the existing typed `documents.editor` slot with `onDirtyChange(dirty: boolean)`. A contributing editor reports whether leaving it would discard edits. Documents Base owns navigation and shows one confirmation before replacing or closing a dirty editor. The callback carries only transient UI state; no editor content enters Base, and no persistence contract changes.
 
-Each file editor is keyed by document ID so a different file starts with fresh editor state. The host also continues to work when no editor plugin is registered: plain previews report no dirty state.
+The entire preview pane and each file editor are keyed by document ID so a different file starts with fresh editor and filename state. This also prevents the previous file's debounced rename value from being applied to the newly selected file. The host continues to work when no editor plugin is registered: plain previews report no dirty state.
 
 ## Scope and follow-up
 

@@ -871,6 +871,7 @@ export function DocumentsPanel(): React.ReactElement {
   const preview =
     selectedFile && selectedFile.kind === "file" ? (
       <PreviewPane
+        key={selectedFile.id}
         doc={selectedFile}
         onDownload={() => void download(selectedFile)}
         onRename={(name) => renameOrMove.mutate({ id: selectedFile.id, input: { name } })}
