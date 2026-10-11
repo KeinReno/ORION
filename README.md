@@ -129,35 +129,26 @@ GitHub Actions дополнительно поднимает чистую Postgr
 
 ## Desktop
 
-На Windows ярлык **ORION** на рабочем столе (создаётся при первом запуске
-`scripts/launch-desktop.cmd`) поднимает Postgres, API, Next.js и окно Tauri
-из **текущего** кода. Сборка `tauri build` — снимок на момент сборки, не
-подхватывает правки.
+Для обычной установки Windows x64 скачайте NSIS `.exe` из GitHub Releases.
+Пакет содержит локальный PostgreSQL, API и интерфейс; инструкции первого
+запуска, данные и ограничения — в [docs/WINDOWS_INSTALLER.md](docs/WINDOWS_INSTALLER.md).
+Путь разработки `scripts/launch-desktop.cmd` запускает ORION из текущего кода.
 
 ```bash
 corepack pnpm dev:app
 # или двойной клик: scripts/launch-desktop.cmd
 
-corepack pnpm --filter @orion/web build:desktop
-corepack pnpm --filter @orion/desktop tauri:build
+corepack pnpm build:desktop-installer  # автономный NSIS-пакет для Windows x64
 ```
 
 Tauri не содержит бизнес-логики: он показывает web-build и добавляет только
 нативные возможности платформы. API разрешает web-origin из `WEB_ORIGIN` или
 `WEB_ORIGINS`, а также стандартные origins Tauri.
 
-**Инсталлятор `tauri:build` не включает backend.** NSIS-пакет содержит только
-окно Tauri поверх статического экспорта `apps/web` — ни NestJS API, ни
-Postgres в него не входят и не запускаются им. Установленное приложение
-работает только при отдельно поднятом API (тот же `apps/api`, тот же
-`.env`/порт, что и при разработке). Это осознанная граница текущей
-архитектуры (см. CLAUDE.md, «Tauri не содержит бизнес-логики»), не пробел —
-но сам инсталлятор об этом не предупреждает пользователя на экране, поэтому
-не раздавать `tauri:build`-сборку людям без API как «автономное приложение».
-`scripts/launch-desktop.cmd`/`dev:app` — единственный путь, который поднимает
-и API, и окно вместе; он же проверяет готовность API через `/system/health`
-(а не фиксированную паузу) и печатает понятную причину сбоя (занятый порт,
-неподнятая БД, упавший процесс) вместо тихого зависания.
+Одна лишь команда `tauri build` без `build:desktop-installer` не готовит
+вспомогательный runtime. Tauri остаётся тонкой оболочкой; бизнес-логика
+работает в упакованном NestJS API. При первом запуске API и PostgreSQL
+инициализируются в локальном профиле пользователя.
 
 ## Статус Sync
 

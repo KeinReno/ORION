@@ -11,6 +11,7 @@
     "dev:app": "node scripts/launch-desktop.mjs",
     "build": "corepack pnpm -r build",
     "build:desktop-export": "corepack pnpm --filter @orion/web build:desktop",
+    "build:desktop-installer": "node scripts/build-desktop-installer.mjs",
     "clean": "node scripts/clean.mjs",
     "typecheck": "corepack pnpm -r --if-present run typecheck",
     "lint": "eslint .",

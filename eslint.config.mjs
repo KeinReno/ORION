@@ -14,6 +14,7 @@ export default tseslint.config(
       "**/target/**",
       "apps/compass-engine/**",
       "**/src-tauri/gen/**",
+      "**/src-tauri/resources/**",
       "**/generated/**",
       // Vendored pdf.js worker, copied into public/ by copy-pdf-worker.mjs.
       "apps/web/public/**",
