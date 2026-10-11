@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import type { Request } from "express";
+import { clientIp } from "../common/client-ip";
 
 /**
  * S05 — brute-force protection on `/auth/login`.
@@ -25,7 +26,7 @@ export class LoginRateLimitGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    const key = clientKey(req);
+    const key = clientIp(req);
     const now = Date.now();
     const entry = this.hits.get(key);
     if (!entry || entry.resetAt <= now) {
@@ -50,9 +51,4 @@ export class LoginRateLimitGuard implements CanActivate {
       if (entry.resetAt <= now) this.hits.delete(key);
     }
   }
-}
-
-function clientKey(req: Request): string {
-  const forwarded = req.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || req.ip || "unknown";
 }

@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import type { Request } from "express";
+import { clientIp } from "../common/client-ip";
 
 /**
  * S05 — narrow abuse guard on `/auth/register`, added after the 2026-09-21
@@ -45,7 +46,7 @@ export class RegisterRateLimitGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    const ip = clientKey(req);
+    const ip = clientIp(req);
     const now = Date.now();
 
     this.bump(
@@ -100,11 +101,6 @@ export class RegisterRateLimitGuard implements CanActivate {
       if (entry.resetAt <= now) store.delete(key);
     }
   }
-}
-
-function clientKey(req: Request): string {
-  const forwarded = req.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || req.ip || "unknown";
 }
 
 function normalizeEmail(raw: unknown): string | null {

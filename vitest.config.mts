@@ -11,7 +11,7 @@ import { defineConfig } from "vitest/config";
 // manual "Проверка" checklists in docs/HISTORY.md still cover those paths for now.
 export default defineConfig({
   test: {
-    include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "scripts/**/*.test.mjs"],
+    include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "apps/api/src/**/*.test.ts", "scripts/**/*.test.mjs"],
     environment: "node"
   }
 });

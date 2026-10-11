@@ -43,6 +43,7 @@ import { AuthService } from "./auth.service";
 import { isServerMode } from "../common/orion-mode";
 import { LoginRateLimitGuard } from "./login-rate-limit.guard";
 import { RegisterRateLimitGuard } from "./register-rate-limit.guard";
+import { clientIp } from "../common/client-ip";
 
 @Controller("auth")
 export class AuthController {
@@ -182,10 +183,9 @@ export class AuthController {
 
 function requestMetadata(req: Request): { userAgent?: string; ipAddress?: string; deviceName?: string } {
   const userAgent = req.get("user-agent") ?? undefined;
-  const forwarded = req.get("x-forwarded-for")?.split(",")[0]?.trim();
   return {
     userAgent,
-    ipAddress: forwarded || req.ip,
+    ipAddress: clientIp(req),
     deviceName: userAgent ? describeDevice(userAgent) : "Неизвестное устройство"
   };
 }

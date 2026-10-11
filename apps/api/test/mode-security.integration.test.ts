@@ -65,6 +65,7 @@ describe("S05: local/server mode over HTTP", () => {
   const emailPrefix = `s05-${runId}`;
   const originalMode = process.env.ORION_MODE;
   const originalAllowPrivate = process.env.ALLOW_PRIVATE_CALENDAR_URLS;
+  const originalTrustedProxies = process.env.ORION_TRUSTED_PROXIES;
 
   beforeAll(async () => {
     // App boots once under whatever ORION_MODE is set at import time
@@ -73,6 +74,10 @@ describe("S05: local/server mode over HTTP", () => {
     // matters here (account picker gate, PIN/password policy) reads it at
     // request time, not at boot time, so this is a faithful reproduction of
     // an operator setting ORION_MODE once before starting the real process.
+    // Most existing requests use synthetic client IPs to keep limiter buckets
+    // independent. They reach the test server through loopback, an explicitly
+    // trusted proxy only in this test app.
+    process.env.ORION_TRUSTED_PROXIES = "127.0.0.1/8,::1/128";
     app = await NestFactory.create(AppModule, { logger: false });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
@@ -86,6 +91,8 @@ describe("S05: local/server mode over HTTP", () => {
     else process.env.ORION_MODE = originalMode;
     if (originalAllowPrivate === undefined) delete process.env.ALLOW_PRIVATE_CALENDAR_URLS;
     else process.env.ALLOW_PRIVATE_CALENDAR_URLS = originalAllowPrivate;
+    if (originalTrustedProxies === undefined) delete process.env.ORION_TRUSTED_PROXIES;
+    else process.env.ORION_TRUSTED_PROXIES = originalTrustedProxies;
 
     if (prisma) {
       await prisma.asSystem(async (tx) => {
@@ -201,6 +208,25 @@ describe("S05: local/server mode over HTTP", () => {
     expect(last.status).toBe(429);
   });
 
+  it("untrusted X-Forwarded-For cannot rotate the login limiter bucket", async () => {
+    process.env.ORION_MODE = "local";
+    const expressApp = app.getHttpAdapter().getInstance() as { set(name: string, value: unknown): void };
+    expressApp.set("trust proxy", false);
+    try {
+      let last = { status: 0 };
+      for (let i = 0; i < 11; i += 1) {
+        last = await request("/auth/login", {
+          method: "POST",
+          ip: `203.0.113.${100 + i}`,
+          body: { email: "nobody@example.test", password: "wrong-password" }
+        });
+      }
+      expect(last.status).toBe(429);
+    } finally {
+      expressApp.set("trust proxy", ["127.0.0.1/8", "::1/128"]);
+    }
+  });
+
   it("register tolerates a legitimate bulk scenario: many distinct emails from one IP all succeed", async () => {
     process.env.ORION_MODE = "local";
     // Reproduces the exact pattern that broke when the first attempt at a
@@ -238,6 +264,25 @@ describe("S05: local/server mode over HTTP", () => {
       });
     }
     expect(last.status).toBe(429);
+  });
+
+  it("untrusted X-Forwarded-For cannot rotate the registration limiter bucket", async () => {
+    process.env.ORION_MODE = "local";
+    const expressApp = app.getHttpAdapter().getInstance() as { set(name: string, value: unknown): void };
+    expressApp.set("trust proxy", false);
+    try {
+      let last = { status: 0 };
+      for (let i = 0; i < 6; i += 1) {
+        last = await request("/auth/register", {
+          method: "POST",
+          ip: `203.0.113.${150 + i}`,
+          body: { name: "spoof-register", email: `${emailPrefix}-spoof-register@example.test`, password: "Correct-Horse-42!" }
+        });
+      }
+      expect(last.status).toBe(429);
+    } finally {
+      expressApp.set("trust proxy", ["127.0.0.1/8", "::1/128"]);
+    }
   });
 
   it("rejects a loopback calendar URL without ever calling fetch for it (SSRF guard runs before any network I/O)", async () => {
@@ -327,8 +372,8 @@ describe("S05: local/server mode over HTTP", () => {
       headers: {
         "Content-Type": "application/json",
         ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-        // The login rate-limit guard buckets by client IP (x-forwarded-for
-        // first). Every test below gets its own synthetic IP so tests that
+        // This test app explicitly trusts loopback as its proxy. Every test
+        // below gets its own synthetic client IP so tests that
         // deliberately trip the limiter (see "login/register are rate-
         // limited") don't poison the shared loopback bucket for the tests
         // that run after them and need a *working* register call.
