@@ -9,6 +9,8 @@ out
 *.tsbuildinfo
 .env
 .env.local
+# Local automation credentials and destinations.
+.autopilot.json
 target
 **/src-tauri/gen
 **/src-tauri/target

@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "orion-api", "runtimeExecutable": "corepack", "runtimeArgs": ["pnpm", "dev:api"], "port": 4000 },
+    { "name": "orion-web", "runtimeExecutable": "corepack", "runtimeArgs": ["pnpm", "dev:web"], "port": 3010 }
+  ]
+}
