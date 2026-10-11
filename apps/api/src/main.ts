@@ -10,6 +10,8 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { configureApp } from "./configure-app";
 import { resolveBindHost, resolveMode } from "./common/orion-mode";
+import { PrismaService } from "./common/prisma.service";
+import { assertServerConfig, describeDbRoleProblems, type DbRoleRow } from "./common/server-config";
 
 async function bootstrap(): Promise<void> {
   // Resolved before NestFactory.create() so an invalid ORION_MODE fails
@@ -17,7 +19,20 @@ async function bootstrap(): Promise<void> {
   // instantiation (see also AuthModule, which fails fast on a missing
   // JWT_SECRET in server mode at import time).
   const mode = resolveMode();
+  // Server mode refuses to boot on a configuration whose development fallbacks
+  // would be holes on a real network (see server-config.ts).
+  if (mode === "server") assertServerConfig(process.env);
   const app = await NestFactory.create(AppModule);
+  if (mode === "server") {
+    // Ask the database who we really are: a superuser/BYPASSRLS connection
+    // silently disables FORCE ROW LEVEL SECURITY.
+    const [role] = await app.get(PrismaService).$queryRaw<DbRoleRow[]>`SELECT rolname::text AS rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`;
+    const problems = describeDbRoleProblems(role);
+    if (problems.length > 0) {
+      await app.close();
+      throw new Error(`Подключение к БД небезопасно, запуск остановлен:\n- ${problems.join("\n- ")}`);
+    }
+  }
   configureApp(app);
   const port = Number(process.env.PORT ?? 4000);
   const host = resolveBindHost(mode);
