@@ -30,6 +30,15 @@ export class EventsController {
     return this.events.list(user.userId, workspaceId, from, to);
   }
 
+  @Get(":id")
+  get(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("id") id: string
+  ): Promise<Event> {
+    return this.events.get(user.userId, workspaceId, id);
+  }
+
   @Post()
   create(
     @CurrentUser() user: RequestUser,

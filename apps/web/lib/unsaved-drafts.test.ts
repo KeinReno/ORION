@@ -44,4 +44,14 @@ describe("unsaved drafts guard", () => {
     requestWorkspaceSwitch("ws-4");
     expect(setActive).toHaveBeenCalledWith("ws-4");
   });
+
+  it("guards only the dock tab that owns a draft while still guarding workspace switches", () => {
+    const release = registerDraft("unsaved-note", "notes");
+    expect(hasUnsavedDrafts("notes")).toBe(true);
+    expect(hasUnsavedDrafts("documents")).toBe(false);
+    requestWorkspaceSwitch("ws-5");
+    expect(setActive).not.toHaveBeenCalled();
+    cancelPendingSwitch();
+    release();
+  });
 });

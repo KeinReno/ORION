@@ -9,7 +9,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/dist/**",
       "**/.next/**",
-      "**/.next-desktop/**",
+      "**/.next-*/**",
       "**/out/**",
       "**/target/**",
       "apps/compass-engine/**",

@@ -3,8 +3,9 @@
 import { useAccounts } from "@orion/core-react";
 import { Button, PanelBody, PanelHeader, PanelShell, SegmentedControl } from "@orion/ui";
 import { Tags, Wallet } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSlotContributions } from "../lib/extensions/slot";
+import { useTransactionFocusRequest, type EntityFocusRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { AccountsView } from "./finance/accounts-view";
 import { CategoryManagerModal } from "./finance/category-manager";
@@ -25,9 +26,22 @@ type FinanceTab = string;
  * instead of a fifth tab (see docs/HISTORY.md v0.8).
  */
 export function FinancePanel(): React.ReactElement {
+  const transactionFocus = useTransactionFocusRequest();
   const { workspace } = useActiveWorkspace();
   const accounts = useAccounts(workspace?.id, true);
   const [tabOverride, setTabOverride] = useState<FinanceTab | null>(null);
+  const [pendingTransactionFocus, setPendingTransactionFocus] = useState<EntityFocusRequest | null>(null);
+  useEffect(() => {
+    if (!transactionFocus || transactionFocus.workspaceId !== workspace?.id) return;
+    setPendingTransactionFocus(transactionFocus);
+    setTabOverride("transactions");
+  }, [transactionFocus, workspace?.id]);
+  useEffect(() => {
+    setPendingTransactionFocus((current) => current?.workspaceId === workspace?.id ? current : null);
+  }, [workspace?.id]);
+  const acknowledgeTransactionFocus = useCallback((nonce: number) => {
+    setPendingTransactionFocus((current) => current?.nonce === nonce ? null : current);
+  }, []);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const hasAccounts = (accounts.data ?? []).some((account) => !account.archivedAt);
   const pluginTabs = useSlotContributions("finance.tabs").filter((contribution) => contribution.meta !== undefined);
@@ -60,7 +74,7 @@ export function FinancePanel(): React.ReactElement {
       </PanelHeader>
       <PanelBody className="[container-type:inline-size]">
         <FinanceSummaryRow />
-        {tab === "transactions" ? <TransactionsView onOpenAccounts={() => setTabOverride("accounts")} /> : null}
+        {tab === "transactions" ? <TransactionsView focusRequest={pendingTransactionFocus} onFocusHandled={acknowledgeTransactionFocus} onOpenAccounts={() => setTabOverride("accounts")} /> : null}
         {tab === "accounts" ? <AccountsView /> : null}
         {activePluginTab ? <activePluginTab.component workspaceId={workspace?.id} /> : null}
       </PanelBody>

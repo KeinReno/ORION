@@ -41,6 +41,8 @@ import {
   FileStack,
   FileText,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pin,
   PinOff,
   Plus,
@@ -51,7 +53,7 @@ import {
   TriangleAlert,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { noteNumberLabel } from "@orion/shared-types";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
@@ -100,6 +102,7 @@ export function NotesPanel(): React.ReactElement {
   const twoPane = width >= TWO_PANE_MIN;
 
   const [sort, setSort] = useState<SortKey>("updated");
+  const [listCollapsed, setListCollapsed] = useState(false);
   const [groupByProject, setGroupByProject] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<"any" | "all">("any");
@@ -109,6 +112,23 @@ export function NotesPanel(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const selectedSnapshotRef = useRef<Note | null>(null);
+  const editorHasUnsavedChangesRef = useRef<(() => boolean) | null>(null);
+  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
+  const requestLeave = useCallback((action: () => void): void => {
+    if (editorHasUnsavedChangesRef.current?.()) {
+      setPendingLeave(() => action);
+    } else {
+      action();
+    }
+  }, []);
+  const selectNote = useCallback((id: string | null): void => {
+    if (selectedIdRef.current === id) return;
+    requestLeave(() => {
+      selectedIdRef.current = id;
+      setSelectedId(id);
+    });
+  }, [requestLeave]);
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const [pendingPurge, setPendingPurge] = useState<Note | null>(null);
   // Bumped after a revision restore to remount NoteEditor on the fresh note.
@@ -119,19 +139,19 @@ export function NotesPanel(): React.ReactElement {
     if (!projectsOn) setProjectFilter(null);
   }, [projectsOn]);
 
-  // Switching list (view / templates) closes any open editor.
-  useEffect(() => {
-    setSelectedId(null);
-  }, [view, templatesView]);
-
   const focusedNoteId = useFocusedNoteId();
   useEffect(() => {
-    if (focusedNoteId) {
+    if (!focusedNoteId) return;
+    requestLeave(() => {
       setView("active");
       setTemplatesView(false);
+      setQuery("");
+      setTagFilters([]);
+      setProjectFilter(null);
+      setPinnedOnly(false);
       setSelectedId(focusedNoteId);
-    }
-  }, [focusedNoteId]);
+    });
+  }, [focusedNoteId, requestLeave]);
 
   function toggleTagFilter(tag: string): void {
     setTagFilters((cur) => (cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]));
@@ -192,34 +212,40 @@ export function NotesPanel(): React.ReactElement {
     setPinnedOnly(false);
   }
 
-  const selected = selectedId && selectedId !== NEW_NOTE ? (notes ?? []).find((n) => n.id === selectedId) ?? null : null;
+  const matchedSelected = selectedId && selectedId !== NEW_NOTE ? (notes ?? []).find((n) => n.id === selectedId) ?? null : null;
+  if (matchedSelected) selectedSnapshotRef.current = matchedSelected;
+  // Server-side search can remove the currently open note from the list while
+  // its editor still has unsaved text. Keep that editor mounted until the user
+  // actually leaves it; never make a search result decide draft lifetime.
+  const selected = matchedSelected ?? (selectedSnapshotRef.current?.id === selectedId ? selectedSnapshotRef.current : null);
   const composing = selectedId === NEW_NOTE;
+  const listHidden = twoPane && listCollapsed && (composing || selected !== null);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
-      if (!panelVisible || composing || pendingDelete || pendingPurge || tagManagerOpen) return;
+      if (!panelVisible || composing || pendingDelete || pendingPurge || pendingLeave || tagManagerOpen) return;
       if (isTypingTarget(event.target)) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const current = selectedIdRef.current && selectedIdRef.current !== NEW_NOTE ? selectedIdRef.current : null;
         const next = nextListId(displayed.map((note) => note.id), current, event.key === "ArrowDown" ? 1 : -1);
         if (next) {
-          selectedIdRef.current = next;
-          setSelectedId(next);
+          selectNote(next);
         }
         return;
       }
       if (event.key === "Enter" && selectedIdRef.current && selectedIdRef.current !== NEW_NOTE && !trash) {
         event.preventDefault();
-        setSelectedId(selectedIdRef.current);
+        selectNote(selectedIdRef.current);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, composing, pendingDelete, pendingPurge, tagManagerOpen, displayed, selectedId, trash]);
+  }, [panelVisible, composing, pendingDelete, pendingPurge, pendingLeave, tagManagerOpen, displayed, selectedId, trash, selectNote]);
 
   async function handleCreate(input: NoteEditorInput): Promise<void> {
     const created = await createNote.mutateAsync({ ...input, isTemplate: templatesView });
+    selectedSnapshotRef.current = created;
     setSelectedId(created.id);
     toast({ title: templatesView ? "Шаблон создан" : "Заметка создана", tone: "success" });
   }
@@ -294,6 +320,7 @@ export function NotesPanel(): React.ReactElement {
       tags: note.tags,
       isTemplate: note.isTemplate
     });
+    selectedSnapshotRef.current = created;
     setSelectedId(created.id);
     toast({ title: "Скопировано", tone: "success" });
   }
@@ -335,7 +362,10 @@ export function NotesPanel(): React.ReactElement {
           {activeView ? (
             <ExtensionSlot
               name="notes.filters"
-              props={{ workspaceId: workspace?.id, active: templatesView, onToggle: () => setTemplatesView((v) => !v) }}
+              props={{ workspaceId: workspace?.id, active: templatesView, onToggle: () => requestLeave(() => {
+                setTemplatesView((v) => !v);
+                setSelectedId(null);
+              }) }}
             />
           ) : null}
           {activeView ? (
@@ -493,7 +523,7 @@ export function NotesPanel(): React.ReactElement {
                   // The whole row is clickable for the mouse; keyboard and assistive tech use the
                   // button around the text below. The row itself must not be a button: it also
                   // holds the actions menu, and interactive controls cannot nest.
-                  onClick={trash ? undefined : () => setSelectedId(note.id)}
+                  onClick={trash ? undefined : () => selectNote(note.id)}
                   className={cx(
                     "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
                     trash
@@ -512,7 +542,7 @@ export function NotesPanel(): React.ReactElement {
                     aria-current={active ? "true" : undefined}
                     onClick={(event) => {
                       event.stopPropagation();
-                      setSelectedId(note.id);
+                      selectNote(note.id);
                     }}
                     className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-default"
                   >
@@ -577,14 +607,14 @@ export function NotesPanel(): React.ReactElement {
                               {
                                 label: note.archivedAt ? "Из архива" : "В архив",
                                 icon: note.archivedAt ? ArchiveRestore : Archive,
-                                onSelect: () => handleToggleArchive(note)
+                                onSelect: () => requestLeave(() => handleToggleArchive(note))
                               },
-                              { label: "Дублировать", icon: Copy, onSelect: () => void handleDuplicate(note) },
+                              { label: "Дублировать", icon: Copy, onSelect: () => requestLeave(() => void handleDuplicate(note)) },
                               ...(templatesApi
-                                ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => handleToggleTemplate(note) }]
+                                ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => requestLeave(() => handleToggleTemplate(note)) }]
                                 : []),
                               "separator",
-                              { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(note) }
+                              { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => requestLeave(() => setPendingDelete(note)) }
                             ]
                       }
                     />
@@ -608,13 +638,14 @@ export function NotesPanel(): React.ReactElement {
         busy={createNote.isPending}
         onCreate={handleCreate}
         onSave={handleSave}
-        onClose={() => setSelectedId(null)}
+        onClose={() => selectNote(null)}
+        hasUnsavedChangesRef={editorHasUnsavedChangesRef}
         onReload={() => setEditorReloadKey((k) => k + 1)}
         onTogglePin={handleTogglePin}
-        onToggleArchive={handleToggleArchive}
-        onDuplicate={(n) => void handleDuplicate(n)}
-        onToggleTemplate={templatesApi ? handleToggleTemplate : undefined}
-        onDelete={setPendingDelete}
+        onToggleArchive={(note) => requestLeave(() => handleToggleArchive(note))}
+        onDuplicate={(note) => requestLeave(() => void handleDuplicate(note))}
+        onToggleTemplate={templatesApi ? (note) => requestLeave(() => handleToggleTemplate(note)) : undefined}
+        onDelete={(note) => requestLeave(() => setPendingDelete(note))}
       />
     ) : (
       <div className="flex h-full items-center justify-center p-6">
@@ -636,12 +667,14 @@ export function NotesPanel(): React.ReactElement {
                 props={{
                   workspaceId: workspace?.id,
                   onOpenNote: (noteId) => {
-                    setView("active");
-                    setSelectedId(noteId);
+                    requestLeave(() => {
+                      setView("active");
+                      setSelectedId(noteId);
+                    });
                   }
                 }}
               />
-              <Button size="sm" onClick={() => setSelectedId(NEW_NOTE)}>
+              <Button size="sm" onClick={() => selectNote(NEW_NOTE)}>
                 <Plus className="h-4 w-4" /> {templatesView ? "Новый шаблон" : "Новая"}
               </Button>
               {!templatesView ? (
@@ -650,8 +683,10 @@ export function NotesPanel(): React.ReactElement {
                   props={{
                     workspaceId: workspace?.id,
                     onOpenNote: (noteId) => {
-                      setView("active");
-                      setSelectedId(noteId);
+                      requestLeave(() => {
+                        setView("active");
+                        setSelectedId(noteId);
+                      });
                     }
                   }}
                 />
@@ -660,19 +695,32 @@ export function NotesPanel(): React.ReactElement {
           )
         }
       >
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={trash ? "В корзине поиск отключён" : "Название, описание, текст, теги, N-104"}
-            aria-label="Поиск по заметкам"
-            title="Ищет по названию, краткому описанию, тексту, тегам и короткому номеру (N-104)"
-            className="pl-8"
-            disabled={trash}
-          />
-        </div>
-        {activeView ? (
+        {twoPane && !trash && (composing || selected) ? (
+          listHidden ? (
+            <Button variant="subtle" size="sm" onClick={() => setListCollapsed(false)}>
+              <PanelLeftOpen className="h-4 w-4" /> Список заметок
+            </Button>
+          ) : (
+            <IconButton label="Скрыть список заметок" size="sm" onClick={() => setListCollapsed(true)}>
+              <PanelLeftClose className="h-4 w-4" />
+            </IconButton>
+          )
+        ) : null}
+        {!listHidden ? (
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={trash ? "В корзине поиск отключён" : "Название, описание, текст, теги, N-104"}
+              aria-label="Поиск по заметкам"
+              title="Ищет по названию, краткому описанию, тексту, тегам и короткому номеру (N-104)"
+              className="pl-8"
+              disabled={trash}
+            />
+          </div>
+        ) : null}
+        {activeView && !listHidden ? (
           <SegmentedControl<SortKey>
             value={sort}
             onChange={setSort}
@@ -684,16 +732,23 @@ export function NotesPanel(): React.ReactElement {
             ]}
           />
         ) : null}
-        <SegmentedControl<NoteView>
-          value={view}
-          onChange={setView}
-          size="sm"
-          options={[
-            { value: "active", label: "Активные" },
-            { value: "archive", label: "Архив" },
-            { value: "trash", label: "Корзина" }
-          ]}
-        />
+        {!listHidden ? (
+          <SegmentedControl<NoteView>
+            value={view}
+            onChange={(next) => {
+              requestLeave(() => {
+                setView(next);
+                setSelectedId(null);
+              });
+            }}
+            size="sm"
+            options={[
+              { value: "active", label: "Активные" },
+              { value: "archive", label: "Архив" },
+              { value: "trash", label: "Корзина" }
+            ]}
+          />
+        ) : null}
       </PanelHeader>
 
       <div ref={wrapRef} className="flex min-h-0 flex-1">
@@ -701,7 +756,7 @@ export function NotesPanel(): React.ReactElement {
           <div className="flex min-w-0 flex-1 flex-col">{list}</div>
         ) : twoPane ? (
           <>
-            <div className="flex w-[20rem] shrink-0 flex-col border-r border-border">{list}</div>
+            <div className={cx("shrink-0 flex-col border-r border-border", listHidden ? "hidden" : "flex w-[20rem]")}>{list}</div>
             <div className="min-w-0 flex-1">{editor}</div>
           </>
         ) : (
@@ -709,7 +764,7 @@ export function NotesPanel(): React.ReactElement {
             <div className="flex min-w-0 flex-1 flex-col">{list}</div>
             <Sheet
               open={composing || Boolean(selected)}
-              onClose={() => setSelectedId(null)}
+              onClose={() => selectNote(null)}
               title={composing ? "Новая заметка" : "Заметка"}
               bare
             >
@@ -719,6 +774,19 @@ export function NotesPanel(): React.ReactElement {
         )}
       </div>
 
+      <ConfirmDialog
+        open={pendingLeave !== null}
+        title="Закрыть без сохранения?"
+        description="Последние изменения заметки ещё не сохранены. При переходе они пропадут."
+        confirmLabel="Не сохранять"
+        danger
+        onConfirm={() => {
+          const action = pendingLeave;
+          setPendingLeave(null);
+          action?.();
+        }}
+        onCancel={() => setPendingLeave(null)}
+      />
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Удалить заметку?"

@@ -33,7 +33,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
 import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { formatDayTitle, fromDatetimeLocal, projectColor, relativeTime, toDatetimeLocal } from "../lib/format";
@@ -76,6 +76,7 @@ export function NoteEditor({
   onCreate,
   onSave,
   onClose,
+  hasUnsavedChangesRef,
   onReload,
   onTogglePin,
   onToggleArchive,
@@ -96,6 +97,8 @@ export function NoteEditor({
    */
   onSave: (id: string, input: NoteEditorInput, expectedRevision: number, opts?: { silent?: boolean }) => Promise<Note>;
   onClose: () => void;
+  /** Lets the panel guard list changes, Sheet dismissal and editor closure with one dialog. */
+  hasUnsavedChangesRef?: MutableRefObject<(() => boolean) | null>;
   /** Ask the panel to remount this editor (e.g. after a revision restore replaced the content). */
   onReload: () => void;
   onTogglePin?: (note: Note) => void;
@@ -199,8 +202,9 @@ export function NoteEditor({
   }, [note?.id, workspaceId]);
 
   const dirty = note ? autosaveState !== "saved" : composeDirty;
-  // A new, not-yet-created note is a draft (an open note autosaves and needs no guard).
-  useUnsavedDraft(!note && composeDirty);
+  // Autosave can still be pending or fail. Switching workspaces must not dispose
+  // its controller before the latest text has been acknowledged by the server.
+  useUnsavedDraft(dirty);
 
   const words = useMemo(() => {
     const m = body.trim().match(/[^\s]+/g);
@@ -274,8 +278,16 @@ export function NoteEditor({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [dirty]);
 
+  useEffect(() => {
+    if (!hasUnsavedChangesRef) return;
+    const check = () => dirty;
+    hasUnsavedChangesRef.current = check;
+    return () => {
+      if (hasUnsavedChangesRef.current === check) hasUnsavedChangesRef.current = null;
+    };
+  }, [hasUnsavedChangesRef, dirty]);
+
   function requestClose(): void {
-    if (dirty && !window.confirm("Есть несохранённые изменения — закрыть без сохранения?")) return;
     onClose();
   }
 

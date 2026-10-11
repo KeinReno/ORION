@@ -2,8 +2,8 @@
 
 import { useDocumentBlob } from "@orion/core-react";
 import type { DocumentItem } from "@orion/shared-types";
-import { AutosaveStatus, Button, EmptyState, FilePreview, Input, Skeleton, useDebouncedValue } from "@orion/ui";
-import { AlertCircle, Download } from "lucide-react";
+import { AutosaveStatus, Button, EmptyState, FilePreview, IconButton, Input, Skeleton, useDebouncedValue } from "@orion/ui";
+import { AlertCircle, ChevronDown, Download, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatBytes } from "../../lib/document-icons";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -16,13 +16,17 @@ export function PreviewPane({
   onDownload,
   onRename,
   renameBusy = false,
-  onEditorDirtyChange
+  onEditorDirtyChange,
+  onToggleList,
+  listCollapsed = false
 }: {
   doc: DocumentItem;
   onDownload: () => void;
   onRename?: (name: string) => void;
   renameBusy?: boolean;
   onEditorDirtyChange: (dirty: boolean) => void;
+  onToggleList?: () => void;
+  listCollapsed?: boolean;
 }): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   // An editor plugin (office) that claims this file replaces the plain viewer; none claims it → viewer only.
@@ -72,16 +76,44 @@ export function PreviewPane({
           )}
           <p className="mt-1 text-2xs text-subtle-foreground">{formatBytes(doc.sizeBytes)}</p>
         </div>
-        <Button size="sm" variant="outline" onClick={onDownload}>
-          <Download className="h-4 w-4" /> Скачать
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onToggleList ? (
+            <IconButton
+              label={listCollapsed ? "Показать список файлов" : "Скрыть список файлов"}
+              size="sm"
+              onClick={onToggleList}
+            >
+              {listCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </IconButton>
+          ) : null}
+          <Button size="sm" variant="outline" onClick={onDownload}>
+            <Download className="h-4 w-4" /> Скачать
+          </Button>
+        </div>
       </div>
-      <div className="shrink-0 border-b border-border px-4 py-2">
-        <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
-      </div>
-      <div className="shrink-0 border-b border-border px-4 py-2">
-        <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
-      </div>
+      {Editor ? (
+        <details className="group shrink-0 border-b border-border">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform group-open:rotate-0" aria-hidden />
+            Сведения, связи и доступ
+          </summary>
+          <div className="border-t border-border px-4 py-2">
+            <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
+          </div>
+          <div className="border-t border-border px-4 py-2">
+            <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
+          </div>
+        </details>
+      ) : (
+        <>
+          <div className="shrink-0 border-b border-border px-4 py-2">
+            <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
+          </div>
+          <div className="shrink-0 border-b border-border px-4 py-2">
+            <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
+          </div>
+        </>
+      )}
       <div className="min-h-0 flex-1">
         {isError ? (
           <div className="p-6">

@@ -423,6 +423,7 @@ export function TasksPanel(): React.ReactElement {
             workspaceId: workspace?.id,
             projects: projectList ?? [],
             current: { search: query, projectId: projectFilter, due: dueFilter, statuses: statusFilter, priorities: priorityFilter },
+            onlyMine: teamOn && onlyMine,
             onApply: (criteria) => {
               setQuery(criteria.search);
               setProjectFilter(criteria.projectId);

@@ -772,6 +772,10 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/events${query}`, undefined, z.array(eventSchema));
   }
 
+  getEvent(workspaceId: string, eventId: string): Promise<Event> {
+    return this.request("GET", `/workspaces/${workspaceId}/events/${encodeURIComponent(eventId)}`, undefined, eventSchema);
+  }
+
   createEvent(workspaceId: string, input: CreateEventInput): Promise<Event> {
     return this.request("POST", `/workspaces/${workspaceId}/events`, input, eventSchema);
   }
@@ -882,6 +886,10 @@ export class ApiClient {
   ): Promise<Transaction[]> {
     const query = buildQuery(filters);
     return this.request("GET", `/workspaces/${workspaceId}/finance/transactions${query}`, undefined, z.array(transactionSchema));
+  }
+
+  getTransaction(workspaceId: string, transactionId: string): Promise<Transaction> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/transactions/${encodeURIComponent(transactionId)}`, undefined, transactionSchema);
   }
 
   createTransaction(workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {

@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useId, useSyncExternalStore } from "react";
+import { createContext, createElement, useContext, useEffect, useId, useSyncExternalStore, type ReactNode } from "react";
 import { setActiveWorkspaceId } from "./use-active-workspace";
 
 /**
  * Text a person has typed but nothing has saved yet (a thought in the capture box, a new note not
- * created yet, a comment, an unsent task form). Switching workspace remounts the panels and that
- * text would silently vanish, so the switch asks first. Things that autosave (an open note, the task
- * detail pane) are not drafts: they flush on their own.
+ * created yet, a comment, an unsent task form, or an autosave still in flight).
+ * Switching workspace or closing the owning dock tab would discard it.
  */
 
-const dirtyIds = new Set<string>();
+const DraftPanelContext = createContext<string | null>(null);
+const dirtyIds = new Map<string, string | null>();
 let pendingSwitch: string | null = null;
 const listeners = new Set<() => void>();
 
@@ -24,8 +24,12 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** Marks `id` as holding unsaved text; returns the function that clears it. */
-export function registerDraft(id: string): () => void {
-  dirtyIds.add(id);
+export function PanelDraftScope({ panelId, children }: { panelId: string; children?: ReactNode }): React.ReactElement {
+  return createElement(DraftPanelContext.Provider, { value: panelId }, children);
+}
+
+export function registerDraft(id: string, panelId: string | null = null): () => void {
+  dirtyIds.set(id, panelId);
   return () => {
     dirtyIds.delete(id);
   };
@@ -34,14 +38,15 @@ export function registerDraft(id: string): () => void {
 /** A mounted field reports whether it holds unsaved text. */
 export function useUnsavedDraft(dirty: boolean): void {
   const id = useId();
+  const panelId = useContext(DraftPanelContext);
   useEffect(() => {
     if (!dirty) return;
-    return registerDraft(id);
-  }, [dirty, id]);
+    return registerDraft(id, panelId);
+  }, [dirty, id, panelId]);
 }
 
-export function hasUnsavedDrafts(): boolean {
-  return dirtyIds.size > 0;
+export function hasUnsavedDrafts(panelId?: string): boolean {
+  return panelId === undefined ? dirtyIds.size > 0 : [...dirtyIds.values()].includes(panelId);
 }
 
 /** Switches workspace now when nothing is unsaved; otherwise parks the request for the confirm dialog. */

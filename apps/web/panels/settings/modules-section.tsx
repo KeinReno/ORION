@@ -12,6 +12,7 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToa
 import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
+import { hasUnsavedDrafts } from "../../lib/unsaved-drafts";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 const KIND_LABEL: Record<ModuleKind, string> = {
@@ -34,6 +35,14 @@ export function ModulesSettings(): React.ReactElement {
 
   async function apply(item: WorkspaceModuleState, enabled: boolean): Promise<void> {
     setPending(null);
+    if (!enabled && hasUnsavedDrafts()) {
+      toast({
+        title: "Сначала сохраните открытые изменения",
+        description: "Выключение модуля закроет его вкладки. Сохраните черновики или закройте их с подтверждением, затем повторите действие.",
+        tone: "default"
+      });
+      return;
+    }
     try {
       await setModule.mutateAsync({ moduleId: item.id, enabled });
       toast({

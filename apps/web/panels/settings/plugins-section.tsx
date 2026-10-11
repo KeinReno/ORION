@@ -7,6 +7,7 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToa
 import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
+import { hasUnsavedDrafts } from "../../lib/unsaved-drafts";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 /** `moduleId` narrows the list to the plugins of one module (the per-module settings sheet). */
@@ -21,6 +22,14 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
 
   async function apply(item: WorkspacePluginState, enabled: boolean): Promise<void> {
     setPending(null);
+    if (!enabled && hasUnsavedDrafts()) {
+      toast({
+        title: "Сначала сохраните открытые изменения",
+        description: "Выключение плагина может закрыть его вкладки. Сохраните черновики или закройте их с подтверждением, затем повторите действие.",
+        tone: "default"
+      });
+      return;
+    }
     try {
       await setPlugin.mutateAsync({ pluginId: item.id, enabled });
       toast({

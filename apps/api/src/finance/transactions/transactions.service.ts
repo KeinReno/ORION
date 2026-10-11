@@ -70,6 +70,13 @@ export class TransactionsService {
     return transactions.map(toDto);
   }
 
+  async get(userId: string, workspaceId: string, transactionId: string): Promise<Transaction> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return toDto(await this.assertOwnedTx(tx, workspaceId, transactionId));
+    });
+  }
+
   async create(userId: string, workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {
     assertTransactionShape(input);
     const { transaction, alerts } = await this.prisma.withUser(userId, async (tx) => {

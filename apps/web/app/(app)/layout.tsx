@@ -10,6 +10,7 @@ import {
   positionToDirection,
   useEscapeKey,
   useMediaQuery,
+  useToast,
   type DockviewApi,
   type DockviewDidDropEvent,
   type DockviewDndOverlayEvent,
@@ -49,7 +50,7 @@ import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
-import { cancelPendingSwitch, confirmPendingSwitch, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
+import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
@@ -81,7 +82,7 @@ function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[
 const panelComponents: Record<string, (props: IDockviewPanelProps) => React.ReactElement> = Object.fromEntries(
   panelRegistry.map((panel) => [
     panel.id,
-    (props: IDockviewPanelProps) => createElement(panel.component, { params: props.params, api: props.api })
+    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))
   ])
 );
 
@@ -104,11 +105,16 @@ function NextLink({ href, className, children }: { href: string; className?: str
  * does the right thing there via a real browser window.
  */
 function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+  const { toast } = useToast();
   if (!isTauri() || !activePanel) return null;
 
   async function detach(): Promise<void> {
     const panel = activePanel;
     if (!panel) return;
+    if (hasUnsavedDrafts(panel.id)) {
+      toast({ title: "Сначала сохраните изменения", description: "Открытый черновик нельзя перенести в новое окно.", tone: "default" });
+      return;
+    }
     const definition = getPanelDefinition(panel.id);
     await detachPanelToWindow(panel.id, panel.title ?? definition?.label ?? panel.id);
     panel.api.close();
@@ -204,6 +210,16 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
   const sidebarPosition = preferences?.sidebarPosition ?? "left";
   const pendingSwitch = usePendingSwitch();
+  const [pendingExit, setPendingExit] = useState<"spaces" | "account" | "logout" | null>(null);
+  const [pendingTabClose, setPendingTabClose] = useState<string | null>(null);
+  const leaveWorkbench = useCallback((destination: "spaces" | "account" | "logout") => {
+    if (hasUnsavedDrafts()) {
+      setPendingExit(destination);
+      return;
+    }
+    if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+    else router.push(destination === "spaces" ? "/spaces" : "/account");
+  }, [logout, router]);
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
@@ -231,6 +247,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   useDesktopDueReminders(tasks);
 
   const apiRef = useRef<DockviewApi | null>(null);
+  const closeTab = useCallback((panelId: string) => {
+    if (hasUnsavedDrafts(panelId)) {
+      setPendingTabClose(panelId);
+      return;
+    }
+    apiRef.current?.getPanel(panelId)?.api.close();
+  }, []);
   const disabledModulesRef = useRef(disabledModules);
   disabledModulesRef.current = disabledModules;
   const pluginOverrides = workspace?.pluginOverrides ?? NO_PLUGIN_OVERRIDES;
@@ -578,7 +601,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               expanded={open}
               onSelect={requestWorkspaceSwitch}
               onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
-              onOpenSpaces={() => router.push("/spaces")}
+              onOpenSpaces={() => leaveWorkbench("spaces")}
             />
           </div>
         )}
@@ -637,7 +660,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => router.push("/account")}
+                onClick={() => leaveWorkbench("account")}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
               >
                 <AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={28} />
@@ -645,13 +668,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               </button>
               <button
                 type="button"
-                onClick={() => router.push("/spaces")}
+                onClick={() => leaveWorkbench("spaces")}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 Сменить пространство
               </button>
               <button
-                onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
+                onClick={() => leaveWorkbench("logout")}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 <LogOut className="h-5 w-5 shrink-0" aria-hidden />
@@ -664,7 +687,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             // lines inside the 60px column instead of being clipped.
             <IconButton
               label="Выйти"
-              onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
+              onClick={() => leaveWorkbench("logout")}
             >
               <LogOut className="h-4 w-4" />
             </IconButton>
@@ -695,7 +718,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           </header>
         ) : null}
         <main className="min-h-0 flex-1 overflow-hidden">
-          <Workbench components={panelComponents} onReady={onReady} rightHeaderActionsComponent={HeaderActions} />
+          <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
         </main>
       </div>
       <ConfirmDialog
@@ -707,7 +730,32 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         onConfirm={confirmPendingSwitch}
         onCancel={cancelPendingSwitch}
       />
+      <ConfirmDialog
+        open={pendingExit !== null}
+        title="Есть несохранённый текст"
+        description="При выходе из рабочей области введённое, но ещё не сохранённое пропадёт. Продолжить?"
+        confirmLabel="Продолжить"
+        onConfirm={() => {
+          const destination = pendingExit;
+          setPendingExit(null);
+          if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+          else if (destination) router.push(destination === "spaces" ? "/spaces" : "/account");
+        }}
+        onCancel={() => setPendingExit(null)}
+      />
       <CommandCenter />
+      <ConfirmDialog
+        open={pendingTabClose !== null}
+        title="Закрыть вкладку без сохранения?"
+        description="В этой вкладке есть изменения, которые ещё не сохранены. При закрытии они пропадут."
+        confirmLabel="Закрыть"
+        onConfirm={() => {
+          const panelId = pendingTabClose;
+          setPendingTabClose(null);
+          if (panelId) apiRef.current?.getPanel(panelId)?.api.close();
+        }}
+        onCancel={() => setPendingTabClose(null)}
+      />
       {children}
     </div>
   );

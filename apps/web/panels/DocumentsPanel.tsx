@@ -64,6 +64,7 @@ import type { DocumentCreateAction } from "../lib/extensions/contracts";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
 import { useFocusedDocumentId } from "../lib/panel-bus";
+import { useUnsavedDraft } from "../lib/unsaved-drafts";
 
 type SortKey = "name" | "date" | "size" | "type";
 type Layout = "list" | "grid";
@@ -96,9 +97,13 @@ export function DocumentsPanel(): React.ReactElement {
 
   const [cwd, setCwd] = useState<string | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [listCollapsed, setListCollapsed] = useState(false);
   const selectedFileIdRef = useRef<string | null>(null);
   selectedFileIdRef.current = selectedFileId;
   const [editorDirty, setEditorDirty] = useState(false);
+  // The local file-switch dialog protects the preview. Register the same
+  // draft with the shell so a workspace switch cannot unmount it silently.
+  useUnsavedDraft(editorDirty);
   const editorDirtyRef = useRef(false);
   editorDirtyRef.current = editorDirty;
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
@@ -277,6 +282,7 @@ export function DocumentsPanel(): React.ReactElement {
   }, [docs, trash, cwd]);
 
   const selectedFile = selectedFileId ? byId.get(selectedFileId) ?? null : null;
+  const editorFocus = twoPane && listCollapsed && selectedFile !== null && !trash && layout === "list";
 
   // --- actions ----------------------------------------------------------
 
@@ -877,6 +883,8 @@ export function DocumentsPanel(): React.ReactElement {
         onRename={(name) => renameOrMove.mutate({ id: selectedFile.id, input: { name } })}
         renameBusy={renameOrMove.isPending}
         onEditorDirtyChange={setEditorDirty}
+        onToggleList={twoPane ? () => setListCollapsed((collapsed) => !collapsed) : undefined}
+        listCollapsed={twoPane && listCollapsed}
       />
     ) : (
       <div className="flex h-full items-center justify-center p-6">
@@ -945,42 +953,46 @@ export function DocumentsPanel(): React.ReactElement {
           )
         }
       >
-        <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" className="pl-8" />
-        </div>
-        {!trash ? (
-          <SegmentedControl<SortKey>
-            value={sort}
-            onChange={setSort}
-            size="sm"
-            options={[
-              { value: "name", label: "Имя" },
-              { value: "date", label: "Дата" },
-              { value: "size", label: "Размер" },
-              { value: "type", label: "Тип" }
-            ]}
-          />
+        {!editorFocus ? (
+          <>
+            <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" className="pl-8" />
+            </div>
+            {!trash ? (
+              <SegmentedControl<SortKey>
+                value={sort}
+                onChange={setSort}
+                size="sm"
+                options={[
+                  { value: "name", label: "Имя" },
+                  { value: "date", label: "Дата" },
+                  { value: "size", label: "Размер" },
+                  { value: "type", label: "Тип" }
+                ]}
+              />
+            ) : null}
+            <SegmentedControl<Layout>
+              aria-label="Вид файлов"
+              value={layout}
+              onChange={setLayout}
+              size="sm"
+              options={[
+                { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
+                { value: "grid", label: <LayoutGrid className="h-3.5 w-3.5" />, ariaLabel: "Плиткой" }
+              ]}
+            />
+            <SegmentedControl<DocumentView>
+              value={view}
+              onChange={(next) => guardNavigation(() => { setEditorDirty(false); setView(next); })}
+              size="sm"
+              options={[
+                { value: "active", label: "Активные" },
+                { value: "trash", label: "Корзина" }
+              ]}
+            />
+          </>
         ) : null}
-        <SegmentedControl<Layout>
-          aria-label="Вид файлов"
-          value={layout}
-          onChange={setLayout}
-          size="sm"
-          options={[
-            { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
-            { value: "grid", label: <LayoutGrid className="h-3.5 w-3.5" />, ariaLabel: "Плиткой" }
-          ]}
-        />
-        <SegmentedControl<DocumentView>
-          value={view}
-          onChange={(next) => guardNavigation(() => { setEditorDirty(false); setView(next); })}
-          size="sm"
-          options={[
-            { value: "active", label: "Активные" },
-            { value: "trash", label: "Корзина" }
-          ]}
-        />
       </PanelHeader>
 
       <div ref={wrapRef} className="flex min-h-0 flex-1">
@@ -995,7 +1007,7 @@ export function DocumentsPanel(): React.ReactElement {
           </>
         ) : twoPane ? (
           <>
-            <div className="flex w-[22rem] shrink-0 flex-col border-r border-border">{list}</div>
+            <div className={cx("w-[22rem] shrink-0 flex-col border-r border-border", listCollapsed && selectedFile ? "hidden" : "flex")}>{list}</div>
             <div className="min-w-0 flex-1">{preview}</div>
           </>
         ) : (

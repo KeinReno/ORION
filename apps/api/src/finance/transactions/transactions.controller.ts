@@ -46,6 +46,15 @@ export class TransactionsController {
     });
   }
 
+  @Get(":transactionId")
+  get(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("transactionId") transactionId: string
+  ): Promise<Transaction> {
+    return this.transactions.get(user.userId, workspaceId, transactionId);
+  }
+
   @Post()
   create(
     @CurrentUser() user: RequestUser,

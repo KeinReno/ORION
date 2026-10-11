@@ -12,6 +12,7 @@ import {
   useTasks,
   useUpdateEvent,
   useUpdateTask,
+  useCore,
   type EventRange
 } from "@orion/core-react";
 import type { CreateEventInput, Event, EventScope, UpdateEventInput } from "@orion/shared-types";
@@ -54,7 +55,7 @@ import {
   taskItems,
   type CalendarSourceId
 } from "../lib/calendar-sources";
-import { focusNote, focusTask, openPanel, useFocusedEventId } from "../lib/panel-bus";
+import { focusNote, focusTask, openPanel, useEventFocusRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
@@ -142,6 +143,7 @@ type PendingScope =
   | { mode: "delete"; origin: { x: number; y: number } };
 
 export function CalendarPanel(): React.ReactElement {
+  const { api } = useCore();
   const panelVisible = usePanelVisible();
   const { workspace } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
@@ -222,14 +224,23 @@ export function CalendarPanel(): React.ReactElement {
   const focusedIdRef = useRef<string | null>(null);
   focusedIdRef.current = focusedId;
   const [pendingScope, setPendingScope] = useState<PendingScope | null>(null);
-  const focusedEventId = useFocusedEventId();
+  const eventFocus = useEventFocusRequest();
 
   useEffect(() => {
-    if (!focusedEventId) return;
-    const event = (events ?? []).find((item) => item.id === focusedEventId);
-    if (!event) return;
-    setSelected(event);
-  }, [focusedEventId, events]);
+    if (!eventFocus || eventFocus.workspaceId !== wsId) return;
+    const event = (events ?? []).find((item) => item.id === eventFocus.id);
+    if (event) {
+      setSelected(event);
+      return;
+    }
+    if (!wsId || eventsQuery.isLoading) return;
+    let cancelled = false;
+    void api.getEvent(wsId, eventFocus.id).then(
+      (record) => { if (!cancelled) setSelected(record); },
+      (error) => { if (!cancelled) toast({ title: "Не удалось открыть событие", description: describeAuthError(error), tone: "danger" }); }
+    );
+    return () => { cancelled = true; };
+  }, [api, eventFocus, events, eventsQuery.isLoading, wsId, toast]);
 
   function findEvent(id: string): Event | undefined {
     return (events ?? []).find((e) => e.id === id);

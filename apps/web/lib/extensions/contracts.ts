@@ -47,6 +47,8 @@ export interface TasksViewsBarSlotProps {
   projects: Project[];
   /** The filters the panel currently has. */
   current: TaskViewCriteria;
+  /** Display-only team scope; saved views do not silently change this host preference. */
+  onlyMine?: boolean;
   /** Ask the host to take these filters. */
   onApply: (criteria: TaskViewCriteria) => void;
 }

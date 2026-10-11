@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const isDesktopExport = process.env.DESKTOP_EXPORT === "1";
+// Parallel UI smoke must not share webpack output with a production build.
+const localDevDistDir = process.env.NODE_ENV === "development" ? process.env.ORION_DEV_DIST_DIR : undefined;
 
 const nextConfig = {
   reactStrictMode: true,
@@ -35,6 +37,7 @@ const nextConfig = {
   // Separate build output from the dev server's .next/ — running the desktop
   // export build while `next dev` is running previously corrupted the dev
   // server's webpack cache (shared .next dir), crashing the web app.
+  ...(!isDesktopExport && localDevDistDir ? { distDir: localDevDistDir } : {}),
   ...(isDesktopExport
     ? {
         distDir: ".next-desktop",

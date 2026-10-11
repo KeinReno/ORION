@@ -6,6 +6,7 @@ import {
   useCreateTransaction,
   useDeleteTransaction,
   useFinanceCategories,
+  useCore,
   useTransactions,
   useUpdateTransaction
 } from "@orion/core-react";
@@ -16,15 +17,17 @@ import { useEffect, useMemo, useState } from "react";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
+import { describeAuthError } from "../../lib/error-message";
 import { formatMoney, projectColor, shortDateTime } from "../../lib/format";
 import { withArchivedFallback } from "../../lib/finance-options";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
-import { useFocusedTransactionId } from "../../lib/panel-bus";
+import type { EntityFocusRequest } from "../../lib/panel-bus";
 import { TransactionForm, type TransactionFormValues } from "./transaction-form";
 
 const PAGE_SIZE = 50;
 
-export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => void }): React.ReactElement {
+export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts }: { focusRequest: EntityFocusRequest | null; onFocusHandled: (nonce: number) => void; onOpenAccounts?: () => void }): React.ReactElement {
+  const { api } = useCore();
   const { workspace } = useActiveWorkspace();
   const [accountFilter, setAccountFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -58,12 +61,22 @@ export function TransactionsView({ onOpenAccounts }: { onOpenAccounts?: () => vo
 
   // U02: a document's "связанные записи" (evidence_for pilot) jumps here via
   // focusTransaction(id) — open the same edit Sheet a row click opens.
-  const focusedTransactionId = useFocusedTransactionId();
   useEffect(() => {
-    if (!focusedTransactionId) return;
-    const target = (transactions ?? []).find((t) => t.id === focusedTransactionId);
-    if (target) setEditing(target);
-  }, [focusedTransactionId, transactions]);
+    if (!focusRequest || !workspace?.id) return;
+    const target = (transactions ?? []).find((t) => t.id === focusRequest.id);
+    if (target) {
+      setEditing(target);
+      onFocusHandled(focusRequest.nonce);
+      return;
+    }
+    if (isLoading) return;
+    let cancelled = false;
+    void api.getTransaction(workspace.id, focusRequest.id).then(
+      (record) => { if (!cancelled) { setEditing(record); onFocusHandled(focusRequest.nonce); } },
+      (error) => { if (!cancelled) { toast({ title: "Не удалось открыть операцию", description: describeAuthError(error), tone: "danger" }); onFocusHandled(focusRequest.nonce); } }
+    );
+    return () => { cancelled = true; };
+  }, [api, focusRequest, isLoading, transactions, workspace?.id, toast, onFocusHandled]);
 
   const activeAccounts = useMemo(() => (accounts ?? []).filter((a) => !a.archivedAt), [accounts]);
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => !c.archivedAt), [categories]);

@@ -74,6 +74,13 @@ export class EventsService {
     });
   }
 
+  async get(userId: string, workspaceId: string, id: string): Promise<Event> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return toDto(await this.loadOwned(tx, workspaceId, id));
+    });
+  }
+
   async create(userId: string, workspaceId: string, input: CreateEventInput): Promise<Event> {
     const { startAt, endAt } = normaliseRange(input.startAt, input.endAt, input.allDay);
     const event = await this.prisma.withUser(userId, async (tx) => {
@@ -340,6 +347,7 @@ function newFeedToken(): string {
 
 /** `webcal://…` so a calendar app subscribes read-only instead of downloading once. */
 function feedUrl(token: string): string {
+  // Server mode refuses to boot without PUBLIC_API_URL (server-config.ts), so this fallback is local-only.
   const base = process.env.PUBLIC_API_URL || "http://localhost:4000";
   return `${base.replace(/^https?:\/\//, "webcal://").replace(/\/$/, "")}/calendar/${token}.ics`;
 }

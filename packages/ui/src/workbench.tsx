@@ -10,7 +10,9 @@ import {
   type IDockviewPanelHeaderProps,
   type IDockviewPanelProps
 } from "dockview-react";
-import type { FunctionComponent } from "react";
+import { createContext, useContext, type FunctionComponent } from "react";
+
+const CloseRequestContext = createContext<((panelId: string) => void) | null>(null);
 
 export type { DockviewApi, DockviewReadyEvent, IDockviewHeaderActionsProps, IDockviewPanelProps } from "dockview-react";
 // U06: external (sidebar → dock) drag-and-drop rides on dockview's own
@@ -36,6 +38,7 @@ export {
  * `auxclick` is not affected. `display: contents` keeps the wrapper out of the tab's layout.
  */
 function OrionTab(props: IDockviewPanelHeaderProps): React.ReactElement {
+  const requestClose = useContext(CloseRequestContext);
   return (
     <div
       style={{ display: "contents" }}
@@ -46,10 +49,11 @@ function OrionTab(props: IDockviewPanelHeaderProps): React.ReactElement {
       onAuxClick={(event) => {
         if (event.button !== 1) return;
         event.preventDefault();
-        props.api.close();
+        if (requestClose) requestClose(props.api.id);
+        else props.api.close();
       }}
     >
-      <DockviewDefaultTab {...props} />
+      <DockviewDefaultTab {...props} closeActionOverride={() => requestClose ? requestClose(props.api.id) : props.api.close()} />
     </div>
   );
 }
@@ -58,6 +62,8 @@ export interface WorkbenchProps {
   /** Panel id -> component. Mirrors the module registry: adding a module means adding one entry here. */
   components: Record<string, FunctionComponent<IDockviewPanelProps>>;
   onReady: (event: DockviewReadyEvent) => void;
+  /** Called for a user tab-close gesture; the host can guard unsaved panel drafts. */
+  onRequestClose: (panelId: string) => void;
   /** Rendered in every group's tab bar, e.g. ORION's "detach to window" button. */
   rightHeaderActionsComponent?: FunctionComponent<IDockviewHeaderActionsProps>;
 }
@@ -68,16 +74,18 @@ export interface WorkbenchProps {
  * look. See ORION v0.5 plan for why dockview (MIT, not the Obsidian source
  * itself, which is closed) was chosen over rolling a docking manager.
  */
-export function Workbench({ components, onReady, rightHeaderActionsComponent }: WorkbenchProps): React.ReactElement {
+export function Workbench({ components, onReady, onRequestClose, rightHeaderActionsComponent }: WorkbenchProps): React.ReactElement {
   return (
-    <div className="h-full w-full">
-      <DockviewReact
-        theme={themeAbyss}
-        components={components}
-        defaultTabComponent={OrionTab}
-        onReady={onReady}
-        rightHeaderActionsComponent={rightHeaderActionsComponent}
-      />
-    </div>
+    <CloseRequestContext.Provider value={onRequestClose}>
+      <div className="h-full w-full">
+        <DockviewReact
+          theme={themeAbyss}
+          components={components}
+          defaultTabComponent={OrionTab}
+          onReady={onReady}
+          rightHeaderActionsComponent={rightHeaderActionsComponent}
+        />
+      </div>
+    </CloseRequestContext.Provider>
   );
 }
