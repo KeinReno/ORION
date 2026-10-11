@@ -34,9 +34,10 @@ export interface OfficeEditorProps {
   doc: DocumentItem;
   /** Falls back to plain download/preview when the file isn't DOCX/XLSX, or parsing fails. */
   fallback: React.ReactNode;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
-export function OfficeEditor({ workspaceId, doc, fallback }: OfficeEditorProps): React.ReactElement {
+export function OfficeEditor({ workspaceId, doc, fallback, onDirtyChange }: OfficeEditorProps): React.ReactElement {
   const { data: blob, isLoading, isError, refetch } = useDocumentBlob(workspaceId, doc.id);
   const [parseFailed, setParseFailed] = useState(false);
 
@@ -78,14 +79,14 @@ export function OfficeEditor({ workspaceId, doc, fallback }: OfficeEditorProps):
   if (isDocxDocument(doc)) {
     return (
       <Suspense fallback={loading}>
-        <DocxEditor workspaceId={workspaceId} doc={doc} blob={blob} onParseFailed={() => setParseFailed(true)} />
+        <DocxEditor workspaceId={workspaceId} doc={doc} blob={blob} onParseFailed={() => setParseFailed(true)} onDirtyChange={onDirtyChange} />
       </Suspense>
     );
   }
   if (isXlsxDocument(doc)) {
     return (
       <Suspense fallback={loading}>
-        <XlsxEditor workspaceId={workspaceId} doc={doc} blob={blob} onParseFailed={() => setParseFailed(true)} />
+        <XlsxEditor workspaceId={workspaceId} doc={doc} blob={blob} onParseFailed={() => setParseFailed(true)} onDirtyChange={onDirtyChange} />
       </Suspense>
     );
   }

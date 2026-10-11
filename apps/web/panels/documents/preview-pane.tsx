@@ -15,12 +15,14 @@ export function PreviewPane({
   doc,
   onDownload,
   onRename,
-  renameBusy = false
+  renameBusy = false,
+  onEditorDirtyChange
 }: {
   doc: DocumentItem;
   onDownload: () => void;
   onRename?: (name: string) => void;
   renameBusy?: boolean;
+  onEditorDirtyChange: (dirty: boolean) => void;
 }): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   // An editor plugin (office) that claims this file replaces the plain viewer; none claims it → viewer only.
@@ -101,8 +103,10 @@ export function PreviewPane({
           </div>
         ) : workspace?.id && Editor ? (
           <Editor
+            key={doc.id}
             workspaceId={workspace.id}
             doc={doc}
+            onDirtyChange={onEditorDirtyChange}
             fallback={<FilePreview mime={doc.mimeType ?? ""} name={doc.name} url={url} onDownload={onDownload} className="h-full" />}
           />
         ) : (

@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   EmptyState,
   IconButton,
+  Input,
   Modal,
   PanelBody,
   PanelHeader,
@@ -24,10 +25,11 @@ import {
   Sheet,
   Skeleton,
   StatCard,
+  SegmentedControl,
   useToast
 } from "@orion/ui";
-import { Archive, ArchiveRestore, Boxes, MoreHorizontal, Pencil, Plus, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { Archive, ArchiveRestore, Boxes, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, TriangleAlert } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useSlotContributions } from "../lib/extensions/slot";
 import { describeAuthError } from "../lib/error-message";
 import { shortDateTime } from "../lib/format";
@@ -53,6 +55,9 @@ export function InventoryPanel(): React.ReactElement {
   const { isEnabled } = useEnabledModules();
 
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState("");
+  const [stockFilter, setStockFilter] = useState<"all" | "low">("all");
+  const [layout, setLayout] = useState<"list" | "cards">("list");
   const itemsQuery = useInventoryItems(workspaceId, showArchived);
   const { data: projectList } = useProjects(isEnabled("projects") ? workspaceId : undefined);
 
@@ -68,12 +73,19 @@ export function InventoryPanel(): React.ReactElement {
   const [detail, setDetail] = useState<InventoryItem | null>(null);
   const [recording, setRecording] = useState(false);
 
-  const items = itemsQuery.data ?? [];
+  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const activeItems = items.filter((item) => !item.archivedAt);
   const lowStockCount = activeItems.filter((item) => item.lowStock).length;
   // The threshold and its marks are the inventory-alerts plugin's.
   const alerts = useSlotContributions("inventory.alerts")[0]?.meta?.api;
   const costing = useSlotContributions("inventory.costing")[0]?.meta?.api;
+  const visibleItems = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("ru");
+    return items.filter((item) => {
+      if (stockFilter === "low" && (item.archivedAt || !item.lowStock)) return false;
+      return !needle || [item.name, item.sku ?? "", item.unit].some((value) => value.toLocaleLowerCase("ru").includes(needle));
+    });
+  }, [items, query, stockFilter]);
 
   async function create(values: InventoryItemFormValues): Promise<void> {
     try {
@@ -143,6 +155,29 @@ export function InventoryPanel(): React.ReactElement {
           </Button>
         }
       >
+        <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
+          <Input aria-label="Поиск по складу" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Название или артикул" className="pl-8" />
+        </div>
+        {alerts ? (
+          <SegmentedControl<"all" | "low">
+            aria-label="Фильтр склада"
+            size="sm"
+            value={stockFilter}
+            onChange={setStockFilter}
+            options={[{ value: "all", label: "Все" }, { value: "low", label: `Мало (${lowStockCount})` }]}
+          />
+        ) : null}
+        <SegmentedControl<"list" | "cards">
+          aria-label="Вид склада"
+          size="sm"
+          value={layout}
+          onChange={setLayout}
+          options={[
+            { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
+            { value: "cards", label: <LayoutGrid className="h-3.5 w-3.5" />, ariaLabel: "Карточками" }
+          ]}
+        />
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
@@ -201,16 +236,42 @@ export function InventoryPanel(): React.ReactElement {
               {alerts ? <alerts.SummaryStat count={lowStockCount} /> : null}
             </div>
 
-            <div className="grid gap-3 [@container(min-width:384px)]:grid-cols-2 [@container(min-width:760px)]:grid-cols-3 [@container(min-width:1040px)]:grid-cols-4">
-              {items.map((item) => (
+            {visibleItems.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="Ничего не найдено"
+                description="Попробуйте другое название или артикул либо сбросьте фильтр."
+                action={<Button size="sm" variant="outline" onClick={() => { setQuery(""); setStockFilter("all"); }}>Сбросить фильтры</Button>}
+              />
+            ) : (
+            <div className={layout === "cards"
+              ? "grid gap-3 [@container(min-width:384px)]:grid-cols-2 [@container(min-width:760px)]:grid-cols-3 [@container(min-width:1040px)]:grid-cols-4"
+              : "overflow-hidden rounded-xl border border-border"}>
+              {layout === "list" ? (
+                <div className="hidden grid-cols-[minmax(0,1fr)_7rem_2rem] gap-3 border-b border-border px-3 py-2 text-2xs uppercase tracking-wide text-subtle-foreground [@container(min-width:560px)]:grid">
+                  <span>Позиция</span><span className="text-right">Остаток</span><span />
+                </div>
+              ) : null}
+              {visibleItems.map((item) => (
                 <Card
                   key={item.id}
                   interactive
-                  className={`flex flex-col gap-2 ${item.archivedAt ? "opacity-60" : ""}`}
+                  className={layout === "cards"
+                    ? `flex flex-col gap-2 ${item.archivedAt ? "opacity-60" : ""}`
+                    : `grid min-w-0 grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-3 rounded-none border-0 border-b border-border px-3 py-2 last:border-b-0 [@container(min-width:560px)]:grid-cols-[minmax(0,1fr)_7rem_2rem] ${item.archivedAt ? "opacity-60" : ""}`}
                   onClick={() => setDetail(item)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Открыть позицию ${item.name}`}
+                  onKeyDown={(event) => {
+                    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      setDetail(item);
+                    }
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                  <div className={layout === "cards" ? "flex items-start justify-between gap-2" : "contents"}>
+                    <div className={layout === "list" ? "col-start-1 row-start-1 min-w-0" : "min-w-0"}>
                       <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
                       <p className="text-2xs text-subtle-foreground">
                         {item.sku ? `${item.sku} · ` : ""}
@@ -218,6 +279,7 @@ export function InventoryPanel(): React.ReactElement {
                         {item.archivedAt ? " · в архиве" : ""}
                       </p>
                     </div>
+                    <div className={layout === "list" ? "col-start-3 row-start-1" : undefined}>
                     <DropdownMenu
                       trigger={({ toggle }) => (
                         <IconButton
@@ -238,17 +300,19 @@ export function InventoryPanel(): React.ReactElement {
                           : { label: "В архив", icon: Archive, onSelect: () => setPendingArchive(item) }
                       ]}
                     />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <p className={`font-mono text-xl font-semibold tabular-nums ${alerts && item.lowStock ? "text-destructive" : "text-foreground"}`}>
+                  <div className={layout === "cards" ? "flex items-center gap-2" : "col-start-2 row-start-1 flex items-center justify-end gap-2"}>
+                    <p className={`font-mono font-semibold tabular-nums ${layout === "cards" ? "text-xl" : "text-sm"} ${alerts && item.lowStock ? "text-destructive" : "text-foreground"}`}>
                       {item.balance} {item.unit}
                     </p>
-                    {alerts && item.lowStock ? <alerts.ItemBadge /> : null}
+                    {alerts && item.lowStock ? <span className={layout === "list" ? "hidden [@container(min-width:560px)]:inline-flex" : undefined}><alerts.ItemBadge /></span> : null}
                   </div>
-                  {costing ? <costing.CardLine avgCostMinor={item.avgCostMinor} /> : null}
+                  {layout === "cards" && costing ? <costing.CardLine avgCostMinor={item.avgCostMinor} /> : null}
                 </Card>
               ))}
             </div>
+            )}
           </div>
         )}
       </PanelBody>

@@ -79,6 +79,7 @@ export interface OfficeEditorInnerProps {
   doc: DocumentItem;
   blob: Blob;
   onParseFailed: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 const MAX_DISPLAY_ROWS = 200;
@@ -95,11 +96,12 @@ function colLetter(index: number): string {
   return s;
 }
 
-export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed }: OfficeEditorInnerProps): React.ReactElement {
+export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDirtyChange }: OfficeEditorInnerProps): React.ReactElement {
   const { toast } = useToast();
   const replaceContent = useReplaceDocumentContent(workspaceId);
   const [state, setState] = useState<WorkbookState | null>(null);
   const [dirty, setDirty] = useState(false);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [activeSheet, setActiveSheet] = useState(0);
   // F05: edit-generation / saved-generation guard. `editGeneration` bumps on
   // every user edit (cell, chart, pivot). `save()` snapshots it into

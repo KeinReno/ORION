@@ -16,6 +16,7 @@ import type { DocumentItem, DocumentView } from "@orion/shared-types";
 import {
   Button,
   CallChip,
+  ConfirmDialog,
   TypeToConfirmDialog,
   DropdownMenu,
   EmptyState,
@@ -52,7 +53,7 @@ import {
   Trash2,
   Upload
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
 import { relativeTime } from "../lib/format";
 import { FilterChip } from "../components/filter-chip";
@@ -97,6 +98,22 @@ export function DocumentsPanel(): React.ReactElement {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const selectedFileIdRef = useRef<string | null>(null);
   selectedFileIdRef.current = selectedFileId;
+  const [editorDirty, setEditorDirty] = useState(false);
+  const editorDirtyRef = useRef(false);
+  editorDirtyRef.current = editorDirty;
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const guardNavigation = useCallback((next: () => void) => {
+    if (editorDirtyRef.current) setPendingNavigation(() => next);
+    else next();
+  }, []);
+  const selectFile = useCallback((id: string | null) => {
+    if (selectedFileIdRef.current === id) return;
+    guardNavigation(() => {
+      selectedFileIdRef.current = id;
+      setSelectedFileId(id);
+      setEditorDirty(false);
+    });
+  }, [guardNavigation]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 200);
@@ -106,8 +123,8 @@ export function DocumentsPanel(): React.ReactElement {
   // same way a row click does, not a second navigation mechanism.
   const focusedDocumentId = useFocusedDocumentId();
   useEffect(() => {
-    if (focusedDocumentId) setSelectedFileId(focusedDocumentId);
-  }, [focusedDocumentId]);
+    if (focusedDocumentId) selectFile(focusedDocumentId);
+  }, [focusedDocumentId, selectFile]);
   const [sort, setSort] = useState<SortKey>("name");
   const [layout, setLayout] = useState<Layout>("list");
   const [groupFilter, setGroupFilter] = useState<DocGroup | null>(null);
@@ -197,8 +214,7 @@ export function DocumentsPanel(): React.ReactElement {
         event.preventDefault();
         const next = nextListId(ids, selectedFileIdRef.current, event.key === "ArrowDown" ? 1 : -1);
         if (next) {
-          selectedFileIdRef.current = next;
-          setSelectedFileId(next);
+          selectFile(next);
         }
         return;
       }
@@ -250,7 +266,8 @@ export function DocumentsPanel(): React.ReactElement {
     selectedFileId,
     checked,
     cwd,
-    byId
+    byId,
+    selectFile
   ]);
 
   const groupsPresent = useMemo(() => {
@@ -273,9 +290,13 @@ export function DocumentsPanel(): React.ReactElement {
   }
 
   function openFolder(id: string | null): void {
-    setCwd(id);
-    setSelectedFileId(null);
-    setChecked(new Set());
+    guardNavigation(() => {
+      setCwd(id);
+      selectedFileIdRef.current = null;
+      setSelectedFileId(null);
+      setEditorDirty(false);
+      setChecked(new Set());
+    });
   }
 
   function runUpload(chipId: string, files: File[], parentId: string | null): void {
@@ -326,7 +347,7 @@ export function DocumentsPanel(): React.ReactElement {
       const file = await action.createFile();
       const created = await uploadDocs.mutateAsync({ parentId: cwd, files: [file] });
       toast({ title: action.successTitle, tone: "success" });
-      if (created[0]) setSelectedFileId(created[0].id);
+      if (created[0]) selectFile(created[0].id);
     } catch (e) {
       toast({ title: "Не удалось создать файл", description: (e as Error).message, tone: "danger" });
     }
@@ -645,7 +666,7 @@ export function DocumentsPanel(): React.ReactElement {
                 onDragStart={() => rowDragStart(doc.id)}
                 onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                 onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
-                onClick={() => (isFolder ? !trash && openFolder(doc.id) : setSelectedFileId(doc.id))}
+                onClick={() => (isFolder ? !trash && openFolder(doc.id) : selectFile(doc.id))}
                 className={cx(
                   "group relative flex flex-col gap-1.5 rounded-xl border p-2",
                   trash ? "border-transparent" : "cursor-pointer",
@@ -727,7 +748,7 @@ export function DocumentsPanel(): React.ReactElement {
                     onDragStart={() => rowDragStart(doc.id)}
                     onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                     onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
-                    onClick={() => (isFolder ? !trash && openFolder(doc.id) : setSelectedFileId(doc.id))}
+                    onClick={() => (isFolder ? !trash && openFolder(doc.id) : selectFile(doc.id))}
                     className={cx(
                       "group grid items-center gap-2 px-2.5 py-2 transition-colors",
                       compactList
@@ -854,6 +875,7 @@ export function DocumentsPanel(): React.ReactElement {
         onDownload={() => void download(selectedFile)}
         onRename={(name) => renameOrMove.mutate({ id: selectedFile.id, input: { name } })}
         renameBusy={renameOrMove.isPending}
+        onEditorDirtyChange={setEditorDirty}
       />
     ) : (
       <div className="flex h-full items-center justify-center p-6">
@@ -951,7 +973,7 @@ export function DocumentsPanel(): React.ReactElement {
         />
         <SegmentedControl<DocumentView>
           value={view}
-          onChange={setView}
+          onChange={(next) => guardNavigation(() => { setEditorDirty(false); setView(next); })}
           size="sm"
           options={[
             { value: "active", label: "Активные" },
@@ -965,7 +987,7 @@ export function DocumentsPanel(): React.ReactElement {
           <>
             <div className="flex min-w-0 flex-1 flex-col">{list}</div>
             {!trash ? (
-              <Sheet open={Boolean(selectedFile)} onClose={() => setSelectedFileId(null)} title={selectedFile?.name ?? "Файл"} bare>
+              <Sheet open={Boolean(selectedFile)} onClose={() => selectFile(null)} title={selectedFile?.name ?? "Файл"} bare>
                 {preview}
               </Sheet>
             ) : null}
@@ -978,7 +1000,7 @@ export function DocumentsPanel(): React.ReactElement {
         ) : (
           <>
             <div className="flex min-w-0 flex-1 flex-col">{list}</div>
-            <Sheet open={Boolean(selectedFile)} onClose={() => setSelectedFileId(null)} title={selectedFile?.name ?? "Файл"} bare>
+            <Sheet open={Boolean(selectedFile)} onClose={() => selectFile(null)} title={selectedFile?.name ?? "Файл"} bare>
               {preview}
             </Sheet>
           </>
@@ -1082,6 +1104,22 @@ export function DocumentsPanel(): React.ReactElement {
           moveMany(ids, parentId);
         }}
         onCancel={() => setPendingBulkMove(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingNavigation !== null}
+        title="Закрыть без сохранения?"
+        description="В документе есть несохранённые изменения. Сохраните их в редакторе или подтвердите переход без сохранения."
+        confirmLabel="Не сохранять"
+        danger
+        onConfirm={() => {
+          const next = pendingNavigation;
+          setPendingNavigation(null);
+          setEditorDirty(false);
+          editorDirtyRef.current = false;
+          next?.();
+        }}
+        onCancel={() => setPendingNavigation(null)}
       />
 
       <ExtensionSlot name="documents.history" props={{ workspaceId, doc: historyTarget, onClose: () => setHistoryTarget(null) }} />

@@ -47,13 +47,15 @@ export interface OfficeEditorInnerProps {
   blob: Blob;
   /** Parsing failed — caller renders its own read-only fallback instead. */
   onParseFailed: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
-export default function DocxEditor({ workspaceId, doc, blob, onParseFailed }: OfficeEditorInnerProps): React.ReactElement {
+export default function DocxEditor({ workspaceId, doc, blob, onParseFailed, onDirtyChange }: OfficeEditorInnerProps): React.ReactElement {
   const { toast } = useToast();
   const replaceContent = useReplaceDocumentContent(workspaceId);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [dirty, setDirty] = useState(false);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   // F05: same edit-generation / saved-generation guard as xlsx-editor.tsx —
   // see that file's comments for the full rationale. `onUpdate` fires on
   // every keystroke (including the initial `setContent` from a freshly

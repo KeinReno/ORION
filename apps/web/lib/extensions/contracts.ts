@@ -70,6 +70,8 @@ export interface DocumentsEditorSlotProps {
   workspaceId: string;
   doc: DocumentItem;
   fallback: ReactNode;
+  /** Tell the host whether leaving this file would discard editor changes. */
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 /** documents.create — contributes "new file" actions; it draws nothing, the host owns upload and selection. */
