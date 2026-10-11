@@ -74,6 +74,7 @@ export function NotesPanel(): React.ReactElement {
   const panelVisible = usePanelVisible();
   const { workspace } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
+  const projectsOn = isEnabled("projects");
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 300);
   const [view, setView] = useState<NoteView>("active");
@@ -86,7 +87,7 @@ export function NotesPanel(): React.ReactElement {
   const { data: notes, isLoading, isError, error, refetch } = useNotes(workspace?.id, debouncedQuery, view, templatesView);
   // Active projects of this workspace — the editor's "Проект" select and the
   // project chip in the list. Same source as TasksPanel.
-  const { data: projectList } = useProjects(isEnabled("projects") ? workspace?.id : undefined);
+  const { data: projectList } = useProjects(projectsOn ? workspace?.id : undefined);
   const showIds = usePreferences().data?.showNoteIds ?? false;
   const createNote = useCreateNote(workspace?.id);
   const updateNote = useUpdateNote(workspace?.id);
@@ -99,6 +100,7 @@ export function NotesPanel(): React.ReactElement {
   const twoPane = width >= TWO_PANE_MIN;
 
   const [sort, setSort] = useState<SortKey>("updated");
+  const [groupByProject, setGroupByProject] = useState(false);
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<"any" | "all">("any");
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
@@ -111,6 +113,11 @@ export function NotesPanel(): React.ReactElement {
   const [pendingPurge, setPendingPurge] = useState<Note | null>(null);
   // Bumped after a revision restore to remount NoteEditor on the fresh note.
   const [editorReloadKey, setEditorReloadKey] = useState(0);
+
+  // A project filter must not keep narrowing the list after Projects is turned off.
+  useEffect(() => {
+    if (!projectsOn) setProjectFilter(null);
+  }, [projectsOn]);
 
   // Switching list (view / templates) closes any open editor.
   useEffect(() => {
@@ -157,6 +164,26 @@ export function NotesPanel(): React.ReactElement {
     });
   }, [notes, tagFilters, tagMode, projectFilter, pinnedOnly, sort, trash, view]);
 
+  // Grouping only changes the list presentation; records and saved sort remain untouched.
+  // Stable Array#sort preserves the selected ordering within each project group.
+  const groupingActive = groupByProject && !trash && projectsOn;
+  const displayed = useMemo(() => {
+    if (!groupingActive) return visible;
+    const names = new Map((projectList ?? []).map((project) => [project.id, project.name]));
+    const label = (note: Note): string => note.projectId ? names.get(note.projectId) ?? "Проект недоступен" : "Без проекта";
+    return [...visible].sort((a, b) =>
+      label(a).localeCompare(label(b), "ru") || (a.projectId ?? "").localeCompare(b.projectId ?? "")
+    );
+  }, [visible, groupingActive, projectList]);
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (groupingActive) for (const note of displayed) {
+      const key = note.projectId ?? NO_PROJECT;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [displayed, groupingActive]);
+
   const filtersOn = activeFilterCount({ tags: tagFilters, tagMode, projectId: projectFilter, pinnedOnly });
   const projectName = (id: string): string => (projectList ?? []).find((p) => p.id === id)?.name ?? "проект";
   function resetFilters(): void {
@@ -175,7 +202,7 @@ export function NotesPanel(): React.ReactElement {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const current = selectedIdRef.current && selectedIdRef.current !== NEW_NOTE ? selectedIdRef.current : null;
-        const next = nextListId(visible.map((note) => note.id), current, event.key === "ArrowDown" ? 1 : -1);
+        const next = nextListId(displayed.map((note) => note.id), current, event.key === "ArrowDown" ? 1 : -1);
         if (next) {
           selectedIdRef.current = next;
           setSelectedId(next);
@@ -189,7 +216,7 @@ export function NotesPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, composing, pendingDelete, pendingPurge, tagManagerOpen, visible, selectedId, trash]);
+  }, [panelVisible, composing, pendingDelete, pendingPurge, tagManagerOpen, displayed, selectedId, trash]);
 
   async function handleCreate(input: NoteEditorInput): Promise<void> {
     const created = await createNote.mutateAsync({ ...input, isTemplate: templatesView });
@@ -316,21 +343,26 @@ export function NotesPanel(): React.ReactElement {
               Закреплённые
             </FilterChip>
           ) : null}
-          {(projectList ?? []).length > 0 ? (
-            <Select
-              value={projectFilter ?? ""}
-              onChange={(event) => setProjectFilter(event.target.value || null)}
-              aria-label="Фильтр по проекту"
-              className="w-auto min-w-[7.5rem] max-w-[11rem] rounded-full !py-1 !text-2xs"
-            >
-              <option value="">Все проекты</option>
-              <option value={NO_PROJECT}>Без проекта</option>
-              {(projectList ?? []).map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
+          {projectsOn && (projectList ?? []).length > 0 ? (
+            <>
+              <Select
+                value={projectFilter ?? ""}
+                onChange={(event) => setProjectFilter(event.target.value || null)}
+                aria-label="Фильтр по проекту"
+                className="w-auto min-w-[7.5rem] max-w-[11rem] rounded-full !py-1 !text-2xs"
+              >
+                <option value="">Все проекты</option>
+                <option value={NO_PROJECT}>Без проекта</option>
+                {(projectList ?? []).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </Select>
+              <FilterChip active={groupByProject} onClick={() => setGroupByProject((value) => !value)}>
+                Группы по проектам
+              </FilterChip>
+            </>
           ) : null}
           {allTags.length > 0 ? (
             <>
@@ -419,7 +451,7 @@ export function NotesPanel(): React.ReactElement {
                 : view === "archive"
                   ? "Заметки из архива не показываются в общем списке, но их не удаляют."
                   : query || filtersOn > 0
-                    ? "Сбросьте поиск или фильтры — в этом списке заметки есть."
+                    ? "Измените запрос или сбросьте фильтры, чтобы увидеть другие заметки."
                     : templatesView
                       ? "Создайте шаблон кнопкой сверху или отметьте существующую заметку как шаблон."
                       : "Создайте первую заметку кнопкой сверху."
@@ -442,13 +474,21 @@ export function NotesPanel(): React.ReactElement {
         </div>
       ) : (
         <ul className="space-y-1">
-          {visible.map((note) => {
+          {displayed.map((note, index) => {
             const active = note.id === selectedId;
             const project = note.projectId ? (projectList ?? []).find((p) => p.id === note.projectId) : undefined;
+            const groupKey = note.projectId ?? NO_PROJECT;
+            const startsGroup = groupingActive && (index === 0 || displayed[index - 1]?.projectId !== note.projectId);
             // The author's own description wins; otherwise a cleaned excerpt of the body.
             const preview = noteListPreview(note.summary.trim() || note.body);
             return (
               <li key={note.id}>
+                {startsGroup ? (
+                  <h3 className={cx("mb-1 flex items-center justify-between px-2 text-xs font-semibold text-muted-foreground", index > 0 ? "mt-4 border-t border-border/60 pt-3" : "mt-2")}>
+                    <span className="truncate">{project?.name ?? (note.projectId ? "Проект недоступен" : "Без проекта")}</span>
+                    <span className="ml-2 font-mono tabular-nums">{groupCounts.get(groupKey)}</span>
+                  </h3>
+                ) : null}
                 <div
                   // The whole row is clickable for the mouse; keyboard and assistive tech use the
                   // button around the text below. The row itself must not be a button: it also
@@ -487,7 +527,7 @@ export function NotesPanel(): React.ReactElement {
                       <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</span>
                     ) : null}
                     <span className="mt-1 flex items-center gap-1.5 text-2xs text-subtle-foreground">
-                      {project ? (
+                      {project && !groupingActive ? (
                         <span
                           style={projectColor(project.name)}
                           className="inline-flex max-w-[9rem] shrink-0 truncate rounded-full border px-1.5 py-0 text-2xs font-medium"
