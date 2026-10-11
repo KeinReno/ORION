@@ -17,6 +17,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.mts",
+    "architecture-check": "node scripts/architecture-check.mjs",
+    "plugin-contract-check": "vitest run apps/web/lib/extensions/registry.test.ts",
     "quality": "corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
     "db:up": "node scripts/postgres.mjs up",
     "db:down": "node scripts/postgres.mjs down",

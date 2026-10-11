@@ -1,4 +1,4 @@
-import { PLUGIN_CATALOG, isModuleEnabled, isPluginEnabled, type OrionPluginId } from "@orion/shared-types";
+import { MODULE_CATALOG, ORION_PLUGIN_IDS, PLUGIN_CATALOG, isPluginEnabled, pluginManifestSchema, type OrionPluginId } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import { createRegistry } from "./registry";
 
@@ -49,7 +49,14 @@ describe("plugin catalog invariants (default-full parity)", () => {
   it("every plugin extends a module that exists and has a unique id", () => {
     const ids = PLUGIN_CATALOG.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const manifest of PLUGIN_CATALOG) expect(isModuleEnabled([], manifest.extendsModuleId)).toBe(true);
+    expect([...ids].sort()).toEqual([...ORION_PLUGIN_IDS].sort());
+    const moduleIds = new Set(MODULE_CATALOG.map((module) => module.id));
+    for (const manifest of PLUGIN_CATALOG) {
+      expect(pluginManifestSchema.safeParse(manifest).success).toBe(true);
+      expect(moduleIds.has(manifest.extendsModuleId)).toBe(true);
+      expect(manifest.provides.length).toBeGreaterThan(0);
+      expect(manifest.disableBehavior.trim()).not.toBe("");
+    }
   });
 
   it("an extracted built-in is ON by default for every existing workspace, so nothing disappears on update", () => {

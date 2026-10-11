@@ -47,6 +47,8 @@ jobs:
       - run: pnpm --filter @orion/api prisma:migrate:deploy
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm architecture-check
+      - run: pnpm plugin-contract-check
       - run: pnpm test
       - run: pnpm test:integration
       - run: pnpm build
