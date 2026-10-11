@@ -4,7 +4,7 @@ import { TokenStore } from "../auth/token-store";
 import { MemoryStorage } from "../storage/storage-adapter";
 
 // Focus: the 401 -> /auth/refresh -> retry-once path in ApiClient.request(),
-// the single most bug-prone piece of client logic (see docs/PLAN.md v0.3).
+// the single most bug-prone piece of client logic (see docs/HISTORY.md v0.3).
 
 interface FakeResponse {
   ok: boolean;

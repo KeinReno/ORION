@@ -9,7 +9,7 @@ import { assertCategoryInWorkspace } from "../finance-refs.util";
  * Plain CRUD, mirroring `categories/` — no `update`: a rule is one
  * matchText→category pair, cheap enough to delete and recreate rather than
  * PATCH. Matching itself happens only in the frontend (`TransactionForm`),
- * see docs/PLAN.md v0.13.
+ * see docs/HISTORY.md v0.13.
  */
 @Injectable()
 export class CategoryRulesService {

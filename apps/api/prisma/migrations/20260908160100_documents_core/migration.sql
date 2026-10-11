@@ -1,5 +1,5 @@
 -- ORION v0.12 "Документы" — a per-workspace tree of folders and files. See
--- docs/PLAN.md. Binary content lives outside Postgres (StorageAdapter); this
+-- docs/HISTORY.md. Binary content lives outside Postgres (StorageAdapter); this
 -- table holds only metadata. RLS is added in the migration that follows.
 
 -- CreateEnum

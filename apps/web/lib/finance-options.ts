@@ -4,7 +4,7 @@
  * active entries day-to-day, but editing a record that references an
  * already-archived one must not silently drop its current value out of the
  * list — so that one archived entry is appended, labelled "(архив)". See
- * docs/PLAN.md v0.13.
+ * docs/HISTORY.md v0.13.
  */
 export function withArchivedFallback<T extends { id: string; name: string; archivedAt: string | null }>(
   all: T[],

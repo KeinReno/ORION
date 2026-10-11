@@ -21,7 +21,7 @@ import * as dns from "node:dns/promises";
  * check and the request a few milliseconds later. That residual race
  * requires the attacker to control authoritative DNS for the hostname *and*
  * win a very tight timing window, and is judged an acceptable trade-off for
- * this app's threat model (see `docs/SONNET_IMPLEMENTATION/12-PROGRESS.md`
+ * this app's threat model (see `docs/HISTORY.md`
  * S05 journal) — callers additionally re-run this check as close to the
  * actual network call as practical (see `sync.service.ts` `remoteFor`) to
  * shrink that window rather than checking only once at config-save time.

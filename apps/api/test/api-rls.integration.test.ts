@@ -1339,7 +1339,7 @@ describe("API workspace isolation", () => {
   });
 
   it("S02: sync/backup is owner-only on every endpoint — member and lead get 403, no WebDAV call is ever made", async () => {
-    // Regression for docs/SONNET_IMPLEMENTATION/15-FIRST-TASKS.md "S02: полный
+    // Regression for docs/HISTORY.md "S02: полный
     // перечень owner gates". Before the fix, every SyncService method only
     // called `assertMemberTx` — any member (or lead) could read/replace the
     // remote WebDAV credentials and trigger a full-workspace restore.
@@ -1564,7 +1564,7 @@ describe("API workspace isolation", () => {
   });
 
   it("restricted-module-aggregate-access: a restricted/disabled module must not leak through search, project rollup or entity links", async () => {
-    // S01 regression (docs/SONNET_IMPLEMENTATION/15-FIRST-TASKS.md). Before the
+    // S01 regression (docs/HISTORY.md). Before the
     // fix, `SearchService`/`ProjectsService` built their cross-module queries
     // from `ModulesService.enabledSetTx`, which only knows "disabled" — a
     // `restricted` module (still enabled, just hidden from a plain `member`)

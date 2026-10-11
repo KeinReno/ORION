@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ORION v0.27 «План проекта» — see docs/PLAN.md. A milestone is the second
+ * ORION v0.27 «План проекта» — see docs/HISTORY.md. A milestone is the second
  * level of the Gantt (tasks are the first): a phase with its own bar,
  * independent of whatever tasks happen to be grouped under it via
  * `Task.milestoneId`.

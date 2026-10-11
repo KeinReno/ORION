@@ -98,7 +98,7 @@ export function PanelShell({
  * The scrolling content region for the common single-column panel.
  *
  * `measure` caps content width by the *kind of work* (see «Контракт ширины»
- * in docs/UI_UX_DESIGN.md), so short cards and prose don't stretch with the
+ * in docs/HISTORY.md), so short cards and prose don't stretch with the
  * dock. Header stays full-bleed; calendar / kanban / tables / Gantt omit it on
  * purpose — their width *is* the data. Don't hand-write `max-w-*` in a panel:
  * pick a step of this scale, so every panel reads at the same widths.

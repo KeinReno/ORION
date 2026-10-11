@@ -163,7 +163,7 @@ export interface MarkdownEditorProps {
 
 /**
  * CodeMirror 6 in markdown source mode — the note-body editor (see
- * docs/PLAN.md v0.9 phase 2). Controlled: `value` in, `onChange` out. The
+ * docs/HISTORY.md v0.9 phase 2). Controlled: `value` in, `onChange` out. The
  * view is created once on mount; external `value` changes (switching notes,
  * reverting) are reconciled without stomping the cursor on the user's own
  * keystrokes.

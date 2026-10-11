@@ -20,7 +20,7 @@
   --orion-danger: 244 63 94;
   --orion-danger-hover: 251 113 133;
 
-  /* Type scale (docs/UI_UX_DESIGN.md). Compact overrides live on
+  /* Type scale (docs/HISTORY.md). Compact overrides live on
      html[data-density="compact"] so density is not only html font-size. */
   --font-display: 1.5rem;
   --font-title: 1.125rem;

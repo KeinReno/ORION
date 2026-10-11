@@ -7,7 +7,7 @@ import { WorkspacesService } from "../workspaces/workspaces.service";
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — lifecycle of a
+ * U09 (docs/HISTORY.md) — lifecycle of a
  * `CrossWorkspaceGrant` record itself (create/revoke/list-mine). This is
  * NOT where the grant-aware object read happens — that's `SharedService`,
  * which is the only caller of `PrismaService.withGrant`. Everything here

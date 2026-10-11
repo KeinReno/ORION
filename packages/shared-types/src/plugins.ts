@@ -4,7 +4,7 @@ import { orionModuleIdSchema, type OrionModuleId } from "./modules";
 /**
  * Plugins extend exactly one existing domain module — never the base shell
  * (dashboard/inbox/search/settings/sync). This is deliberately NOT a runtime
- * for loading arbitrary/external code: docs/PLAN.md rejected a real Plugin
+ * for loading arbitrary/external code: docs/HISTORY.md rejected a real Plugin
  * Runtime twice (v0.20, v0.23) as premature. A plugin here is a compiled-in
  * unit at the same trust level as a module, registered the same way
  * (PLUGIN_CATALOG mirrors MODULE_CATALOG) — the only extra rule is

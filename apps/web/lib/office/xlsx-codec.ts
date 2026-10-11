@@ -1,7 +1,7 @@
 /**
  * O01 spike — XLSX <-> grid-state codec, with a real formula engine.
  *
- * Library choice (see docs/SONNET_IMPLEMENTATION/21-OFFICE-IMPLEMENTATION.md
+ * Library choice (see docs/HISTORY.md
  * O01 and 20-DOCUMENT-EDITORS.md's explicit fallback clause): Univer was the
  * default candidate, but was rejected after checking its actual npm surface
  * (see 12-PROGRESS.md O01 entry for the full trail):
@@ -35,7 +35,7 @@ import { HyperFormula } from "hyperformula";
 
 /**
  * Charts and pivot tables — added after O01 shipped the exceljs+hyperformula
- * spike (see docs/SONNET_IMPLEMENTATION/22-SPREADSHEET-CHARTS-RESEARCH.md).
+ * spike (see docs/HISTORY.md).
  * exceljs cannot write chart/pivot XML at all (proven above, not assumed).
  *
  * Architecture decision, checked empirically before writing this file (see
@@ -68,7 +68,7 @@ import { HyperFormula } from "hyperformula";
  * `node_modules` layout, since pnpm nests packages under `.pnpm/`.
  *
  * In the browser the situation is different and was initially missed (see
- * docs/SONNET_IMPLEMENTATION/12-PROGRESS.md "O04"): there is no `node:fs`,
+ * docs/HISTORY.md "O04"): there is no `node:fs`,
  * so `initWasmSync` cannot run there at all. modern-xlsx *does* ship a real
  * browser story though (its README's "Browser Usage (ESM)"/"Custom WASM
  * URL" sections, and `src/wasm-loader.ts`'s `initWasm(wasmSource)`, which

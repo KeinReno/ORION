@@ -112,7 +112,7 @@ export class InventoryService {
    * row serialises concurrent movements against the *same* item — the
    * balance isn't a stored column a `CHECK` constraint could guard, so two
    * racing issues both reading "balance = 3" and both writing "-2" is exactly
-   * the failure this lock closes (see docs/PLAN.md v0.26).
+   * the failure this lock closes (see docs/HISTORY.md v0.26).
    */
   async recordMovement(
     userId: string,

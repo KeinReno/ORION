@@ -7,7 +7,7 @@ import { PrismaService } from "../../common/prisma.service";
 /**
  * Mirrors DueTaskCheckerService (apps/api/src/notifications/) — a
  * system-wide cron, only ever reachable this way (no per-user manual
- * trigger in v1, see docs/PLAN.md v0.8), that materialises due recurring
+ * trigger in v1, see docs/HISTORY.md v0.8), that materialises due recurring
  * rules into real Transaction rows and advances nextRunAt. Hourly is
  * plenty for day/week-granularity schedules — no need for the task
  * checker's per-minute cadence.
@@ -126,7 +126,7 @@ export class RecurringCheckerService {
         const scheduledFor = rule.nextRunAt;
         try {
           // v0.9: Transaction's amount/category moved into a child `lines`
-          // table (see docs/PLAN.md) — recurring rules themselves stay
+          // table (see docs/HISTORY.md) — recurring rules themselves stay
           // single-category/non-transfer, so this is just one nested line.
           await tx.transaction.create({
             data: {

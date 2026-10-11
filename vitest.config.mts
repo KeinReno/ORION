@@ -8,7 +8,7 @@ import { defineConfig } from "vitest/config";
 // backs the desktop launcher (S18 readiness polling) — no Tauri/child_process
 // runtime needed to exercise it.
 // NestJS service / DB-integration tests are a separate future setup — the
-// manual "Проверка" checklists in docs/PLAN.md still cover those paths for now.
+// manual "Проверка" checklists in docs/HISTORY.md still cover those paths for now.
 export default defineConfig({
   test: {
     include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "scripts/**/*.test.mjs"],

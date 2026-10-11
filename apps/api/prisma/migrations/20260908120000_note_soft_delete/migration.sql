@@ -1,5 +1,5 @@
 -- ORION v0.8 "Заметки" phase 1 — soft delete + a content-change timestamp
--- (see docs/PLAN.md). No RLS changes: "notes" is already under the
+-- (see docs/HISTORY.md). No RLS changes: "notes" is already under the
 -- notes_isolation policy (20260905121419_enable_rls), and that policy applies
 -- to every row of the table regardless of deletedAt — trashed rows stay
 -- workspace-isolated exactly like live ones.

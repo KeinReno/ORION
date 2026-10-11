@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — explicit,
+ * U09 (docs/HISTORY.md) — explicit,
  * read-only cross-workspace grants. Closed allowlist, DELIBERATELY a
  * subset of `SearchableEntityType`: only the four types the threat model's
  * permission matrix (раздел 3.1) defines a per-type allowlist for. `task`

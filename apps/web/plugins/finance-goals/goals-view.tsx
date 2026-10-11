@@ -22,7 +22,7 @@ function daysLeft(targetDate: string): number {
 }
 
 /**
- * A goal is tied to one savings account (v0.13, see docs/PLAN.md) —
+ * A goal is tied to one savings account (v0.13, see docs/HISTORY.md) —
  * `currentAmount` is just that account's live balance, computed server-side;
  * there's no separate contribution ledger to maintain here.
  */

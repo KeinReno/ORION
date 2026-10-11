@@ -2,7 +2,7 @@
 // as a plain static asset (no bundler / Terser touching it — the worker is an
 // ESM file that breaks minification). Referenced by packages/ui's PdfView as
 // `/pdf.worker.min.mjs`. Regenerable, so it's gitignored — this runs before
-// dev/build. See docs/PLAN.md v0.12.
+// dev/build. See docs/HISTORY.md v0.12.
 import { createRequire } from "node:module";
 import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";

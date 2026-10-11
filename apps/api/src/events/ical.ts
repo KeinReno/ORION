@@ -1,6 +1,6 @@
 /**
  * Hand-rolled RFC 5545 (iCalendar) serialisation for the read-only outbound
- * feed — see docs/PLAN.md v0.10 "Уровень 1". VEVENT is a tiny, stable
+ * feed — see docs/HISTORY.md v0.10 "Уровень 1". VEVENT is a tiny, stable
  * format; a dependency (`ics`, `ical-generator`) would earn its keep only if
  * we also *parsed* .ics, which Уровень 1 deliberately doesn't. Treat this
  * like the project's other hand-written primitives.

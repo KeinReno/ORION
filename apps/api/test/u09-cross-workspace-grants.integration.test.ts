@@ -6,7 +6,7 @@ import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
 
 /**
- * U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — negative-first
+ * U09 (docs/HISTORY.md) — negative-first
  * security tests for explicit cross-workspace grants, written before/along
  * with the implementation per the session's instructions. Proves each of
  * T1-T7 in the threat model doc holds at the HTTP + RLS boundary, not just

@@ -160,7 +160,7 @@ export interface TransactionShape {
  * touch one field). Not a zod `.superRefine` on the shared-types schema:
  * that would only ever see the partial PATCH body, never the merged
  * picture, so it can't actually validate an update correctly. See
- * docs/PLAN.md v0.9.
+ * docs/HISTORY.md v0.9.
  */
 export function assertTransactionShape(shape: TransactionShape): void {
   if (shape.type === "transfer") {

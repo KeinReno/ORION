@@ -3,7 +3,7 @@ import { createIntentChannel } from "./intent-channel";
 
 /**
  * S09 — the two scenarios from
- * docs/SONNET_IMPLEMENTATION/15-FIRST-TASKS.md:
+ * docs/HISTORY.md:
  *   1. `focusTask(X)` emits before the Tasks panel has mounted (e.g. it's
  *      being lazily opened by this very click) — the panel must still end
  *      up focused on X once it mounts, not silently miss it.

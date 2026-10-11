@@ -1,4 +1,4 @@
--- Server-side full-text search (ORION v0.7 — see docs/PLAN.md). Functional
+-- Server-side full-text search (ORION v0.7 — see docs/HISTORY.md). Functional
 -- GIN indexes, no denormalized tsvector column: the expression is small and
 -- cheap enough to index directly, so there's no generated column to keep in
 -- sync on every write. "russian" is Postgres's built-in text search config

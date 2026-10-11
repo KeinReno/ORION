@@ -75,7 +75,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — narrow,
+   * U09 (docs/HISTORY.md) — narrow,
    * transaction-scoped RLS context for reading a single object through an
    * explicit `CrossWorkspaceGrant`. Only `SharedService` calls this — never
    * a normal module service — because the whole point is that

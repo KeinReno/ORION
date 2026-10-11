@@ -5,7 +5,7 @@
 // `ensureModernXlsxWasm` as `/modern-xlsx.wasm` when running in the browser
 // (Node keeps reading the file straight from node_modules via `node:fs`,
 // unaffected). Regenerable, so it's gitignored — this runs before dev/build.
-// See docs/SONNET_IMPLEMENTATION/12-PROGRESS.md "O04-follow-up" for why this
+// See docs/HISTORY.md "O04-follow-up" for why this
 // was needed: modern-xlsx's default `initWasm()` auto-detects the .wasm URL
 // via `import.meta.url`, which after webpack bundling points at the emitted
 // JS chunk, not at node_modules — an explicit URL to a statically served

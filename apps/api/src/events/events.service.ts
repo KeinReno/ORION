@@ -28,7 +28,7 @@ export class EventsService {
 
   /**
    * Windowed list — the ONE place in ORION where filtering moved to the
-   * server (see docs/PLAN.md v0.10): a recurring event's occurrences can't
+   * server (see docs/HISTORY.md v0.10): a recurring event's occurrences can't
    * be materialised client-side without shipping every rule and every
    * expansion. Returns real (non-recurring) events overlapping
    * `[from, to)` plus one virtual event per in-window occurrence of each

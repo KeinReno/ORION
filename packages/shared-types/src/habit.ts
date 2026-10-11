@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ORION v0.19 «Привычки» — see docs/PLAN.md.
+ * ORION v0.19 «Привычки» — see docs/HISTORY.md.
  *
  * A habit is a weekly intention plus a set of ticks, one per calendar day. The
  * interesting logic — "is it scheduled today?" and "how long is the current

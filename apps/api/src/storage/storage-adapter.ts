@@ -2,7 +2,7 @@ import type { Readable } from "node:stream";
 
 /**
  * ORION v0.12 "Документы" — the seam between the documents module and where
- * file bytes actually live. See docs/PLAN.md.
+ * file bytes actually live. See docs/HISTORY.md.
  *
  * The `key` is a POSIX-style path that mirrors the folder tree
  * (`<workspaceId>/<folder>/<subfolder>/<name>`), so the `local` and `webdav`

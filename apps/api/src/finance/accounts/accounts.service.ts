@@ -75,7 +75,7 @@ export class AccountsService {
   }
 
   /**
-   * Reconciliation, the simple way (see docs/PLAN.md v0.13): no per-
+   * Reconciliation, the simple way (see docs/HISTORY.md v0.13): no per-
    * transaction cleared/uncleared ledger, just "here's what the bank
    * actually says" → if it disagrees with the computed balance, one
    * corrective `Transaction` closes the gap. `diff === 0` is a no-op —

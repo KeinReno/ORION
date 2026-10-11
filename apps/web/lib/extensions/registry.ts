@@ -5,7 +5,7 @@ import type { MetaOf, SlotContracts, SlotName } from "./contracts";
 /**
  * The extension registry: which plugin contributes which component to which slot.
  *
- * It is deliberately small and compiled-in (docs/PLAN.md rejected a runtime that loads
+ * It is deliberately small and compiled-in (docs/HISTORY.md rejected a runtime that loads
  * foreign code): a plugin is a unit at the same trust level as a module. What it adds
  * is the BOUNDARY the architecture documents ask for — a host module renders a slot and
  * knows nothing about who fills it; a plugin fills a slot and knows only that slot's

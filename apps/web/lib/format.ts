@@ -106,7 +106,7 @@ export function fromDatetimeLocal(value: string): string | null {
 
 /**
  * ORION v0.8 "Финансы" money helpers. Amounts cross the API boundary as an
- * Int in kopecks (see docs/PLAN.md) — same reasoning as dates being ISO
+ * Int in kopecks (see docs/HISTORY.md) — same reasoning as dates being ISO
  * strings: no float rounding, no ambiguity. These two functions are the
  * only place that boundary is crossed on the frontend.
  */
@@ -136,7 +136,7 @@ export function formatMoney(kopecks: number, currency = "RUB"): string {
  * share a currency (accounts, and anything derived from them). 100 USD + 100
  * EUR is not 200 of anything, so a naive `reduce((sum, x) => sum + amount(x),
  * 0)` across mixed currencies is a bug, not a simplification (see S16 in
- * docs/SONNET_IMPLEMENTATION/12-PROGRESS.md — this is exactly what
+ * docs/HISTORY.md — this is exactly what
  * DashboardPanel's finance card did before). Order follows first-seen
  * currency, which is stable enough for a UI list; callers with exactly one
  * entry get the pre-v0.14 single-currency behaviour back for free.

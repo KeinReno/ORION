@@ -12,7 +12,7 @@ import { Button, cx, EmptyState, Spinner } from "./primitives";
  * in its own async chunk, loaded only when a file of that type is opened.
  *
  * This is a deliberate exception to CLAUDE.md "UI-примитивы руками" — the same
- * kind of exception as the v0.9 CodeMirror/markdown-it editor. See docs/PLAN.md
+ * kind of exception as the v0.9 CodeMirror/markdown-it editor. See docs/HISTORY.md
  * v0.12.
  */
 

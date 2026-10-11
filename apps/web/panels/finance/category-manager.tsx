@@ -19,7 +19,7 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 /**
  * Categories are shared infrastructure across Transactions/Budgets/
- * Recurring — not their own tab (see docs/PLAN.md v0.8), so this is a
+ * Recurring — not their own tab (see docs/HISTORY.md v0.8), so this is a
  * standalone modal opened from FinancePanel's header, reachable from any
  * tab. Same list+inline-form shape as NotesPanel's tag chips, one level
  * more structured (kind is a real field here, not free text). The "Правила"

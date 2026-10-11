@@ -1,18 +1,20 @@
 # ORION
 
-ORION — персональное рабочее пространство для задач, календаря, заметок,
-финансов и документов. Проект построен как модульный монолит: NestJS API и
+ORION — рабочее пространство для личных/семейных дел и небольших команд:
+задач, календаря, заметок, финансов и документов. Проект построен как модульный монолит: NestJS API и
 PostgreSQL обслуживают общий TypeScript-клиент, который используется Next.js
 веб-приложением и тонкой Tauri-обёрткой.
 
 Актуальные архитектурные правила — в [`AGENTS.md`](AGENTS.md) и
 [`ORION_CONSTITUTION.md`](ORION_CONSTITUTION.md); карта поэтапного перехода —
 [`docs/AI_REFACTOR_MIGRATION_MAP.md`](docs/AI_REFACTOR_MIGRATION_MAP.md).
-Архитектурные решения и история этапов описаны в [`docs/PLAN.md`](docs/PLAN.md),
-устройство резервного копирования — в [`docs/SYNC.md`](docs/SYNC.md), правила
-работы с существующим кодом — в [`CLAUDE.md`](CLAUDE.md). Текущие ворота
-развёртывания — в [`docs/DEPLOYMENT_READINESS.md`](docs/DEPLOYMENT_READINESS.md),
-история релизных проверок — в [`docs/RELEASE_NOTES.md`](docs/RELEASE_NOTES.md),
+Актуальная карта документов — в [`docs/README.md`](docs/README.md),
+продуктовая модель и порядок работы — в
+[`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) и
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Резервное копирование и архитектурная
+развилка устройств — в [`docs/SYNC.md`](docs/SYNC.md), правила работы с
+существующим кодом — в [`CLAUDE.md`](CLAUDE.md). Ворота развёртывания — в
+[`docs/DEPLOYMENT_READINESS.md`](docs/DEPLOYMENT_READINESS.md),
 план интеграции Compass/FinControl — в
 [`docs/INTEGRATIONS_COMPASS_FINCONTROL.md`](docs/INTEGRATIONS_COMPASS_FINCONTROL.md).
 Согласованные решения по рабочей оболочке, заметкам, календарю, проектам,
@@ -164,6 +166,7 @@ Postgres в него не входят и не запускаются им. Ус
 по явному реестру моделей (`snapshot-registry.ts`, версия схемы снимка 2) и
 включает не только строки БД, но и файлы документов с их версиями
 (`blob-backup.service.ts`) — см. CLAUDE.md «Snapshot registry v2 +
-blob-backup» и `docs/RELEASE_NOTES.md` для процедуры обновления/отката.
+blob-backup» и [`docs/DEPLOYMENT_READINESS.md`](docs/DEPLOYMENT_READINESS.md)
+для процедуры обновления/отката.
 Двусторонняя поэлементная синхронизация и командные шары из Стадий 2–3
 остаются roadmap и не показываются как готовые функции.

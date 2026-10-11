@@ -39,7 +39,7 @@ export type DocumentView = z.infer<typeof documentViewSchema>;
 // Name rules
 //
 // The `local` / `webdav` storage driver mirrors this tree as a real directory
-// structure (see docs/PLAN.md), so a name typed by the user must be a valid
+// structure (see docs/HISTORY.md), so a name typed by the user must be a valid
 // path segment on Windows and WebDAV alike — otherwise the DB name and the
 // on-disk name would diverge. Names that come from an OS file drop are run
 // through `sanitizeSegment` instead of being rejected (the user did not type

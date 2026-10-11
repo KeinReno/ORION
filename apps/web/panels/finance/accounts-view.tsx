@@ -207,7 +207,7 @@ export function AccountsView(): React.ReactElement {
 }
 
 /**
- * The simple reconciliation flow (v0.13, see docs/PLAN.md): no per-
+ * The simple reconciliation flow (v0.13, see docs/HISTORY.md): no per-
  * transaction cleared/uncleared state, just "what does the bank actually
  * say" → the backend creates one corrective transaction if it disagrees
  * with the computed balance.

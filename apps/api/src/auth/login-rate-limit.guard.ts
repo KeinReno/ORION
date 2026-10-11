@@ -13,7 +13,7 @@ import type { Request } from "express";
  * asks for ("retries ограничены") without a new dependency. This is a
  * deliberately narrow tool, not a general-purpose limiter: single-process
  * only (no shared store across horizontally-scaled API instances — out of
- * scope for Стадия 1, which is single-node per docs/PLAN.md), and it counts
+ * scope for Стадия 1, which is single-node per docs/HISTORY.md), and it counts
  * failed *and* successful requests alike (simplicity over precision; a
  * legitimate user hitting the cap just waits out the window).
  */

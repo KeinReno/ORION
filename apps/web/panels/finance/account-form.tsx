@@ -15,7 +15,7 @@ export const ACCOUNT_KIND_LABEL: Record<AccountKind, string> = {
 
 /**
  * Which currencies the form offers. ORION deliberately does not convert
- * between them (no rate source, see docs/PLAN.md): the currency is a label on
+ * between them (no rate source, see docs/HISTORY.md): the currency is a label on
  * the account, and every amount is still stored as an integer in minor units.
  */
 export const ACCOUNT_CURRENCY_ORDER = ["RUB", "USD", "EUR", "KZT", "BYN"] as const;

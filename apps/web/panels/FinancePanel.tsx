@@ -22,7 +22,7 @@ type FinanceTab = string;
  * for one product surface. Transactions and accounts are the module itself; budgets,
  * goals, recurring payments and reports are plugins that add their own tab. Categories are shared infrastructure used by
  * three of the four tabs, so they get their own modal off the header
- * instead of a fifth tab (see docs/PLAN.md v0.8).
+ * instead of a fifth tab (see docs/HISTORY.md v0.8).
  */
 export function FinancePanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();

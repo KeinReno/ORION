@@ -3,7 +3,7 @@
  * `NoteEditor` so the concurrency logic can be unit-tested with fake timers
  * and controlled/deferred promises, without React or a real network.
  *
- * The bug this replaces (see docs/SONNET_IMPLEMENTATION/15-FIRST-TASKS.md
+ * The bug this replaces (see docs/HISTORY.md
  * "S11: autosave trailing drain"): the previous `NoteEditor` guarded autosave
  * with a single `savingRef` boolean and *skipped* the debounce trigger
  * outright while a save was in flight. If the user kept typing during that

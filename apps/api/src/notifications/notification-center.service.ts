@@ -77,7 +77,7 @@ export interface CreateNotificationData {
  * `readAt` is a column on that one row, so read state is per-recipient by
  * construction: A marking their copy read never touches B's row for the
  * same event, because there is no shared row anymore (see S07 in
- * docs/SONNET_IMPLEMENTATION).
+ * docs/HISTORY.md).
  *
  * Rows created before this rework have `recipientId: null` — a deliberate
  * legacy archive (see `list()`), not a bug to backfill: nothing in the old

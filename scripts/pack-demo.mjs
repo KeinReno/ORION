@@ -161,7 +161,7 @@ if errorlevel 1 (
 function stripFromCopy() {
   const extra = [
     join(APP, "CLAUDE.md"),
-    join(APP, "docs", "PLAN.md"),
+    join(APP, "docs", "HISTORY.md"),
     join(APP, "infra", "postgres", "data"),
     join(APP, "apps", "api", ".data"),
     join(APP, "apps", "api", ".env"),

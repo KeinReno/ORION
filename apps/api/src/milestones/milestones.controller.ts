@@ -15,7 +15,7 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { RequireModule } from "../modules/require-module";
 import { MilestonesService } from "./milestones.service";
 
-/** Gated by "projects", not a module of its own — a milestone only exists as a project's plan, see docs/PLAN.md v0.27. */
+/** Gated by "projects", not a module of its own — a milestone only exists as a project's plan, see docs/HISTORY.md v0.27. */
 @RequireModule("projects")
 @Controller("workspaces/:workspaceId/milestones")
 export class MilestonesController {

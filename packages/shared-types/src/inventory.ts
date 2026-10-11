@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ORION v0.26 «Склад» — see docs/PLAN.md.
+ * ORION v0.26 «Склад» — see docs/HISTORY.md.
  *
  * `InventoryItem.balance` and `avgCostMinor` are never stored — they're a sum
  * over `InventoryMovement` rows, computed by `InventoryService` for every item

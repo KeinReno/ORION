@@ -84,7 +84,7 @@ export function deriveSessionResult(
 }
 
 /**
- * Honest session state (see docs/SONNET_IMPLEMENTATION/15-FIRST-TASKS.md,
+ * Honest session state (see docs/HISTORY.md,
  * "S08: session state"). `loading` and `authenticated`/`unauthenticated` mean
  * what they say. `unavailable` means the API could not be reached or answered
  * with something other than a definitive 401 (network error, 5xx) — it is

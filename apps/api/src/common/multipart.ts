@@ -15,7 +15,7 @@ export const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.MAX_UPLOAD_MB ?? 
  * The result is exactly the mojibake pattern below ("Смета.csv" → "Ð¡Ð¼ÐµÑ‚Ð°.csv").
  * Reversing that one mis-decode (bytes → Latin-1 → back to UTF-8) is a
  * no-op for a plain ASCII filename, so this is safe to apply unconditionally
- * for this interceptor. See docs/PLAN.md v0.13.
+ * for this interceptor. See docs/HISTORY.md v0.13.
  */
 export function fixMultipartFilename(name: string): string {
   return Buffer.from(name, "latin1").toString("utf8");

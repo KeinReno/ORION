@@ -1,6 +1,6 @@
 /**
  * ORION v0.10 "Календарь" — a deliberately small recurrence engine, written
- * by hand instead of pulling in `rrule` (see docs/PLAN.md v0.10: the four
+ * by hand instead of pulling in `rrule` (see docs/HISTORY.md v0.10: the four
  * rules below cover a solo dev's real needs, and staying dependency-free
  * keeps this testable as pure logic in `pnpm test`, like the zod schemas).
  *

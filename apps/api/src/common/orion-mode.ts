@@ -2,7 +2,7 @@
  * S05 — explicit local/server mode.
  *
  * ORION started life desktop-only: single user, loopback-only, no threat
- * model beyond "don't trust the LAN". `docs/SONNET_IMPLEMENTATION` S05 asks
+ * model beyond "don't trust the LAN". `docs/HISTORY.md` S05 asks
  * for that assumption to become an explicit, fail-safe switch instead of an
  * implicit one — a workspace exposed on a real network interface (server
  * mode, multi-user) needs the account picker, PIN unlock and dev JWT

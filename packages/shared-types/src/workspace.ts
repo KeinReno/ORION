@@ -56,7 +56,7 @@ export const workspaceMemberSearchResultSchema = z.object({
 export type WorkspaceMemberSearchResult = z.infer<typeof workspaceMemberSearchResultSchema>;
 
 /**
- * R29-05 (docs/SONNET_IMPLEMENTATION/29-REVIEW-GRANTS.md) — `GET
+ * R29-05 (docs/HISTORY.md) — `GET
  * /users/resolve-by-email?email=` result for the grant-issue "по email"
  * flow. Deliberately minimal and deliberately NOT distinguishable between
  * "no such account" and "account exists but can't be resolved" — a neutral

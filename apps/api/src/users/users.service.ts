@@ -3,7 +3,7 @@ import type { ResolveUserByEmailResult } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 
 /**
- * R29-05 (docs/SONNET_IMPLEMENTATION/29-REVIEW-GRANTS.md) — the "по email"
+ * R29-05 (docs/HISTORY.md) — the "по email"
  * half of the grant-issue recipient picker. `WorkspacesService.searchMembers`
  * only ever sees people already inside a workspace the caller owns; this is
  * the deliberately narrow escape hatch for "share with someone who isn't a

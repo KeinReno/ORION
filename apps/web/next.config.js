@@ -17,7 +17,7 @@ const nextConfig = {
   // (not execute) that reachable-but-unused branch for the client bundle
   // and errors on the bare `node:` scheme without this fallback — it's
   // dead code for our usage, not a live runtime path, so stubbing it out is
-  // safe. See docs/SONNET_IMPLEMENTATION/12-PROGRESS.md "O04-follow-up" for
+  // safe. See docs/HISTORY.md "O04-follow-up" for
   // the full trail (including why the *original* O04 comment here — that
   // charts/pivots couldn't save from the browser at all — is now stale).
   webpack: (config, { isServer, webpack }) => {

@@ -11,9 +11,9 @@ ORION — платформа для личных пространств и не�
 (`apps/api`) и общий **TypeScript-core**, переиспользуемый веб-клиентом
 (`apps/web`, Next.js) и десктопом (`apps/desktop`, тонкая Tauri-обёртка).
 
-- **Почему всё устроено именно так** — [`docs/PLAN.md`](docs/PLAN.md). Это история
-  решений v0 → v0.19 с обоснованиями (в т.ч. на разборе реальных багов других
-  проектов). Читай его перед любой архитектурной правкой.
+- **Актуальные продуктовые решения** — [`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md)
+  и [`docs/ROADMAP.md`](docs/ROADMAP.md). Исторические обоснования старых
+  реализаций доступны через [`docs/HISTORY.md`](docs/HISTORY.md).
 - Быстрый старт и обзор — [`README.md`](README.md).
 - Комментарии в коде намеренно подробные и объясняют «почему» (особенно
   `apps/api/src/common/prisma.service.ts`, `infra/postgres/init/01-app-roles.sql`,
@@ -187,7 +187,7 @@ pub/sub, а не стейт-менеджер; смотри его, прежде 
 
 Владельца пространства для политики ищет `NotificationPolicyService`
 (роль `owner`, иначе любой участник) — напоминания в ORION
-workspace-scoped, а не per-user, см. `docs/PLAN.md` v0.16.
+workspace-scoped, а не per-user; историческое обоснование — `docs/HISTORY.md` (v0.16).
 
 ### Чек-лист: добавить модуль `X` (копируем `notes/` / `tasks/`)
 
@@ -250,7 +250,7 @@ workspace-scoped, а не per-user, см. `docs/PLAN.md` v0.16.
 
 ## Осознанные упрощения v0 — НЕ «чинить» без запроса
 
-Отложено намеренно (обоснование — `docs/PLAN.md`), это не забытый техдолг:
+Следующие упрощения относятся к описываемой исторической реализации; актуальная очередь — в `docs/ROADMAP.md`:
 
 - **Нет offline-sync / outbox.** Только обычный REST, всегда онлайн.
 - **Tauri не содержит бизнес-логики.** Единственное расширение за весь проект —
@@ -276,7 +276,7 @@ workspace-scoped, а не per-user, см. `docs/PLAN.md` v0.16.
 - **Исключение (v0.9, по явному запросу): редактор тела заметки.**
   `MarkdownEditor` в `@orion/ui` — обёртка **CodeMirror 6** (source-markdown,
   режим «как в Obsidian»), просмотр — `MarkdownView`/`renderMarkdown` через
-  **`markdown-it`**. Обоснование — `docs/PLAN.md` v0.9.
+  **`markdown-it`**. Историческое обоснование — `docs/HISTORY.md` (v0.9).
   `whitespace-pre-wrap` для тела заметки больше не актуален.
 - **Исключение (v0.12, по явному запросу): просмотрщики файлов.**
   `FilePreview` в `@orion/ui` (`file-preview/*`) — `React.lazy` на три
@@ -285,7 +285,7 @@ workspace-scoped, а не per-user, см. `docs/PLAN.md` v0.16.
   аудио — нативно, текст/Markdown — `MarkdownView`/`<pre>`. Воркер pdf.js
   копируется в `apps/web/public/pdf.worker.min.mjs` скриптом
   `scripts/copy-pdf-worker.mjs` (перед dev/build). Обоснование —
-  `docs/PLAN.md` v0.12.
+  `docs/HISTORY.md` (v0.12).
 - **Поиск/фильтры в панелях — клиентские** (по уже загруженному списку через
   `useNotes`/`useTasks`/`useDocuments`). Серверного поиска нет by design
   (кроме full-text заметок/задач v0.7 и оконного `events?from&to` v0.10).
@@ -437,12 +437,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - `DELETE /habits/:id` — архивация (история отметок сохраняется), как у
   проектов; возврат — `PATCH { archivedAt: null }`.
 - Привычка — **не** задача: не переиспользуй `Task.recurrence` и `Task.status`,
-  это разные модели (см. `docs/PLAN.md` v0.19).
+  это разные модели (история — `docs/HISTORY.md`, v0.19).
 
 ### Release-hardening backlog (v0.20) — механизмы, которые надо знать
 
-История решений — `docs/PLAN.md` (записи v0.20). Итоговый релиз-отчёт —
-`docs/RELEASE_NOTES.md`; журнал по каждой карточке — `docs/SONNET_IMPLEMENTATION/12-PROGRESS.md`.
+Актуальные релизные ворота — `docs/DEPLOYMENT_READINESS.md`; исторические
+проверки и решения доступны через `docs/HISTORY.md` (v0.20).
 
 - **`ORION_MODE` (local/server split).** `apps/api/src/common/orion-mode.ts`
   (`resolveMode()`) читает `ORION_MODE=local|server` (по умолчанию `local`,

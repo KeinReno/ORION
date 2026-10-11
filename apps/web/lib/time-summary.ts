@@ -3,7 +3,7 @@ import { entryMinutes, timeCostMinor, timeEntryDay, type Project, type TimeEntry
 /**
  * Pure client-side aggregation for the time panel. Everything is computed from
  * the already-loaded list (the same choice the other panels make — there is no
- * server-side totals endpoint by design, see docs/PLAN.md v0.18), so these
+ * server-side totals endpoint by design, see docs/HISTORY.md v0.18), so these
  * helpers take `now` explicitly instead of reading the clock: the running entry
  * is part of every total and has to grow with the panel's local tick.
  *

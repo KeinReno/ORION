@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ORION v0.18 «Учёт времени» — see docs/PLAN.md.
+ * ORION v0.18 «Учёт времени» — see docs/HISTORY.md.
  *
  * One entry is a stretch of work: `startedAt` plus `endedAt`, where a null
  * `endedAt` means the timer is running *right now*. Duration is never stored —

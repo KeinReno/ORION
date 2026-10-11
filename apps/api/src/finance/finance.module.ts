@@ -26,7 +26,7 @@ import { BudgetAlertsService } from "./budget-alerts.service";
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
  * transactions/budgets/recurring/reports) rather than six — see
- * docs/PLAN.md v0.8: it's one product surface (one sidebar entry, one
+ * docs/HISTORY.md v0.8: it's one product surface (one sidebar entry, one
  * FinancePanel with tabs), so one NestJS module with several controller+
  * service pairs mirrors that, instead of splitting into module-per-entity
  * for no reason.

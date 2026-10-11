@@ -106,7 +106,7 @@ export async function seedSoloDeveloperWorkspace(
         "- Панель модуля — `apps/web/panels`, реестр — `panel-registry.ts`, не сайдбар.",
         "- Выключенный модуль не удаляет данные.",
         "",
-        "Подробности: `CLAUDE.md` и `docs/PLAN.md`. Соседние заметки: [[Правила соло]]."
+        "Подробности: `CLAUDE.md` и `docs/README.md`. Соседние заметки: [[Правила соло]]."
       ].join("\n")
     }
   });

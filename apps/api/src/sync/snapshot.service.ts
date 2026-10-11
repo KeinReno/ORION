@@ -213,7 +213,7 @@ function specSelfRef(key: string, pick: (tx: Tx) => unknown): ModelSpec {
  * R29-02.
  *
  * Chosen contract (approach "б" from
- * docs/SONNET_IMPLEMENTATION/29-REVIEW-GRANTS.md): keep restoring the rows
+ * docs/HISTORY.md): keep restoring the rows
  * (so an owner can still see "I once shared X with Y" for audit after a
  * restore, and so restoring a snapshot that predates a grant's creation
  * doesn't need special-casing), but force EVERY restored row's `revokedAt`

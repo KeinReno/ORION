@@ -1,4 +1,4 @@
--- U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — cross-workspace
+-- U09 (docs/HISTORY.md) — cross-workspace
 -- grants RLS.
 --
 -- 1) `cross_workspace_grants` itself gets the usual ENABLE + FORCE + a

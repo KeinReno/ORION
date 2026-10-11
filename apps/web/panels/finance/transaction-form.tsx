@@ -29,7 +29,7 @@ function toLineDraft(categoryId: string | null, amount: number): LineDraft {
  * v0.9: a 3-way type switch (was 2 — expense/income), a repeatable list of
  * category+amount lines (split), and a transfer mode (no category, a
  * second "to account" select instead). See TransactionFormValues and
- * docs/PLAN.md v0.9 — a transfer is just a transaction with one
+ * docs/HISTORY.md v0.9 — a transfer is just a transaction with one
  * uncategorised line, not a separate code path bolted on.
  */
 export function TransactionForm({

@@ -1,5 +1,5 @@
 /**
- * R28-05 (docs/SONNET_IMPLEMENTATION/28-REVIEW-AFTER-U08.md): the shared
+ * R28-05 (docs/HISTORY.md): the shared
  * "is it safe to accept a refetched blob and overwrite editor state with
  * it" decision used by both `docx-editor.tsx` and `xlsx-editor.tsx`.
  *

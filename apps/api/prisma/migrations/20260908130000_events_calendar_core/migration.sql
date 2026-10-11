@@ -1,4 +1,4 @@
--- ORION v0.10 "Календарь" — first-class calendar events. See docs/PLAN.md.
+-- ORION v0.10 "Календарь" — first-class calendar events. See docs/HISTORY.md.
 
 -- AlterTable: read-only .ics feed credential (backfilled + made NOT NULL-ish
 -- via the RLS/backfill migration that follows; kept nullable here for the

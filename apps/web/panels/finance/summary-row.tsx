@@ -13,7 +13,7 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
  * Balances are grouped by currency via `sumByCurrency` (accounts aren't all
  * RUB, see `Account.currency`) — DashboardPanel's finance card used to skip
  * this and sum raw balances across currencies into one misleading number
- * (fixed in S16, see docs/SONNET_IMPLEMENTATION/12-PROGRESS.md).
+ * (fixed in S16, see docs/HISTORY.md).
  *
  * "Расход в этом месяце" (`monthly.expense`) is a *different*, still-open
  * instance of the same bug: `ReportsService.monthlySummary` sums

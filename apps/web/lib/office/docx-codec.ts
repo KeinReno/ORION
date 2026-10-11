@@ -1,7 +1,7 @@
 /**
  * O01 spike — DOCX <-> Tiptap JSON codec.
  *
- * Design (see docs/SONNET_IMPLEMENTATION/21-OFFICE-IMPLEMENTATION.md, O01):
+ * Design (see docs/HISTORY.md, O01):
  * office documents stay a plain Document/DocumentVersion; the editor model
  * (Tiptap JSON) only ever lives in client memory between "open" and "save".
  * There is no round-trip-safe DOCX <-> Tiptap-JSON library on npm, so the

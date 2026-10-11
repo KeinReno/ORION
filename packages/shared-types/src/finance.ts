@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * ORION v0.8 "Финансы" — see docs/PLAN.md. Five entities, all mirroring the
+ * ORION v0.8 "Финансы" — see docs/HISTORY.md. Five entities, all mirroring the
  * Note/Task pattern: a plain DTO schema for what the API returns, plus
  * create/update input schemas for what a client may send. Money is always
  * an integer in kopecks (minor units) at this boundary — the same reason
@@ -76,7 +76,7 @@ export type UpdateFinanceCategoryInput = z.infer<typeof updateFinanceCategoryInp
  * `transfer` (v0.9) moves money between two of the user's own accounts —
  * never income or expense anywhere (category budgets, reports): it leaves
  * one account and enters another, net zero on total net worth. See
- * docs/PLAN.md v0.9.
+ * docs/HISTORY.md v0.9.
  */
 export const transactionTypeSchema = z.enum(["income", "expense", "transfer"]);
 export type TransactionType = z.infer<typeof transactionTypeSchema>;
@@ -226,7 +226,7 @@ export type FinanceForecastPoint = z.infer<typeof financeForecastPointSchema>;
  * A rule is a plain substring match against `Transaction.note` (case-
  * insensitive) suggesting a category — applied only in the frontend
  * (`TransactionForm`), never server-side, so the API never silently
- * rewrites a category the user didn't choose. See docs/PLAN.md v0.13.
+ * rewrites a category the user didn't choose. See docs/HISTORY.md v0.13.
  */
 export const categoryRuleSchema = z.object({
   id: z.string(),

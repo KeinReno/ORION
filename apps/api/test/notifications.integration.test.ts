@@ -9,7 +9,7 @@ import { configureApp } from "../src/configure-app";
 /**
  * S07 «Адресные уведомления». Notification rows are now addressed
  * (`recipientId`) instead of shared across the whole workspace — this
- * covers every done-criterion from docs/SONNET_IMPLEMENTATION/10-BACKLOG.md:
+ * covers every done-criterion from docs/HISTORY.md:
  * independent per-recipient read state, repeated-cron dedup via `eventKey`,
  * revoked members never becoming a recipient, and the recipient's own
  * quiet hours (not the owner's, not the actor's) governing delivery.

@@ -8,7 +8,7 @@
 --    them to the workspace owner (that would silently misattribute someone
 --    else's work). They stay author-unknown; reports must label them as such,
 --    an admin-facing reassignment tool is out of scope here (see
---    docs/SONNET_IMPLEMENTATION/12-PROGRESS.md, S06 entry, runbook TODO).
+--    docs/HISTORY.md, S06 entry, runbook TODO).
 ALTER TABLE "time_entries" ADD COLUMN "userId" TEXT;
 
 CREATE INDEX "time_entries_userId_idx" ON "time_entries"("userId");

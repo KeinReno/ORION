@@ -1,4 +1,4 @@
--- R29-04 (docs/SONNET_IMPLEMENTATION/29-REVIEW-GRANTS.md) — the original
+-- R29-04 (docs/HISTORY.md) — the original
 -- `cross_workspace_grants_isolation` policy from the
 -- `cross_workspace_grants_rls` migration has no `FOR SELECT` clause, so it
 -- applies to every command including UPDATE/DELETE. Its `OR

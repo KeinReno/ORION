@@ -329,7 +329,7 @@ model Note {
   body        String    @default("")
   /// Free-form labels, same idea as Task.projectTag but multi-valued —
   /// a native Postgres array column, not a join table (no cross-note
-  /// tag management needed yet, see docs/PLAN.md v0.7).
+  /// tag management needed yet, see docs/HISTORY.md v0.7).
   tags        String[]  @default([])
   /// Non-null pins the note to the top of the list; the timestamp itself
   /// (not just a boolean) doubles as "pinned since", for a stable sort
@@ -598,7 +598,7 @@ model TimeEntry {
   /// the authenticated userId on every new row; the client can never set or
   /// override it. `null` here means "author unknown", not "nobody's": do not
   /// auto-assign these rows to the workspace owner (see S06 runbook note in
-  /// docs/SONNET_IMPLEMENTATION/12-PROGRESS.md) — reports must show them as
+  /// docs/HISTORY.md) — reports must show them as
   /// unknown-author, not attribute them.
   userId      String?
   /// Optional: time can be tracked against a project without a specific task.
@@ -754,7 +754,7 @@ model SavedTaskView {
   @@map("saved_task_views")
 }
 
-/// ORION v0.10 "Календарь" — see docs/PLAN.md. A first-class calendar event,
+/// ORION v0.10 "Календарь" — see docs/HISTORY.md. A first-class calendar event,
 /// separate from Task.dueAt / Note.eventAt. Recurrence lives in `recurrence`
 /// as the JSON spec from packages/shared-types/src/recurrence.ts and is
 /// expanded server-side per queried window (EventsService.list). Per-
@@ -872,7 +872,7 @@ model SentReminder {
   @@map("sent_reminders")
 }
 
-/// ORION v0.8 "Финансы" — see docs/PLAN.md. Five tables, all workspace-scoped
+/// ORION v0.8 "Финансы" — see docs/HISTORY.md. Five tables, all workspace-scoped
 /// and RLS-protected the same way as notes/tasks (see the finance_rls
 /// migration). Money is always an Int in minor units (kopecks) — never a
 /// float — for the same reason dates are ISO strings everywhere else in this
@@ -943,7 +943,7 @@ enum TransactionType {
   /// Money moving between two of the user's own accounts. Never counted as
   /// income or expense anywhere (category budgets, reports) — net effect on
   /// total net worth is always zero, since it leaves one account and enters
-  /// another. See docs/PLAN.md v0.9.
+  /// another. See docs/HISTORY.md v0.9.
   transfer
 }
 
@@ -1073,7 +1073,7 @@ model RecurringTransaction {
 }
 
 /// ORION v0.13 "Финансы" — правила автокатегоризации и цели накопления, see
-/// docs/PLAN.md. Applied client-side only (TransactionForm), not by the
+/// docs/HISTORY.md. Applied client-side only (TransactionForm), not by the
 /// server on write — the API never silently rewrites a category the user
 /// chose (or didn't) themselves.
 model CategoryRule {
@@ -1192,7 +1192,7 @@ model SavingsGoal {
   @@map("finance_savings_goals")
 }
 
-/// ORION v0.12 "Документы" — see docs/PLAN.md. One self-referential tree of
+/// ORION v0.12 "Документы" — see docs/HISTORY.md. One self-referential tree of
 /// folders and files per workspace. `parentId` (hierarchy) is a deliberate
 /// exception to the project's "no parentId" rule (see CLAUDE.md): folders are
 /// the whole point of this module, so a tree is unavoidable, unlike notes
@@ -1329,7 +1329,7 @@ model Notification {
   id          String    @id @default(uuid())
   workspaceId String
   /// Who this is addressed to (v0.28 "addressed notifications" — see
-  /// S07 in docs/SONNET_IMPLEMENTATION). Nullable only for legacy rows
+  /// S07 in docs/HISTORY.md). Nullable only for legacy rows
   /// created before this column existed; every row NotificationCenterService
   /// creates from here on sets it. `readAt` is per-row, so once every row
   /// belongs to exactly one recipient, read state is naturally per-user —
@@ -1488,7 +1488,7 @@ model SyncRestoreOperation {
   @@map("sync_restore_operations")
 }
 
-/// ORION v0.26 «Склад» — см. docs/PLAN.md. `receipt`/`issue` — обычный
+/// ORION v0.26 «Склад» — см. docs/HISTORY.md. `receipt`/`issue` — обычный
 /// приход/расход, `quantity` всегда положительная. `adjustment` — ручная
 /// корректировка остатка (пересчёт, списание брака и т.п.) и может быть
 /// как положительной, так и отрицательной. Знак хранится прямо в
@@ -1561,7 +1561,7 @@ model InventoryMovement {
   @@map("inventory_movements")
 }
 
-/// ORION v0.27 «План проекта» — see docs/PLAN.md. A phase/checkpoint inside a
+/// ORION v0.27 «План проекта» — see docs/HISTORY.md. A phase/checkpoint inside a
 /// project, the second level of the Gantt (tasks are the first). A
 /// milestone's own bar (`startAt`/`dueAt`) is independent of the tasks
 /// grouped under it via `Task.milestoneId` — the user sets it directly,
@@ -1625,7 +1625,7 @@ model MilestoneDependency {
   @@map("milestone_dependencies")
 }
 
-/// U09 (docs/SONNET_IMPLEMENTATION/27-U09-THREAT-MODEL.md) — explicit,
+/// U09 (docs/HISTORY.md) — explicit,
 /// read-only cross-workspace grant. NOT a workspace-scoped resource in the
 /// usual sense: it lives in the source workspace (workspaceId), but its
 /// visibility rule for the grantee is NOT "member of workspaceId" (they
