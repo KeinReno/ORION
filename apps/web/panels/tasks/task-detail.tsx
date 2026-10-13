@@ -301,7 +301,7 @@ export function TaskDetail({
         </div>
       </header>
 
-      <div className="orion-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+      <div className={cx("orion-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4", standalone && "mx-auto w-full max-w-3xl")}>
         {conflict ? (
           <div role="alert" className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-label text-foreground">
             <p>Эту задачу изменил кто-то другой, пока вы редактировали. Что оставить?</p>

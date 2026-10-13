@@ -148,20 +148,27 @@ function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React
  * (and put it back). Works in the browser and in Tauri alike, unlike an OS window; the
  * panel and its data are untouched — only where it is drawn changes.
  */
-function FloatHeaderAction({ group, containerApi, api, activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+function FloatHeaderAction({ containerApi, api, activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+  // The location changes without this header re-rendering on its own: follow it.
+  const [floating, setFloating] = useState(api.location.type === "floating");
+  useEffect(() => {
+    setFloating(api.location.type === "floating");
+    const subscription = api.onDidLocationChange(() => setFloating(api.location.type === "floating"));
+    return () => subscription.dispose();
+  }, [api]);
   if (!activePanel) return null;
-  const floating = api.location.type === "floating";
   function toggle(): void {
     try {
       if (floating) {
         api.moveTo({ position: "right" });
-      } else {
+      } else if (activePanel) {
+        // Only the active panel leaves the dock: the other tabs stay where they were.
         const width = Math.min(720, Math.round(window.innerWidth * 0.5));
         const height = Math.min(560, Math.round(window.innerHeight * 0.7));
-        containerApi.addFloatingGroup(group, { x: 80, y: 80, width, height });
+        containerApi.addFloatingGroup(activePanel, { x: 80, y: 80, width, height });
       }
     } catch {
-      /* the layout refused the move (e.g. a single locked group): leave it where it is */
+      /* the layout refused the move: leave it where it is */
     }
   }
   return (

@@ -3,12 +3,13 @@
 import { useEvents, useTasks } from "@orion/core-react";
 import { isTaskClosed } from "@orion/shared-types";
 import { cx } from "@orion/ui";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { buildMiniMonth, markDays, miniMonthRange } from "./mini-month";
 import type { SidebarWidgetSlotProps } from "../../lib/extensions/contracts";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const COLLAPSED_KEY = "orion.mini-calendar-collapsed";
 const MONTH_FORMAT = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" });
 
 /**
@@ -18,11 +19,31 @@ const MONTH_FORMAT = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "nu
  */
 export function MiniCalendarWidget({ workspaceId, open, onOpenCalendar }: SidebarWidgetSlotProps): React.ReactElement | null {
   const today = new Date();
+  // Tall sidebars have room for the month; on a short window it starts folded to one line.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(COLLAPSED_KEY);
+      if (saved === "1" || saved === "0") return saved === "1";
+    } catch {
+      /* a remembered fold is a convenience only */
+    }
+    return window.innerHeight < 1000;
+  });
+  function toggleCollapsed(): void {
+    setCollapsed((current) => {
+      try {
+        localStorage.setItem(COLLAPSED_KEY, current ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+      return !current;
+    });
+  }
   const [cursor, setCursor] = useState(() => ({ year: today.getFullYear(), month: today.getMonth() }));
   const cells = useMemo(() => buildMiniMonth(cursor.year, cursor.month, new Date()), [cursor.year, cursor.month]);
   const range = useMemo(() => miniMonthRange(cells), [cells]);
-  const { data: events } = useEvents(open ? workspaceId : undefined, range);
-  const { data: tasks } = useTasks(open ? workspaceId : undefined);
+  const { data: events } = useEvents(open && !collapsed ? workspaceId : undefined, range);
+  const { data: tasks } = useTasks(open && !collapsed ? workspaceId : undefined);
   const marks = useMemo(
     () => markDays(events ?? [], (tasks ?? []).map((task) => ({ dueAt: task.dueAt, closed: isTaskClosed(task.status) }))),
     [events, tasks]
@@ -37,18 +58,35 @@ export function MiniCalendarWidget({ workspaceId, open, onOpenCalendar }: Sideba
     });
   }
 
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-expanded={false}
+        className="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-muted-foreground first-letter:uppercase transition-colors hover:bg-white/5 hover:text-foreground"
+      >
+        {MONTH_FORMAT.format(new Date(cursor.year, cursor.month, 1))}
+        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    );
+  }
+
   return (
     <section aria-label="Мини-календарь" className="rounded-lg border border-border px-2 py-2">
       <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
           onClick={onOpenCalendar}
-          className="truncate text-2xs font-medium capitalize text-foreground hover:underline"
+          className="truncate text-2xs font-medium text-foreground first-letter:uppercase hover:underline"
           title="Открыть календарь"
         >
           {MONTH_FORMAT.format(new Date(cursor.year, cursor.month, 1))}
         </button>
         <span className="flex items-center">
+          <button type="button" aria-label="Свернуть календарь" aria-expanded onClick={toggleCollapsed} className="rounded p-0.5 text-subtle-foreground hover:text-foreground">
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
           <button type="button" aria-label="Предыдущий месяц" onClick={() => shift(-1)} className="rounded p-0.5 text-subtle-foreground hover:text-foreground">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>

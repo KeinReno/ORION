@@ -37,6 +37,8 @@ import {
   Archive,
   ArchiveRestore,
   Copy,
+  ExternalLink,
+  PanelRight,
   FileStack,
   FileText,
   MoreHorizontal,
@@ -58,7 +60,8 @@ import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
-import { useFocusedNoteId } from "../lib/panel-bus";
+import { openPanel, useFocusedNoteId } from "../lib/panel-bus";
+import { detachPanelToWindow } from "../lib/panel-window";
 import { nextListId } from "../lib/list-nav";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
@@ -588,6 +591,8 @@ export function NotesPanel(): React.ReactElement {
                                 icon: note.archivedAt ? ArchiveRestore : Archive,
                                 onSelect: () => requestLeave(() => handleToggleArchive(note))
                               },
+                              { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
+                              { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`note:${note.id}`, note.title) },
                               { label: "Дублировать", icon: Copy, onSelect: () => requestLeave(() => void handleDuplicate(note)) },
                               ...(templatesApi
                                 ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => requestLeave(() => handleToggleTemplate(note)) }]

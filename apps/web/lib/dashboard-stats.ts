@@ -72,7 +72,8 @@ export function workload(tasks: readonly Task[], now: Date): Workload {
     if (!task.dueAt) continue;
     const due = new Date(task.dueAt).getTime();
     if (Number.isNaN(due)) continue;
-    if (due < todayStart) result.overdue += 1;
+    // Same meaning as everywhere else (calendar, badges): overdue = the moment has passed.
+    if (due < now.getTime()) result.overdue += 1;
     else if (due < tomorrowStart) result.dueToday += 1;
     else if (due < weekEnd) result.dueWeek += 1;
   }

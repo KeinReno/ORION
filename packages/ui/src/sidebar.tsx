@@ -561,7 +561,8 @@ export function Sidebar({
       )}
       style={isDrawer ? { width: 240, pointerEvents: drawerOpen ? "auto" : "none" } : undefined}
     >
-      <div className={clsx("flex gap-3", horizontal ? "min-w-0 flex-1 flex-row items-center" : "flex-col")}>
+      {/* Vertical: the links scroll on a short window while the footer (account, layouts, widgets) stays pinned. */}
+      <div className={clsx("flex gap-3", horizontal ? "min-w-0 flex-1 flex-row items-center" : "orion-scroll min-h-0 flex-col overflow-y-auto overflow-x-hidden")}>
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
         <nav
           id="orion-sidebar-nav"
@@ -627,7 +628,7 @@ export function Sidebar({
               ]}
         </nav>
       </div>
-      <div className={clsx("flex gap-2", horizontal ? "shrink-0 flex-row items-center" : "flex-col")}>
+      <div className={clsx("flex gap-2", horizontal ? "shrink-0 flex-row items-center" : "shrink-0 flex-col")}>
         {footer ? (
           <div className={horizontal ? "border-l border-border pl-3" : "border-t border-border pt-3"}>{typeof footer === "function" ? footer({ open }) : footer}</div>
         ) : null}

@@ -14,6 +14,9 @@ export interface TreeNode {
   children: TreeNode[];
   /** Open prerequisites of this task (known to the view); empty = not blocked. */
   blockedBy: Task[];
+  /** Direct subtasks counted BEFORE hiding closed ones, so progress stays true when closed work is hidden. */
+  childTotal: number;
+  childClosed: number;
 }
 
 function compareTasks(a: Task, b: Task): number {
@@ -64,7 +67,15 @@ export function buildTaskTree(tasks: Task[], showClosed: boolean): TreeNode[] {
       .filter((node): node is TreeNode => node !== null);
     visiting.delete(task.id);
     if (!showClosed && isTaskClosed(task.status) && children.length === 0) return null;
-    return { task, depth, children, blockedBy: blockers.get(task.id) ?? [] };
+    const direct = childrenOf.get(task.id) ?? [];
+    return {
+      task,
+      depth,
+      children,
+      blockedBy: blockers.get(task.id) ?? [],
+      childTotal: direct.length,
+      childClosed: direct.filter((child) => isTaskClosed(child.status)).length
+    };
   }
 
   return roots

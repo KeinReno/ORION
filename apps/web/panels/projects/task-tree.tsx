@@ -41,7 +41,7 @@ export function TaskTree({
 
   return (
     <ul role="tree" aria-label="Иерархия задач" className="flex max-w-4xl flex-col">
-      {rows.map(({ task, depth, children, blockedBy }) => {
+      {rows.map(({ task, depth, children, blockedBy, childTotal, childClosed }) => {
         const closed = isTaskClosed(task.status);
         const hasChildren = children.length > 0;
         const isCollapsed = collapsed.has(task.id);
@@ -87,9 +87,9 @@ export function TaskTree({
             >
               {task.title}
             </button>
-            {hasChildren ? (
+            {childTotal > 0 ? (
               <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
-                {children.filter((c) => isTaskClosed(c.task.status)).length}/{children.length}
+                {childClosed}/{childTotal}
               </span>
             ) : null}
             {blockedBy.length > 0 ? (
@@ -142,8 +142,11 @@ export function TaskDependencyGraph({
       <div className="orion-scroll overflow-auto rounded-xl border border-border">
         <svg width={graph.width} height={graph.height} role="group" aria-label="Граф зависимостей задач" className="block">
           <defs>
-            <marker id="dep-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+            <marker id="dep-arrow-blocking" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" className="fill-accent" />
+            </marker>
+            <marker id="dep-arrow-idle" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" className="fill-border" />
             </marker>
           </defs>
           {graph.edges.map((edge) => {
@@ -161,7 +164,7 @@ export function TaskDependencyGraph({
                 d={`M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 2},${y2}`}
                 fill="none"
                 strokeWidth={edge.blocking ? 2 : 1.25}
-                markerEnd="url(#dep-arrow)"
+                markerEnd={edge.blocking ? "url(#dep-arrow-blocking)" : "url(#dep-arrow-idle)"}
                 className={edge.blocking ? "text-accent" : "text-border"}
                 stroke="currentColor"
               />

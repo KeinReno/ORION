@@ -72,6 +72,12 @@ describe("buildTaskTree", () => {
     expect(buildTaskTree(withClosed, true).map((n) => n.task.id).sort()).toEqual(["lonely", "p"]);
   });
 
+  it("counts subtasks before hiding closed ones", () => {
+    const tree = buildTaskTree([task("p"), task("c1", { parentId: "p", status: "done" }), task("c2", { parentId: "p" })], false);
+    expect(tree[0].children).toHaveLength(1);
+    expect(tree[0]).toMatchObject({ childTotal: 2, childClosed: 1 });
+  });
+
   it("survives a parent cycle in bad data", () => {
     const cyclic = [task("x", { parentId: "y" }), task("y", { parentId: "x" })];
     expect(() => buildTaskTree(cyclic, true)).not.toThrow();
