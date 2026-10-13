@@ -1,6 +1,7 @@
 "use client";
 
-import { useCreateProject, useProjects, useTasks } from "@orion/core-react";
+import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "../lib/project-order";
+import { useCreateProject, useProjects, useSession, useTasks } from "@orion/core-react";
 import { formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
 import {
   Badge,
@@ -88,10 +89,60 @@ export function ProjectsPanel(): React.ReactElement {
 
   const source = useMemo(() => projects ?? [], [projects]);
   const summary = useMemo(() => summariseProjectBoard(source), [source]);
-  const list = useMemo(
-    () => visibleProjectBoard(source, query, statusFilter, sort),
-    [source, query, statusFilter, sort]
-  );
+  // "Мой порядок": the viewer's own drag order, kept in localStorage (never shared).
+  const { user } = useSession();
+  const orderKey = user && workspaceId ? projectOrderKey(user.id, workspaceId) : null;
+  const [manualOrder, setManualOrder] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = orderKey ? localStorage.getItem(orderKey) : null;
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      setManualOrder(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+    } catch {
+      setManualOrder([]);
+    }
+  }, [orderKey]);
+  const list = useMemo(() => {
+    const visible = visibleProjectBoard(source, query, statusFilter, sort);
+    return sort === "manual" ? applyProjectOrder(visible, manualOrder) : visible;
+  }, [source, query, statusFilter, sort, manualOrder]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  function commitOrder(next: string[]): void {
+    setManualOrder(next);
+    try {
+      if (orderKey) localStorage.setItem(orderKey, JSON.stringify(next));
+    } catch {
+      /* a remembered order is a convenience only */
+    }
+  }
+  /** Drag + Alt+↑/↓ handlers for one list item; only active in "Мой порядок". */
+  function itemProps(project: Project): React.HTMLAttributes<HTMLLIElement> | undefined {
+    if (sort !== "manual") return undefined;
+    const ids = list.map((p) => p.id);
+    return {
+      draggable: true,
+      onDragStart: (event) => {
+        setDraggingId(project.id);
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", project.id);
+      },
+      onDragEnd: () => setDraggingId(null),
+      onDragOver: (event) => {
+        if (draggingId) event.preventDefault();
+      },
+      onDrop: (event) => {
+        event.preventDefault();
+        if (draggingId) commitOrder(moveProject(manualOrder.length ? manualOrder : ids, ids, draggingId, project.id));
+        setDraggingId(null);
+      },
+      onKeyDown: (event) => {
+        if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+        event.preventDefault();
+        commitOrder(stepProject(manualOrder.length ? manualOrder : ids, ids, project.id, event.key === "ArrowUp" ? -1 : 1));
+      },
+      title: "Перетащите или Alt+↑/↓, чтобы изменить порядок"
+    };
+  }
   const filteredOut = source.length > 0 && list.length === 0;
   // The workspace query resolves before the project list can even start, so
   // until it lands all the hooks above are intentionally idle — show the
@@ -250,6 +301,7 @@ export function ProjectsPanel(): React.ReactElement {
                         nextAction={nextActions.get(project.id)}
                         tasksOn={isEnabled("tasks")}
                         onOpen={() => openProject(project.id, project.name)}
+                        itemProps={itemProps(project)}
                       />
                     ))}
                   </ul>
@@ -257,12 +309,13 @@ export function ProjectsPanel(): React.ReactElement {
               ) : (
               <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:1152px)]:grid-cols-3 [@container(min-width:1408px)]:grid-cols-4">
                 {list.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    nextAction={nextActions.get(project.id)}
-                    onOpen={() => openProject(project.id, project.name)}
-                  />
+                  <div key={project.id} {...(itemProps(project) as React.HTMLAttributes<HTMLDivElement> | undefined)}>
+                    <ProjectCard
+                      project={project}
+                      nextAction={nextActions.get(project.id)}
+                      onOpen={() => openProject(project.id, project.name)}
+                    />
+                  </div>
                 ))}
               </div>
               )

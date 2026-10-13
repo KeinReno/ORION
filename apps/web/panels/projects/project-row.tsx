@@ -41,12 +41,15 @@ export function ProjectRow({
   project,
   nextAction,
   tasksOn,
-  onOpen
+  onOpen,
+  itemProps
 }: {
   project: Project;
   nextAction: ProjectNextAction | undefined;
   tasksOn: boolean;
   onOpen: () => void;
+  /** Drag / keyboard-reorder handlers of the list item ("Мой порядок"). */
+  itemProps?: React.HTMLAttributes<HTMLLIElement>;
 }): React.ReactElement {
   const swatch = projectSwatchColor(project.color);
   const progress = Math.min(100, Math.max(0, project.progress));
@@ -55,7 +58,7 @@ export function ProjectRow({
   const overdueTasks = nextAction?.overdue ?? 0;
 
   return (
-    <li>
+    <li {...itemProps}>
       <div
         role="button"
         tabIndex={0}

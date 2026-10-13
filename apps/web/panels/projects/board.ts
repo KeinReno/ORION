@@ -12,10 +12,11 @@ import {
  * a card does not hide that you have three overdue projects.
  */
 
-export type ProjectBoardSort = "lifecycle" | "name" | "due" | "progress" | "spent" | "time";
+export type ProjectBoardSort = "lifecycle" | "manual" | "name" | "due" | "progress" | "spent" | "time";
 
 export const PROJECT_BOARD_SORT_LABEL: Record<ProjectBoardSort, string> = {
   lifecycle: "По статусу",
+  manual: "Мой порядок",
   name: "По названию",
   due: "По сроку",
   progress: "По прогрессу",
@@ -95,7 +96,7 @@ export function visibleProjectBoard(
 }
 
 function compareProjectBoard(a: Project, b: Project, sort: ProjectBoardSort): number {
-  if (sort === "lifecycle") return compareProjectsByLifecycle(a, b);
+  if (sort === "lifecycle" || sort === "manual") return compareProjectsByLifecycle(a, b);
   if (sort === "name") return a.name.localeCompare(b.name, "ru");
   if (sort === "due") {
     const byDue = dueMs(a.dueAt) - dueMs(b.dueAt);
