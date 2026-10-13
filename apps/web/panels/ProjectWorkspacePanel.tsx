@@ -51,6 +51,7 @@ import {
   FolderOpen,
   GanttChartSquare,
   ListTodo,
+  ShieldCheck,
   Milestone as MilestoneIcon,
   MoreHorizontal,
   Package,
@@ -396,6 +397,14 @@ function ProjectWorkspace({
                       { label: "План окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectplan:${project.id}`, `План · ${project.name}`) }
                     ]
                   : []),
+                ...(tasksOn
+                  ? [
+                      { label: "Задачи панелью", icon: ListTodo, onSelect: () => openPanel(`projecttasks:${project.id}`, `Задачи · ${project.name}`) },
+                      { label: "Задачи окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projecttasks:${project.id}`, `Задачи · ${project.name}`) }
+                    ]
+                  : []),
+                { label: "Доступ панелью", icon: ShieldCheck, onSelect: () => openPanel(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
+                { label: "Доступ окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
                 { label: "Материалы панелью", icon: FolderOpen, onSelect: () => openPanel(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
                 { label: "Материалы окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
                 "separator" as const,

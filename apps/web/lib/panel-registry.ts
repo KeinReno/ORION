@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Settings,
   Share2,
+  ShieldCheck,
   StickyNote,
   Target,
   Timer,
@@ -62,6 +63,8 @@ export interface PanelDefinition {
 const LazyDashboardPanel = dynamic(() => import("../panels/DashboardPanel").then((module) => module.DashboardPanel), { ssr: false });
 const LazyTaskDetailPanel = dynamic(() => import("../panels/TaskDetailPanel").then((module) => module.TaskDetailPanel), { ssr: false });
 const LazyNoteWindowPanel = dynamic(() => import("../panels/NoteWindowPanel").then((module) => module.NoteWindowPanel), { ssr: false });
+const LazyProjectTasksPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectTasksPanel), { ssr: false });
+const LazyProjectAccessPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectAccessPanel), { ssr: false });
 const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module) => module.GoalsPanel), { ssr: false });
 const LazyTasksPanel = dynamic(() => import("../panels/TasksPanel").then((module) => module.TasksPanel), { ssr: false });
 const LazyCalendarPanel = dynamic(() => import("../panels/CalendarPanel").then((module) => module.CalendarPanel), { ssr: false });
@@ -98,6 +101,8 @@ const NotesPanel: FunctionComponent = () => createElement(LazyNotesPanel);
 const ProjectsPanel: FunctionComponent = () => createElement(LazyProjectsPanel);
 const TaskDetailPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTaskDetailPanel, props);
 const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNoteWindowPanel, props);
+const ProjectTasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectTasksPanel, props);
+const ProjectAccessPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectAccessPanel, props);
 const GoalsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyGoalsPanel);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
@@ -166,6 +171,26 @@ export const panelRegistry: PanelDefinition[] = [
     component: ProjectPlanPanel,
     moduleId: "projects",
     pluginId: "projects-planning",
+    hideFromNav: true,
+    instanced: true,
+    navParent: "projects"
+  },
+  {
+    id: "projecttasks",
+    label: "Задачи проекта",
+    icon: ListTodo,
+    component: ProjectTasksPanel,
+    moduleId: "projects",
+    hideFromNav: true,
+    instanced: true,
+    navParent: "projects"
+  },
+  {
+    id: "projectaccess",
+    label: "Доступ к проекту",
+    icon: ShieldCheck,
+    component: ProjectAccessPanel,
+    moduleId: "projects",
     hideFromNav: true,
     instanced: true,
     navParent: "projects"
