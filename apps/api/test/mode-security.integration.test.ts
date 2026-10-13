@@ -227,6 +227,23 @@ describe("S05: local/server mode over HTTP", () => {
     }
   });
 
+  it("behind a trusted proxy that appends X-Forwarded-For, a spoofed prefix cannot rotate the login bucket", async () => {
+    // nginx's default `proxy_add_x_forwarded_for` keeps whatever the client sent
+    // and appends the address it saw: "<client-controlled…>, <real client>".
+    // With only the proxy trusted, Express must key on the rightmost untrusted
+    // entry (the real client), so rotating the left part changes nothing.
+    process.env.ORION_MODE = "local";
+    let last = { status: 0 };
+    for (let i = 0; i < 11; i += 1) {
+      last = await request("/auth/login", {
+        method: "POST",
+        ip: `203.0.113.${150 + i}, 198.51.100.77`,
+        body: { email: "nobody@example.test", password: "wrong-password" }
+      });
+    }
+    expect(last.status).toBe(429);
+  });
+
   it("register tolerates a legitimate bulk scenario: many distinct emails from one IP all succeed", async () => {
     process.env.ORION_MODE = "local";
     // Reproduces the exact pattern that broke when the first attempt at a

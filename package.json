@@ -20,6 +20,7 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "test:e2e:local": "node scripts/e2e-local.mjs",
+    "ops:restore-rehearsal": "node scripts/restore-rehearsal.mjs",
     "architecture-check": "node scripts/architecture-check.mjs",
     "plugin-contract-check": "vitest run apps/web/lib/extensions/registry.test.ts",
     "quality": "corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
