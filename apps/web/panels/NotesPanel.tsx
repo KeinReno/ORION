@@ -11,9 +11,8 @@ import {
   useUpdateNote
 } from "@orion/core-react";
 import { TagManager } from "./tag-manager";
-import { ApiError } from "@orion/core";
 import type { Note, NoteView } from "@orion/shared-types";
-import { isNoteConflictPayload, type AutosaveConflict } from "../lib/note-autosave";
+import { saveNoteWithRevision } from "../lib/note-save";
 import {
   Button,
   ConfirmDialog,
@@ -287,29 +286,9 @@ export function NotesPanel(): React.ReactElement {
     expectedRevision: number,
     opts?: { silent?: boolean }
   ): Promise<Note> {
-    try {
-      const updated = await updateNote.mutateAsync({ noteId: id, input: { ...input, expectedRevision } });
-      if (!opts?.silent) toast({ title: "Сохранено", tone: "success" });
-      return updated;
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409 && isNoteConflictPayload(err.details)) {
-        const payload = err.details;
-        const conflict: AutosaveConflict = {
-          conflict: true,
-          currentRevision: payload.currentRevision,
-          current: {
-            title: payload.current.title as string,
-            summary: (payload.current.summary as string | undefined) ?? "",
-            body: payload.current.body as string,
-            tags: payload.current.tags as string[],
-            eventAt: (payload.current.eventAt as string | null) ?? null,
-            projectId: (payload.current.projectId as string | null) ?? null
-          }
-        };
-        throw conflict;
-      }
-      throw err;
-    }
+    const updated = await saveNoteWithRevision(updateNote.mutateAsync, id, input, expectedRevision);
+    if (!opts?.silent) toast({ title: "Сохранено", tone: "success" });
+    return updated;
   }
 
   async function handleDuplicate(note: Note): Promise<void> {

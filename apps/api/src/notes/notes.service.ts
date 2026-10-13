@@ -203,6 +203,15 @@ export class NotesService {
     });
   }
 
+  async getOne(userId: string, workspaceId: string, noteId: string): Promise<Note> {
+    const note = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return this.assertOwnedTx(tx, workspaceId, noteId);
+    });
+    if (note.deletedAt) throw new NotFoundException("Заметка не найдена");
+    return toDto(note);
+  }
+
   async create(userId: string, workspaceId: string, input: CreateNoteInput): Promise<Note> {
     const note = await this.prisma.withUser(userId, (tx) => this.createTx(tx, userId, workspaceId, input));
     return toDto(note);

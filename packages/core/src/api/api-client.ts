@@ -491,6 +491,10 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/notes${query}`, undefined, z.array(noteSchema));
   }
 
+  getNote(workspaceId: string, noteId: string): Promise<Note> {
+    return this.request("GET", `/workspaces/${workspaceId}/notes/${noteId}`, undefined, noteSchema);
+  }
+
   /** `{ id, title }` for every live note — for the `[[wiki link]]` autocomplete. */
   listNoteTitles(workspaceId: string): Promise<NoteTitleRef[]> {
     return this.request("GET", `/workspaces/${workspaceId}/notes/titles`, undefined, z.array(noteTitleRefSchema));

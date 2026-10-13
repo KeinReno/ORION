@@ -181,6 +181,16 @@ export class NotesController {
     return this.notes.restoreRevision(user.userId, workspaceId, noteId, revisionId, body.expectedRevision);
   }
 
+  /** One live note by id (not trashed) — for a note opened in a panel or window of its own. */
+  @Get(":noteId")
+  getOne(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId") noteId: string
+  ): Promise<Note> {
+    return this.notes.getOne(user.userId, workspaceId, noteId);
+  }
+
   @Post()
   create(
     @CurrentUser() user: RequestUser,

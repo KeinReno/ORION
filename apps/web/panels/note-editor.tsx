@@ -26,7 +26,9 @@ import {
   History,
   Link2,
   List,
+  ExternalLink,
   MoreHorizontal,
+  PanelRight,
   Pin,
   PinOff,
   SlidersHorizontal,
@@ -34,6 +36,8 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
+import { openPanel } from "../lib/panel-bus";
+import { detachPanelToWindow } from "../lib/panel-window";
 import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { formatDayTitle, fromDatetimeLocal, projectColor, relativeTime, toDatetimeLocal } from "../lib/format";
@@ -73,6 +77,7 @@ export function NoteEditor({
   workspaceId,
   projects,
   busy,
+  standalone,
   onCreate,
   onSave,
   onClose,
@@ -89,6 +94,8 @@ export function NoteEditor({
   /** Active projects of this workspace — the "Проект" select. Absent = projects module is off. */
   projects?: Project[];
   busy: boolean;
+  /** Already its own dock panel / window: no "open in a panel" actions. */
+  standalone?: boolean;
   onCreate: (input: NoteEditorInput) => Promise<void>;
   /**
    * Throws an `AutosaveConflict` (see `../lib/note-autosave`) on a 409 CAS
@@ -324,6 +331,12 @@ export function NoteEditor({
 
   const menuItems: ComponentProps<typeof DropdownMenu>["items"] = [];
   if (note) {
+    if (!standalone) {
+      menuItems.push(
+        { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
+        { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`note:${note.id}`, note.title) }
+      );
+    }
     if (onTogglePin) {
       menuItems.push({
         label: note.pinnedAt ? "Открепить" : "Закрепить",

@@ -96,6 +96,16 @@ export function useNoteTitles(workspaceId: string | undefined) {
 }
 
 /** Notes that link to `noteId` via a body `[[wiki link]]`. */
+export function useNote(workspaceId: string | undefined, noteId: string | undefined) {
+  const { api } = useCore();
+  return useQuery<Note>({
+    queryKey: ["notes", workspaceId, "one", noteId],
+    queryFn: () => api.getNote(workspaceId as string, noteId as string),
+    enabled: Boolean(workspaceId && noteId),
+    retry: false
+  });
+}
+
 export function useNoteBacklinks(workspaceId: string | undefined, noteId: string | undefined) {
   const { api } = useCore();
   return useQuery<NoteBacklink[]>({
