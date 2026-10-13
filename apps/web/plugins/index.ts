@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -164,6 +164,9 @@ contribute("inventory.alerts", {
   component: NoVisual as unknown as ComponentType<InventoryAlertsSlotProps>,
   meta: { api: inventoryAlertsApi }
 });
+
+const MiniCalendarWidget = dynamic<SidebarWidgetSlotProps>(() => import("./calendar-widget/mini-calendar").then((m) => m.MiniCalendarWidget), { ssr: false });
+contribute("shell.sidebar.widgets", { pluginId: "calendar-widget", component: MiniCalendarWidget, order: 10 });
 
 const EventRecurrenceFields = dynamic<EventRecurrenceSlotProps>(() => import("./calendar-recurrence/recurrence-fields").then((m) => m.EventRecurrenceFields), { ssr: false });
 const EventReminderFields = dynamic<EventRemindersSlotProps>(() => import("./calendar-reminders/reminder-fields").then((m) => m.EventReminderFields), { ssr: false });

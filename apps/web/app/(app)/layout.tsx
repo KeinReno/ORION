@@ -47,6 +47,7 @@ import {
 import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
+import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
@@ -658,6 +659,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         footer={({ open }) =>
           open ? (
             <div className="flex flex-col gap-2">
+              <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
               <button
                 type="button"
                 onClick={() => leaveWorkbench("account")}

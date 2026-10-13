@@ -317,7 +317,20 @@ export interface InventoryCostingApi {
 
 export type InventoryCostingSlotProps = Record<string, never>;
 
+/**
+ * shell.sidebar.widgets — a compact surface of a module shown in the sidebar (Widget Surface).
+ * The host decides where it sits and whether the rail is `open`; the plugin only draws itself
+ * and asks the host to open its full screen via `onOpenCalendar`-style callbacks.
+ */
+export interface SidebarWidgetSlotProps {
+  workspaceId: string | undefined;
+  /** The sidebar is expanded; a collapsed rail has no room for a widget. */
+  open: boolean;
+  onOpenCalendar: () => void;
+}
+
 export interface SlotContracts {
+  "shell.sidebar.widgets": SidebarWidgetSlotProps;
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
   "finance.tabs": FinanceTabSlotProps;

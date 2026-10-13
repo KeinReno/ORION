@@ -36,6 +36,7 @@ export const ORION_PLUGIN_IDS = [
   "inventory-alerts",
   "calendar-recurrence",
   "calendar-reminders",
+  "calendar-widget",
   "finance-quick-entry",
   "finance-import",
   "finance-obligations",
@@ -309,6 +310,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "То, что не нравится в проекте, найденные баги и то, что нужно поправить — рядом с проектом, пока из записи не сделана задача.",
     provides: ["Вкладка «Проблемы» в проекте", "Пометки «Не нравится», «Баг», «Поправить»", "Кнопка «Сделать задачей»"],
     disableBehavior: "Вкладка «Проблемы» скрывается; записи сохраняются. Уже созданные из них задачи остаются задачами.",
+    defaultEnabled: true
+  },
+  {
+    id: "calendar-widget",
+    extendsModuleId: "calendar",
+    label: "Календарь в сайдбаре",
+    summary: "Компактный месяц в боковом меню: точки отмечают дни с событиями и задачами со сроком; клик открывает календарь.",
+    provides: ["Виджет «Мини-календарь» в сайдбаре"],
+    disableBehavior: "Виджет пропадает из сайдбара; календарь и данные не затрагиваются.",
     defaultEnabled: true
   },
   {
