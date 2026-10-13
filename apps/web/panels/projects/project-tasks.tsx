@@ -14,8 +14,9 @@ import { parentOptions, subtaskProgressMap } from "../../lib/task-structure";
 import { DetailSlot, TaskDetail } from "../tasks/task-detail";
 import { TaskMatrix } from "./task-matrix";
 import { TaskRow } from "./task-row";
+import { TaskDependencyGraph, TaskTree } from "./task-tree";
 
-type TasksLayout = "matrix" | "board" | "list";
+type TasksLayout = "matrix" | "board" | "list" | "tree" | "graph";
 const LAYOUT_KEY = "orion.project-tasks-layout";
 /** Panel width from which the open task sits beside the view instead of replacing it. */
 const DETAIL_SPLIT_MIN = 980;
@@ -24,8 +25,8 @@ const BOARD_COLUMNS: TaskStatus[] = ["backlog", "todo", "in_progress", "done"];
 const DONE_VISIBLE = 5;
 
 /**
- * A project's tasks, in the project: matrix (direction × urgency), board (by status)
- * or list (by milestone). A task opens in a detail pane here — the same pane the
+ * A project's tasks, in the project: matrix (direction × urgency), board (by status),
+ * list (by milestone), tree (subtasks) or links (dependency graph). A task opens in a detail pane here — the same pane the
  * general Tasks panel uses — so working on a project never throws you out to another
  * panel. The general panel stays the place for "all tasks"; this one is this project's.
  */
@@ -72,7 +73,7 @@ export function ProjectTasks({
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LAYOUT_KEY);
-      if (saved === "list" || saved === "board" || saved === "matrix") setLayout(saved);
+      if (saved === "list" || saved === "board" || saved === "matrix" || saved === "tree" || saved === "graph") setLayout(saved);
     } catch {
       /* a remembered layout is a convenience only */
     }
@@ -154,7 +155,9 @@ export function ProjectTasks({
               options={[
                 { value: "matrix", label: "Матрица" },
                 { value: "board", label: "Доска" },
-                { value: "list", label: "Список" }
+                { value: "list", label: "Список" },
+                { value: "tree", label: "Дерево" },
+                { value: "graph", label: "Связи" }
               ]}
             />
             <SegmentedControl<"open" | "all">
@@ -178,6 +181,10 @@ export function ProjectTasks({
               onOpen={(task) => onOpenTask(task.id)}
               onMove={moveToMilestone}
             />
+          ) : layout === "tree" ? (
+            <TaskTree tasks={tasks} showClosed={showClosed} openTaskId={openTaskId} onToggle={onToggle} onOpen={(task) => onOpenTask(task.id)} />
+          ) : layout === "graph" ? (
+            <TaskDependencyGraph tasks={allTasks} showClosed={showClosed} openTaskId={openTaskId} onOpen={(task) => onOpenTask(task.id)} />
           ) : layout === "board" ? (
             <ProjectBoard
               tasks={tasks}
