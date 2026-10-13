@@ -18,7 +18,8 @@ export const ORION_MODULE_IDS = [
   "habits",
   "lists",
   "inventory",
-  "markets"
+  "markets",
+  "home"
 ] as const;
 
 export const orionModuleIdSchema = z.enum(ORION_MODULE_IDS);
@@ -289,5 +290,20 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     disableBehavior: "Панель и API скрываются. Список наблюдения и сделки сохраняются и вернутся при включении.",
     panelId: "markets",
     defaultEnabled: false
+  },
+  {
+    id: "home",
+    kind: "additional",
+    required: false,
+    label: "Дом",
+    summary: "Квартира, дом, дача, машина: что купить, что платить, какие дела, показания счётчиков — в одном месте.",
+    owns: "Дома (объекты), счётчики и их показания, контакты дома. Задачи, списки, вещи и платежи остаются в своих модулях и лишь привязываются к дому.",
+    livesWithout: "Работает без задач, списков, склада и финансов — соответствующие блоки на странице дома просто не показываются.",
+    provides: ["Панель «Дом»", "Создание дел, покупок, вещей и платежей прямо на странице дома", "Счётчики с расходом", "Контакты дома"],
+    optionalDependencies: ["tasks", "lists", "inventory", "finance"],
+    disableBehavior: "Панель и API скрываются. Дома, счётчики и привязки сохраняются; задачи, списки, вещи и платежи остаются в своих модулях.",
+    panelId: "home",
+    defaultEnabled: true
   }
+
 ];

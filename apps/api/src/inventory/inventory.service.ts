@@ -1,3 +1,4 @@
+import { assertHomeInWorkspace } from "../home/home-refs.util";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type {
@@ -51,6 +52,7 @@ export class InventoryService {
     const item = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.projectId) await this.assertProjectTx(tx, workspaceId, input.projectId);
+      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
       return tx.inventoryItem.create({
         data: {
           workspaceId,
@@ -58,7 +60,8 @@ export class InventoryService {
           sku: input.sku ?? null,
           unit: input.unit,
           minStock: input.minStock ?? null,
-          projectId: input.projectId ?? null
+          projectId: input.projectId ?? null,
+          homeId: input.homeId ?? null
         }
       });
     });

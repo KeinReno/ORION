@@ -35,7 +35,9 @@ export const listSchema = z.object({
 export type List = z.infer<typeof listSchema>;
 
 export const createListInputSchema = z.object({
-  name: z.string().trim().min(1, "Название обязательно").max(120)
+  name: z.string().trim().min(1, "Название обязательно").max(120),
+  /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
+  homeId: z.string().nullable().optional()
 });
 export type CreateListInput = z.infer<typeof createListInputSchema>;
 

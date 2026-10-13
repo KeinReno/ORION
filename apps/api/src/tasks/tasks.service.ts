@@ -1,3 +1,4 @@
+import { assertHomeInWorkspace } from "../home/home-refs.util";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 // Value import, not `import type`: `Prisma.DbNull` / `Prisma.InputJsonValue` are
 // runtime values. Importing the namespace as a type only compiles the type
@@ -87,6 +88,7 @@ export class TasksService {
     await this.assertDependenciesTx(tx, workspaceId, null, dependencyIds);
     if (input.assigneeId !== undefined) await this.assertAssigneeWriteTx(tx, userId, workspaceId, input.assigneeId);
     if (input.milestoneId) await this.assertMilestoneTx(tx, workspaceId, input.milestoneId, project?.id ?? null);
+    if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
     const created = await tx.task.create({
       data: {
         workspaceId,
@@ -101,6 +103,7 @@ export class TasksService {
         startAt: input.startAt ?? null,
         estimatedMinutes: input.estimatedMinutes ?? null,
         milestoneId: input.milestoneId ?? null,
+        homeId: input.homeId ?? null,
         recurrence: input.recurrence ? (input.recurrence as Prisma.InputJsonValue) : Prisma.DbNull
       }
     });

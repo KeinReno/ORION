@@ -53,7 +53,9 @@ export const createObligationInputSchema = z.object({
   nextDueAt: z.string().datetime().nullable().optional(),
   accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
-  note: z.string().max(2000).default("")
+  note: z.string().max(2000).default(""),
+  /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
+  homeId: z.string().nullable().optional()
 });
 export type CreateObligationInput = z.infer<typeof createObligationInputSchema>;
 

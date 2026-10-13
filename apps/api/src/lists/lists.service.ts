@@ -1,3 +1,4 @@
+import { assertHomeInWorkspace } from "../home/home-refs.util";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { List as ListRow, ListItem as ListItemRow, Prisma } from "@prisma/client";
 import type { CreateListInput, CreateListItemInput, List, ListItem, UpdateListInput, UpdateListItemInput } from "@orion/shared-types";
@@ -39,8 +40,9 @@ export class ListsService {
   async create(userId: string, workspaceId: string, input: CreateListInput): Promise<List> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
       return tx.list.create({
-        data: { workspaceId, name: input.name },
+        data: { workspaceId, name: input.name, homeId: input.homeId ?? null },
         include: { items: { orderBy: [{ createdAt: "asc" }] } }
       });
     });

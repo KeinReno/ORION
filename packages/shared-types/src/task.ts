@@ -68,7 +68,9 @@ export const createTaskInputSchema = z.object({
   assigneeId: z.string().nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
   estimatedMinutes: z.number().int().min(0).nullable().optional(),
-  milestoneId: z.string().nullable().optional()
+  milestoneId: z.string().nullable().optional(),
+  /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
+  homeId: z.string().nullable().optional()
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;
 

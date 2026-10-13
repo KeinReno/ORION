@@ -54,6 +54,10 @@ interface ModelSpec {
  */
 const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("projects", (tx) => tx.project),
+  spec("homes", (tx) => tx.home),
+  spec("meters", (tx) => tx.meter),
+  spec("meterReadings", (tx) => tx.meterReading),
+  spec("contacts", (tx) => tx.contact),
   spec("milestones", (tx) => tx.milestone),
   spec("goals", (tx) => tx.goal),
   spec("goalPlans", (tx) => tx.goalPlan),

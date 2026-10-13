@@ -41,7 +41,9 @@ export const createInventoryItemInputSchema = z.object({
   sku: z.string().trim().max(80).nullable().optional(),
   unit: z.string().trim().min(1).max(20).default("шт"),
   minStock: z.number().int().min(0).nullable().optional(),
-  projectId: z.string().nullable().optional()
+  projectId: z.string().nullable().optional(),
+  /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
+  homeId: z.string().nullable().optional()
 });
 export type CreateInventoryItemInput = z.infer<typeof createInventoryItemInputSchema>;
 

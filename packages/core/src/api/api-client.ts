@@ -107,6 +107,18 @@ import {
   type AgentAuditEntry,
   type AgentToken,
   type ActivityEntry,
+  type AttachToHomeInput,
+  type Contact,
+  type CreateContactInput,
+  type CreateHomeInput,
+  type CreateMeterInput,
+  type CreateMeterReadingInput,
+  type Home,
+  type HomeOverview,
+  type Meter,
+  type UpdateContactInput,
+  type UpdateHomeInput,
+  type UpdateMeterInput,
   type AgentProposal,
   type AddGoalPlanInput,
   type CreateGoalInput,
@@ -120,6 +132,10 @@ import {
   agentTokenSchema,
   goalSchema,
   activityEntrySchema,
+  contactSchema,
+  homeOverviewSchema,
+  homeSchema,
+  meterSchema,
   agentProposalSchema,
   agentAuditEntrySchema,
   createdAgentTokenSchema,
@@ -825,6 +841,68 @@ export class ApiClient {
 
   decideAgentProposal(workspaceId: string, proposalId: string, decision: "approve" | "reject"): Promise<AgentProposal> {
     return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/${proposalId}/${decision}`, {}, agentProposalSchema);
+  }
+
+  // ---- Module «Дом» -------------------------------------------------------
+
+  listHomes(workspaceId: string, archived = false): Promise<Home[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/homes${archived ? "?archived=1" : ""}`, undefined, z.array(homeSchema));
+  }
+
+  createHome(workspaceId: string, input: CreateHomeInput): Promise<Home> {
+    return this.request("POST", `/workspaces/${workspaceId}/homes`, input, homeSchema);
+  }
+
+  updateHome(workspaceId: string, homeId: string, input: UpdateHomeInput): Promise<Home> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/homes/${homeId}`, input, homeSchema);
+  }
+
+  async deleteHome(workspaceId: string, homeId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/homes/${homeId}`, undefined, z.unknown());
+  }
+
+  homeOverview(workspaceId: string, homeId: string): Promise<HomeOverview> {
+    return this.request("GET", `/workspaces/${workspaceId}/homes/${homeId}/overview`, undefined, homeOverviewSchema);
+  }
+
+  async attachToHome(workspaceId: string, homeId: string, input: AttachToHomeInput): Promise<void> {
+    await this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/attach`, input, z.unknown());
+  }
+
+  async detachFromHome(workspaceId: string, homeId: string, input: AttachToHomeInput): Promise<void> {
+    await this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/detach`, input, z.unknown());
+  }
+
+  createMeter(workspaceId: string, homeId: string, input: CreateMeterInput): Promise<Meter> {
+    return this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/meters`, input, meterSchema);
+  }
+
+  updateMeter(workspaceId: string, homeId: string, meterId: string, input: UpdateMeterInput): Promise<Meter> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/homes/${homeId}/meters/${meterId}`, input, meterSchema);
+  }
+
+  async deleteMeter(workspaceId: string, homeId: string, meterId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/homes/${homeId}/meters/${meterId}`, undefined, z.unknown());
+  }
+
+  addMeterReading(workspaceId: string, homeId: string, meterId: string, input: CreateMeterReadingInput): Promise<Meter> {
+    return this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/meters/${meterId}/readings`, input, meterSchema);
+  }
+
+  deleteMeterReading(workspaceId: string, homeId: string, meterId: string, readingId: string): Promise<Meter> {
+    return this.request("DELETE", `/workspaces/${workspaceId}/homes/${homeId}/meters/${meterId}/readings/${readingId}`, undefined, meterSchema);
+  }
+
+  createContact(workspaceId: string, homeId: string, input: CreateContactInput): Promise<Contact> {
+    return this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/contacts`, input, contactSchema);
+  }
+
+  updateContact(workspaceId: string, homeId: string, contactId: string, input: UpdateContactInput): Promise<Contact> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/homes/${homeId}/contacts/${contactId}`, input, contactSchema);
+  }
+
+  async deleteContact(workspaceId: string, homeId: string, contactId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/homes/${homeId}/contacts/${contactId}`, undefined, z.unknown());
   }
 
   listActivity(workspaceId: string): Promise<ActivityEntry[]> {

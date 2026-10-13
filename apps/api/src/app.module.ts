@@ -25,6 +25,7 @@ import { MilestonesModule } from "./milestones/milestones.module";
 import { ModulesModule } from "./modules/modules.module";
 import { ActivityModule } from "./activity/activity.module";
 import { AiModule } from "./ai/ai.module";
+import { HomeModule } from "./home/home.module";
 import { GoalsModule } from "./goals/goals.module";
 import { PluginsModule } from "./plugins/plugins.module";
 import { OverviewModule } from "./overview/overview.module";
@@ -40,6 +41,7 @@ import { UsersModule } from "./users/users.module";
     ModulesModule,
     PluginsModule,
     AiModule,
+    HomeModule,
     ActivityModule,
     GoalsModule,
     NotesModule,

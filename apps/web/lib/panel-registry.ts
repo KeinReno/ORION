@@ -8,6 +8,7 @@ import {
   CandlestickChart,
   Flag,
   Globe,
+  Home as HomeIcon,
   Globe2,
   Inbox,
   LayoutDashboard,
@@ -65,6 +66,7 @@ const LazyTaskDetailPanel = dynamic(() => import("../panels/TaskDetailPanel").th
 const LazyNoteWindowPanel = dynamic(() => import("../panels/NoteWindowPanel").then((module) => module.NoteWindowPanel), { ssr: false });
 const LazyProjectTasksPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectTasksPanel), { ssr: false });
 const LazyProjectAccessPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectAccessPanel), { ssr: false });
+const LazyHomePanel = dynamic(() => import("../panels/HomePanel").then((module) => module.HomePanel), { ssr: false });
 const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module) => module.GoalsPanel), { ssr: false });
 const LazyTasksPanel = dynamic(() => import("../panels/TasksPanel").then((module) => module.TasksPanel), { ssr: false });
 const LazyCalendarPanel = dynamic(() => import("../panels/CalendarPanel").then((module) => module.CalendarPanel), { ssr: false });
@@ -103,6 +105,7 @@ const TaskDetailPanel: FunctionComponent<PanelComponentProps> = (props) => creat
 const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNoteWindowPanel, props);
 const ProjectTasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectTasksPanel, props);
 const ProjectAccessPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectAccessPanel, props);
+const HomePanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyHomePanel);
 const GoalsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyGoalsPanel);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
@@ -143,6 +146,7 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "calendar", label: "Календарь", icon: CalendarDays, component: CalendarPanel, moduleId: "calendar", group: "Работа" },
   { id: "notes", label: "Заметки", icon: StickyNote, component: NotesPanel, moduleId: "notes", group: "Работа" },
   { id: "projects", label: "Проекты", icon: FolderKanban, component: ProjectsPanel, moduleId: "projects", group: "Работа" },
+  { id: "home", label: "Дом", icon: HomeIcon, component: HomePanel, moduleId: "home", group: "Семья и дом" },
   {
     id: "goals",
     label: "Цели",

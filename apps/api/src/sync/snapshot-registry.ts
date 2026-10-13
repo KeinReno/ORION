@@ -72,6 +72,10 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   // --- секреты/адреса назначения бэкапа ------------------------------------
   { model: "SyncRemote", snapshotKey: null, policy: "secret-excluded", reason: "Хранит зашифрованный пароль и адрес WebDAV-удалёнки, которая сама пишет снапшот — конфигурация узла, не данные пространства; класть секрет назначения внутрь того, что он производит, не нужно." },
 
+  { model: "Home", snapshotKey: "homes", policy: "included", reason: "Дома (модуль «Дом») — пользовательский контент; вставляются раньше задач, списков, вещей и платежей, которые на них ссылаются." },
+  { model: "Meter", snapshotKey: "meters", policy: "included", reason: "Счётчики дома." },
+  { model: "MeterReading", snapshotKey: "meterReadings", policy: "included", reason: "Показания счётчиков — история расхода." },
+  { model: "Contact", snapshotKey: "contacts", policy: "included", reason: "Контакты дома (УК, мастера)." },
   { model: "AgentToken", snapshotKey: null, policy: "secret-excluded", reason: "Учётные данные ИИ-агентов (ADR-0007): хранится только хеш секрета; токены не переносятся между узлами — их выпускают заново." },
   { model: "AgentMessage", snapshotKey: null, policy: "ephemeral-excluded", reason: "Сообщения между агентами привязаны к токенам узла; токены в бэкап не входят, а значит и переписка." },
   { model: "AgentTask", snapshotKey: null, policy: "ephemeral-excluded", reason: "Задания между агентами привязаны к токенам узла, которые в бэкап не входят." },

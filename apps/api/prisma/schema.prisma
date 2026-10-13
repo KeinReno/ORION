@@ -209,6 +209,10 @@ model Workspace {
   milestoneDependencies MilestoneDependency[]
   projectCaptures       ProjectCapture[]
   agentTokens           AgentToken[]
+  homes                 Home[]
+  meters                Meter[]
+  meterReadings         MeterReading[]
+  contacts              Contact[]
   goals                 Goal[]
   goalPlans             GoalPlan[]
   agentAuditEntries     AgentAuditEntry[]
@@ -467,6 +471,8 @@ enum TaskPriority {
 
 model Task {
   id          String       @id @default(uuid())
+  /// Module «Дом»: the household this chore belongs to. SetNull — deleting a home keeps the task.
+  homeId      String?
   /// Optimistic-concurrency token: +1 on every write through TasksService.update (like Note.revision).
   revision    Int          @default(1)
   workspaceId String
@@ -505,6 +511,7 @@ model Task {
 
   workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project    Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  home       Home?            @relation(fields: [homeId], references: [id], onDelete: SetNull)
   parent     Task?            @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
   children   Task[]           @relation("TaskTree")
   dependsOn  TaskDependency[] @relation("TaskDependsOn")
@@ -518,6 +525,7 @@ model Task {
 
   @@index([workspaceId])
   @@index([projectId])
+  @@index([homeId])
   @@index([parentId])
   @@index([dueAt])
   @@index([assigneeId])
@@ -749,6 +757,8 @@ model HabitEntry {
 model List {
   id          String    @id @default(uuid())
   workspaceId String
+  /// Module «Дом»: a shopping / household list of this home (SetNull on home delete).
+  homeId      String?
   name        String
   /// Non-null = archived: hidden from the active view, items kept.
   archivedAt  DateTime?
@@ -756,9 +766,11 @@ model List {
   updatedAt   DateTime  @updatedAt
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  home      Home?      @relation(fields: [homeId], references: [id], onDelete: SetNull)
   items     ListItem[]
 
   @@index([workspaceId])
+  @@index([homeId])
   @@map("lists")
 }
 
@@ -1159,6 +1171,8 @@ model CategoryRule {
 model FinanceObligation {
   id          String    @id @default(uuid())
   workspaceId String
+  /// Module «Дом»: a utility bill / payment of this home (SetNull on home delete).
+  homeId      String?
   name        String
   /// debt | credit | utility | subscription | other
   kind        String    @default("debt")
@@ -1184,6 +1198,7 @@ model FinanceObligation {
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account   Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
   category  FinanceCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  home      Home?             @relation(fields: [homeId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@map("finance_obligations")
@@ -1568,6 +1583,8 @@ model InventoryItem {
   id          String    @id @default(uuid())
   workspaceId String
   projectId   String?
+  /// Module «Дом»: where this thing lives (SetNull on home delete).
+  homeId      String?
   /// Артикул. Nullable — Postgres считает NULL в уникальном индексе
   /// самостоятельным значением, поэтому несколько позиций без артикула не
   /// конфликтуют друг с другом.
@@ -1590,6 +1607,7 @@ model InventoryItem {
 
   workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  home      Home?               @relation(fields: [homeId], references: [id], onDelete: SetNull)
   movements InventoryMovement[]
 
   @@unique([workspaceId, sku])
@@ -1913,4 +1931,92 @@ model AgentProposal {
   @@index([workspaceId, status])
   @@index([tokenId])
   @@map("agent_proposals")
+}
+
+/// Module «Дом»: a household object — a flat, a house, a dacha, a car. It owns only meters and
+/// contacts; tasks, lists, things and payments stay in their own modules and just point here
+/// through a nullable `homeId`, so the Home page can show and create them in one place.
+model Home {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  /// "flat" | "house" | "country" | "car" | "other"
+  kind        String    @default("flat")
+  /// Free text, optional (address, access codes, anything worth keeping next to the home).
+  note        String    @default("")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  meters    Meter[]
+  contacts  Contact[]
+  tasks     Task[]
+  lists     List[]
+  inventory InventoryItem[]
+  payments  FinanceObligation[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("homes")
+}
+
+/// A utility meter of a home (electricity, water, gas, heating). Readings are cumulative.
+model Meter {
+  id          String   @id @default(uuid())
+  workspaceId String
+  homeId      String
+  name        String
+  /// "electricity" | "water_cold" | "water_hot" | "gas" | "heating" | "other"
+  kind        String   @default("other")
+  unit        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  home      Home           @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  readings  MeterReading[]
+
+  @@index([workspaceId])
+  @@index([homeId])
+  @@map("meters")
+}
+
+model MeterReading {
+  id          String   @id @default(uuid())
+  workspaceId String
+  meterId     String
+  /// Cumulative reading as shown on the meter.
+  value       Float
+  readAt      DateTime
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  meter     Meter     @relation(fields: [meterId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([meterId, readAt])
+  @@map("meter_readings")
+}
+
+/// A person or company worth having at hand for a home: the management company, a plumber, a neighbour.
+model Contact {
+  id          String   @id @default(uuid())
+  workspaceId String
+  homeId      String
+  name        String
+  /// What they do for this home: «УК», «сантехник», «сосед сверху».
+  role        String   @default("")
+  phone       String   @default("")
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  home      Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([homeId])
+  @@map("contacts")
 }

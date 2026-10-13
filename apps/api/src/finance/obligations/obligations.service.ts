@@ -1,3 +1,4 @@
+import { assertHomeInWorkspace } from "../../home/home-refs.util";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
@@ -42,6 +43,7 @@ export class ObligationsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
       if (input.categoryId) await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
+      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
       return tx.financeObligation.create({
         data: {
           workspaceId,
@@ -55,6 +57,7 @@ export class ObligationsService {
           dueDay: input.nextDueAt ? new Date(input.nextDueAt).getUTCDate() : null,
           accountId: input.accountId ?? null,
           categoryId: input.categoryId ?? null,
+          homeId: input.homeId ?? null,
           note: input.note
         }
       });
