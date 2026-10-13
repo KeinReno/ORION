@@ -4,6 +4,7 @@ import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspace
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
   AppBackground,
+  DropdownMenu,
   IconButton,
   Sidebar,
   Workbench,
@@ -24,7 +25,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { Folder, FolderPlus, LogOut, Menu, Settings, SlidersHorizontal } from "lucide-react";
+import { Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -36,6 +37,15 @@ import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
 import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
 import { dockLayoutStorageKey } from "../../lib/dock-layout-key";
+import {
+  LAYOUT_NAME_MAX,
+  cleanLayoutName,
+  deleteNamedLayout,
+  getNamedLayout,
+  listNamedLayouts,
+  namedLayoutsKey,
+  saveNamedLayout
+} from "../../lib/named-layouts";
 import { isTauri } from "../../lib/is-tauri";
 import { useLocalNow } from "../../lib/use-day-boundary";
 import {
@@ -248,6 +258,59 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   useDesktopDueReminders(tasks);
 
   const apiRef = useRef<DockviewApi | null>(null);
+  // Named layouts ("Разработка", "Финансы"): a saved set of open panels, per user and workspace.
+  const [layoutDialogOpen, setLayoutDialogOpen] = useState(false);
+  const [layoutNames, setLayoutNames] = useState<string[]>([]);
+  const namedKey = user && workspace ? namedLayoutsKey(user.id, workspace.id) : null;
+  useEffect(() => {
+    try {
+      setLayoutNames(namedKey ? listNamedLayouts(window.localStorage, namedKey) : []);
+    } catch {
+      setLayoutNames([]);
+    }
+  }, [namedKey]);
+  const saveLayoutAs = useCallback(
+    (name: string) => {
+      const api = apiRef.current;
+      if (!api || !namedKey) return;
+      try {
+        if (saveNamedLayout(window.localStorage, namedKey, name, api.toJSON())) {
+          setLayoutNames(listNamedLayouts(window.localStorage, namedKey));
+        }
+      } catch {
+        /* storage blocked: the layout simply is not saved */
+      }
+    },
+    [namedKey]
+  );
+  const applyLayout = useCallback(
+    (name: string) => {
+      const api = apiRef.current;
+      if (!api || !namedKey) return;
+      try {
+        const saved = getNamedLayout(window.localStorage, namedKey, name);
+        if (saved) {
+          api.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
+          closeDisabledPanels(api, disabledModulesRef.current, pluginOverridesRef.current);
+        }
+      } catch {
+        /* an incompatible layout (a removed panel) leaves the current one in place */
+      }
+    },
+    [namedKey]
+  );
+  const removeLayout = useCallback(
+    (name: string) => {
+      if (!namedKey) return;
+      try {
+        deleteNamedLayout(window.localStorage, namedKey, name);
+        setLayoutNames(listNamedLayouts(window.localStorage, namedKey));
+      } catch {
+        /* ignore */
+      }
+    },
+    [namedKey]
+  );
   const closeTab = useCallback((panelId: string) => {
     if (hasUnsavedDrafts(panelId)) {
       setPendingTabClose(panelId);
@@ -551,6 +614,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     >
       <AppBackground />
       <FolderNameDialog
+        open={layoutDialogOpen}
+        title="Сохранить раскладку"
+        initial=""
+        submitLabel="Сохранить"
+        placeholder="Например, «Разработка»"
+        maxLength={LAYOUT_NAME_MAX}
+        clean={cleanLayoutName}
+        onClose={() => setLayoutDialogOpen(false)}
+        onSubmit={(name) => {
+          setLayoutDialogOpen(false);
+          saveLayoutAs(name);
+        }}
+      />
+      <FolderNameDialog
         open={folderDialog !== null}
         title={folderDialog?.mode === "rename" ? "Переименовать папку" : "Новая папка"}
         initial={folderDialog?.mode === "rename" ? folderDialog.name : ""}
@@ -659,6 +736,26 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         footer={({ open }) =>
           open ? (
             <div className="flex flex-col gap-2">
+              <DropdownMenu
+                align="start"
+                trigger={({ toggle }) => (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden />
+                    Раскладки
+                  </button>
+                )}
+                items={[
+                  { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
+                  ...(layoutNames.length > 0 ? ["separator" as const] : []),
+                  ...layoutNames.map((name) => ({ label: name, onSelect: () => applyLayout(name) })),
+                  ...(layoutNames.length > 0 ? ["separator" as const] : []),
+                  ...layoutNames.map((name) => ({ label: `Удалить «${name}»`, tone: "danger" as const, onSelect: () => removeLayout(name) }))
+                ]}
+              />
               <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
               <button
                 type="button"

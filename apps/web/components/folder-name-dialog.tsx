@@ -11,6 +11,9 @@ export function FolderNameDialog({
   title,
   initial,
   submitLabel,
+  placeholder = "Название папки",
+  maxLength = SIDEBAR_FOLDER_NAME_MAX,
+  clean: cleanName = cleanFolderName,
   onSubmit,
   onClose
 }: {
@@ -18,13 +21,16 @@ export function FolderNameDialog({
   title: string;
   initial: string;
   submitLabel: string;
+  placeholder?: string;
+  maxLength?: number;
+  clean?: (raw: string) => string;
   onSubmit: (name: string) => void;
   onClose: () => void;
 }): React.ReactElement {
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">
       {/* Remounted per opening so the field always starts from `initial`. */}
-      {open ? <NameForm key={initial} initial={initial} submitLabel={submitLabel} onSubmit={onSubmit} onClose={onClose} /> : null}
+      {open ? <NameForm key={initial} initial={initial} submitLabel={submitLabel} placeholder={placeholder} maxLength={maxLength} clean={cleanName} onSubmit={onSubmit} onClose={onClose} /> : null}
     </Modal>
   );
 }
@@ -32,16 +38,22 @@ export function FolderNameDialog({
 function NameForm({
   initial,
   submitLabel,
+  placeholder,
+  maxLength,
+  clean: cleanName,
   onSubmit,
   onClose
 }: {
   initial: string;
   submitLabel: string;
+  placeholder: string;
+  maxLength: number;
+  clean: (raw: string) => string;
   onSubmit: (name: string) => void;
   onClose: () => void;
 }): React.ReactElement {
   const [name, setName] = useState(initial);
-  const clean = cleanFolderName(name);
+  const clean = cleanName(name);
 
   function submit(event: FormEvent): void {
     event.preventDefault();
@@ -53,9 +65,9 @@ function NameForm({
       <Input
         value={name}
         onChange={(event) => setName(event.target.value)}
-        maxLength={SIDEBAR_FOLDER_NAME_MAX}
-        placeholder="Название папки"
-        aria-label="Название папки"
+        maxLength={maxLength}
+        placeholder={placeholder}
+        aria-label={placeholder}
         autoFocus
       />
       <div className="flex justify-end gap-2">
