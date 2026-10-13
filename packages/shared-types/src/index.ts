@@ -19,6 +19,7 @@ export * from "./settings";
 export * from "./project";
 export * from "./project-update";
 export * from "./project-capture";
+export * from "./goal";
 export * from "./inbox";
 export * from "./capture";
 export * from "./today";

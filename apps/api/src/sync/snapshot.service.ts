@@ -55,6 +55,8 @@ interface ModelSpec {
 const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("projects", (tx) => tx.project),
   spec("milestones", (tx) => tx.milestone),
+  spec("goals", (tx) => tx.goal),
+  spec("goalPlans", (tx) => tx.goalPlan),
   spec("financeAccounts", (tx) => tx.account),
   spec("financeCategories", (tx) => tx.financeCategory),
   spec("calendarConnections", (tx) => tx.calendarConnection),

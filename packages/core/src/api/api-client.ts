@@ -106,11 +106,17 @@ import {
   type ProjectCaptureKind,
   type AgentAuditEntry,
   type AgentToken,
+  type AddGoalPlanInput,
+  type CreateGoalInput,
+  type Goal,
+  type UpdateGoalInput,
+  type UpdateGoalPlanInput,
   type CreateAgentTokenInput,
   type CreatedAgentToken,
   type UpdateProjectCaptureInput,
   projectCaptureSchema,
   agentTokenSchema,
+  goalSchema,
   agentAuditEntrySchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
@@ -807,6 +813,34 @@ export class ApiClient {
       input,
       projectCaptureSchema
     );
+  }
+
+  listProjectGoals(workspaceId: string): Promise<Goal[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/goals`, undefined, z.array(goalSchema));
+  }
+
+  createProjectGoal(workspaceId: string, input: CreateGoalInput): Promise<Goal> {
+    return this.request("POST", `/workspaces/${workspaceId}/goals`, input, goalSchema);
+  }
+
+  updateProjectGoal(workspaceId: string, goalId: string, input: UpdateGoalInput): Promise<Goal> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/goals/${goalId}`, input, goalSchema);
+  }
+
+  async deleteProjectGoal(workspaceId: string, goalId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/goals/${goalId}`, undefined, z.unknown());
+  }
+
+  addProjectGoalPlan(workspaceId: string, goalId: string, input: AddGoalPlanInput): Promise<Goal> {
+    return this.request("POST", `/workspaces/${workspaceId}/goals/${goalId}/plans`, input, goalSchema);
+  }
+
+  updateProjectGoalPlan(workspaceId: string, goalId: string, planId: string, input: UpdateGoalPlanInput): Promise<Goal> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/goals/${goalId}/plans/${planId}`, input, goalSchema);
+  }
+
+  removeProjectGoalPlan(workspaceId: string, goalId: string, planId: string): Promise<Goal> {
+    return this.request("DELETE", `/workspaces/${workspaceId}/goals/${goalId}/plans/${planId}`, undefined, goalSchema);
   }
 
   listAgentTokens(workspaceId: string): Promise<AgentToken[]> {

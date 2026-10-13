@@ -33,6 +33,7 @@ export const ORION_PLUGIN_IDS = [
   "projects-planning",
   "projects-ideas",
   "projects-problems",
+  "projects-goals",
   "inventory-alerts",
   "calendar-recurrence",
   "calendar-reminders",
@@ -319,6 +320,15 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Компактный месяц в боковом меню: точки отмечают дни с событиями и задачами со сроком; клик открывает календарь.",
     provides: ["Виджет «Мини-календарь» в сайдбаре"],
     disableBehavior: "Виджет пропадает из сайдбара; календарь и данные не затрагиваются.",
+    defaultEnabled: true
+  },
+  {
+    id: "projects-goals",
+    extendsModuleId: "projects",
+    label: "Глобальные цели",
+    summary: "Цель объединяет несколько планов — проектов — с весами; прогресс считается по задачам этих проектов, а не вводится руками.",
+    provides: ["Панель «Цели»", "Прогресс цели по планам"],
+    disableBehavior: "Панель «Цели» скрывается; цели и связи с проектами сохраняются и вернутся при повторном включении. Проекты не затрагиваются.",
     defaultEnabled: true
   },
   {

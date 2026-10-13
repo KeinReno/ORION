@@ -209,6 +209,8 @@ model Workspace {
   milestoneDependencies MilestoneDependency[]
   projectCaptures       ProjectCapture[]
   agentTokens           AgentToken[]
+  goals                 Goal[]
+  goalPlans             GoalPlan[]
   agentAuditEntries     AgentAuditEntry[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
@@ -255,6 +257,7 @@ model Project {
   milestones   Milestone[]
   projectStatusUpdates ProjectStatusUpdate[]
   captures     ProjectCapture[]
+  goalPlans    GoalPlan[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -1793,3 +1796,42 @@ model AgentAuditEntry {
   @@map("agent_audit_entries")
 }
 
+/// A global goal (plugin projects-goals): an outcome that several plans — projects — serve.
+/// Its progress is computed from the plans (see `goalProgress`), never stored.
+model Goal {
+  id          String    @id @default(uuid())
+  workspaceId String
+  title       String
+  description String    @default("")
+  /// "active" | "achieved" | "dropped"
+  status      String    @default("active")
+  dueAt       DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plans     GoalPlan[]
+
+  @@index([workspaceId])
+  @@map("goals")
+}
+
+/// A plan of a goal = one project with a weight. The project keeps its own milestones and
+/// tasks; deleting the project or the goal removes only this link.
+model GoalPlan {
+  id          String   @id @default(uuid())
+  workspaceId String
+  goalId      String
+  projectId   String
+  weight      Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  goal      Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, projectId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("goal_plans")
+}
