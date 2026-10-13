@@ -107,6 +107,7 @@ import {
   type AgentAuditEntry,
   type AgentToken,
   type ActivityEntry,
+  type AgentProposal,
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
@@ -119,6 +120,7 @@ import {
   agentTokenSchema,
   goalSchema,
   activityEntrySchema,
+  agentProposalSchema,
   agentAuditEntrySchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
@@ -815,6 +817,14 @@ export class ApiClient {
       input,
       projectCaptureSchema
     );
+  }
+
+  listAgentProposals(workspaceId: string): Promise<AgentProposal[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/proposals`, undefined, z.array(agentProposalSchema));
+  }
+
+  decideAgentProposal(workspaceId: string, proposalId: string, decision: "approve" | "reject"): Promise<AgentProposal> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/${proposalId}/${decision}`, {}, agentProposalSchema);
   }
 
   listActivity(workspaceId: string): Promise<ActivityEntry[]> {

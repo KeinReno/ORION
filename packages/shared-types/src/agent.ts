@@ -5,7 +5,7 @@ import { z } from "zod";
  * credential issued by a workspace member; it acts with that member's rights, inside
  * one workspace, and only for the scopes ticked at creation. It never widens access.
  */
-export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "agents:message"] as const;
+export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "agents:message", "agents:delegate"] as const;
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 
@@ -15,7 +15,8 @@ export const AGENT_SCOPE_LABEL: Record<AgentScope, string> = {
   "notes:read": "Читать заметки",
   "notes:write": "Создавать и менять заметки",
   "projects:read": "Читать проекты",
-  "agents:message": "Переписываться с другими агентами"
+  "agents:message": "Переписываться с другими агентами",
+  "agents:delegate": "Давать и брать задания у других агентов"
 };
 
 export const AGENT_TOKEN_PREFIX = "orion_agt_";
@@ -78,3 +79,65 @@ export const sendAgentMessageInputSchema = z.object({
   body: z.string().max(20_000).default("")
 });
 export type SendAgentMessageInput = z.infer<typeof sendAgentMessageInputSchema>;
+
+export const agentJobStatusSchema = z.enum(["pending", "in_progress", "done", "failed", "canceled"]);
+export type AgentJobStatus = z.infer<typeof agentJobStatusSchema>;
+
+export const agentJobSchema = z.object({
+  id: z.string(),
+  fromTokenId: z.string(),
+  fromName: z.string(),
+  toTokenId: z.string(),
+  toName: z.string(),
+  title: z.string(),
+  body: z.string(),
+  status: agentJobStatusSchema,
+  result: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type AgentJob = z.infer<typeof agentJobSchema>;
+
+export const createAgentJobInputSchema = z.object({
+  toTokenId: z.string().min(1),
+  title: z.string().trim().min(1, "Название обязательно").max(200),
+  body: z.string().max(20_000).default("")
+});
+export type CreateAgentJobInput = z.infer<typeof createAgentJobInputSchema>;
+
+/** The assignee reports progress; the giver may only cancel. */
+export const updateAgentJobInputSchema = z.object({
+  status: agentJobStatusSchema,
+  result: z.string().max(20_000).optional()
+});
+export type UpdateAgentJobInput = z.infer<typeof updateAgentJobInputSchema>;
+
+export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete"] as const;
+export const agentProposalActionSchema = z.enum(AGENT_PROPOSAL_ACTIONS);
+export type AgentProposalAction = z.infer<typeof agentProposalActionSchema>;
+
+export const AGENT_PROPOSAL_ACTION_LABEL: Record<AgentProposalAction, string> = {
+  "task.delete": "Удалить задачу",
+  "note.delete": "Удалить заметку"
+};
+
+export const agentProposalSchema = z.object({
+  id: z.string(),
+  tokenId: z.string(),
+  tokenName: z.string(),
+  action: agentProposalActionSchema,
+  targetId: z.string(),
+  targetTitle: z.string(),
+  reason: z.string(),
+  status: z.enum(["pending", "approved", "rejected"]),
+  createdAt: z.string(),
+  decidedAt: z.string().nullable()
+});
+export type AgentProposal = z.infer<typeof agentProposalSchema>;
+
+export const createAgentProposalInputSchema = z.object({
+  action: agentProposalActionSchema,
+  targetId: z.string().min(1),
+  reason: z.string().max(2000).default("")
+});
+export type CreateAgentProposalInput = z.infer<typeof createAgentProposalInputSchema>;

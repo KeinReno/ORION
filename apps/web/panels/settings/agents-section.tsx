@@ -1,7 +1,7 @@
 "use client";
 
-import { useAgentAuditLog, useAgentTokens, useCreateAgentToken, useRevokeAgentToken } from "@orion/core-react";
-import { AGENT_SCOPES, AGENT_SCOPE_LABEL, type AgentScope, type CreatedAgentToken } from "@orion/shared-types";
+import { useAgentAuditLog, useAgentProposals, useAgentTokens, useCreateAgentToken, useDecideAgentProposal, useRevokeAgentToken } from "@orion/core-react";
+import { AGENT_PROPOSAL_ACTION_LABEL, AGENT_SCOPES, AGENT_SCOPE_LABEL, type AgentScope, type CreatedAgentToken } from "@orion/shared-types";
 import { Badge, Button, Card, ConfirmDialog, Input, Select, Skeleton, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
@@ -21,6 +21,8 @@ export function AgentsSettings(): React.ReactElement {
   const { toast } = useToast();
   const tokens = useAgentTokens(workspaceId);
   const audit = useAgentAuditLog(workspaceId);
+  const proposals = useAgentProposals(workspaceId);
+  const decide = useDecideAgentProposal(workspaceId);
   const create = useCreateAgentToken(workspaceId);
   const revoke = useRevokeAgentToken(workspaceId);
 
@@ -62,6 +64,41 @@ export function AgentsSettings(): React.ReactElement {
         <code className="rounded bg-muted px-1">node scripts/orion-mcp.mjs</code> с переменной{" "}
         <code className="rounded bg-muted px-1">ORION_AGENT_TOKEN</code>.
       </p>
+
+      {(proposals.data ?? []).some((p) => p.status === "pending") ? (
+        <section aria-label="Запросы агентов" className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
+          <h3 className="text-label font-medium">Агенты просят подтвердить действие</h3>
+          <ul className="space-y-2">
+            {(proposals.data ?? [])
+              .filter((p) => p.status === "pending")
+              .map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-2 text-label">
+                  <span>
+                    <b>{p.tokenName}</b>: {AGENT_PROPOSAL_ACTION_LABEL[p.action].toLowerCase()} «{p.targetTitle}»
+                    {p.reason ? <span className="text-muted-foreground"> — {p.reason}</span> : null}
+                  </span>
+                  <span className="ml-auto flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={decide.isPending}
+                      onClick={() => decide.mutate({ proposalId: p.id, decision: "reject" }, { onError: (error) => toast({ title: "Не удалось отклонить", description: describeError(error), tone: "danger" }) })}
+                    >
+                      Отклонить
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={decide.isPending}
+                      onClick={() => decide.mutate({ proposalId: p.id, decision: "approve" }, { onError: (error) => toast({ title: "Не удалось выполнить", description: describeError(error), tone: "danger" }) })}
+                    >
+                      Подтвердить
+                    </Button>
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
 
       {issued ? (
         <Card className="space-y-2 border-warning/40 bg-warning/10 p-4">

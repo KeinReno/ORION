@@ -230,6 +230,75 @@ describe("AI Bridge (agent tokens)", () => {
     expect((await request("/ai/v1/tasks", { method: "GET", token: a.secret })).status).toBe(403);
   });
 
+  it("задания между агентами: исполнитель отчитывается, выдавший только отменяет, итог финален", async () => {
+    const alice = await register("alice-job");
+    const giver = await issue(alice, ["agents:delegate"]);
+    const worker = await issue(alice, ["agents:delegate"]);
+    const outsider = await issue(alice, ["tasks:read"]);
+
+    const created = await request<{ id: string; status: string; toName: string }>("/ai/v1/jobs", {
+      method: "POST", token: giver.secret, body: { toTokenId: worker.id, title: "Свести отчёт", body: "за неделю" }
+    });
+    expect(created.status).toBe(201);
+    expect(created.data.status).toBe("pending");
+    const path = `/ai/v1/jobs/${created.data.id}`;
+
+    expect((await request("/ai/v1/jobs", { method: "POST", token: giver.secret, body: { toTokenId: giver.id, title: "я себе" } })).status).toBe(400);
+    expect((await request("/ai/v1/jobs", { method: "POST", token: outsider.secret, body: { toTokenId: worker.id, title: "x" } })).status).toBe(403);
+    expect((await request<unknown[]>("/ai/v1/jobs", { method: "GET", token: worker.secret })).data).toHaveLength(1);
+
+    // The giver cannot mark it done; a third party cannot see it at all.
+    expect((await request(path, { method: "PATCH", token: giver.secret, body: { status: "done" } })).status).toBe(400);
+    const stranger = await issue(alice, ["agents:delegate"]);
+    expect((await request(path, { method: "PATCH", token: stranger.secret, body: { status: "done" } })).status).toBe(404);
+    // The worker cannot cancel on the giver's behalf, but can progress and finish.
+    expect((await request(path, { method: "PATCH", token: worker.secret, body: { status: "canceled" } })).status).toBe(400);
+    expect((await request(path, { method: "PATCH", token: worker.secret, body: { status: "in_progress" } })).status).toBe(200);
+    const done = await request<{ status: string; result: string }>(path, { method: "PATCH", token: worker.secret, body: { status: "done", result: "готово" } });
+    expect(done.data).toMatchObject({ status: "done", result: "готово" });
+    // A finished job is final.
+    expect((await request(path, { method: "PATCH", token: giver.secret, body: { status: "canceled" } })).status).toBe(409);
+  });
+
+  it("агент не удаляет сам: запрос на удаление выполняет только человек, один раз, под своими правами", async () => {
+    const alice = await register("alice-del");
+    const bob = await register("bob-del");
+    const agent = await issue(alice, ["tasks:write", "notes:write"]);
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const task = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Лишняя" } });
+
+    // There is no delete verb for agents, and a proposal changes nothing by itself.
+    expect((await request(`/ai/v1/tasks/${task.data.id}`, { method: "DELETE", token: agent.secret })).status).toBe(404);
+    const proposal = await request<{ id: string; status: string; targetTitle: string }>("/ai/v1/proposals", {
+      method: "POST", token: agent.secret, body: { action: "task.delete", targetId: task.data.id, reason: "дубль" }
+    });
+    expect(proposal.status).toBe(201);
+    expect(proposal.data).toMatchObject({ status: "pending", targetTitle: "Лишняя" });
+    const again = await request<{ id: string }>("/ai/v1/proposals", { method: "POST", token: agent.secret, body: { action: "task.delete", targetId: task.data.id } });
+    expect(again.data.id).toBe(proposal.data.id); // no duplicate pending request
+    const stillThere = await request<Array<{ id: string }>>(`${ws}/tasks`, { method: "GET", token: alice.accessToken });
+    expect(stillThere.data.map((t) => t.id)).toContain(task.data.id);
+
+    // An agent cannot approve its own request (agent tokens do not work on the human API).
+    expect((await request(`${ws}/agent-tokens/proposals/${proposal.data.id}/approve`, { method: "POST", token: agent.secret, body: {} })).status).toBe(401);
+    // A non-member cannot decide it.
+    expect([403, 404]).toContain((await request(`${ws}/agent-tokens/proposals/${proposal.data.id}/approve`, { method: "POST", token: bob.accessToken, body: {} })).status);
+
+    const approved = await request<{ status: string }>(`${ws}/agent-tokens/proposals/${proposal.data.id}/approve`, { method: "POST", token: alice.accessToken, body: {} });
+    expect(approved.data.status).toBe("approved");
+    const gone = await request<Array<{ id: string }>>(`${ws}/tasks`, { method: "GET", token: alice.accessToken });
+    expect(gone.data.map((t) => t.id)).not.toContain(task.data.id);
+    expect((await request(`${ws}/agent-tokens/proposals/${proposal.data.id}/approve`, { method: "POST", token: alice.accessToken, body: {} })).status).toBe(409);
+
+    // Rejecting leaves the object alone; missing scope is refused.
+    const note = await request<{ id: string }>(`${ws}/notes`, { method: "POST", token: alice.accessToken, body: { title: "Заметка" } });
+    const second = await request<{ id: string }>("/ai/v1/proposals", { method: "POST", token: agent.secret, body: { action: "note.delete", targetId: note.data.id } });
+    await request(`${ws}/agent-tokens/proposals/${second.data.id}/reject`, { method: "POST", token: alice.accessToken, body: {} });
+    expect((await request(`${ws}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken })).status).toBe(200);
+    const readOnly = await issue(alice, ["tasks:read"]);
+    expect((await request("/ai/v1/proposals", { method: "POST", token: readOnly.secret, body: { action: "task.delete", targetId: task.data.id } })).status).toBe(403);
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

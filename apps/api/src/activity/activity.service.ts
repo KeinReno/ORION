@@ -34,7 +34,11 @@ const AGENT_ACTION_RU: Record<string, string> = {
   "agents.list": "посмотрел список агентов",
   "messages.send": "отправил сообщение агенту",
   "messages.inbox": "прочитал входящие",
-  "messages.read": "отметил сообщение прочитанным"
+  "messages.read": "отметил сообщение прочитанным",
+  "jobs.list": "посмотрел задания",
+  "jobs.create": "выдал задание другому агенту",
+  "jobs.update": "обновил задание",
+  "proposals.create": "попросил подтвердить удаление"
 };
 
 /**

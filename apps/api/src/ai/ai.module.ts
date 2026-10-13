@@ -6,6 +6,7 @@ import { ProjectsModule } from "../projects/projects.module";
 import { TasksModule } from "../tasks/tasks.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { AgentTokenGuard } from "./agent-token.guard";
+import { AgentJobsService } from "./agent-jobs.service";
 import { AgentTokensService } from "./agent-tokens.service";
 import { AgentTokensController, AiController } from "./ai.controller";
 
@@ -13,6 +14,6 @@ import { AgentTokensController, AiController } from "./ai.controller";
 @Module({
   imports: [AuthModule, WorkspacesModule, ModulesModule, TasksModule, NotesModule, ProjectsModule],
   controllers: [AgentTokensController, AiController],
-  providers: [AgentTokensService, AgentTokenGuard]
+  providers: [AgentTokensService, AgentJobsService, AgentTokenGuard]
 })
 export class AiModule {}

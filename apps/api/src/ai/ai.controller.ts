@@ -14,7 +14,10 @@ import {
   UseGuards
 } from "@nestjs/common";
 import {
+  createAgentJobInputSchema,
+  createAgentProposalInputSchema,
   createAgentTokenInputSchema,
+  updateAgentJobInputSchema,
   sendAgentMessageInputSchema,
   createNoteInputSchema,
   createTaskInputSchema,
@@ -22,6 +25,11 @@ import {
   updateNoteInputSchema,
   updateTaskInputSchema,
   type AgentAuditEntry,
+  type AgentJob,
+  type AgentProposal,
+  type CreateAgentJobInput,
+  type CreateAgentProposalInput,
+  type UpdateAgentJobInput,
   type AgentMessage,
   type AgentPeer,
   type SendAgentMessageInput,
@@ -47,6 +55,7 @@ import { NotesService } from "../notes/notes.service";
 import { ProjectsService } from "../projects/projects.service";
 import { TasksService } from "../tasks/tasks.service";
 import { AgentTokenGuard, type AgentRequest } from "./agent-token.guard";
+import { AgentJobsService } from "./agent-jobs.service";
 import { AgentTokensService, type AgentContext } from "./agent-tokens.service";
 
 /** Everything an agent may change on a task — no delete, no reassignment, no dependency rewiring. */
@@ -70,7 +79,10 @@ const agentNotePatchSchema = updateNoteInputSchema.pick({
 @UseGuards(JwtAuthGuard)
 @Controller("workspaces/:workspaceId/agent-tokens")
 export class AgentTokensController {
-  constructor(private readonly tokens: AgentTokensService) {}
+  constructor(
+    private readonly tokens: AgentTokensService,
+    private readonly jobs: AgentJobsService
+  ) {}
 
   @Get()
   list(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AgentToken[]> {
@@ -89,6 +101,29 @@ export class AgentTokensController {
   @Get("audit")
   audit(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AgentAuditEntry[]> {
     return this.tokens.audit(user.userId, workspaceId);
+  }
+
+  @Get("proposals")
+  proposals(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AgentProposal[]> {
+    return this.jobs.listProposals(user.userId, workspaceId);
+  }
+
+  @Post("proposals/:proposalId/approve")
+  approve(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("proposalId") proposalId: string
+  ): Promise<AgentProposal> {
+    return this.jobs.approve(user.userId, workspaceId, proposalId);
+  }
+
+  @Post("proposals/:proposalId/reject")
+  reject(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("proposalId") proposalId: string
+  ): Promise<AgentProposal> {
+    return this.jobs.reject(user.userId, workspaceId, proposalId);
   }
 
   @Delete(":tokenId")
@@ -113,6 +148,7 @@ export class AgentTokensController {
 export class AiController {
   constructor(
     private readonly tokens: AgentTokensService,
+    private readonly jobs: AgentJobsService,
     private readonly modules: ModulesService,
     private readonly tasks: TasksService,
     private readonly notes: NotesService,
@@ -204,6 +240,39 @@ export class AiController {
   @HttpCode(204)
   markRead(@Req() req: AgentRequest, @Param("messageId") messageId: string): Promise<void> {
     return this.run(req, "agents:message", null, "messages.read", `message:${messageId}`, (a) => this.tokens.markRead(a, messageId));
+  }
+
+  @Get("jobs")
+  listJobs(@Req() req: AgentRequest): Promise<AgentJob[]> {
+    return this.run(req, "agents:delegate", null, "jobs.list", null, (a) => this.jobs.listJobs(a));
+  }
+
+  @Post("jobs")
+  createJob(
+    @Req() req: AgentRequest,
+    @Body(new ZodValidationPipe(createAgentJobInputSchema)) body: CreateAgentJobInput
+  ): Promise<AgentJob> {
+    return this.run(req, "agents:delegate", null, "jobs.create", `agent:${body.toTokenId}`, (a) => this.jobs.createJob(a, body));
+  }
+
+  @Patch("jobs/:jobId")
+  updateJob(
+    @Req() req: AgentRequest,
+    @Param("jobId") jobId: string,
+    @Body(new ZodValidationPipe(updateAgentJobInputSchema)) body: UpdateAgentJobInput
+  ): Promise<AgentJob> {
+    return this.run(req, "agents:delegate", null, "jobs.update", `job:${jobId}`, (a) => this.jobs.updateJob(a, jobId, body));
+  }
+
+  /** Deletion is never executed for an agent: it files a request a human approves in Settings. */
+  @Post("proposals")
+  propose(
+    @Req() req: AgentRequest,
+    @Body(new ZodValidationPipe(createAgentProposalInputSchema)) body: CreateAgentProposalInput
+  ): Promise<AgentProposal> {
+    const scope: AgentScope = body.action === "task.delete" ? "tasks:write" : "notes:write";
+    const moduleId: OrionModuleId = body.action === "task.delete" ? "tasks" : "notes";
+    return this.run(req, scope, moduleId, "proposals.create", `${body.action}:${body.targetId}`, (a) => this.jobs.propose(a, body));
   }
 
   @Get("projects")

@@ -213,6 +213,8 @@ model Workspace {
   goalPlans             GoalPlan[]
   agentAuditEntries     AgentAuditEntry[]
   agentMessages         AgentMessage[]
+  agentTasks            AgentTask[]
+  agentProposals        AgentProposal[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
   /// настроенная удалёнка на рабочее пространство на этом узле.
@@ -1775,6 +1777,9 @@ model AgentToken {
   audit     AgentAuditEntry[]
   sent      AgentMessage[]    @relation("AgentMessageFrom")
   received  AgentMessage[]    @relation("AgentMessageTo")
+  jobsGiven AgentTask[]       @relation("AgentTaskFrom")
+  jobsTaken AgentTask[]       @relation("AgentTaskTo")
+  proposals AgentProposal[]
 
   @@index([workspaceId])
   @@index([createdById])
@@ -1858,4 +1863,54 @@ model AgentMessage {
   @@index([workspaceId])
   @@index([toTokenId, readAt])
   @@map("agent_messages")
+}
+
+/// A structured job one agent hands to another (ADR-0007). The assignee works under its
+/// OWN token's rights; the job carries text and a result, never the giver's permissions.
+model AgentTask {
+  id          String   @id @default(uuid())
+  workspaceId String
+  fromTokenId String
+  toTokenId   String
+  title       String
+  body        String   @default("")
+  /// "pending" | "in_progress" | "done" | "failed" | "canceled"
+  status      String   @default("pending")
+  result      String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  from      AgentToken @relation("AgentTaskFrom", fields: [fromTokenId], references: [id], onDelete: Cascade)
+  to        AgentToken @relation("AgentTaskTo", fields: [toTokenId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([toTokenId, status])
+  @@index([fromTokenId])
+  @@map("agent_tasks")
+}
+
+/// A destructive action an agent may only PROPOSE: it runs when a human approves it, under
+/// that human's rights (ADR-0007). `targetTitle` is captured at proposal time so the human
+/// sees what they are approving even if the object is renamed meanwhile.
+model AgentProposal {
+  id          String    @id @default(uuid())
+  workspaceId String
+  tokenId     String
+  /// "task.delete" | "note.delete"
+  action      String
+  targetId    String
+  targetTitle String
+  reason      String    @default("")
+  /// "pending" | "approved" | "rejected"
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token     AgentToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([tokenId])
+  @@map("agent_proposals")
 }
