@@ -21,6 +21,7 @@ model User {
   passwordChangedAt DateTime?
   createdAt         DateTime           @default(now())
   memberships       WorkspaceMember[]
+  agentTokens       AgentToken[]
   refreshTokens     RefreshToken[]
   preference        UserPreference?
   sentInvites       WorkspaceInvite[]
@@ -207,6 +208,8 @@ model Workspace {
   milestones            Milestone[]
   milestoneDependencies MilestoneDependency[]
   projectCaptures       ProjectCapture[]
+  agentTokens           AgentToken[]
+  agentAuditEntries     AgentAuditEntry[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
   /// настроенная удалёнка на рабочее пространство на этом узле.
@@ -1747,3 +1750,46 @@ model ProjectStatusUpdate {
   @@index([projectId, createdAt])
   @@map("project_status_updates")
 }
+
+/// ORION AI Bridge (ADR-0007). Only the sha256 of the secret is stored; the secret is
+/// shown once at creation. The token acts as `createdById` inside `workspaceId`.
+model AgentToken {
+  id          String    @id @default(uuid())
+  workspaceId String
+  createdById String
+  name        String
+  tokenHash   String    @unique
+  prefix      String
+  scopes      String[]
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  audit     AgentAuditEntry[]
+
+  @@index([workspaceId])
+  @@index([createdById])
+  @@map("agent_tokens")
+}
+
+/// Append-only record of what an agent did (or tried to). Kept when the token is deleted.
+model AgentAuditEntry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  tokenId     String?
+  tokenName   String
+  action      String
+  resource    String?
+  status      Int
+  createdAt   DateTime @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token     AgentToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("agent_audit_entries")
+}
+

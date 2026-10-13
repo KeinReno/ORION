@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./agent";
 export * from "./workspace";
 export * from "./workspace-invite";
 export * from "./plugins";

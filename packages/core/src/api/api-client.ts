@@ -104,8 +104,15 @@ import {
   type CreateProjectProblemInput,
   type ProjectCapture,
   type ProjectCaptureKind,
+  type AgentAuditEntry,
+  type AgentToken,
+  type CreateAgentTokenInput,
+  type CreatedAgentToken,
   type UpdateProjectCaptureInput,
   projectCaptureSchema,
+  agentTokenSchema,
+  agentAuditEntrySchema,
+  createdAgentTokenSchema,
   type UpdateTaskCommentInput,
   type TaskActivity,
   type TaskComment,
@@ -800,6 +807,23 @@ export class ApiClient {
       input,
       projectCaptureSchema
     );
+  }
+
+  listAgentTokens(workspaceId: string): Promise<AgentToken[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens`, undefined, z.array(agentTokenSchema));
+  }
+
+  /** The only response that carries the token secret. */
+  createAgentToken(workspaceId: string, input: CreateAgentTokenInput): Promise<CreatedAgentToken> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens`, input, createdAgentTokenSchema);
+  }
+
+  async revokeAgentToken(workspaceId: string, tokenId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/agent-tokens/${tokenId}`, undefined, z.unknown());
+  }
+
+  listAgentAudit(workspaceId: string): Promise<AgentAuditEntry[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/audit`, undefined, z.array(agentAuditEntrySchema));
   }
 
   async deleteProjectCapture(workspaceId: string, projectId: string, captureId: string, kind: ProjectCaptureKind): Promise<void> {

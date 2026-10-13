@@ -42,12 +42,14 @@ import { BackgroundEffectSettingsForm } from "./settings/background-effect-form"
 import { ModulesSettings } from "./settings/modules-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
+import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
 
 type Tab =
   | "profile"
+  | "agents"
   | "security"
   | "notifications"
   | "appearance"
@@ -69,6 +71,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "workspace", label: "Пространство" },
   { value: "spheres", label: "Сферы" },
   { value: "members", label: "Участники" },
+  { value: "agents", label: "ИИ-агенты" },
   { value: "about", label: "О приложении" }
 ];
 
@@ -514,6 +517,12 @@ export function SettingsPanel(): React.ReactElement {
         {tab === "members" ? (
           <PanelSection title="Участники пространства">
             <MembersSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "agents" ? (
+          <PanelSection title="ИИ-агенты (AI Bridge)">
+            <AgentsSettings />
           </PanelSection>
         ) : null}
 

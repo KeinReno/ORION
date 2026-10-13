@@ -23,6 +23,7 @@ import { MarketsModule } from "./markets/markets.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { MilestonesModule } from "./milestones/milestones.module";
 import { ModulesModule } from "./modules/modules.module";
+import { AiModule } from "./ai/ai.module";
 import { PluginsModule } from "./plugins/plugins.module";
 import { OverviewModule } from "./overview/overview.module";
 import { SharedGrantModule } from "./shared/shared.module";
@@ -36,6 +37,7 @@ import { UsersModule } from "./users/users.module";
     WorkspacesModule,
     ModulesModule,
     PluginsModule,
+    AiModule,
     NotesModule,
     TasksModule,
     EventsModule,
