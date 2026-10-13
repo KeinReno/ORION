@@ -31,9 +31,12 @@ import {
   cx,
   useToast
 } from "@orion/ui";
-import { ArrowLeft, MoreHorizontal, Play, Square, Trash2, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Square, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EntityLinksSection } from "../../components/entity-links";
+import { ResizablePane } from "../../components/resizable-pane";
+import { openPanel } from "../../lib/panel-bus";
+import { detachPanelToWindow } from "../../lib/panel-window";
 import { describeError } from "../../lib/error-message";
 import { relativeTime } from "../../lib/format";
 import {
@@ -82,6 +85,7 @@ export function TaskDetail({
   parentOptions,
   timeOn,
   compact,
+  standalone,
   onSave,
   onClose,
   onDelete,
@@ -98,6 +102,8 @@ export function TaskDetail({
   timeOn: boolean;
   /** Narrow panel: the pane replaces the list, so "close" reads as "back". */
   compact: boolean;
+  /** Already its own dock panel / window: no "open in a panel" actions. */
+  standalone?: boolean;
   /** Resolves with the saved task (its new revision is the base of the next edit). */
   onSave: (taskId: string, patch: UpdateTaskInput) => Promise<Task | void>;
   onClose: () => void;
@@ -247,6 +253,12 @@ export function TaskDetail({
   const showParent = parentOptions !== undefined && ((parentOptions?.length ?? 0) > 0 || Boolean(fields.parentId));
 
   const menuItems: React.ComponentProps<typeof DropdownMenu>["items"] = [
+    ...(standalone
+      ? []
+      : [
+          { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`task:${task.id}`, task.title) },
+          { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`task:${task.id}`, task.title) }
+        ]),
     { label: "Удалить задачу", icon: Trash2, tone: "danger", onSelect: onDelete }
   ];
 
@@ -513,5 +525,26 @@ function TaskHistory({ workspaceId, taskId }: { workspaceId: string | undefined;
           </li>
         ))}
     </ul>
+  );
+}
+
+/**
+ * Where the detail pane sits next to a list: a resizable column when there is room
+ * (`split`), otherwise it fills the panel and replaces the list.
+ */
+export function DetailSlot({
+  split,
+  className,
+  children
+}: {
+  split: boolean;
+  className?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  if (!split) return <div className={cx(className, "flex-1")}>{children}</div>;
+  return (
+    <ResizablePane storageKey="orion.task-detail.width.v1" className={cx(className, "border-l")}>
+      {children}
+    </ResizablePane>
   );
 }

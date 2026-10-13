@@ -11,7 +11,7 @@ import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
 import { TASK_STATUS_LABEL } from "../task-form";
 import { TaskCard } from "../tasks/task-card";
 import { parentOptions, subtaskProgressMap } from "../../lib/task-structure";
-import { TaskDetail } from "../tasks/task-detail";
+import { DetailSlot, TaskDetail } from "../tasks/task-detail";
 import { TaskMatrix } from "./task-matrix";
 import { TaskRow } from "./task-row";
 
@@ -195,10 +195,11 @@ export function ProjectTasks({
       ) : null}
 
       {opened ? (
-        <div
+        <DetailSlot
+          split={split}
           className={cx(
             "min-w-0 overflow-hidden rounded-xl border border-border",
-            split ? "sticky top-0 h-[calc(100dvh-14rem)] min-h-[28rem] w-[26rem] shrink-0" : "min-h-[28rem] flex-1"
+            split ? "sticky top-0 h-[calc(100dvh-14rem)] min-h-[28rem]" : "min-h-[28rem]"
           )}
         >
           <TaskDetail
@@ -217,7 +218,7 @@ export function ProjectTasks({
             onDelete={() => setPendingDelete(opened)}
             onOpenTask={(id) => onOpenTask(id)}
           />
-        </div>
+        </DetailSlot>
       ) : null}
 
       <ConfirmDialog

@@ -48,7 +48,7 @@ import {
   subtaskProgressMap,
   useTaskReorder
 } from "../lib/task-structure";
-import { TaskDetail } from "./tasks/task-detail";
+import { DetailSlot, TaskDetail } from "./tasks/task-detail";
 import { matchesTaskView } from "../lib/task-view-filter";
 
 type GroupBy = "status" | "project" | "due" | "priority";
@@ -718,7 +718,7 @@ export function TasksPanel(): React.ReactElement {
       </div>
       ) : null}
       {editing ? (
-        <div className={cx("min-h-0 min-w-0", splitDetail ? "w-[26rem] shrink-0 border-l border-border" : "flex-1")}>
+        <DetailSlot split={splitDetail} className="min-h-0 min-w-0 border-border">
           <TaskDetail
             key={editing.id}
             task={editing}
@@ -735,7 +735,7 @@ export function TasksPanel(): React.ReactElement {
             onDelete={() => setPendingDelete(editing)}
             onOpenTask={setEditingId}
           />
-        </div>
+        </DetailSlot>
       ) : null}
       </div>
 

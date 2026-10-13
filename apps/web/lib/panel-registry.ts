@@ -32,7 +32,7 @@ import { createElement, type FunctionComponent } from "react";
  */
 export interface PanelComponentProps {
   params?: { instanceId?: string };
-  api?: { setTitle: (title: string) => void };
+  api?: { setTitle: (title: string) => void; close?: () => void };
 }
 
 export interface PanelDefinition {
@@ -59,6 +59,7 @@ export interface PanelDefinition {
 }
 
 const LazyDashboardPanel = dynamic(() => import("../panels/DashboardPanel").then((module) => module.DashboardPanel), { ssr: false });
+const LazyTaskDetailPanel = dynamic(() => import("../panels/TaskDetailPanel").then((module) => module.TaskDetailPanel), { ssr: false });
 const LazyTasksPanel = dynamic(() => import("../panels/TasksPanel").then((module) => module.TasksPanel), { ssr: false });
 const LazyCalendarPanel = dynamic(() => import("../panels/CalendarPanel").then((module) => module.CalendarPanel), { ssr: false });
 const LazyNotesPanel = dynamic(() => import("../panels/NotesPanel").then((module) => module.NotesPanel), { ssr: false });
@@ -92,6 +93,7 @@ const TasksPanel: FunctionComponent = () => createElement(LazyTasksPanel);
 const CalendarPanel: FunctionComponent = () => createElement(LazyCalendarPanel);
 const NotesPanel: FunctionComponent = () => createElement(LazyNotesPanel);
 const ProjectsPanel: FunctionComponent = () => createElement(LazyProjectsPanel);
+const TaskDetailPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTaskDetailPanel, props);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
 const ProjectPlanPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectPlanPanel, props);
@@ -163,6 +165,16 @@ export const panelRegistry: PanelDefinition[] = [
     hideFromNav: true,
     instanced: true,
     navParent: "projects"
+  },
+  {
+    id: "task",
+    label: "Задача",
+    icon: ListTodo,
+    component: TaskDetailPanel,
+    moduleId: "tasks",
+    hideFromNav: true,
+    instanced: true,
+    navParent: "tasks"
   },
   { id: "time", label: "Время", icon: Timer, component: TimePanel, moduleId: "time", group: "Работа" },
   { id: "habits", label: "Привычки", icon: Target, component: HabitsPanel, moduleId: "habits", group: "Работа" },
