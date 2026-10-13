@@ -32,6 +32,7 @@ export * from "./use-lists";
 export * from "./use-inventory";
 export * from "./use-milestones";
 export * from "./use-project-updates";
+export * from "./use-project-captures";
 export * from "./use-plugins";
 export * from "./use-overview";
 export * from "./use-shared";

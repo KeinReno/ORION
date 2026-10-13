@@ -84,6 +84,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "Task", snapshotKey: "tasks", policy: "included", reason: "Самоссылающееся дерево (parentId) — вставляется в топологическом порядке, не в порядке findMany." },
   { model: "TaskDependency", snapshotKey: "taskDependencies", policy: "included", reason: "Связи между задачами, требуют, чтобы обе задачи уже были вставлены." },
   { model: "ProjectStatusUpdate", snapshotKey: "projectStatusUpdates", policy: "included", reason: "Ручные отчёты о состоянии проекта (UI-05) — пользовательский контент." },
+  { model: "ProjectCapture", snapshotKey: "projectCaptures", policy: "included", reason: "Идеи и проблемы проекта — пользовательский текст, привязанный к Project; taskId ссылается на уже вставленную задачу." },
   { model: "TaskComment", snapshotKey: "taskComments", policy: "included", reason: "Комментарии задач (S17) — пользовательский контент, часть истории задачи." },
   { model: "TaskActivity", snapshotKey: "taskActivities", policy: "included", reason: "Журнал изменений статуса/исполнителя/срока (S17) — append-only аудит." },
   { model: "SavedTaskView", snapshotKey: "savedTaskViews", policy: "included", reason: "Сохранённые виды доски задач." },

@@ -154,6 +154,11 @@ const ProjectOverviewPlan = dynamic<ProjectOverviewPlanSlotProps>(() => import("
 contribute("projects.tabs", { pluginId: "projects-planning", component: ProjectPlanTab, order: 20, meta: { tabId: "plan", label: "План", needsModule: "tasks" } });
 contribute("projects.overview.plan", { pluginId: "projects-planning", component: ProjectOverviewPlan, order: 10 });
 
+const ProjectIdeasTab = dynamic<ProjectTabSlotProps>(() => import("./project-captures/ideas-tab").then((m) => m.ProjectIdeasTab), { ssr: false });
+const ProjectProblemsTab = dynamic<ProjectTabSlotProps>(() => import("./project-captures/problems-tab").then((m) => m.ProjectProblemsTab), { ssr: false });
+contribute("projects.tabs", { pluginId: "projects-ideas", component: ProjectIdeasTab, order: 30, meta: { tabId: "ideas", label: "Идеи" } });
+contribute("projects.tabs", { pluginId: "projects-problems", component: ProjectProblemsTab, order: 40, meta: { tabId: "problems", label: "Проблемы" } });
+
 contribute("inventory.alerts", {
   pluginId: "inventory-alerts",
   component: NoVisual as unknown as ComponentType<InventoryAlertsSlotProps>,

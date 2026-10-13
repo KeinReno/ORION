@@ -88,6 +88,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // UI-05: authorId (User) is identity-excluded and must exist at the restore
   // target, same precondition as TaskComment.userId; projects load earlier.
   spec("projectStatusUpdates", (tx) => tx.projectStatusUpdate),
+  // Ideas/problems. taskId is nullable and points at a task loaded above;
+  // a null link does not wait on tasks, a set one does.
+  spec("projectCaptures", (tx) => tx.projectCapture),
   spec("milestoneDependencies", (tx) => tx.milestoneDependency),
   spec("events", (tx) => tx.event),
   spec("eventOverrides", (tx) => tx.eventOverride),

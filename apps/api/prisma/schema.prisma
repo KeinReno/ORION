@@ -206,6 +206,7 @@ model Workspace {
   inventoryMovements    InventoryMovement[]
   milestones            Milestone[]
   milestoneDependencies MilestoneDependency[]
+  projectCaptures       ProjectCapture[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
   /// настроенная удалёнка на рабочее пространство на этом узле.
@@ -250,6 +251,7 @@ model Project {
   inventoryItems InventoryItem[]
   milestones   Milestone[]
   projectStatusUpdates ProjectStatusUpdate[]
+  captures     ProjectCapture[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -503,6 +505,7 @@ model Task {
   milestone  Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   comments   TaskComment[]
   activities TaskActivity[]
+  captures   ProjectCapture[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -511,6 +514,54 @@ model Task {
   @@index([assigneeId])
   @@index([milestoneId])
   @@map("tasks")
+}
+
+/// A short note pinned to one project: an idea ("a feature I just thought of")
+/// or a problem ("a bug, something I dislike, something to fix"). It is not a
+/// Note and not a Task — the thought stays here until the user explicitly
+/// turns it into a task of this project. Other hosts (finance, home) are a
+/// later plugin with the same shape, not extra columns on this table.
+enum ProjectCaptureKind {
+  idea
+  problem
+}
+
+enum ProjectCaptureStatus {
+  open
+  promoted
+  dismissed
+}
+
+/// Only meaningful for `problem`. Ideas leave this null.
+enum ProjectCaptureSeverity {
+  annoyance
+  bug
+  fix
+}
+
+model ProjectCapture {
+  id          String                  @id @default(uuid())
+  workspaceId String
+  projectId   String
+  kind        ProjectCaptureKind
+  title       String
+  body        String                  @default("")
+  status      ProjectCaptureStatus    @default(open)
+  severity    ProjectCaptureSeverity?
+  /// Set when the user turns this into a task. The task then lives on its
+  /// own: deleting the task clears the link (SetNull) and the thought stays.
+  taskId      String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId, kind])
+  @@index([taskId])
+  @@map("project_captures")
 }
 
 /// ORION S17 «Комментарии и журнал задач». A free-text comment on a task,

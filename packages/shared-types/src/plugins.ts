@@ -31,6 +31,8 @@ export const ORION_PLUGIN_IDS = [
   "tasks-recurrence",
   "tasks-planning",
   "projects-planning",
+  "projects-ideas",
+  "projects-problems",
   "inventory-alerts",
   "calendar-recurrence",
   "calendar-reminders",
@@ -289,6 +291,24 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Вкладка «План» в проекте", "Блок «План» в обзоре", "Панель и окно «План проекта»"],
     disableBehavior:
       "Вкладка, блок в обзоре и панель плана скрываются (открытая панель плана закрывается); вехи и даты задач сохраняются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "projects-ideas",
+    extendsModuleId: "projects",
+    label: "Идеи",
+    summary: "Короткие мысли, закреплённые за проектом: новая фича, направление, то, что не хочется забыть. Из идеи можно сделать задачу этого проекта.",
+    provides: ["Вкладка «Идеи» в проекте", "Кнопка «Сделать задачей»"],
+    disableBehavior: "Вкладка «Идеи» скрывается; записанные идеи сохраняются и вернутся при повторном включении. Уже созданные из них задачи остаются задачами.",
+    defaultEnabled: true
+  },
+  {
+    id: "projects-problems",
+    extendsModuleId: "projects",
+    label: "Проблемы",
+    summary: "То, что не нравится в проекте, найденные баги и то, что нужно поправить — рядом с проектом, пока из записи не сделана задача.",
+    provides: ["Вкладка «Проблемы» в проекте", "Пометки «Не нравится», «Баг», «Поправить»", "Кнопка «Сделать задачей»"],
+    disableBehavior: "Вкладка «Проблемы» скрывается; записи сохраняются. Уже созданные из них задачи остаются задачами.",
     defaultEnabled: true
   },
   {

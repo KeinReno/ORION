@@ -100,6 +100,12 @@ import {
   type CreateProjectUpdateInput,
   type ProjectUpdate,
   projectUpdateSchema,
+  type CreateProjectCaptureInput,
+  type CreateProjectProblemInput,
+  type ProjectCapture,
+  type ProjectCaptureKind,
+  type UpdateProjectCaptureInput,
+  projectCaptureSchema,
   type UpdateTaskCommentInput,
   type TaskActivity,
   type TaskComment,
@@ -760,6 +766,54 @@ export class ApiClient {
 
   async deleteProjectUpdate(workspaceId: string, projectId: string, updateId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/updates/${updateId}`, undefined, z.unknown());
+  }
+
+  // --- идеи и проблемы проекта (плагины projects-ideas / projects-problems) ---
+
+  listProjectCaptures(workspaceId: string, projectId: string, kind: ProjectCaptureKind): Promise<ProjectCapture[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/projects/${projectId}/${capturePath(kind)}`, undefined, z.array(projectCaptureSchema));
+  }
+
+  createProjectCapture(
+    workspaceId: string,
+    projectId: string,
+    kind: ProjectCaptureKind,
+    input: CreateProjectCaptureInput | CreateProjectProblemInput
+  ): Promise<ProjectCapture> {
+    return this.request("POST", `/workspaces/${workspaceId}/projects/${projectId}/${capturePath(kind)}`, input, projectCaptureSchema);
+  }
+
+  updateProjectCapture(
+    workspaceId: string,
+    projectId: string,
+    captureId: string,
+    kind: ProjectCaptureKind,
+    input: UpdateProjectCaptureInput
+  ): Promise<ProjectCapture> {
+    return this.request(
+      "PATCH",
+      `/workspaces/${workspaceId}/projects/${projectId}/${capturePath(kind)}/${captureId}`,
+      input,
+      projectCaptureSchema
+    );
+  }
+
+  async deleteProjectCapture(workspaceId: string, projectId: string, captureId: string, kind: ProjectCaptureKind): Promise<void> {
+    await this.request(
+      "DELETE",
+      `/workspaces/${workspaceId}/projects/${projectId}/${capturePath(kind)}/${captureId}`,
+      undefined,
+      z.unknown()
+    );
+  }
+
+  promoteProjectCapture(workspaceId: string, projectId: string, captureId: string, kind: ProjectCaptureKind): Promise<ProjectCapture> {
+    return this.request(
+      "POST",
+      `/workspaces/${workspaceId}/projects/${projectId}/${capturePath(kind)}/${captureId}/promote`,
+      {},
+      projectCaptureSchema
+    );
   }
 
   listTaskActivity(workspaceId: string, taskId: string): Promise<TaskActivity[]> {
@@ -1687,6 +1741,10 @@ export class ApiClient {
 }
 
 /** Builds `?a=1&b=2` from the defined entries of `params`, `""` if none — for the finance list filters (accountId/categoryId/month). */
+function capturePath(kind: ProjectCaptureKind): "ideas" | "problems" {
+  return kind === "idea" ? "ideas" : "problems";
+}
+
 function buildQuery(params: Record<string, string | number | undefined> | undefined): string {
   if (!params) return "";
   const entries = Object.entries(params).filter(
