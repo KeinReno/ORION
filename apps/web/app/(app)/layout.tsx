@@ -144,6 +144,40 @@ function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React
 }
 
 /**
+ * Floating mode: lift the active group above the workbench as a movable, resizable window
+ * (and put it back). Works in the browser and in Tauri alike, unlike an OS window; the
+ * panel and its data are untouched — only where it is drawn changes.
+ */
+function FloatHeaderAction({ group, containerApi, api, activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+  if (!activePanel) return null;
+  const floating = api.location.type === "floating";
+  function toggle(): void {
+    try {
+      if (floating) {
+        api.moveTo({ position: "right" });
+      } else {
+        const width = Math.min(720, Math.round(window.innerWidth * 0.5));
+        const height = Math.min(560, Math.round(window.innerHeight * 0.7));
+        containerApi.addFloatingGroup(group, { x: 80, y: 80, width, height });
+      }
+    } catch {
+      /* the layout refused the move (e.g. a single locked group): leave it where it is */
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      title={floating ? "Вернуть в рабочую область" : "Сделать плавающим окном"}
+      aria-label={floating ? "Вернуть в рабочую область" : "Сделать плавающим окном"}
+      className="mr-1 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+    >
+      {floating ? "⇲" : "⇱"}
+    </button>
+  );
+}
+
+/**
  * Top-right of the panel group tab strip — the one persistent "top of the
  * app" spot regardless of which panel is active. Settings lives here instead
  * of the sidebar link list: it's account/workspace config, not a domain you
@@ -177,6 +211,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
           focusPanel("settings");
         }}
       />
+      <FloatHeaderAction {...props} />
       <DetachHeaderAction {...props} />
       <RunningTimerChip />
       <NotificationBell size="sm" />
