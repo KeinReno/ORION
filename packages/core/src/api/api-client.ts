@@ -106,6 +106,7 @@ import {
   type ProjectCaptureKind,
   type AgentAuditEntry,
   type AgentToken,
+  type ActivityEntry,
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
@@ -117,6 +118,7 @@ import {
   projectCaptureSchema,
   agentTokenSchema,
   goalSchema,
+  activityEntrySchema,
   agentAuditEntrySchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
@@ -813,6 +815,10 @@ export class ApiClient {
       input,
       projectCaptureSchema
     );
+  }
+
+  listActivity(workspaceId: string): Promise<ActivityEntry[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/activity`, undefined, z.array(activityEntrySchema));
   }
 
   listProjectGoals(workspaceId: string): Promise<Goal[]> {

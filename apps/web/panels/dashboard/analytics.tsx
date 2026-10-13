@@ -1,16 +1,16 @@
 "use client";
 
-import { useAgentAuditLog, useProjectGoals, useProjects } from "@orion/core-react";
+import { useActivity, useAgentAuditLog, useProjectGoals, useProjects } from "@orion/core-react";
 import type { Task } from "@orion/shared-types";
 import { SegmentedControl, cx } from "@orion/ui";
 import { BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { dailyFlow, flowTotals, workload, type DayFlow } from "../../lib/dashboard-stats";
-import { openPanel, openProject } from "../../lib/panel-bus";
+import { openEntity, openPanel, openProject } from "../../lib/panel-bus";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
 
-type Mode = "personal" | "projects" | "goals" | "ai";
+type Mode = "personal" | "projects" | "goals" | "ai" | "activity";
 
 const MODE_KEY = "orion.dashboard-analytics-mode";
 
@@ -96,7 +96,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
   const [mode, setMode] = useState<Mode>(() => {
     try {
       const saved = localStorage.getItem(MODE_KEY);
-      return saved === "projects" || saved === "goals" || saved === "ai" ? saved : "personal";
+      return saved === "projects" || saved === "goals" || saved === "ai" || saved === "activity" ? saved : "personal";
     } catch {
       return "personal";
     }
@@ -112,6 +112,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
 
   const { data: projects } = useProjects(projectsOn && mode === "projects" ? workspaceId : undefined);
   const { data: goals } = useProjectGoals(goalsOn && mode === "goals" ? workspaceId : undefined);
+  const { data: activity } = useActivity(mode === "activity" ? workspaceId : undefined);
   const { data: audit } = useAgentAuditLog(mode === "ai" ? workspaceId : undefined);
 
   const flow = useMemo(() => dailyFlow(tasks, now, 14), [tasks, now]);
@@ -121,6 +122,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
     { value: "personal", label: "Личный" },
     ...(projectsOn ? [{ value: "projects" as const, label: "Проекты" }] : []),
     ...(goalsOn ? [{ value: "goals" as const, label: "Цели" }] : []),
+    { value: "activity", label: "Журнал" },
     { value: "ai", label: "ИИ" }
   ];
   const active = modes.some((m) => m.value === mode) ? mode : "personal";
@@ -186,6 +188,31 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
                   </span>
                   <Bar value={goal.progress} />
                 </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+
+      {active === "activity" ? (
+        (activity ?? []).length === 0 ? (
+          <p className="text-label text-subtle-foreground">Пока нет событий.</p>
+        ) : (
+          <ul className="divide-y divide-border/60 rounded-xl border border-border text-label">
+            {(activity ?? []).map((entry) => (
+              <li key={entry.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5">
+                <span className="shrink-0 font-mono text-2xs tabular-nums text-subtle-foreground">
+                  {new Date(entry.at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <span className={cx("shrink-0", entry.actorKind === "agent" && "text-accent-text")}>
+                  {entry.actorKind === "agent" ? `🤖 ${entry.actorName}` : entry.actorName}
+                </span>
+                <span className="min-w-0 flex-1 text-muted-foreground">{entry.summary}</span>
+                {entry.entity ? (
+                  <button type="button" onClick={() => openEntity(entry.entity!.type, entry.entity!.id, entry.entity!.title)} className="max-w-[16rem] truncate hover:underline">
+                    {entry.entity.title}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
