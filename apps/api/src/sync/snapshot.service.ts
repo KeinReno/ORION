@@ -115,9 +115,10 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("investmentTrades", (tx) => tx.investmentTrade),
   spec("timeEntries", (tx) => tx.timeEntry),
   spec("habitEntries", (tx) => tx.habitEntry),
-  spec("listItems", (tx) => tx.listItem),
   spec("inventoryItems", (tx) => tx.inventoryItem),
   spec("inventoryMovements", (tx) => tx.inventoryMovement),
+  // After inventory: a list item may point at a stock item and at the receipt its purchase created.
+  spec("listItems", (tx) => tx.listItem),
   // R29-02: grants are kept in the snapshot for audit (an owner inspecting
   // an old backup should still see "I once shared X with Y"), but restore
   // must never reactivate external access that has since been revoked —

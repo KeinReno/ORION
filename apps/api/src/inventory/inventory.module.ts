@@ -10,6 +10,8 @@ import { InventoryService } from "./inventory.service";
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule],
   controllers: [InventoryController],
-  providers: [InventoryService, InventoryAlertsService]
+  providers: [InventoryService, InventoryAlertsService],
+  // The lists-inventory bridge writes its purchase receipts through InventoryService.recordMovementTx.
+  exports: [InventoryService]
 })
 export class InventoryModule {}

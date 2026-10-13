@@ -123,38 +123,58 @@ export class InventoryService {
     itemId: string,
     input: CreateInventoryMovementInput
   ): Promise<InventoryMovement> {
-    const delta = deltaFor(input);
     const { movement, alert } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await tx.$queryRaw`SELECT id FROM "inventory_items" WHERE id = ${itemId} FOR UPDATE`;
-      const item = await tx.inventoryItem.findUnique({ where: { id: itemId } });
-      if (!item || item.workspaceId !== workspaceId) throw new NotFoundException("Позиция не найдена");
-
-      if (delta < 0) {
-        const current = await tx.inventoryMovement.aggregate({ where: { itemId }, _sum: { quantity: true } });
-        const balance = current._sum.quantity ?? 0;
-        if (balance + delta < 0) {
-          throw new BadRequestException(`Недостаточно остатка: на складе ${balance} ${item.unit}`);
-        }
-      }
-
-      const movement = await tx.inventoryMovement.create({
-        data: {
-          workspaceId,
-          itemId,
-          type: input.type,
-          quantity: delta,
-          unitCostMinor: input.type === "receipt" ? input.unitCostMinor ?? null : null,
-          note: input.note ?? ""
-        }
-      });
-
-      const after = await tx.inventoryMovement.aggregate({ where: { itemId }, _sum: { quantity: true } });
-      const alert = await this.alerts.evaluateTx(tx, item, after._sum.quantity ?? 0);
-      return { movement, alert };
+      return this.recordMovementTx(tx, workspaceId, itemId, input);
     });
     await this.alerts.deliver(alert);
     return toMovementDto(movement);
+  }
+
+  /**
+   * The ledger write itself, inside the caller's transaction (membership already
+   * checked by the caller). Shared with the lists-inventory bridge, whose
+   * "Куплено" must write exactly the same receipt under the same row lock. The
+   * caller delivers the returned alert after its transaction commits.
+   */
+  async recordMovementTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    itemId: string,
+    input: CreateInventoryMovementInput
+  ): Promise<{ movement: MovementRow; alert: string | null }> {
+    const delta = deltaFor(input);
+    await tx.$queryRaw`SELECT id FROM "inventory_items" WHERE id = ${itemId} FOR UPDATE`;
+    const item = await tx.inventoryItem.findUnique({ where: { id: itemId } });
+    if (!item || item.workspaceId !== workspaceId) throw new NotFoundException("Позиция не найдена");
+
+    if (delta < 0) {
+      const current = await tx.inventoryMovement.aggregate({ where: { itemId }, _sum: { quantity: true } });
+      const balance = current._sum.quantity ?? 0;
+      if (balance + delta < 0) {
+        throw new BadRequestException(`Недостаточно остатка: на складе ${balance} ${item.unit}`);
+      }
+    }
+
+    const movement = await tx.inventoryMovement.create({
+      data: {
+        workspaceId,
+        itemId,
+        type: input.type,
+        quantity: delta,
+        unitCostMinor: input.type === "receipt" ? input.unitCostMinor ?? null : null,
+        note: input.note ?? ""
+      }
+    });
+
+    const after = await tx.inventoryMovement.aggregate({ where: { itemId }, _sum: { quantity: true } });
+    const alert = await this.alerts.evaluateTx(tx, item, after._sum.quantity ?? 0);
+    return { movement, alert };
+  }
+
+  /** Sends what `recordMovementTx` decided, once the caller's transaction has committed. */
+  async deliverAlert(alert: string | null): Promise<void> {
+    await this.alerts.deliver(alert);
   }
 
   private async assertOwnedTx(tx: Prisma.TransactionClient, workspaceId: string, itemId: string) {
@@ -254,7 +274,7 @@ type MovementRow = {
   createdAt: Date;
 };
 
-function toMovementDto(row: MovementRow): InventoryMovement {
+export function toMovementDto(row: MovementRow): InventoryMovement {
   return {
     id: row.id,
     workspaceId: row.workspaceId,

@@ -27,4 +27,5 @@ export { TASK_PRIORITY_LABEL, TASK_RECURRENCE_LABEL, TASK_STATUS_LABEL } from ".
 export { dailyTotals, localDayKey, periodStats, projectShares } from "../time-stats";
 export { useUnsavedDraft } from "../unsaved-drafts";
 export { useActiveWorkspace } from "../use-active-workspace";
+export { useEnabledModules } from "../use-enabled-modules";
 export { useLocalNow } from "../use-day-boundary";

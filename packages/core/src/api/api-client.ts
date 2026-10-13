@@ -25,6 +25,7 @@ import {
   inboxListSchema,
   listItemSchema,
   listSchema,
+  purchaseListItemResultSchema,
   inventoryItemSchema,
   inventoryMovementSchema,
   milestoneCascadeImpactSchema,
@@ -196,6 +197,9 @@ import {
   type InventoryMovement,
   type List,
   type ListItem,
+  type LinkListItemInventoryInput,
+  type AddInventoryToListInput,
+  type PurchaseListItemResult,
   type Milestone,
   type Notification,
   type ProcessInboxInput,
@@ -1735,6 +1739,23 @@ export class ApiClient {
   /** Deletes every checked item in the list at once. */
   async clearCheckedItems(workspaceId: string, listId: string): Promise<void> {
     await this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/clear-checked`, undefined, z.unknown());
+  }
+
+  // --- Покупки → Склад (plugin lists-inventory) -----------------------------
+  // The bridge between a shopping list and stock; 409 when Lists, Inventory or the plugin is off.
+
+  linkListItemInventory(workspaceId: string, listId: string, itemId: string, input: LinkListItemInventoryInput): Promise<ListItem> {
+    return this.request("PUT", `/workspaces/${workspaceId}/lists-inventory/lists/${listId}/items/${itemId}/link`, input, listItemSchema);
+  }
+
+  /** Ticks the entry and, the first time only, writes the stock receipt. */
+  purchaseListItem(workspaceId: string, listId: string, itemId: string): Promise<PurchaseListItemResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists-inventory/lists/${listId}/items/${itemId}/purchase`, undefined, purchaseListItemResultSchema);
+  }
+
+  /** «В список покупок»: returns the open entry for this stock item in `listId`, creating it if needed. */
+  addInventoryToList(workspaceId: string, inventoryItemId: string, input: AddInventoryToListInput): Promise<ListItem> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists-inventory/inventory/${inventoryItemId}/to-list`, input, listItemSchema);
   }
 
   // --- Склад (v0.26) --------------------------------------------------------

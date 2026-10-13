@@ -8,6 +8,7 @@ import {
   useCreateListItem,
   useDeleteListItem,
   useLists,
+  useCore,
   useUpdateList,
   useUpdateListItem
 } from "@orion/core-react";
@@ -29,8 +30,11 @@ import {
   useToast
 } from "@orion/ui";
 import { Archive, ListChecks, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useSlotContributions } from "../lib/extensions/slot";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { useEnabledModules } from "../lib/use-enabled-modules";
 import { describeError } from "../lib/error-message";
 
 /**
@@ -310,6 +314,11 @@ function ListCard({
   const deleteItem = useDeleteListItem(workspaceId);
   const clearChecked = useClearCheckedItems(workspaceId);
   const { toast } = useToast();
+  // A bridge plugin (lists.item, e.g. «Покупки → Склад») may mark entries and take over ticking them.
+  const itemBridge = useSlotContributions("lists.item")[0]?.meta?.api;
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const { isEnabled } = useEnabledModules();
 
   // Unchecked first (what's left to do), checked at the bottom — display-only,
   // nothing persisted (see List's model comment on why there's no sortOrder).
@@ -329,6 +338,13 @@ function ListCard({
   }
 
   function toggle(item: ListItem): void {
+    if (!item.checked && itemBridge && workspaceId) {
+      const completion = itemBridge.completeItem({ api, queryClient, workspaceId, listId: list.id, item, isModuleEnabled: isEnabled });
+      if (completion) {
+        completion.catch((error: unknown) => toast({ title: "Не удалось отметить пункт", description: describeError(error), tone: "danger" }));
+        return;
+      }
+    }
     updateItem.mutate({ listId: list.id, itemId: item.id, input: { checked: !item.checked } });
   }
 
@@ -396,6 +412,7 @@ function ListCard({
                   <span className={cx("min-w-0 flex-1 truncate text-body text-foreground", item.checked && "text-muted-foreground line-through")}>
                     {item.label}
                   </span>
+                  {itemBridge && workspaceId ? <itemBridge.ItemExtra workspaceId={workspaceId} listId={list.id} item={item} /> : null}
                   <IconButton
                     label="Удалить пункт"
                     size="sm"

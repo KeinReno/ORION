@@ -17,6 +17,12 @@ export const listItemSchema = z.object({
   listId: z.string(),
   label: z.string(),
   checked: z.boolean(),
+  /** Plugin «Покупки → Склад»: the stock item a purchase of this entry restocks (null = plain entry). */
+  inventoryItemId: z.string().nullable(),
+  /** Units a purchase adds to stock; 1 for plain entries. */
+  quantity: z.number().int(),
+  /** A purchase already created its stock receipt — buying it again never restocks twice. */
+  stocked: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string()
 });

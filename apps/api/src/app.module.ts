@@ -21,6 +21,7 @@ import { HabitsModule } from "./habits/habits.module";
 import { ListsModule } from "./lists/lists.module";
 import { MarketsModule } from "./markets/markets.module";
 import { InventoryModule } from "./inventory/inventory.module";
+import { ListsInventoryModule } from "./lists-inventory/lists-inventory.module";
 import { MilestonesModule } from "./milestones/milestones.module";
 import { ModulesModule } from "./modules/modules.module";
 import { ActivityModule } from "./activity/activity.module";
@@ -62,6 +63,7 @@ import { UsersModule } from "./users/users.module";
     ListsModule,
     MarketsModule,
     InventoryModule,
+    ListsInventoryModule,
     MilestonesModule,
     OverviewModule,
     SharedGrantModule,

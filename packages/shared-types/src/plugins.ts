@@ -42,7 +42,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-import",
   "finance-obligations",
   "finance-forecast",
-  "inventory-costing"
+  "inventory-costing",
+  "lists-inventory"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -405,6 +406,17 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Цена прихода и средняя себестоимость позиции — в карточке и в окне позиции.",
     provides: ["Поле «Цена за единицу» у прихода", "Средняя себестоимость"],
     disableBehavior: "Поле цены и средняя себестоимость скрываются; остатки и движения не затрагиваются, прежние цены приходов сохраняются.",
+    defaultEnabled: true
+  },
+  {
+    id: "lists-inventory",
+    extendsModuleId: "lists",
+    label: "Покупки → Склад",
+    summary:
+      "Связь списка покупок со складом: пункт списка привязывается к позиции склада, «Куплено» записывает приход, а позицию с низким остатком можно одним действием отправить в список покупок. Работает, когда включены и «Списки», и «Склад».",
+    provides: ["Привязка пункта списка к позиции склада и количество", "«Куплено» → приход на склад (один раз)", "«В список покупок» у позиции склада"],
+    disableBehavior:
+      "Привязки и кнопки скрываются, отметка пункта снова только отмечает его; уже записанные приходы и сохранённые привязки остаются и вернутся при включении.",
     defaultEnabled: true
   }
 ];

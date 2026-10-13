@@ -148,12 +148,16 @@ function toDto(row: ListRow & { items: ListItemRow[] }): List {
   };
 }
 
-function toItemDto(row: ListItemRow): ListItem {
+/** Exported for the lists-inventory bridge, which returns list items it links or buys. */
+export function toItemDto(row: ListItemRow): ListItem {
   return {
     id: row.id,
     listId: row.listId,
     label: row.label,
     checked: row.checked,
+    inventoryItemId: row.inventoryItemId,
+    quantity: row.quantity,
+    stocked: row.stockedMovementId !== null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

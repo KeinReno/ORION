@@ -1,10 +1,11 @@
 import dynamic from "next/dynamic";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
 import { inventoryAlertsApi } from "./inventory-alerts/alerts";
 import { inventoryCostingApi } from "./inventory-costing/costing";
+import { listsItemApi } from "./lists-inventory/bridge";
 import { taskPlanningApi } from "./tasks-planning/planning";
 import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
@@ -164,6 +165,15 @@ contribute("inventory.alerts", {
   component: NoVisual as unknown as ComponentType<InventoryAlertsSlotProps>,
   meta: { api: inventoryAlertsApi }
 });
+
+// «Покупки → Склад»: the Lists ↔ Inventory bridge (ADR-0009) — a mark + «Куплено» on list entries, «В список покупок» on stock items.
+contribute("lists.item", {
+  pluginId: "lists-inventory",
+  component: NoVisual as unknown as ComponentType<ListsItemSlotProps>,
+  meta: { api: listsItemApi }
+});
+const AddToShoppingList = dynamic<InventoryItemActionsSlotProps>(() => import("./lists-inventory/to-list-action").then((m) => m.AddToShoppingList), { ssr: false });
+contribute("inventory.item.actions", { pluginId: "lists-inventory", component: AddToShoppingList, order: 10 });
 
 const MiniCalendarWidget = dynamic<SidebarWidgetSlotProps>(() => import("./calendar-widget/mini-calendar").then((m) => m.MiniCalendarWidget), { ssr: false });
 contribute("shell.sidebar.widgets", { pluginId: "calendar-widget", component: MiniCalendarWidget, order: 10 });

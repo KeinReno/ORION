@@ -783,14 +783,25 @@ model ListItem {
   listId      String
   label       String
   checked     Boolean  @default(false)
+  /// Plugin «Покупки → Склад» (lists-inventory): the stock item this purchase restocks.
+  /// SetNull — archiving/deleting the stock item never deletes the list entry.
+  inventoryItemId   String?
+  /// How many units a purchase adds to stock (only meaningful with `inventoryItemId`).
+  quantity          Int      @default(1)
+  /// The receipt created when this item was bought — set once, so ticking it again never
+  /// restocks twice. Unchecking keeps the receipt: the movement ledger stays the source of truth.
+  stockedMovementId String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  list      List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  list            List               @relation(fields: [listId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  stockedMovement InventoryMovement? @relation(fields: [stockedMovementId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([listId])
+  @@index([inventoryItemId])
   @@map("list_items")
 }
 
@@ -1609,6 +1620,7 @@ model InventoryItem {
   project   Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
   home      Home?               @relation(fields: [homeId], references: [id], onDelete: SetNull)
   movements InventoryMovement[]
+  listItems ListItem[]
 
   @@unique([workspaceId, sku])
   @@index([workspaceId])
@@ -1633,6 +1645,8 @@ model InventoryMovement {
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// The shopping-list entry whose purchase created this receipt (plugin lists-inventory).
+  listItem  ListItem?
 
   @@index([workspaceId])
   @@index([itemId, createdAt])

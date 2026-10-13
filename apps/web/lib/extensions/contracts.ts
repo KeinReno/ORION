@@ -1,4 +1,6 @@
-import type { DocumentItem, Habit, Milestone, Note, OrionModuleId, Project, RecurrenceSpec, Task, TaskPriority, TaskRecurrence, TaskStatus, TaskViewFilters, TimeEntry } from "@orion/shared-types";
+import type { ApiClient } from "@orion/core";
+import type { DocumentItem, Habit, InventoryItem, ListItem, Milestone, Note, OrionModuleId, Project, RecurrenceSpec, Task, TaskPriority, TaskRecurrence, TaskStatus, TaskViewFilters, TimeEntry } from "@orion/shared-types";
+import type { QueryClient } from "@tanstack/react-query";
 import type { ComponentType, ReactNode } from "react";
 import type { TimeProjectTotal, TimeSummary } from "../time-summary";
 
@@ -318,6 +320,35 @@ export interface InventoryCostingApi {
 export type InventoryCostingSlotProps = Record<string, never>;
 
 /**
+ * lists.item — what a bridge plugin adds to one entry of a list (ADR-0009). Draws nothing by itself:
+ * `meta.api.ItemExtra` sits after the entry's label, and `completeItem` may take over ticking an
+ * entry. It returns `null` to let the host tick the entry as usual, or the promise of its own
+ * completion (the host then shows an error toast if it rejects). `isModuleEnabled` lets a bridge
+ * stand down when the module on its other end is off.
+ */
+export interface ListsItemContext {
+  api: ApiClient;
+  queryClient: QueryClient;
+  workspaceId: string;
+  listId: string;
+  item: ListItem;
+  isModuleEnabled: (id: OrionModuleId) => boolean;
+}
+
+export interface ListsItemApi {
+  ItemExtra: ComponentType<{ workspaceId: string; listId: string; item: ListItem }>;
+  completeItem: (context: ListsItemContext) => Promise<void> | null;
+}
+
+export type ListsItemSlotProps = Record<string, never>;
+
+/** inventory.item.actions — extra actions in the window of one stock item (ADR-0009: «В список покупок»). */
+export interface InventoryItemActionsSlotProps {
+  workspaceId: string;
+  item: InventoryItem;
+}
+
+/**
  * shell.sidebar.widgets — a compact surface of a module shown in the sidebar (Widget Surface).
  * The host decides where it sits and whether the rail is `open`; the plugin only draws itself
  * and asks the host to open its full screen via `onOpenCalendar`-style callbacks.
@@ -356,6 +387,8 @@ export interface SlotContracts {
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
   "inventory.alerts": InventoryAlertsSlotProps;
   "inventory.costing": InventoryCostingSlotProps;
+  "inventory.item.actions": InventoryItemActionsSlotProps;
+  "lists.item": ListsItemSlotProps;
   "calendar.event.recurrence": EventRecurrenceSlotProps;
   "calendar.event.reminders": EventRemindersSlotProps;
   "finance.transactions.top": FinanceTransactionsTopSlotProps;
@@ -382,6 +415,7 @@ export interface SlotMeta {
   "projects.tabs": { tabId: string; label: string; needsModule?: OrionModuleId };
   "inventory.alerts": { api: InventoryAlertsApi };
   "inventory.costing": { api: InventoryCostingApi };
+  "lists.item": { api: ListsItemApi };
   "documents.create": { actions: DocumentCreateAction[] };
 }
 

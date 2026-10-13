@@ -31,6 +31,7 @@ export * from "./time";
 export * from "./habit";
 export * from "./list";
 export * from "./inventory";
+export * from "./lists-inventory";
 export * from "./milestone";
 export * from "./reminder";
 export * from "./overview";

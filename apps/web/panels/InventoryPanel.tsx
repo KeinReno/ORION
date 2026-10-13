@@ -30,7 +30,7 @@ import {
 } from "@orion/ui";
 import { Archive, ArchiveRestore, Boxes, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useSlotContributions } from "../lib/extensions/slot";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { describeAuthError } from "../lib/error-message";
 import { shortDateTime } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
@@ -404,9 +404,12 @@ function InventoryItemDetail({
       {recording ? (
         <InventoryMovementForm unit={item.unit} busy={recordBusy} onCancel={onCancelRecord} onSubmit={onSubmitMovement} />
       ) : (
-        <Button size="sm" onClick={onStartRecord}>
-          <Plus className="h-4 w-4" /> Новое движение
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={onStartRecord}>
+            <Plus className="h-4 w-4" /> Новое движение
+          </Button>
+          {workspace ? <ExtensionSlot name="inventory.item.actions" props={{ workspaceId: workspace.id, item }} /> : null}
+        </div>
       )}
 
       <div className="flex flex-col gap-1.5">
