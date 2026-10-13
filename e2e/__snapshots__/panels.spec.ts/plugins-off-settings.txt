@@ -1,0 +1,12 @@
+button: Безопасность
+button: Внешний вид
+button: ИИ-агенты
+button: Модули
+button: О приложении
+button: Плагины
+button: Пространство
+button: Профиль
+button: Сохранить
+button: Сферы
+button: Уведомления
+button: Участники

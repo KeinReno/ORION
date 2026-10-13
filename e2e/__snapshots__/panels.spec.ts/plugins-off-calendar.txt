@@ -1,0 +1,15 @@
+button: Вперёд
+button: Задачи
+button: Заметки
+button: Как пользоваться календарём
+button: Назад
+button: Перейти к дате
+button: Платежи
+button: Сегодня
+button: Событие
+button: События
+button: Создать задачу или заметку
+tab: День
+tab: Месяц
+tab: Неделя
+tab: Список

@@ -38,6 +38,8 @@ pnpm typecheck        # tsc --noEmit по всем пакетам (+ apps/api/te
 pnpm lint             # eslint .
 pnpm test             # vitest run — юнит-тесты в packages/**, без БД
 pnpm test:integration # API + реальная PostgreSQL/RLS; требует db:up и миграции
+pnpm test:e2e:local   # Playwright: каждая панель в default-full и plugins-off на отдельной БД orion_e2e
+                      # (порты 4100/3110; --skip-build, --update-snapshots). В CI — pnpm test:e2e после build
 pnpm build            # сборка всех пакетов
 pnpm quality          # typecheck + lint + unit tests + build
 pnpm clean            # удалить регенерируемые артефакты (target/.next/out/dist); --dry-run, --deps

@@ -36,3 +36,7 @@ apps/api/.data/
 
 # Compass engine: runtime data and caches.
 apps/compass-engine/**/__pycache__/
+
+# Playwright (e2e/)
+test-results/
+playwright-report/

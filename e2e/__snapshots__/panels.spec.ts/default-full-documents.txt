@@ -1,0 +1,14 @@
+button: Все файлы
+button: Выбрать файлы
+button: Документ
+button: Загрузить
+button: Папка
+button: Таблица
+tab: Активные
+tab: Дата
+tab: Имя
+tab: Корзина
+tab: Плиткой
+tab: Размер
+tab: Списком
+tab: Тип
