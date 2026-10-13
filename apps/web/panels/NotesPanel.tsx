@@ -61,6 +61,7 @@ import { projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
 import { openPanel, useFocusedNoteId } from "../lib/panel-bus";
+import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { detachPanelToWindow } from "../lib/panel-window";
 import { nextListId } from "../lib/list-nav";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
@@ -506,6 +507,12 @@ export function NotesPanel(): React.ReactElement {
                   // button around the text below. The row itself must not be a button: it also
                   // holds the actions menu, and interactive controls cannot nest.
                   onClick={trash ? undefined : () => selectNote(note.id)}
+                  // Drag the note into the dock: it opens as a panel of its own, where it is dropped.
+                  draggable={!trash}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "copy";
+                    event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, `note:${note.id}`);
+                  }}
                   className={cx(
                     "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
                     trash

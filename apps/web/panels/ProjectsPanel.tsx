@@ -1,5 +1,6 @@
 "use client";
 
+import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "../lib/project-order";
 import { useCreateProject, useProjects, useSession, useTasks } from "@orion/core-react";
 import { formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
@@ -117,11 +118,18 @@ export function ProjectsPanel(): React.ReactElement {
   }
   /** Drag + Alt+↑/↓ handlers for one list item; only active in "Мой порядок". */
   function itemProps(project: Project): React.HTMLAttributes<HTMLLIElement> | undefined {
-    if (sort !== "manual") return undefined;
     const ids = list.map((p) => p.id);
+    const manual = sort === "manual";
     return {
       draggable: true,
       onDragStart: (event) => {
+        // Ctrl+drag (or any drag outside "Мой порядок") takes the project to the dock as a panel of its
+        // own; a plain drag in "Мой порядок" reorders. Same payload the sidebar links use.
+        if (!manual || event.ctrlKey) {
+          event.dataTransfer.effectAllowed = "copy";
+          event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, `project:${project.id}`);
+          return;
+        }
         setDraggingId(project.id);
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", project.id);
@@ -136,11 +144,13 @@ export function ProjectsPanel(): React.ReactElement {
         setDraggingId(null);
       },
       onKeyDown: (event) => {
-        if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+        if (!manual || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
         event.preventDefault();
         commitOrder(stepProject(manualOrder.length ? manualOrder : ids, ids, project.id, event.key === "ArrowUp" ? -1 : 1));
       },
-      title: "Перетащите или Alt+↑/↓, чтобы изменить порядок"
+      title: manual
+        ? "Перетащите, чтобы изменить порядок (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
+        : "Перетащите в рабочую область, чтобы открыть рядом"
     };
   }
   const filteredOut = source.length > 0 && list.length === 0;
