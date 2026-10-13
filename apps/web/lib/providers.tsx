@@ -5,6 +5,7 @@ import { CoreProvider } from "@orion/core-react";
 import { ToastProvider } from "@orion/ui";
 import { useState, type ReactNode } from "react";
 import { API_BASE_URL } from "./api-base";
+import { CrossWindowSync } from "./cross-window-sync-provider";
 import { PreferencesEffect } from "./preferences-effect";
 
 export function Providers({ children }: { children: ReactNode }): React.ReactElement {
@@ -14,6 +15,7 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
       {/* Inside CoreProvider (it needs the API client) and gated on a session,
           so the login screen never fires a doomed preferences request. */}
       <PreferencesEffect />
+      <CrossWindowSync />
       <ToastProvider>{children}</ToastProvider>
     </CoreProvider>
   );
