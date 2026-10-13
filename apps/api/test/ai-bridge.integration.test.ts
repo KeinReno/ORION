@@ -196,6 +196,40 @@ describe("AI Bridge (agent tokens)", () => {
     }
   });
 
+  it("агенты переписываются внутри пространства: адресная доставка, чужие не читают, права не передаются", async () => {
+    const alice = await register("alice-msg");
+    const mallory = await register("mallory-msg");
+    const a = await issue(alice, ["agents:message"]);
+    const b = await issue(alice, ["agents:message", "tasks:read"]);
+    const noScope = await issue(alice, ["tasks:read"]);
+    const foreign = await issue(mallory, ["agents:message"]);
+
+    const peers = await request<Array<{ id: string }>>("/ai/v1/agents", { method: "GET", token: a.secret });
+    expect(peers.data.map((p) => p.id).sort()).toEqual([b.id, noScope.id].sort());
+
+    const sent = await request<{ id: string }>("/ai/v1/messages", {
+      method: "POST", token: a.secret, body: { toTokenId: b.id, subject: "Проверь задачи", body: "список за неделю" }
+    });
+    expect(sent.status).toBe(201);
+
+    // A sender cannot read the receiver's inbox; the receiver sees it, unread first.
+    expect((await request<unknown[]>("/ai/v1/messages", { method: "GET", token: a.secret })).data).toHaveLength(0);
+    const inbox = await request<Array<{ id: string; subject: string; fromName: string; readAt: string | null }>>("/ai/v1/messages", { method: "GET", token: b.secret });
+    expect(inbox.data).toHaveLength(1);
+    expect(inbox.data[0]).toMatchObject({ subject: "Проверь задачи", readAt: null });
+    expect((await request(`/ai/v1/messages/${sent.data.id}/read`, { method: "POST", token: a.secret })).status).toBe(404);
+    expect((await request(`/ai/v1/messages/${sent.data.id}/read`, { method: "POST", token: b.secret })).status).toBe(204);
+    expect((await request<Array<{ readAt: string | null }>>("/ai/v1/messages", { method: "GET", token: b.secret })).data[0].readAt).not.toBeNull();
+
+    // Another workspace's agent is unreachable; so is a token without the scope.
+    expect((await request("/ai/v1/messages", { method: "POST", token: a.secret, body: { toTokenId: foreign.id, subject: "x" } })).status).toBe(404);
+    expect((await request("/ai/v1/messages", { method: "POST", token: noScope.secret, body: { toTokenId: a.id, subject: "x" } })).status).toBe(403);
+    expect((await request("/ai/v1/messages", { method: "POST", token: a.secret, body: { toTokenId: a.id, subject: "я себе" } })).status).toBe(400);
+
+    // The receiver does NOT inherit the sender's rights: `a` has no tasks scope and still has none.
+    expect((await request("/ai/v1/tasks", { method: "GET", token: a.secret })).status).toBe(403);
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

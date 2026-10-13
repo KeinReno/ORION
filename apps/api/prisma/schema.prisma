@@ -212,6 +212,7 @@ model Workspace {
   goals                 Goal[]
   goalPlans             GoalPlan[]
   agentAuditEntries     AgentAuditEntry[]
+  agentMessages         AgentMessage[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
   /// настроенная удалёнка на рабочее пространство на этом узле.
@@ -1772,6 +1773,8 @@ model AgentToken {
   workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User               @relation(fields: [createdById], references: [id], onDelete: Cascade)
   audit     AgentAuditEntry[]
+  sent      AgentMessage[]    @relation("AgentMessageFrom")
+  received  AgentMessage[]    @relation("AgentMessageTo")
 
   @@index([workspaceId])
   @@index([createdById])
@@ -1834,4 +1837,25 @@ model GoalPlan {
   @@index([workspaceId])
   @@index([projectId])
   @@map("goal_plans")
+}
+
+/// A note from one agent token to another in the same workspace (ADR-0007). Plain text only:
+/// the receiver acts under its own token's rights, never the sender's.
+model AgentMessage {
+  id          String    @id @default(uuid())
+  workspaceId String
+  fromTokenId String
+  toTokenId   String
+  subject     String
+  body        String    @default("")
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  from      AgentToken @relation("AgentMessageFrom", fields: [fromTokenId], references: [id], onDelete: Cascade)
+  to        AgentToken @relation("AgentMessageTo", fields: [toTokenId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([toTokenId, readAt])
+  @@map("agent_messages")
 }

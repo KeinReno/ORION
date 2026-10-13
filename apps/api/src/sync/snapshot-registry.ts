@@ -73,6 +73,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "SyncRemote", snapshotKey: null, policy: "secret-excluded", reason: "Хранит зашифрованный пароль и адрес WebDAV-удалёнки, которая сама пишет снапшот — конфигурация узла, не данные пространства; класть секрет назначения внутрь того, что он производит, не нужно." },
 
   { model: "AgentToken", snapshotKey: null, policy: "secret-excluded", reason: "Учётные данные ИИ-агентов (ADR-0007): хранится только хеш секрета; токены не переносятся между узлами — их выпускают заново." },
+  { model: "AgentMessage", snapshotKey: null, policy: "ephemeral-excluded", reason: "Сообщения между агентами привязаны к токенам узла; токены в бэкап не входят, а значит и переписка." },
   { model: "AgentAuditEntry", snapshotKey: null, policy: "ephemeral-excluded", reason: "Журнал действий ИИ-агентов привязан к токенам узла и в бэкап не входит." },
 
   // --- продуктовая политика уведомлений (09-RELIABILITY.md) ---------------

@@ -5,7 +5,7 @@ import { z } from "zod";
  * credential issued by a workspace member; it acts with that member's rights, inside
  * one workspace, and only for the scopes ticked at creation. It never widens access.
  */
-export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read"] as const;
+export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "agents:message"] as const;
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 
@@ -14,7 +14,8 @@ export const AGENT_SCOPE_LABEL: Record<AgentScope, string> = {
   "tasks:write": "Создавать и менять задачи",
   "notes:read": "Читать заметки",
   "notes:write": "Создавать и менять заметки",
-  "projects:read": "Читать проекты"
+  "projects:read": "Читать проекты",
+  "agents:message": "Переписываться с другими агентами"
 };
 
 export const AGENT_TOKEN_PREFIX = "orion_agt_";
@@ -54,3 +55,26 @@ export const agentAuditEntrySchema = z.object({
   createdAt: z.string()
 });
 export type AgentAuditEntry = z.infer<typeof agentAuditEntrySchema>;
+
+/** A peer an agent may write to: another live token of the same workspace. */
+export const agentPeerSchema = z.object({ id: z.string(), name: z.string() });
+export type AgentPeer = z.infer<typeof agentPeerSchema>;
+
+export const agentMessageSchema = z.object({
+  id: z.string(),
+  fromTokenId: z.string(),
+  fromName: z.string(),
+  toTokenId: z.string(),
+  subject: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+  readAt: z.string().nullable()
+});
+export type AgentMessage = z.infer<typeof agentMessageSchema>;
+
+export const sendAgentMessageInputSchema = z.object({
+  toTokenId: z.string().min(1),
+  subject: z.string().trim().min(1, "Тема обязательна").max(200),
+  body: z.string().max(20_000).default("")
+});
+export type SendAgentMessageInput = z.infer<typeof sendAgentMessageInputSchema>;

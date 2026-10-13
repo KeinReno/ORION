@@ -15,12 +15,16 @@ import {
 } from "@nestjs/common";
 import {
   createAgentTokenInputSchema,
+  sendAgentMessageInputSchema,
   createNoteInputSchema,
   createTaskInputSchema,
   noteViewSchema,
   updateNoteInputSchema,
   updateTaskInputSchema,
   type AgentAuditEntry,
+  type AgentMessage,
+  type AgentPeer,
+  type SendAgentMessageInput,
   type AgentScope,
   type AgentToken,
   type CreateAgentTokenInput,
@@ -178,6 +182,30 @@ export class AiController {
     );
   }
 
+  @Get("agents")
+  listAgents(@Req() req: AgentRequest): Promise<AgentPeer[]> {
+    return this.run(req, "agents:message", null, "agents.list", null, (a) => this.tokens.peers(a));
+  }
+
+  @Get("messages")
+  inbox(@Req() req: AgentRequest): Promise<AgentMessage[]> {
+    return this.run(req, "agents:message", null, "messages.inbox", null, (a) => this.tokens.inbox(a));
+  }
+
+  @Post("messages")
+  sendMessage(
+    @Req() req: AgentRequest,
+    @Body(new ZodValidationPipe(sendAgentMessageInputSchema)) body: SendAgentMessageInput
+  ): Promise<AgentMessage> {
+    return this.run(req, "agents:message", null, "messages.send", `agent:${body.toTokenId}`, (a) => this.tokens.sendMessage(a, body));
+  }
+
+  @Post("messages/:messageId/read")
+  @HttpCode(204)
+  markRead(@Req() req: AgentRequest, @Param("messageId") messageId: string): Promise<void> {
+    return this.run(req, "agents:message", null, "messages.read", `message:${messageId}`, (a) => this.tokens.markRead(a, messageId));
+  }
+
   @Get("projects")
   listProjects(@Req() req: AgentRequest): Promise<Project[]> {
     return this.run(req, "projects:read", "projects", "projects.list", null, (a) => this.projects.list(a.userId, a.workspaceId));
@@ -186,7 +214,7 @@ export class AiController {
   private async run<T>(
     req: AgentRequest,
     scope: AgentScope,
-    moduleId: OrionModuleId,
+    moduleId: OrionModuleId | null,
     action: string,
     resource: string | null,
     fn: (agent: AgentContext) => Promise<T>
@@ -194,7 +222,7 @@ export class AiController {
     const agent = req.agent as AgentContext;
     try {
       if (!agent.scopes.includes(scope)) throw new ForbiddenException(`У токена нет разрешения «${scope}»`);
-      await this.modules.assertEnabled(agent.userId, agent.workspaceId, moduleId);
+      if (moduleId) await this.modules.assertEnabled(agent.userId, agent.workspaceId, moduleId);
       const result = await fn(agent);
       await this.tokens.record(agent, action, resource, 200);
       return result;

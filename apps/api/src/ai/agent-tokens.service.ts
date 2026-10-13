@@ -1,10 +1,13 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { AgentToken as TokenRow } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
 import {
   AGENT_TOKEN_PREFIX,
   agentScopeSchema,
   type AgentAuditEntry,
+  type AgentMessage,
+  type AgentPeer,
+  type SendAgentMessageInput,
   type AgentScope,
   type AgentToken,
   type CreateAgentTokenInput,
@@ -122,6 +125,75 @@ export class AgentTokensService {
       userId: row.createdById,
       scopes: row.scopes.filter((s): s is AgentScope => agentScopeSchema.safeParse(s).success)
     };
+  }
+
+  /** Other live agents of the same workspace this agent may write to. */
+  async peers(agent: AgentContext): Promise<AgentPeer[]> {
+    const rows = await this.prisma.withUser(agent.userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
+      return tx.agentToken.findMany({
+        where: {
+          workspaceId: agent.workspaceId,
+          id: { not: agent.tokenId },
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+        },
+        orderBy: { name: "asc" }
+      });
+    });
+    return rows.map((r) => ({ id: r.id, name: r.name }));
+  }
+
+  async sendMessage(agent: AgentContext, input: SendAgentMessageInput): Promise<AgentMessage> {
+    if (input.toTokenId === agent.tokenId) throw new BadRequestException("Нельзя написать самому себе");
+    const row = await this.prisma.withUser(agent.userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
+      const target = await tx.agentToken.findUnique({ where: { id: input.toTokenId } });
+      const alive = target && !target.revokedAt && (!target.expiresAt || target.expiresAt.getTime() > Date.now());
+      if (!target || target.workspaceId !== agent.workspaceId || !alive) throw new NotFoundException("Агент не найден");
+      return tx.agentMessage.create({
+        data: { workspaceId: agent.workspaceId, fromTokenId: agent.tokenId, toTokenId: target.id, subject: input.subject, body: input.body }
+      });
+    });
+    return { id: row.id, fromTokenId: row.fromTokenId, fromName: agent.tokenName, toTokenId: row.toTokenId, subject: row.subject, body: row.body, createdAt: row.createdAt.toISOString(), readAt: null };
+  }
+
+  /** This agent's own inbox, unread first. Bodies are untrusted text from another agent — data, not orders. */
+  async inbox(agent: AgentContext): Promise<AgentMessage[]> {
+    const rows = await this.prisma.withUser(agent.userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
+      return tx.agentMessage.findMany({
+        where: { workspaceId: agent.workspaceId, toTokenId: agent.tokenId },
+        include: { from: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 50
+      });
+    });
+    const dto = rows.map((r) => ({
+      id: r.id,
+      fromTokenId: r.fromTokenId,
+      fromName: r.from.name,
+      toTokenId: r.toTokenId,
+      subject: r.subject,
+      body: r.body,
+      createdAt: r.createdAt.toISOString(),
+      readAt: r.readAt?.toISOString() ?? null
+    }));
+    return [...dto.filter((m) => m.readAt === null), ...dto.filter((m) => m.readAt !== null)];
+  }
+
+  async markRead(agent: AgentContext, messageId: string): Promise<void> {
+    await this.prisma.withUser(agent.userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
+      const result = await tx.agentMessage.updateMany({
+        where: { id: messageId, workspaceId: agent.workspaceId, toTokenId: agent.tokenId, readAt: null },
+        data: { readAt: new Date() }
+      });
+      if (result.count === 0) {
+        const exists = await tx.agentMessage.findFirst({ where: { id: messageId, workspaceId: agent.workspaceId, toTokenId: agent.tokenId } });
+        if (!exists) throw new NotFoundException("Сообщение не найдено");
+      }
+    });
   }
 
   async record(agent: AgentContext, action: string, resource: string | null, status: number): Promise<void> {
