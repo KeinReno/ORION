@@ -1,6 +1,6 @@
 /**
  * O04 — small glue between the DOCX/XLSX codecs (O01/O01b/O02,
- * `apps/web/lib/office/{docx,xlsx}-codec.ts`) and the UI: recognizing an
+ * `./{docx,xlsx}-codec.ts`) and the UI: recognizing an
  * office `Document` by MIME/extension, and generating a valid empty
  * DOCX/XLSX `File` for "Создать документ"/"Создать таблицу" (O04 task item
  * 1 — no new server endpoint, see 12-PROGRESS.md "O02" §4: these are

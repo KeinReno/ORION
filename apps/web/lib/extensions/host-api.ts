@@ -3,9 +3,9 @@
 // The only module outside `./contracts` that plugins may import from the host
 // (enforced by scripts/architecture-check.mjs). Everything re-exported here is
 // a deliberate, stable surface: change a signature and every plugin feels it, so
-// treat additions as API design, not convenience. Heavy codecs (lib/office/*)
-// are intentionally NOT re-exported — a barrel would drag SheetJS into the main
-// bundle; that plugin keeps a named, shrink-only exception instead.
+// treat additions as API design, not convenience. Heavy DOCX/XLSX codecs are
+// not part of this surface: they live inside plugins/documents-office/codecs,
+// so a barrel here can never drag SheetJS into the main bundle.
 
 export { FilterChip } from "../../components/filter-chip";
 export { Meter } from "../../components/project-bits";
@@ -18,7 +18,8 @@ export { withArchivedFallback } from "../finance-options";
 export { parseQuickEntry, type QuickEntryDraft } from "../finance-quick-entry";
 export { formatDayTitle, formatMoney, fromDatetimeLocal, fromKopecks, parseMoneyInput, projectColor, relativeTime, shortDate, shortDateTime, toDatetimeLocal, toKopecks } from "../format";
 export { buildHeatmapWeeks, buildWeek, entryDaysByHabit, habitSwatchColor, streakLabel, type WeekDay, WEEKDAY_SHORT, weekdayTitle } from "../habit-days";
-export { focusTask, openPanel } from "../panel-bus";
+// `openEntity` is the one way to jump to a record; `focusTask` stays for existing callers.
+export { focusTask, openEntity, openPanel } from "../panel-bus";
 export { projectSwatchColor } from "../project-colors";
 export { dayOffset, planDates, type PlanGroup, planGroups, type PlanRow, timelineRange, weekTicks } from "../project-plan";
 export { daysUntil, type PlanStepState, planStrip, pluralDays } from "../project-status";

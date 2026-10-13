@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FilterChip } from "../../components/filter-chip";
 import { describeError } from "../../lib/error-message";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../../lib/format";
-import { focusDocument, focusEvent, focusNote, focusTransaction, openPanel } from "../../lib/panel-bus";
+import { openEntity, openPanel } from "../../lib/panel-bus";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 
 type Kind = "note" | "file" | "event" | "operation" | "stock";
@@ -96,11 +96,11 @@ export function ProjectMaterials({
     const out: Material[] = [];
     for (const note of notes ?? []) {
       if (note.projectId !== project.id) continue;
-      out.push({ key: `note:${note.id}`, kind: "note", title: note.title || "Без заголовка", at: note.editedAt ?? note.updatedAt, open: () => focusNote(note.id) });
+      out.push({ key: `note:${note.id}`, kind: "note", title: note.title || "Без заголовка", at: note.editedAt ?? note.updatedAt, open: () => openEntity("note", note.id) });
     }
     for (const doc of documents ?? []) {
       if (doc.projectId !== project.id || doc.kind !== "file" || doc.deletedAt) continue;
-      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => focusDocument(doc.id) });
+      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id) });
     }
     for (const item of project.activity) {
       const kind = activityKind(item.type);
@@ -111,8 +111,7 @@ export function ProjectMaterials({
         title: item.title,
         at: item.at,
         open: () => {
-          if (item.type === "event") focusEvent(item.id);
-          else if (item.type === "transaction") focusTransaction(item.id);
+          if (item.type === "event" || item.type === "transaction") openEntity(item.type, item.id);
           else openPanel("inventory");
         }
       });

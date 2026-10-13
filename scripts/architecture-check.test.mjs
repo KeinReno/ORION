@@ -51,22 +51,23 @@ describe("architecture import boundary", () => {
     expect(architectureViolations(root)).toEqual([expect.stringContaining("imports host internals")]);
   });
 
-  it("keeps the office codec exception scoped to the documents-office plugin", () => {
+  it("has no office codec exception: host lib imports are rejected, plugin-local codecs are fine", () => {
     const root = fixture();
-    put(root, "apps/web/lib/office/docx-codec.ts", "export const c = 1;");
-    put(root, "apps/web/plugins/documents-office/docx-editor.tsx", 'import { c } from "../../lib/office/docx-codec";');
+    put(root, "apps/web/plugins/documents-office/codecs/docx-codec.ts", "export const c = 1;");
+    put(root, "apps/web/plugins/documents-office/docx-editor.tsx", 'import { c } from "./codecs/docx-codec";');
+    put(root, "apps/web/plugins/index.ts", 'import { c } from "./documents-office/codecs/docx-codec";');
     expect(architectureViolations(root)).toEqual([]);
-    put(root, "apps/web/plugins/sample/view.tsx", 'import { c } from "../../lib/office/docx-codec";');
+    put(root, "apps/web/lib/office/docx-codec.ts", "export const c = 1;");
+    put(root, "apps/web/plugins/documents-office/old-editor.tsx", 'import { c } from "../../lib/office/docx-codec";');
     expect(architectureViolations(root)).toEqual([expect.stringContaining("imports host internals")]);
   });
 
-  it("rejects new office imports and registry imports outside the fixed allowlist", () => {
+  it("rejects registry imports of host internals and plugin-to-plugin codec imports", () => {
     const root = fixture();
-    put(root, "apps/web/plugins/index.ts", 'import { x } from "../lib/office/office-kind";');
-    expect(architectureViolations(root)).toEqual([]);
     put(root, "apps/web/plugins/index.ts", 'import { x } from "../lib/format";');
     expect(architectureViolations(root)).toEqual([expect.stringContaining("imports host internals")]);
-    put(root, "apps/web/plugins/documents-office/new-editor.tsx", 'import { x } from "../../lib/office/docx-codec";');
+    put(root, "apps/web/plugins/documents-office/codecs/docx-codec.ts", "export const c = 1;");
+    put(root, "apps/web/plugins/sample/view.tsx", 'import { c } from "../documents-office/codecs/docx-codec";');
     expect(architectureViolations(root)).toHaveLength(2);
   });
 

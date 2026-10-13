@@ -24,7 +24,7 @@ import type { DocumentItem } from "@orion/shared-types";
 import { Button, EmptyState, Spinner } from "@orion/ui";
 import { AlertTriangle, FileWarning } from "lucide-react";
 import { Suspense, lazy, useState } from "react";
-import { isDocxDocument, isXlsxDocument } from "../../lib/office/office-kind";
+import { isDocxDocument, isXlsxDocument } from "./codecs/office-kind";
 
 const DocxEditor = lazy(() => import("./docx-editor"));
 const XlsxEditor = lazy(() => import("./xlsx-editor"));

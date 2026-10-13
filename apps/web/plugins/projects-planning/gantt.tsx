@@ -13,7 +13,7 @@ import { formatDuration, isTaskClosed, type Milestone, type MilestoneCascadeImpa
 import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
 import { Milestone as MilestoneIcon, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { focusTask, openPanel } from "../../lib/extensions/host-api";
+import { openEntity, openPanel } from "../../lib/extensions/host-api";
 import { shortDateTime } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
@@ -381,7 +381,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
           onEditMilestone={(id) => setEditingMilestone(milestones.find((m) => m.id === id) ?? null)}
           onDeleteMilestone={(id) => setPendingDeleteMilestone(milestones.find((m) => m.id === id) ?? null)}
           onOpenTask={(id) => {
-            focusTask(id);
+            openEntity("task", id);
             openPanel("tasks");
           }}
         />

@@ -390,7 +390,7 @@ Current source:
 Current source includes:
 
 - `apps/web/components/office/*`;
-- `apps/web/lib/office/*`.
+- `apps/web/plugins/documents-office/codecs/*` (перенесено из `apps/web/lib/office/*`).
 
 This plugin is especially important to isolate because it carries significant UI/runtime dependencies that should not become part of minimal Documents Base.
 

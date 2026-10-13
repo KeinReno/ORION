@@ -55,7 +55,7 @@ import {
   taskItems,
   type CalendarSourceId
 } from "../lib/calendar-sources";
-import { focusNote, focusTask, openPanel, useEventFocusRequest } from "../lib/panel-bus";
+import { openEntity, openPanel, useEventFocusRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
@@ -253,8 +253,8 @@ export function CalendarPanel(): React.ReactElement {
       setSelected(event);
       return;
     }
-    if ((tasks ?? []).some((t) => t.id === id)) focusTask(id);
-    else if ((notes ?? []).some((n) => n.id === id)) focusNote(id);
+    if ((tasks ?? []).some((t) => t.id === id)) openEntity("task", id);
+    else if ((notes ?? []).some((n) => n.id === id)) openEntity("note", id);
     else openPanel("finance");
   }
 

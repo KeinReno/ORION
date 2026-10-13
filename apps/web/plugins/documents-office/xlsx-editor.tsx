@@ -7,7 +7,7 @@
  *
  * Deliberately NOT a full Excel clone (per 21-OFFICE-IMPLEMENTATION.md /
  * task instructions): a plain editable grid over `WorkbookState`
- * (`apps/web/lib/office/xlsx-codec.ts`, O01/O01b), sheet tabs, computed
+ * (`apps/web/plugins/documents-office/codecs/xlsx-codec.ts`, O01/O01b), sheet tabs, computed
  * formula values via `recalculate` (HyperFormula), and minimal "insert
  * chart" / "insert pivot table" forms driving the already-existing
  * `addChart`/`addPivotTable` — no drag-and-drop, no cell-range selection UI
@@ -46,9 +46,9 @@ import {
   type ChartType,
   type PivotSubtotal,
   type WorkbookState
-} from "../../lib/office/xlsx-codec";
-import { shouldAcceptRefetchedBlob } from "../../lib/office/editor-generation-guard";
-import { XLSX_MIME } from "../../lib/office/office-files";
+} from "./codecs/xlsx-codec";
+import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
+import { XLSX_MIME } from "./codecs/office-files";
 
 /** Parses an A1 range like "A1:D10" into header names read from its first row. */
 function headersFromRange(sheetRows: { value: string | number | boolean | null; formula?: string }[][], range: string): string[] {

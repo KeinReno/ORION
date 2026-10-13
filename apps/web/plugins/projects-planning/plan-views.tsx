@@ -18,7 +18,7 @@ import {
 import { Milestone as MilestoneIcon, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { shortDate } from "../../lib/extensions/host-api";
-import { focusTask, openPanel } from "../../lib/extensions/host-api";
+import { openEntity, openPanel } from "../../lib/extensions/host-api";
 import { dayOffset, planDates, planGroups, timelineRange, weekTicks, type PlanGroup, type PlanRow } from "../../lib/extensions/host-api";
 import { daysUntil, planStrip, pluralDays, type PlanStepState } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
@@ -103,7 +103,7 @@ export function ProjectPlan({ projectId }: { projectId: string }): React.ReactEl
   }
 
   const openTask = (task: Task): void => {
-    focusTask(task.id);
+    openEntity("task", task.id);
     openPanel("tasks");
   };
 

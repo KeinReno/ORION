@@ -6,7 +6,7 @@ const localDevDistDir = process.env.NODE_ENV === "development" ? process.env.ORI
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@orion/core", "@orion/core-react", "@orion/ui", "@orion/shared-types"],
-  // O04-follow-up (office editor): `apps/web/lib/office/xlsx-codec.ts`'s
+  // O04-follow-up (office editor): `apps/web/plugins/documents-office/codecs/xlsx-codec.ts`'s
   // modern-xlsx write path now DOES work in the browser for charts/pivot
   // tables — `ensureModernXlsxWasm` branches on `typeof window` and calls
   // modern-xlsx's own `initWasm("/modern-xlsx.wasm")` (a plain `fetch()`,

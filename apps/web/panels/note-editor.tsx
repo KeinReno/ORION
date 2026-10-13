@@ -44,7 +44,7 @@ import { formatDayTitle, fromDatetimeLocal, projectColor, relativeTime, toDateti
 import { describeError } from "../lib/error-message";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { NoteAutosave, type AutosaveConflict, type AutosaveState as NoteAutosaveState } from "../lib/note-autosave";
-import { focusNote } from "../lib/panel-bus";
+import { openEntity } from "../lib/panel-bus";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { NoteAttachmentsSection } from "./note-attachments";
 import { openInBrowser } from "../lib/panel-bus";
@@ -229,7 +229,7 @@ export function NoteEditor({
 
   function navigateWikiLink(target: string): void {
     const match = (titles ?? []).find((t) => t.title.toLowerCase() === target.toLowerCase());
-    if (match) focusNote(match.id);
+    if (match) openEntity("note", match.id);
     else toast({ title: `Заметки «${target}» нет`, tone: "default" });
   }
 
@@ -646,7 +646,7 @@ export function NoteEditor({
                   <li key={bl.id}>
                     <button
                       type="button"
-                      onClick={() => focusNote(bl.id)}
+                      onClick={() => openEntity("note", bl.id)}
                       className="w-full rounded-lg border border-transparent px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-card-hover"
                     >
                       <span className="block truncate text-label font-medium text-foreground">{bl.title || "Без заголовка"}</span>

@@ -37,9 +37,9 @@ import {
   Undo2
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { docxToTiptapJsonInBrowser, officeDocExtensions, tiptapJsonToDocx } from "../../lib/office/docx-codec";
-import { shouldAcceptRefetchedBlob } from "../../lib/office/editor-generation-guard";
-import { DOCX_MIME } from "../../lib/office/office-files";
+import { docxToTiptapJsonInBrowser, officeDocExtensions, tiptapJsonToDocx } from "./codecs/docx-codec";
+import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
+import { DOCX_MIME } from "./codecs/office-files";
 
 export interface OfficeEditorInnerProps {
   workspaceId: string;

@@ -8,7 +8,7 @@ import { inventoryCostingApi } from "./inventory-costing/costing";
 import { taskPlanningApi } from "./tasks-planning/planning";
 import { taskRecurrenceApi } from "./tasks-recurrence/recurrence";
 import { timeBillingApi } from "./time-billing/billing";
-import { isOfficeFile } from "../lib/office/office-kind";
+import { isOfficeFile } from "./documents-office/codecs/office-kind";
 
 /**
  * Every compiled-in plugin registers here, once, what it adds to which slot. The components
@@ -69,7 +69,7 @@ contribute("documents.create", {
         buttonLabel: "Документ",
         icon: FileText,
         successTitle: "Документ создан",
-        createFile: async () => (await import("../lib/office/office-files")).createEmptyDocxFile()
+        createFile: async () => (await import("./documents-office/codecs/office-files")).createEmptyDocxFile()
       },
       {
         id: "xlsx",
@@ -77,7 +77,7 @@ contribute("documents.create", {
         buttonLabel: "Таблица",
         icon: FileSpreadsheet,
         successTitle: "Таблица создана",
-        createFile: async () => (await import("../lib/office/office-files")).createEmptyXlsxFile()
+        createFile: async () => (await import("./documents-office/codecs/office-files")).createEmptyXlsxFile()
       }
     ]
   }

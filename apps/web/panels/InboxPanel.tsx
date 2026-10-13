@@ -29,7 +29,7 @@ import { CircleCheck, Clock, FolderKanban, Inbox, Trash2, TriangleAlert } from "
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { fromDatetimeLocal, relativeTime, shortDateTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
-import { focusEvent, focusNote, focusTask, openPanel } from "../lib/panel-bus";
+import { openEntity, openPanel } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { InboxQueue } from "./inbox/queue";
@@ -144,16 +144,16 @@ export function InboxPanel(): React.ReactElement {
 
   function openCreated(kind: ProcessKind, targetId: string | null): void {
     if (kind === "task") {
-      if (targetId) focusTask(targetId);
+      if (targetId) openEntity("task", targetId);
       else openPanel("tasks");
       return;
     }
     if (kind === "note") {
-      if (targetId) focusNote(targetId);
+      if (targetId) openEntity("note", targetId);
       else openPanel("notes");
       return;
     }
-    if (targetId) focusEvent(targetId);
+    if (targetId) openEntity("event", targetId);
     else openPanel("calendar");
   }
 

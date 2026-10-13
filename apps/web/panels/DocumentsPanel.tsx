@@ -337,7 +337,8 @@ export function DocumentsPanel(): React.ReactElement {
    * `uploadDocuments` path as a drag-and-dropped file — no new endpoint,
    * per 12-PROGRESS.md "O02" §4.
    *
-   * `../lib/office/office-files` (and the DOCX/XLSX codecs it wraps —
+   * `plugins/documents-office/codecs/office-files` (reached via the
+   * `documents.create` slot, together with the DOCX/XLSX codecs it wraps —
    * Tiptap/docx, exceljs/HyperFormula/modern-xlsx) is imported dynamically
    * here rather than at module scope: DocumentsPanel itself is already
    * lazy-loaded per-panel (`lib/panel-registry.ts`'s `next/dynamic`), but a

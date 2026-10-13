@@ -17,7 +17,7 @@ import { Globe2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { describeError } from "../lib/error-message";
 import { formatMoney, shortDateTime } from "../lib/format";
-import { focusTask } from "../lib/panel-bus";
+import { openEntity } from "../lib/panel-bus";
 import { requestWorkspaceSwitch } from "../lib/unsaved-drafts";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
@@ -123,7 +123,7 @@ export function OverviewPanel(): React.ReactElement {
     // Explicit, user-triggered switch (a click), not a silent fallback —
     // same pattern U04's window model expects for cross-workspace navigation.
     requestWorkspaceSwitch(workspaceId);
-    focusTask(taskId);
+    openEntity("task", taskId);
   }
 
   return (

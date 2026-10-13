@@ -1,7 +1,7 @@
 // Copies modern-xlsx's precompiled WASM binary out of node_modules into
 // public/ so the browser can `fetch()` it as a plain static asset — same
 // pattern as copy-pdf-worker.mjs for pdf.js's worker (see that file's
-// comment). Referenced by apps/web/lib/office/xlsx-codec.ts's
+// comment). Referenced by apps/web/plugins/documents-office/codecs/xlsx-codec.ts's
 // `ensureModernXlsxWasm` as `/modern-xlsx.wasm` when running in the browser
 // (Node keeps reading the file straight from node_modules via `node:fs`,
 // unaffected). Regenerable, so it's gitignored — this runs before dev/build.
