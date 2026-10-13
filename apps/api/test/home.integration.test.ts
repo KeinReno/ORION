@@ -51,6 +51,7 @@ describe("Module Home", () => {
     listIds: string[];
     inventoryIds: string[];
     obligationIds: string[];
+    elsewhere: { taskIds: string[]; listIds: string[]; inventoryIds: string[]; obligationIds: string[] };
     meters: Array<{ id: string; unit: string; lastValue: number | null; readings: Array<{ id: string; value: number; consumption: number | null }> }>;
     contacts: Array<{ id: string; name: string }>;
   }
@@ -149,6 +150,36 @@ describe("Module Home", () => {
     expect((await request(`${base}/contacts/${contact.data.id}`, { method: "PATCH", token: alice.accessToken, body: { phone: "+7 911 111-11-11" } })).status).toBe(200);
     expect((await request<Overview>(`${base}/overview`, { method: "GET", token: alice.accessToken })).data.contacts).toHaveLength(1);
     expect((await request(`${base}/contacts/${contact.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+  });
+
+  it("«привязано к другому дому» не предлагается повторно, а лента дома собирает дела и показания", async () => {
+    const alice = await register("alice4");
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const flat = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Квартира" } });
+    const dacha = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Дача" } });
+    const task = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Побелить потолок", homeId: flat.data.id } });
+    const free = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Свободная" } });
+
+    const dachaView = await request<Overview>(`${ws}/homes/${dacha.data.id}/overview`, { method: "GET", token: alice.accessToken });
+    expect(dachaView.data.elsewhere.taskIds).toContain(task.data.id);
+    expect(dachaView.data.elsewhere.taskIds).not.toContain(free.data.id);
+    const flatView = await request<Overview>(`${ws}/homes/${flat.data.id}/overview`, { method: "GET", token: alice.accessToken });
+    expect(flatView.data.elsewhere.taskIds).not.toContain(task.data.id);
+
+    await request(`${ws}/tasks/${task.data.id}`, { method: "PATCH", token: alice.accessToken, body: { status: "done" } });
+    await request(`${ws}/tasks/${task.data.id}/comments`, { method: "POST", token: alice.accessToken, body: { body: "готово" } });
+    const meter = await request<{ id: string }>(`${ws}/homes/${flat.data.id}/meters`, { method: "POST", token: alice.accessToken, body: { name: "Газ", kind: "gas" } });
+    await request(`${ws}/homes/${flat.data.id}/meters/${meter.data.id}/readings`, { method: "POST", token: alice.accessToken, body: { value: 55 } });
+    // A chore of another home or of none does not leak into this feed.
+    await request(`${ws}/tasks/${free.data.id}`, { method: "PATCH", token: alice.accessToken, body: { status: "done" } });
+
+    const feed = await request<Array<{ kind: string; summary: string; entity: { title: string } | null }>>(`${ws}/homes/${flat.data.id}/activity`, { method: "GET", token: alice.accessToken });
+    expect(feed.status).toBe(200);
+    expect(new Set(feed.data.map((e) => e.kind))).toEqual(new Set(["task_change", "task_comment", "meter_reading"]));
+    expect(feed.data.every((e) => e.entity === null || e.entity.title === "Побелить потолок")).toBe(true);
+    expect(feed.data.find((e) => e.kind === "meter_reading")?.summary).toContain("Газ");
+    const otherFeed = await request<unknown[]>(`${ws}/homes/${dacha.data.id}/activity`, { method: "GET", token: alice.accessToken });
+    expect(otherFeed.data).toEqual([]);
   });
 
   async function register(name: string): Promise<RegisteredSession> {

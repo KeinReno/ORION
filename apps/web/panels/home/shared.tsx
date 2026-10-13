@@ -1,7 +1,7 @@
 "use client";
 
 import type { Home, HomeOverview } from "@orion/shared-types";
-import { Button, Card, Input } from "@orion/ui";
+import { Button, Card, Input, Select } from "@orion/ui";
 import { Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -80,4 +80,40 @@ export function QuickAdd({
 
 export function EmptyLine({ children }: { children: React.ReactNode }): React.ReactElement {
   return <p className="text-label text-subtle-foreground">{children}</p>;
+}
+
+/**
+ * «Привязать существующее»: pick a record that already lives in its own module and hang it on this
+ * home. Records attached to ANOTHER home are not offered (the server lists them in `overview.elsewhere`).
+ */
+export function AttachPicker({
+  label,
+  options,
+  busy,
+  onPick
+}: {
+  label: string;
+  options: Array<{ id: string; label: string }>;
+  busy?: boolean;
+  onPick: (id: string) => void;
+}): React.ReactElement | null {
+  if (options.length === 0) return null;
+  return (
+    <Select
+      aria-label={label}
+      value=""
+      disabled={busy}
+      onChange={(event) => {
+        if (event.target.value) onPick(event.target.value);
+      }}
+      className="text-2xs"
+    >
+      <option value="">+ {label}…</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
+  );
 }

@@ -7,6 +7,7 @@ import {
   meterKindSchema,
   readingProblem,
   withConsumption,
+  type ActivityEntry,
   type AttachToHomeInput,
   type Contact,
   type CreateContactInput,
@@ -24,6 +25,7 @@ import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
+const STATUS_RU: Record<string, string> = { backlog: "Бэклог", todo: "К выполнению", in_progress: "В работе", done: "Готово", canceled: "Отменено" };
 const READINGS_SHOWN = 12;
 /** Closed chores stay on the page for this long, so "what did we do lately" is visible. */
 const DONE_VISIBLE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -112,6 +114,14 @@ export class HomeService {
         tx.contact.findMany({ where: { workspaceId, homeId }, orderBy: { name: "asc" } })
       ]);
 
+      const elsewhere = { homeId: { not: null as string | null, notIn: [homeId] }, workspaceId };
+      const [otherTasks, otherLists, otherItems, otherBills] = await Promise.all([
+        accessible.has("tasks") ? tx.task.findMany({ where: elsewhere, select: { id: true } }) : Promise.resolve([]),
+        accessible.has("lists") ? tx.list.findMany({ where: { ...elsewhere, archivedAt: null }, select: { id: true } }) : Promise.resolve([]),
+        accessible.has("inventory") ? tx.inventoryItem.findMany({ where: { ...elsewhere, archivedAt: null }, select: { id: true } }) : Promise.resolve([]),
+        accessible.has("finance") ? tx.financeObligation.findMany({ where: elsewhere, select: { id: true } }) : Promise.resolve([])
+      ]);
+
       const meterDtos = await Promise.all(meters.map((meter) => this.meterDtoTx(tx, meter)));
       return {
         home: homeDto(home),
@@ -119,9 +129,96 @@ export class HomeService {
         listIds: lists.map((l) => l.id),
         inventoryIds: items.map((i) => i.id),
         obligationIds: obligations.filter((o) => !o.closedAt).map((o) => o.id),
+        elsewhere: {
+          taskIds: otherTasks.map((t) => t.id),
+          listIds: otherLists.map((l) => l.id),
+          inventoryIds: otherItems.map((i) => i.id),
+          obligationIds: otherBills.map((b) => b.id)
+        },
         meters: meterDtos,
         contacts: contacts.map(contactDto)
       };
+    });
+  }
+
+  // -------------------------------------------------------------- activity
+
+  /**
+   * What happened lately around this home, newest first: chore changes and comments, meter readings.
+   * Chore entries appear only if the viewer may use the tasks module.
+   */
+  async activity(userId: string, workspaceId: string, homeId: string, limit = 30): Promise<ActivityEntry[]> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await this.assertHomeTx(tx, workspaceId, homeId);
+      const accessible = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+      const entries: ActivityEntry[] = [];
+
+      if (accessible.has("tasks")) {
+        const [changes, comments] = await Promise.all([
+          tx.taskActivity.findMany({
+            where: { workspaceId, task: { homeId } },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            include: { task: { select: { id: true, title: true } }, actor: { select: { name: true } } }
+          }),
+          tx.taskComment.findMany({
+            where: { workspaceId, task: { homeId } },
+            orderBy: { createdAt: "desc" },
+            take: limit,
+            include: { task: { select: { id: true, title: true } }, author: { select: { name: true } } }
+          })
+        ]);
+        for (const row of changes) {
+          const summary =
+            row.field === "status"
+              ? `Статус: ${STATUS_RU[row.fromValue ?? ""] ?? "—"} → ${STATUS_RU[row.toValue ?? ""] ?? "—"}`
+              : row.field === "dueAt"
+                ? "Срок изменён"
+                : row.field === "assigneeId"
+                  ? "Исполнитель изменён"
+                  : `Изменено: ${row.field}`;
+          entries.push({
+            id: `task_change:${row.id}`,
+            kind: "task_change",
+            at: row.createdAt.toISOString(),
+            actorKind: row.actor ? "user" : "unknown",
+            actorName: row.actor?.name ?? "—",
+            summary,
+            entity: { type: "task", id: row.task.id, title: row.task.title }
+          });
+        }
+        for (const row of comments) {
+          entries.push({
+            id: `task_comment:${row.id}`,
+            kind: "task_comment",
+            at: row.createdAt.toISOString(),
+            actorKind: "user",
+            actorName: row.author.name,
+            summary: "Комментарий к делу",
+            entity: { type: "task", id: row.task.id, title: row.task.title }
+          });
+        }
+      }
+
+      const readings = await tx.meterReading.findMany({
+        where: { workspaceId, meter: { homeId } },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: { meter: { select: { name: true, unit: true } } }
+      });
+      for (const row of readings) {
+        entries.push({
+          id: `meter_reading:${row.id}`,
+          kind: "meter_reading",
+          at: row.createdAt.toISOString(),
+          actorKind: "unknown",
+          actorName: "",
+          summary: `Счётчик «${row.meter.name}»: ${row.value}${row.meter.unit ? ` ${row.meter.unit}` : ""}`,
+          entity: null
+        });
+      }
+      return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
     });
   }
 

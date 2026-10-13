@@ -8,6 +8,7 @@ import {
   updateContactInputSchema,
   updateHomeInputSchema,
   updateMeterInputSchema,
+  type ActivityEntry,
   type AttachToHomeInput,
   type Contact,
   type CreateContactInput,
@@ -49,6 +50,11 @@ export class HomeController {
   @Get(":homeId/overview")
   overview(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("homeId") homeId: string): Promise<HomeOverview> {
     return this.home.overview(user.userId, workspaceId, homeId);
+  }
+
+  @Get(":homeId/activity")
+  activity(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("homeId") homeId: string): Promise<ActivityEntry[]> {
+    return this.home.activity(user.userId, workspaceId, homeId);
   }
 
   @Patch(":homeId")

@@ -865,6 +865,10 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/homes/${homeId}/overview`, undefined, homeOverviewSchema);
   }
 
+  homeActivity(workspaceId: string, homeId: string): Promise<ActivityEntry[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/homes/${homeId}/activity`, undefined, z.array(activityEntrySchema));
+  }
+
   async attachToHome(workspaceId: string, homeId: string, input: AttachToHomeInput): Promise<void> {
     await this.request("POST", `/workspaces/${workspaceId}/homes/${homeId}/attach`, input, z.unknown());
   }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCreateInventoryItem, useInventoryItems, useRecordInventoryMovement, useRefreshHome } from "@orion/core-react";
+import { useAttachToHome, useCreateInventoryItem, useInventoryItems, useRecordInventoryMovement, useRefreshHome } from "@orion/core-react";
 import { Badge, IconButton, useToast } from "@orion/ui";
 import { Boxes, Minus, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { describeError } from "../../lib/error-message";
-import { EmptyLine, QuickAdd, SectionCard, type HomeSectionProps } from "./shared";
+import { AttachPicker, EmptyLine, QuickAdd, SectionCard, type HomeSectionProps } from "./shared";
 
 /** Things and supplies of the home, from «Склад»: what there is and how much is left. */
 export function HomeThings({ workspaceId, home, overview }: HomeSectionProps): React.ReactElement {
@@ -14,9 +14,15 @@ export function HomeThings({ workspaceId, home, overview }: HomeSectionProps): R
   const createItem = useCreateInventoryItem(workspaceId);
   const record = useRecordInventoryMovement(workspaceId);
   const refresh = useRefreshHome(workspaceId);
+  const attach = useAttachToHome(workspaceId);
 
   const mine = useMemo(() => new Set(overview.inventoryIds), [overview.inventoryIds]);
   const rows = useMemo(() => (items ?? []).filter((i) => mine.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, "ru")), [items, mine]);
+  const elsewhere = useMemo(() => new Set(overview.elsewhere.inventoryIds), [overview.elsewhere.inventoryIds]);
+  const attachable = useMemo(
+    () => (items ?? []).filter((i) => !mine.has(i.id) && !elsewhere.has(i.id) && !i.archivedAt).map((i) => ({ id: i.id, label: i.name })),
+    [items, mine, elsewhere]
+  );
   const low = rows.filter((i) => i.lowStock).length;
 
   async function add(name: string): Promise<void> {
@@ -39,6 +45,7 @@ export function HomeThings({ workspaceId, home, overview }: HomeSectionProps): R
   return (
     <SectionCard title="Вещи и запасы" icon={Boxes} summary={low ? `заканчивается: ${low}` : undefined}>
       <QuickAdd placeholder="Вещь или запас, например «стиральный порошок»" busy={createItem.isPending} onAdd={add} />
+      <AttachPicker label="Привязать вещь со склада" options={attachable} busy={attach.isPending} onPick={(id) => attach.mutate({ homeId: home.id, input: { type: "inventory", id }, attach: true })} />
       {rows.length === 0 ? (
         <EmptyLine>Вещей пока нет.</EmptyLine>
       ) : (

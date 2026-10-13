@@ -9,7 +9,7 @@ import { describeError } from "../../lib/error-message";
 import { shortDate } from "../../lib/format";
 import { focusTask } from "../../lib/panel-bus";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
-import { EmptyLine, QuickAdd, SectionCard, type HomeSectionProps } from "./shared";
+import { AttachPicker, EmptyLine, QuickAdd, SectionCard, type HomeSectionProps } from "./shared";
 
 /**
  * Chores and errands of the home. A task made here is an ordinary task (it shows in «Задачи» too)
@@ -43,6 +43,11 @@ export function HomeTasks({ workspaceId, home, overview }: HomeSectionProps): Re
     });
   }, [tasks, mine, onlyMine, myMemberId]);
   const open = rows.filter((t) => !isTaskClosed(t.status)).length;
+  const elsewhere = useMemo(() => new Set(overview.elsewhere.taskIds), [overview.elsewhere.taskIds]);
+  const attachable = useMemo(
+    () => (tasks ?? []).filter((t) => !mine.has(t.id) && !elsewhere.has(t.id) && !isTaskClosed(t.status)).map((t) => ({ id: t.id, label: t.title })),
+    [tasks, mine, elsewhere]
+  );
 
   async function add(title: string): Promise<void> {
     try {
@@ -84,6 +89,7 @@ export function HomeTasks({ workspaceId, home, overview }: HomeSectionProps): Re
           </>
         }
       />
+      <AttachPicker label="Привязать существующую задачу" options={attachable} busy={attach.isPending} onPick={(id) => attach.mutate({ homeId: home.id, input: { type: "task", id }, attach: true })} />
       {teamOn && myMemberId ? (
         <label className="flex items-center gap-1.5 text-2xs text-subtle-foreground">
           <input type="checkbox" checked={onlyMine} onChange={(event) => setOnlyMine(event.target.checked)} className="accent-accent" />

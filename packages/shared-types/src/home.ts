@@ -158,6 +158,13 @@ export const homeOverviewSchema = z.object({
   listIds: z.array(z.string()),
   inventoryIds: z.array(z.string()),
   obligationIds: z.array(z.string()),
+  /** Records already attached to ANOTHER home: the «attach existing» pickers leave them out. */
+  elsewhere: z.object({
+    taskIds: z.array(z.string()),
+    listIds: z.array(z.string()),
+    inventoryIds: z.array(z.string()),
+    obligationIds: z.array(z.string())
+  }),
   meters: z.array(meterSchema),
   contacts: z.array(contactSchema)
 });

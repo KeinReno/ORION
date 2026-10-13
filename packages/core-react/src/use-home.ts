@@ -7,6 +7,7 @@ import type {
   CreateHomeInput,
   CreateMeterInput,
   CreateMeterReadingInput,
+  ActivityEntry,
   Home,
   HomeOverview,
   Meter,
@@ -33,6 +34,17 @@ export function useHomeOverview(workspaceId: string | undefined, homeId: string 
     queryKey: ["home", workspaceId, "overview", homeId],
     queryFn: () => api.homeOverview(workspaceId as string, homeId as string),
     enabled: Boolean(workspaceId && homeId)
+  });
+}
+
+/** Lately around this home: chore changes and comments, meter readings. */
+export function useHomeActivity(workspaceId: string | undefined, homeId: string | undefined) {
+  const { api } = useCore();
+  return useQuery<ActivityEntry[]>({
+    queryKey: ["home", workspaceId, "activity", homeId],
+    queryFn: () => api.homeActivity(workspaceId as string, homeId as string),
+    enabled: Boolean(workspaceId && homeId),
+    refetchInterval: 30_000
   });
 }
 

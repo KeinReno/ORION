@@ -7,7 +7,7 @@ import { z } from "zod";
 export const activityActorKindSchema = z.enum(["user", "agent", "unknown"]);
 export type ActivityActorKind = z.infer<typeof activityActorKindSchema>;
 
-export const activityKindSchema = z.enum(["task_change", "task_comment", "agent_call"]);
+export const activityKindSchema = z.enum(["task_change", "task_comment", "agent_call", "meter_reading"]);
 export type ActivityKind = z.infer<typeof activityKindSchema>;
 
 export const activityEntrySchema = z.object({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCreateObligation, useObligations, usePayObligation, useRefreshHome } from "@orion/core-react";
+import { useAttachToHome, useCreateObligation, useObligations, usePayObligation, useRefreshHome } from "@orion/core-react";
 import { OBLIGATION_KIND_LABEL, type ObligationKind } from "@orion/shared-types";
 import { Badge, Button, Input, Select, useToast } from "@orion/ui";
 import { Receipt } from "lucide-react";
@@ -8,7 +8,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
 import { formatMoney, parseMoneyInput, shortDate } from "../../lib/format";
 import { openPanel } from "../../lib/panel-bus";
-import { EmptyLine, SectionCard, type HomeSectionProps } from "./shared";
+import { AttachPicker, EmptyLine, SectionCard, type HomeSectionProps } from "./shared";
 
 const KINDS: ObligationKind[] = ["utility", "subscription", "credit", "other"];
 
@@ -30,11 +30,17 @@ export function HomePayments({ workspaceId, home, overview }: HomeSectionProps):
   const create = useCreateObligation(workspaceId);
   const pay = usePayObligation(workspaceId);
   const refresh = useRefreshHome(workspaceId);
+  const attach = useAttachToHome(workspaceId);
 
   const mine = useMemo(() => new Set(overview.obligationIds), [overview.obligationIds]);
   const rows = useMemo(
     () => (obligations ?? []).filter((o) => mine.has(o.id)).sort((a, b) => (a.nextDueAt ?? "9").localeCompare(b.nextDueAt ?? "9")),
     [obligations, mine]
+  );
+  const elsewhere = useMemo(() => new Set(overview.elsewhere.obligationIds), [overview.elsewhere.obligationIds]);
+  const attachable = useMemo(
+    () => (obligations ?? []).filter((o) => !mine.has(o.id) && !elsewhere.has(o.id) && !o.closedAt).map((o) => ({ id: o.id, label: o.name })),
+    [obligations, mine, elsewhere]
   );
   const monthly = rows.filter((o) => o.interval === "monthly" && o.direction === "owe").reduce((sum, o) => sum + o.payment, 0);
 
@@ -98,6 +104,7 @@ export function HomePayments({ workspaceId, home, overview }: HomeSectionProps):
           Добавить
         </Button>
       </form>
+      <AttachPicker label="Привязать существующий платёж" options={attachable} busy={attach.isPending} onPick={(id) => attach.mutate({ homeId: home.id, input: { type: "obligation", id }, attach: true })} />
       {rows.length === 0 ? (
         <EmptyLine>Платежей по дому пока нет. Добавьте коммуналку, интернет, страховку — с суммой и днём месяца.</EmptyLine>
       ) : (

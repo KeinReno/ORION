@@ -8,6 +8,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { describeError } from "../lib/error-message";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
+import { HomeActivity } from "./home/home-activity";
 import { HomeContacts } from "./home/home-contacts";
 import { HomeMeters } from "./home/home-meters";
 import { HomePayments } from "./home/home-payments";
@@ -141,6 +142,7 @@ export function HomePanel(): React.ReactElement {
                 <HomeMeters workspaceId={workspaceId} home={home} overview={overview} />
                 {isEnabled("inventory") ? <HomeThings workspaceId={workspaceId} home={home} overview={overview} /> : null}
                 <HomeContacts workspaceId={workspaceId} home={home} overview={overview} />
+                <HomeActivity workspaceId={workspaceId} home={home} overview={overview} />
               </div>
             )}
           </>
