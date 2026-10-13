@@ -1,5 +1,6 @@
 "use client";
 
+import { DashboardAnalytics } from "./dashboard/analytics";
 import { ApiError } from "@orion/core";
 import {
   useAccounts,
@@ -584,6 +585,7 @@ export function DashboardPanel(): React.ReactElement {
                 ) : null}
               </div>
             ) : null}
+            {tasksOn ? <DashboardAnalytics workspaceId={wsId} tasks={tasks ?? []} now={localNow} /> : null}
           </>
         )}
       </PanelBody>
