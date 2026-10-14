@@ -69,15 +69,47 @@ export interface DragStartInput {
 }
 
 /**
- * Arm a drag only for primary button + the platform's modifier (Ctrl, or Cmd on
- * macOS where Ctrl+click is a right click) on a non-interactive spot. A plain
- * press never arms it, so ordinary clicks and Ctrl+click keep working.
+ * What a press on a view's handle will do if it turns into a drag:
+ *  - `"dock"`   plain drag — the view becomes a panel INSIDE the app, where it is dropped
+ *               (and, like a browser tab, an OS window if it is dropped outside the app window);
+ *  - `"window"` Ctrl (Cmd on macOS) + drag — an OS window at the drop point, wherever that is;
+ *  - `null`     not a drag: a non-primary button, other modifiers, or a control / data surface.
+ * HTML5 drag only starts after the pointer moves, so a plain click keeps working.
  */
-export function shouldStartPanelDrag(input: DragStartInput): boolean {
-  if (input.button !== 0) return false;
-  if (input.blockedTarget) return false;
-  if (input.shiftKey || input.altKey) return false;
-  return input.isMac ? input.metaKey && !input.ctrlKey : input.ctrlKey && !input.metaKey;
+export function panelDragMode(input: DragStartInput): "dock" | "window" | null {
+  if (input.button !== 0) return null;
+  if (input.blockedTarget) return null;
+  if (input.shiftKey || input.altKey) return null;
+  const modifier = input.isMac ? input.metaKey && !input.ctrlKey : input.ctrlKey && !input.metaKey;
+  const wrongModifier = input.isMac ? input.ctrlKey : input.metaKey;
+  if (wrongModifier) return null;
+  return modifier ? "window" : "dock";
+}
+
+export interface DragEndInput {
+  mode: "dock" | "window";
+  /** `dataTransfer.dropEffect` at `dragend`: "none" = nobody in this page accepted the drop. */
+  dropEffect: string;
+  clientX: number;
+  clientY: number;
+  screenX: number;
+  screenY: number;
+  innerWidth: number;
+  innerHeight: number;
+}
+
+/**
+ * Where an OS window should open after a drag ended, or null for "do nothing".
+ * `window` mode opens at the drop point whatever it was (it is the explicit «в окно»); `dock` mode only
+ * when the view was dropped OUTSIDE the app window (another monitor, the desktop). A cancelled drag
+ * (Esc) reports 0,0 and never opens anything; a drop the dock accepted (`dropEffect !== "none"`) is not ours.
+ */
+export function dragEndWindowTarget(input: DragEndInput): { x: number; y: number } | null {
+  if (input.dropEffect !== "none") return null;
+  if (input.screenX === 0 && input.screenY === 0) return null;
+  const outside = input.clientX < 0 || input.clientY < 0 || input.clientX > input.innerWidth || input.clientY > input.innerHeight;
+  if (input.mode === "dock" && !outside) return null;
+  return { x: input.screenX, y: input.screenY };
 }
 
 /** Builds the dock panel id (`kind:recordId`); null for an unknown kind or an unusable id. */
@@ -96,5 +128,5 @@ export function isDraggablePanelId(panelId: string | null | undefined): panelId 
 }
 
 export function panelDragHint(isMac: boolean): string {
-  return `${isMac ? "Cmd" : "Ctrl"}+перетаскивание — открыть панелью. С клавиатуры: меню «Действия» → «Открыть панелью»`;
+  return `Перетащите — откроется панелью в приложении (за пределами окна — отдельным окном); ${isMac ? "Cmd" : "Ctrl"}+перетаскивание — отдельным окном. С клавиатуры: меню «Вынести» / «Действия»`;
 }

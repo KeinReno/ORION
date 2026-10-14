@@ -1,24 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { buildPanelDragId, isBlockedDragTarget, isDraggablePanelId, isMacPlatform, panelDragHint, shouldStartPanelDrag } from "./panel-drag";
+import { buildPanelDragId, dragEndWindowTarget, isBlockedDragTarget, isDraggablePanelId, isMacPlatform, panelDragHint, panelDragMode } from "./panel-drag";
 
 const base = { button: 0, ctrlKey: false, metaKey: false, isMac: false, blockedTarget: false };
 
-describe("shouldStartPanelDrag", () => {
-  it("ignores a plain press", () => {
-    expect(shouldStartPanelDrag(base)).toBe(false);
-  });
-  it("arms on Ctrl (non-mac) and Cmd (mac)", () => {
-    expect(shouldStartPanelDrag({ ...base, ctrlKey: true })).toBe(true);
-    expect(shouldStartPanelDrag({ ...base, isMac: true, metaKey: true })).toBe(true);
+describe("panelDragMode", () => {
+  it("a plain press is a dock drag, Ctrl (Cmd on mac) makes it a window drag", () => {
+    expect(panelDragMode(base)).toBe("dock");
+    expect(panelDragMode({ ...base, ctrlKey: true })).toBe("window");
+    expect(panelDragMode({ ...base, isMac: true, metaKey: true })).toBe("window");
   });
   it("does not treat Ctrl as the modifier on mac (right click) or Cmd off mac", () => {
-    expect(shouldStartPanelDrag({ ...base, isMac: true, ctrlKey: true })).toBe(false);
-    expect(shouldStartPanelDrag({ ...base, metaKey: true })).toBe(false);
+    expect(panelDragMode({ ...base, isMac: true, ctrlKey: true })).toBeNull();
+    expect(panelDragMode({ ...base, metaKey: true })).toBeNull();
   });
   it("rejects non-primary buttons, extra modifiers and blocked targets", () => {
-    expect(shouldStartPanelDrag({ ...base, ctrlKey: true, button: 2 })).toBe(false);
-    expect(shouldStartPanelDrag({ ...base, ctrlKey: true, shiftKey: true })).toBe(false);
-    expect(shouldStartPanelDrag({ ...base, ctrlKey: true, blockedTarget: true })).toBe(false);
+    expect(panelDragMode({ ...base, button: 2 })).toBeNull();
+    expect(panelDragMode({ ...base, ctrlKey: true, shiftKey: true })).toBeNull();
+    expect(panelDragMode({ ...base, altKey: true })).toBeNull();
+    expect(panelDragMode({ ...base, blockedTarget: true })).toBeNull();
+    expect(panelDragMode({ ...base, ctrlKey: true, blockedTarget: true })).toBeNull();
+  });
+});
+
+describe("dragEndWindowTarget", () => {
+  const end = { mode: "dock" as const, dropEffect: "none", clientX: 400, clientY: 300, screenX: 900, screenY: 500, innerWidth: 1500, innerHeight: 900 };
+  it("dock mode opens a window only when dropped outside the app window", () => {
+    expect(dragEndWindowTarget(end)).toBeNull();
+    expect(dragEndWindowTarget({ ...end, clientX: 1800 })).toEqual({ x: 900, y: 500 });
+    expect(dragEndWindowTarget({ ...end, clientY: -20 })).toEqual({ x: 900, y: 500 });
+  });
+  it("window mode opens at the drop point, inside or outside the app", () => {
+    expect(dragEndWindowTarget({ ...end, mode: "window" })).toEqual({ x: 900, y: 500 });
+    expect(dragEndWindowTarget({ ...end, mode: "window", clientX: 2000 })).toEqual({ x: 900, y: 500 });
+  });
+  it("never when the dock took the drop or the drag was cancelled", () => {
+    expect(dragEndWindowTarget({ ...end, mode: "window", dropEffect: "copy" })).toBeNull();
+    expect(dragEndWindowTarget({ ...end, mode: "window", screenX: 0, screenY: 0 })).toBeNull();
+    expect(dragEndWindowTarget({ ...end, clientX: 1800, screenX: 0, screenY: 0 })).toBeNull();
   });
 });
 
@@ -73,6 +91,6 @@ describe("platform + hint", () => {
   it("names the right modifier and the keyboard alternative", () => {
     expect(panelDragHint(false)).toContain("Ctrl");
     expect(panelDragHint(true)).toContain("Cmd");
-    expect(panelDragHint(false)).toContain("Открыть панелью");
+    expect(panelDragHint(false)).toContain("панелью");
   });
 });

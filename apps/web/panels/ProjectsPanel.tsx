@@ -1,6 +1,8 @@
 "use client";
 
+import { dragEndWindowTarget } from "../lib/panel-drag";
 import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
+import { detachPanelToWindow } from "../lib/panel-window";
 import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "../lib/project-order";
 import { useCreateProject, useProjects, useReorderProjects, useSession, useTasks } from "@orion/core-react";
 import { compareProjectsBySharedOrder, formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
@@ -21,7 +23,7 @@ import {
   useToast
 } from "@orion/ui";
 import { FolderKanban, Plus, Search, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { describeError } from "../lib/error-message";
 import { formatMoney } from "../lib/format";
 import { openProject } from "../lib/panel-bus";
@@ -111,6 +113,8 @@ export function ProjectsPanel(): React.ReactElement {
     return sort === "manual" ? applyProjectOrder(visible, manualOrder) : visible;
   }, [source, query, statusFilter, sort, manualOrder]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  /** What the drag in flight will do at its end: an OS window (Ctrl, or dock drop outside the app) or nothing. */
+  const dragModeRef = useRef<"dock" | "window" | null>(null);
   function commitOrder(next: string[]): void {
     if (sort === "shared") {
       reorderProjects.mutate(
@@ -136,18 +140,43 @@ export function ProjectsPanel(): React.ReactElement {
     return {
       draggable: true,
       onDragStart: (event) => {
-        // Ctrl+drag (or any drag outside "Мой порядок") takes the project to the dock as a panel of its
-        // own; a plain drag in "Мой порядок" reorders. Same payload the sidebar links use.
-        if (!manual || event.ctrlKey) {
+        // Ctrl+drag takes the project OUT as an OS window; a plain drag opens it as a panel inside the app
+        // (an OS window if dropped outside the app window) — except in a manual order, where a plain
+        // drag reorders the list instead.
+        if (event.ctrlKey || event.metaKey) {
+          dragModeRef.current = "window";
+          event.dataTransfer.effectAllowed = "none";
+          event.dataTransfer.setData("text/plain", project.id);
+          return;
+        }
+        if (!manual) {
+          dragModeRef.current = "dock";
           event.dataTransfer.effectAllowed = "copy";
           event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, `project:${project.id}`);
           return;
         }
+        dragModeRef.current = null;
         setDraggingId(project.id);
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", project.id);
       },
-      onDragEnd: () => setDraggingId(null),
+      onDragEnd: (event) => {
+        setDraggingId(null);
+        const mode = dragModeRef.current;
+        dragModeRef.current = null;
+        if (!mode) return;
+        const at = dragEndWindowTarget({
+          mode,
+          dropEffect: event.dataTransfer.dropEffect,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          screenX: event.screenX,
+          screenY: event.screenY,
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight
+        });
+        if (at) void detachPanelToWindow(`project:${project.id}`, project.name, at);
+      },
       onDragOver: (event) => {
         if (draggingId) event.preventDefault();
       },
@@ -162,10 +191,8 @@ export function ProjectsPanel(): React.ReactElement {
         commitOrder(stepProject(full, ids, project.id, event.key === "ArrowUp" ? -1 : 1));
       },
       title: manual
-        ? shared
-          ? "Порядок команды: перетащите, чтобы изменить для всех (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
-          : "Перетащите, чтобы изменить порядок (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
-        : "Перетащите в рабочую область, чтобы открыть рядом"
+        ? "Перетащите, чтобы изменить порядок (Alt+↑/↓); Ctrl+перетаскивание — открыть отдельным окном"
+        : "Перетащите в рабочую область — откроется панелью (за пределами окна — отдельным окном); Ctrl+перетаскивание — отдельным окном"
     };
   }
   const filteredOut = source.length > 0 && list.length === 0;

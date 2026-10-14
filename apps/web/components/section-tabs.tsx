@@ -73,7 +73,7 @@ export function SectionTabs<T extends string>({
   if (locked) return null;
   const options: SegmentedOption<T>[] = tabs.map((tab) => {
     const id = sectionViewPanelId({ base: baseId, view: tab.value, instance });
-    return { value: tab.value, label: tab.label, ...(id ? { dataAttrs: { "data-panel-drag": id } } : {}) };
+    return { value: tab.value, label: tab.label, ...(id ? { dataAttrs: { "data-panel-drag": id, "data-panel-title": tabTitle(tab) } } : {}) };
   });
   const active = tabs.find((tab) => tab.value === value);
   const activeId = active ? sectionViewPanelId({ base: baseId, view: active.value, instance }) : null;

@@ -48,7 +48,7 @@ export function SettingsNav<T extends string>({
                 key={item.value}
                 type="button"
                 onClick={() => onChange(item.value)}
-                {...(id ? { "data-panel-drag": id } : {})}
+                {...(id ? { "data-panel-drag": id, "data-panel-title": `Настройки · ${typeof item.label === "string" ? item.label : item.value}` } : {})}
                 className={cx(
                   "rounded-lg px-3 py-row text-left text-label transition-colors",
                   value === item.value ? "bg-accent/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"

@@ -30,7 +30,12 @@ export async function openWorkspaceInNewWindow(workspaceId: string, title: strin
  * dockview's own built-in popout already uses there, just reachable
  * without first placing the panel in this window's dock.
  */
-export async function detachPanelToWindow(panelId: string, title: string): Promise<void> {
+export async function detachPanelToWindow(
+  panelId: string,
+  title: string,
+  /** Экранные координаты (CSS px) — окно появится там, куда карточку бросили (второй монитор). */
+  at?: { x: number; y: number }
+): Promise<void> {
   const workspaceId = getActiveWorkspaceId();
   const url = panelWindowUrl(panelId, workspaceId);
   if (isTauri()) {
@@ -44,8 +49,14 @@ export async function detachPanelToWindow(panelId: string, title: string): Promi
     // imperative click handler, not a render) so the detached window opens
     // already scoped to the same workspace; from then on it is its own
     // independent window context and can be switched separately.
-    new WebviewWindow(`panel-${panelId}-${Date.now()}`, { url, title, width: 900, height: 700 });
+    new WebviewWindow(`panel-${panelId}-${Date.now()}`, {
+      url,
+      title,
+      width: 900,
+      height: 700,
+      ...(at ? { x: Math.round(at.x - 450), y: Math.round(at.y - 40) } : {})
+    });
   } else {
-    window.open(url, `orion-panel-${panelId}-${Date.now()}`, "width=900,height=700");
+    window.open(url, `orion-panel-${panelId}-${Date.now()}`, `width=900,height=700${at ? `,left=${Math.round(at.x - 450)},top=${Math.round(at.y - 40)}` : ""}`);
   }
 }
