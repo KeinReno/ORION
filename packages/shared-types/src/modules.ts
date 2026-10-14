@@ -19,6 +19,7 @@ export const ORION_MODULE_IDS = [
   "lists",
   "inventory",
   "markets",
+  "opportunities",
   "home",
   "contacts"
 ] as const;
@@ -139,6 +140,13 @@ export const INBOX_TARGET_MODULE: Record<"task" | "note" | "event", OrionModuleI
  * the panel, commands and API without a migration.
  */
 export const MODULE_CATALOG: readonly ModuleManifest[] = [
+  { id: "opportunities", kind: "additional", required: false, label: "Возможности",
+    summary: "Вакансии и заказы: условия, статусы и история работы.",
+    owns: "Карточки возможностей, источник, условия и ручной жизненный цикл.",
+    livesWithout: "Работает без профилей, ИИ, HeadHunter и соседних модулей.",
+    provides: ["Вакансии и заказы", "Поиск и фильтры", "Архив и экспорт"],
+    optionalDependencies: [], disableBehavior: "Панель и API недоступны; карточки сохраняются.",
+    panelId: "opportunities", defaultEnabled: true },
   {
     id: "tasks",
     kind: "base",
@@ -321,5 +329,4 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     panelId: "contacts",
     defaultEnabled: true
   }
-
 ];

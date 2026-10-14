@@ -64,7 +64,7 @@ import { ExtensionSlot } from "../lib/extensions/slot";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
-import { focusNote, focusTask, openPanel } from "../lib/panel-bus";
+import { openEntity, openPanel } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useDayKey, useLocalNow } from "../lib/use-day-boundary";
 import { useEnabledModules } from "../lib/use-enabled-modules";
@@ -476,7 +476,7 @@ export function DashboardPanel(): React.ReactElement {
                         <li key={event.id}>
                           <button
                             type="button"
-                            onClick={() => openPanel("calendar")}
+                            onClick={() => openEntity("event", event.id, event.title)}
                             className="flex w-full items-center gap-2 rounded-lg px-1 py-row text-left hover:bg-white/5"
                           >
                             <span className="w-14 shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
@@ -504,7 +504,7 @@ export function DashboardPanel(): React.ReactElement {
                         <li key={event.id}>
                           <button
                             type="button"
-                            onClick={() => openPanel("calendar")}
+                            onClick={() => openEntity("event", event.id, event.title)}
                             className="flex w-full items-center gap-2 rounded-lg px-1 py-row text-left hover:bg-white/5"
                           >
                             <span className="w-14 shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
@@ -572,7 +572,7 @@ export function DashboardPanel(): React.ReactElement {
                         <li key={note.id}>
                           <button
                             type="button"
-                            onClick={() => focusNote(note.id)}
+                            onClick={() => openEntity("note", note.id, note.title)}
                             className="flex w-full items-baseline justify-between gap-3 rounded-lg px-1 py-row text-left hover:bg-white/5"
                           >
                             <span className="truncate text-body text-foreground">{note.title || "Без заголовка"}</span>
@@ -749,7 +749,7 @@ function TaskRow({
         label={done ? "Вернуть в работу" : `Отметить «${task.title}» выполненной`}
         tone="success"
       />
-      <button type="button" onClick={() => focusTask(task.id)} className="min-w-0 flex-1 truncate text-left text-body text-foreground">
+      <button type="button" onClick={() => openEntity("task", task.id, task.title)} className="min-w-0 flex-1 truncate text-left text-body text-foreground">
         {task.title}
       </button>
       {task.projectTag ? (

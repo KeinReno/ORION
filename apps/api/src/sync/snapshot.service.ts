@@ -53,6 +53,14 @@ interface ModelSpec {
  * this list to be complete by inspection, per S03a in 10-BACKLOG.md.
  */
 const SNAPSHOT_MODELS: ModelSpec[] = [
+  spec("opportunities", (tx) => tx.opportunity),
+  spec("opportunityProfiles", (tx) => tx.opportunityProfile),
+  spec("opportunityFacts", (tx) => tx.opportunityFact),
+  spec("opportunityTracks", (tx) => tx.opportunityTrack),
+  spec("opportunityMaterials", (tx) => tx.opportunityMaterial),
+  specCanceledImports("opportunityImports", (tx) => tx.opportunityImport),
+  spec("opportunityCaptures", (tx) => tx.opportunityCapture),
+  spec("opportunityHistory", (tx) => tx.opportunityHistory),
   spec("projects", (tx) => tx.project),
   spec("homes", (tx) => tx.home),
   spec("meters", (tx) => tx.meter),
@@ -154,6 +162,11 @@ interface WsDelegate {
   findMany(args: { where: { workspaceId: string } }): Promise<unknown[]>;
   deleteMany(args: { where: { workspaceId: string } }): Promise<unknown>;
   createMany(args: { data: unknown[]; skipDuplicates?: boolean }): Promise<unknown>;
+}
+
+function specCanceledImports(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  return { ...base, insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map((row) => ({ ...row, status: "canceled", revision: Number(row.revision ?? 0) + 1 }))) };
 }
 
 function spec(key: string, pick: (tx: Tx) => unknown): ModelSpec {

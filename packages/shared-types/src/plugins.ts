@@ -12,6 +12,8 @@ import { orionModuleIdSchema, type OrionModuleId } from "./modules";
  */
 export const ORION_PLUGIN_IDS = [
   "team",
+  "opportunities-profiles",
+  "opportunities-hh-import",
   "habits-insights",
   "finance-budgeting",
   "finance-goals",
@@ -106,6 +108,8 @@ export function pluginStates(
 
 /** Compiled-in catalog — same posture as MODULE_CATALOG, now two plugins: the original optional `team` and the first extraction, `habits-insights`. */
 export const PLUGIN_CATALOG: readonly PluginManifest[] = [
+  { id: "opportunities-profiles", extendsModuleId: "opportunities", label: "Профили кандидатов", summary: "Люди, команды, подтверждённые факты и версии материалов.", provides: ["Профили", "Факты и треки", "Версии резюме"], disableBehavior: "Профили и материалы сохраняются; их API и экран недоступны.", defaultEnabled: false },
+  { id: "opportunities-hh-import", extendsModuleId: "opportunities", label: "Импорт архива HH", summary: "Предварительный просмотр вакансий, резюме и исторических откликов.", provides: ["Импорт текстовых файлов", "Происхождение и защита от дублей"], disableBehavior: "Применение импорта блокируется; импортированные карточки сохраняются.", defaultEnabled: false },
   {
     id: "team",
     extendsModuleId: "tasks",

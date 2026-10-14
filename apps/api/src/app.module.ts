@@ -1,3 +1,5 @@
+import { OpportunitiesModule } from "./opportunities/opportunities.module";
+import { OpportunityExtensionsModule } from "./opportunity-extensions/opportunity-extensions.module";
 import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PrismaModule } from "./common/prisma.module";
@@ -62,6 +64,8 @@ import { UsersModule } from "./users/users.module";
     TimeModule,
     HabitsModule,
     ListsModule,
+    OpportunitiesModule,
+    OpportunityExtensionsModule,
     MarketsModule,
     InventoryModule,
     ListsInventoryModule,

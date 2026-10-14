@@ -11,7 +11,8 @@ import { Button, EmptyState, IconButton, Popover, Skeleton, cx, useToast } from 
 import { Bell, BellRing, Boxes, CalendarClock, FolderKanban, Info, ListTodo, MessageSquare, Trash2, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { relativeTime } from "../lib/format";
-import { focusEvent, focusNote, focusTask, openPanel } from "../lib/panel-bus";
+import { openEntity, openPanel } from "../lib/panel-bus";
+import { notificationTarget } from "../lib/notification-navigation";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
 const KIND_ICON: Record<Notification["kind"], React.ComponentType<{ className?: string }>> = {
@@ -40,27 +41,9 @@ const KIND_LABEL: Record<Notification["kind"], string> = {
 const VISIBLE_LIMIT = 10;
 
 function openNotificationTarget(item: Notification): void {
-  const type = item.entityType;
-  const id = item.entityId;
-  if (type === "task" && id) {
-    focusTask(id);
-    return;
-  }
-  if (type === "note" && id) {
-    focusNote(id);
-    return;
-  }
-  if (type === "event" && id) {
-    focusEvent(id);
-    return;
-  }
-  if (type === "budget" || item.kind === "finance_alert") {
-    openPanel("finance");
-    return;
-  }
-  if (type === "inventory_item" || item.kind === "inventory_low_stock") {
-    openPanel("inventory");
-  }
+  const target = notificationTarget(item);
+  if (target?.kind === "entity") openEntity(target.type, target.id);
+  else if (target?.kind === "panel") openPanel(target.panelId);
 }
 
 /**
@@ -166,7 +149,12 @@ export function NotificationBell({ size = "md" }: { size?: "sm" | "md" }): React
               <Skeleton className="h-12" />
             </div>
           ) : notifications.isError ? (
-            <p className="py-6 text-center text-xs text-muted-foreground">Не удалось загрузить уведомления</p>
+            <div className="space-y-2 py-4 text-center">
+              <p className="text-xs text-muted-foreground">Не удалось загрузить уведомления</p>
+              <Button size="sm" variant="outline" onClick={() => void notifications.refetch()}>
+                Повторить
+              </Button>
+            </div>
           ) : visible.length === 0 ? (
             <EmptyState icon={Bell} title="Уведомлений нет" />
           ) : (
@@ -207,20 +195,22 @@ function NotificationRow({
 }): React.ReactElement {
   const Icon = KIND_ICON[item.kind];
   const unread = !item.readAt;
-  const canOpen = Boolean(item.entityType && item.entityId) || item.kind === "finance_alert" || item.kind === "inventory_low_stock";
+  const canOpen = notificationTarget(item) !== null;
 
   return (
     <li
       className={
-        "rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:bg-white/5" +
+        "rounded-lg border border-transparent px-2 py-1.5 transition-colors" +
+        (canOpen ? " hover:bg-white/5" : "") +
         (unread ? " bg-accent/[0.06]" : "")
       }
     >
       <button
         type="button"
         onClick={onOpen}
+        disabled={!canOpen}
         title={canOpen ? "Открыть" : undefined}
-        className="flex w-full items-start gap-2 text-left"
+        className="flex w-full items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${unread ? "text-accent-text" : "text-muted-foreground"}`} />
         <span className="min-w-0 flex-1">

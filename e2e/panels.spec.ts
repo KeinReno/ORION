@@ -35,6 +35,7 @@ const PANELS = [
   "goals",
   "home",
   "contacts",
+  "opportunities",
   "time",
   "habits",
   "lists",

@@ -1,3 +1,5 @@
+import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery } from "@orion/shared-types";
+import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import {
   accountPublicSchema,
   accountSchema,
@@ -1708,6 +1710,39 @@ export class ApiClient {
   // --- Списки -----------------------------------------------------------
   // A list is a name plus a small set of checkable items, always fetched and
   // shown together (unlike habits/entries, there's no separate flat endpoint).
+
+  listOpportunities(workspaceId: string, query: Partial<OpportunityListQuery> = {}): Promise<OpportunityPage> {
+    return this.request("GET", `/workspaces/${workspaceId}/opportunities${buildQuery(query)}`, undefined, opportunityPageSchema);
+  }
+  getOpportunity(workspaceId: string, id: string): Promise<Opportunity> {
+    return this.request("GET", `/workspaces/${workspaceId}/opportunities/${id}`, undefined, opportunitySchema);
+  }
+  createOpportunity(workspaceId: string, input: CreateOpportunityInput): Promise<Opportunity> {
+    return this.request("POST", `/workspaces/${workspaceId}/opportunities`, input, opportunitySchema);
+  }
+  updateOpportunity(workspaceId: string, id: string, input: UpdateOpportunityInput): Promise<Opportunity> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/opportunities/${id}`, input, opportunitySchema);
+  }
+  exportOpportunities(workspaceId: string): Promise<Opportunity[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/opportunities/export`, undefined, z.array(opportunitySchema));
+  }
+
+  listOpportunityProfiles(ws: string, cursor?: string, includeArchived = false) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles${buildQuery({ cursor, includeArchived: String(includeArchived) })}`, undefined, opportunityProfilePageSchema); }
+  createOpportunityProfile(ws: string, input: CreateOpportunityProfileInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles`, input, opportunityProfileSchema); }
+  getOpportunityProfile(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles/${id}`, undefined, opportunityProfileDetailSchema); }
+  updateOpportunityProfile(ws: string, id: string, input: UpdateOpportunityProfileInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}`, input, opportunityProfileSchema); }
+  addOpportunityFact(ws: string, id: string, input: CreateOpportunityFactInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/facts`, input, opportunityFactSchema); }
+  setOpportunityFactState(ws: string, id: string, factId: string, input: SetOpportunityFactStateInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}/facts/${factId}`, input, opportunityFactSchema); }
+  addOpportunityTrack(ws: string, id: string, input: CreateOpportunityTrackInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/tracks`, input, opportunityTrackSchema); }
+  addOpportunityMaterial(ws: string, id: string, input: CreateOpportunityMaterialInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/materials`, input, opportunityMaterialSchema); }
+  listOpportunityMaterials(ws: string, id: string, cursor?: string) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles/${id}/materials${buildQuery({ cursor })}`, undefined, opportunityMaterialPageSchema); }
+  getOpportunityMaterial(ws: string, id: string, materialId: string) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles/${id}/materials/${materialId}`, undefined, opportunityMaterialContentSchema); }
+  previewHhImport(ws: string, input: HhImportPreviewInput) { return this.request("POST", `/workspaces/${ws}/opportunity-hh-import/preview`, input, hhImportRunSchema); }
+  listHhImports(ws: string) { return this.request("GET", `/workspaces/${ws}/opportunity-hh-import`, undefined, z.array(hhImportRunSchema)); }
+  getHhImport(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-hh-import/${id}`, undefined, hhImportRunSchema); }
+  applyHhImport(ws: string, id: string, input: HhImportApplyInput) { return this.request("POST", `/workspaces/${ws}/opportunity-hh-import/${id}/apply`, input, hhImportRunSchema); }
+  cancelHhImport(ws: string, id: string, input: HhImportApplyInput) { return this.request("POST", `/workspaces/${ws}/opportunity-hh-import/${id}/cancel`, input, hhImportRunSchema); }
+  getHhOpportunitySources(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-hh-import/sources/${id}`, undefined, hhOpportunitySourcesSchema); }
 
   listLists(workspaceId: string, includeArchived = false): Promise<List[]> {
     const query = buildQuery({ includeArchived: includeArchived ? "true" : undefined });

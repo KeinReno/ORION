@@ -51,6 +51,7 @@ export interface ModelClassification {
 }
 
 export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
+  { model: "Opportunity", snapshotKey: "opportunities", policy: "included", reason: "Вакансии/заказы и история Base; внешних разрешений здесь нет." },
   // --- workspace config (derived, не построчный список) -------------------
   {
     model: "Workspace",
@@ -88,6 +89,13 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "SyncRestoreOperation", snapshotKey: null, policy: "ephemeral-excluded", reason: "R18-01: durable lock/progress-строка для текущего restore, не пользовательские данные; строка живёт только на время самой операции восстановления и не должна становиться частью того, что эта же операция восстанавливает." },
 
   // --- включённые предметные модели -----------------------------------------
+  { model: "OpportunityProfile", snapshotKey: "opportunityProfiles", policy: "included", reason: "Профили расширения, сохраняются при отключении." },
+  { model: "OpportunityFact", snapshotKey: "opportunityFacts", policy: "included", reason: "Факты и явное подтверждение владельца." },
+  { model: "OpportunityTrack", snapshotKey: "opportunityTracks", policy: "included", reason: "Треки профиля." },
+  { model: "OpportunityMaterial", snapshotKey: "opportunityMaterials", policy: "included", reason: "Неизменяемые версии материалов." },
+  { model: "OpportunityImport", snapshotKey: "opportunityImports", policy: "included", reason: "Импорт с checkpoint; restore принудительно canceled и повышает revision." },
+  { model: "OpportunityCapture", snapshotKey: "opportunityCaptures", policy: "included", reason: "Исторический снимок источника, после Opportunity/Import." },
+  { model: "OpportunityHistory", snapshotKey: "opportunityHistory", policy: "included", reason: "Неподтверждённая внешняя история, после родителей." },
   { model: "Project", snapshotKey: "projects", policy: "included", reason: "Корень для milestones/tasks/notes/events/documents/finance/inventory через projectId." },
   { model: "Milestone", snapshotKey: "milestones", policy: "included", reason: "«План проекта» (v0.27) — веха, дочерняя к Project, родитель для Task.milestoneId." },
   { model: "MilestoneDependency", snapshotKey: "milestoneDependencies", policy: "included", reason: "Finish-to-start связи между вехами." },

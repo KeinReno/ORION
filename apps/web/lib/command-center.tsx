@@ -17,19 +17,16 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { focusNote, focusTask, openEntity, openPanel } from "./panel-bus";
+import { openEntity, openPanel } from "./panel-bus";
+import { selectPaletteResults, type PaletteEntry } from "./palette-results";
 import { panelRegistry } from "./panel-registry";
 import { useActiveWorkspace } from "./use-active-workspace";
 import { useEnabledModules } from "./use-enabled-modules";
 
-interface Command {
-  id: string;
-  label: string;
+interface Command extends PaletteEntry {
   hint?: string;
   icon: LucideIcon;
   run: () => void;
-  /** Came from the server-side search, so it's already matched and ranked — don't re-filter it by substring. */
-  serverResult?: boolean;
 }
 
 /** Which panel a search hit of each type opens. */
@@ -264,7 +261,8 @@ export function CommandCenter(): React.ReactElement {
           label: task.title,
           hint: "задача",
           icon: ListTodo,
-          run: () => focusTask(task.id)
+          entityKey: `task:${task.id}`,
+          run: () => openEntity("task", task.id, task.title)
         });
       }
     }
@@ -275,7 +273,8 @@ export function CommandCenter(): React.ReactElement {
           label: note.title || "Без заголовка",
           hint: "заметка",
           icon: StickyNote,
-          run: () => focusNote(note.id)
+          entityKey: `note:${note.id}`,
+          run: () => openEntity("note", note.id, note.title)
         });
       }
     }
@@ -289,6 +288,8 @@ export function CommandCenter(): React.ReactElement {
         hint: SEARCH_RESULT_LABELS[hit.type] ?? hit.type,
         icon: SEARCH_RESULT_ICONS[hit.type] ?? FileText,
         serverResult: true,
+        entityKey: `${hit.type}:${hit.id}`,
+        resultGroup: hit.type,
         run: () => openEntity(hit.type, hit.id, hit.title)
       });
     }
@@ -296,10 +297,8 @@ export function CommandCenter(): React.ReactElement {
   }, [tasks, notes, searchHits, disabledModules, isEnabled]);
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q ? commands.filter((c) => c.serverResult || c.label.toLowerCase().includes(q)) : commands;
-    return list.slice(0, 16);
-  }, [commands, query]);
+    return selectPaletteResults(commands, query, debouncedQuery);
+  }, [commands, query, debouncedQuery]);
 
   useEffect(() => {
     setActiveIndex((i) => Math.min(i, Math.max(0, results.length - 1)));
@@ -352,8 +351,12 @@ export function CommandCenter(): React.ReactElement {
           <Input
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActiveIndex(0);
+            }}
             placeholder="Поиск по задачам, заметкам, проектам, файлам…"
+            aria-label="Поиск команд и записей"
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
@@ -381,7 +384,7 @@ export function CommandCenter(): React.ReactElement {
                       type="button"
                       onMouseEnter={() => setActiveIndex(i)}
                       onClick={() => runCommand(cmd)}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
                         i === activeIndex ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"
                       }`}
                     >
