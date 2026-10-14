@@ -9,6 +9,7 @@ import type { HomeObjectTabSlotProps } from "../../lib/extensions/contracts";
 import { ImportUtilityTable } from "./ImportUtilityTable";
 import { UtilityPayments } from "./UtilityPayments";
 import { UtilitiesAnalytics } from "./UtilitiesAnalytics";
+import { canRecordReading, parseDecimalInput, parseRateInput, parseRubToMinor, parseWholeInput } from "./electricity-input";
 
 const money = (minor: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(minor / 100);
 const inputMoney = (minor: number) => (minor / 100).toFixed(2).replace(".", ",");
@@ -156,22 +157,17 @@ function QuickElectricityCalculator(): React.ReactElement {
   const [amount, setAmount] = useState("");
   const [daysElapsed, setDaysElapsed] = useState("");
   const [daysTotal, setDaysTotal] = useState("");
-  const decimal = (value: string) => (value.trim() ? Number(value.trim().replace(/\s/g, "").replace(",", ".")) : NaN);
-  const whole = (value: string) => (value.trim() ? Number(value.trim()) : NaN);
-  const rubToMinor = (value: string): number | null => {
-    const text = value.replace(/\s/g, "").replace(",", ".");
-    return /^\d{1,8}(\.\d{1,2})?$/.test(text) ? Math.round(Number(text) * 100) : null;
-  };
-  const prev = decimal(previous);
-  const next = decimal(current);
-  const enteredRate = tariff.trim().replace(/\s/g, "").replace(",", ".");
-  const amountMinor = rubToMinor(amount);
-  // A tariff typed in wins; otherwise the bill amount implies one.
-  const impliedRate = !enteredRate && amountMinor !== null ? electricityTariffFromAmount(prev, next, amountMinor) : null;
+  const prev = parseDecimalInput(previous);
+  const next = parseDecimalInput(current);
+  const rateInput = parseRateInput(tariff);
+  // A valid tariff typed in wins; otherwise the bill amount implies one. An invalid typed tariff is reported, not ignored.
+  const enteredRate = rateInput.kind === "ok" ? rateInput.rateRub : "";
+  const amountMinor = parseRubToMinor(amount);
+  const impliedRate = rateInput.kind !== "ok" && amountMinor !== null ? electricityTariffFromAmount(prev, next, amountMinor) : null;
   const rate = enteredRate || impliedRate || "";
   const result = electricityEstimate(prev, next, rate);
   const consumed = Number.isFinite(prev) && Number.isFinite(next) && next >= prev ? Math.round((next - prev) * 1000) / 1000 : null;
-  const forecast = electricityForecast(prev, next, whole(daysElapsed), whole(daysTotal), rate || undefined);
+  const forecast = electricityForecast(prev, next, parseWholeInput(daysElapsed), parseWholeInput(daysTotal), rate || undefined);
   const nothingTyped = !previous && !current && !tariff && !amount;
   const num = (value: number) => value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
   return (
@@ -202,7 +198,9 @@ function QuickElectricityCalculator(): React.ReactElement {
       ) : nothingTyped ? null : (
         <p className="text-2xs text-amber-400">Введите показания числами; на конец периода показание не меньше, чем на начало.</p>
       )}
-      {consumed !== null && !enteredRate && amountMinor === null && amount.trim() ? <p className="text-2xs text-amber-400">Сумма — число рублей, например 687,50.</p> : null}
+      {consumed !== null && rateInput.kind !== "ok" && amountMinor === null && amount.trim() ? <p className="text-2xs text-amber-400">Сумма — число рублей, например 687,50.</p> : null}
+      {rateInput.kind === "invalid" ? <p className="text-2xs text-amber-400">Тариф — положительное число рублей за кВт·ч, например 6,25. Пока он неверный, расчёт по нему не делается.</p> : null}
+      {(daysElapsed.trim() || daysTotal.trim()) && consumed !== null && !forecast ? <p className="text-2xs text-amber-400">Для прогноза укажите целые дни: прошло — от 1, в периоде — не меньше прошедших.</p> : null}
     </div>
   );
 }
@@ -216,8 +214,11 @@ function ElectricityMeter({ workspaceId, homeId, meter }: { workspaceId: string 
   const [rate, setRate] = useState("");
   const [from, setFrom] = useState(localToday);
   const currentTariff = tariffs?.find((item) => item.effectiveFrom <= localToday());
-  const next = Number(newReading.replace(",", "."));
+  const next = parseDecimalInput(newReading);
   const estimate = meter.lastValue !== null && newReading.trim() ? electricityEstimate(meter.lastValue, next, currentTariff?.rateRub ?? "") : null;
+  // Recording a reading must not depend on having a tariff: the estimate is optional.
+  const readingOk = canRecordReading(meter.lastValue, newReading);
+  const consumption = readingOk && meter.lastValue !== null ? Math.round((next - meter.lastValue) * 1000) / 1000 : null;
   const changedDuringPeriod = Boolean(currentTariff && meter.lastReadAt && currentTariff.effectiveFrom > meter.lastReadAt.slice(0, 10));
   async function saveTariff(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -225,14 +226,14 @@ function ElectricityMeter({ workspaceId, homeId, meter }: { workspaceId: string 
     catch (error) { toast({ title: "Не удалось сохранить тариф", description: String(error), tone: "danger" }); }
   }
   async function saveReading(): Promise<void> {
-    if (!estimate) return;
+    if (!readingOk) return;
     try { await addReading.mutateAsync({ homeId, meterId: meter.id, input: { value: next, note: "" } }); setNewReading(""); toast({ title: "Показание записано", tone: "success" }); }
     catch (error) { toast({ title: "Показание не записано", description: String(error), tone: "danger" }); }
   }
   return <div className="space-y-3 border-t border-border pt-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-label">{meter.name}</strong><span className="text-2xs text-muted-foreground">{currentTariff ? `${Number(currentTariff.rateRub).toLocaleString("ru-RU", { maximumFractionDigits: 4 })} ₽/кВт·ч с ${currentTariff.effectiveFrom}` : "Тариф не задан"}</span></div>
     {isError ? <Button size="sm" variant="outline" onClick={() => void refetch()}>Повторить загрузку тарифа</Button> : null}
-    <div className="grid gap-2 [@container(min-width:650px)]:grid-cols-[1fr_1fr_auto]"><label className="text-2xs text-muted-foreground">Предыдущее показание<Input value={meter.lastValue === null ? "Нет" : String(meter.lastValue)} readOnly className="mt-1" /></label><label className="text-2xs text-muted-foreground">Новое показание<Input value={newReading} inputMode="decimal" onChange={(e) => setNewReading(e.target.value)} placeholder="кВт·ч" className="mt-1" /></label><div className="self-end"><Button size="sm" onClick={() => void saveReading()} disabled={!estimate || addReading.isPending}>Записать</Button></div></div>
-    {meter.lastValue === null ? <p className="text-2xs text-muted-foreground">Сначала запишите начальное показание на вкладке «Счётчики».</p> : estimate ? <div className="flex flex-wrap items-baseline gap-3 rounded-lg bg-accent/10 p-3"><span className="text-label">Расход: <b>{estimate.consumption} кВт·ч</b></span><span className="text-label">Оценка: <b>{money(estimate.amountMinor)}</b></span></div> : <p className="text-2xs text-muted-foreground">Введите новое показание. Если оно меньше предыдущего, проверьте замену прибора.</p>}
+    <div className="grid gap-2 [@container(min-width:650px)]:grid-cols-[1fr_1fr_auto]"><label className="text-2xs text-muted-foreground">Предыдущее показание<Input value={meter.lastValue === null ? "Нет" : String(meter.lastValue)} readOnly className="mt-1" /></label><label className="text-2xs text-muted-foreground">Новое показание<Input value={newReading} inputMode="decimal" onChange={(e) => setNewReading(e.target.value)} placeholder="кВт·ч" className="mt-1" /></label><div className="self-end"><Button size="sm" onClick={() => void saveReading()} disabled={!readingOk || addReading.isPending}>Записать</Button></div></div>
+    {meter.lastValue === null ? <p className="text-2xs text-muted-foreground">Сначала запишите начальное показание на вкладке «Счётчики».</p> : consumption !== null ? <div className="flex flex-wrap items-baseline gap-3 rounded-lg bg-accent/10 p-3"><span className="text-label">Расход: <b>{consumption} кВт·ч</b></span>{estimate ? <span className="text-label">Оценка: <b>{money(estimate.amountMinor)}</b></span> : <span className="text-2xs text-muted-foreground">Задайте тариф, чтобы увидеть оценку суммы.</span>}</div> : <p className="text-2xs text-muted-foreground">Введите новое показание. Если оно меньше предыдущего, проверьте замену прибора.</p>}
     {changedDuringPeriod ? <p className="text-2xs text-amber-400">Тариф изменился после прошлого показания. Без показания на дату изменения это только приблизительная оценка.</p> : null}
     <form onSubmit={(e) => void saveTariff(e)} className="flex flex-wrap items-end gap-2 border-t border-border/70 pt-3"><label className="min-w-36 flex-1 text-2xs text-muted-foreground">Тариф, ₽/кВт·ч<Input className="mt-1" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" placeholder="Например, 6,25" /></label><label className="text-2xs text-muted-foreground">Действует с<Input className="mt-1" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><Button type="submit" size="sm" variant="outline" disabled={!rate.trim() || addTariff.isPending}><Check className="h-4 w-4" /> Сохранить тариф</Button></form>
     <p className="text-2xs text-subtle-foreground">Оценка по расходу не равна сумме квитанции: в ней могут быть дополнительные начисления и корректировки.</p>
