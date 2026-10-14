@@ -56,7 +56,7 @@ export type UpdateTaskCommentInput = z.infer<typeof updateTaskCommentInputSchema
  * directly; `TasksService.update` produces them as a side effect of a task
  * edit (see tasks.service.ts).
  */
-export const taskActivityFieldSchema = z.enum(["status", "assigneeId", "dueAt"]);
+export const taskActivityFieldSchema = z.enum(["status", "assigneeId", "dueAt", "created"]);
 export type TaskActivityField = z.infer<typeof taskActivityFieldSchema>;
 
 export const taskActivitySchema = z.object({
@@ -68,6 +68,8 @@ export const taskActivitySchema = z.object({
   field: taskActivityFieldSchema,
   fromValue: z.string().nullable(),
   toValue: z.string().nullable(),
+  /** Name of the AI Bridge token that made the change (ADR-0007); null = the person themself. `created` rows exist only for agent-made tasks. */
+  agentName: z.string().nullable(),
   createdAt: z.string()
 });
 export type TaskActivity = z.infer<typeof taskActivitySchema>;

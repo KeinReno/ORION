@@ -36,6 +36,7 @@ export class TaskActivityService {
         field: row.field as TaskActivity["field"],
         fromValue: row.fromValue,
         toValue: row.toValue,
+        agentName: row.agentName,
         createdAt: row.createdAt.toISOString()
       }));
     });

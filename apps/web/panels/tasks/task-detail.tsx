@@ -60,7 +60,8 @@ const AUTOSAVE_DELAY_MS = 800;
 const ACTIVITY_FIELD_LABEL: Record<string, string> = {
   status: "Статус",
   assigneeId: "Исполнитель",
-  dueAt: "Срок"
+  dueAt: "Срок",
+  created: "Создана"
 };
 
 function activityValue(item: TaskActivity, value: string | null): string {
@@ -523,9 +524,18 @@ function TaskHistory({ workspaceId, taskId }: { workspaceId: string | undefined;
         .map((item) => (
           <li key={item.id} className="text-label text-muted-foreground">
             <span className="text-foreground">{ACTIVITY_FIELD_LABEL[item.field] ?? item.field}:</span>{" "}
-            {item.field === "assigneeId" ? "изменён" : `${activityValue(item, item.fromValue)} → ${activityValue(item, item.toValue)}`}
+            {item.field === "created"
+              ? "ИИ-агентом"
+              : item.field === "assigneeId"
+                ? "изменён"
+                : `${activityValue(item, item.fromValue)} → ${activityValue(item, item.toValue)}`}
             <span className="block text-micro text-subtle-foreground">
-              {item.actorName ?? "Система"} · {relativeTime(item.createdAt)}
+              {item.agentName ? (
+                <span title={`Действие ИИ-агента «${item.agentName}» с правами ${item.actorName ?? "владельца токена"}`}>🤖 {item.agentName}</span>
+              ) : (
+                (item.actorName ?? "Система")
+              )}{" "}
+              · {relativeTime(item.createdAt)}
             </span>
           </li>
         ))}

@@ -93,6 +93,52 @@ const TOOLS = {
     ),
     call: ({ noteId, ...patch }) => ["PATCH", `/ai/v1/notes/${encodeURIComponent(noteId)}`, patch]
   },
+  orion_list_events: {
+    description: "События календаря в окне [from, to) (по умолчанию ближайшие 30 дней, не шире 366). Повторяющиеся приходят развёрнутыми.",
+    schema: obj({ from: str("Начало окна, ISO-8601"), to: str("Конец окна, ISO-8601") }),
+    call: ({ from, to }) => {
+      const query = new URLSearchParams();
+      if (from) query.set("from", from);
+      if (to) query.set("to", to);
+      const suffix = query.toString();
+      return ["GET", `/ai/v1/events${suffix ? `?${suffix}` : ""}`];
+    }
+  },
+  orion_create_event: {
+    description: "Создать событие календаря. Без повторов; удалять события агенту нельзя.",
+    schema: obj(
+      {
+        title: str("Название"),
+        startAt: str("Начало, ISO-8601 (например 2026-10-20T09:00:00Z)"),
+        endAt: str("Конец, ISO-8601, строго позже начала"),
+        description: str("Описание"),
+        location: str("Место"),
+        allDay: { type: "boolean", description: "Весь день (даты — по UTC)" },
+        reminders: { type: "array", items: { type: "integer" }, description: "За сколько минут напомнить (до 5 значений)" },
+        projectId: str("id проекта")
+      },
+      ["title", "startAt", "endAt"]
+    ),
+    call: (args) => ["POST", "/ai/v1/events", args]
+  },
+  orion_update_event: {
+    description: "Изменить событие: название, описание, место, время, напоминания. У повторяющегося события правка применяется ко всей серии.",
+    schema: obj(
+      {
+        eventId: str("id события"),
+        title: str("Название"),
+        description: str("Описание"),
+        location: str("Место"),
+        startAt: str("Начало, ISO-8601"),
+        endAt: str("Конец, ISO-8601"),
+        allDay: { type: "boolean" },
+        reminders: { type: "array", items: { type: "integer" } },
+        projectId: str("id проекта")
+      },
+      ["eventId"]
+    ),
+    call: ({ eventId, ...patch }) => ["PATCH", `/ai/v1/events/${encodeURIComponent(eventId)}`, patch]
+  },
   orion_list_agents: {
     description: "Другие агенты этого пространства, которым можно написать (id и имя).",
     schema: obj({}),

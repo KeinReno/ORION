@@ -37,6 +37,9 @@ export const noteSchema = z.object({
   /// `expectedRevision` on the next `update`; a mismatch is a 409
   /// (`NoteConflictError`-shaped body), meaning another client saved first.
   revision: z.number().int(),
+  /** AI Bridge token names (ADR-0007) of who created / last edited the note via `/ai/v1`; null = a person. */
+  createdByAgent: z.string().nullable().optional(),
+  editedByAgent: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });

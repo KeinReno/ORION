@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,6 +15,8 @@ import {
   UseGuards
 } from "@nestjs/common";
 import {
+  agentEventCreateSchema,
+  agentEventPatchSchema,
   createAgentJobInputSchema,
   createAgentProposalInputSchema,
   createAgentTokenInputSchema,
@@ -25,6 +28,9 @@ import {
   updateNoteInputSchema,
   updateTaskInputSchema,
   type AgentAuditEntry,
+  type AgentEventCreate,
+  type AgentEventPatch,
+  type Event,
   type AgentJob,
   type AgentProposal,
   type CreateAgentJobInput,
@@ -50,6 +56,7 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { EventsService } from "../events/events.service";
 import { ModulesService } from "../modules/modules.service";
 import { NotesService } from "../notes/notes.service";
 import { ProjectsService } from "../projects/projects.service";
@@ -152,7 +159,8 @@ export class AiController {
     private readonly modules: ModulesService,
     private readonly tasks: TasksService,
     private readonly notes: NotesService,
-    private readonly projects: ProjectsService
+    private readonly projects: ProjectsService,
+    private readonly events: EventsService
   ) {}
 
   @Get("me")
@@ -171,7 +179,7 @@ export class AiController {
     @Req() req: AgentRequest,
     @Body(new ZodValidationPipe(createTaskInputSchema)) body: CreateTaskInput
   ): Promise<Task> {
-    return this.run(req, "tasks:write", "tasks", "tasks.create", null, (a) => this.tasks.create(a.userId, a.workspaceId, body));
+    return this.run(req, "tasks:write", "tasks", "tasks.create", null, (a) => this.tasks.create(a.userId, a.workspaceId, body, a.tokenName));
   }
 
   @Patch("tasks/:taskId")
@@ -181,7 +189,7 @@ export class AiController {
     @Body(new ZodValidationPipe(agentTaskPatchSchema)) body: UpdateTaskInput
   ): Promise<Task> {
     return this.run(req, "tasks:write", "tasks", "tasks.update", `task:${taskId}`, (a) =>
-      this.tasks.update(a.userId, a.workspaceId, taskId, body)
+      this.tasks.update(a.userId, a.workspaceId, taskId, body, a.tokenName)
     );
   }
 
@@ -204,7 +212,7 @@ export class AiController {
     @Req() req: AgentRequest,
     @Body(new ZodValidationPipe(createNoteInputSchema)) body: CreateNoteInput
   ): Promise<Note> {
-    return this.run(req, "notes:write", "notes", "notes.create", null, (a) => this.notes.create(a.userId, a.workspaceId, body));
+    return this.run(req, "notes:write", "notes", "notes.create", null, (a) => this.notes.create(a.userId, a.workspaceId, body, a.tokenName));
   }
 
   @Patch("notes/:noteId")
@@ -214,7 +222,40 @@ export class AiController {
     @Body(new ZodValidationPipe(agentNotePatchSchema)) body: UpdateNoteInput
   ): Promise<Note> {
     return this.run(req, "notes:write", "notes", "notes.update", `note:${noteId}`, (a) =>
-      this.notes.update(a.userId, a.workspaceId, noteId, body)
+      this.notes.update(a.userId, a.workspaceId, noteId, body, a.tokenName)
+    );
+  }
+
+  /** Window `[from, to)`; defaults to the next 30 days, at most 366 days wide. Recurring events come expanded. */
+  @Get("events")
+  listEvents(@Req() req: AgentRequest, @Query("from") from?: string, @Query("to") to?: string): Promise<Event[]> {
+    const start = from ? new Date(from) : new Date();
+    const end = to ? new Date(to) : new Date(start.getTime() + 30 * 24 * 3600 * 1000);
+    return this.run(req, "events:read", "calendar", "events.list", null, (a) => {
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+        throw new BadRequestException("Некорректное окно запроса (from/to)");
+      }
+      if (end.getTime() - start.getTime() > 366 * 24 * 3600 * 1000) throw new BadRequestException("Окно не шире 366 дней");
+      return this.events.list(a.userId, a.workspaceId, start.toISOString(), end.toISOString());
+    });
+  }
+
+  @Post("events")
+  createEvent(
+    @Req() req: AgentRequest,
+    @Body(new ZodValidationPipe(agentEventCreateSchema)) body: AgentEventCreate
+  ): Promise<Event> {
+    return this.run(req, "events:write", "calendar", "events.create", null, (a) => this.events.create(a.userId, a.workspaceId, body));
+  }
+
+  @Patch("events/:eventId")
+  updateEvent(
+    @Req() req: AgentRequest,
+    @Param("eventId") eventId: string,
+    @Body(new ZodValidationPipe(agentEventPatchSchema)) body: AgentEventPatch
+  ): Promise<Event> {
+    return this.run(req, "events:write", "calendar", "events.update", `event:${eventId}`, (a) =>
+      this.events.update(a.userId, a.workspaceId, eventId, body, "all")
     );
   }
 

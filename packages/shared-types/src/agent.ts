@@ -5,7 +5,7 @@ import { z } from "zod";
  * credential issued by a workspace member; it acts with that member's rights, inside
  * one workspace, and only for the scopes ticked at creation. It never widens access.
  */
-export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "agents:message", "agents:delegate"] as const;
+export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "events:read", "events:write", "agents:message", "agents:delegate"] as const;
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 
@@ -15,9 +15,45 @@ export const AGENT_SCOPE_LABEL: Record<AgentScope, string> = {
   "notes:read": "Читать заметки",
   "notes:write": "Создавать и менять заметки",
   "projects:read": "Читать проекты",
+  "events:read": "Читать события календаря",
+  "events:write": "Создавать и менять события календаря",
   "agents:message": "Переписываться с другими агентами",
   "agents:delegate": "Давать и брать задания у других агентов"
 };
+
+/**
+ * What an agent may write on a calendar event (`events:write`): the plain fields only. No
+ * recurrence, colour, timezone or link — and no delete, as everywhere in the bridge. Edits
+ * to a recurring event always apply to the whole series.
+ */
+export const agentEventCreateSchema = z
+  .object({
+    title: z.string().trim().min(1, "Название обязательно").max(200),
+    description: z.string().max(20_000).default(""),
+    location: z.string().max(300).nullable().optional(),
+    startAt: z.string().datetime(),
+    endAt: z.string().datetime(),
+    allDay: z.boolean().default(false),
+    reminders: z.array(z.number().int().min(0).max(40_320)).max(5).default([]),
+    projectId: z.string().nullable().optional()
+  })
+  .refine((e) => new Date(e.endAt).getTime() > new Date(e.startAt).getTime(), {
+    message: "Конец должен быть позже начала",
+    path: ["endAt"]
+  });
+export type AgentEventCreate = z.infer<typeof agentEventCreateSchema>;
+
+export const agentEventPatchSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().max(20_000).optional(),
+  location: z.string().max(300).nullable().optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  allDay: z.boolean().optional(),
+  reminders: z.array(z.number().int().min(0).max(40_320)).max(5).optional(),
+  projectId: z.string().nullable().optional()
+});
+export type AgentEventPatch = z.infer<typeof agentEventPatchSchema>;
 
 export const AGENT_TOKEN_PREFIX = "orion_agt_";
 

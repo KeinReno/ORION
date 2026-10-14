@@ -14,7 +14,11 @@ interface RegisteredSession {
   workspaceId: string;
 }
 
+/** Small per-token budget so the rate-limit test is quick; read by the guard when the app starts. */
+const TEST_RATE_LIMIT = 15;
+
 describe("AI Bridge (agent tokens)", () => {
+  const previousRateLimit = process.env.ORION_AI_RATE_LIMIT;
   let app: INestApplication;
   let prisma: PrismaService;
   let baseUrl: string;
@@ -22,6 +26,7 @@ describe("AI Bridge (agent tokens)", () => {
   const emailPrefix = `aibridge-${runId}`;
 
   beforeAll(async () => {
+    process.env.ORION_AI_RATE_LIMIT = String(TEST_RATE_LIMIT);
     app = await NestFactory.create(AppModule, { logger: false });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
@@ -31,6 +36,8 @@ describe("AI Bridge (agent tokens)", () => {
   });
 
   afterAll(async () => {
+    if (previousRateLimit === undefined) delete process.env.ORION_AI_RATE_LIMIT;
+    else process.env.ORION_AI_RATE_LIMIT = previousRateLimit;
     if (prisma) {
       await prisma.asSystem(async (tx) => {
         const users = await tx.user.findMany({ where: { email: { startsWith: emailPrefix } }, select: { id: true } });
@@ -297,6 +304,114 @@ describe("AI Bridge (agent tokens)", () => {
     expect((await request(`${ws}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken })).status).toBe(200);
     const readOnly = await issue(alice, ["tasks:read"]);
     expect((await request("/ai/v1/proposals", { method: "POST", token: readOnly.secret, body: { action: "task.delete", targetId: task.data.id } })).status).toBe(403);
+  });
+
+  it("лимит частоты: после исчерпания бюджета токена 429 с Retry-After, отказ в журнале, другой токен не задет", async () => {
+    const alice = await register("alice-rate");
+    const busy = await issue(alice, ["tasks:read"]);
+    const calm = await issue(alice, ["tasks:read"]);
+    for (let i = 0; i < TEST_RATE_LIMIT; i++) {
+      expect((await request("/ai/v1/tasks", { method: "GET", token: busy.secret })).status).toBe(200);
+    }
+    const limited = await fetch(`${baseUrl}/ai/v1/tasks`, { headers: { Authorization: `Bearer ${busy.secret}` } });
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+    expect((await request("/ai/v1/tasks", { method: "GET", token: calm.secret })).status).toBe(200);
+    // A token that is not valid is a 401 before it ever touches the budget.
+    expect((await request("/ai/v1/tasks", { method: "GET", token: "orion_agt_nonsense" })).status).toBe(401);
+
+    const audit = await request<Array<{ action: string; status: number; tokenId: string | null }>>(
+      `/workspaces/${alice.workspaceId}/agent-tokens/audit`, { method: "GET", token: alice.accessToken }
+    );
+    expect(audit.data.filter((e) => e.status === 429 && e.tokenId === busy.id && e.action === "rate_limited")).toHaveLength(1);
+  });
+
+  it("действия агента помечены: журнал задачи, заметка, лента активности; человек остаётся без метки", async () => {
+    const alice = await register("alice-attr");
+    const agent = await issue(alice, ["tasks:write", "notes:write"]);
+    const ws = `/workspaces/${alice.workspaceId}`;
+
+    const task = await request<{ id: string; revision: number }>("/ai/v1/tasks", { method: "POST", token: agent.secret, body: { title: "От агента" } });
+    expect((await request(`/ai/v1/tasks/${task.data.id}`, { method: "PATCH", token: agent.secret, body: { status: "in_progress" } })).status).toBe(200);
+    expect((await request(`${ws}/tasks/${task.data.id}`, { method: "PATCH", token: alice.accessToken, body: { status: "done" } })).status).toBe(200);
+
+    const history = await request<Array<{ field: string; toValue: string | null; agentName: string | null; actorId: string | null }>>(
+      `${ws}/tasks/${task.data.id}/activity`, { method: "GET", token: alice.accessToken }
+    );
+    const byAgent = history.data.filter((h) => h.agentName === "Claude");
+    expect(byAgent.map((h) => h.field).sort()).toEqual(["created", "status"]);
+    expect(byAgent.every((h) => h.actorId === alice.user.id)).toBe(true);
+    const human = history.data.find((h) => h.field === "status" && h.toValue === "done");
+    expect(human?.agentName).toBeNull();
+
+    const feed = await request<Array<{ kind: string; actorKind: string; actorName: string; summary: string }>>(
+      `${ws}/activity`, { method: "GET", token: alice.accessToken }
+    );
+    expect(feed.data.some((e) => e.kind === "task_change" && e.actorKind === "agent" && e.actorName === "Claude" && e.summary === "Создана задача")).toBe(true);
+    expect(feed.data.some((e) => e.kind === "task_change" && e.actorKind === "user" && e.summary.includes("Готово"))).toBe(true);
+
+    // A task made by the human has no `created` row at all.
+    const own = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Моя" } });
+    const ownHistory = await request<unknown[]>(`${ws}/tasks/${own.data.id}/activity`, { method: "GET", token: alice.accessToken });
+    expect(ownHistory.data).toHaveLength(0);
+
+    const note = await request<{ id: string; createdByAgent: string | null; editedByAgent: string | null; revision: number }>("/ai/v1/notes", {
+      method: "POST", token: agent.secret, body: { title: "Агентская", body: "v1" }
+    });
+    expect(note.data).toMatchObject({ createdByAgent: "Claude", editedByAgent: null });
+    const edited = await request<{ editedByAgent: string | null; revision: number }>(`/ai/v1/notes/${note.data.id}`, {
+      method: "PATCH", token: agent.secret, body: { body: "v2", expectedRevision: note.data.revision }
+    });
+    expect(edited.data.editedByAgent).toBe("Claude");
+    const humanEdit = await request<{ createdByAgent: string | null; editedByAgent: string | null }>(`${ws}/notes/${note.data.id}`, {
+      method: "PATCH", token: alice.accessToken, body: { body: "v3", expectedRevision: edited.data.revision }
+    });
+    expect(humanEdit.data).toMatchObject({ createdByAgent: "Claude", editedByAgent: null });
+    const humanNote = await request<{ createdByAgent: string | null }>(`${ws}/notes`, { method: "POST", token: alice.accessToken, body: { title: "Человеческая" } });
+    expect(humanNote.data.createdByAgent).toBeNull();
+  });
+
+  it("события: scope, окно, создание и правка безопасных полей, повторов и удаления у агента нет", async () => {
+    const alice = await register("alice-events");
+    const reader = await issue(alice, ["events:read"]);
+    const writer = await issue(alice, ["events:read", "events:write"]);
+    const noScope = await issue(alice, ["tasks:read"]);
+    const ws = `/workspaces/${alice.workspaceId}`;
+
+    expect((await request("/ai/v1/events", { method: "GET", token: noScope.secret })).status).toBe(403);
+    const body = { title: "Созвон", startAt: "2026-11-02T09:00:00.000Z", endAt: "2026-11-02T10:00:00.000Z", location: "Zoom", reminders: [15] };
+    expect((await request("/ai/v1/events", { method: "POST", token: reader.secret, body })).status).toBe(403);
+
+    const created = await request<{ id: string; title: string; recurrence: unknown; colorTag: string | null; reminders: number[] }>("/ai/v1/events", {
+      method: "POST", token: writer.secret,
+      // Fields outside the agent's schema (recurrence, colour) are dropped, not applied.
+      body: { ...body, recurrence: { freq: "daily", interval: 1 }, colorTag: "red" }
+    });
+    expect(created.status).toBe(201);
+    expect(created.data).toMatchObject({ title: "Созвон", recurrence: null, colorTag: null, reminders: [15] });
+    expect((await request("/ai/v1/events", { method: "POST", token: writer.secret, body: { ...body, endAt: body.startAt } })).status).toBe(400);
+
+    const patched = await request<{ title: string; startAt: string }>(`/ai/v1/events/${created.data.id}`, {
+      method: "PATCH", token: writer.secret, body: { title: "Созвон (перенос)", startAt: "2026-11-02T11:00:00.000Z", endAt: "2026-11-02T12:00:00.000Z" }
+    });
+    expect(patched.status).toBe(200);
+    expect(patched.data).toMatchObject({ title: "Созвон (перенос)", startAt: "2026-11-02T11:00:00.000Z" });
+
+    const inWindow = await request<Array<{ id: string }>>("/ai/v1/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z", { method: "GET", token: reader.secret });
+    expect(inWindow.data.map((e) => e.id)).toContain(created.data.id);
+    const elsewhere = await request<Array<{ id: string }>>("/ai/v1/events?from=2026-12-01T00:00:00Z&to=2026-12-30T00:00:00Z", { method: "GET", token: reader.secret });
+    expect(elsewhere.data.map((e) => e.id)).not.toContain(created.data.id);
+    expect((await request("/ai/v1/events?from=nonsense", { method: "GET", token: reader.secret })).status).toBe(400);
+    expect((await request("/ai/v1/events?from=2026-01-01T00:00:00Z&to=2028-01-01T00:00:00Z", { method: "GET", token: reader.secret })).status).toBe(400);
+
+    // The person sees the same event; the bridge has no delete.
+    const human = await request<Array<{ id: string }>>(`${ws}/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, { method: "GET", token: alice.accessToken });
+    expect(human.data.map((e) => e.id)).toContain(created.data.id);
+    expect((await request(`/ai/v1/events/${created.data.id}`, { method: "DELETE", token: writer.secret })).status).toBe(404);
+
+    // The module switch applies as for tasks and notes.
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: ["calendar"] } }));
+    expect((await request("/ai/v1/events", { method: "GET", token: reader.secret })).status).toBe(409);
   });
 
   async function register(name: string): Promise<RegisteredSession> {

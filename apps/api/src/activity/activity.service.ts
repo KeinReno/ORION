@@ -23,6 +23,10 @@ function dateRu(value: string | null): string {
 }
 
 const AGENT_ACTION_RU: Record<string, string> = {
+  rate_limited: "превысил лимит вызовов",
+  "events.list": "прочитал события",
+  "events.create": "создал событие",
+  "events.update": "изменил событие",
   "tasks.list": "прочитал задачи",
   "tasks.create": "создал задачу",
   "tasks.update": "изменил задачу",
@@ -77,19 +81,22 @@ export class ActivityService {
         ]);
         for (const row of changes) {
           const summary =
-            row.field === "status"
-              ? `Статус: ${statusRu(row.fromValue)} → ${statusRu(row.toValue)}`
-              : row.field === "dueAt"
-                ? `Срок: ${dateRu(row.fromValue)} → ${dateRu(row.toValue)}`
-                : row.field === "assigneeId"
-                  ? "Исполнитель изменён"
-                  : `Изменено: ${row.field}`;
+            row.field === "created"
+              ? "Создана задача"
+              : row.field === "status"
+                ? `Статус: ${statusRu(row.fromValue)} → ${statusRu(row.toValue)}`
+                : row.field === "dueAt"
+                  ? `Срок: ${dateRu(row.fromValue)} → ${dateRu(row.toValue)}`
+                  : row.field === "assigneeId"
+                    ? "Исполнитель изменён"
+                    : `Изменено: ${row.field}`;
+          // A row stamped with an agent name was done through the AI Bridge, not by the token's owner themself.
           entries.push({
             id: `task_change:${row.id}`,
             kind: "task_change",
             at: row.createdAt.toISOString(),
-            actorKind: row.actor ? "user" : "unknown",
-            actorName: row.actor?.name ?? "—",
+            actorKind: row.agentName ? "agent" : row.actor ? "user" : "unknown",
+            actorName: row.agentName ?? row.actor?.name ?? "—",
             summary,
             entity: { type: "task", id: row.task.id, title: row.task.title }
           });

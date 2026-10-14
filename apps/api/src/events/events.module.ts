@@ -13,6 +13,7 @@ import { CalendarConnectionsService } from "./calendar-connections.service";
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule],
   controllers: [EventsController, CalendarController, CalendarFeedController, CalendarConnectionsController],
-  providers: [EventsService, EventReminderService, CalendarConnectionsService]
+  providers: [EventsService, EventReminderService, CalendarConnectionsService],
+  exports: [EventsService]
 })
 export class EventsModule {}

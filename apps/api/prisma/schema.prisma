@@ -399,6 +399,10 @@ model Note {
   /// with a plain `UPDATE ... WHERE revision = $expected` (single statement,
   /// no read-then-write race) — see `NotesService.update`.
   revision    Int       @default(1)
+  /// AI Bridge attribution (ADR-0007): name of the agent token that created / last edited the note
+  /// through `/ai/v1`. Null = a human did it. The name is a snapshot, so it survives token revocation.
+  createdByAgent  String?
+  editedByAgent   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -651,6 +655,9 @@ model TaskActivity {
   field       String
   fromValue   String?
   toValue     String?
+  /// AI Bridge attribution (ADR-0007): set to the agent token's name when the change came through
+  /// `/ai/v1` (`actorId` is then the token's owner, whose rights it ran with). Null = the human themself.
+  agentName   String?
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

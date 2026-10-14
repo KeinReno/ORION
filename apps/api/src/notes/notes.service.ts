@@ -212,8 +212,9 @@ export class NotesService {
     return toDto(note);
   }
 
-  async create(userId: string, workspaceId: string, input: CreateNoteInput): Promise<Note> {
-    const note = await this.prisma.withUser(userId, (tx) => this.createTx(tx, userId, workspaceId, input));
+  /** `agentName` is set only by the AI Bridge (ADR-0007): the note is marked as created by that agent. */
+  async create(userId: string, workspaceId: string, input: CreateNoteInput, agentName?: string): Promise<Note> {
+    const note = await this.prisma.withUser(userId, (tx) => this.createTx(tx, userId, workspaceId, input, agentName));
     return toDto(note);
   }
 
@@ -222,7 +223,13 @@ export class NotesService {
    * `TasksService.createTx` for why (U03 Часть 1 / `SearchService.
    * createAndLink`). Caller owns the transaction and the membership check.
    */
-  async createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateNoteInput): Promise<DbNote> {
+  async createTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    workspaceId: string,
+    input: CreateNoteInput,
+    agentName?: string
+  ): Promise<DbNote> {
     await this.assertProjectTx(tx, workspaceId, input.projectId ?? null);
     const created = await tx.note.create({
       data: {
@@ -234,7 +241,8 @@ export class NotesService {
         eventAt: input.eventAt ?? null,
         isTemplate: input.isTemplate ?? false,
         projectId: input.projectId ?? null,
-        editedAt: new Date()
+        editedAt: new Date(),
+        createdByAgent: agentName ?? null
       }
     });
     await this.syncOutgoingLinks(tx, created);
@@ -249,7 +257,7 @@ export class NotesService {
    * A body change rebuilds this note's outgoing `[[links]]`; a title change
    * re-resolves everyone else's links that might now point here (or stop).
    */
-  async update(userId: string, workspaceId: string, noteId: string, input: UpdateNoteInput): Promise<Note> {
+  async update(userId: string, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string): Promise<Note> {
     const { expectedRevision, ...patch } = input;
     const touchesContent =
       patch.title !== undefined || patch.summary !== undefined || patch.body !== undefined || patch.tags !== undefined;
@@ -279,7 +287,8 @@ export class NotesService {
       const result = await tx.note.updateMany({
         where: { id: noteId, ...(effectiveExpectedRevision !== undefined ? { revision: effectiveExpectedRevision } : {}) },
         data: touchesContent
-          ? { ...patch, editedAt: new Date(), revision: { increment: 1 } }
+          ? // `editedByAgent` is rewritten on every content edit: a human edit after an agent's clears the mark.
+            { ...patch, editedAt: new Date(), editedByAgent: agentName ?? null, revision: { increment: 1 } }
           : { ...patch, revision: { increment: 1 } }
       });
       if (result.count === 0) {
@@ -570,6 +579,8 @@ type NoteRow = {
   dailyOn: Date | null;
   isTemplate: boolean;
   revision: number;
+  createdByAgent: string | null;
+  editedByAgent: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -644,6 +655,8 @@ function toDto(note: NoteRow): Note {
     dailyOn: note.dailyOn ? note.dailyOn.toISOString().slice(0, 10) : null,
     isTemplate: note.isTemplate,
     revision: note.revision,
+    createdByAgent: note.createdByAgent,
+    editedByAgent: note.editedByAgent,
     createdAt: note.createdAt.toISOString(),
     updatedAt: note.updatedAt.toISOString()
   };

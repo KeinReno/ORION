@@ -171,7 +171,9 @@ export class HomeService {
         ]);
         for (const row of changes) {
           const summary =
-            row.field === "status"
+            row.field === "created"
+              ? "Создана задача"
+              : row.field === "status"
               ? `Статус: ${STATUS_RU[row.fromValue ?? ""] ?? "—"} → ${STATUS_RU[row.toValue ?? ""] ?? "—"}`
               : row.field === "dueAt"
                 ? "Срок изменён"
@@ -182,8 +184,8 @@ export class HomeService {
             id: `task_change:${row.id}`,
             kind: "task_change",
             at: row.createdAt.toISOString(),
-            actorKind: row.actor ? "user" : "unknown",
-            actorName: row.actor?.name ?? "—",
+            actorKind: row.agentName ? "agent" : row.actor ? "user" : "unknown",
+            actorName: row.agentName ?? row.actor?.name ?? "—",
             summary,
             entity: { type: "task", id: row.task.id, title: row.task.title }
           });

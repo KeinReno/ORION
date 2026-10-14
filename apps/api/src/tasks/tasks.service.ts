@@ -67,8 +67,17 @@ export class TasksService {
     return tasks.map(toDto);
   }
 
-  async create(userId: string, workspaceId: string, input: CreateTaskInput): Promise<Task> {
-    const task = await this.prisma.withUser(userId, (tx) => this.createTx(tx, userId, workspaceId, input));
+  /** `agentName` is set only by the AI Bridge (ADR-0007): it leaves a `created` journal row marked as the agent's. */
+  async create(userId: string, workspaceId: string, input: CreateTaskInput, agentName?: string): Promise<Task> {
+    const task = await this.prisma.withUser(userId, async (tx) => {
+      const created = await this.createTx(tx, userId, workspaceId, input);
+      if (agentName) {
+        await tx.taskActivity.create({
+          data: { workspaceId, taskId: created.id, actorId: userId, field: "created", toValue: created.title, agentName }
+        });
+      }
+      return created;
+    });
     return toDto(task);
   }
 
@@ -113,7 +122,8 @@ export class TasksService {
     return tx.task.findUniqueOrThrow({ where: { id: created.id }, include: taskInclude });
   }
 
-  async update(userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput): Promise<Task> {
+  /** `agentName`: see `create()` — stamps the journal rows of this edit as the agent's. */
+  async update(userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput, agentName?: string): Promise<Task> {
     const { expectedRevision, ...input } = rawInput;
     const task = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -164,7 +174,7 @@ export class TasksService {
       // against `current` (the pre-update row) before the write below.
       const activityRows: Prisma.TaskActivityCreateManyInput[] = [];
       if (input.status !== undefined && input.status !== current.status) {
-        activityRows.push({ workspaceId, taskId, actorId: userId, field: "status", fromValue: current.status, toValue: input.status });
+        activityRows.push({ workspaceId, taskId, actorId: userId, field: "status", fromValue: current.status, toValue: input.status, agentName: agentName ?? null });
       }
       if (input.assigneeId !== undefined && input.assigneeId !== current.assigneeId) {
         activityRows.push({
@@ -173,14 +183,15 @@ export class TasksService {
           actorId: userId,
           field: "assigneeId",
           fromValue: current.assigneeId,
-          toValue: input.assigneeId
+          toValue: input.assigneeId,
+          agentName: agentName ?? null
         });
       }
       if (input.dueAt !== undefined) {
         const nextDueAtIso = input.dueAt ?? null;
         const currentDueAtIso = current.dueAt ? current.dueAt.toISOString() : null;
         if (nextDueAtIso !== currentDueAtIso) {
-          activityRows.push({ workspaceId, taskId, actorId: userId, field: "dueAt", fromValue: currentDueAtIso, toValue: nextDueAtIso });
+          activityRows.push({ workspaceId, taskId, actorId: userId, field: "dueAt", fromValue: currentDueAtIso, toValue: nextDueAtIso, agentName: agentName ?? null });
         }
       }
 
