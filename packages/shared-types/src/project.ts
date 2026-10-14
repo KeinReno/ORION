@@ -109,6 +109,8 @@ export const projectSchema = z.object({
   currency: z.string(),
   /** «Где я остановился» — operational scratchpad, not a Notes document. See schema.prisma. */
   contextNote: z.string(),
+  /** Team-shared board order (0-based); null = not placed yet. Written only via the reorder endpoint. */
+  sharedOrder: z.number().int().nullable(),
   /**
    * The author-reported health from the newest status update (UI-05), or null
    * when nobody has reported. Deliberately separate from `progress`/overdue,
@@ -187,3 +189,44 @@ export const updateProjectInputSchema = z.object(projectBody).partial().extend({
   archivedAt: z.string().datetime().nullable().optional()
 });
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
+
+/** Owner/lead write the whole shared board order in one request (ids of the visible list, top to bottom). */
+export const reorderProjectsInputSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(2000)
+});
+export type ReorderProjectsInput = z.infer<typeof reorderProjectsInputSchema>;
+
+/**
+ * «Порядок команды»: placed projects first by `sharedOrder`, unplaced ones after them in the
+ * lifecycle order. Pure — the panel and tests share it.
+ */
+export function compareProjectsBySharedOrder<T extends { sharedOrder: number | null; status: string; dueAt: Date | string | null; name: string }>(
+  a: T,
+  b: T
+): number {
+  if (a.sharedOrder !== null && b.sharedOrder !== null && a.sharedOrder !== b.sharedOrder) return a.sharedOrder - b.sharedOrder;
+  if (a.sharedOrder !== null && b.sharedOrder === null) return -1;
+  if (a.sharedOrder === null && b.sharedOrder !== null) return 1;
+  return compareProjectsByLifecycle(a, b);
+}
+
+/**
+ * Normalises a requested order: drops duplicates (first wins) and ids the workspace no longer
+ * has (stale), keeping the requested sequence. `foreign` lists ids that exist but belong elsewhere.
+ */
+export function normaliseProjectOrder(
+  requested: readonly string[],
+  workspaceIds: ReadonlySet<string>,
+  knownElsewhere: ReadonlySet<string> = new Set()
+): { ids: string[]; foreign: string[] } {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  const foreign: string[] = [];
+  for (const id of requested) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (workspaceIds.has(id)) ids.push(id);
+    else if (knownElsewhere.has(id)) foreign.push(id);
+  }
+  return { ids, foreign };
+}

@@ -217,6 +217,7 @@ import {
   type SessionInfo,
   type UpdateDocumentInput,
   type UpdateProjectInput,
+  type ReorderProjectsInput,
   type UpdateUserPreferenceInput,
   type UpdateProfileInput,
   type UserPreference,
@@ -1401,6 +1402,11 @@ export class ApiClient {
 
   updateProject(workspaceId: string, projectId: string, input: UpdateProjectInput): Promise<Project> {
     return this.request("PATCH", `/workspaces/${workspaceId}/projects/${projectId}`, input, projectSchema);
+  }
+
+  /** Owner/lead: write the team-shared project order in one request. */
+  reorderProjects(workspaceId: string, input: ReorderProjectsInput): Promise<{ updated: number }> {
+    return this.request("PUT", `/workspaces/${workspaceId}/projects/order`, input, z.object({ updated: z.number().int() }));
   }
 
   /** Archiving is the delete: the route sets `archivedAt` and returns the project, so history stays readable. */

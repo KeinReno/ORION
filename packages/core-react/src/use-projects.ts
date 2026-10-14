@@ -1,6 +1,6 @@
 "use client";
 
-import type { CreateProjectInput, Project, ProjectDetail, UpdateProjectInput } from "@orion/shared-types";
+import type { ReorderProjectsInput, CreateProjectInput, Project, ProjectDetail, UpdateProjectInput } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
@@ -52,6 +52,16 @@ export function useUpdateProject(workspaceId: string | undefined) {
       void queryClient.invalidateQueries({ queryKey: ["projects"] });
       void queryClient.invalidateQueries({ queryKey: ["project"] });
     }
+  });
+}
+
+/** Owner/lead: save the team-shared order («Порядок команды»). */
+export function useReorderProjects(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<{ updated: number }, Error, ReorderProjectsInput>({
+    mutationFn: (input: ReorderProjectsInput) => api.reorderProjects(workspaceId as string, input),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["projects"] })
   });
 }
 

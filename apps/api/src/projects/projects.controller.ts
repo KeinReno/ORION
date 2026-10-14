@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import {
   createProjectInputSchema,
+  reorderProjectsInputSchema,
+  type ReorderProjectsInput,
   updateProjectInputSchema,
   type CreateProjectInput,
   type Project,
@@ -21,6 +23,11 @@ export class ProjectsController {
   @Get()
   list(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Query("archived") archived?: string): Promise<Project[]> {
     return this.projects.list(user.userId, workspaceId, archived === "true");
+  }
+
+  @Put("order")
+  reorder(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Body(new ZodValidationPipe(reorderProjectsInputSchema)) body: ReorderProjectsInput): Promise<{ updated: number }> {
+    return this.projects.reorder(user.userId, workspaceId, body);
   }
 
   @Get(":projectId")

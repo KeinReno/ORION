@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   compareProjectsByLifecycle,
+  compareProjectsBySharedOrder,
+  normaliseProjectOrder,
   isProjectOverdue,
   PROJECT_STATUS_ORDER,
   projectTaskProgress,
@@ -121,5 +123,20 @@ describe("projectTimeRollup", () => {
 
   it("is empty when nothing was tracked, even without a rate", () => {
     expect(projectTimeRollup(0, null)).toEqual({ trackedMinutes: 0, timeCost: null, unratedMinutes: 0 });
+  });
+});
+
+describe("shared project order", () => {
+  const p = (name: string, sharedOrder: number | null, status = "active") => ({ name, sharedOrder, status, dueAt: null });
+
+  it("sorts placed projects by sharedOrder, unplaced after them in lifecycle order", () => {
+    const list = [p("Я", null), p("Б", 1), p("А", 0), p("Ж", null, "completed"), p("В", 2, "completed")];
+    list.sort(compareProjectsBySharedOrder);
+    expect(list.map((x) => x.name)).toEqual(["А", "Б", "В", "Я", "Ж"]);
+  });
+
+  it("normaliseProjectOrder drops duplicates and stale ids, reports foreign ones", () => {
+    const result = normaliseProjectOrder(["a", "b", "a", "gone", "x"], new Set(["a", "b"]), new Set(["x"]));
+    expect(result).toEqual({ ids: ["a", "b"], foreign: ["x"] });
   });
 });

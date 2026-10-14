@@ -1,8 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   compareProjectsByLifecycle,
   entryMinutes,
+  normaliseProjectOrder,
+  type ReorderProjectsInput,
   projectTaskRollup,
   projectTimeRollup,
   type CreateProjectInput,
@@ -32,6 +34,28 @@ export class ProjectsService {
       });
       rows.sort(compareProjectsByLifecycle);
       return this.toDtos(tx, userId, rows);
+    });
+  }
+
+  /**
+   * Writes the team-shared order in ONE statement (all-or-nothing). Owner/lead only. Ids of other
+   * workspaces are rejected (400); ids that no longer exist anywhere are stale and ignored.
+   */
+  async reorder(userId: string, workspaceId: string, input: ReorderProjectsInput): Promise<{ updated: number }> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
+      const found = await tx.project.findMany({ where: { id: { in: input.ids } }, select: { id: true, workspaceId: true } });
+      const own = new Set(found.filter((p) => p.workspaceId === workspaceId).map((p) => p.id));
+      const elsewhere = new Set(found.filter((p) => p.workspaceId !== workspaceId).map((p) => p.id));
+      const { ids, foreign } = normaliseProjectOrder(input.ids, own, elsewhere);
+      if (foreign.length > 0) throw new BadRequestException("Проект принадлежит другому пространству");
+      if (ids.length === 0) return { updated: 0 };
+      const orders = ids.map((_, index) => index);
+      const updated = await tx.$executeRaw`
+        UPDATE "projects" AS p SET "sharedOrder" = v.ord
+        FROM unnest(${ids}::text[], ${orders}::int[]) AS v(id, ord)
+        WHERE p."id" = v.id AND p."workspaceId" = ${workspaceId}`;
+      return { updated };
     });
   }
 
@@ -236,6 +260,7 @@ export class ProjectsService {
         hourlyRate: row.hourlyRate,
         currency: row.currency,
         contextNote: row.contextNote,
+        sharedOrder: row.sharedOrder,
         reportedHealth: (reportByProject.get(row.id)?.health as Project["reportedHealth"]) ?? null,
         reportedAt: reportByProject.get(row.id)?.createdAt.toISOString() ?? null,
         archivedAt: row.archivedAt?.toISOString() ?? null,

@@ -2,8 +2,8 @@
 
 import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "../lib/project-order";
-import { useCreateProject, useProjects, useSession, useTasks } from "@orion/core-react";
-import { formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
+import { useCreateProject, useProjects, useReorderProjects, useSession, useTasks } from "@orion/core-react";
+import { compareProjectsBySharedOrder, formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
 import {
   Badge,
   Button,
@@ -66,6 +66,9 @@ export function ProjectsPanel(): React.ReactElement {
   const [archived, setArchived] = useState(false);
   const { data: projects, isLoading, isError, error, refetch } = useProjects(workspaceId, archived);
   const createProject = useCreateProject(workspaceId);
+  const reorderProjects = useReorderProjects(workspaceId);
+  // «Порядок команды»: общий порядок пространства; менять его могут владелец и лид, остальные только видят.
+  const canEditShared = workspace?.role === "owner" || workspace?.role === "lead";
   const { isEnabled } = useEnabledModules();
   // One workspace task list feeds "Дальше" on every card — no per-project requests.
   const { data: allTasks } = useTasks(isEnabled("tasks") ? workspaceId : undefined);
@@ -109,6 +112,13 @@ export function ProjectsPanel(): React.ReactElement {
   }, [source, query, statusFilter, sort, manualOrder]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   function commitOrder(next: string[]): void {
+    if (sort === "shared") {
+      reorderProjects.mutate(
+        { ids: next },
+        { onError: () => toast({ title: "Не удалось сохранить порядок команды", tone: "danger" }) }
+      );
+      return;
+    }
     setManualOrder(next);
     try {
       if (orderKey) localStorage.setItem(orderKey, JSON.stringify(next));
@@ -119,7 +129,10 @@ export function ProjectsPanel(): React.ReactElement {
   /** Drag + Alt+↑/↓ handlers for one list item; only active in "Мой порядок". */
   function itemProps(project: Project): React.HTMLAttributes<HTMLLIElement> | undefined {
     const ids = list.map((p) => p.id);
-    const manual = sort === "manual";
+    const shared = sort === "shared";
+    const manual = sort === "manual" || (shared && canEditShared);
+    // Полный порядок: в «Порядке команды» берётся серверный, в «Моём» — локальный.
+    const full = shared ? [...source].sort(compareProjectsBySharedOrder).map((p) => p.id) : manualOrder.length ? manualOrder : ids;
     return {
       draggable: true,
       onDragStart: (event) => {
@@ -140,16 +153,18 @@ export function ProjectsPanel(): React.ReactElement {
       },
       onDrop: (event) => {
         event.preventDefault();
-        if (draggingId) commitOrder(moveProject(manualOrder.length ? manualOrder : ids, ids, draggingId, project.id));
+        if (draggingId) commitOrder(moveProject(full, ids, draggingId, project.id));
         setDraggingId(null);
       },
       onKeyDown: (event) => {
         if (!manual || !event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
         event.preventDefault();
-        commitOrder(stepProject(manualOrder.length ? manualOrder : ids, ids, project.id, event.key === "ArrowUp" ? -1 : 1));
+        commitOrder(stepProject(full, ids, project.id, event.key === "ArrowUp" ? -1 : 1));
       },
       title: manual
-        ? "Перетащите, чтобы изменить порядок (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
+        ? shared
+          ? "Порядок команды: перетащите, чтобы изменить для всех (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
+          : "Перетащите, чтобы изменить порядок (Alt+↑/↓); Ctrl+перетаскивание — открыть в рабочей области"
         : "Перетащите в рабочую область, чтобы открыть рядом"
     };
   }

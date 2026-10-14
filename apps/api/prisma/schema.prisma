@@ -261,6 +261,9 @@ model Project {
   /// first when the project is reopened. Empty string, not null, so the
   /// panel never has to special-case "never set" vs "cleared".
   contextNote  String    @default("")
+  /// Team-shared board order («Порядок команды»). Null = not placed yet (sorts after placed
+  /// projects). Written only by owner/lead through PUT projects/order, in one statement.
+  sharedOrder  Int?
   archivedAt   DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
