@@ -7,6 +7,7 @@ import {
   type CaptureKind,
   type CreateCaptureInput,
   type ListCapturesQuery,
+  type OrionModuleId,
   type UpdateCaptureInput
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
@@ -33,15 +34,24 @@ const ANCHOR_FINDERS: Record<CaptureAnchorType, { label: string; find: Finder }>
   contact: { label: "Контакт", find: (tx, id) => tx.contact.findUnique({ where: { id }, select: { workspaceId: true } }) }
 };
 
+/** The module a host object belongs to — a capture cannot hang on an object whose module is off. */
+const ANCHOR_MODULE: Partial<Record<CaptureAnchorType, OrionModuleId>> = {
+  project: "projects",
+  task: "tasks",
+  goal: "projects",
+  home: "home",
+  account: "finance",
+  obligation: "finance",
+  contact: "contacts"
+};
+
 /**
  * Universal captures: an idea / problem / note anchored to any ORION object or to
  * nothing. The thought stays until `promote` creates a real task through
  * TasksService — the capture is never consumed, it just remembers `taskId`.
  *
- * Only the project anchor has a foreign key (`projectId`), so only deleting a
- * project removes its captures. Captures anchored to a home / goal / account…
- * are not cascaded: if the anchor is deleted they stay in the workspace, no
- * longer shown on any host, and are still returned by an unfiltered list.
+ * Deleting the anchor deletes its captures: a real FK for projects (`projectId`), a database
+ * trigger for the other anchor types (migration 20261015100000_capture_anchor_cleanup).
  */
 @Injectable()
 export class CapturesService {
@@ -74,7 +84,10 @@ export class CapturesService {
     const anchor: CaptureAnchor | null = input.anchorType && input.anchorId ? { type: input.anchorType, id: input.anchorId } : null;
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      if (anchor) await this.assertAnchorTx(tx, workspaceId, anchor);
+      if (anchor) {
+        await this.assertAnchorTx(tx, workspaceId, anchor);
+        await this.assertAnchorModuleTx(tx, userId, workspaceId, anchor);
+      }
       return tx.capture.create({
         data: {
           workspaceId,
@@ -96,9 +109,23 @@ export class CapturesService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const current = await this.assertOwnedTx(tx, workspaceId, captureId);
       assertScope(current, scope);
+      // Re-anchoring is a plain-API feature: the legacy per-project routes address a capture BY its anchor.
+      const reanchor = scope.anchor === undefined && input.anchorType !== undefined;
+      if (reanchor && input.anchorType && input.anchorId) {
+        const anchor = { type: input.anchorType, id: input.anchorId };
+        await this.assertAnchorTx(tx, workspaceId, anchor);
+        await this.assertAnchorModuleTx(tx, userId, workspaceId, anchor);
+      }
       return tx.capture.update({
         where: { id: captureId },
         data: {
+          ...(reanchor
+            ? {
+                anchorType: input.anchorType ?? null,
+                anchorId: input.anchorId ?? null,
+                projectId: input.anchorType === "project" ? (input.anchorId as string) : null
+              }
+            : {}),
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.body !== undefined ? { body: input.body } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
@@ -151,6 +178,11 @@ export class CapturesService {
     const entry = ANCHOR_FINDERS[anchor.type];
     const found = await entry.find(tx, anchor.id);
     if (!found || found.workspaceId !== workspaceId) throw new NotFoundException(`${entry.label} не найден`);
+  }
+
+  private async assertAnchorModuleTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, anchor: CaptureAnchor): Promise<void> {
+    const moduleId = ANCHOR_MODULE[anchor.type];
+    if (moduleId) await this.modules.assertEnabledTx(tx, userId, workspaceId, moduleId);
   }
 
   private async assertOwnedTx(tx: Prisma.TransactionClient, workspaceId: string, captureId: string): Promise<CaptureRow> {

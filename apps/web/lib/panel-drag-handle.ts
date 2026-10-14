@@ -20,7 +20,9 @@ export function panelDragHandleProps(panelId: string | null): {
   onMouseUp: React.MouseEventHandler<HTMLElement>;
   onDragStart: React.DragEventHandler<HTMLElement>;
   onDragEnd: React.DragEventHandler<HTMLElement>;
-  title: string;
+  onMouseOver: React.MouseEventHandler<HTMLElement>;
+  /** Fixed handle: the hint. Tab strip (panelId null): none up front — `onMouseOver` sets it only over a draggable tab. */
+  title: string | undefined;
 } {
   const isMac = typeof navigator !== "undefined" && isMacPlatform(navigator.platform);
   function resolve(target: EventTarget | null): string | null {
@@ -58,6 +60,14 @@ export function panelDragHandleProps(panelId: string | null): {
     onDragEnd(event) {
       disarm(event.currentTarget);
     },
-    title: panelDragHint(isMac)
+    onMouseOver(event) {
+      // A strip of several tabs gets the hint only while the pointer is over a tab that CAN be dragged.
+      if (panelId) return;
+      const strip = event.currentTarget;
+      const overHandle = (event.target as Element | null)?.closest?.("[data-panel-drag]");
+      const hint = overHandle && isDraggablePanelId(overHandle.getAttribute("data-panel-drag")) ? panelDragHint(isMac) : "";
+      if (strip.title !== hint) strip.title = hint;
+    },
+    title: panelId ? panelDragHint(isMac) : undefined
   };
 }

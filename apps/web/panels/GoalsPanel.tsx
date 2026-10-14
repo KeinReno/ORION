@@ -1,5 +1,6 @@
 "use client";
 
+import { CapturesSection } from "../components/captures-section";
 import {
   useAddProjectGoalPlan,
   useCreateProjectGoal,
@@ -297,6 +298,13 @@ export function GoalsPanel(): React.ReactElement {
                 ))}
               </Select>
             ) : null}
+
+            <details className="group text-label">
+              <summary className="cursor-pointer text-2xs text-subtle-foreground hover:text-foreground">Идеи и заметки по цели</summary>
+              <div className="mt-2">
+                <CapturesSection workspaceId={workspaceId} anchorType="goal" anchorId={goal.id} />
+              </div>
+            </details>
           </Card>
         </div>
         {childrenOf(goal.id).map((child) => renderGoal(child, depth + 1))}

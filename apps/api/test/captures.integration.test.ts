@@ -214,6 +214,40 @@ describe("Universal captures", () => {
     return user.id;
   }
 
+  it("запись уходит вместе с объектом-якорем, якорь можно сменить, а при выключенном модуле запись не создать", async () => {
+    const alice = await register("alice-anchor");
+    const base = `/workspaces/${alice.workspaceId}/captures`;
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const homeA = await makeHome(alice);
+    const homeB = (await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Дача" } })).data.id;
+    const task = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Крыша" } });
+
+    const onHome = await request<CaptureDto>(base, { method: "POST", token: alice.accessToken, body: { kind: "idea", title: "Лампа", anchorType: "home", anchorId: homeA } });
+    const onTask = await request<CaptureDto>(base, { method: "POST", token: alice.accessToken, body: { kind: "problem", title: "Течёт", anchorType: "task", anchorId: task.data.id } });
+
+    // Re-anchor: home A -> home B; half a pair is refused; detach with null/null.
+    const moved = await request<CaptureDto>(`${base}/${onHome.data.id}`, { method: "PATCH", token: alice.accessToken, body: { anchorType: "home", anchorId: homeB } });
+    expect(moved.data).toMatchObject({ anchorType: "home", anchorId: homeB });
+    expect((await request(`${base}/${onHome.data.id}`, { method: "PATCH", token: alice.accessToken, body: { anchorType: "home" } })).status).toBe(400);
+    expect((await request(`${base}/${onHome.data.id}`, { method: "PATCH", token: alice.accessToken, body: { anchorType: "home", anchorId: "nope" } })).status).toBe(404);
+    const detached = await request<CaptureDto>(`${base}/${onHome.data.id}`, { method: "PATCH", token: alice.accessToken, body: { anchorType: null, anchorId: null } });
+    expect(detached.data).toMatchObject({ anchorType: null, anchorId: null });
+    await request(`${base}/${onHome.data.id}`, { method: "PATCH", token: alice.accessToken, body: { anchorType: "home", anchorId: homeB } });
+
+    // Deleting the anchor deletes its captures (database trigger), and only those.
+    expect((await request(`${ws}/homes/${homeB}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    expect([200, 204]).toContain((await request(`${ws}/tasks/${task.data.id}`, { method: "DELETE", token: alice.accessToken })).status);
+    const left = await request<CaptureDto[]>(base, { method: "GET", token: alice.accessToken });
+    expect(left.data.map((c) => c.id)).not.toContain(onHome.data.id);
+    expect(left.data.map((c) => c.id)).not.toContain(onTask.data.id);
+
+    // A host whose module is switched off cannot receive new captures.
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: ["home"] } }));
+    const refused = await request(base, { method: "POST", token: alice.accessToken, body: { kind: "idea", title: "x", anchorType: "home", anchorId: homeA } });
+    expect(refused.status).toBe(409);
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: [] } }));
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string }>("/auth/register", {

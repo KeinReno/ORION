@@ -70,7 +70,13 @@ export const updateCaptureInputSchema = z.object({
   title: z.string().trim().min(1, "Заголовок обязателен").max(200).optional(),
   body: z.string().max(20_000).optional(),
   status: z.enum(["open", "dismissed"]).optional(),
-  severity: captureSeveritySchema.optional()
+  severity: captureSeveritySchema.optional(),
+  /** Move the capture to another object (or `null` + `null` to detach it). The pair is both-or-neither. */
+  anchorType: captureAnchorTypeSchema.nullish(),
+  anchorId: z.string().min(1).nullish()
+}).refine((v) => (v.anchorType === undefined && v.anchorId === undefined) || Boolean(v.anchorType) === Boolean(v.anchorId), {
+  message: "Укажите тип и id объекта вместе или не указывайте оба",
+  path: ["anchorId"]
 });
 export type UpdateCaptureInput = z.infer<typeof updateCaptureInputSchema>;
 
