@@ -11,7 +11,8 @@ export const DRAGGABLE_PANEL_KINDS = [
   "projecttasks",
   "projectaccess",
   "task",
-  "note"
+  "note",
+  "view"
 ] as const;
 export type DraggablePanelKind = (typeof DRAGGABLE_PANEL_KINDS)[number];
 

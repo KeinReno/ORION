@@ -10,6 +10,7 @@ import {
   Flag,
   Globe,
   Home as HomeIcon,
+  PanelTop,
   UserRound,
   Globe2,
   Inbox,
@@ -27,7 +28,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { createElement, type FunctionComponent } from "react";
+import { createElement, type ComponentType, type FunctionComponent } from "react";
 
 /**
  * What a panel component may receive. Dockview passes its own
@@ -36,7 +37,7 @@ import { createElement, type FunctionComponent } from "react";
  * panels ignore both.
  */
 export interface PanelComponentProps {
-  params?: { instanceId?: string };
+  params?: { instanceId?: string; /** Section view host: render only this tab, without the tab strip. */ view?: string; locked?: boolean };
   api?: { setTitle: (title: string) => void; close?: () => void };
 }
 
@@ -68,6 +69,7 @@ const LazyTaskDetailPanel = dynamic(() => import("../panels/TaskDetailPanel").th
 const LazyNoteWindowPanel = dynamic(() => import("../panels/NoteWindowPanel").then((module) => module.NoteWindowPanel), { ssr: false });
 const LazyProjectTasksPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectTasksPanel), { ssr: false });
 const LazyProjectAccessPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectAccessPanel), { ssr: false });
+const LazySectionViewPanel = dynamic(() => import("../panels/SectionViewPanel").then((module) => module.SectionViewPanel), { ssr: false });
 const LazyHomePanel = dynamic(() => import("../panels/HomePanel").then((module) => module.HomePanel), { ssr: false });
 const LazyContactsPanel = dynamic(() => import("../panels/ContactsPanel").then((module) => module.ContactsPanel), { ssr: false });
 const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module) => module.GoalsPanel), { ssr: false });
@@ -100,37 +102,38 @@ const LazyDocumentsPanel = dynamic(() => import("../panels/DocumentsPanel").then
 const LazySyncPanel = dynamic(() => import("../panels/SyncPanel").then((module) => module.SyncPanel), { ssr: false });
 const LazySettingsPanel = dynamic(() => import("../panels/SettingsPanel").then((module) => module.SettingsPanel), { ssr: false });
 
-const DashboardPanel: FunctionComponent = () => createElement(LazyDashboardPanel);
-const TasksPanel: FunctionComponent = () => createElement(LazyTasksPanel);
-const CalendarPanel: FunctionComponent = () => createElement(LazyCalendarPanel);
-const NotesPanel: FunctionComponent = () => createElement(LazyNotesPanel);
-const ProjectsPanel: FunctionComponent = () => createElement(LazyProjectsPanel);
+const DashboardPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDashboardPanel as ComponentType<PanelComponentProps>, props);
+const TasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTasksPanel as ComponentType<PanelComponentProps>, props);
+const CalendarPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyCalendarPanel as ComponentType<PanelComponentProps>, props);
+const NotesPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNotesPanel as ComponentType<PanelComponentProps>, props);
+const ProjectsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectsPanel as ComponentType<PanelComponentProps>, props);
 const TaskDetailPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTaskDetailPanel, props);
 const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNoteWindowPanel, props);
 const ProjectTasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectTasksPanel, props);
 const ProjectAccessPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectAccessPanel, props);
-const HomePanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyHomePanel);
-const ContactsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyContactsPanel);
-const GoalsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyGoalsPanel);
+const SectionViewPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySectionViewPanel, props);
+const HomePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyHomePanel as ComponentType<PanelComponentProps>, props);
+const ContactsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyContactsPanel as ComponentType<PanelComponentProps>, props);
+const GoalsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyGoalsPanel as ComponentType<PanelComponentProps>, props);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
 const ProjectPlanPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectPlanPanel, props);
 const ProjectMaterialsPanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectMaterialsPanel, props);
-const InboxPanel: FunctionComponent = () => createElement(LazyInboxPanel);
-const OverviewPanel: FunctionComponent = () => createElement(LazyOverviewPanel);
-const SharedPanel: FunctionComponent = () => createElement(LazySharedPanel);
-const TimePanel: FunctionComponent = () => createElement(LazyTimePanel);
-const HabitsPanel: FunctionComponent = () => createElement(LazyHabitsPanel);
-const ListsPanel: FunctionComponent = () => createElement(LazyListsPanel);
-const FinancePanel: FunctionComponent = () => createElement(LazyFinancePanel);
-const InventoryPanel: FunctionComponent = () => createElement(LazyInventoryPanel);
-const MarketsPanel: FunctionComponent = () => createElement(LazyMarketsPanel);
-const BrowserPanel: FunctionComponent = () => createElement(LazyBrowserPanel);
+const InboxPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyInboxPanel as ComponentType<PanelComponentProps>, props);
+const OverviewPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyOverviewPanel as ComponentType<PanelComponentProps>, props);
+const SharedPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySharedPanel as ComponentType<PanelComponentProps>, props);
+const TimePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTimePanel as ComponentType<PanelComponentProps>, props);
+const HabitsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyHabitsPanel as ComponentType<PanelComponentProps>, props);
+const ListsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyListsPanel as ComponentType<PanelComponentProps>, props);
+const FinancePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyFinancePanel as ComponentType<PanelComponentProps>, props);
+const InventoryPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyInventoryPanel as ComponentType<PanelComponentProps>, props);
+const MarketsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyMarketsPanel as ComponentType<PanelComponentProps>, props);
+const BrowserPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPanel as ComponentType<PanelComponentProps>, props);
 const BrowserPagePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPagePanel, props);
-const DocumentsPanel: FunctionComponent = () => createElement(LazyDocumentsPanel);
-const SyncPanel: FunctionComponent = () => createElement(LazySyncPanel);
-const SettingsPanel: FunctionComponent = () => createElement(LazySettingsPanel);
+const DocumentsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentsPanel as ComponentType<PanelComponentProps>, props);
+const SyncPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySyncPanel as ComponentType<PanelComponentProps>, props);
+const SettingsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySettingsPanel as ComponentType<PanelComponentProps>, props);
 
 /**
  * Modules are loaded on demand: opening the shell no longer downloads every
@@ -256,7 +259,9 @@ export const panelRegistry: PanelDefinition[] = [
   },
   { id: "documents", label: "Документы", icon: FolderOpen, component: DocumentsPanel, moduleId: "documents", group: "Файлы и система" },
   { id: "sync", label: "Резервные копии", icon: RefreshCw, component: SyncPanel, group: "Файлы и система" },
-  { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true }
+  { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true },
+  // One tab of any section panel as a panel of its own (dock tab or OS window): `view:<base>~<view>[~<instance>]`.
+  { id: "view", label: "Раздел", icon: PanelTop, component: SectionViewPanel, hideFromNav: true, instanced: true }
 ];
 
 /**
