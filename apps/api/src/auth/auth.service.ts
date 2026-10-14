@@ -241,6 +241,13 @@ export class AuthService {
   async openAvatar(userId: string): Promise<{ stream: Awaited<ReturnType<StorageAdapter["getStream"]>>; mime: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.hasAvatar) throw new NotFoundException("Аватар не задан");
+    // The flag can outlive the file (storage dir wiped or moved, a restore
+    // without blobs). Answer 404 instead of a 500 and drop the flag, so every
+    // client falls back to the initial instead of a broken image.
+    if (!(await this.storage.exists(avatarKey(userId)))) {
+      await this.prisma.user.update({ where: { id: userId }, data: { hasAvatar: false, avatarMime: null } });
+      throw new NotFoundException("Файл аватара не найден");
+    }
     const stream = await this.storage.getStream(avatarKey(userId));
     return { stream, mime: user.avatarMime ?? "image/jpeg" };
   }

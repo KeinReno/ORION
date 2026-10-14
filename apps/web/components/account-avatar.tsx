@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { accountAvatarUrl } from "../lib/api-base";
 
 export function AccountAvatar({
@@ -16,7 +17,11 @@ export function AccountAvatar({
   bust?: number;
 }): React.ReactElement {
   const initial = (name.trim().slice(0, 1) || "?").toUpperCase();
-  if (!hasAvatar) {
+  // A missing/broken image (file gone on the server) falls back to the initial
+  // instead of an empty box; a new upload (`bust`) tries the image again.
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [userId, bust]);
+  if (!hasAvatar || failed) {
     return (
       <span
         className="flex shrink-0 items-center justify-center rounded-xl bg-accent/15 text-sm font-bold text-accent-text"
@@ -35,6 +40,7 @@ export function AccountAvatar({
       height={size}
       className="shrink-0 rounded-xl object-cover"
       style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
     />
   );
 }
