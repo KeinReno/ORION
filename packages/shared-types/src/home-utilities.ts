@@ -96,3 +96,37 @@ export function electricityEstimate(previous: number, next: number, rateRub: str
   if (minor > BigInt(Number.MAX_SAFE_INTEGER)) return null;
   return { consumption: usedMilli / 1000, amountMinor: Number(minor) };
 }
+
+/**
+ * The tariff implied by a bill: amount ÷ consumption between two readings, rounded to 0.0001 ₽/кВт·ч.
+ * `amountMinor` is in kopecks. Null for backwards/equal readings or a non-positive amount.
+ */
+export function electricityTariffFromAmount(previous: number, next: number, amountMinor: number): string | null {
+  if (!Number.isFinite(previous) || !Number.isFinite(next) || !Number.isInteger(amountMinor) || previous < 0 || next <= previous || amountMinor <= 0) return null;
+  const usedMilli = BigInt(Math.round(next * 1000) - Math.round(previous * 1000));
+  if (usedMilli <= 0n) return null;
+  const units = (BigInt(amountMinor) * 100_000n + usedMilli / 2n) / usedMilli; // 1/10000 ₽ per кВт·ч
+  const text = units.toString().padStart(5, "0");
+  return `${text.slice(0, -4)}.${text.slice(-4)}`;
+}
+
+/**
+ * Where the period will end if the pace so far holds: consumption since the period start
+ * (`previous` → `current`, `daysElapsed` days in) scaled to `daysTotal`. With a tariff it also
+ * estimates the amount for the whole period. A straight-line estimate, not a prediction of weather.
+ */
+export function electricityForecast(
+  previous: number,
+  current: number,
+  daysElapsed: number,
+  daysTotal: number,
+  rateRub?: string
+): { consumed: number; projected: number; projectedEndReading: number; projectedAmountMinor: number | null } | null {
+  if (!Number.isFinite(previous) || !Number.isFinite(current) || current < previous || previous < 0) return null;
+  if (!Number.isInteger(daysElapsed) || !Number.isInteger(daysTotal) || daysElapsed < 1 || daysTotal < daysElapsed || daysTotal > 366) return null;
+  const consumed = (Math.round(current * 1000) - Math.round(previous * 1000)) / 1000;
+  const projected = Math.round((consumed * daysTotal) / daysElapsed * 1000) / 1000;
+  const projectedEndReading = Math.round((previous + projected) * 1000) / 1000;
+  const estimate = rateRub ? electricityEstimate(previous, projectedEndReading, rateRub) : null;
+  return { consumed, projected, projectedEndReading, projectedAmountMinor: estimate ? estimate.amountMinor : null };
+}

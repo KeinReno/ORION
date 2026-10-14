@@ -1,13 +1,14 @@
 "use client";
 
 import { useAddElectricityTariff, useAddMeterReading, useCopyPreviousUtilityMonth, useElectricityTariffs, usePutUtilityMonth, useUtilityMonths } from "@orion/core-react";
-import { electricityEstimate, utilityTotals, type UtilityMonth, type PutUtilityMonthInput, type Meter } from "@orion/shared-types";
+import { electricityEstimate, electricityForecast, electricityTariffFromAmount, utilityTotals, type UtilityMonth, type PutUtilityMonthInput, type Meter } from "@orion/shared-types";
 import { Button, Card, ConfirmDialog, Input, useToast } from "@orion/ui";
-import { ArrowLeft, ArrowRight, Check, Copy, Gauge, Plus, Receipt, Save, Trash2, Upload, Table2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, Gauge, Plus, Receipt, Save, Trash2, Upload, Table2, ChartNoAxesCombined } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { HomeObjectTabSlotProps } from "../../lib/extensions/contracts";
 import { ImportUtilityTable } from "./ImportUtilityTable";
 import { UtilityPayments } from "./UtilityPayments";
+import { UtilitiesAnalytics } from "./UtilitiesAnalytics";
 
 const money = (minor: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(minor / 100);
 const inputMoney = (minor: number) => (minor / 100).toFixed(2).replace(".", ",");
@@ -51,6 +52,7 @@ export function UtilitiesView({ workspaceId, home, overview, financeAvailable, o
   const [pendingPeriod, setPendingPeriod] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [showTable, setShowTable] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(true);
   const current = months?.find((month) => month.period === period);
   const hasPrevious = months?.some((month) => month.period === shiftPeriod(period, -1));
 
@@ -70,7 +72,7 @@ export function UtilitiesView({ workspaceId, home, overview, financeAvailable, o
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><p className="text-2xs uppercase tracking-[0.14em] text-subtle-foreground">Квартира · счета</p><h3 className="mt-1 text-xl font-semibold">Коммуналка</h3><p className="text-label text-muted-foreground">Квартирная плата, счета компаний и оплаты по каждому месяцу.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4" /> Перенести таблицу</Button><Button size="sm" variant="outline" onClick={() => setShowTable((value) => !value)}><Table2 className="h-4 w-4" /> {showTable ? "Скрыть историю" : "Вся история"}</Button><div className="flex items-center gap-1 rounded-lg border border-border p-1"><button type="button" aria-label="Предыдущий месяц" onClick={() => choosePeriod(shiftPeriod(period, -1))} className="rounded p-2 hover:bg-white/5"><ArrowLeft className="h-4 w-4" /></button><span className="min-w-36 text-center text-label">{labelPeriod(period)}</span><button type="button" aria-label="Следующий месяц" onClick={() => choosePeriod(shiftPeriod(period, 1))} className="rounded p-2 hover:bg-white/5"><ArrowRight className="h-4 w-4" /></button></div></div>
+      <div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => setImportOpen(true)}><Upload className="h-4 w-4" /> Перенести таблицу</Button><Button size="sm" variant="outline" onClick={() => setShowAnalytics((value) => !value)} aria-pressed={showAnalytics}><ChartNoAxesCombined className="h-4 w-4" /> Аналитика</Button><Button size="sm" variant="outline" onClick={() => setShowTable((value) => !value)}><Table2 className="h-4 w-4" /> {showTable ? "Скрыть историю" : "Вся история"}</Button><div className="flex items-center gap-1 rounded-lg border border-border p-1"><button type="button" aria-label="Предыдущий месяц" onClick={() => choosePeriod(shiftPeriod(period, -1))} className="rounded p-2 hover:bg-white/5"><ArrowLeft className="h-4 w-4" /></button><span className="min-w-36 text-center text-label">{labelPeriod(period)}</span><button type="button" aria-label="Следующий месяц" onClick={() => choosePeriod(shiftPeriod(period, 1))} className="rounded p-2 hover:bg-white/5"><ArrowRight className="h-4 w-4" /></button></div></div>
     </div>
     {isLoading ? <p className="text-label text-muted-foreground">Загрузка месяцев…</p> : isError ? <Card className="p-4"><p>Не удалось загрузить коммуналку.</p><Button size="sm" onClick={() => void refetch()}>Повторить</Button></Card> : (
       <div className="grid gap-4 [@container(min-width:900px)]:grid-cols-[minmax(0,1fr)_15rem]">
@@ -81,6 +83,7 @@ export function UtilitiesView({ workspaceId, home, overview, financeAvailable, o
         <MonthHistory months={months ?? []} selected={period} onSelect={choosePeriod} />
       </div>
     )}
+    {showAnalytics && months?.length ? <UtilitiesAnalytics months={months} /> : null}
     {showTable && months?.length ? <HistoryTable months={months} onSelect={choosePeriod} /> : null}
     <ImportUtilityTable workspaceId={workspaceId} homeId={home.id} open={importOpen} onClose={() => setImportOpen(false)} onImported={choosePeriod} />
     <ConfirmDialog open={pendingPeriod !== null} title="Открыть другой месяц?" description="Несохранённые изменения текущего месяца будут потеряны." confirmLabel="Открыть" danger={false} onCancel={() => setPendingPeriod(null)} onConfirm={() => { if (pendingPeriod) { setPeriod(pendingPeriod); setEditorDirty(false); } setPendingPeriod(null); }} />
@@ -143,7 +146,65 @@ function HistoryTable({ months, onSelect }: { months: UtilityMonth[]; onSelect: 
 }
 
 function ElectricitySection({ workspaceId, homeId, meters, onOpenMeters }: { workspaceId: string | undefined; homeId: string; meters: Meter[]; onOpenMeters: () => void }): React.ReactElement {
-  return <Card className="space-y-3 p-4"><div className="flex items-center gap-2"><Gauge className="h-4 w-4 text-muted-foreground" aria-hidden /><h4 className="text-title">Калькулятор электричества</h4></div>{meters.length === 0 ? <div className="space-y-2"><p className="text-label text-muted-foreground">Добавьте электросчётчик, чтобы считать расход по показаниям.</p><Button size="sm" variant="outline" onClick={onOpenMeters}>Открыть счётчики</Button></div> : meters.map((meter) => <ElectricityMeter key={meter.id} workspaceId={workspaceId} homeId={homeId} meter={meter} />)}</Card>;
+  return <Card className="space-y-4 p-4"><div className="flex items-center gap-2"><Gauge className="h-4 w-4 text-muted-foreground" aria-hidden /><h4 className="text-title">Калькулятор электричества</h4></div><QuickElectricityCalculator />{meters.length === 0 ? <div className="border-t border-border/70 pt-3"><p className="text-2xs text-muted-foreground">Чтобы хранить показания и тарифы, добавьте электросчётчик.</p><Button className="mt-2" size="sm" variant="outline" onClick={onOpenMeters}>Открыть счётчики</Button></div> : meters.map((meter) => <ElectricityMeter key={meter.id} workspaceId={workspaceId} homeId={homeId} meter={meter} />)}</Card>;
+}
+
+function QuickElectricityCalculator(): React.ReactElement {
+  const [previous, setPrevious] = useState("");
+  const [current, setCurrent] = useState("");
+  const [tariff, setTariff] = useState("");
+  const [amount, setAmount] = useState("");
+  const [daysElapsed, setDaysElapsed] = useState("");
+  const [daysTotal, setDaysTotal] = useState("");
+  const decimal = (value: string) => (value.trim() ? Number(value.trim().replace(/\s/g, "").replace(",", ".")) : NaN);
+  const whole = (value: string) => (value.trim() ? Number(value.trim()) : NaN);
+  const rubToMinor = (value: string): number | null => {
+    const text = value.replace(/\s/g, "").replace(",", ".");
+    return /^\d{1,8}(\.\d{1,2})?$/.test(text) ? Math.round(Number(text) * 100) : null;
+  };
+  const prev = decimal(previous);
+  const next = decimal(current);
+  const enteredRate = tariff.trim().replace(/\s/g, "").replace(",", ".");
+  const amountMinor = rubToMinor(amount);
+  // A tariff typed in wins; otherwise the bill amount implies one.
+  const impliedRate = !enteredRate && amountMinor !== null ? electricityTariffFromAmount(prev, next, amountMinor) : null;
+  const rate = enteredRate || impliedRate || "";
+  const result = electricityEstimate(prev, next, rate);
+  const consumed = Number.isFinite(prev) && Number.isFinite(next) && next >= prev ? Math.round((next - prev) * 1000) / 1000 : null;
+  const forecast = electricityForecast(prev, next, whole(daysElapsed), whole(daysTotal), rate || undefined);
+  const nothingTyped = !previous && !current && !tariff && !amount;
+  const num = (value: number) => value.toLocaleString("ru-RU", { maximumFractionDigits: 3 });
+  return (
+    <div className="space-y-3">
+      <p className="text-2xs text-muted-foreground">
+        Введите показания на начало периода и на сейчас (или на конец). Дальше либо тариф — получите сумму, либо сумму по счёту — получите тариф. Дни периода дают прогноз расхода на конец.
+      </p>
+      <div className="grid gap-2 [@container(min-width:650px)]:grid-cols-2">
+        <label className="text-2xs text-muted-foreground">Начало периода, кВт·ч<Input className="mt-1" value={previous} onChange={(event) => setPrevious(event.target.value)} inputMode="decimal" placeholder="Например, 1250" /></label>
+        <label className="text-2xs text-muted-foreground">Сейчас / конец периода, кВт·ч<Input className="mt-1" value={current} onChange={(event) => setCurrent(event.target.value)} inputMode="decimal" placeholder="Например, 1360" /></label>
+        <label className="text-2xs text-muted-foreground">Тариф, ₽/кВт·ч<Input className="mt-1" value={tariff} onChange={(event) => setTariff(event.target.value)} inputMode="decimal" placeholder="Например, 6,25" /></label>
+        <label className="text-2xs text-muted-foreground">Сумма по счёту, ₽ (если тариф неизвестен)<Input className="mt-1" value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="Например, 687,50" /></label>
+        <label className="text-2xs text-muted-foreground">Дней прошло с начала периода<Input className="mt-1" value={daysElapsed} onChange={(event) => setDaysElapsed(event.target.value)} inputMode="numeric" placeholder="Для прогноза, например 12" /></label>
+        <label className="text-2xs text-muted-foreground">Дней в периоде<Input className="mt-1" value={daysTotal} onChange={(event) => setDaysTotal(event.target.value)} inputMode="numeric" placeholder="Например, 30" /></label>
+      </div>
+      {consumed !== null ? (
+        <div className="space-y-1 rounded-lg bg-accent/10 p-3 text-label">
+          <p>Расход с начала периода: <strong>{num(consumed)} кВт·ч</strong></p>
+          {impliedRate ? <p>Тариф по счёту: <strong>{Number(impliedRate).toLocaleString("ru-RU", { maximumFractionDigits: 4 })} ₽/кВт·ч</strong></p> : null}
+          {result && enteredRate ? <p>К оплате примерно: <strong>{money(result.amountMinor)}</strong></p> : null}
+          {forecast ? (
+            <p>
+              На конец периода: <strong>{num(forecast.projected)} кВт·ч</strong>, показание ≈ <strong>{num(forecast.projectedEndReading)}</strong>
+              {forecast.projectedAmountMinor !== null ? <>, сумма ≈ <strong>{money(forecast.projectedAmountMinor)}</strong></> : null}
+            </p>
+          ) : null}
+        </div>
+      ) : nothingTyped ? null : (
+        <p className="text-2xs text-amber-400">Введите показания числами; на конец периода показание не меньше, чем на начало.</p>
+      )}
+      {consumed !== null && !enteredRate && amountMinor === null && amount.trim() ? <p className="text-2xs text-amber-400">Сумма — число рублей, например 687,50.</p> : null}
+    </div>
+  );
 }
 
 function ElectricityMeter({ workspaceId, homeId, meter }: { workspaceId: string | undefined; homeId: string; meter: Meter }): React.ReactElement {
