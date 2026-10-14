@@ -1,0 +1,6 @@
+button: Вакансии
+button: Все
+button: Добавить возможность
+button: Заказы
+button: Скачать CSV
+button: Скачать JSON
