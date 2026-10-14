@@ -19,7 +19,8 @@ describe("Lists ↔ Inventory bridge (lists-inventory plugin)", () => {
   const emailPrefix = `lists-inventory-${runId}`;
 
   beforeAll(async () => {
-    app = await NestFactory.create(AppModule, { logger: false });
+    // Errors only: a 500 under concurrency must leave its stack in the CI log.
+    app = await NestFactory.create(AppModule, { logger: ["error"] });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
     const address = app.getHttpServer().address() as { port: number };
