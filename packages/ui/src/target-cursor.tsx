@@ -3,71 +3,85 @@
 import { useEffect, useRef } from "react";
 
 /**
- * reactbits' "Target Cursor" — a bracket/reticle that follows the pointer and
- * snaps to hover over interactive elements (anything matching `TARGET_SELECTOR`),
- * corners tightening to the hovered element's box instead of floating free.
+ * reactbits' "Target Cursor", reworked for smoothness: a reticle that wraps the
+ * interactive element under the pointer (anything matching `TARGET_SELECTOR`).
  *
- * Pure CSS transforms driven by rAF-throttled pointer tracking, no canvas/WebGL
- * — this one doesn't need `ogl`. Hidden entirely on touch (`pointer: coarse`)
- * since there's no cursor to decorate there.
+ * The pointer itself stays the system cursor. The original version hid it
+ * (`cursor: none`) and drew a dot from JavaScript, so the cursor could only move
+ * as fast as the page painted — with a WebGL background or a heavy panel that
+ * meant a 20-fps pointer. The OS cursor is composited by the system and never
+ * waits for the page; the reticle is decoration and may trail a frame.
+ *
+ * Cheap by construction: the target comes from `pointerover` (no
+ * `elementFromPoint` hit-test per move), and the rAF loop runs only while a
+ * target is hovered (so the reticle follows scrolling/layout), reading one
+ * rect and writing size only when it actually changed. Hidden on touch.
  */
 const TARGET_SELECTOR = "a, button, [role=\"button\"], input, textarea, select, [data-target-cursor]";
+const PAD = 6;
 
 export function TargetCursor(): React.ReactElement | null {
-  const dotRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef(0);
-  const targetRef = useRef<HTMLElement | null>(null);
-  const posRef = useRef({ x: -100, y: -100 });
 
   useEffect(() => {
     if (window.matchMedia("(pointer: coarse)").matches) return;
+    let target: HTMLElement | null = null;
+    let raf = 0;
+    let lastW = -1;
+    let lastH = -1;
 
-    function onPointerMove(event: PointerEvent): void {
-      posRef.current = { x: event.clientX, y: event.clientY };
-      const el = document.elementFromPoint(event.clientX, event.clientY);
-      targetRef.current = el?.closest<HTMLElement>(TARGET_SELECTOR) ?? null;
-    }
-    window.addEventListener("pointermove", onPointerMove);
-
-    function tick(): void {
-      const dot = dotRef.current;
+    function place(): void {
       const box = boxRef.current;
-      const { x, y } = posRef.current;
-      if (dot) dot.style.transform = `translate(${x}px, ${y}px)`;
-      if (box) {
-        const target = targetRef.current;
-        if (target) {
-          const rect = target.getBoundingClientRect();
-          const pad = 6;
-          box.style.opacity = "1";
-          box.style.width = `${rect.width + pad * 2}px`;
-          box.style.height = `${rect.height + pad * 2}px`;
-          box.style.transform = `translate(${rect.left - pad}px, ${rect.top - pad}px)`;
-        } else {
-          box.style.opacity = "0";
-          box.style.width = "28px";
-          box.style.height = "28px";
-          box.style.transform = `translate(${x - 14}px, ${y - 14}px)`;
-        }
+      if (!box || !target || !target.isConnected) {
+        hide();
+        return;
       }
-      rafRef.current = requestAnimationFrame(tick);
+      const rect = target.getBoundingClientRect();
+      const width = Math.round(rect.width + PAD * 2);
+      const height = Math.round(rect.height + PAD * 2);
+      if (width !== lastW || height !== lastH) {
+        box.style.width = `${width}px`;
+        box.style.height = `${height}px`;
+        lastW = width;
+        lastH = height;
+      }
+      box.style.transform = `translate3d(${rect.left - PAD}px, ${rect.top - PAD}px, 0)`;
+      raf = requestAnimationFrame(place);
     }
-    rafRef.current = requestAnimationFrame(tick);
 
-    document.documentElement.classList.add("orion-target-cursor-active");
+    function hide(): void {
+      cancelAnimationFrame(raf);
+      raf = 0;
+      target = null;
+      if (boxRef.current) boxRef.current.style.opacity = "0";
+    }
 
+    function onPointerOver(event: PointerEvent): void {
+      if (event.pointerType === "touch") return;
+      const next = event.target instanceof Element ? event.target.closest<HTMLElement>(TARGET_SELECTOR) : null;
+      if (next === target) return;
+      if (!next) {
+        hide();
+        return;
+      }
+      target = next;
+      if (boxRef.current) boxRef.current.style.opacity = "1";
+      if (!raf) raf = requestAnimationFrame(place);
+    }
+
+    function onPointerOut(event: PointerEvent): void {
+      // Left the window entirely.
+      if (!event.relatedTarget) hide();
+    }
+
+    document.addEventListener("pointerover", onPointerOver, { passive: true });
+    document.addEventListener("pointerout", onPointerOut, { passive: true });
     return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      cancelAnimationFrame(rafRef.current);
-      document.documentElement.classList.remove("orion-target-cursor-active");
+      document.removeEventListener("pointerover", onPointerOver);
+      document.removeEventListener("pointerout", onPointerOut);
+      cancelAnimationFrame(raf);
     };
   }, []);
 
-  return (
-    <>
-      <div ref={dotRef} className="orion-target-cursor-dot" aria-hidden />
-      <div ref={boxRef} className="orion-target-cursor-box" aria-hidden />
-    </>
-  );
+  return <div ref={boxRef} className="orion-target-cursor-box" aria-hidden />;
 }

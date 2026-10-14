@@ -189,6 +189,36 @@ export function Sidebar({
   // open) rather than persisted: this is a "tidy the view for a second",
   // not a preference worth remembering across sessions.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // The links column scrolls on a short window. In the 60px collapsed rail a
+  // scrollbar (Windows draws one with arrow buttons) eats a sixth of the width
+  // and pushes the icons off-centre, so there the bar is hidden and a soft
+  // fade at the clipped edge says "there is more" instead.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [clipped, setClipped] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || horizontal) return;
+    function measure(): void {
+      if (!el) return;
+      const top = el.scrollTop > 1;
+      const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+      setClipped((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+    }
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [horizontal, open]);
+  const fadeMask =
+    clipped.top || clipped.bottom
+      ? `linear-gradient(to bottom, ${clipped.top ? "transparent 0, black 20px" : "black 0"}, ${clipped.bottom ? "black calc(100% - 20px), transparent 100%" : "black 100%"})`
+      : undefined;
   function toggleGroup(name: string): void {
     setCollapsedGroups((cur) => {
       const next = new Set(cur);
@@ -562,7 +592,15 @@ export function Sidebar({
       style={isDrawer ? { width: 240, pointerEvents: drawerOpen ? "auto" : "none" } : undefined}
     >
       {/* Vertical: the links scroll on a short window while the footer (account, layouts, widgets) stays pinned. */}
-      <div className={clsx("flex gap-3", horizontal ? "min-w-0 flex-1 flex-row items-center" : "orion-scroll min-h-0 flex-col overflow-y-auto overflow-x-hidden")}>
+      <div
+        ref={scrollRef}
+        className={clsx(
+          "flex gap-3",
+          horizontal ? "min-w-0 flex-1 flex-row items-center" : "min-h-0 flex-col overflow-y-auto overflow-x-hidden",
+          !horizontal && (open ? "orion-scroll" : "orion-scroll-hidden")
+        )}
+        style={!horizontal && fadeMask ? { maskImage: fadeMask, WebkitMaskImage: fadeMask } : undefined}
+      >
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
         <nav
           id="orion-sidebar-nav"

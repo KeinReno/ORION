@@ -37,6 +37,11 @@ export interface ShaderCanvasProps {
   className?: string;
 }
 
+/** Internal resolution relative to the device pixels — see the Renderer comment in ShaderCanvas. */
+const RENDER_SCALE = 0.5;
+/** Background frames per second at most. */
+const FRAME_INTERVAL_MS = 1000 / 30;
+
 const VERTEX = `
   attribute vec2 uv;
   attribute vec2 position;
@@ -66,7 +71,13 @@ export function ShaderCanvas({
     if (!container) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) });
+    // These are soft, full-screen noise fields: rendering them at half the
+    // device resolution and letting CSS stretch the canvas is visually the same
+    // and a quarter of the fragment work (a sixteenth at DPR 2). Together with
+    // the 30 fps cap below this keeps a decorative background from eating the
+    // frame budget the UI and the pointer need (measured: liquid-ether alone
+    // took a 1600×900 page from 60 to 17 fps).
+    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio, 2) * RENDER_SCALE });
     const gl = renderer.gl;
     gl.canvas.style.width = "100%";
     gl.canvas.style.height = "100%";
@@ -92,33 +103,37 @@ export function ShaderCanvas({
     const program = new Program(gl, { vertex: VERTEX, fragment, uniforms, transparent: true, cullFace: false });
     const mesh = new Mesh(gl, { geometry, program });
 
+    // Cached so pointer tracking never forces a layout read per move.
+    let rect = container.getBoundingClientRect();
     function resize(): void {
       if (!container) return;
       const { clientWidth, clientHeight } = container;
       renderer.setSize(clientWidth, clientHeight);
       (uniforms.uResolution.value as number[]) = [clientWidth, clientHeight];
+      rect = container.getBoundingClientRect();
     }
     resize();
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(container);
 
     function onPointerMove(event: PointerEvent): void {
-      const rect = container!.getBoundingClientRect();
       (uniforms.uMouse.value as number[]) = [
         (event.clientX - rect.left) / rect.width,
         1 - (event.clientY - rect.top) / rect.height
       ];
     }
-    if (trackPointer) window.addEventListener("pointermove", onPointerMove);
+    if (trackPointer) window.addEventListener("pointermove", onPointerMove, { passive: true });
 
     let raf = 0;
     let last = performance.now();
     function tick(now: number): void {
-      const dt = (now - last) / 1000;
+      raf = requestAnimationFrame(tick);
+      // Slow drifting shapes read the same at 30 fps; skip every other frame.
+      if (now - last < FRAME_INTERVAL_MS - 1) return;
+      const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
       if (!reducedMotion) (uniforms.uTime.value as number) += dt;
       renderer.render({ scene: mesh });
-      raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);
 

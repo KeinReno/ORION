@@ -116,6 +116,14 @@ body {
   background: #71717a;
   background-clip: content-box;
 }
+/* Scrolls (wheel, keyboard, touch) without drawing a bar — for narrow rails
+   where a scrollbar would take a sixth of the width. Pair with an edge fade. */
+.orion-scroll-hidden {
+  scrollbar-width: none;
+}
+.orion-scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
 
 /*
  * Harmonise dockview's built-in "abyss" theme with the ORION tokens above —
@@ -247,33 +255,27 @@ body {
    the native cursor only while the effect is mounted, so unchecking the
    preference (or the pointer:coarse bail-out inside the component) leaves
    the normal cursor untouched. */
-.orion-target-cursor-active,
-.orion-target-cursor-active * {
-  cursor: none !important;
-}
-.orion-target-cursor-dot,
+/* Reticle around the hovered button/link (TargetCursor). The pointer itself stays
+   the system cursor — composited by the OS, so it never drops frames with the page. */
 .orion-target-cursor-box {
   position: fixed;
   top: 0;
   left: 0;
   pointer-events: none;
   z-index: 9999;
-}
-.orion-target-cursor-dot {
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border-radius: 9999px;
-  background: rgb(var(--orion-accent));
-}
-.orion-target-cursor-box {
   border: 1.5px solid rgb(var(--orion-accent));
   border-radius: 6px;
   opacity: 0;
+  will-change: transform;
   transition:
     width 0.15s ease,
     height 0.15s ease,
     opacity 0.15s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orion-target-cursor-box {
+    transition: none;
+  }
 }
 
 /* "glass": sidebar, panel shells and cards become translucent + blurred so

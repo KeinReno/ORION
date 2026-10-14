@@ -684,7 +684,7 @@ export function SettingsPanel(): React.ReactElement {
                       checked={form.targetCursorEnabled}
                       onChange={(targetCursorEnabled) => setForm({ ...form, targetCursorEnabled })}
                     />
-                    <span className="text-xs text-muted-foreground">Рамка вокруг курсора, сужается на кнопках и ссылках</span>
+                    <span className="text-xs text-muted-foreground">Рамка вокруг кнопки или ссылки под курсором; сам курсор остаётся системным и не тормозит</span>
                   </div>
                 </Field>
                 <div className="grid gap-4 [@container(min-width:576px)]:grid-cols-2">
