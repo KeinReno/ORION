@@ -203,6 +203,15 @@ model Workspace {
   habitEntries          HabitEntry[]
   lists                 List[]
   listItems             ListItem[]
+  opportunities         Opportunity[]
+  opportunityProfiles OpportunityProfile[]
+  opportunityFacts OpportunityFact[]
+  opportunityTracks OpportunityTrack[]
+  opportunityMaterials OpportunityMaterial[]
+  opportunityImports OpportunityImport[]
+  opportunityCaptures OpportunityCapture[]
+  opportunityHistorys OpportunityHistory[]
+
   inventoryItems        InventoryItem[]
   inventoryMovements    InventoryMovement[]
   milestones            Milestone[]
@@ -1931,6 +1940,179 @@ model AgentProposal {
   @@index([workspaceId, status])
   @@index([tokenId])
   @@map("agent_proposals")
+}
+
+
+model Opportunity {
+  id               String @id @default(uuid())
+  workspaceId      String
+  kind             String
+  title            String
+  organizationName String @default("")
+  description      String @default("")
+  sourceType       String @default("manual")
+  canonicalUrl     String?
+  externalId       String?
+  status           String @default("new")
+  conditions       Json @default("{}")
+  history          Json @default("[]")
+  revision         Int @default(0)
+  capturedAt       DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, sourceType, externalId])
+  @@index([workspaceId, archivedAt, id])
+  captures OpportunityCapture[]
+  historyImports OpportunityHistory[]
+  @@unique([id, workspaceId], map: "opportunity_scope")
+  @@map("opportunities")
+}
+
+model OpportunityProfile {
+  id String @id @default(uuid())
+  workspaceId String
+  displayName String
+  kind String @default("person")
+  ownerUserId String
+  sourceKey String?
+  preferences Json @default("{}")
+  revision Int @default(0)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  facts OpportunityFact[]
+  tracks OpportunityTrack[]
+  materials OpportunityMaterial[]
+  history OpportunityHistory[]
+  @@unique([id, workspaceId], map: "opportunity_profile_scope")
+  @@unique([workspaceId, sourceKey], map: "opportunity_profile_source")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_profiles")
+}
+
+model OpportunityFact {
+  id String @id @default(uuid())
+  workspaceId String
+  profileId String
+  statement String
+  category String @default("experience")
+  source String
+  state String @default("unverified")
+  revision Int @default(0)
+  confirmedBy String?
+  confirmedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_facts")
+}
+
+model OpportunityTrack {
+  id String @id @default(uuid())
+  workspaceId String
+  profileId String
+  name String
+  factIds Json @default("[]")
+  sourceKey String
+  createdAt DateTime @default(now())
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  materials OpportunityMaterial[]
+  @@unique([workspaceId, profileId, sourceKey], map: "opportunity_track_source")
+  @@unique([id, workspaceId, profileId], map: "opportunity_track_scope")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_tracks")
+}
+
+model OpportunityMaterial {
+  id String @id @default(uuid())
+  workspaceId String
+  profileId String
+  trackId String?
+  title String
+  type String @default("resume")
+  content String
+  contentHash String
+  sourcePath String?
+  sourceKey String
+  createdAt DateTime @default(now())
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  track OpportunityTrack? @relation(fields: [trackId, workspaceId, profileId], references: [id, workspaceId, profileId], onDelete: Cascade)
+  @@unique([workspaceId, profileId, sourceKey, contentHash], map: "opportunity_material_source_hash")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_materials")
+}
+
+model OpportunityImport {
+  id String @id @default(uuid())
+  workspaceId String
+  createdById String
+  status String @default("preview")
+  checkpoint Int @default(0)
+  revision Int @default(0)
+  manifestHash String
+  plan Json
+  preview Json
+  report Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  captures OpportunityCapture[]
+  history OpportunityHistory[]
+  @@unique([id, workspaceId], map: "opportunity_import_scope")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_imports")
+}
+
+model OpportunityCapture {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  importRunId String
+  sourcePath String
+  fileHash String
+  contentHash String
+  snapshot Json
+  historical Boolean @default(true)
+  capturedAt DateTime @default(now())
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  importRun OpportunityImport @relation(fields: [importRunId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@unique([workspaceId, opportunityId, contentHash], map: "opportunity_capture_hash")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_captures")
+}
+
+model OpportunityHistory {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String?
+  profileId String?
+  importRunId String
+  externalId String?
+  title String
+  outcome String
+  originalStatus String @default("")
+  reason String @default("")
+  sourceTime String?
+  sourcePath String
+  recordHash String
+  possibleDuplicate Boolean @default(false)
+  createdAt DateTime @default(now())
+  opportunity Opportunity? @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile? @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  importRun OpportunityImport @relation(fields: [importRunId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@unique([workspaceId, recordHash], map: "opportunity_history_hash")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId])
+  @@map("opportunity_history")
 }
 
 /// Module «Дом»: a household object — a flat, a house, a dacha, a car. It owns only meters and

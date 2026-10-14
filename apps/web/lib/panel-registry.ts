@@ -1,6 +1,7 @@
 import { isModuleEnabled, isPluginEnabled, type OrionModuleId, type OrionPluginId } from "@orion/shared-types";
 import {
   Boxes,
+  BriefcaseBusiness,
   CalendarDays,
   FolderKanban,
   FolderOpen,
@@ -86,6 +87,7 @@ const LazyOverviewPanel = dynamic(() => import("../panels/OverviewPanel").then((
 const LazySharedPanel = dynamic(() => import("../panels/SharedPanel").then((module) => module.SharedPanel), { ssr: false });
 const LazyTimePanel = dynamic(() => import("../panels/TimePanel").then((module) => module.TimePanel), { ssr: false });
 const LazyHabitsPanel = dynamic(() => import("../panels/HabitsPanel").then((module) => module.HabitsPanel), { ssr: false });
+const LazyOpportunitiesPanel = dynamic(() => import("../panels/OpportunitiesPanel").then((module) => module.OpportunitiesPanel), { ssr: false });
 const LazyListsPanel = dynamic(() => import("../panels/ListsPanel").then((module) => module.ListsPanel), { ssr: false });
 const LazyFinancePanel = dynamic(() => import("../panels/FinancePanel").then((module) => module.FinancePanel), { ssr: false });
 const LazyInventoryPanel = dynamic(() => import("../panels/InventoryPanel").then((module) => module.InventoryPanel), { ssr: false });
@@ -231,6 +233,7 @@ export const panelRegistry: PanelDefinition[] = [
   },
   { id: "time", label: "Время", icon: Timer, component: TimePanel, moduleId: "time", group: "Работа" },
   { id: "habits", label: "Привычки", icon: Target, component: HabitsPanel, moduleId: "habits", group: "Работа" },
+  { id: "opportunities", label: "Возможности", icon: BriefcaseBusiness, component: () => createElement(LazyOpportunitiesPanel), moduleId: "opportunities", group: "Работа" },
   { id: "lists", label: "Списки", icon: ListChecks, component: ListsPanel, moduleId: "lists", group: "Работа" },
   { id: "finance", label: "Финансы", icon: Wallet, component: FinancePanel, moduleId: "finance", group: "Деньги и склад" },
   { id: "inventory", label: "Склад", icon: Boxes, component: InventoryPanel, moduleId: "inventory", group: "Деньги и склад" },

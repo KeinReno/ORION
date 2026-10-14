@@ -30,8 +30,13 @@ export * from "./search";
 export * from "./time";
 export * from "./habit";
 export * from "./list";
+export * from "./opportunity";
 export * from "./inventory";
 export * from "./milestone";
 export * from "./reminder";
 export * from "./overview";
 export * from "./shared-grant";
+
+export * from "./opportunity-profile";
+
+export * from "./opportunity-hh-import";

@@ -10,6 +10,7 @@
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Многопользовательская модель и WebDAV | [SYNC.md](SYNC.md) |
+| KAIDEN Opportunity Hub: первый срез, ТЗ профилей/импорта/ИИ-менеджера | [OPPORTUNITY_HUB_SPEC.md](OPPORTUNITY_HUB_SPEC.md), [OPPORTUNITY_HUB_PROGRESS.md](OPPORTUNITY_HUB_PROGRESS.md), [ADR-0008](adr/ADR-0008-opportunity-hub.md) |
 | Поздние направления | [KNOWLEDGE_HUB.md](KNOWLEDGE_HUB.md), [INTEGRATIONS_COMPASS_FINCONTROL.md](INTEGRATIONS_COMPASS_FINCONTROL.md), [adr/](adr/) |
 | Журнал текущей экстракции плагинов | [PLUGIN_EXTRACTION_LOG.md](PLUGIN_EXTRACTION_LOG.md) |
 

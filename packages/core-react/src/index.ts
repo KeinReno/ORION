@@ -40,3 +40,4 @@ export * from "./use-activity";
 export * from "./use-plugins";
 export * from "./use-overview";
 export * from "./use-shared";
+export * from "./use-opportunities";

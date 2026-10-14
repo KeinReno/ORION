@@ -1,8 +1,15 @@
 import dynamic from "next/dynamic";
+import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
 import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
+const ProfilesView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-profiles/ProfilesView").then((m) => m.ProfilesView), { ssr: false });
+const HhImportView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-hh-import/ImportView").then((m) => m.ImportView), { ssr: false });
+const HhSources = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportunities-hh-import/SourcesSection").then((m) => m.SourcesSection), { ssr: false });
+contribute("opportunities.views", { pluginId: "opportunities-profiles", component: ProfilesView, order: 10, meta: { tabId: "profiles", label: "Профили" } });
+contribute("opportunities.views", { pluginId: "opportunities-hh-import", component: HhImportView, order: 20, meta: { tabId: "hh-import", label: "Импорт HH", ownerOnly: true } });
+contribute("opportunities.details.sections", { pluginId: "opportunities-hh-import", component: HhSources });
 import { inventoryAlertsApi } from "./inventory-alerts/alerts";
 import { inventoryCostingApi } from "./inventory-costing/costing";
 import { taskPlanningApi } from "./tasks-planning/planning";

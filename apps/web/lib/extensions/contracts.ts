@@ -329,7 +329,11 @@ export interface SidebarWidgetSlotProps {
   onOpenCalendar: () => void;
 }
 
+export interface OpportunitiesViewSlotProps { workspaceId: string; workspaceLabel: string; canManage: boolean; onDirtyChange: (dirty: boolean) => void }
+export interface OpportunitiesDetailsSlotProps { workspaceId: string; opportunity: import("@orion/shared-types").Opportunity; canManage: boolean }
 export interface SlotContracts {
+  "opportunities.views": OpportunitiesViewSlotProps;
+  "opportunities.details.sections": OpportunitiesDetailsSlotProps;
   "shell.sidebar.widgets": SidebarWidgetSlotProps;
   "habits.insights": HabitsInsightsSlotProps;
   "habits.detail": HabitDetailSlotProps;
@@ -368,6 +372,7 @@ export type SlotName = keyof SlotContracts;
  * component). Only slots that need it are listed; for the rest `meta` is absent.
  */
 export interface SlotMeta {
+  "opportunities.views": { tabId: string; label: string; ownerOnly?: boolean };
   "finance.tabs": { tabId: string; label: string };
   "documents.history": { actionLabel: string };
   "documents.editor": { handles: (doc: DocumentItem) => boolean };
