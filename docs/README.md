@@ -7,6 +7,7 @@
 | Архитектурные инварианты и правила для агента | [../AGENTS.md](../AGENTS.md), [../ORION_CONSTITUTION.md](../ORION_CONSTITUTION.md) |
 | Граница Core / Module / Plugin и текущая миграция | [MODULES_AND_PLUGINS.md](MODULES_AND_PLUGINS.md), [AI_FIRST_EXTENSION_ARCHITECTURE.md](AI_FIRST_EXTENSION_ARCHITECTURE.md), [AI_REFACTOR_MIGRATION_MAP.md](AI_REFACTOR_MIGRATION_MAP.md) |
 | Оболочка и UX существующих модулей | [FRONTEND_WORKSPACE_SPEC.md](FRONTEND_WORKSPACE_SPEC.md), [UI_AUDIT_2026-10-11.md](UI_AUDIT_2026-10-11.md) |
+| Контекстная панель ресурсов и межмодульные связи (согласованная концепция; не реализовано) | [CONTEXTUAL_RESOURCES_PANEL.md](CONTEXTUAL_RESOURCES_PANEL.md) |
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Многопользовательская модель и WebDAV | [SYNC.md](SYNC.md) |
