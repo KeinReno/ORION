@@ -57,8 +57,27 @@ import { SignalsTab } from "./markets/signals-tab";
 import { describeAuthError } from "../lib/error-message";
 import { formatMoney, shortDateTime, toKopecks } from "../lib/format";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
+import { openPanel } from "../lib/panel-bus";
+import type { PanelComponentProps } from "../lib/panel-registry";
 
 type Tab = "compass" | "chart" | "day" | "journal" | "trade" | "signals" | "research" | "review" | "crypto" | "csettings" | "watch" | "trades" | "import";
+
+const MARKET_TABS: SectionTab<Tab>[] = [
+  { value: "compass", label: "Compass" },
+  { value: "chart", label: "График" },
+  { value: "day", label: "День" },
+  { value: "journal", label: "Журнал" },
+  { value: "trade", label: "Сделка" },
+  { value: "signals", label: "Сигналы" },
+  { value: "research", label: "Проверка" },
+  { value: "review", label: "Разбор" },
+  { value: "crypto", label: "Крипта" },
+  { value: "csettings", label: "Настройки Compass" },
+  { value: "watch", label: "Наблюдение" },
+  { value: "trades", label: "Сделки" },
+  { value: "import", label: "Импорт из Compass" }
+];
 
 const MARKET_HINTS = ["moex", "crypto"];
 
@@ -72,10 +91,12 @@ function num(value: number, digits = 8): string {
  * this panel only keeps references and a journal, shows positions from REAL trades, and lets you (explicitly) record a trade's
  * fee as an expense. A trade is never an expense by itself.
  */
-export function MarketsPanel(): React.ReactElement {
+export function MarketsPanel({ params, api }: PanelComponentProps = {}): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const workspaceId = workspace?.id;
-  const [tab, setTab] = useState<Tab>("compass");
+  const [tabState, setTab] = useState<Tab>("compass");
+  const section = useSectionView(params, api, "Рынки", MARKET_TABS);
+  const tab: Tab = section.view ?? tabState;
   const [compassUrl, setCompassUrl] = useState(() => readCompassUrl());
   const [editingUrl, setEditingUrl] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
@@ -94,9 +115,13 @@ export function MarketsPanel(): React.ReactElement {
       <PanelHeader
         icon={CandlestickChart}
         title="Рынки"
-        subtitle="Compass целиком: графики, сигналы, бэктесты, журнал. Рядом — наблюдение и сделки в ORION."
+        subtitle={
+          section.locked
+            ? sectionTabTitle(MARKET_TABS.find((item) => item.value === tab))
+            : "Compass целиком: графики, сигналы, бэктесты, журнал. Рядом — наблюдение и сделки в ORION."
+        }
         actions={
-          tab === "compass" ? undefined : (
+          tab === "compass" || section.missing ? undefined : (
           <div className="flex items-center gap-2">
             <Badge tone={state === "running" ? "success" : state === "offline" ? "neutral" : "neutral"}>
               {state === "running" ? "Compass запущен" : state === "checking" ? "Проверяю Compass…" : "Compass не запущен"}
@@ -111,29 +136,13 @@ export function MarketsPanel(): React.ReactElement {
           )
         }
       >
-        <div className="max-w-full overflow-x-auto">
-        <SegmentedControl<Tab>
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "compass", label: "Compass" },
-            { value: "chart", label: "График" },
-            { value: "day", label: "День" },
-            { value: "journal", label: "Журнал" },
-            { value: "trade", label: "Сделка" },
-            { value: "signals", label: "Сигналы" },
-            { value: "research", label: "Проверка" },
-            { value: "review", label: "Разбор" },
-            { value: "crypto", label: "Крипта" },
-            { value: "csettings", label: "Настройки Compass" },
-            { value: "watch", label: "Наблюдение" },
-            { value: "trades", label: "Сделки" },
-            { value: "import", label: "Импорт из Compass" }
-          ]}
-        />
-        </div>
+        <SectionTabs baseId="markets" tabs={MARKET_TABS} value={tab} onChange={setTab} locked={section.locked} />
       </PanelHeader>
-      {tab === "compass" ? (
+      {section.missing ? (
+        <PanelBody>
+          <p className="text-label text-muted-foreground">Этой вкладки больше нет. Данные сохранены.</p>
+        </PanelBody>
+      ) : tab === "compass" ? (
         <div className="min-h-0 flex-1">
           <CompassTab workspaceId={workspaceId} />
         </div>
@@ -150,7 +159,7 @@ export function MarketsPanel(): React.ReactElement {
         {tab === "research" ? <EngineGate workspaceId={workspaceId}><ResearchTab workspaceId={workspaceId} /></EngineGate> : null}
         {tab === "watch" ? <WatchTab workspaceId={workspaceId} compassUrl={compassUrl} compassRunning={state === "running"} /> : null}
         {tab === "trades" ? <TradesTab workspaceId={workspaceId} /> : null}
-        {tab === "import" ? <ImportTab workspaceId={workspaceId} onDone={() => setTab("trades")} /> : null}
+        {tab === "import" ? <ImportTab workspaceId={workspaceId} onDone={() => (section.locked ? openPanel("view:markets~trades", "Рынки · Сделки") : setTab("trades"))} /> : null}
       </PanelBody>
       )}
 

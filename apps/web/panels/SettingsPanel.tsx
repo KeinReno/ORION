@@ -46,6 +46,9 @@ import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
+import { SettingsNav } from "./settings/settings-nav";
+import { sectionTabTitle, useSectionView } from "../components/section-tabs";
+import type { PanelComponentProps } from "../lib/panel-registry";
 
 type Tab =
   | "profile"
@@ -139,7 +142,7 @@ function LiveSaveHint({ pending }: { pending: boolean }): React.ReactElement {
   );
 }
 
-export function SettingsPanel(): React.ReactElement {
+export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {}): React.ReactElement {
   const { api } = useCore();
   const { user } = useSession();
   const preferences = usePreferences();
@@ -154,7 +157,10 @@ export function SettingsPanel(): React.ReactElement {
   const appInfo = useAppInfo();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tabState, setTab] = useState<Tab>("profile");
+  const section = useSectionView(params, panelApi, "Настройки", TABS);
+  // Locked to a tab that no longer exists: "" matches no branch below, only the explanation is shown.
+  const tab: Tab | "" = section.locked ? (section.view ?? "") : tabState;
   const [form, setForm] = useState<UserPreference | null>(null);
   const [profile, setProfile] = useState({ name: "", email: "" });
   const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", newPin: "", revokeOtherSessions: true });
@@ -293,40 +299,17 @@ export function SettingsPanel(): React.ReactElement {
 
   return (
     <PanelShell>
-      <PanelHeader icon={Settings} title="Настройки" subtitle="Профиль, модули, безопасность и внешний вид" />
+      <PanelHeader
+        icon={Settings}
+        title="Настройки"
+        subtitle={section.locked ? sectionTabTitle(TABS.find((item) => item.value === tab)) : "Профиль, модули, безопасность и внешний вид"}
+      />
 
       <PanelBody measure="settings" className="[container-type:inline-size]">
-        <div className="flex flex-col gap-6 [@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start">
-          <Select
-            value={tab}
-            onChange={(event) => setTab(event.target.value as Tab)}
-            className="[@container(min-width:640px)]:hidden"
-            aria-label="Раздел настроек"
-          >
-            {TABS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-          <nav className="hidden w-48 shrink-0 flex-col gap-0.5 [@container(min-width:640px)]:flex" aria-label="Разделы настроек">
-            {TABS.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => setTab(item.value)}
-                className={cx(
-                  "rounded-lg px-3 py-row text-left text-label transition-colors",
-                  tab === item.value
-                    ? "bg-accent/15 text-foreground"
-                    : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+        <div className={cx("flex flex-col gap-6", !section.locked && "[@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start")}>
+          {!section.locked ? <SettingsNav tabs={TABS} value={tab as Tab} onChange={setTab} /> : null}
           <div className="min-w-0 flex-1">
+        {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет. Данные сохранены.</p> : null}
         {tab === "profile" ? (
           <PanelSection title="Профиль">
             <Card className="space-y-4">
