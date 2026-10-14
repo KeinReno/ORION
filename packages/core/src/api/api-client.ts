@@ -89,6 +89,11 @@ import {
   type CalendarConnectionInput,
   type CalendarFeedInfo,
   type CaptureInboxInput,
+  type Capture,
+  type CreateCaptureInput,
+  type ListCapturesQuery,
+  type UpdateCaptureInput,
+  captureSchema,
   type CategoryBreakdownEntry,
   type CategoryRule,
   type ChangePasswordInput,
@@ -815,6 +820,29 @@ export class ApiClient {
 
   async deleteProjectUpdate(workspaceId: string, projectId: string, updateId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/updates/${updateId}`, undefined, z.unknown());
+  }
+
+  // --- универсальные Capture: идея / проблема / заметка с якорем на любой объект или без него ---
+
+  listCaptures(workspaceId: string, query: ListCapturesQuery = {}): Promise<Capture[]> {
+    const qs = buildQuery({ anchorType: query.anchorType, anchorId: query.anchorId, kind: query.kind, status: query.status });
+    return this.request("GET", `/workspaces/${workspaceId}/captures${qs}`, undefined, z.array(captureSchema));
+  }
+
+  createCapture(workspaceId: string, input: CreateCaptureInput): Promise<Capture> {
+    return this.request("POST", `/workspaces/${workspaceId}/captures`, input, captureSchema);
+  }
+
+  updateCapture(workspaceId: string, captureId: string, input: UpdateCaptureInput): Promise<Capture> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/captures/${captureId}`, input, captureSchema);
+  }
+
+  async deleteCapture(workspaceId: string, captureId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/captures/${captureId}`, undefined, z.unknown());
+  }
+
+  promoteCapture(workspaceId: string, captureId: string): Promise<Capture> {
+    return this.request("POST", `/workspaces/${workspaceId}/captures/${captureId}/promote`, {}, captureSchema);
   }
 
   // --- идеи и проблемы проекта (плагины projects-ideas / projects-problems) ---

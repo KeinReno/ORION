@@ -216,7 +216,7 @@ model Workspace {
   inventoryMovements    InventoryMovement[]
   milestones            Milestone[]
   milestoneDependencies MilestoneDependency[]
-  projectCaptures       ProjectCapture[]
+  captures              Capture[]
   agentTokens           AgentToken[]
   homes                 Home[]
   meters                Meter[]
@@ -278,7 +278,7 @@ model Project {
   inventoryItems InventoryItem[]
   milestones   Milestone[]
   projectStatusUpdates ProjectStatusUpdate[]
-  captures     ProjectCapture[]
+  captures     Capture[]
   goalPlans    GoalPlan[]
 
   @@unique([workspaceId, name])
@@ -540,7 +540,7 @@ model Task {
   milestone  Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   comments   TaskComment[]
   activities TaskActivity[]
-  captures   ProjectCapture[]
+  captures   Capture[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -552,52 +552,59 @@ model Task {
   @@map("tasks")
 }
 
-/// A short note pinned to one project: an idea ("a feature I just thought of")
-/// or a problem ("a bug, something I dislike, something to fix"). It is not a
-/// Note and not a Task — the thought stays here until the user explicitly
-/// turns it into a task of this project. Other hosts (finance, home) are a
-/// later plugin with the same shape, not extra columns on this table.
-enum ProjectCaptureKind {
+/// A short thought anchored to ANY ORION object (project, task, goal, home, finance account /
+/// obligation, contact) or to nothing: an idea, a problem, or a note-to-self. It is not a Note and
+/// not a Task — it stays here until the user explicitly turns it into a task; the record survives
+/// promotion. (anchorType, anchorId) is validated against the workspace by CapturesService; only the
+/// project anchor also fills `projectId`, which carries the FK and so the cascade on project delete.
+/// Other anchors have no FK — see the module comment in captures.service.ts for the orphan rule.
+enum CaptureKind {
   idea
   problem
+  note
 }
 
-enum ProjectCaptureStatus {
+enum CaptureStatus {
   open
   promoted
   dismissed
 }
 
-/// Only meaningful for `problem`. Ideas leave this null.
-enum ProjectCaptureSeverity {
+/// Only meaningful for `problem`. Everything else leaves this null.
+enum CaptureSeverity {
   annoyance
   bug
   fix
 }
 
-model ProjectCapture {
-  id          String                  @id @default(uuid())
+model Capture {
+  id          String           @id @default(uuid())
   workspaceId String
-  projectId   String
-  kind        ProjectCaptureKind
+  /// project | task | goal | home | account | obligation | contact — null together with anchorId.
+  anchorType  String?
+  anchorId    String?
+  /// Mirror of the anchor when anchorType = "project" (carries the cascade FK); null otherwise.
+  projectId   String?
+  kind        CaptureKind
   title       String
-  body        String                  @default("")
-  status      ProjectCaptureStatus    @default(open)
-  severity    ProjectCaptureSeverity?
+  body        String           @default("")
+  status      CaptureStatus    @default(open)
+  severity    CaptureSeverity?
   /// Set when the user turns this into a task. The task then lives on its
   /// own: deleting the task clears the link (SetNull) and the thought stays.
   taskId      String?
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
+  @@index([workspaceId, anchorType, anchorId, kind])
   @@index([projectId, kind])
   @@index([taskId])
-  @@map("project_captures")
+  @@map("captures")
 }
 
 /// ORION S17 «Комментарии и журнал задач». A free-text comment on a task,

@@ -10,6 +10,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { openPanel } from "../lib/panel-bus";
+import { HomeCaptures } from "./home/home-captures";
 import { HomeActivity } from "./home/home-activity";
 import { HomeContacts } from "./home/home-contacts";
 import { HomeMeters } from "./home/home-meters";
@@ -176,6 +177,7 @@ export function HomePanel(): React.ReactElement {
                   {isEnabled("inventory") ? <HomeThings workspaceId={workspaceId} home={home} overview={overview} /> : null}
                   {isEnabled("finance") ? <HomePayments workspaceId={workspaceId} home={home} overview={overview} /> : null}
                   <HomeContacts workspaceId={workspaceId} home={home} overview={overview} />
+                  <HomeCaptures workspaceId={workspaceId} home={home} overview={overview} />
                 </div> : null}
                 {pluginTabs.map(({ pluginId, component: Component, meta }) => displayedTab === meta?.tabId ? <Component key={pluginId} workspaceId={workspaceId} home={home} overview={overview} financeAvailable={isEnabled("finance")} /> : null)}
               </div>

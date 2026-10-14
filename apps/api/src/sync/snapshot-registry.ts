@@ -107,7 +107,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "ProjectStatusUpdate", snapshotKey: "projectStatusUpdates", policy: "included", reason: "Ручные отчёты о состоянии проекта (UI-05) — пользовательский контент." },
   { model: "Goal", snapshotKey: "goals", policy: "included", reason: "Глобальные цели (плагин projects-goals) — пользовательский контент." },
   { model: "GoalPlan", snapshotKey: "goalPlans", policy: "included", reason: "Связь цель ↔ проект с весом; вставляется после целей и проектов." },
-  { model: "ProjectCapture", snapshotKey: "projectCaptures", policy: "included", reason: "Идеи и проблемы проекта — пользовательский текст, привязанный к Project; taskId ссылается на уже вставленную задачу." },
+  { model: "Capture", snapshotKey: "captures", policy: "included", reason: "Универсальные идеи/проблемы/заметки с якорем (anchorType, anchorId) — пользовательский текст; после Project и Task (projectId, taskId)." },
   { model: "TaskComment", snapshotKey: "taskComments", policy: "included", reason: "Комментарии задач (S17) — пользовательский контент, часть истории задачи." },
   { model: "TaskActivity", snapshotKey: "taskActivities", policy: "included", reason: "Журнал изменений статуса/исполнителя/срока (S17) — append-only аудит." },
   { model: "SavedTaskView", snapshotKey: "savedTaskViews", policy: "included", reason: "Сохранённые виды доски задач." },

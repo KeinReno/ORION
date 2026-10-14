@@ -35,6 +35,7 @@ export * from "./use-contacts";
 export * from "./use-milestones";
 export * from "./use-project-updates";
 export * from "./use-project-captures";
+export * from "./use-captures";
 export * from "./use-agent-tokens";
 export * from "./use-goals";
 export * from "./use-home";

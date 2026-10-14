@@ -118,7 +118,7 @@ describe("Project captures (ideas / problems)", () => {
     expect(crossWorkspace.status).toBe(404);
 
     await prisma.asSystem((tx) => tx.project.delete({ where: { id: projectId } }));
-    const left = await prisma.asSystem((tx) => tx.projectCapture.count({ where: { id: idea.data.id } }));
+    const left = await prisma.asSystem((tx) => tx.capture.count({ where: { id: idea.data.id } }));
     expect(left).toBe(0);
   });
 

@@ -106,7 +106,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("projectStatusUpdates", (tx) => tx.projectStatusUpdate),
   // Ideas/problems. taskId is nullable and points at a task loaded above;
   // a null link does not wait on tasks, a set one does.
-  spec("projectCaptures", (tx) => tx.projectCapture),
+  spec("captures", (tx) => tx.capture),
   spec("milestoneDependencies", (tx) => tx.milestoneDependency),
   spec("events", (tx) => tx.event),
   spec("eventOverrides", (tx) => tx.eventOverride),
@@ -377,7 +377,12 @@ export class SnapshotService {
     }
     // Вставка: от корня к листьям.
     for (const m of SNAPSHOT_MODELS) {
-      const rows = snapshot.tables[m.key] ?? [];
+      let rows = snapshot.tables[m.key] ?? [];
+      // Копии, снятые до универсальных Capture, хранили идеи/проблемы проекта под ключом `projectCaptures`.
+      if (m.key === "captures" && rows.length === 0) {
+        const legacy = (snapshot.tables as Record<string, unknown[] | undefined>)["projectCaptures"] ?? [];
+        rows = legacy.map((r) => ({ ...(r as object), anchorType: "project", anchorId: (r as { projectId: string }).projectId }));
+      }
       // Страховка: снапшот другого workspace не должен просочиться.
       const own = rows.filter(
         (r) => (r as { workspaceId?: string }).workspaceId === snapshot.workspaceId

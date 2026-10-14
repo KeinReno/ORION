@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { CapturesModule } from "../captures/captures.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { TasksModule } from "../tasks/tasks.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -11,7 +12,7 @@ import { ProjectsController } from "./projects.controller";
 import { ProjectsService } from "./projects.service";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, CapturesModule],
   controllers: [ProjectsController, ProjectUpdatesController, ProjectIdeasController, ProjectProblemsController],
   providers: [ProjectsService, ProjectUpdatesService, ProjectCapturesService],
   exports: [ProjectsService]
