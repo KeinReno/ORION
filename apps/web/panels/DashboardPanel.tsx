@@ -1,6 +1,7 @@
 "use client";
 
-import { DashboardAnalytics } from "./dashboard/analytics";
+import { DashboardAnalytics, DashboardAnalyticsView } from "./dashboard/analytics";
+import type { PanelComponentProps } from "../lib/panel-registry";
 import { ApiError } from "@orion/core";
 import {
   useAccounts,
@@ -78,7 +79,21 @@ function greeting(): string {
   return "Добрый вечер";
 }
 
-export function DashboardPanel(): React.ReactElement {
+/** Opened as an analytics tab (`view:dashboard~<mode>`) it shows only that mode; otherwise the whole dashboard. */
+export function DashboardPanel(props: PanelComponentProps = {}): React.ReactElement {
+  return props.params?.locked === true ? <DashboardAnalyticsTab {...props} /> : <DashboardOverview />;
+}
+
+function DashboardAnalyticsTab({ params, api }: PanelComponentProps): React.ReactElement {
+  const { workspace } = useActiveWorkspace();
+  const { isEnabled } = useEnabledModules();
+  const tasksOn = isEnabled("tasks");
+  const localNow = useLocalNow();
+  const { data: tasks } = useTasks(tasksOn ? workspace?.id : undefined);
+  return <DashboardAnalyticsView params={params} api={api} tasks={tasks ?? []} now={localNow} workspaceId={workspace?.id} tasksOn={tasksOn} />;
+}
+
+function DashboardOverview(): React.ReactElement {
   const { user } = useSession();
   const { workspace } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();

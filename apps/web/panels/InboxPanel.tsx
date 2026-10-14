@@ -27,6 +27,8 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { CircleCheck, Clock, FolderKanban, Inbox, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
+import type { PanelComponentProps } from "../lib/panel-registry";
 import { fromDatetimeLocal, relativeTime, shortDateTime, toDatetimeLocal } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { openEntity, openPanel } from "../lib/panel-bus";
@@ -36,6 +38,11 @@ import { InboxQueue } from "./inbox/queue";
 import { groupInboxItems, isInboxGroupBy, type InboxGroupBy } from "./inbox/group";
 
 type InboxView = "queue" | "history";
+
+const INBOX_TABS: SectionTab<InboxView>[] = [
+  { value: "queue", label: "К разбору" },
+  { value: "history", label: "История" }
+];
 
 const GROUP_KEY = "orion.inbox.groupBy";
 
@@ -81,11 +88,14 @@ function processedKind(item: InboxItem): ProcessKind | null {
  * to be sorted) and the history (what it was turned into and when). Both come
  * from the same endpoint — see `useInbox(workspaceId, history)`.
  */
-export function InboxPanel(): React.ReactElement {
+export function InboxPanel({ params, api }: PanelComponentProps = {}): React.ReactElement {
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
   const workspaceId = workspace?.id;
-  const [view, setView] = useState<InboxView>("queue");
+  const [viewChoice, setView] = useState<InboxView>("queue");
+  const section = useSectionView(params, api, "Инбокс", INBOX_TABS);
+  // Opened as a view of ONE tab: that tab, always (the strip is hidden).
+  const view: InboxView = section.view ?? viewChoice;
   const history = view === "history";
   const [groupBy, setGroupBy] = useState<InboxGroupBy>("none");
   const grouping = groupBy === "project" && !isEnabled("projects") ? "none" : groupBy;
@@ -226,7 +236,7 @@ export function InboxPanel(): React.ReactElement {
       <PanelHeader
         icon={Inbox}
         title="Инбокс"
-        subtitle={unprocessed > 0 ? `${unprocessed} к разбору` : "Записывайте мысли, разбирайте потом"}
+        subtitle={section.locked ? sectionTabTitle(INBOX_TABS.find((tab) => tab.value === view)) : unprocessed > 0 ? `${unprocessed} к разбору` : "Записывайте мысли, разбирайте потом"}
         actions={
           unprocessed > 0 ? (
             <Badge tone="accent">{unprocessed}</Badge>
@@ -235,15 +245,7 @@ export function InboxPanel(): React.ReactElement {
           )
         }
       >
-        <SegmentedControl<InboxView>
-          value={view}
-          onChange={setView}
-          size="sm"
-          options={[
-            { value: "queue", label: "К разбору" },
-            { value: "history", label: "История" }
-          ]}
-        />
+        <SectionTabs<InboxView> baseId="inbox" tabs={INBOX_TABS} value={view} onChange={setView} locked={section.locked} size="sm" />
         {history ? (
           <SegmentedControl<InboxGroupBy>
             value={grouping}

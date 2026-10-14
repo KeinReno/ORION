@@ -2,11 +2,13 @@
 
 import { useActivity, useAgentAuditLog, useProjectGoals, useProjects } from "@orion/core-react";
 import type { Task } from "@orion/shared-types";
-import { SegmentedControl, cx } from "@orion/ui";
+import { PanelBody, PanelHeader, PanelShell, cx } from "@orion/ui";
 import { BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../../components/section-tabs";
 import { dailyFlow, flowTotals, workload, type DayFlow } from "../../lib/dashboard-stats";
 import { openEntity, openPanel, openProject } from "../../lib/panel-bus";
+import type { PanelComponentProps } from "../../lib/panel-registry";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
 
@@ -87,7 +89,20 @@ function Bar({ value }: { value: number | null }): React.ReactElement {
  * projects, goals, AI agents. Every figure is a way into the list it counts (tile → Tasks,
  * row → the project / goals panel / agent log).
  */
-export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: string | undefined; tasks: Task[]; now: Date }): React.ReactElement {
+export function DashboardAnalytics({
+  workspaceId,
+  tasks,
+  now,
+  params,
+  api
+}: {
+  workspaceId: string | undefined;
+  tasks: Task[];
+  now: Date;
+  /** Set when the analytics is opened as a view of ONE mode (`view:dashboard~<mode>`): only that mode, no strip. */
+  params?: PanelComponentProps["params"];
+  api?: PanelComponentProps["api"];
+}): React.ReactElement {
   const { isEnabled } = useEnabledModules();
   const { isEnabled: isPluginEnabled } = useEnabledPlugins();
   const projectsOn = isEnabled("projects");
@@ -110,33 +125,38 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
     }
   }
 
-  const { data: projects } = useProjects(projectsOn && mode === "projects" ? workspaceId : undefined);
-  const { data: goals } = useProjectGoals(goalsOn && mode === "goals" ? workspaceId : undefined);
-  const { data: activity } = useActivity(mode === "activity" ? workspaceId : undefined);
-  const { data: audit } = useAgentAuditLog(mode === "ai" ? workspaceId : undefined);
-
-  const flow = useMemo(() => dailyFlow(tasks, now, 14), [tasks, now]);
-  const load = useMemo(() => workload(tasks, now), [tasks, now]);
-
-  const modes: { value: Mode; label: string }[] = [
+  const modes: SectionTab<Mode>[] = [
     { value: "personal", label: "Личный" },
     ...(projectsOn ? [{ value: "projects" as const, label: "Проекты" }] : []),
     ...(goalsOn ? [{ value: "goals" as const, label: "Цели" }] : []),
     { value: "activity", label: "Журнал" },
     { value: "ai", label: "ИИ" }
   ];
-  const active = modes.some((m) => m.value === mode) ? mode : "personal";
+  const section = useSectionView(params, api, "Дашборд", modes);
+  const active: Mode = section.view ?? (modes.some((m) => m.value === mode) ? mode : "personal");
+
+  const { data: projects } = useProjects(projectsOn && active === "projects" ? workspaceId : undefined);
+  const { data: goals } = useProjectGoals(goalsOn && active === "goals" ? workspaceId : undefined);
+  const { data: activity } = useActivity(active === "activity" ? workspaceId : undefined);
+  const { data: audit } = useAgentAuditLog(active === "ai" ? workspaceId : undefined);
+
+  const flow = useMemo(() => dailyFlow(tasks, now, 14), [tasks, now]);
+  const load = useMemo(() => workload(tasks, now), [tasks, now]);
+
 
   return (
     <section aria-label="Аналитика" className="min-w-0 space-y-3 rounded-2xl border border-border bg-card/60 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-title text-foreground">
-          <BarChart3 className="h-4 w-4 text-muted-foreground" /> Аналитика
-        </h2>
-        <SegmentedControl<Mode> aria-label="Режим аналитики" size="sm" value={active} onChange={chooseMode} options={modes} />
-      </div>
+      {section.locked ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-title text-foreground">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" /> Аналитика
+          </h2>
+          <SectionTabs<Mode> baseId="dashboard" tabs={modes} value={active} onChange={chooseMode} size="sm" />
+        </div>
+      )}
+      {section.missing ? <p className="text-label text-subtle-foreground">Этой вкладки больше нет: её раздел выключен. Данные сохранены.</p> : null}
 
-      {active === "personal" ? (
+      {!section.missing && active === "personal" ? (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <StatTile value={load.open} label="открыто" onClick={() => openPanel("tasks")} />
@@ -150,7 +170,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
         </div>
       ) : null}
 
-      {active === "projects" ? (
+      {!section.missing && active === "projects" ? (
         (projects ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">Проектов пока нет.</p>
         ) : (
@@ -172,7 +192,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
         )
       ) : null}
 
-      {active === "goals" ? (
+      {!section.missing && active === "goals" ? (
         (goals ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">Целей пока нет — они создаются в панели «Цели».</p>
         ) : (
@@ -195,7 +215,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
         )
       ) : null}
 
-      {active === "activity" ? (
+      {!section.missing && active === "activity" ? (
         (activity ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">Пока нет событий.</p>
         ) : (
@@ -220,7 +240,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
         )
       ) : null}
 
-      {active === "ai" ? (
+      {!section.missing && active === "ai" ? (
         (audit ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">
             Агенты пока ничего не делали. Токены выпускаются в Настройках → «ИИ-агенты».
@@ -236,5 +256,40 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
         )
       ) : null}
     </section>
+  );
+}
+
+/**
+ * One analytics mode as a panel of its own (`view:dashboard~<mode>`): the same component as inside the
+ * dashboard, locked to the mode. Used by `DashboardPanel` when it receives locked params.
+ */
+export function DashboardAnalyticsView({ params, api, tasks, now, workspaceId, tasksOn }: {
+  params: PanelComponentProps["params"];
+  api: PanelComponentProps["api"];
+  tasks: Task[];
+  now: Date;
+  workspaceId: string | undefined;
+  tasksOn: boolean;
+}): React.ReactElement {
+  const modeLabel = sectionTabTitle(
+    ([
+      { value: "personal", label: "Личный" },
+      { value: "projects", label: "Проекты" },
+      { value: "goals", label: "Цели" },
+      { value: "activity", label: "Журнал" },
+      { value: "ai", label: "ИИ" }
+    ] as SectionTab<string>[]).find((tab) => tab.value === params?.view)
+  );
+  return (
+    <PanelShell>
+      <PanelHeader icon={BarChart3} title="Аналитика" subtitle={modeLabel} />
+      <PanelBody className="[container-type:inline-size]">
+        {tasksOn ? (
+          <DashboardAnalytics workspaceId={workspaceId} tasks={tasks} now={now} params={params} api={api} />
+        ) : (
+          <p className="text-label text-subtle-foreground">Модуль «Задачи» выключен в этом пространстве. Данные сохранены.</p>
+        )}
+      </PanelBody>
+    </PanelShell>
   );
 }
