@@ -36,6 +36,7 @@ import {
   PanelSection,
   PanelShell,
   SegmentedControl,
+  type SegmentedOption,
   Skeleton,
   Textarea,
   cx,
@@ -68,6 +69,8 @@ import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
+import { buildPanelDragId } from "../lib/panel-drag";
+import { panelDragHandleProps } from "../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { projectFocus } from "../lib/project-focus";
@@ -245,12 +248,21 @@ function ProjectWorkspace({
     (contribution) => contribution.meta !== undefined && (contribution.meta.needsModule === undefined || (contribution.meta.needsModule === "tasks" ? tasksOn : true))
   );
   const planPlugin = pluginTabs.some((contribution) => contribution.meta?.tabId === "plan");
-  const tabs: { value: ProjectTab; label: React.ReactNode }[] = [
+  // Ctrl/Cmd+drag by a tab drops that view into the dock as a panel (ADR-0003 step 4).
+  const dragAttrs = (kind: string): { dataAttrs?: Record<`data-${string}`, string> } => {
+    const id = buildPanelDragId(kind, project.id);
+    return id ? { dataAttrs: { "data-panel-drag": id } } : {};
+  };
+  const tabs: (SegmentedOption<ProjectTab> & { label: React.ReactNode })[] = [
     { value: "overview", label: "Обзор" },
-    ...(tasksOn ? [{ value: "tasks" as const, label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}` }] : []),
-    ...pluginTabs.map((contribution) => ({ value: contribution.meta!.tabId, label: contribution.meta!.label })),
-    { value: "materials", label: "Материалы" },
-    { value: "access", label: "Доступ" }
+    ...(tasksOn ? [{ value: "tasks" as const, label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}`, ...dragAttrs("projecttasks") }] : []),
+    ...pluginTabs.map((contribution) => ({
+      value: contribution.meta!.tabId,
+      label: contribution.meta!.label,
+      ...(contribution.meta!.tabId === "plan" ? dragAttrs("projectplan") : {})
+    })),
+    { value: "materials", label: "Материалы", ...dragAttrs("projectmaterials") },
+    { value: "access", label: "Доступ", ...dragAttrs("projectaccess") }
   ];
 
   // A remembered tab can name a module that is off now — fall back to the overview
@@ -454,7 +466,9 @@ function ProjectWorkspace({
               </span>
             ) : null}
           </div>
-          <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
+          <div {...panelDragHandleProps(null)}>
+            <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
+          </div>
         </div>
       </PanelHeader>
 

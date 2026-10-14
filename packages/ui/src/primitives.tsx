@@ -322,6 +322,8 @@ export interface SegmentedOption<T extends string> {
   label: ReactNode;
   /** Required when `label` is only an icon: the button's accessible name (also shown as a tooltip). */
   ariaLabel?: string;
+  /** Extra `data-*` attributes for the button (e.g. a drag-handle marker the app reads). */
+  dataAttrs?: Record<`data-${string}`, string>;
 }
 
 /** Compact tab-like switch (view modes, sort order). Fully keyboard-operable. */
@@ -357,6 +359,7 @@ export function SegmentedControl<T extends string>({
             aria-selected={active}
             aria-label={option.ariaLabel}
             title={option.ariaLabel}
+            {...option.dataAttrs}
             onClick={() => onChange(option.value)}
             className={clsx(
               "rounded-md font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/60",

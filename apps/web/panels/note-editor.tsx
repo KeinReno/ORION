@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
 import { openPanel } from "../lib/panel-bus";
+import { buildPanelDragId } from "../lib/panel-drag";
+import { panelDragHandleProps } from "../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../lib/panel-window";
 import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
@@ -410,7 +412,10 @@ export function NoteEditor({
             </div>
           </div>
           {note ? (
-            <p className="flex flex-wrap items-center gap-x-1 text-micro text-subtle-foreground">
+            <p
+              className="flex flex-wrap items-center gap-x-1 text-micro text-subtle-foreground"
+              {...(standalone ? {} : panelDragHandleProps(buildPanelDragId("note", note.id)))}
+            >
               {showIds && note.number !== null ? (
                 <button
                   type="button"

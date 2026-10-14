@@ -36,6 +36,8 @@ import { useEffect, useRef, useState } from "react";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ResizablePane } from "../../components/resizable-pane";
 import { openPanel } from "../../lib/panel-bus";
+import { buildPanelDragId } from "../../lib/panel-drag";
+import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../../lib/panel-window";
 import { describeError } from "../../lib/error-message";
 import { relativeTime } from "../../lib/format";
@@ -264,7 +266,10 @@ export function TaskDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
+      <header
+        className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5"
+        {...(standalone ? {} : panelDragHandleProps(buildPanelDragId("task", task.id)))}
+      >
         {compact ? (
           <Button size="sm" variant="ghost" onClick={onClose}>
             <ArrowLeft className="h-4 w-4" /> Задачи
