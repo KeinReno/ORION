@@ -210,6 +210,9 @@ describe("snapshot coverage and restore preflight (S03)", () => {
       const feeTx = await tx.transaction.create({
         data: { workspaceId, accountId: account.id, type: "expense", occurredAt: new Date(), lines: { create: [{ workspaceId, amount: 100 }] } }
       });
+      const home = await tx.home.create({ data: { workspaceId, name: "S03 flat" } });
+      const utilityMonth = await tx.homeUtilityMonth.create({ data: { workspaceId, homeId: home.id, period: "2026-08", rentMinor: 100, rentConfirmed: true, charges: [], importedGrandTotalMinor: 100 } });
+      await tx.homeUtilityPayment.create({ data: { workspaceId, homeId: home.id, monthId: utilityMonth.id, transactionId: feeTx.id, amountMinor: 100 } });
       await tx.investmentTrade.create({
         data: { workspaceId, externalUid: "compass:s03", mode: "real", market: "moex", symbol: "SBER", side: "buy", qty: 1, price: 1, tradedAt: new Date(), feeTransactionId: feeTx.id }
       });
@@ -260,8 +263,11 @@ describe("snapshot coverage and restore preflight (S03)", () => {
     expect(after.financeObligations).toBe(1);
     expect(after.marketWatchItems).toBe(1);
     expect(after.investmentTrades).toBe(1);
+    expect(after.homeUtilityPayments).toBe(1);
     const trade = await prisma.withUser(userId, (tx) => tx.investmentTrade.findFirst({ where: { workspaceId } }));
     expect(trade?.feeTransactionId).not.toBeNull();
+    const restoredPayment = await prisma.withUser(userId, (tx) => tx.homeUtilityPayment.findFirst({ where: { workspaceId } }));
+    expect(restoredPayment?.amountMinor).toBe(100);
 
     const restoredTasks = await prisma.withUser(userId, (tx) =>
       tx.task.findMany({ where: { workspaceId }, select: { id: true, parentId: true, title: true } })

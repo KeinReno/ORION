@@ -188,6 +188,89 @@ describe("Module Home", () => {
     expect(otherFeed.data).toEqual([]);
   });
 
+  it("коммуналка: помесячные начисления, черновое копирование, тарифы и изоляция", async () => {
+    const alice = await register("utilities-owner");
+    const otherUser = await register("utilities-outsider");
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const home = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Квартира" } });
+    const otherHome = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Дача" } });
+    const path = `${ws}/home-utilities/${home.data.id}`;
+    const charge = { id: "00000000-0000-4000-8000-000000000001", name: "ТНС энерго", amountMinor: 112_341, confirmed: true, note: "" };
+    const september = await request<{ revision: number; grandTotalMinor: number; confirmedTotalMinor: number }>(`${path}/months/2026-09`, {
+      method: "PUT", token: alice.accessToken, body: { rentMinor: 1_800_000, rentConfirmed: true, charges: [charge] }
+    });
+    expect(september.status).toBe(200);
+    expect(september.data.grandTotalMinor).toBe(1_912_341);
+    expect(september.data.confirmedTotalMinor).toBe(1_912_341);
+    expect((await request(`${path}/months/2026-09`, { method: "PUT", token: alice.accessToken, body: { rentMinor: 1_700_000, rentConfirmed: true, charges: [charge] } })).status).toBe(409);
+    const revised = await request<{ revision: number }>(`${path}/months/2026-09`, { method: "PUT", token: alice.accessToken, body: { expectedRevision: september.data.revision, rentMinor: 1_800_000, rentConfirmed: true, charges: [charge] } });
+    expect(revised.status).toBe(200);
+    expect(revised.data.revision).toBe(september.data.revision + 1);
+
+    const october = await request<{ rentConfirmed: boolean; charges: Array<{ confirmed: boolean; amountMinor: number }> }>(`${path}/months/2026-10/copy-previous`, { method: "POST", token: alice.accessToken });
+    expect(october.status).toBe(201);
+    expect(october.data.rentConfirmed).toBe(false);
+    expect(october.data.charges).toMatchObject([{ amountMinor: 112_341, confirmed: false }]);
+    expect((await request(`${path}/months/2026-10/copy-previous`, { method: "POST", token: alice.accessToken })).status).toBe(409);
+    expect((await request(`${ws}/home-utilities/${otherHome.data.id}/months`, { method: "GET", token: alice.accessToken })).data).toEqual([]);
+    expect([403, 404]).toContain((await request(`${path}/months`, { method: "GET", token: otherUser.accessToken })).status);
+
+    const meter = await request<{ id: string }>(`${ws}/homes/${home.data.id}/meters`, { method: "POST", token: alice.accessToken, body: { name: "Свет", kind: "electricity" } });
+    const tariffPath = `${path}/meters/${meter.data.id}/tariffs`;
+    const tariff = await request<{ rateRub: string }>(tariffPath, { method: "POST", token: alice.accessToken, body: { effectiveFrom: "2026-10-01", rateRub: "6.25", note: "" } });
+    expect(tariff.status).toBe(201);
+    expect(tariff.data.rateRub).toBe("6.2500");
+    expect((await request(tariffPath, { method: "GET", token: alice.accessToken })).status).toBe(200);
+
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { pluginOverrides: ["home-utilities"] } }));
+    expect([403, 404, 409]).toContain((await request(`${path}/months`, { method: "GET", token: alice.accessToken })).status);
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { pluginOverrides: [] } }));
+    expect((await request<Array<{ period: string }>>(`${path}/months`, { method: "GET", token: alice.accessToken })).data.map((m) => m.period)).toEqual(["2026-10", "2026-09"]);
+  });
+
+  it("перенос таблицы сохраняет исходные итоги, а оплата ссылается на расход без второго списания", async () => {
+    const alice = await register("utility-import-payment");
+    const outsider = await register("utility-payment-outsider");
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const home = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Квартира" } });
+    const path = `${ws}/home-utilities/${home.data.id}`;
+    const charge = { id: "00000000-0000-4000-8000-000000000123", name: "ТНС энерго", amountMinor: 106704, confirmed: false, note: "" };
+    const importBody = { rows: [{ period: "2026-08", rentMinor: 1800000, charges: [charge], importedUtilityMinor: 106704, importedGrandTotalMinor: 1906705 }] };
+    const preview = await request<{ dryRun: boolean; rows: Array<{ grandDifferenceMinor: number }> }>(`${path}/months/import`, { method: "POST", token: alice.accessToken, body: { ...importBody, dryRun: true } });
+    expect(preview.status).toBe(201);
+    expect(preview.data.rows[0].grandDifferenceMinor).toBe(-1);
+    expect((await request<unknown[]>(`${path}/months`, { method: "GET", token: alice.accessToken })).data).toEqual([]);
+    const imported = await request<{ imported: number; skipped: number }>(`${path}/months/import`, { method: "POST", token: alice.accessToken, body: { ...importBody, dryRun: false } });
+    expect(imported.data).toMatchObject({ imported: 1, skipped: 0 });
+    expect((await request<{ imported: number; skipped: number }>(`${path}/months/import`, { method: "POST", token: alice.accessToken, body: { ...importBody, dryRun: false } })).data).toMatchObject({ imported: 0, skipped: 1 });
+    const month = (await request<Array<{ revision: number; importedGrandTotalMinor: number; confirmedTotalMinor: number }>>(`${path}/months`, { method: "GET", token: alice.accessToken })).data[0];
+    expect(month).toMatchObject({ importedGrandTotalMinor: 1906705, confirmedTotalMinor: 0 });
+
+    const account = await request<{ id: string }>(`${ws}/finance/accounts`, { method: "POST", token: alice.accessToken, body: { name: "Карта", kind: "card", currency: "RUB", startingBalance: 0 } });
+    const category = await request<{ id: string }>(`${ws}/finance/categories`, { method: "POST", token: alice.accessToken, body: { name: "Коммуналка", kind: "expense" } });
+    const expense = await request<{ id: string }>(`${ws}/finance/transactions`, { method: "POST", token: alice.accessToken, body: { accountId: account.data.id, type: "expense", note: "Счета за август", occurredAt: "2026-08-30T12:00:00.000Z", lines: [{ categoryId: category.data.id, amount: 1_906_704 }] } });
+    expect(expense.status).toBe(201);
+    expect((await request(`${path}/months/2026-08/payments`, { method: "PUT", token: alice.accessToken, body: { transactionId: expense.data.id, amountMinor: 1_906_704 } })).status).toBe(409);
+    const confirmed = await request<{ revision: number; confirmedTotalMinor: number }>(`${path}/months/2026-08`, { method: "PUT", token: alice.accessToken, body: { expectedRevision: month.revision, rentMinor: 1_800_000, rentConfirmed: true, charges: [{ ...charge, confirmed: true }] } });
+    expect(confirmed.data.confirmedTotalMinor).toBe(1_906_704);
+    const linked = await request<{ paidMinor: number; remainingMinor: number; payments: Array<{ id: string; valid: boolean }> }>(`${path}/months/2026-08/payments`, { method: "PUT", token: alice.accessToken, body: { transactionId: expense.data.id, amountMinor: 1_906_704 } });
+    expect(linked.status).toBe(200);
+    expect(linked.data).toMatchObject({ paidMinor: 1_906_704, remainingMinor: 0 });
+    expect(linked.data.payments[0].valid).toBe(true);
+    expect((await request(`${path}/months/2026-08/payments`, { method: "PUT", token: outsider.accessToken, body: { transactionId: expense.data.id, amountMinor: 100 } })).status).toBeGreaterThanOrEqual(403);
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: ["finance"] } }));
+    const hiddenFinance = (await request<Array<{ paidMinor: number | null; payments: unknown[] }>>(`${path}/months`, { method: "GET", token: alice.accessToken })).data[0];
+    expect(hiddenFinance).toMatchObject({ paidMinor: null, payments: [] });
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: [] } }));
+    const changed = await request(`${ws}/finance/transactions/${expense.data.id}`, { method: "PATCH", token: alice.accessToken, body: { lines: [{ categoryId: category.data.id, amount: 1_000_000 }] } });
+    expect(changed.status).toBe(200);
+    const invalid = (await request<Array<{ paidMinor: number; payments: Array<{ valid: boolean }> }>>(`${path}/months`, { method: "GET", token: alice.accessToken })).data[0];
+    expect(invalid).toMatchObject({ paidMinor: 0 });
+    expect(invalid.payments[0].valid).toBe(false);
+    expect((await request<Array<{ id: string }>>(`${ws}/finance/transactions`, { method: "GET", token: alice.accessToken })).data.filter((row) => row.id === expense.data.id)).toHaveLength(1);
+    expect((await request<{ paidMinor: number }>(`${path}/months/2026-08/payments/${linked.data.payments[0].id}`, { method: "DELETE", token: alice.accessToken })).data.paidMinor).toBe(0);
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

@@ -22,6 +22,7 @@ export * from "./project-update";
 export * from "./project-capture";
 export * from "./goal";
 export * from "./home";
+export * from "./home-utilities";
 export * from "./inbox";
 export * from "./capture";
 export * from "./today";

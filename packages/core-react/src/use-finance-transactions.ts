@@ -39,6 +39,7 @@ function invalidateTransactionEffects(queryClient: ReturnType<typeof useQueryCli
   queryClient.invalidateQueries({ queryKey: ["finance-budgets", workspaceId] });
   queryClient.invalidateQueries({ queryKey: ["finance-reports-monthly", workspaceId] });
   queryClient.invalidateQueries({ queryKey: ["finance-reports-categories", workspaceId] });
+  queryClient.invalidateQueries({ queryKey: ["home-utilities", workspaceId] });
 }
 
 export function useCreateTransaction(workspaceId: string | undefined) {

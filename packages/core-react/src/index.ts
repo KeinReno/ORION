@@ -38,6 +38,7 @@ export * from "./use-project-captures";
 export * from "./use-agent-tokens";
 export * from "./use-goals";
 export * from "./use-home";
+export * from "./use-home-utilities";
 export * from "./use-activity";
 export * from "./use-plugins";
 export * from "./use-overview";

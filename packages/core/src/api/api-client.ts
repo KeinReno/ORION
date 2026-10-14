@@ -1,5 +1,6 @@
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
+import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
 import {
   accountPublicSchema,
   accountSchema,
@@ -877,6 +878,38 @@ export class ApiClient {
 
   homeActivity(workspaceId: string, homeId: string): Promise<ActivityEntry[]> {
     return this.request("GET", `/workspaces/${workspaceId}/homes/${homeId}/activity`, undefined, z.array(activityEntrySchema));
+  }
+
+  listUtilityMonths(workspaceId: string, homeId: string): Promise<UtilityMonth[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/home-utilities/${homeId}/months`, undefined, z.array(utilityMonthSchema));
+  }
+
+  importUtilityMonths(workspaceId: string, homeId: string, input: ImportUtilityMonthsInput): Promise<ImportUtilityMonthsResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/home-utilities/${homeId}/months/import`, input, importUtilityMonthsResultSchema);
+  }
+
+  putUtilityMonth(workspaceId: string, homeId: string, period: string, input: PutUtilityMonthInput): Promise<UtilityMonth> {
+    return this.request("PUT", `/workspaces/${workspaceId}/home-utilities/${homeId}/months/${period}`, input, utilityMonthSchema);
+  }
+
+  copyPreviousUtilityMonth(workspaceId: string, homeId: string, period: string): Promise<UtilityMonth> {
+    return this.request("POST", `/workspaces/${workspaceId}/home-utilities/${homeId}/months/${period}/copy-previous`, {}, utilityMonthSchema);
+  }
+
+  putUtilityPayment(workspaceId: string, homeId: string, period: string, input: PutUtilityPaymentInput): Promise<UtilityMonth> {
+    return this.request("PUT", `/workspaces/${workspaceId}/home-utilities/${homeId}/months/${period}/payments`, input, utilityMonthSchema);
+  }
+
+  removeUtilityPayment(workspaceId: string, homeId: string, period: string, paymentId: string): Promise<UtilityMonth> {
+    return this.request("DELETE", `/workspaces/${workspaceId}/home-utilities/${homeId}/months/${period}/payments/${paymentId}`, undefined, utilityMonthSchema);
+  }
+
+  listElectricityTariffs(workspaceId: string, homeId: string, meterId: string): Promise<ElectricityTariff[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/home-utilities/${homeId}/meters/${meterId}/tariffs`, undefined, z.array(electricityTariffSchema));
+  }
+
+  addElectricityTariff(workspaceId: string, homeId: string, meterId: string, input: ElectricityTariffInput): Promise<ElectricityTariff> {
+    return this.request("POST", `/workspaces/${workspaceId}/home-utilities/${homeId}/meters/${meterId}/tariffs`, input, electricityTariffSchema);
   }
 
   async attachToHome(workspaceId: string, homeId: string, input: AttachToHomeInput): Promise<void> {

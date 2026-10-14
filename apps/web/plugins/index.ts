@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
+import type { HomeObjectTabSlotProps } from "../lib/extensions/contracts";
 import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
@@ -10,6 +11,10 @@ const HhSources = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportu
 contribute("opportunities.views", { pluginId: "opportunities-profiles", component: ProfilesView, order: 10, meta: { tabId: "profiles", label: "Профили" } });
 contribute("opportunities.views", { pluginId: "opportunities-hh-import", component: HhImportView, order: 20, meta: { tabId: "hh-import", label: "Импорт HH", ownerOnly: true } });
 contribute("opportunities.details.sections", { pluginId: "opportunities-hh-import", component: HhSources });
+const HomeUtilitiesTab = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesView), { ssr: false });
+contribute("home.object.tabs", { pluginId: "home-utilities", component: HomeUtilitiesTab, order: 10, meta: { tabId: "utilities", label: "Коммуналка" } });
+const HomeUtilitiesSummary = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesSummary), { ssr: false });
+contribute("home.object.overview.cards", { pluginId: "home-utilities", component: HomeUtilitiesSummary });
 import { inventoryAlertsApi } from "./inventory-alerts/alerts";
 import { inventoryCostingApi } from "./inventory-costing/costing";
 import { listsItemApi } from "./lists-inventory/bridge";

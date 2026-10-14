@@ -22,6 +22,7 @@ import { GoalsService } from "./goals/goals.service";
 import { ObligationsController } from "./obligations/obligations.controller";
 import { ObligationsService } from "./obligations/obligations.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
+import { FinanceExpenseReader } from "./public/expense-reader";
 
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
@@ -55,7 +56,9 @@ import { BudgetAlertsService } from "./budget-alerts.service";
     CategoryRulesService,
     GoalsService,
     ObligationsService,
-    BudgetAlertsService
-  ]
+    BudgetAlertsService,
+    FinanceExpenseReader
+  ],
+  exports: [FinanceExpenseReader]
 })
 export class FinanceModule {}
