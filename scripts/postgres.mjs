@@ -30,6 +30,9 @@ const PORT = Number(process.env.ORION_PG_PORT || 5433);
 const USER = "orion";
 const PASSWORD = "orion_local_dev";
 const DATABASE = "orion";
+const ICU_LOCALE = "ru-RU";
+/** `CREATE DATABASE` options: ICU default collation, independent of how the cluster was initialised. */
+const ICU_DATABASE_OPTIONS = `TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER icu ICU_LOCALE '${ICU_LOCALE}' LOCALE 'C'`;
 
 const command = process.argv[2] ?? "up";
 
@@ -116,6 +119,12 @@ async function initialise(initdb) {
       `--username=${USER}`,
       `--pwfile=${pwFile}`,
       "--encoding=UTF8",
+      // ICU for the default collation: with a plain libc "C" locale Postgres
+      // cannot case-fold Cyrillic, so `ILIKE` / Prisma `mode: "insensitive"`
+      // (global search, list filters) would not find «Сидорова» by «сидоров».
+      // lc_* stay "C" so server messages and libc behaviour are unchanged.
+      "--locale-provider=icu",
+      `--icu-locale=${ICU_LOCALE}`,
       "--locale=C",
       "--lc-messages=C"
     ]);
@@ -141,7 +150,16 @@ async function ensureDatabaseAndRoles() {
     const found = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [DATABASE]);
     if (found.rowCount === 0) {
       log(`создаю базу ${DATABASE}`);
-      await client.query(`CREATE DATABASE ${DATABASE}`);
+      // Explicit ICU even on a cluster initialised before the fix (see initialise()).
+      await client.query(`CREATE DATABASE ${DATABASE} ${ICU_DATABASE_OPTIONS}`);
+    } else {
+      const provider = await client.query("SELECT datlocprovider FROM pg_database WHERE datname = $1", [DATABASE]);
+      if (provider.rows[0]?.datlocprovider !== "i") {
+        log(
+          `ВНИМАНИЕ: база ${DATABASE} создана с локалью C — поиск без учёта регистра не работает для кириллицы. ` +
+            "Перенос без потери данных: infra/postgres/README.md, раздел «Локаль и поиск по-русски»."
+        );
+      }
     }
   } finally {
     await client.end();

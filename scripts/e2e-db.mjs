@@ -41,7 +41,8 @@ async function main() {
   const admin = new pg.Client({ connectionString: urls.admin });
   await admin.connect();
   await admin.query(`DROP DATABASE IF EXISTS ${E2E_DB} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${E2E_DB}`);
+  // Same ICU collation as the dev cluster and CI's postgres image: Cyrillic case folding works.
+  await admin.query(`CREATE DATABASE ${E2E_DB} TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER icu ICU_LOCALE 'ru-RU' LOCALE 'C'`);
   await admin.end();
 
   const db = new pg.Client({ connectionString: urls.migrate });
