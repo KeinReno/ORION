@@ -80,7 +80,7 @@ export class HomeService {
     return homeDto(row);
   }
 
-  /** Meters, readings and contacts go with the home; chores, lists, things and payments only lose the link. */
+  /** Meters and readings go with the home; contacts, chores, lists, things and payments only lose the link. */
   async remove(userId: string, workspaceId: string, homeId: string): Promise<void> {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -421,5 +421,6 @@ function meterDto(meter: MeterRow, rows: ReadingRow[]): Meter {
 }
 
 function contactDto(row: ContactRow): Contact {
-  return { id: row.id, homeId: row.homeId, name: row.name, role: row.role, phone: row.phone, note: row.note };
+  // Home reads contacts only with `where: { homeId }`, so the link is always set here.
+  return { id: row.id, homeId: row.homeId ?? "", name: row.name, role: row.role, phone: row.phone, note: row.note };
 }

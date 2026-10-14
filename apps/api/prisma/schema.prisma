@@ -2018,17 +2018,21 @@ model MeterReading {
 model Contact {
   id          String   @id @default(uuid())
   workspaceId String
-  homeId      String
+  /// Module «Дом»: the home this contact belongs to. Optional since the
+  /// «Контакты» module made contacts universal; deleting a home keeps its
+  /// contacts and only drops the link (SET NULL).
+  homeId      String?
   name        String
-  /// What they do for this home: «УК», «сантехник», «сосед сверху».
+  /// Who they are: «УК», «сантехник», «бухгалтер», «клиент».
   role        String   @default("")
   phone       String   @default("")
+  email       String   @default("")
   note        String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  home      Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  home      Home?     @relation(fields: [homeId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([homeId])

@@ -9,6 +9,7 @@ import {
   Flag,
   Globe,
   Home as HomeIcon,
+  UserRound,
   Globe2,
   Inbox,
   LayoutDashboard,
@@ -67,6 +68,7 @@ const LazyNoteWindowPanel = dynamic(() => import("../panels/NoteWindowPanel").th
 const LazyProjectTasksPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectTasksPanel), { ssr: false });
 const LazyProjectAccessPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectAccessPanel), { ssr: false });
 const LazyHomePanel = dynamic(() => import("../panels/HomePanel").then((module) => module.HomePanel), { ssr: false });
+const LazyContactsPanel = dynamic(() => import("../panels/ContactsPanel").then((module) => module.ContactsPanel), { ssr: false });
 const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module) => module.GoalsPanel), { ssr: false });
 const LazyTasksPanel = dynamic(() => import("../panels/TasksPanel").then((module) => module.TasksPanel), { ssr: false });
 const LazyCalendarPanel = dynamic(() => import("../panels/CalendarPanel").then((module) => module.CalendarPanel), { ssr: false });
@@ -106,6 +108,7 @@ const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => creat
 const ProjectTasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectTasksPanel, props);
 const ProjectAccessPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectAccessPanel, props);
 const HomePanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyHomePanel);
+const ContactsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyContactsPanel);
 const GoalsPanel: FunctionComponent<PanelComponentProps> = () => createElement(LazyGoalsPanel);
 const ProjectWorkspacePanel: FunctionComponent<PanelComponentProps> = (props) =>
   createElement(LazyProjectWorkspacePanel, props);
@@ -147,6 +150,7 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "notes", label: "Заметки", icon: StickyNote, component: NotesPanel, moduleId: "notes", group: "Работа" },
   { id: "projects", label: "Проекты", icon: FolderKanban, component: ProjectsPanel, moduleId: "projects", group: "Работа" },
   { id: "home", label: "Дом", icon: HomeIcon, component: HomePanel, moduleId: "home", group: "Семья и дом" },
+  { id: "contacts", label: "Контакты", icon: UserRound, component: ContactsPanel, moduleId: "contacts", group: "Семья и дом" },
   {
     id: "goals",
     label: "Цели",

@@ -101,6 +101,7 @@ export interface EntityFocusRequest { id: string; nonce: number; workspaceId: st
 const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
 const transactionChannel = makeIntentChannel<EntityFocusRequest>("finance");
+const contactChannel = makeIntentChannel<EntityFocusRequest>("contacts");
 let focusNonce = 0;
 const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
 let browserNonce = 0;
@@ -139,6 +140,10 @@ export const useFocusedDocumentId = documentChannel.useFocusedId;
 export function focusTransaction(id: string): void { transactionChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
 export const useTransactionFocusRequest = transactionChannel.useIntent;
 
+/** Open the Contacts panel on one contact; a nonce so re-opening the same contact still applies. */
+export function focusContact(id: string): void { contactChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
+export const useContactFocusRequest = contactChannel.useIntent;
+
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);
@@ -171,6 +176,9 @@ export function openEntity(type: SearchableEntityType, id: string, title?: strin
       return;
     case "project":
       openProject(id, title);
+      return;
+    case "contact":
+      focusContact(id);
       return;
   }
 }

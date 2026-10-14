@@ -26,6 +26,7 @@ import {
   listItemSchema,
   listSchema,
   purchaseListItemResultSchema,
+  contactCardSchema,
   inventoryItemSchema,
   inventoryMovementSchema,
   milestoneCascadeImpactSchema,
@@ -200,6 +201,9 @@ import {
   type LinkListItemInventoryInput,
   type AddInventoryToListInput,
   type PurchaseListItemResult,
+  type ContactCard,
+  type CreateContactCardInput,
+  type UpdateContactCardInput,
   type Milestone,
   type Notification,
   type ProcessInboxInput,
@@ -1739,6 +1743,30 @@ export class ApiClient {
   /** Deletes every checked item in the list at once. */
   async clearCheckedItems(workspaceId: string, listId: string): Promise<void> {
     await this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/clear-checked`, undefined, z.unknown());
+  }
+
+  // --- Контакты -------------------------------------------------------------
+  // Universal contacts (the same table «Дом» uses for a home's contacts — the
+  // home-scoped createContact/updateContact/deleteContact above stay for it).
+
+  listContactCards(workspaceId: string): Promise<ContactCard[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/contacts`, undefined, z.array(contactCardSchema));
+  }
+
+  getContactCard(workspaceId: string, contactId: string): Promise<ContactCard> {
+    return this.request("GET", `/workspaces/${workspaceId}/contacts/${contactId}`, undefined, contactCardSchema);
+  }
+
+  createContactCard(workspaceId: string, input: CreateContactCardInput): Promise<ContactCard> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts`, input, contactCardSchema);
+  }
+
+  updateContactCard(workspaceId: string, contactId: string, input: UpdateContactCardInput): Promise<ContactCard> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/contacts/${contactId}`, input, contactCardSchema);
+  }
+
+  async deleteContactCard(workspaceId: string, contactId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/contacts/${contactId}`, undefined, z.unknown());
   }
 
   // --- Покупки → Склад (plugin lists-inventory) -----------------------------

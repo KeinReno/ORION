@@ -31,6 +31,7 @@ export * from "./use-habits";
 export * from "./use-lists";
 export * from "./use-inventory";
 export * from "./use-lists-inventory";
+export * from "./use-contacts";
 export * from "./use-milestones";
 export * from "./use-project-updates";
 export * from "./use-project-captures";

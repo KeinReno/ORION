@@ -44,7 +44,7 @@ export class SearchService {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const enabled = await this.modules.accessibleSetTx(tx, userId, workspaceId);
-      const [projects, tasks, notes, events, documents, transactions] = await Promise.all([
+      const [projects, tasks, notes, events, documents, transactions, contacts] = await Promise.all([
         enabled.has(SEARCH_TYPE_MODULE.project)
           ? tx.project.findMany({ where: { workspaceId, archivedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
@@ -62,6 +62,9 @@ export class SearchService {
           : [],
         enabled.has(SEARCH_TYPE_MODULE.transaction)
           ? tx.transaction.findMany({ where: { workspaceId, OR: [{ note: { contains: term, mode: "insensitive" } }, { tags: { has: term } }] }, include: { lines: true }, take: 8, orderBy: { updatedAt: "desc" } })
+          : [],
+        enabled.has(SEARCH_TYPE_MODULE.contact)
+          ? tx.contact.findMany({ where: { workspaceId, OR: [{ name: { contains: term, mode: "insensitive" } }, { role: { contains: term, mode: "insensitive" } }, { phone: { contains: term } }, { email: { contains: term, mode: "insensitive" } }, { note: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : []
       ]);
       const results: GlobalSearchResult[] = [
@@ -70,7 +73,8 @@ export class SearchService {
         ...notes.map((item) => result("note", item.id, item.title, item.tags.join(" · "), item.body, item.projectId, item.updatedAt)),
         ...events.map((item) => result("event", item.id, item.title, item.location ?? "Событие", item.description, item.projectId, item.updatedAt)),
         ...documents.map((item) => result("document", item.id, item.name, item.mimeType ?? "Папка", item.extractedText, item.projectId, item.updatedAt)),
-        ...transactions.map((item) => result("transaction", item.id, item.note || "Финансовая операция", `${item.type} · ${item.lines.reduce((sum, line) => sum + line.amount, 0)}`, item.tags.join(" · "), item.projectId, item.updatedAt))
+        ...transactions.map((item) => result("transaction", item.id, item.note || "Финансовая операция", `${item.type} · ${item.lines.reduce((sum, line) => sum + line.amount, 0)}`, item.tags.join(" · "), item.projectId, item.updatedAt)),
+        ...contacts.map((item) => result("contact", item.id, item.name, item.role || "Контакт", [item.phone, item.email, item.note].filter(Boolean).join(" · "), null, item.updatedAt))
       ];
       const lower = term.toLocaleLowerCase("ru");
       return results

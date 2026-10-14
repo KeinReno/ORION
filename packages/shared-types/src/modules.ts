@@ -19,7 +19,8 @@ export const ORION_MODULE_IDS = [
   "lists",
   "inventory",
   "markets",
-  "home"
+  "home",
+  "contacts"
 ] as const;
 
 export const orionModuleIdSchema = z.enum(ORION_MODULE_IDS);
@@ -122,7 +123,8 @@ export const SEARCH_TYPE_MODULE: Record<SearchableEntityType, OrionModuleId> = {
   note: "notes",
   event: "calendar",
   document: "documents",
-  transaction: "finance"
+  transaction: "finance",
+  contact: "contacts"
 };
 
 export const INBOX_TARGET_MODULE: Record<"task" | "note" | "event", OrionModuleId> = {
@@ -297,12 +299,26 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     required: false,
     label: "Дом",
     summary: "Квартира, дом, дача, машина: что купить, что платить, какие дела, показания счётчиков — в одном месте.",
-    owns: "Дома (объекты), счётчики и их показания, контакты дома. Задачи, списки, вещи и платежи остаются в своих модулях и лишь привязываются к дому.",
+    owns: "Дома (объекты), счётчики и их показания. Контакты, задачи, списки, вещи и платежи остаются в своих модулях и лишь привязываются к дому.",
     livesWithout: "Работает без задач, списков, склада и финансов — соответствующие блоки на странице дома просто не показываются.",
     provides: ["Панель «Дом»", "Создание дел, покупок, вещей и платежей прямо на странице дома", "Счётчики с расходом", "Контакты дома"],
     optionalDependencies: ["tasks", "lists", "inventory", "finance"],
     disableBehavior: "Панель и API скрываются. Дома, счётчики и привязки сохраняются; задачи, списки, вещи и платежи остаются в своих модулях.",
     panelId: "home",
+    defaultEnabled: true
+  },
+  {
+    id: "contacts",
+    kind: "additional",
+    required: false,
+    label: "Контакты",
+    summary: "Люди и организации: кто это, как связаться, что с ними связано и когда напомнить.",
+    owns: "Контакты пространства (та же таблица, что у контактов «Дома»: контакт дома — это контакт с привязкой к дому).",
+    livesWithout: "Полностью самостоятелен. С «Домом» показывает привязку к дому; связи и напоминания — общие для всех записей.",
+    provides: ["Панель «Контакты»", "Поиск по имени, роли, телефону и почте", "Связи контакта с задачами, проектами, заметками и др.", "Напоминания по контакту"],
+    optionalDependencies: ["home"],
+    disableBehavior: "Панель и API скрываются. Контакты сохраняются, а контакты домов по-прежнему видны и редактируются на странице дома.",
+    panelId: "contacts",
     defaultEnabled: true
   }
 

@@ -13,6 +13,7 @@ import {
   Plus,
   Receipt,
   StickyNote,
+  UserRound,
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -38,7 +39,8 @@ const PANEL_FOR_TYPE: Record<string, string> = {
   note: "notes",
   event: "calendar",
   document: "documents",
-  transaction: "finance"
+  transaction: "finance",
+  contact: "contacts"
 };
 
 /** Icon + panel for a server-side search hit, by entity type (`GlobalSearchResult.type`). */
@@ -48,7 +50,8 @@ const SEARCH_RESULT_ICONS: Record<string, LucideIcon> = {
   note: StickyNote,
   event: CalendarDays,
   document: FileText,
-  transaction: Receipt
+  transaction: Receipt,
+  contact: UserRound
 };
 const SEARCH_RESULT_LABELS: Record<string, string> = {
   project: "проект",
@@ -56,7 +59,8 @@ const SEARCH_RESULT_LABELS: Record<string, string> = {
   note: "заметка",
   event: "событие",
   document: "документ",
-  transaction: "операция"
+  transaction: "операция",
+  contact: "контакт"
 };
 
 /** Second key after G. Letters avoid colliding with bare N (capture). */

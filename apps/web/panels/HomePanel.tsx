@@ -156,7 +156,7 @@ export function HomePanel(): React.ReactElement {
       <ConfirmDialog
         open={confirmDelete}
         title="Удалить дом?"
-        description={home ? `«${home.name}»: счётчики и контакты удалятся. Дела, списки, вещи и платежи останутся в своих разделах, только потеряют привязку к дому.` : undefined}
+        description={home ? `«${home.name}»: счётчики удалятся. Контакты, дела, списки, вещи и платежи останутся в своих разделах, только потеряют привязку к дому.` : undefined}
         onConfirm={() => {
           const id = home?.id;
           setConfirmDelete(false);

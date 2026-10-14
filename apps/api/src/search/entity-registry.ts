@@ -4,7 +4,7 @@ import { SEARCH_TYPE_MODULE } from "@orion/shared-types";
 
 /**
  * U01 (24-CONNECTED-CORE-BACKLOG.md): closed adapter registry for the five
- * entity types EntityLink can reference. 23-UNIVERSAL-CONNECTED-CORE.md is
+ * entity types EntityLink can reference (contacts joined with the «Контакты» module). 23-UNIVERSAL-CONNECTED-CORE.md is
  * explicit that no generic endpoint accepts a client-chosen table name — this
  * is the one place that maps a `SearchableEntityType` id to real Prisma calls,
  * so a new type means one new adapter (+ tests), not a new code path per
@@ -62,6 +62,13 @@ export const ENTITY_REGISTRY: Record<SearchableEntityType, EntityAdapter> = {
       const title = owned(row, workspaceId, "note");
       if (title === null) return null;
       return title || "Финансовая операция";
+    }
+  },
+  contact: {
+    moduleId: SEARCH_TYPE_MODULE.contact,
+    async summary(tx, workspaceId, id) {
+      const row = await tx.contact.findUnique({ where: { id }, select: { workspaceId: true, name: true } });
+      return owned(row, workspaceId, "name");
     }
   }
 };

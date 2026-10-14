@@ -97,7 +97,7 @@ describe("Module Home", () => {
     expect([403, 404]).toContain((await request(`${ws}/homes/${home.data.id}/overview`, { method: "GET", token: mallory.accessToken })).status);
   });
 
-  it("привязать и отвязать существующее; удаление дома не удаляет дела, но убирает счётчики", async () => {
+  it("привязать и отвязать существующее; удаление дома не удаляет дела и контакты, но убирает счётчики", async () => {
     const alice = await register("alice2");
     const ws = `/workspaces/${alice.workspaceId}`;
     const home = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Дача", kind: "country" } });
@@ -114,7 +114,13 @@ describe("Module Home", () => {
 
     await request(`${base}/attach`, { method: "POST", token: alice.accessToken, body: { type: "task", id: task.data.id } });
     await request(`${base}/meters`, { method: "POST", token: alice.accessToken, body: { name: "Свет", kind: "electricity" } });
+    const contact = await request<{ id: string }>(`${base}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Сосед", role: "ключи от дачи" } });
+    expect(contact.status).toBe(201);
     expect((await request(base, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    // Since the «Контакты» module, a home's contacts outlive the home: only the link goes (SET NULL).
+    const kept = await request<{ id: string; homeId: string | null; name: string }>(`${ws}/contacts/${contact.data.id}`, { method: "GET", token: alice.accessToken });
+    expect(kept.status).toBe(200);
+    expect(kept.data).toMatchObject({ homeId: null, name: "Сосед" });
     const tasks = await request<Array<{ id: string }>>(`${ws}/tasks`, { method: "GET", token: alice.accessToken });
     expect(tasks.data.map((t) => t.id)).toContain(task.data.id);
     expect(await prisma.asSystem((tx) => tx.meter.count({ where: { homeId: home.data.id } }))).toBe(0);

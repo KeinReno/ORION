@@ -25,6 +25,7 @@ import {
   Receipt,
   StickyNote,
   Trash2,
+  UserRound,
   X,
   type LucideIcon
 } from "lucide-react";
@@ -39,7 +40,8 @@ const TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
   note: StickyNote,
   event: CalendarDays,
   document: FileText,
-  transaction: Receipt
+  transaction: Receipt,
+  contact: UserRound
 };
 
 const TYPE_LABEL: Record<SearchableEntityType, string> = {
@@ -48,7 +50,8 @@ const TYPE_LABEL: Record<SearchableEntityType, string> = {
   note: "заметка",
   event: "событие",
   document: "документ",
-  transaction: "операция"
+  transaction: "операция",
+  contact: "контакт"
 };
 
 /**

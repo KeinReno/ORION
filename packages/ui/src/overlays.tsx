@@ -248,6 +248,8 @@ export function Sheet({
   const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  // Same as Modal: the title names the dialog for screen readers (and for getByRole(..., { name })).
+  const labelId = useId();
   const fade = useMotionDuration(0.15);
   const slide = useMotionDuration(0.2);
   const shown = useOverlayOpen(open);
@@ -286,6 +288,7 @@ export function Sheet({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
+            aria-labelledby={title ? labelId : undefined}
             tabIndex={-1}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
@@ -296,7 +299,7 @@ export function Sheet({
           >
             {title ? (
               <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-                <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+                <h2 id={labelId} className="text-sm font-semibold text-foreground">{title}</h2>
                 <IconButton label="Закрыть" size="sm" onClick={onClose}>
                   <X className="h-4 w-4" />
                 </IconButton>
