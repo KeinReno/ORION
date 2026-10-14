@@ -35,8 +35,6 @@ import {
   PanelHeader,
   PanelSection,
   PanelShell,
-  SegmentedControl,
-  type SegmentedOption,
   Skeleton,
   Textarea,
   cx,
@@ -64,16 +62,16 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import { EntityLinksSection } from "../components/entity-links";
 import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
-import { buildPanelDragId } from "../lib/panel-drag";
-import { panelDragHandleProps } from "../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { projectFocus } from "../lib/project-focus";
+import { sectionViewPanelId } from "../lib/section-views";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
@@ -143,9 +141,10 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
   // The tab was opened with the name the caller knew (or just "Проект" after
   // a layout restore) — keep it in sync with the real, possibly renamed, project.
   const projectName = project?.name;
+  const lockedView = params?.locked === true;
   useEffect(() => {
-    if (projectName) api?.setTitle(projectName);
-  }, [api, projectName]);
+    if (projectName && !lockedView) api?.setTitle(projectName);
+  }, [api, projectName, lockedView]);
 
   if (!projectId) {
     return (
@@ -198,15 +197,19 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
     );
   }
 
-  return <ProjectWorkspace key={project.id} workspaceId={workspaceId} project={project} />;
+  return <ProjectWorkspace key={project.id} workspaceId={workspaceId} project={project} params={params} api={api} />;
 }
 
 function ProjectWorkspace({
   workspaceId,
-  project
+  project,
+  params,
+  api
 }: {
   workspaceId: string | undefined;
   project: ProjectDetail;
+  params: PanelComponentProps["params"];
+  api: PanelComponentProps["api"];
 }): React.ReactElement {
   const { isEnabled } = useEnabledModules();
   const tasksOn = isEnabled("tasks");
@@ -248,29 +251,24 @@ function ProjectWorkspace({
     (contribution) => contribution.meta !== undefined && (contribution.meta.needsModule === undefined || (contribution.meta.needsModule === "tasks" ? tasksOn : true))
   );
   const planPlugin = pluginTabs.some((contribution) => contribution.meta?.tabId === "plan");
-  // Ctrl/Cmd+drag by a tab drops that view into the dock as a panel (ADR-0003 step 4).
-  const dragAttrs = (kind: string): { dataAttrs?: Record<`data-${string}`, string> } => {
-    const id = buildPanelDragId(kind, project.id);
-    return id ? { dataAttrs: { "data-panel-drag": id } } : {};
-  };
-  const tabs: (SegmentedOption<ProjectTab> & { label: React.ReactNode })[] = [
+  // Every tab can be its own dock panel or OS window (`SectionTabs`, lib/section-views.ts).
+  const tabs: SectionTab<ProjectTab>[] = [
     { value: "overview", label: "Обзор" },
-    ...(tasksOn ? [{ value: "tasks" as const, label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}`, ...dragAttrs("projecttasks") }] : []),
-    ...pluginTabs.map((contribution) => ({
-      value: contribution.meta!.tabId,
-      label: contribution.meta!.label,
-      ...(contribution.meta!.tabId === "plan" ? dragAttrs("projectplan") : {})
-    })),
-    { value: "materials", label: "Материалы", ...dragAttrs("projectmaterials") },
-    { value: "access", label: "Доступ", ...dragAttrs("projectaccess") }
+    ...(tasksOn ? [{ value: "tasks", label: `Задачи${focus.open > 0 ? ` · ${focus.open}` : ""}`, title: "Задачи" }] : []),
+    ...pluginTabs.map((contribution) => ({ value: contribution.meta!.tabId, label: contribution.meta!.label })),
+    { value: "materials", label: "Материалы" },
+    { value: "access", label: "Доступ" }
   ];
+  const section = useSectionView(params, api, project.name, tabs);
+  const locked = section.locked;
 
   // A remembered tab can name a module that is off now — fall back to the overview
   // instead of rendering a view whose data this project can't show.
-  const tab: ProjectTab = tabs.some((item) => item.value === chosenTab) ? chosenTab : "overview";
+  const tab: ProjectTab = section.view ?? (tabs.some((item) => item.value === chosenTab) ? chosenTab : "overview");
   const activePluginTab = pluginTabs.find((contribution) => contribution.meta?.tabId === tab);
 
   useEffect(() => {
+    if (locked) return;
     try {
       const saved = localStorage.getItem(projectTabKey(project.id));
       // Any remembered id is fine: one that is no longer a tab (plugin off) falls back to the overview below.
@@ -278,7 +276,14 @@ function ProjectWorkspace({
     } catch {
       /* storage is a convenience only */
     }
-  }, [project.id]);
+  }, [project.id, locked]);
+
+  /** Another tab of this project: switches inside the section, or opens that tab's own panel when this one is a locked view. */
+  function goTo(next: ProjectTab): void {
+    if (!locked) return setTab(next);
+    const id = sectionViewPanelId({ base: "project", view: next, instance: project.id });
+    if (id) openPanel(id, `${project.name} · ${sectionTabTitle(tabs.find((item) => item.value === next)) ?? next}`);
+  }
 
   function setTab(next: ProjectTab): void {
     setChosenTab(next);
@@ -382,7 +387,7 @@ function ProjectWorkspace({
             {project.name}
           </span>
         }
-        subtitle={project.description || undefined}
+        subtitle={locked ? sectionTabTitle(tabs.find((item) => item.value === tab)) : project.description || undefined}
         actions={
           <>
             {tasksOn ? (
@@ -466,14 +471,13 @@ function ProjectWorkspace({
               </span>
             ) : null}
           </div>
-          <div {...panelDragHandleProps(null)}>
-            <SegmentedControl<ProjectTab> value={tab} onChange={setTab} size="sm" options={tabs} />
-          </div>
+          <SectionTabs baseId="project" instance={project.id} tabs={tabs} value={tab} onChange={setTab} locked={locked} size="sm" />
         </div>
       </PanelHeader>
 
       <PanelBody className="[container-type:inline-size]">
-        {tab === "overview" ? (
+        {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет: её плагин или модуль выключен. Данные сохранены.</p> : null}
+        {!section.missing && tab === "overview" ? (
           <OverviewTab
             workspaceId={workspaceId}
             project={project}
@@ -487,9 +491,10 @@ function ProjectWorkspace({
             busyNote={updateProject.isPending}
             onSaveNote={(contextNote) => updateProject.mutate({ projectId: project.id, input: { contextNote } })}
             onToggle={toggleTask}
-            onGoTo={setTab}
+            onGoTo={goTo}
             onEditProject={() => setEditing(true)}
             onOpenTask={(task) => {
+              if (locked) return openEntity("task", task.id);
               setOpenTaskId(task.id);
               setTab("tasks");
             }}
@@ -497,7 +502,7 @@ function ProjectWorkspace({
           />
         ) : null}
 
-        {tab === "tasks" ? (
+        {!section.missing && tab === "tasks" ? (
           <ProjectTasks
             workspaceId={workspaceId}
             tasks={tasks}
@@ -514,9 +519,9 @@ function ProjectWorkspace({
           />
         ) : null}
 
-        {activePluginTab ? <activePluginTab.component workspaceId={workspaceId} projectId={project.id} /> : null}
+        {!section.missing && activePluginTab ? <activePluginTab.component workspaceId={workspaceId} projectId={project.id} /> : null}
 
-        {tab === "materials" ? (
+        {!section.missing && tab === "materials" ? (
           <ProjectMaterials
             workspaceId={workspaceId}
             project={project}
@@ -526,7 +531,7 @@ function ProjectWorkspace({
           />
         ) : null}
 
-        {tab === "access" ? (
+        {!section.missing && tab === "access" ? (
           <div className="flex max-w-3xl flex-col gap-6">
             <ShareGrantSection workspaceId={workspaceId} type="project" id={project.id} />
             <PanelSection title="Архив">

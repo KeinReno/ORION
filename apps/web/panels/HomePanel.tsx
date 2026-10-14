@@ -2,14 +2,17 @@
 
 import { useCreateHome, useDeleteHome, useHomeOverview, useHomes, useUpdateHome } from "@orion/core-react";
 import { HOME_KINDS, HOME_KIND_LABEL, type Home, type HomeKind } from "@orion/shared-types";
-import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, PanelBody, PanelHeader, PanelShell, Select, Skeleton, Textarea, cx, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, PanelBody, PanelHeader, PanelShell, Select, Skeleton, Textarea, useToast } from "@orion/ui";
 import { ArrowLeft, ArrowRight, ClipboardList, Gauge, HomeIcon, Link2, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { describeError } from "../lib/error-message";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
+import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import { openPanel } from "../lib/panel-bus";
+import type { PanelComponentProps } from "../lib/panel-registry";
+import { sectionViewPanelId } from "../lib/section-views";
 import { HomeCaptures } from "./home/home-captures";
 import { HomeActivity } from "./home/home-activity";
 import { HomeContacts } from "./home/home-contacts";
@@ -26,7 +29,7 @@ const SELECTED_KEY = "orion.home.selected";
  * Everything is added right here; the records still belong to Tasks / Lists / Finance / Inventory
  * (they show up there too), the home only points at them. A block of a module that is off is hidden.
  */
-export function HomePanel(): React.ReactElement {
+export function HomePanel({ params, api }: PanelComponentProps): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const workspaceId = workspace?.id;
   const { isEnabled } = useEnabledModules();
@@ -49,7 +52,12 @@ export function HomePanel(): React.ReactElement {
       /* a remembered home is a convenience only */
     }
   }, [workspaceId]);
-  const home = (homes ?? []).find((h) => h.id === selectedId) ?? (homes ?? [])[0] ?? null;
+  // Opened as a view of one tab (see lib/section-views.ts): the instance is the home id, and it wins over
+  // the remembered selection; a home that no longer exists is reported, not replaced by another one.
+  const lockedHomeId = params?.locked === true ? params.instanceId : undefined;
+  const home = lockedHomeId
+    ? (homes ?? []).find((h) => h.id === lockedHomeId) ?? null
+    : (homes ?? []).find((h) => h.id === selectedId) ?? (homes ?? [])[0] ?? null;
   function select(id: string): void {
     setSelectedId(id);
     setView("object");
@@ -63,14 +71,22 @@ export function HomePanel(): React.ReactElement {
 
   const { data: overview, isLoading: overviewLoading, isError: overviewError, refetch: refetchOverview } = useHomeOverview(workspaceId, home?.id);
   const pluginTabs = useSlotContributions("home.object.tabs");
-  const tabs = [
-    { id: "overview", label: "Обзор" },
-    ...pluginTabs.map((p) => ({ id: p.meta?.tabId ?? p.pluginId, label: p.meta?.label ?? p.pluginId })),
-    { id: "meters", label: "Счётчики" },
-    { id: "tasks", label: "Дела" },
-    { id: "related", label: "Связанное" }
+  const tabs: SectionTab<string>[] = [
+    { value: "overview", label: "Обзор" },
+    ...pluginTabs.map((p) => ({ value: p.meta?.tabId ?? p.pluginId, label: p.meta?.label ?? p.pluginId })),
+    { value: "meters", label: "Счётчики" },
+    { value: "tasks", label: "Дела" },
+    { value: "related", label: "Связанное" }
   ];
-  const displayedTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : "overview";
+  const section = useSectionView(params, api, "Дом", tabs);
+  const displayedTab = section.view ?? (tabs.some((tab) => tab.value === activeTab) ? activeTab : "overview");
+  const locked = section.locked;
+  /** «Open another tab»: switches the tab in the section, or opens that tab's own panel when this one is locked. */
+  function openTab(tab: string): void {
+    if (!locked) return setActiveTab(tab);
+    const id = sectionViewPanelId({ base: "home", view: tab, instance: home?.id });
+    if (id) openPanel(id, `Дом · ${sectionTabTitle(tabs.find((t) => t.value === tab)) ?? tab}`);
+  }
 
   async function submit(values: { name: string; kind: HomeKind; note: string }): Promise<void> {
     try {
@@ -91,13 +107,15 @@ export function HomePanel(): React.ReactElement {
       <PanelHeader
         icon={HomeIcon}
         title="Дом"
-        subtitle={view === "object" && home ? `${HOME_KIND_LABEL[home.kind]} · ${home.name}` : "Семейный центр"}
+        subtitle={locked && home ? `${HOME_KIND_LABEL[home.kind]} · ${home.name} · ${sectionTabTitle(tabs.find((t) => t.value === displayedTab)) ?? ""}` : view === "object" && home ? `${HOME_KIND_LABEL[home.kind]} · ${home.name}` : "Семейный центр"}
         actions={
           <>
-            <Button size="sm" onClick={() => setDialog("create")}>
-              <Plus className="h-4 w-4" /> Новый объект
-            </Button>
-            {view === "object" && home ? (
+            {!locked ? (
+              <Button size="sm" onClick={() => setDialog("create")}>
+                <Plus className="h-4 w-4" /> Новый объект
+              </Button>
+            ) : null}
+            {(locked || view === "object") && home ? (
               <DropdownMenu
                 align="end"
                 trigger={({ toggle }) => (
@@ -120,7 +138,9 @@ export function HomePanel(): React.ReactElement {
           <Skeleton className="h-48 w-full" />
         ) : homesError ? (
           <EmptyState icon={HomeIcon} title="Не удалось загрузить Дом" description="Проверьте соединение и попробуйте ещё раз." action={<Button size="sm" onClick={() => void refetchHomes()}>Повторить</Button>} />
-        ) : view === "family" || !home ? (
+        ) : locked && !home ? (
+          <EmptyState icon={HomeIcon} title="Объект не найден" description="Возможно, он был удалён. Остальные объекты доступны в разделе «Дом»." />
+        ) : !home || (!locked && view === "family") ? (
           <>
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
@@ -150,23 +170,23 @@ export function HomePanel(): React.ReactElement {
           </>
         ) : (
           <>
-            <button type="button" className="inline-flex items-center gap-1 text-label text-muted-foreground hover:text-foreground" onClick={() => setView("family")}><ArrowLeft className="h-4 w-4" aria-hidden /> Все объекты</button>
-            <div className="flex flex-wrap items-center gap-3">
+            {!locked ? <button type="button" className="inline-flex items-center gap-1 text-label text-muted-foreground hover:text-foreground" onClick={() => setView("family")}><ArrowLeft className="h-4 w-4" aria-hidden /> Все объекты</button> : null}
+            {!locked ? <div className="flex flex-wrap items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15"><HomeIcon className="h-5 w-5 text-accent" aria-hidden /></div>
               <div className="min-w-0"><h2 className="text-xl font-semibold text-foreground">{home.name}</h2><p className="text-2xs text-muted-foreground">{HOME_KIND_LABEL[home.kind]}</p></div>
-            </div>
-            <div role="tablist" aria-label={`Разделы объекта ${home.name}`} className="flex flex-wrap gap-1 border-b border-border pb-2">
-              {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={displayedTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cx("rounded-lg px-3 py-2 text-label transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent", displayedTab === tab.id ? "bg-accent/15 font-medium text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground")}>{tab.label}</button>)}
-            </div>
-            {overviewError ? <EmptyState icon={HomeIcon} title="Не удалось загрузить объект" description="Попробуйте обновить данные." action={<Button size="sm" onClick={() => void refetchOverview()}>Повторить</Button>} /> : overviewLoading || !overview ? <Skeleton className="h-64 w-full" /> : (
-              <div role="tabpanel" aria-label={tabs.find((tab) => tab.id === displayedTab)?.label} className="space-y-4">
+            </div> : null}
+            {!locked ? <div className="border-b border-border pb-2">
+              <SectionTabs baseId="home" instance={home.id} tabs={tabs} value={displayedTab} onChange={setActiveTab} />
+            </div> : null}
+            {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет: её плагин выключен. Данные сохранены.</p> : overviewError ? <EmptyState icon={HomeIcon} title="Не удалось загрузить объект" description="Попробуйте обновить данные." action={<Button size="sm" onClick={() => void refetchOverview()}>Повторить</Button>} /> : overviewLoading || !overview ? <Skeleton className="h-64 w-full" /> : (
+              <div role="tabpanel" aria-label={sectionTabTitle(tabs.find((tab) => tab.value === displayedTab))} className="space-y-4">
                 {displayedTab === "overview" ? <>
                   {home.note ? <p className="whitespace-pre-wrap text-label text-muted-foreground">{home.note}</p> : null}
-                  <ExtensionSlot name="home.object.overview.cards" props={{ workspaceId, home, overview, financeAvailable: isEnabled("finance"), onOpenTab: setActiveTab }} />
+                  <ExtensionSlot name="home.object.overview.cards" props={{ workspaceId, home, overview, financeAvailable: isEnabled("finance"), onOpenTab: openTab }} />
                   <div className="grid gap-3 [@container(min-width:680px)]:grid-cols-3">
-                    <OverviewShortcut label="Дела" value={overview.taskIds.length} onClick={() => setActiveTab("tasks")} />
-                    <OverviewShortcut label="Счётчики" value={overview.meters.length} onClick={() => setActiveTab("meters")} />
-                    <OverviewShortcut label="Связанное" value={overview.listIds.length + overview.inventoryIds.length + overview.contacts.length + overview.obligationIds.length} onClick={() => setActiveTab("related")} />
+                    <OverviewShortcut label="Дела" value={overview.taskIds.length} onClick={() => openTab("tasks")} />
+                    <OverviewShortcut label="Счётчики" value={overview.meters.length} onClick={() => openTab("meters")} />
+                    <OverviewShortcut label="Связанное" value={overview.listIds.length + overview.inventoryIds.length + overview.contacts.length + overview.obligationIds.length} onClick={() => openTab("related")} />
                   </div>
                   <HomeActivity workspaceId={workspaceId} home={home} overview={overview} />
                 </> : null}
