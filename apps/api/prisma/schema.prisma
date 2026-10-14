@@ -1863,13 +1863,20 @@ model Goal {
   /// "active" | "achieved" | "dropped"
   status      String    @default("active")
   dueAt       DateTime?
+  /// Parent goal (max depth 3, enforced in the service). Deleting a parent makes children top-level.
+  parentId    String?
+  /// Weight of this goal inside its parent's progress.
+  subWeight   Int       @default(1)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Goal?      @relation("GoalTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Goal[]     @relation("GoalTree")
   plans     GoalPlan[]
 
   @@index([workspaceId])
+  @@index([parentId])
   @@map("goals")
 }
 

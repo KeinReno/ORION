@@ -1,7 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Goal as GoalRow, GoalPlan as PlanRow, Prisma } from "@prisma/client";
 import {
+  GOAL_MAX_DEPTH,
+  checkGoalParent,
   goalProgress,
+  goalTreeProgress,
   goalStatusSchema,
   type AddGoalPlanInput,
   type CreateGoalInput,
@@ -39,8 +42,17 @@ export class GoalsService {
   async create(userId: string, workspaceId: string, input: CreateGoalInput): Promise<Goal> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const parentId = input.parentId ?? null;
+      if (parentId) await this.assertParentTx(tx, workspaceId, null, parentId);
       return tx.goal.create({
-        data: { workspaceId, title: input.title, description: input.description, dueAt: input.dueAt ?? null },
+        data: {
+          workspaceId,
+          title: input.title,
+          description: input.description,
+          dueAt: input.dueAt ?? null,
+          parentId,
+          subWeight: input.subWeight
+        },
         include: { plans: true }
       });
     });
@@ -51,9 +63,12 @@ export class GoalsService {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertGoalTx(tx, workspaceId, goalId);
+      if (input.parentId) await this.assertParentTx(tx, workspaceId, goalId, input.parentId);
       return tx.goal.update({
         where: { id: goalId },
         data: {
+          ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+          ...(input.subWeight !== undefined ? { subWeight: input.subWeight } : {}),
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.description !== undefined ? { description: input.description } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
@@ -114,6 +129,21 @@ export class GoalsService {
     return goal;
   }
 
+  /**
+   * Parent must be a goal of THIS workspace, not the goal itself or its descendant, and the
+   * resulting depth must stay within GOAL_MAX_DEPTH. The workspace's goal rows are locked first
+   * so two concurrent moves cannot each look valid and together close a cycle.
+   */
+  private async assertParentTx(tx: Prisma.TransactionClient, workspaceId: string, goalId: string | null, parentId: string): Promise<void> {
+    await tx.$queryRaw`SELECT "id" FROM "goals" WHERE "workspaceId" = ${workspaceId} FOR UPDATE`;
+    const nodes = await tx.goal.findMany({ where: { workspaceId }, select: { id: true, parentId: true } });
+    const check = checkGoalParent(goalId, parentId, nodes);
+    if (check.ok) return;
+    if (check.reason === "missing") throw new NotFoundException("Родительская цель не найдена");
+    if (check.reason === "depth") throw new BadRequestException(`Вложенность целей ограничена ${GOAL_MAX_DEPTH} уровнями`);
+    throw new BadRequestException("Цель не может быть вложена в саму себя или в свою подцель");
+  }
+
   private async assertPlanTx(tx: Prisma.TransactionClient, workspaceId: string, goalId: string, planId: string): Promise<void> {
     const plan = await tx.goalPlan.findUnique({ where: { id: planId } });
     if (!plan || plan.workspaceId !== workspaceId || plan.goalId !== goalId) throw new NotFoundException("План не найден");
@@ -130,8 +160,10 @@ export class GoalsService {
     for (const p of live) byId.set(p.id, { p, archived: false });
     for (const p of archived) byId.set(p.id, { p, archived: true });
 
-    return rows.map((row) => {
-      const plans = row.plans
+    // Sub-goals feed their parent, so progress is computed over the whole workspace tree.
+    const all = await this.prisma.withUser(userId, (tx) => tx.goal.findMany({ where: { workspaceId }, include: { plans: true } }));
+    const buildPlans = (row: GoalWithPlans) =>
+      row.plans
         .map((plan) => {
           const entry = byId.get(plan.projectId);
           if (!entry) return null;
@@ -149,7 +181,14 @@ export class GoalsService {
         })
         .filter((plan): plan is NonNullable<typeof plan> => plan !== null)
         .sort((a, b) => a.projectName.localeCompare(b.projectName, "ru"));
-      const { progress, unknown } = goalProgress(plans);
+    const planMap = new Map(all.map((g) => [g.id, buildPlans(g)]));
+    const tree = goalTreeProgress(all.map((g) => ({ id: g.id, parentId: g.parentId, subWeight: g.subWeight, plans: planMap.get(g.id) ?? [] })));
+    const subCounts = new Map<string, number>();
+    for (const g of all) if (g.parentId) subCounts.set(g.parentId, (subCounts.get(g.parentId) ?? 0) + 1);
+
+    return rows.map((row) => {
+      const plans = planMap.get(row.id) ?? buildPlans(row);
+      const own = tree.get(row.id) ?? { progress: goalProgress(plans).progress, unknownPlans: 0, unknownSubGoals: 0 };
       return {
         id: row.id,
         workspaceId: row.workspaceId,
@@ -157,9 +196,13 @@ export class GoalsService {
         description: row.description,
         status: goalStatusSchema.catch("active").parse(row.status),
         dueAt: row.dueAt?.toISOString() ?? null,
+        parentId: row.parentId,
+        subWeight: row.subWeight,
+        subGoalCount: subCounts.get(row.id) ?? 0,
         plans,
-        progress,
-        unknownPlans: unknown,
+        progress: own.progress,
+        unknownPlans: own.unknownPlans,
+        unknownSubGoals: own.unknownSubGoals,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString()
       };

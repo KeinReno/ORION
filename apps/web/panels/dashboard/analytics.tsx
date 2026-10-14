@@ -184,6 +184,7 @@ export function DashboardAnalytics({ workspaceId, tasks, now }: { workspaceId: s
                     <span className="truncate text-label">{goal.title}</span>
                     <span className="shrink-0 font-mono text-2xs tabular-nums text-subtle-foreground">
                       {goal.progress === null ? "—" : `${goal.progress}%`} · планов {goal.plans.length}
+                      {goal.subGoalCount > 0 ? ` · подцелей ${goal.subGoalCount}` : ""}
                     </span>
                   </span>
                   <Bar value={goal.progress} />

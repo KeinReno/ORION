@@ -118,6 +118,74 @@ describe("Global goals over projects", () => {
     expect(after.data.find((g) => g.id === goal.data.id)?.plans).toEqual([]);
   });
 
+  it("подцели: вложенность до 3 уровней, циклы и чужие родители отклоняются, прогресс родителя смешивает планы и подцели", async () => {
+    const alice = await register("nest");
+    const mallory = await register("nest-mallory");
+    const base = `/workspaces/${alice.workspaceId}/goals`;
+    const mk = async (title: string, extra: Record<string, unknown> = {}) =>
+      request<{ id: string; parentId: string | null; progress: number | null; subGoalCount: number; unknownSubGoals: number }>(base, {
+        method: "POST", token: alice.accessToken, body: { title, ...extra }
+      });
+    const patch = (id: string, body: Record<string, unknown>) =>
+      request<{ id: string; parentId: string | null; progress: number | null }>(`${base}/${id}`, { method: "PATCH", token: alice.accessToken, body });
+    const get = async (id: string) =>
+      (await request<Array<{ id: string; parentId: string | null; progress: number | null; subGoalCount: number; unknownSubGoals: number }>>(base, { method: "GET", token: alice.accessToken })).data.find((g) => g.id === id);
+
+    const root = (await mk("Корень")).data;
+    const mid = await mk("Середина", { parentId: root.id });
+    expect(mid.status).toBe(201);
+    const leaf = await mk("Лист", { parentId: mid.data.id });
+    expect(leaf.status).toBe(201);
+    // 4-й уровень
+    expect((await mk("Слишком глубоко", { parentId: leaf.data.id })).status).toBe(400);
+    // цикл и самоссылка
+    expect((await patch(root.id, { parentId: leaf.data.id })).status).toBe(400);
+    expect((await patch(root.id, { parentId: root.id })).status).toBe(400);
+    // перенос поддерева, выходящий за глубину
+    const other = (await mk("Другая")).data;
+    expect((await patch(other.id, { parentId: leaf.data.id })).status).toBe(400);
+    // чужое пространство
+    const foreign = await request<{ id: string }>(`/workspaces/${mallory.workspaceId}/goals`, {
+      method: "POST", token: mallory.accessToken, body: { title: "Чужая" }
+    });
+    expect((await mk("Смешение", { parentId: foreign.data.id })).status).toBe(404);
+    expect((await patch(other.id, { parentId: foreign.data.id })).status).toBe(404);
+
+    // без известного прогресса — null, не 0
+    expect((await get(root.id))?.progress).toBeNull();
+    expect((await get(root.id))?.subGoalCount).toBe(1);
+
+    // лист: проект 100 %; середина: свой план 0 % с весом 1 + лист (вес 3)
+    const done = await project(alice, "Готовый");
+    await task(alice, done, "a", "done");
+    const zero = await project(alice, "Нулевой");
+    await task(alice, zero, "b");
+    await request(`${base}/${leaf.data.id}/plans`, { method: "POST", token: alice.accessToken, body: { projectId: done } });
+    await request(`${base}/${mid.data.id}/plans`, { method: "POST", token: alice.accessToken, body: { projectId: zero, weight: 1 } });
+    expect((await patch(leaf.data.id, { subWeight: 3 })).status).toBe(200);
+    expect((await get(leaf.data.id))?.progress).toBe(100);
+    expect((await get(mid.data.id))?.progress).toBe(75); // (1*0 + 3*100) / 4
+    expect((await get(root.id))?.progress).toBe(75); // единственная известная подцель
+
+    // подцель без прогресса не тянет родителя вниз
+    const empty = await mk("Пустая", { parentId: root.id });
+    const rootAfter = await get(root.id);
+    expect(rootAfter?.progress).toBe(75);
+    expect(rootAfter?.unknownSubGoals).toBe(1);
+    expect((await get(empty.data.id))?.progress).toBeNull();
+
+    // перенос в корень и обратно
+    expect((await patch(empty.data.id, { parentId: null })).data.parentId).toBeNull();
+
+    // удаление родителя: дети становятся верхнего уровня, не удаляются
+    const del = await request(`${base}/${mid.data.id}`, { method: "DELETE", token: alice.accessToken });
+    expect(del.status).toBe(204);
+    const orphan = await get(leaf.data.id);
+    expect(orphan).toBeDefined();
+    expect(orphan?.parentId).toBeNull();
+    expect((await get(root.id))?.subGoalCount).toBe(0);
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {
