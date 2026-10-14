@@ -40,12 +40,21 @@ import { dockLayoutStorageKey } from "../../lib/dock-layout-key";
 import {
   LAYOUT_NAME_MAX,
   cleanLayoutName,
+  LAYOUT_SHORTCUT_COUNT,
   deleteNamedLayout,
+  exportNamedLayouts,
+  getDefaultLayoutName,
   getNamedLayout,
+  importNamedLayouts,
+  layoutShortcutIndex,
   listNamedLayouts,
   namedLayoutsKey,
-  saveNamedLayout
+  pruneDockLayout,
+  renameNamedLayout,
+  saveNamedLayout,
+  setDefaultLayoutName
 } from "../../lib/named-layouts";
+import { LayoutsDialog } from "../../components/layouts-dialog";
 import { isTauri } from "../../lib/is-tauri";
 import { useLocalNow } from "../../lib/use-day-boundary";
 import {
@@ -304,13 +313,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const [layoutDialogOpen, setLayoutDialogOpen] = useState(false);
   const [layoutNames, setLayoutNames] = useState<string[]>([]);
   const namedKey = user && workspace ? namedLayoutsKey(user.id, workspace.id) : null;
-  useEffect(() => {
-    try {
-      setLayoutNames(namedKey ? listNamedLayouts(window.localStorage, namedKey) : []);
-    } catch {
-      setLayoutNames([]);
-    }
-  }, [namedKey]);
   const saveLayoutAs = useCallback(
     (name: string) => {
       const api = apiRef.current;
@@ -325,34 +327,102 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     },
     [namedKey]
   );
+  /**
+   * Puts a saved layout into the dock: panels that no longer exist are pruned out of it first,
+   * then the ones whose module/plugin is off are closed. `false` = nothing usable to apply
+   * (missing, corrupt, or empty after pruning) and the dock is left as it was.
+   */
+  const applyNamedToApi = useCallback((api: DockviewApi, key: string, name: string): boolean => {
+    try {
+      const saved = getNamedLayout(window.localStorage, key, name);
+      const pruned = pruneDockLayout(saved, (component) => getPanelDefinition(component) !== undefined);
+      if (!pruned) return false;
+      api.fromJSON(pruned as unknown as Parameters<DockviewApi["fromJSON"]>[0]);
+      closeDisabledPanels(api, disabledModulesRef.current, pluginOverridesRef.current);
+      return true;
+    } catch {
+      /* an incompatible layout leaves the current one in place */
+      return false;
+    }
+  }, []);
   const applyLayout = useCallback(
     (name: string) => {
       const api = apiRef.current;
       if (!api || !namedKey) return;
-      try {
-        const saved = getNamedLayout(window.localStorage, namedKey, name);
-        if (saved) {
-          api.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
-          closeDisabledPanels(api, disabledModulesRef.current, pluginOverridesRef.current);
-        }
-      } catch {
-        /* an incompatible layout (a removed panel) leaves the current one in place */
-      }
+      applyNamedToApi(api, namedKey, name);
     },
-    [namedKey]
+    [namedKey, applyNamedToApi]
   );
+  const [layoutDefault, setLayoutDefault] = useState<string | null>(null);
+  const [layoutsManagerOpen, setLayoutsManagerOpen] = useState(false);
+  const refreshLayouts = useCallback(() => {
+    try {
+      setLayoutNames(namedKey ? listNamedLayouts(window.localStorage, namedKey) : []);
+      setLayoutDefault(namedKey ? getDefaultLayoutName(window.localStorage, namedKey) : null);
+    } catch {
+      setLayoutNames([]);
+      setLayoutDefault(null);
+    }
+  }, [namedKey]);
+  useEffect(() => {
+    refreshLayouts();
+  }, [refreshLayouts]);
   const removeLayout = useCallback(
     (name: string) => {
       if (!namedKey) return;
       try {
         deleteNamedLayout(window.localStorage, namedKey, name);
-        setLayoutNames(listNamedLayouts(window.localStorage, namedKey));
       } catch {
         /* ignore */
       }
+      refreshLayouts();
     },
-    [namedKey]
+    [namedKey, refreshLayouts]
   );
+  const markDefaultLayout = useCallback(
+    (name: string | null) => {
+      if (!namedKey) return;
+      setDefaultLayoutName(window.localStorage, namedKey, name);
+      refreshLayouts();
+    },
+    [namedKey, refreshLayouts]
+  );
+  const renameLayout = useCallback(
+    (from: string, to: string): boolean => {
+      if (!namedKey) return false;
+      const ok = renameNamedLayout(window.localStorage, namedKey, from, to);
+      refreshLayouts();
+      return ok;
+    },
+    [namedKey, refreshLayouts]
+  );
+  const exportLayouts = useCallback(() => (namedKey ? exportNamedLayouts(window.localStorage, namedKey) : ""), [namedKey]);
+  const importLayouts = useCallback(
+    (text: string) => {
+      if (!namedKey) return { ok: false, error: "Нет активного пространства.", added: 0, replaced: 0, skipped: 0 };
+      const result = importNamedLayouts(window.localStorage, namedKey, text);
+      refreshLayouts();
+      return result;
+    },
+    [namedKey, refreshLayouts]
+  );
+  // Alt+1..Alt+9 apply the first nine layouts, in the order the menu shows them.
+  const layoutNamesRef = useRef(layoutNames);
+  layoutNamesRef.current = layoutNames;
+  const applyLayoutRef = useRef(applyLayout);
+  applyLayoutRef.current = applyLayout;
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      const index = layoutShortcutIndex(event);
+      if (index === null || event.repeat) return;
+      const name = layoutNamesRef.current[index];
+      if (name === undefined) return;
+      event.preventDefault();
+      applyLayoutRef.current(name);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const closeTab = useCallback((panelId: string) => {
     if (hasUnsavedDrafts(panelId)) {
       setPendingTabClose(panelId);
@@ -470,7 +540,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
    * logic as a fresh load, not a hand-rolled subset of it.
    */
   const loadLayoutForKey = useCallback(
-    (api: DockviewApi, key: string) => {
+    (api: DockviewApi, key: string, namedKey: string) => {
       let restored = false;
       try {
         const raw = window.localStorage.getItem(key);
@@ -480,6 +550,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }
       } catch {
         // corrupt or incompatible saved layout (e.g. a removed panel id) — fall through to the default
+      }
+      if (!restored) {
+        // No automatic layout yet: the workspace's «открывать при входе» layout, if one is marked.
+        try {
+          const preferred = getDefaultLayoutName(window.localStorage, namedKey);
+          if (preferred) restored = applyNamedToApi(api, namedKey, preferred);
+        } catch {
+          /* fall through to the dashboard */
+        }
       }
       if (!restored) {
         openPanel("dashboard");
@@ -493,7 +572,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }
       }
     },
-    [openPanel]
+    [openPanel, applyNamedToApi]
   );
 
   const onReady = useCallback(
@@ -556,7 +635,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       // this onReady callback — only ever mounts once both are loaded.
       const key = dockLayoutStorageKey(user!.id, workspace!.id);
       layoutKeyRef.current = key;
-      loadLayoutForKey(api, key);
+      loadLayoutForKey(api, key, namedLayoutsKey(user!.id, workspace!.id));
 
       let saveTimer: ReturnType<typeof setTimeout> | undefined;
       api.onDidLayoutChange(() => {
@@ -597,7 +676,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     }
     for (const panel of [...api.panels]) panel.api.close();
     layoutKeyRef.current = nextKey;
-    loadLayoutForKey(api, nextKey);
+    loadLayoutForKey(api, nextKey, namedLayoutsKey(user.id, workspace.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, workspace?.id]);
 
@@ -668,6 +747,17 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           setLayoutDialogOpen(false);
           saveLayoutAs(name);
         }}
+      />
+      <LayoutsDialog
+        open={layoutsManagerOpen}
+        onClose={() => setLayoutsManagerOpen(false)}
+        names={layoutNames}
+        defaultName={layoutDefault}
+        onSetDefault={markDefaultLayout}
+        onRename={renameLayout}
+        onDelete={removeLayout}
+        onExport={exportLayouts}
+        onImport={importLayouts}
       />
       <FolderNameDialog
         open={folderDialog !== null}
@@ -793,9 +883,12 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                 items={[
                   { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
                   ...(layoutNames.length > 0 ? ["separator" as const] : []),
-                  ...layoutNames.map((name) => ({ label: name, onSelect: () => applyLayout(name) })),
-                  ...(layoutNames.length > 0 ? ["separator" as const] : []),
-                  ...layoutNames.map((name) => ({ label: `Удалить «${name}»`, tone: "danger" as const, onSelect: () => removeLayout(name) }))
+                  ...layoutNames.map((name, index) => ({
+                    label: `${index < LAYOUT_SHORTCUT_COUNT ? `Alt+${index + 1}  ` : ""}${name}${name === layoutDefault ? "  ★" : ""}`,
+                    onSelect: () => applyLayout(name)
+                  })),
+                  "separator" as const,
+                  { label: "Управление: название, вход, перенос…", onSelect: () => setLayoutsManagerOpen(true) }
                 ]}
               />
               <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
