@@ -9,7 +9,7 @@ import {
   useUpdateProjectGoalPlan,
   useUpdateTask
 } from "@orion/core-react";
-import { GOAL_STATUS_LABEL, checkGoalParent, goalStatusSchema, type Goal, type GoalStatus, type Project } from "@orion/shared-types";
+import { GOAL_STATUS_LABEL, checkGoalParent, goalPace, goalStatusSchema, type Goal, type GoalStatus, type Project } from "@orion/shared-types";
 import { Badge, Button, Card, Input, Select, Textarea, useToast } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListTree, Play, Check, Trash2, X } from "lucide-react";
@@ -20,6 +20,7 @@ import { STALLED_DAYS, validParents, type Star } from "../../lib/goal-constellat
 import { openProject } from "../../lib/panel-bus";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { STATE_LABEL } from "./sky-canvas";
+import { GoalLinks } from "./goal-links";
 
 function clampWeight(raw: string): number {
   return Math.min(100, Math.max(1, Math.round(Number(raw) || 1)));
@@ -37,6 +38,22 @@ function dayToIso(value: string): string | null {
   return value ? new Date(`${value}T12:00:00`).toISOString() : null;
 }
 
+function PaceNote({ pace, progress }: { pace: ReturnType<typeof goalPace>; progress: number | null }): React.ReactElement {
+  const tone = pace.state === "late" ? "danger" : pace.state === "behind" ? "warning" : pace.state === "on_track" ? "success" : "neutral";
+  const text =
+    pace.state === "late"
+      ? "Срок прошёл, а цель не достигнута"
+      : pace.state === "unknown"
+        ? `Прошло ${pace.elapsed}% срока, прогресс пока неизвестен`
+        : `Прошло ${pace.elapsed}% срока, сделано ${progress}% — ${pace.state === "behind" ? "отстаёт" : "по плану"}`;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge tone={tone}>{pace.state === "late" ? "просрочено" : pace.state === "behind" ? "отстаёт" : pace.state === "on_track" ? "по плану" : "срок идёт"}</Badge>
+      <span className="text-label text-subtle-foreground">{text}</span>
+    </div>
+  );
+}
+
 export interface GoalInspectorProps {
   workspaceId: string | undefined;
   star: Star;
@@ -45,13 +62,17 @@ export interface GoalInspectorProps {
   onSelect: (id: string) => void;
   onDeleteGoal: (goal: Goal) => void;
   onShowInList: (goalId: string) => void;
+  /** Jump to another goal's constellation (a shared project serves it too). */
+  onOpenGoal: (goalId: string) => void;
+  visibleLinkIds?: ReadonlySet<string>;
+  onToggleVisible?: (id: string) => void;
 }
 
 /**
  * Everything you can do with the selected star, without leaving the sky: edit the goal,
  * grow it (sub-goal / plan), tune weights, and act on a plan's next task (start timer / done).
  */
-export function GoalInspector({ workspaceId, star, goals, projects, onSelect, onDeleteGoal, onShowInList }: GoalInspectorProps): React.ReactElement {
+export function GoalInspector({ workspaceId, star, goals, projects, onSelect, onDeleteGoal, onShowInList, onOpenGoal, visibleLinkIds, onToggleVisible }: GoalInspectorProps): React.ReactElement {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isEnabled } = useEnabledModules();
@@ -69,7 +90,37 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
 
   const fail = (message: string) => (error: unknown) => toast({ title: message, description: describeError(error), tone: "danger" });
   const refreshGoals = (): void => void queryClient.invalidateQueries({ queryKey: ["goals", workspaceId] });
-  const plan = star.kind === "plan" ? goal.plans.find((p) => p.id === star.planId) : undefined;
+  const plan = star.planId ? goal.plans.find((p) => p.id === star.planId) : undefined;
+
+  if (star.kind === "milestone") {
+    const milestone = plan?.milestones.find((m) => m.id === star.milestoneId);
+    if (!plan || !milestone) return <Card className="p-4 text-label text-subtle-foreground">Эта веха уже изменилась — выберите другую.</Card>;
+    const late = star.overdue > 0;
+    return (
+      <Card className="space-y-3 p-4" aria-label={`Веха ${milestone.title}`}>
+        <p className="text-sm font-medium">{milestone.title}</p>
+        <p className="text-label text-subtle-foreground">
+          Веха проекта «{plan.projectName}» · {STATE_LABEL[star.state]}
+          {milestone.tasks > 0 ? ` · ${milestone.closed}/${milestone.tasks} задач` : ""}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {milestone.dueAt ? <Badge tone={late ? "danger" : "neutral"}>{late ? "просрочена · " : "до "}{shortDate(milestone.dueAt)}</Badge> : null}
+          {star.frontier ? <Badge tone="accent">сейчас здесь</Badge> : null}
+        </div>
+        <p className="text-2xs text-subtle-foreground">
+          {plan.milestones.length > 4 ? `На карте показаны 4 из ${plan.milestones.length} вех — ближайшие к текущей.` : "Первая веха ниже, следующие ведут вверх к результату."}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => openProject(plan.projectId, plan.projectName)}>
+            Открыть проект
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => onSelect(`${goal.id}:${plan.id}`)}>
+            К плану
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   if (star.kind === "plan") {
     if (!plan) return <Card className="p-4 text-label text-subtle-foreground">Этот план уже убран из цели.</Card>;
@@ -93,6 +144,20 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
           {star.blocked > 0 ? <Badge tone="warning">ждёт другие задачи: {star.blocked}</Badge> : null}
           {star.stalled ? <Badge tone="warning">стоит {idleDays} дн.</Badge> : null}
         </div>
+
+        {star.sharedWith.length > 0 ? (
+          <div className="space-y-1 rounded-lg border border-border p-2.5">
+            <p className="text-2xs uppercase tracking-wide text-subtle-foreground">Этот проект служит и другим целям</p>
+            <div className="flex flex-wrap gap-1.5">
+              {star.sharedWith.map((id) => (
+                <Button key={id} type="button" size="sm" variant="ghost" onClick={() => onOpenGoal(id)}>
+                  ✦ {goals.find((g) => g.id === id)?.title ?? "цель"}
+                </Button>
+              ))}
+            </div>
+            <p className="text-2xs text-subtle-foreground">Закрытая здесь задача двигает все эти цели сразу.</p>
+          </div>
+        ) : null}
 
         <div className="space-y-1.5 rounded-lg border border-border p-2.5">
           <p className="text-2xs uppercase tracking-wide text-subtle-foreground">Следующий шаг</p>
@@ -200,6 +265,7 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
   }
 
   // ---- goal star ----
+  const pace = goalPace(goal, new Date());
   const parentChoices = validParents(goals, goal.id);
   const attachable = projects.filter((p) => !goal.plans.some((pl) => pl.projectId === p.id));
   const canAddSub = checkGoalParent(null, goal.id, goals).ok;
@@ -233,6 +299,8 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
         {goal.progress === null ? "Прогресс неизвестен — в планах и подцелях нет задач" : `Прогресс ${goal.progress}%`}
         {goal.unknownPlans + goal.unknownSubGoals > 0 ? ` (не учтено: ${goal.unknownPlans + goal.unknownSubGoals} — ещё без задач)` : ""}
       </p>
+
+      {pace.state !== "none" ? <PaceNote pace={pace} progress={goal.progress} /> : null}
 
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1 text-2xs text-subtle-foreground">
@@ -342,6 +410,8 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
           ))}
         </Select>
       ) : null}
+
+      <GoalLinks workspaceId={workspaceId} goalId={goal.id} goals={goals} visibleLinkIds={visibleLinkIds} onToggleVisible={onToggleVisible} />
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={() => onShowInList(goal.id)}>

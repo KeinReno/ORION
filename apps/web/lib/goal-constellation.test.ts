@@ -1,4 +1,4 @@
-import type { Goal } from "@orion/shared-types";
+import type { Goal, GoalMilestone } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import {
   CONSTELLATION_H,
@@ -49,6 +49,7 @@ const plan = (id: string, progress: number | null, weight = 1, patch: Record<str
   blocked: 0,
   overdue: 0,
   lastActivityAt: null,
+  milestones: [] as GoalMilestone[],
   ...patch
 });
 
@@ -100,6 +101,17 @@ describe("buildConstellations", () => {
   it("is deterministic", () => {
     const goals = [goal("a", { plans: [plan("1", 50), plan("2", 20)] })];
     expect(buildConstellations(goals, NOW)).toEqual(buildConstellations(goals, NOW));
+  });
+
+  it("places the outcome above its branches and centres a parent over its children", () => {
+    const c = buildConstellations([goal("a", { plans: [plan("1", 10), plan("2", 20)] })], NOW)[0]!;
+    const root = c.stars.find((s) => s.id === "a")!;
+    const left = c.stars.find((s) => s.id === "a:1")!;
+    const right = c.stars.find((s) => s.id === "a:2")!;
+    expect(root.y).toBeLessThan(left.y);
+    expect(left.y).toBe(right.y);
+    expect(left.x).toBeLessThan(root.x);
+    expect(root.x).toBeLessThan(right.x);
   });
 
   it("shows an orphaned sub-goal as its own constellation and survives a cycle", () => {
@@ -155,6 +167,12 @@ describe("facts, lenses and health", () => {
     expect(lensVisible(c, "progress")).toBeNull();
   });
 
+  it("does not fade a goal when no next step or blocker exists", () => {
+    const empty = buildConstellations([goal("empty")], NOW)[0]!;
+    expect(lensVisible(empty, "focus")).toBeNull();
+    expect(lensVisible(empty, "stuck")).toBeNull();
+  });
+
   it("summarises health for the overview card", () => {
     const health = skyHealth(c);
     expect(health.tone).toBe("attention");
@@ -189,5 +207,85 @@ describe("drag and keyboard helpers", () => {
     expect(neighbour(c, "a:1", "right")).toBe("a:2");
     expect(neighbour(c, "a:1", "left")).toBe("a:2"); // wraps
     expect(neighbour(c, "a", "up")).toBeNull();
+  });
+});
+
+const ms = (id: string, status: GoalMilestone["status"], patch: Partial<GoalMilestone> = {}): GoalMilestone => ({
+  id,
+  title: `Веха ${id}`,
+  status,
+  dueAt: null,
+  tasks: 0,
+  closed: 0,
+  ...patch
+});
+
+describe("milestones as a path", () => {
+  const goals = [
+    goal("g", {
+      plans: [plan("p", 40, 1, { nextTask: next, milestones: [ms("m1", "done"), ms("m2", "in_progress", { tasks: 4, closed: 1 }), ms("m3", "planned")] })]
+    })
+  ];
+  const c = buildConstellations(goals, NOW)[0]!;
+  const star = (id: string) => c.stars.find((s) => s.id === id)!;
+
+  it("hangs the milestones one after another on the plan's branch", () => {
+    expect(c.stars.map((s) => s.id)).toEqual(["g", "g:p", "g:p:m3", "g:p:m2", "g:p:m1"]);
+    expect(pathToRoot(c, "g:p:m1")).toEqual(["g", "g:p", "g:p:m3", "g:p:m2", "g:p:m1"]);
+    expect(star("g:p:m1").y).toBeGreaterThan(star("g:p:m3").y);
+    expect(star("g:p:m1").state).toBe("done");
+    expect(star("g:p:m2")).toMatchObject({ progress: 25, state: "lit" });
+    expect(star("g:p:m3").state).toBe("unknown"); // a milestone without tasks is unknown, not 0
+  });
+
+  it("pulses the first unfinished milestone instead of the plan", () => {
+    expect(star("g:p").ready).toBe(true);
+    expect(star("g:p").frontier).toBe(false);
+    expect(star("g:p:m2").frontier).toBe(true);
+    expect(star("g:p:m3").frontier).toBe(false);
+    expect(skyHealth(c).next?.id).toBe("g:p"); // the card still names the plan's next task
+  });
+
+  it("falls back to pulsing the plan when the route is finished", () => {
+    const done = buildConstellations([goal("g", { plans: [plan("p", 60, 1, { nextTask: next, milestones: [ms("m1", "done")] })] })], NOW)[0]!;
+    expect(done.stars.find((s) => s.id === "g:p")!.frontier).toBe(true);
+  });
+
+  it("counts an overdue unfinished milestone as trouble", () => {
+    const late = buildConstellations(
+      [goal("g", { progress: 10, plans: [plan("p", 10, 1, { milestones: [ms("m1", "planned", { dueAt: "2026-10-01T00:00:00Z" })] })] })],
+      NOW
+    )[0]!;
+    expect(late.stars.find((s) => s.kind === "milestone")!.overdue).toBe(1);
+    expect(skyHealth(late)).toMatchObject({ overdue: 1, tone: "attention" });
+  });
+
+  it("draws only a window of a long route", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ms(`m${i}`, i < 5 ? "done" : "planned"));
+    const long = buildConstellations([goal("g", { plans: [plan("p", 50, 1, { milestones: many })] })], NOW)[0]!;
+    expect(long.stars.filter((s) => s.kind === "milestone").map((s) => s.milestoneId)).toEqual(["m7", "m6", "m5", "m4"]);
+  });
+});
+
+describe("pace and shared projects", () => {
+  it("puts the deadline pace on the goal star and into the card health", () => {
+    const behind = buildConstellations(
+      [goal("g", { progress: 10, createdAt: "2026-10-01T00:00:00Z", dueAt: "2026-10-29T00:00:00Z", plans: [plan("p", 10)] })],
+      NOW
+    )[0]!;
+    expect(behind.stars[0]!.pace.state).toBe("behind");
+    expect(skyHealth(behind)).toMatchObject({ tone: "attention", pace: { state: "behind" } });
+    expect(behind.stars.find((s) => s.kind === "plan")!.pace.state).toBe("none");
+  });
+
+  it("marks a project that serves two goals on both", () => {
+    const shared = plan("p", 10);
+    const [a, b] = buildConstellations(
+      [goal("a", { plans: [{ ...shared, id: "pa", projectId: "P" }] }), goal("b", { plans: [{ ...shared, id: "pb", projectId: "P" }] }), goal("c", { plans: [plan("x", 1)] })],
+      NOW
+    );
+    expect(a!.stars.find((s) => s.kind === "plan")!.sharedWith).toEqual(["b"]);
+    expect(b!.stars.find((s) => s.kind === "plan")!.sharedWith).toEqual(["a"]);
+    expect(skyHealth(a!).shared).toBe(1);
   });
 });

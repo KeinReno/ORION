@@ -1,6 +1,6 @@
 "use client";
 
-import type { AddGoalPlanInput, CreateGoalInput, Goal, UpdateGoalInput } from "@orion/shared-types";
+import type { AddGoalPlanInput, CreateGoalInput, Goal, GoalHistory, UpdateGoalInput } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
@@ -10,6 +10,17 @@ export function useProjectGoals(workspaceId: string | undefined) {
     queryKey: ["goals", workspaceId],
     queryFn: () => api.listProjectGoals(workspaceId as string),
     enabled: Boolean(workspaceId)
+  });
+}
+
+/** Weekly reconstruction of the goals' projects; only fetched while the time slider is in use. */
+export function useProjectGoalsHistory(workspaceId: string | undefined, weeks: number, enabled: boolean) {
+  const { api } = useCore();
+  return useQuery<GoalHistory>({
+    queryKey: ["goals", workspaceId, "history", weeks],
+    queryFn: () => api.listProjectGoalsHistory(workspaceId as string, weeks),
+    enabled: Boolean(workspaceId) && enabled,
+    staleTime: 60_000
   });
 }
 

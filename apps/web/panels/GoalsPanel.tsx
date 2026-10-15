@@ -28,11 +28,11 @@ import {
   useToast
 } from "@orion/ui";
 import { Flag, List, ListTree, Sparkles, Trash2, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ConstellationView } from "./goals/constellation-view";
 import { describeError } from "../lib/error-message";
 import { shortDate } from "../lib/format";
-import { openProject } from "../lib/panel-bus";
+import { openProject, useFocusedGoalId } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
 function ProgressBar({ value }: { value: number | null }): React.ReactElement {
@@ -73,6 +73,14 @@ export function GoalsPanel(): React.ReactElement {
   const [subFor, setSubFor] = useState<string | null>(null);
   const [subTitle, setSubTitle] = useState("");
   const [view, setView] = useState<"list" | "sky">("list");
+  const focusedGoalId = useFocusedGoalId();
+
+  useEffect(() => {
+    if (!focusedGoalId || !goals?.some((goal) => goal.id === focusedGoalId)) return;
+    setView("list");
+    const frame = requestAnimationFrame(() => document.getElementById(`goal-${focusedGoalId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    return () => cancelAnimationFrame(frame);
+  }, [focusedGoalId, goals]);
 
   function showInList(goalId: string): void {
     setView("list");

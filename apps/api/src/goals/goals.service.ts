@@ -6,13 +6,17 @@ import {
   goalProgress,
   goalTreeProgress,
   goalStatusSchema,
+  historyPoints,
   isTaskClosed,
+  projectHistory,
+  milestoneStatusSchema,
   summarizePlanTasks,
   taskPrioritySchema,
   taskStatusSchema,
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
+  type GoalHistory,
   type UpdateGoalInput,
   type UpdateGoalPlanInput
 } from "@orion/shared-types";
@@ -41,6 +45,36 @@ export class GoalsService {
       return tx.goal.findMany({ where: { workspaceId }, include: { plans: true }, orderBy: [{ createdAt: "desc" }] });
     });
     return this.toDtos(userId, workspaceId, rows);
+  }
+
+  /**
+   * Weekly "how was it" for every project behind a goal, rebuilt from task dates (nothing is
+   * stored). Only counts leave the server — the client recomputes goal progress from them with the
+   * same `goalTreeProgress` it uses for today, so the past and the present cannot disagree on the rule.
+   */
+  async history(userId: string, workspaceId: string, weeks: number): Promise<GoalHistory> {
+    const points = historyPoints(new Date(), weeks);
+    const tasks = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const plans = await tx.goalPlan.findMany({ where: { workspaceId }, select: { projectId: true } });
+      const projectIds = [...new Set(plans.map((p) => p.projectId))];
+      if (projectIds.length === 0) return [];
+      return tx.task.findMany({
+        where: { workspaceId, projectId: { in: projectIds } },
+        select: { projectId: true, status: true, createdAt: true, completedAt: true, updatedAt: true }
+      });
+    });
+    const byProject = new Map<string, Array<{ createdAt: Date; closedAt: Date | null }>>();
+    for (const task of tasks) {
+      if (!task.projectId) continue;
+      const closed = isTaskClosed(taskStatusSchema.catch("todo").parse(task.status));
+      // A closed task without completedAt (e.g. canceled) is dated by its last change.
+      const entry = { createdAt: task.createdAt, closedAt: closed ? (task.completedAt ?? task.updatedAt) : null };
+      byProject.set(task.projectId, [...(byProject.get(task.projectId) ?? []), entry]);
+    }
+    const projects: GoalHistory["projects"] = {};
+    for (const [projectId, list] of byProject) projects[projectId] = projectHistory(list, points);
+    return { points: points.map((p) => p.toISOString()), projects };
   }
 
   async create(userId: string, workspaceId: string, input: CreateGoalInput): Promise<Goal> {
@@ -177,6 +211,7 @@ export class GoalsService {
               select: {
                 id: true,
                 projectId: true,
+                milestoneId: true,
                 title: true,
                 status: true,
                 priority: true,
@@ -187,6 +222,30 @@ export class GoalsService {
               }
             })
           );
+    const milestoneRows =
+      projectIds.length === 0
+        ? []
+        : await this.prisma.withUser(userId, (tx) =>
+            tx.milestone.findMany({
+              where: { workspaceId, projectId: { in: projectIds } },
+              orderBy: [{ order: "asc" }, { dueAt: "asc" }, { createdAt: "asc" }],
+              select: { id: true, projectId: true, title: true, status: true, dueAt: true }
+            })
+          );
+    const milestonesByProject = new Map<string, Goal["plans"][number]["milestones"]>();
+    for (const m of milestoneRows) {
+      const own = taskRows.filter((t) => t.milestoneId === m.id);
+      const list = milestonesByProject.get(m.projectId) ?? [];
+      list.push({
+        id: m.id,
+        title: m.title,
+        status: milestoneStatusSchema.catch("planned").parse(m.status),
+        dueAt: m.dueAt?.toISOString() ?? null,
+        tasks: own.length,
+        closed: own.filter((t) => isTaskClosed(taskStatusSchema.catch("todo").parse(t.status))).length
+      });
+      milestonesByProject.set(m.projectId, list);
+    }
     const now = new Date();
     const pulseByProject = new Map<string, ReturnType<typeof summarizePlanTasks>>();
     for (const projectId of projectIds) {
@@ -225,7 +284,8 @@ export class GoalsService {
             progress: tasks === 0 ? null : entry.p.progress,
             tasks,
             closed: entry.p.counts.closed,
-            ...(pulseByProject.get(plan.projectId) ?? noPulse)
+            ...(pulseByProject.get(plan.projectId) ?? noPulse),
+            milestones: milestonesByProject.get(plan.projectId) ?? []
           };
         })
         .filter((plan): plan is NonNullable<typeof plan> => plan !== null)
