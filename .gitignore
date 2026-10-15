@@ -40,3 +40,6 @@ apps/compass-engine/**/__pycache__/
 # Playwright (e2e/)
 test-results/
 playwright-report/
+
+# Root .data/: local runtime leftovers (e.g. a portable node), never source.
+/.data/
