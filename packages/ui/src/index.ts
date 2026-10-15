@@ -33,3 +33,4 @@ export * from "./webgl-backgrounds";
 export * from "./target-cursor";
 export * from "./design-tokens";
 export * from "./theme-provider";
+export * from "./theme-engine";

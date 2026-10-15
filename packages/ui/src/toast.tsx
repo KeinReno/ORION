@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
+import { useThemeScopeProps } from "./theme-provider";
 
 export type ToastTone = "default" | "success" | "danger";
 
@@ -21,6 +22,7 @@ export interface ToastOptions {
 
 interface ToastRecord extends ToastOptions {
   id: number;
+  themeScope?: ReturnType<typeof useThemeScopeProps>;
 }
 
 interface ToastApi {
@@ -28,7 +30,11 @@ interface ToastApi {
   dismiss: (id: number) => void;
 }
 
-const ToastContext = createContext<ToastApi | null>(null);
+interface ToastDispatcher {
+  toast: (options: ToastOptions, scope?: ReturnType<typeof useThemeScopeProps>) => number;
+  dismiss: (id: number) => void;
+}
+const ToastContext = createContext<ToastDispatcher | null>(null);
 
 /**
  * Minimal toast stack (no `sonner` dependency). Mount once near the app
@@ -50,9 +56,9 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
   }, []);
 
   const toast = useCallback(
-    (options: ToastOptions): number => {
+    (options: ToastOptions, themeScope?: ReturnType<typeof useThemeScopeProps>): number => {
       const id = ++seq.current;
-      setToasts((list) => [...list, { ...options, id }]);
+      setToasts((list) => [...list, { ...options, id, themeScope }]);
       const duration = options.duration ?? (options.action ? 8000 : 4000);
       if (duration > 0) {
         timers.current.set(
@@ -76,6 +82,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
               <AnimatePresence initial={false}>
                 {toasts.map((t) => (
                   <motion.div
+                    {...t.themeScope}
                     key={t.id}
                     layout
                     drag="x"
@@ -89,24 +96,24 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                     exit={{ opacity: 0, x: 24, scale: 0.98 }}
                     transition={{ duration: 0.16, ease: "easeOut" }}
                     className={clsx(
-                      "pointer-events-auto relative touch-pan-y overflow-hidden rounded-xl border bg-card/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md",
-                      t.tone === "success" && "border-success/30",
-                      t.tone === "danger" && "border-destructive/30",
-                      (!t.tone || t.tone === "default") && "border-border"
+                      "pointer-events-auto relative touch-pan-y overflow-hidden rounded-xl border bg-ui-overlay/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md",
+                      t.tone === "success" && "border-ui-success/30",
+                      t.tone === "danger" && "border-ui-danger/30",
+                      (!t.tone || t.tone === "default") && "border-ui-border"
                     )}
                   >
                     <div className="flex items-start gap-3">
                       <span
                         className={clsx(
                           "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
-                          t.tone === "success" && "bg-success",
-                          t.tone === "danger" && "bg-destructive",
-                          (!t.tone || t.tone === "default") && "bg-accent"
+                          t.tone === "success" && "bg-ui-success",
+                          t.tone === "danger" && "bg-ui-danger",
+                          (!t.tone || t.tone === "default") && "bg-ui-button"
                         )}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground">{t.title}</p>
-                        {t.description ? <p className="mt-0.5 text-2xs text-muted-foreground">{t.description}</p> : null}
+                        <p className="text-xs font-medium text-ui-primary">{t.title}</p>
+                        {t.description ? <p className="mt-0.5 text-2xs text-ui-secondary">{t.description}</p> : null}
                         {t.action ? (
                           <button
                             type="button"
@@ -114,7 +121,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                               t.action?.onClick();
                               dismiss(t.id);
                             }}
-                            className="mt-1.5 text-2xs font-medium text-accent-text hover:text-accent-hover"
+                            className="mt-1.5 text-2xs font-medium text-ui-accent-hover hover:text-ui-accent-hover"
                           >
                             {t.action.label}
                           </button>
@@ -124,7 +131,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                         type="button"
                         onClick={() => dismiss(t.id)}
                         aria-label="Закрыть"
-                        className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                        className="rounded p-0.5 text-ui-secondary transition-colors hover:bg-ui-tint/10 hover:text-ui-primary"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -142,7 +149,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                         aria-hidden
                         className={clsx(
                           "absolute inset-x-0 bottom-0 h-0.5 origin-left",
-                          t.tone === "success" ? "bg-success/50" : t.tone === "danger" ? "bg-destructive/50" : "bg-accent/50"
+                          t.tone === "success" ? "bg-ui-success/50" : t.tone === "danger" ? "bg-ui-danger/50" : "bg-ui-button/50"
                         )}
                         initial={{ scaleX: 1 }}
                         animate={{ scaleX: 0 }}
@@ -163,6 +170,13 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
 /** Returns a no-op-safe toast API; throws only if the provider is truly absent. */
 export function useToast(): ToastApi {
   const api = useContext(ToastContext);
-  if (!api) throw new Error("useToast() must be used inside <ToastProvider>");
-  return api;
+  const scope = useThemeScopeProps();
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const scopedApi = useMemo(() => api ? {
+    toast: (options: ToastOptions) => api.toast(options, scopeRef.current),
+    dismiss: api.dismiss
+  } : null, [api]);
+  if (!scopedApi) throw new Error("useToast() must be used inside <ToastProvider>");
+  return scopedApi;
 }

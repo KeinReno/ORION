@@ -8,6 +8,8 @@
   --kaiden-bg-hover: 26 26 33;
   --kaiden-text-primary: 244 244 245;
   --kaiden-text-secondary: 161 161 170;
+  --kaiden-text-subtle: 138 138 148;
+  --kaiden-tint-base: 255 255 255;
   --kaiden-border-default: 44 44 53;
   --kaiden-border-strong: 60 60 71;
   --kaiden-accent-base: var(--orion-accent, 91 94 232);

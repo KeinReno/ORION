@@ -1,12 +1,14 @@
 "use client";
 
-import { createContext, useContext, useMemo, type HTMLAttributes } from "react";
-import { DESIGN_SYSTEM_VERSION, resolveTheme, themeVariables, type ThemeId, type ThemeVariables } from "./design-tokens";
+import { createContext, useContext, useMemo, type CSSProperties, type HTMLAttributes } from "react";
+import { DESIGN_SYSTEM_VERSION, THEME_FOUNDATION_FLAG, resolveTheme, themeVariables, type ThemeId, type ThemeVariables } from "./design-tokens";
+import { parseThemeDocument, themeDocumentVariables } from "./theme-engine";
 
 export interface ThemeContextValue {
   schemaVersion: typeof DESIGN_SYSTEM_VERSION;
-  theme: ThemeId;
+  theme: string;
   variables: Readonly<ThemeVariables>;
+  colorScheme?: "dark" | "light";
 }
 
 const DEFAULT_THEME_CONTEXT: ThemeContextValue = {
@@ -23,16 +25,16 @@ export function useTheme(): ThemeContextValue {
 
 /** Apply to an existing portal root so it inherits the React owner's theme without a layout wrapper. */
 export function useThemeScopeProps(): {
-  style?: ThemeVariables;
-  "data-kaiden-theme"?: ThemeId;
+  style?: CSSProperties & ThemeVariables;
+  "data-kaiden-theme"?: string;
   "data-kaiden-version"?: typeof DESIGN_SYSTEM_VERSION;
 } {
   const context = useContext(ThemeContext);
-  return context ? {
-    style: { ...context.variables },
+  return useMemo(() => context ? {
+    style: { ...context.variables, ...(context.colorScheme ? { colorScheme: context.colorScheme } : {}) },
     "data-kaiden-theme": context.theme,
     "data-kaiden-version": context.schemaVersion
-  } : {};
+  } : {}, [context]);
 }
 
 /**
@@ -42,20 +44,26 @@ export function useThemeScopeProps(): {
  * The host owns layout through className. Shared overlays carry the scope across their portals.
  * Custom plugin portals can apply useThemeScopeProps() to their existing root.
  */
-export function ThemeProvider({ flag, theme, style, children, ...props }: HTMLAttributes<HTMLDivElement> & {
+export function ThemeProvider({ flag, theme, definition, style, children, ...props }: HTMLAttributes<HTMLDivElement> & {
   flag?: string;
   theme?: ThemeId;
+  /** Data-only v1 document. Invalid input keeps the selected built-in/legacy fallback. */
+  definition?: unknown;
 }): React.ReactElement {
   const effectiveTheme = resolveTheme(flag, theme);
-  const context = useMemo(() => ({
-    schemaVersion: DESIGN_SYSTEM_VERSION,
-    theme: effectiveTheme,
-    variables: themeVariables(effectiveTheme)
-  }), [effectiveTheme]);
+  const context = useMemo(() => {
+    const parsed = flag === THEME_FOUNDATION_FLAG ? parseThemeDocument(definition) : null;
+    return {
+      schemaVersion: DESIGN_SYSTEM_VERSION,
+      theme: parsed?.ok ? parsed.value.id : effectiveTheme,
+      variables: parsed?.ok ? themeDocumentVariables(parsed.value) : themeVariables(effectiveTheme),
+      colorScheme: parsed?.ok ? parsed.value.baseMode : undefined
+    };
+  }, [definition, effectiveTheme, flag]);
   return (
     <ThemeContext.Provider value={context}>
-      <div {...props} data-kaiden-theme={effectiveTheme} data-kaiden-version={DESIGN_SYSTEM_VERSION}
-        style={{ ...style, ...context.variables }}>
+      <div {...props} data-kaiden-theme={context.theme} data-kaiden-version={DESIGN_SYSTEM_VERSION}
+        style={{ ...style, ...context.variables, ...(context.colorScheme ? { colorScheme: context.colorScheme } : {}) }}>
         {children}
       </div>
     </ThemeContext.Provider>

@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
+import { useThemeScopeProps } from "./theme-provider";
 
 /**
  * Hover/focus label popped above the trigger — same proven shape as the
@@ -24,6 +25,7 @@ export function Tooltip({
   delay?: number;
 }): React.ReactElement {
   const mounted = useMounted();
+  const themeScope = useThemeScopeProps();
   const reduceMotion = useReducedMotion();
   const [rect, setRect] = useState<DOMRect | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,17 +57,20 @@ export function Tooltip({
         ? createPortal(
             <AnimatePresence>
               <motion.div
+                {...themeScope}
+                role="tooltip"
                 initial={{ opacity: 0, y: 4, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.9 }}
                 transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 30 }}
                 style={{
+                  ...themeScope.style,
                   position: "fixed",
                   left: rect.left + rect.width / 2,
                   top: rect.top - 8,
                   transform: "translate(-50%, -100%)"
                 }}
-                className="pointer-events-none z-[140] whitespace-nowrap rounded-lg border border-border bg-card/95 px-2.5 py-1.5 text-xs text-foreground shadow-xl shadow-black/40 backdrop-blur-md"
+                className="pointer-events-none z-[140] whitespace-nowrap rounded-lg border border-ui-overlay-border bg-ui-overlay/95 px-2.5 py-1.5 text-xs text-ui-primary shadow-xl shadow-black/40 backdrop-blur-md"
               >
                 {label}
               </motion.div>
