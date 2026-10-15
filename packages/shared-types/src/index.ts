@@ -50,3 +50,4 @@ export * from "./shared-grant";
 export * from "./opportunity-profile";
 
 export * from "./opportunity-hh-import";
+export * from "./lan";

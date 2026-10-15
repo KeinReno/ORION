@@ -6,10 +6,11 @@ import { ToastProvider } from "@orion/ui";
 import { useState, type ReactNode } from "react";
 import { API_BASE_URL } from "./api-base";
 import { CrossWindowSync } from "./cross-window-sync-provider";
+import { NamespacedStorage, nodeStoragePrefix, readNodeMark } from "./node-mode";
 import { PreferencesEffect } from "./preferences-effect";
 
 export function Providers({ children }: { children: ReactNode }): React.ReactElement {
-  const [storage] = useState(() => new BrowserLocalStorage());
+  const [storage] = useState(() => new NamespacedStorage(new BrowserLocalStorage(), nodeStoragePrefix(readNodeMark())));
   return (
     <CoreProvider baseUrl={API_BASE_URL} storage={storage}>
       {/* Inside CoreProvider (it needs the API client) and gated on a session,

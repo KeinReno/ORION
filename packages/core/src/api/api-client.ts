@@ -1,3 +1,20 @@
+import {
+  lanClientPairingSchema,
+  lanDeviceSchema,
+  lanDiscoveredNodeSchema,
+  lanHostStatusSchema,
+  lanPendingPairSchema,
+  lanPinAccountSchema,
+  type LanApprovePairInput,
+  type LanClientConnectInput,
+  type LanClientPairing,
+  type LanDevice,
+  type LanDiscoveredNode,
+  type LanEnableHostInput,
+  type LanHostStatus,
+  type LanPendingPair,
+  type LanPinAccount
+} from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
@@ -2168,6 +2185,107 @@ export class ApiClient {
       undefined,
       z.object({ status: z.string(), database: z.string(), timestamp: z.string() })
     );
+  }
+
+  // ───────── ТЗ-04: LAN Host/Client (управление узлом этого компьютера) ─────────
+
+  getLanHost(): Promise<LanHostStatus> {
+    return this.request("GET", "/lan/host", undefined, lanHostStatusSchema);
+  }
+
+  getLanPinAccounts(): Promise<LanPinAccount[]> {
+    return this.request("GET", "/lan/host/pin-accounts", undefined, z.array(lanPinAccountSchema));
+  }
+
+  enableLanHost(input: Omit<LanEnableHostInput, "passwords"> & { passwords?: Record<string, string> }): Promise<{ restarting: boolean; status: LanHostStatus }> {
+    return this.request("POST", "/lan/host/enable", input, z.object({ restarting: z.boolean(), status: lanHostStatusSchema }));
+  }
+
+  disableLanHost(): Promise<{ restarting: boolean; status: LanHostStatus }> {
+    return this.request("POST", "/lan/host/disable", {}, z.object({ restarting: z.boolean(), status: lanHostStatusSchema }));
+  }
+
+  renameLanNode(name: string): Promise<LanHostStatus> {
+    return this.request("PATCH", "/lan/host", { name }, lanHostStatusSchema);
+  }
+
+  openLanFirewall(): Promise<{ ok: boolean }> {
+    return this.request("POST", "/lan/host/firewall", {}, z.object({ ok: z.boolean() }));
+  }
+
+  listLanDevices(): Promise<LanDevice[]> {
+    return this.request("GET", "/lan/host/devices", undefined, z.array(lanDeviceSchema));
+  }
+
+  revokeLanDevice(id: string): Promise<void> {
+    return this.request("DELETE", `/lan/host/devices/${id}`, undefined, z.void());
+  }
+
+  listLanPendingPairs(): Promise<LanPendingPair[]> {
+    return this.request("GET", "/lan/host/pairs", undefined, z.array(lanPendingPairSchema));
+  }
+
+  approveLanPair(id: string, input: LanApprovePairInput): Promise<void> {
+    return this.request("POST", `/lan/host/pairs/${id}/approve`, input, z.void());
+  }
+
+  denyLanPair(id: string): Promise<void> {
+    return this.request("POST", `/lan/host/pairs/${id}/deny`, {}, z.void());
+  }
+
+  discoverLanNodes(): Promise<LanDiscoveredNode[]> {
+    return this.request("GET", "/lan/client/discover", undefined, z.array(lanDiscoveredNodeSchema));
+  }
+
+  startLanPairing(input: LanClientConnectInput): Promise<LanClientPairing> {
+    return this.request("POST", "/lan/client/pair", input, lanClientPairingSchema);
+  }
+
+  pollLanPairing(id: string): Promise<LanClientPairing> {
+    return this.request("GET", `/lan/client/pair/${id}`, undefined, lanClientPairingSchema);
+  }
+
+  // --- ТЗ-06 / ADR-0016: гибридная синхронизация -------------------------------------------
+
+  getSyncMode(workspaceId: string): Promise<SyncModeState> {
+    return this.request("GET", `/workspaces/${workspaceId}/sync/mode`, undefined, syncModeStateSchema);
+  }
+
+  setSyncMode(workspaceId: string, mode: SyncMode): Promise<SyncModeState> {
+    return this.request("PUT", `/workspaces/${workspaceId}/sync/mode`, { mode }, syncModeStateSchema);
+  }
+
+  registerSyncDevice(input: RegisterSyncDeviceInput): Promise<SyncDevice> {
+    return this.request("POST", "/sync/devices", input, syncDeviceSchema);
+  }
+
+  listSyncDevices(): Promise<SyncDevice[]> {
+    return this.request("GET", "/sync/devices", undefined, z.array(syncDeviceSchema));
+  }
+
+  revokeSyncDevice(deviceId: string): Promise<SyncDevice> {
+    return this.request("DELETE", `/sync/devices/${deviceId}`, undefined, syncDeviceSchema);
+  }
+
+  getReplicaSnapshot(workspaceId: string): Promise<ReplicaSnapshot> {
+    return this.request("GET", `/workspaces/${workspaceId}/sync/replica?protocol=${SYNC_PROTOCOL_VERSION}`, undefined, replicaSnapshotSchema);
+  }
+
+  getReplicaChanges(workspaceId: string, cursor: string): Promise<ReplicaPull> {
+    return this.request(
+      "GET",
+      `/workspaces/${workspaceId}/sync/replica/changes?protocol=${SYNC_PROTOCOL_VERSION}&cursor=${encodeURIComponent(cursor)}`,
+      undefined,
+      replicaPullSchema
+    );
+  }
+
+  pushSyncOps(workspaceId: string, input: PushSyncOpsInput): Promise<PushSyncOpsResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/sync/ops`, input, pushSyncOpsResultSchema);
+  }
+
+  activateLanClient(): Promise<void> {
+    return this.request("POST", "/lan/client/activate", {}, z.void());
   }
 
   private async request<T>(

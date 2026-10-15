@@ -379,7 +379,7 @@ function toSessionUser(user: UserLike): SessionUser {
   };
 }
 
-function passwordScore(password: string): number {
+export function passwordScore(password: string): number {
   if (/^\d{4}$/.test(password)) return 0;
   let score = 0;
   if (password.length >= 8) score += 1;

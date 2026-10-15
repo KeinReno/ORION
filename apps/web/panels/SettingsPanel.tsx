@@ -44,6 +44,7 @@ import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
+import { NetworkSettings } from "./settings/network-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
 import { SettingsNav } from "./settings/settings-nav";
@@ -61,6 +62,7 @@ type Tab =
   | "workspace"
   | "spheres"
   | "members"
+  | "network"
   | "about";
 type PreferenceKey = keyof UserPreference;
 
@@ -75,6 +77,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "spheres", label: "Сферы" },
   { value: "members", label: "Участники" },
   { value: "agents", label: "ИИ-агенты" },
+  { value: "network", label: "Сеть и устройства" },
   { value: "about", label: "О приложении" }
 ];
 
@@ -506,6 +509,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "agents" ? (
           <PanelSection title="ИИ-агенты (AI Bridge)">
             <AgentsSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "network" ? (
+          <PanelSection title="Сеть и устройства">
+            <NetworkSettings />
           </PanelSection>
         ) : null}
 
