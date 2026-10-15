@@ -77,7 +77,7 @@ export function Button({
     <button
       disabled={disabled || status === "pending"}
       className={clsx(
-        "inline-flex select-none items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,transform] outline-none",
+        "inline-flex select-none items-center justify-center gap-2 rounded-ui-button font-medium transition-[color,background-color,border-color,transform] outline-none",
         "focus-visible:ring-2 focus-visible:ring-ui-focus/60 disabled:pointer-events-none disabled:opacity-50",
         "active:scale-[0.97]",
         size === "sm" ? "px-2.5 py-1.5 text-label" : "px-4 py-2 text-body",

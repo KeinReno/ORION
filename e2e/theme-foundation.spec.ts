@@ -24,6 +24,7 @@ test("token bridge preserves saved user accents, button states and compact glass
     await page.mouse.move(0, 0);
     await expect(create).toHaveCSS("background-color", preset.base);
     await expect(create).toHaveCSS("color", preset.foreground);
+    await expect(create).toHaveCSS("border-radius", "8px");
     await create.hover();
     await expect(create).toHaveCSS("background-color", preset.hover);
   }
@@ -38,6 +39,7 @@ test("token bridge preserves saved user accents, button states and compact glass
   await expect(page.locator("html")).toHaveAttribute("data-surface", "glass");
   const create = page.locator("header").getByRole("button", { name: "Новая задача", exact: true });
   await expect(create).toBeVisible();
+  await expect(create).toHaveCSS("border-radius", "7px");
   await expect(page.locator("header").first()).toHaveCSS("background-color", "rgba(13, 13, 17, 0.6)");
   await create.focus();
   await expect(create).toBeFocused();

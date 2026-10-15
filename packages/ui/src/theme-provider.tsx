@@ -9,22 +9,38 @@ export interface ThemeContextValue {
   variables: Readonly<ThemeVariables>;
 }
 
-const ThemeContext = createContext<ThemeContextValue>({
+const DEFAULT_THEME_CONTEXT: ThemeContextValue = {
   schemaVersion: DESIGN_SYSTEM_VERSION,
   theme: "legacy",
   variables: themeVariables("legacy")
-});
+};
+const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /** Read effective scoped tokens through @orion/ui, without importing an app theme manager. */
 export function useTheme(): ThemeContextValue {
-  return useContext(ThemeContext);
+  return useContext(ThemeContext) ?? DEFAULT_THEME_CONTEXT;
+}
+
+/** Apply to an existing portal root so it inherits the React owner's theme without a layout wrapper. */
+export function useThemeScopeProps(): {
+  style?: ThemeVariables;
+  "data-kaiden-theme"?: ThemeId;
+  "data-kaiden-version"?: typeof DESIGN_SYSTEM_VERSION;
+} {
+  const context = useContext(ThemeContext);
+  return context ? {
+    style: { ...context.variables },
+    "data-kaiden-theme": context.theme,
+    "data-kaiden-version": context.schemaVersion
+  } : {};
 }
 
 /**
  * Explicit opt-in scope, never writes html, storage or user/workspace settings.
  * `flag="kaiden-theme-v1" theme="kaiden-precision"` enables the candidate palette.
  * Removing the flag restores legacy values, including the user's current accent.
- * The host owns layout through className; portalled content must be scoped separately.
+ * The host owns layout through className. Shared overlays carry the scope across their portals.
+ * Custom plugin portals can apply useThemeScopeProps() to their existing root.
  */
 export function ThemeProvider({ flag, theme, style, children, ...props }: HTMLAttributes<HTMLDivElement> & {
   flag?: string;

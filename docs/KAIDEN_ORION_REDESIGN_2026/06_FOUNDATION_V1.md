@@ -4,6 +4,10 @@
 База: `origin/master` на `280162d`. Ветка: `redesign/kaiden-foundation-20261015`.
 Это ограниченный фундамент фазы 1, а не завершение Theme Engine или нового Shell.
 
+Актуальное продолжение: [07_FOUNDATION_SCOPES.md](07_FOUNDATION_SCOPES.md).
+В нём устранён блокер lint, актуализированы проверенные action baselines и
+добавлены primitive scales / наследование темы в portal overlays.
+
 ## Изученный контекст и зависимости
 
 Прочитаны пакет `00`–`05` и README редизайна, приложенный текст из исходного чата,

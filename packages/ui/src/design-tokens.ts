@@ -25,6 +25,44 @@ export const LEGACY_TOKENS = {
 export type DesignToken = keyof typeof LEGACY_TOKENS;
 export type DesignTokens = Readonly<Record<DesignToken, string>>;
 
+/** Existing Tailwind/rem scales: additive primitives, independent of theme and density. */
+export const PRIMITIVE_TOKENS = {
+  "space-0": "0px",
+  "space-0-5": "0.125rem",
+  "space-1": "0.25rem",
+  "space-2": "0.5rem",
+  "space-3": "0.75rem",
+  "space-4": "1rem",
+  "space-5": "1.25rem",
+  "space-6": "1.5rem",
+  "space-8": "2rem",
+  "space-12": "3rem",
+  "radius-6": "0.375rem",
+  "radius-8": "0.5rem",
+  "radius-12": "0.75rem",
+  "radius-16": "1rem",
+  "type-display": "var(--font-display, 1.5rem)",
+  "type-title": "var(--font-title, 1.125rem)",
+  "type-body": "var(--font-body, 0.9375rem)",
+  "type-label": "var(--font-label, 0.8125rem)",
+  "type-micro": "var(--font-micro, 0.6875rem)"
+} as const;
+
+export const COMPONENT_TOKEN_ALIASES = {
+  "button-bg": "var(--kaiden-accent-base)",
+  "button-fg": "var(--kaiden-accent-foreground)",
+  "button-radius": "var(--kaiden-radius-8)",
+  "tab-radius": "var(--kaiden-radius-6)",
+  "panel-header-bg": "var(--kaiden-bg-surface)",
+  "panel-padding": "var(--kaiden-space-6)",
+  "panel-gap": "var(--kaiden-space-6)",
+  "overlay-bg": "var(--kaiden-bg-elevated)",
+  "overlay-border": "var(--kaiden-border-default)",
+  "inspector-bg": "var(--kaiden-bg-elevated)",
+  "inspector-border": "var(--kaiden-border-default)",
+  "item-hover": "var(--kaiden-bg-hover)"
+} as const;
+
 /** Candidate palette, opt-in only; full theme/module acceptance belongs to phase 2. */
 export const PRECISION_TOKENS: DesignTokens = {
   ...LEGACY_TOKENS,
@@ -54,9 +92,8 @@ export function themeVariables(theme: ThemeId): ThemeVariables {
   const tokens = theme === "kaiden-precision" ? PRECISION_TOKENS : LEGACY_TOKENS;
   const variables: ThemeVariables = { "--kaiden-schema-version": String(DESIGN_SYSTEM_VERSION) };
   for (const [name, value] of Object.entries(tokens)) variables[`--kaiden-${name}`] = value;
-  // Component aliases remain connected to semantic roles, including during a scoped preview.
-  variables["--kaiden-button-bg"] = "var(--kaiden-accent-base)";
-  variables["--kaiden-button-fg"] = "var(--kaiden-accent-foreground)";
-  variables["--kaiden-panel-header-bg"] = "var(--kaiden-bg-surface)";
+  for (const [name, value] of Object.entries(PRIMITIVE_TOKENS)) variables[`--kaiden-${name}`] = value;
+  // Rebind aliases in every scope: CSS variable references resolve at their declaration node.
+  for (const [name, value] of Object.entries(COMPONENT_TOKEN_ALIASES)) variables[`--kaiden-${name}`] = value;
   return variables;
 }

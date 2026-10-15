@@ -128,7 +128,7 @@ export function PanelBody({
   return (
     <div
       className={clsx(
-        "orion-scroll relative z-10 flex-1 space-y-6 overflow-y-auto p-6",
+        "orion-scroll relative z-10 flex-1 space-y-ui-panel-gap overflow-y-auto p-ui-panel",
         measure && PANEL_MEASURE_CLASS[measure],
         className
       )}

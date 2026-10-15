@@ -35,6 +35,8 @@ module.exports = {
         "ui-border": "rgb(var(--kaiden-border-default) / <alpha-value>)",
         "ui-border-strong": "rgb(var(--kaiden-border-strong) / <alpha-value>)",
         "ui-hover": "rgb(var(--kaiden-bg-hover) / <alpha-value>)",
+        "ui-overlay": "rgb(var(--kaiden-overlay-bg) / <alpha-value>)",
+        "ui-overlay-border": "rgb(var(--kaiden-overlay-border) / <alpha-value>)",
         background: "#0a0a0c",
         panel: "#0d0d11",
         card: "#141419",
@@ -68,8 +70,13 @@ module.exports = {
         micro: ["var(--font-micro)", { lineHeight: "1rem", letterSpacing: "0.06em", fontWeight: "500" }]
       },
       spacing: {
+        "ui-panel": "var(--kaiden-panel-padding)",
+        "ui-panel-gap": "var(--kaiden-panel-gap)",
         row: "var(--orion-row-py)",
         "card-row": "var(--orion-card-row-py)"
+      },
+      borderRadius: {
+        "ui-button": "var(--kaiden-button-radius)"
       },
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
