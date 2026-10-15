@@ -8,12 +8,22 @@
  * due today; `#tag` anywhere in the remaining text becomes `projectTag` and
  * is stripped from the title. `#tag` alone is not a destination — without
  * `!` or `/task` the thought still lands in the inbox.
+ *
+ * `/list` (`/список`, `/купить`) puts the text straight into the shopping list: «/купить молоко, 2 л».
  */
 export type QuickCaptureResult =
   | { kind: "task"; title: string; dueToday?: boolean; projectTag?: string | null }
   | { kind: "note"; title: string }
   | { kind: "inbox"; title: string }
+  | { kind: "list"; text: string }
   | { kind: "error"; message: string };
+
+export interface QuickCaptureEnabled {
+  tasks: boolean;
+  notes: boolean;
+  /** Absent = off, so existing callers keep their behaviour. */
+  lists?: boolean;
+}
 
 /** First `#token` as its own word — `C#` and `foo#bar` stay in the title. */
 const PROJECT_TAG = /(?:^|\s)#([^\s#]+)/;
@@ -40,7 +50,7 @@ function asTask(rawTitle: string, enabled: boolean, dueToday: boolean): QuickCap
 
 export function resolveQuickCapture(
   text: string,
-  enabled: { tasks: boolean; notes: boolean }
+  enabled: QuickCaptureEnabled
 ): QuickCaptureResult {
   const trimmed = text.trim();
   if (!trimmed) return { kind: "error", message: "Пустой ввод" };
@@ -50,6 +60,15 @@ export function resolveQuickCapture(
   }
   if (/^\/(note|заметка)$/i.test(trimmed)) {
     return { kind: "error", message: "Укажите название заметки" };
+  }
+
+  if (/^\/(list|список|купить)$/i.test(trimmed)) {
+    return { kind: "error", message: "Укажите, что добавить в список" };
+  }
+  const listMatch = trimmed.match(/^\/(list|список|купить)\s+(.+)/i);
+  if (listMatch) {
+    if (!enabled.lists) return { kind: "error", message: "Модуль «Списки» выключен" };
+    return { kind: "list", text: listMatch[2].trim() };
   }
 
   const taskMatch = trimmed.match(/^\/(task|задача)\s+(.+)/i);
@@ -72,13 +91,14 @@ export function resolveQuickCapture(
   return { kind: "inbox", title: trimmed };
 }
 
-export function quickCapturePlaceholder(enabled: { tasks: boolean; notes: boolean }): string {
+export function quickCapturePlaceholder(enabled: QuickCaptureEnabled): string {
+  const list = enabled.lists ? " /купить — в список покупок." : "";
   if (enabled.notes && enabled.tasks) {
-    return "В инбокс. ! — сегодня, #тег — проект. /task или /note — сразу сущность";
+    return `В инбокс. ! — сегодня, #тег — проект. /task или /note — сразу сущность.${list}`.trimEnd();
   }
-  if (enabled.tasks) return "В инбокс. ! — сегодня, #тег — проект. /task — сразу задача";
-  if (enabled.notes) return "В инбокс. /note — сразу заметка";
-  return "Мысль → инбокс";
+  if (enabled.tasks) return `В инбокс. ! — сегодня, #тег — проект. /task — сразу задача.${list}`.trimEnd();
+  if (enabled.notes) return `В инбокс. /note — сразу заметка.${list}`.trimEnd();
+  return enabled.lists ? "Мысль → инбокс. /купить — в список покупок" : "Мысль → инбокс";
 }
 
 /** Live hint under the dashboard field — empty input has no hint. */
@@ -86,6 +106,7 @@ export function quickCaptureHint(result: QuickCaptureResult): string | null {
   if (result.kind === "task") return result.dueToday ? "→ задача на сегодня" : "→ задача";
   if (result.kind === "note") return "→ заметка";
   if (result.kind === "inbox") return "→ инбокс";
+  if (result.kind === "list") return "→ список покупок";
   if (result.message === "Пустой ввод") return null;
   return result.message;
 }

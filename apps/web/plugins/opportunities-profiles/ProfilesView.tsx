@@ -20,7 +20,7 @@ export function ProfilesView({ workspaceId: ws, workspaceLabel, canManage, onDir
     try { const row = await api.createOpportunityProfile(ws, createOpportunityProfileInputSchema.parse({ displayName: name, kind, acknowledgeWorkspaceVisibility: ack })); setName(""); setAck(false); setDirty(false); setSelected(row.id); await cache.invalidateQueries({ queryKey: ["opportunity-profiles", ws] }); }
     catch (e) { setError(describeError(e)); } finally { setBusy(false); }
   }
-  function choose(id: string | null, discard = false) { if (busy) return; if (dirty && !discard) { setPending({ id }); return; } setPending(null); setDirty(false); setName(""); setAck(false); setSelected(id); }
+  function choose(id: string | null, discard = false) { if (busy || id === selected) return; if (dirty && !discard) { setPending({ id }); return; } setPending(null); setDirty(false); setName(""); setAck(false); setSelected(id); }
   return <div className="space-y-4">
     <ConfirmDialog open={pending !== null} title="Сменить профиль без сохранения?" description="Несохранённый ввод будет потерян." confirmLabel="Сменить профиль" danger={false} onCancel={() => setPending(null)} onConfirm={() => { if (pending) choose(pending.id, true); }} />
     <p className="text-sm text-muted-foreground">Профили и материалы видны участникам пространства «{workspaceLabel}». Изменять их может владелец. Для личных данных используйте отдельное личное пространство.</p>
@@ -41,6 +41,7 @@ function ProfileDetail({ id, ws, canManage, onDirty, onBusy }: { id: string; ws:
   const [mode, setMode] = useState<"material" | "fact" | "track" | "preferences">("material");
   const [pendingMode, setPendingMode] = useState<typeof mode | null>(null);
   const [title, setTitle] = useState(""); const [content, setContent] = useState(""); const [trackId, setTrackId] = useState(""); const [factIds, setFactIds] = useState<string[]>([]);
+  const [materialType, setMaterialType] = useState<"resume" | "portfolio" | "proposal">("resume");
   const [source, setSource] = useState(""); const [city, setCity] = useState(""); const [salary, setSalary] = useState(""); const [formats, setFormats] = useState<string[]>([]); const [exclusions, setExclusions] = useState(""); const [roles, setRoles] = useState("");
   const [preferencesBase, setPreferencesBase] = useState<OpportunityProfileDetail | null>(null);
   const [busy, setBusy] = useState(false); const [dirty, setDirty] = useState(false); const [error, setError] = useState(""); const [opened, setOpened] = useState<{ title: string; content: string } | null>(null);
@@ -60,18 +61,19 @@ function ProfileDetail({ id, ws, canManage, onDirty, onBusy }: { id: string; ws:
   }
   async function save() {
     await action(async () => {
-      if (mode === "material") return api.addOpportunityMaterial(ws, id, createOpportunityMaterialInputSchema.parse({ title, content, trackId: trackId || null }));
+      if (mode === "material") return api.addOpportunityMaterial(ws, id, createOpportunityMaterialInputSchema.parse({ title, type: materialType, content, trackId: trackId || null }));
       if (mode === "fact") return api.addOpportunityFact(ws, id, createOpportunityFactInputSchema.parse({ statement: content, source }));
       if (mode === "track") return api.addOpportunityTrack(ws, id, createOpportunityTrackInputSchema.parse({ name: title, factIds }));
       const base = preferencesBase; if (!base) throw new Error("Загрузите профиль перед изменением предпочтений");
-      return api.updateOpportunityProfile(ws, id, updateOpportunityProfileInputSchema.parse({ expectedRevision: base.revision, displayName: title, preferences: { city, minSalaryNetRub: salary.trim() ? Number(salary) : null, workFormats: formats, excludedCompanies: exclusions.split("\n").filter((s) => s.trim()), excludedRoles: roles.split("\n").filter((s) => s.trim()) } }));
-    }, true);
+      const updated = await api.updateOpportunityProfile(ws, id, updateOpportunityProfileInputSchema.parse({ expectedRevision: base.revision, displayName: title, preferences: { city, minSalaryNetRub: salary.trim() ? Number(salary) : null, workFormats: formats, excludedCompanies: exclusions.split("\n").filter((s) => s.trim()), excludedRoles: roles.split("\n").filter((s) => s.trim()) } }));
+      setPreferencesBase({ ...base, ...updated }); setTitle(updated.displayName); setDirty(false); return updated;
+    }, mode !== "preferences");
   }
   if (detail.isLoading) return <Skeleton className="h-40" />;
   if (!detail.data) return <p role="alert">{describeError(detail.error)}</p>;
   const p = detail.data;
   return <div className="space-y-4"><ConfirmDialog open={pendingMode !== null} title="Сменить форму без сохранения?" description="Введённые данные останутся несохранёнными и будут потеряны." confirmLabel="Сменить форму" danger={false} onCancel={() => setPendingMode(null)} onConfirm={() => { if (pendingMode) choose(pendingMode, true); }} /><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-medium">{p.displayName}</h2>{canManage && <Button variant="outline" disabled={busy || dirty} onClick={() => void action(() => api.updateOpportunityProfile(ws, id, { expectedRevision: p.revision, archivedAt: p.archivedAt ? null : new Date().toISOString() }))}>{p.archivedAt ? "Восстановить профиль" : "В архив"}</Button>}</div>
-    <p className="text-sm text-muted-foreground">{p.preferences.city || "Город не указан"} · Минимум на руки: {p.preferences.minSalaryNetRub ?? "не указан"} ₽ · {p.preferences.workFormats.join(", ") || "Формат не указан"}</p>
+    <p className="text-sm text-muted-foreground">{p.preferences.city || "Город не указан"} · Минимум на руки: {p.preferences.minSalaryNetRub ?? "не указан"} ₽ · {p.preferences.workFormats.map((f) => ({ remote: "Удалённо", hybrid: "Гибрид", office: "Офис" })[f]).join(", ") || "Формат не указан"}</p>
     {error && <p role="alert" className="text-sm text-destructive">{error} Ввод сохранён.</p>}
     <section className="space-y-2"><h3 className="font-medium">Факты ({p.facts.length})</h3>{!p.facts.length && <p className="text-sm text-muted-foreground">Фактов пока нет. Текст резюме не подтверждает их автоматически.</p>}{p.facts.map((f) => <div key={f.id} className="rounded-lg border border-border p-3 text-sm"><p>{f.statement}</p><p className="text-muted-foreground">Источник: {f.source} · {f.state === "confirmed" ? "Подтверждён владельцем" : f.state === "disputed" ? "Оспорен" : "Не проверен"}</p>{canManage && !p.archivedAt && <div className="mt-2 flex flex-wrap gap-2">{(["confirmed", "disputed", "unverified"] as const).filter((s) => s !== f.state).map((s) => <Button key={s} size="sm" variant="outline" disabled={busy} onClick={() => void action(() => api.setOpportunityFactState(ws, id, f.id, { expectedRevision: f.revision, state: s }))}>{s === "confirmed" ? "Подтвердить факт" : s === "disputed" ? "Оспорить" : "Снять подтверждение"}</Button>)}</div>}</div>)}</section>
     <section className="space-y-2"><h3 className="font-medium">Треки</h3>{p.tracks.map((t) => <p key={t.id} className="text-sm">{t.name} · фактов: {t.factIds.length}</p>)}</section>
@@ -81,6 +83,7 @@ function ProfileDetail({ id, ws, canManage, onDirty, onBusy }: { id: string; ws:
     {canManage && !p.archivedAt && <form className="space-y-3 rounded-xl border border-border p-4" onChange={() => setDirty(true)} onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <div className="flex flex-wrap gap-2">{(["material", "fact", "track", "preferences"] as const).map((m) => <Button key={m} type="button" variant={mode === m ? "primary" : "outline"} disabled={busy} onClick={() => choose(m)}>{({ material: "Новая версия", fact: "Добавить факт", track: "Новый трек", preferences: "Предпочтения" })[m]}</Button>)}</div>
       {mode !== "fact" && <label className="block text-sm">{mode === "preferences" ? "Имя / название" : "Название"}<Input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} /></label>}
+      {mode === "material" && <label className="block text-sm">Вид материала<select className={fieldClass} value={materialType} onChange={(e) => setMaterialType(e.target.value as typeof materialType)}><option value="resume">Резюме</option><option value="portfolio">Портфолио</option><option value="proposal">Предложение</option></select></label>}
       {(mode === "material" || mode === "fact") && <label className="block text-sm">{mode === "fact" ? "Формулировка факта" : "Текст материала"}<textarea required maxLength={mode === "fact" ? 2000 : 50000} className={`${fieldClass} min-h-32`} value={content} onChange={(e) => setContent(e.target.value)} /></label>}
       {mode === "fact" && <label className="block text-sm">Источник факта<Input required maxLength={1000} value={source} onChange={(e) => setSource(e.target.value)} /></label>}
       {mode === "material" && <><label className="block text-sm">Трек<select className={fieldClass} value={trackId} onChange={(e) => setTrackId(e.target.value)}><option value="">Без трека</option>{p.tracks.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label><p className="text-xs text-muted-foreground">Сохраняется новая неизменяемая версия. Предыдущие материалы остаются.</p></>}

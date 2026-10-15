@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import {
   attachToHomeInputSchema,
+  contributionPeriodSchema,
   createContactInputSchema,
   createHomeInputSchema,
   createMeterInputSchema,
@@ -16,6 +17,7 @@ import {
   type CreateMeterInput,
   type CreateMeterReadingInput,
   type Home,
+  type HomeContributions,
   type HomeOverview,
   type Meter,
   type UpdateContactInput,
@@ -45,6 +47,19 @@ export class HomeController {
     @Body(new ZodValidationPipe(createHomeInputSchema)) body: CreateHomeInput
   ): Promise<Home> {
     return this.home.create(user.userId, workspaceId, body);
+  }
+
+  /** Объявлен до `:homeId/...`: кто сколько закрыл за период; `homeId` необязателен (все объекты). */
+  @Get("contributions")
+  contributions(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Query("period") period?: string,
+    @Query("homeId") homeId?: string
+  ): Promise<HomeContributions> {
+    const parsed = contributionPeriodSchema.safeParse(period ?? "month");
+    if (!parsed.success) throw new BadRequestException("Период: week, month или quarter");
+    return this.home.contributions(user.userId, workspaceId, parsed.data, homeId || null);
   }
 
   @Get(":homeId/overview")

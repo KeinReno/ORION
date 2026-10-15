@@ -12,11 +12,17 @@ import { z } from "zod";
 export const accountKindSchema = z.enum(["cash", "card", "savings", "other"]);
 export type AccountKind = z.infer<typeof accountKindSchema>;
 
+/** Чьи деньги на счёте. Метка для фильтров и итогов, а не правило доступа. */
+export const accountContextSchema = z.enum(["personal", "family", "work"]);
+export type AccountContext = z.infer<typeof accountContextSchema>;
+export const ACCOUNT_CONTEXT_LABEL: Record<AccountContext, string> = { personal: "Личные", family: "Семейные", work: "Рабочие" };
+
 export const accountSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   name: z.string(),
   kind: accountKindSchema,
+  context: accountContextSchema,
   currency: z.string(),
   startingBalance: z.number().int(),
   /** startingBalance + net of every transaction on this account — computed by AccountsService, never stored. */
@@ -30,6 +36,7 @@ export type Account = z.infer<typeof accountSchema>;
 export const createAccountInputSchema = z.object({
   name: z.string().min(1, "Название обязательно").max(100),
   kind: accountKindSchema.default("other"),
+  context: accountContextSchema.default("personal"),
   startingBalance: z.number().int().default(0),
   currency: z.string().length(3).default("RUB")
 });
@@ -38,6 +45,7 @@ export type CreateAccountInput = z.infer<typeof createAccountInputSchema>;
 export const updateAccountInputSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   kind: accountKindSchema.optional(),
+  context: accountContextSchema.optional(),
   currency: z.string().length(3).optional(),
   startingBalance: z.number().int().optional(),
   archivedAt: z.string().datetime().nullable().optional()

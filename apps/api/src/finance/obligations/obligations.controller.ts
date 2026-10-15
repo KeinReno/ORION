@@ -58,6 +58,15 @@ export class ObligationsController {
     return this.obligations.pay(user.userId, workspaceId, obligationId, body);
   }
 
+  @Get(":obligationId/payments")
+  payments(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("obligationId") obligationId: string
+  ): Promise<Transaction[]> {
+    return this.obligations.payments(user.userId, workspaceId, obligationId);
+  }
+
   @Delete(":obligationId")
   remove(
     @CurrentUser() user: RequestUser,

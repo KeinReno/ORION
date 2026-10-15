@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GOAL_MAX_DEPTH, checkGoalParent, goalProgress, goalSubtreeHeight, goalTreeProgress } from "./goal";
+import { GOAL_MAX_DEPTH, checkGoalParent, goalProgress, goalSubtreeHeight, goalTreeProgress, summarizePlanTasks, type PulseTask } from "./goal";
 
 describe("goalTreeProgress", () => {
   const node = (id: string, parentId: string | null, plans: Array<[number, number | null]>, subWeight = 1) => ({
@@ -82,5 +82,50 @@ describe("goalProgress", () => {
 
   it("a genuine 0 % plan counts as 0", () => {
     expect(goalProgress([{ weight: 1, progress: 0 }, { weight: 1, progress: 100 }]).progress).toBe(50);
+  });
+});
+
+describe("summarizePlanTasks", () => {
+  const now = new Date("2026-10-15T12:00:00Z");
+  const t = (id: string, patch: Partial<PulseTask> = {}): PulseTask => ({
+    id,
+    title: id,
+    status: "todo",
+    priority: "normal",
+    dueAt: null,
+    sortOrder: 0,
+    updatedAt: new Date("2026-10-01T00:00:00Z"),
+    blocked: false,
+    ...patch
+  });
+
+  it("has no next task and no activity for a project without tasks", () => {
+    expect(summarizePlanTasks([], now)).toEqual({ nextTask: null, blocked: 0, overdue: 0, lastActivityAt: null });
+  });
+
+  it("prefers a started task, then the earliest due date, then priority", () => {
+    const early = new Date("2026-10-20T00:00:00Z");
+    const late = new Date("2026-11-20T00:00:00Z");
+    expect(summarizePlanTasks([t("a", { dueAt: late }), t("b", { dueAt: early }), t("c", { status: "in_progress" })], now).nextTask?.id).toBe("c");
+    expect(summarizePlanTasks([t("a", { dueAt: late }), t("b", { dueAt: early })], now).nextTask?.id).toBe("b");
+    expect(summarizePlanTasks([t("a", { priority: "low" }), t("b", { priority: "high" })], now).nextTask?.id).toBe("b");
+  });
+
+  it("never points at a blocked or closed task, but counts blocked ones", () => {
+    const result = summarizePlanTasks([t("a", { blocked: true }), t("b", { status: "done" })], now);
+    expect(result.nextTask).toBeNull();
+    expect(result.blocked).toBe(1);
+  });
+
+  it("counts overdue open tasks and flags an overdue next task", () => {
+    const past = new Date("2026-10-10T00:00:00Z");
+    const result = summarizePlanTasks([t("a", { dueAt: past }), t("b", { dueAt: past, status: "canceled" })], now);
+    expect(result.overdue).toBe(1);
+    expect(result.nextTask?.overdue).toBe(true);
+  });
+
+  it("reports the latest change across all tasks, closed included", () => {
+    const result = summarizePlanTasks([t("a"), t("b", { status: "done", updatedAt: new Date("2026-10-14T08:00:00Z") })], now);
+    expect(result.lastActivityAt).toBe("2026-10-14T08:00:00.000Z");
   });
 });

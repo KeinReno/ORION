@@ -1,10 +1,12 @@
 "use client";
 
+import { KaidenLogo } from "../../components/kaiden-logo";
+
 import { useCreateWorkspace, useLogout, useSession, useWorkspaces } from "@orion/core-react";
 import type { WorkspaceRole } from "@orion/shared-types";
 import { AuroraBackground, Button, Input, SpotlightCard } from "@orion/ui";
 import { motion } from "framer-motion";
-import { ChevronRight, FolderPlus, LogOut, Sparkles } from "lucide-react";
+import { ChevronRight, FolderPlus, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
@@ -101,9 +103,7 @@ export default function SpacesPage(): React.ReactElement {
       >
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
-              <Sparkles className="h-4 w-4" />
-            </span>
+            <KaidenLogo className="h-8 w-8" />
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
           </div>
           <h1 className="mb-1 text-lg font-semibold text-foreground">Пространства учётки</h1>

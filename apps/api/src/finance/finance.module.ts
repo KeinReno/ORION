@@ -21,8 +21,13 @@ import { GoalsController } from "./goals/goals.controller";
 import { GoalsService } from "./goals/goals.service";
 import { ObligationsController } from "./obligations/obligations.controller";
 import { ObligationsService } from "./obligations/obligations.service";
+import { ProjectCostsController } from "./project-costs/project-costs.controller";
+import { ProjectCostsService } from "./project-costs/project-costs.service";
+import { TransferMatchController } from "./transfer-match/transfer-match.controller";
+import { TransferMatchService } from "./transfer-match/transfer-match.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
 import { FinanceExpenseReader } from "./public/expense-reader";
+import { FinanceExpenseWriter } from "./public/expense-writer";
 
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
@@ -43,7 +48,9 @@ import { FinanceExpenseReader } from "./public/expense-reader";
     ReportsController,
     CategoryRulesController,
     GoalsController,
-    ObligationsController
+    ObligationsController,
+    ProjectCostsController,
+    TransferMatchController
   ],
   providers: [
     AccountsService,
@@ -56,9 +63,12 @@ import { FinanceExpenseReader } from "./public/expense-reader";
     CategoryRulesService,
     GoalsService,
     ObligationsService,
+    ProjectCostsService,
+    TransferMatchService,
     BudgetAlertsService,
-    FinanceExpenseReader
+    FinanceExpenseReader,
+    FinanceExpenseWriter
   ],
-  exports: [FinanceExpenseReader]
+  exports: [FinanceExpenseReader, FinanceExpenseWriter]
 })
 export class FinanceModule {}

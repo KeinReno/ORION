@@ -22,12 +22,14 @@ import {
   PanelBody,
   PanelHeader,
   PanelShell,
+  SegmentedControl,
   Select,
   Skeleton,
   useToast
 } from "@orion/ui";
-import { Flag, ListTree, Trash2, X } from "lucide-react";
+import { Flag, List, ListTree, Sparkles, Trash2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { ConstellationView } from "./goals/constellation-view";
 import { describeError } from "../lib/error-message";
 import { shortDate } from "../lib/format";
 import { openProject } from "../lib/panel-bus";
@@ -70,6 +72,13 @@ export function GoalsPanel(): React.ReactElement {
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
   const [subFor, setSubFor] = useState<string | null>(null);
   const [subTitle, setSubTitle] = useState("");
+  const [view, setView] = useState<"list" | "sky">("list");
+
+  function showInList(goalId: string): void {
+    setView("list");
+    // The list mounts on the next frame; wait for it before scrolling to the card.
+    requestAnimationFrame(() => document.getElementById(`goal-${goalId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  }
 
   const allGoals = goals ?? [];
   const childrenOf = (parentId: string): Goal[] => allGoals.filter((g) => g.parentId === parentId);
@@ -107,7 +116,7 @@ export function GoalsPanel(): React.ReactElement {
     const unknown = goal.unknownPlans + goal.unknownSubGoals;
     const parentOptions = allGoals.filter((g) => g.id !== goal.id && checkGoalParent(goal.id, g.id, allGoals).ok);
     return (
-      <div key={goal.id} className="space-y-3" role="group" aria-label={`Цель ${goal.title}`}>
+      <div key={goal.id} id={`goal-${goal.id}`} className="space-y-3" role="group" aria-label={`Цель ${goal.title}`}>
         <div className={depth > 0 ? "ml-5 border-l border-border pl-3" : ""}>
           <Card className="space-y-3 p-4">
             <div className="flex items-start gap-2">
@@ -316,12 +325,24 @@ export function GoalsPanel(): React.ReactElement {
     <PanelShell>
       <PanelHeader icon={Flag} title="Цели" subtitle={goals ? `${goals.filter((g) => g.status === "active").length} в работе` : undefined} />
       <PanelBody className="space-y-4">
-        <form onSubmit={(event) => void submit(event)} className="flex max-w-xl gap-2">
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Новая цель, например «Запустить экосистему»" maxLength={200} />
-          <Button type="submit" size="sm" disabled={create.isPending || !title.trim()}>
-            Добавить
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center gap-3">
+          <form onSubmit={(event) => void submit(event)} className="flex min-w-0 max-w-xl flex-1 gap-2">
+            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Новая цель, например «Запустить экосистему»" maxLength={200} />
+            <Button type="submit" size="sm" disabled={create.isPending || !title.trim()}>
+              Добавить
+            </Button>
+          </form>
+          <SegmentedControl<"list" | "sky">
+            aria-label="Вид целей"
+            value={view}
+            onChange={setView}
+            size="sm"
+            options={[
+              { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
+              { value: "sky", label: <Sparkles className="h-3.5 w-3.5" />, ariaLabel: "Созвездиями" }
+            ]}
+          />
+        </div>
 
         {isLoading ? (
           <Skeleton className="h-40 w-full" />
@@ -330,6 +351,14 @@ export function GoalsPanel(): React.ReactElement {
             icon={Flag}
             title="Целей пока нет"
             description="Цель объединяет несколько проектов-планов: добавьте её, затем привяжите проекты с весами."
+          />
+        ) : view === "sky" ? (
+          <ConstellationView
+            workspaceId={workspaceId}
+            goals={allGoals}
+            projects={projects ?? []}
+            onShowInList={showInList}
+            onDeleteGoal={setPendingDelete}
           />
         ) : (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))]">

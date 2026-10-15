@@ -57,6 +57,7 @@ function OpportunityBase({ workspaceId, onDirtyChange, canManage }: { workspaceI
   const list = useOpportunities(workspaceId, { query: query || undefined, kind: kind || undefined, status: status || undefined, includeArchived: archive ? "true" : "false" });
   const mutations = useOpportunityMutations(workspaceId);
   function open(value: Opportunity | "new" | null, discard = false) {
+    if (value === editor || (value && editor && value !== "new" && editor !== "new" && value.id === editor.id)) return;
     if (dirty && !discard) { setPendingEditor({ value }); return; }
     setPendingEditor(null);
     setDirty(false); setEditor(value);

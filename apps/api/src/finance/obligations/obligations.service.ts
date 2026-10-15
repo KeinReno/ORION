@@ -1,5 +1,5 @@
 import { assertHomeInWorkspace } from "../../home/home-refs.util";
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
   advanceObligationDue,
@@ -58,7 +58,8 @@ export class ObligationsService {
           accountId: input.accountId ?? null,
           categoryId: input.categoryId ?? null,
           homeId: input.homeId ?? null,
-          note: input.note
+          note: input.note,
+          counterparty: input.counterparty ?? ""
         }
       });
     });
@@ -83,6 +84,37 @@ export class ObligationsService {
       });
     });
     return toDto(row);
+  }
+
+  /** Every payment recorded against this obligation, newest first (they are ordinary transactions tagged by `importedRef`). */
+  async payments(userId: string, workspaceId: string, obligationId: string): Promise<Transaction[]> {
+    const rows = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await this.assertOwnedTx(tx, workspaceId, obligationId);
+      return tx.transaction.findMany({
+        where: { workspaceId, importedRef: { startsWith: `obligation:${obligationId}:` } },
+        include: { lines: true },
+        orderBy: { occurredAt: "desc" },
+        take: 200
+      });
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspaceId,
+      accountId: row.accountId,
+      toAccountId: row.toAccountId,
+      type: row.type,
+      note: row.note,
+      tags: row.tags,
+      projectId: row.projectId,
+      reconciledAt: row.reconciledAt?.toISOString() ?? null,
+      importedRef: row.importedRef,
+      occurredAt: row.occurredAt.toISOString(),
+      lines: row.lines.map((line) => ({ id: line.id, categoryId: line.categoryId, amount: line.amount })),
+      totalAmount: row.lines.reduce((sum, line) => sum + line.amount, 0),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString()
+    }));
   }
 
   async remove(userId: string, workspaceId: string, obligationId: string): Promise<void> {
@@ -110,7 +142,12 @@ export class ObligationsService {
         const type = obligation.direction === "owed" ? "income" : "expense";
         const amount = input.amount ?? obligation.payment;
         const paidAt = input.paidAt ? new Date(input.paidAt) : new Date();
-        const dueKey = obligation.nextDueAt ? obligation.nextDueAt.toISOString().slice(0, 10) : `adhoc-${paidAt.getTime()}`;
+        if (input.partial && obligation.principal === null) throw new BadRequestException("Частичное погашение возможно, только если ведётся остаток долга");
+        // A partial repayment is its own event (several per due date are fine); a regular payment is one per due date.
+        const dueKey =
+          input.partial || !obligation.nextDueAt
+            ? `adhoc-${paidAt.getTime()}-${Math.random().toString(36).slice(2, 8)}`
+            : obligation.nextDueAt.toISOString().slice(0, 10);
         const importedRef = `obligation:${obligation.id}:${dueKey}`;
 
         // A category helps only when it fits the direction; otherwise the payment is simply uncategorised.
@@ -136,11 +173,14 @@ export class ObligationsService {
         });
 
         const remaining = obligation.principal === null ? null : Math.max(0, obligation.principal - amount);
-        const next = obligation.nextDueAt ? advanceObligationDue(obligation.nextDueAt, obligation.interval as ObligationInterval, obligation.dueDay) : null;
-        const finished = obligation.interval === "once" || (remaining !== null && remaining === 0);
+        const next = obligation.nextDueAt && !input.partial ? advanceObligationDue(obligation.nextDueAt, obligation.interval as ObligationInterval, obligation.dueDay) : null;
+        const finished = (!input.partial && obligation.interval === "once") || (remaining !== null && remaining === 0);
         const updated = await tx.financeObligation.update({
           where: { id: obligation.id },
-          data: { principal: remaining, nextDueAt: finished ? null : next, closedAt: finished ? paidAt : null }
+          data:
+            input.partial && !finished
+              ? { principal: remaining }
+              : { principal: remaining, nextDueAt: finished ? null : next, closedAt: finished ? paidAt : null }
         });
         return {
           obligation: toDto(updated),
@@ -192,6 +232,7 @@ type ObligationRow = {
   accountId: string | null;
   categoryId: string | null;
   note: string;
+  counterparty: string;
   closedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -212,6 +253,7 @@ function toDto(row: ObligationRow): Obligation {
     accountId: row.accountId,
     categoryId: row.categoryId,
     note: row.note,
+    counterparty: row.counterparty,
     closedAt: row.closedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()

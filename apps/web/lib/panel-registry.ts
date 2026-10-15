@@ -9,6 +9,7 @@ import {
   CandlestickChart,
   Flag,
   Globe,
+  HeartPulse,
   Home as HomeIcon,
   PanelTop,
   UserRound,
@@ -70,6 +71,7 @@ const LazyNoteWindowPanel = dynamic(() => import("../panels/NoteWindowPanel").th
 const LazyProjectTasksPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectTasksPanel), { ssr: false });
 const LazyProjectAccessPanel = dynamic(() => import("../panels/ProjectViewPanels").then((module) => module.ProjectAccessPanel), { ssr: false });
 const LazySectionViewPanel = dynamic(() => import("../panels/SectionViewPanel").then((module) => module.SectionViewPanel), { ssr: false });
+const LazyHealthPanel = dynamic(() => import("../panels/HealthPanel").then((module) => module.HealthPanel), { ssr: false });
 const LazyHomePanel = dynamic(() => import("../panels/HomePanel").then((module) => module.HomePanel), { ssr: false });
 const LazyContactsPanel = dynamic(() => import("../panels/ContactsPanel").then((module) => module.ContactsPanel), { ssr: false });
 const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module) => module.GoalsPanel), { ssr: false });
@@ -93,6 +95,7 @@ const LazyTimePanel = dynamic(() => import("../panels/TimePanel").then((module) 
 const LazyHabitsPanel = dynamic(() => import("../panels/HabitsPanel").then((module) => module.HabitsPanel), { ssr: false });
 const LazyOpportunitiesPanel = dynamic(() => import("../panels/OpportunitiesPanel").then((module) => module.OpportunitiesPanel), { ssr: false });
 const LazyListsPanel = dynamic(() => import("../panels/ListsPanel").then((module) => module.ListsPanel), { ssr: false });
+const LazyListPanel = dynamic(() => import("../panels/ListPanel").then((module) => module.ListPanel), { ssr: false });
 const LazyFinancePanel = dynamic(() => import("../panels/FinancePanel").then((module) => module.FinancePanel), { ssr: false });
 const LazyInventoryPanel = dynamic(() => import("../panels/InventoryPanel").then((module) => module.InventoryPanel), { ssr: false });
 const LazyBrowserPanel = dynamic(() => import("../panels/BrowserPanel").then((module) => module.BrowserPanel), { ssr: false });
@@ -112,6 +115,7 @@ const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => creat
 const ProjectTasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectTasksPanel, props);
 const ProjectAccessPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectAccessPanel, props);
 const SectionViewPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySectionViewPanel, props);
+const HealthPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyHealthPanel as ComponentType<PanelComponentProps>, props);
 const HomePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyHomePanel as ComponentType<PanelComponentProps>, props);
 const ContactsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyContactsPanel as ComponentType<PanelComponentProps>, props);
 const GoalsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyGoalsPanel as ComponentType<PanelComponentProps>, props);
@@ -126,6 +130,7 @@ const SharedPanel: FunctionComponent<PanelComponentProps> = (props) => createEle
 const TimePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTimePanel as ComponentType<PanelComponentProps>, props);
 const HabitsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyHabitsPanel as ComponentType<PanelComponentProps>, props);
 const ListsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyListsPanel as ComponentType<PanelComponentProps>, props);
+const ListPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyListPanel as ComponentType<PanelComponentProps>, props);
 const FinancePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyFinancePanel as ComponentType<PanelComponentProps>, props);
 const InventoryPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyInventoryPanel as ComponentType<PanelComponentProps>, props);
 const MarketsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyMarketsPanel as ComponentType<PanelComponentProps>, props);
@@ -155,6 +160,7 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "notes", label: "Заметки", icon: StickyNote, component: NotesPanel, moduleId: "notes", group: "Работа" },
   { id: "projects", label: "Проекты", icon: FolderKanban, component: ProjectsPanel, moduleId: "projects", group: "Работа" },
   { id: "home", label: "Дом", icon: HomeIcon, component: HomePanel, moduleId: "home", group: "Семья и дом" },
+  { id: "health", label: "Здоровье", icon: HeartPulse, component: HealthPanel, moduleId: "health", group: "Семья и дом" },
   { id: "contacts", label: "Контакты", icon: UserRound, component: ContactsPanel, moduleId: "contacts", group: "Семья и дом" },
   {
     id: "goals",
@@ -242,6 +248,8 @@ export const panelRegistry: PanelDefinition[] = [
   { id: "habits", label: "Привычки", icon: Target, component: HabitsPanel, moduleId: "habits", group: "Работа" },
   { id: "opportunities", label: "Возможности", icon: BriefcaseBusiness, component: () => createElement(LazyOpportunitiesPanel), moduleId: "opportunities", group: "Работа" },
   { id: "lists", label: "Списки", icon: ListChecks, component: ListsPanel, moduleId: "lists", group: "Работа" },
+  // One list as a dock tab / OS window: every entry, groups, drag-reorder, the entry editor.
+  { id: "list", label: "Список", icon: ListChecks, component: ListPanel, moduleId: "lists", hideFromNav: true, instanced: true, navParent: "lists" },
   { id: "finance", label: "Финансы", icon: Wallet, component: FinancePanel, moduleId: "finance", group: "Деньги и склад" },
   { id: "inventory", label: "Склад", icon: Boxes, component: InventoryPanel, moduleId: "inventory", group: "Деньги и склад" },
   { id: "markets", label: "Рынки", icon: CandlestickChart, component: MarketsPanel, moduleId: "markets", group: "Деньги и склад" },

@@ -6,6 +6,10 @@ import {
   goalProgress,
   goalTreeProgress,
   goalStatusSchema,
+  isTaskClosed,
+  summarizePlanTasks,
+  taskPrioritySchema,
+  taskStatusSchema,
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
@@ -162,6 +166,50 @@ export class GoalsService {
 
     // Sub-goals feed their parent, so progress is computed over the whole workspace tree.
     const all = await this.prisma.withUser(userId, (tx) => tx.goal.findMany({ where: { workspaceId }, include: { plans: true } }));
+    // What each plan says about the way forward (next task, stuck/overdue counts, last movement).
+    const projectIds = [...new Set(all.flatMap((g) => g.plans.map((p) => p.projectId)))];
+    const taskRows =
+      projectIds.length === 0
+        ? []
+        : await this.prisma.withUser(userId, (tx) =>
+            tx.task.findMany({
+              where: { workspaceId, projectId: { in: projectIds } },
+              select: {
+                id: true,
+                projectId: true,
+                title: true,
+                status: true,
+                priority: true,
+                dueAt: true,
+                sortOrder: true,
+                updatedAt: true,
+                dependsOn: { select: { dependsOn: { select: { status: true } } } }
+              }
+            })
+          );
+    const now = new Date();
+    const pulseByProject = new Map<string, ReturnType<typeof summarizePlanTasks>>();
+    for (const projectId of projectIds) {
+      pulseByProject.set(
+        projectId,
+        summarizePlanTasks(
+          taskRows
+            .filter((t) => t.projectId === projectId)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              status: taskStatusSchema.catch("todo").parse(t.status),
+              priority: taskPrioritySchema.catch("normal").parse(t.priority),
+              dueAt: t.dueAt,
+              sortOrder: t.sortOrder,
+              updatedAt: t.updatedAt,
+              blocked: t.dependsOn.some((d) => !isTaskClosed(taskStatusSchema.catch("todo").parse(d.dependsOn.status)))
+            })),
+          now
+        )
+      );
+    }
+    const noPulse = { nextTask: null, blocked: 0, overdue: 0, lastActivityAt: null };
     const buildPlans = (row: GoalWithPlans) =>
       row.plans
         .map((plan) => {
@@ -176,7 +224,8 @@ export class GoalsService {
             weight: plan.weight,
             progress: tasks === 0 ? null : entry.p.progress,
             tasks,
-            closed: entry.p.counts.closed
+            closed: entry.p.counts.closed,
+            ...(pulseByProject.get(plan.projectId) ?? noPulse)
           };
         })
         .filter((plan): plan is NonNullable<typeof plan> => plan !== null)

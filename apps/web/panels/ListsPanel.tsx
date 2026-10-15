@@ -1,160 +1,133 @@
 "use client";
 
-import { ApiError } from "@orion/core";
+import { useCreateList, useListTemplates, useLists, useReorderLists } from "@orion/core-react";
 import {
-  useArchiveList,
-  useClearCheckedItems,
-  useCreateList,
-  useCreateListItem,
-  useDeleteListItem,
-  useLists,
-  useCore,
-  useUpdateList,
-  useUpdateListItem
-} from "@orion/core-react";
-import type { List, ListItem } from "@orion/shared-types";
+  LIST_KINDS,
+  LIST_KIND_LABELS,
+  listProgress,
+  sortListItems,
+  type List,
+  type ListKind
+} from "@orion/shared-types";
 import {
+  Badge,
   Button,
-  CheckToggle,
   EmptyState,
-  FuseButton,
-  IconButton,
   Input,
   Modal,
   PanelBody,
   PanelHeader,
   PanelShell,
+  SegmentedControl,
+  Select,
   Skeleton,
-  SwipeRow,
   cx,
   useToast
 } from "@orion/ui";
-import { Archive, ListChecks, Plus, RotateCcw, TriangleAlert, X } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, FilePlus2, ListChecks, Plus, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useSlotContributions } from "../lib/extensions/slot";
-import { useActiveWorkspace } from "../lib/use-active-workspace";
-import { useEnabledModules } from "../lib/use-enabled-modules";
 import { describeError } from "../lib/error-message";
+import { formatMoney } from "../lib/format";
+import { openList } from "../lib/panel-bus";
+import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { useRowDnd } from "../lib/use-row-dnd";
+import { ItemAdder } from "./lists/item-adder";
+import { ListItemRow } from "./lists/list-item-row";
+import { ListMenu } from "./lists/list-menu";
+import { useListActions } from "./lists/use-list-actions";
+
+type Tab = "active" | "templates" | "archive";
 
 /**
- * Списки: lightweight checklists (shopping, to-dos) — deliberately simpler
- * than Tasks (no status/due date/recurrence) and simpler than Habits (no
- * schedule/streak). One cache — `["lists", ws, includeArchived]` — carries
- * each list with its items nested, so every mutation invalidates the same
- * single key; `useUpdateListItem` additionally patches it optimistically so
- * the checkbox answers instantly.
+ * Списки: lightweight checklists (shopping, to-dos, packing) — deliberately simpler than Tasks (no
+ * status/recurrence) and simpler than Habits (no schedule/streak). The board shows every list as a card
+ * with a preview; a list opens as its own tab (`openList`) for the full view. One cache family —
+ * `["lists", ws, …]` — carries each list with its items nested, so every mutation invalidates the same
+ * key; item mutations additionally patch it optimistically so the checkbox answers instantly.
+ *
+ * Lists belong to the whole workspace: everyone sees and ticks the same ones, and the board re-reads
+ * them every few seconds. Order of the cards is manual (drag them).
  */
 export function ListsPanel(): React.ReactElement {
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const workspaceId = workspace?.id;
   const { toast } = useToast();
 
-  const [showArchive, setShowArchive] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [renameTarget, setRenameTarget] = useState<List | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [tab, setTab] = useState<Tab>("active");
+  const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<ListKind | "all">("all");
+  const [creating, setCreating] = useState<{ templateId?: string } | null>(null);
 
-  const listsQuery = useLists(workspaceId, showArchive);
-  const createList = useCreateList(workspaceId);
-  const updateList = useUpdateList(workspaceId);
-  const archiveList = useArchiveList(workspaceId);
+  const listsQuery = useLists(workspaceId, true);
+  const templatesQuery = useListTemplates(workspaceId);
+  const reorder = useReorderLists(workspaceId);
 
-  const lists = listsQuery.data ?? [];
-  const activeLists = lists.filter((list) => !list.archivedAt);
-  const archivedLists = lists.filter((list) => list.archivedAt);
+  const all = listsQuery.data ?? [];
+  const templates = templatesQuery.data ?? [];
+  const active = all.filter((list) => !list.archivedAt);
+  const archived = all.filter((list) => list.archivedAt);
 
-  function submitCreate(): void {
-    const name = newName.trim();
-    if (!name) return;
-    createList.mutate(
-      { name },
-      {
-        onSuccess: () => {
-          setCreating(false);
-          setNewName("");
-          toast({ title: "Список создан", tone: "success" });
-        },
-        onError: (error) =>
-          toast({
-            title: "Не удалось создать список",
-            description: error instanceof ApiError ? error.message : undefined,
-            tone: "danger"
-          })
-      }
+  const shown = useMemo(() => {
+    const source = tab === "active" ? active : tab === "archive" ? archived : templates.filter((list) => !list.archivedAt);
+    const needle = query.trim().toLocaleLowerCase("ru");
+    return source.filter(
+      (list) =>
+        (kindFilter === "all" || list.kind === kindFilter) &&
+        (needle === "" || list.name.toLocaleLowerCase("ru").includes(needle) || list.items.some((item) => item.label.toLocaleLowerCase("ru").includes(needle)))
     );
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, templates, tab, query, kindFilter]);
 
-  function submitRename(): void {
-    if (!renameTarget) return;
-    const name = renameValue.trim();
-    if (!name || name === renameTarget.name) {
-      setRenameTarget(null);
-      return;
-    }
-    updateList.mutate(
-      { listId: renameTarget.id, input: { name } },
-      {
-        onSuccess: () => {
-          setRenameTarget(null);
-          toast({ title: "Переименовано", tone: "success" });
-        },
-        onError: (error) =>
-          toast({
-            title: "Не удалось переименовать",
-            description: error instanceof ApiError ? error.message : undefined,
-            tone: "danger"
-          })
-      }
-    );
-  }
+  const filtering = query.trim() !== "" || kindFilter !== "all";
 
-  // No confirm modal: the archive button itself arms a fuse (see FuseButton
-  // in ListCard) — this only runs once that window has burned out, and
-  // archiving already keeps history (list can be restored), so a second
-  // "are you sure" on top of the fuse would be redundant friction.
-  function doArchive(list: List): void {
-    archiveList.mutate(list.id, {
-      onSuccess: () => toast({ title: "Список в архиве", description: "Пункты сохранены", tone: "default" }),
-      onError: () => toast({ title: "Не удалось убрать в архив", tone: "danger" })
-    });
+  function moveCard(movedId: string, beforeId: string | null): void {
+    const ids = shown.map((list) => list.id).filter((id) => id !== movedId);
+    const at = beforeId ? ids.indexOf(beforeId) : ids.length;
+    ids.splice(at < 0 ? ids.length : at, 0, movedId);
+    reorder.mutate({ ids }, { onError: (error) => toast({ title: "Не удалось изменить порядок", description: describeError(error), tone: "danger" }) });
   }
+  const dnd = useRowDnd("lists-board", (movedId, beforeId) => moveCard(movedId, beforeId));
 
-  async function restore(list: List): Promise<void> {
-    try {
-      await updateList.mutateAsync({ listId: list.id, input: { archivedAt: null } });
-      toast({ title: "Список возвращён", tone: "success" });
-    } catch (error) {
-      toast({
-        title: "Не удалось вернуть список",
-        description: error instanceof ApiError ? error.message : undefined,
-        tone: "danger"
-      });
-    }
-  }
+  const loading = workspaceId !== undefined && (listsQuery.isLoading || templatesQuery.isLoading);
+  const empty = all.length === 0 && templates.length === 0;
 
   return (
     <PanelShell>
       <PanelHeader
         icon={ListChecks}
         title="Списки"
-        subtitle="Покупки, дела — что угодно с галочками"
+        subtitle="Покупки, дела, сборы — что угодно с галочками"
         actions={
-          <Button size="sm" onClick={() => setCreating(true)} disabled={workspaceId === undefined}>
+          <Button size="sm" onClick={() => setCreating({})} disabled={workspaceId === undefined}>
             <Plus className="h-4 w-4" /> Новый список
           </Button>
         }
       >
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showArchive}
-            disabled={workspaceId === undefined}
-            onChange={(event) => setShowArchive(event.target.checked)}
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl<Tab>
+            size="sm"
+            aria-label="Раздел списков"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "active", label: `Активные${active.length ? ` · ${active.length}` : ""}` },
+              { value: "templates", label: `Шаблоны${templates.length ? ` · ${templates.length}` : ""}` },
+              { value: "archive", label: `Архив${archived.length ? ` · ${archived.length}` : ""}` }
+            ]}
           />
-          Показать архив
-        </label>
+          <div className="relative min-w-40 flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" aria-hidden />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти список или пункт" className="h-8 pl-8 text-xs" disabled={workspaceId === undefined} />
+          </div>
+          <Select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as ListKind | "all")} className="h-8 w-auto text-xs" aria-label="Вид списка">
+            <option value="all">Все виды</option>
+            {LIST_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {LIST_KIND_LABELS[kind]}
+              </option>
+            ))}
+          </Select>
+        </div>
       </PanelHeader>
 
       <PanelBody className="[container-type:inline-size]">
@@ -166,13 +139,9 @@ export function ListsPanel(): React.ReactElement {
               ))}
             </div>
           ) : (
-            <EmptyState
-              icon={ListChecks}
-              title="Нет рабочего пространства"
-              description="Списки живут внутри пространства — создайте его или войдите заново."
-            />
+            <EmptyState icon={ListChecks} title="Нет рабочего пространства" description="Списки живут внутри пространства — создайте его или войдите заново." />
           )
-        ) : listsQuery.isLoading ? (
+        ) : loading ? (
           <div className="grid grid-cols-1 gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-40 w-full" />
@@ -190,270 +159,292 @@ export function ListsPanel(): React.ReactElement {
               </Button>
             }
           />
-        ) : activeLists.length === 0 && archivedLists.length === 0 ? (
+        ) : empty ? (
           <EmptyState
             icon={ListChecks}
             title="Списков пока нет"
             description="Заведите первый — например, «Продукты»."
             action={
-              <Button size="sm" onClick={() => setCreating(true)}>
+              <Button size="sm" onClick={() => setCreating({})}>
                 <Plus className="h-4 w-4" /> Новый список
               </Button>
             }
           />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            icon={tab === "templates" ? FilePlus2 : ListChecks}
+            title={
+              filtering
+                ? "Ничего не найдено"
+                : tab === "active"
+                  ? "Нет активных списков"
+                  : tab === "templates"
+                    ? "Шаблонов пока нет"
+                    : "В архиве пусто"
+            }
+            description={
+              filtering
+                ? "Измените запрос или вид списка."
+                : tab === "templates"
+                  ? "Откройте меню «⋯» у списка и выберите «Сохранить как шаблон» — из него потом создаётся новый список."
+                  : undefined
+            }
+          />
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
-              {activeLists.map((list) => (
+          <div className="grid grid-cols-1 items-start gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
+            {shown.map((list) => (
+              <div
+                key={list.id}
+                {...(tab === "active" && !filtering ? dnd.bind(list.id) : {})}
+                className={cx(
+                  "relative transition-opacity",
+                  dnd.dragId === list.id && "opacity-40",
+                  dnd.overId === list.id && "before:absolute before:-left-1.5 before:inset-y-0 before:w-0.5 before:rounded before:bg-accent"
+                )}
+              >
                 <ListCard
-                  key={list.id}
                   list={list}
                   workspaceId={workspaceId}
-                  onRename={() => {
-                    setRenameTarget(list);
-                    setRenameValue(list.name);
-                  }}
-                  onArchive={() => doArchive(list)}
+                  mode={tab}
+                  onCreateFromTemplate={() => setCreating({ templateId: list.id })}
                 />
-              ))}
-            </div>
-
-            {showArchive ? (
-              <div>
-                <h3 className="mb-2 text-xs font-medium text-subtle-foreground">Архив</h3>
-                {archivedLists.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">В архиве пусто.</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {archivedLists.map((list) => (
-                      <li key={list.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
-                        <span className="truncate text-sm text-foreground">{list.name}</span>
-                        <Button size="sm" variant="subtle" disabled={updateList.isPending} onClick={() => void restore(list)}>
-                          <RotateCcw className="h-3.5 w-3.5" /> Вернуть
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
-            ) : null}
+            ))}
           </div>
         )}
       </PanelBody>
 
-      <Modal
-        open={creating}
-        onClose={() => setCreating(false)}
-        title="Новый список"
-        footer={
-          <>
-            <Button variant="subtle" size="sm" onClick={() => setCreating(false)}>
-              Отмена
-            </Button>
-            <Button
-              size="sm"
-              onClick={submitCreate}
-              disabled={!newName.trim()}
-              status={createList.isPending ? "pending" : createList.isSuccess ? "success" : createList.isError ? "error" : "idle"}
-            >
-              Создать
-            </Button>
-          </>
-        }
-      >
-        <Input
-          autoFocus
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submitCreate()}
-          placeholder="Название списка"
-        />
-      </Modal>
-
-      <Modal
-        open={renameTarget !== null}
-        onClose={() => setRenameTarget(null)}
-        title="Переименовать"
-        footer={
-          <>
-            <Button variant="subtle" size="sm" onClick={() => setRenameTarget(null)}>
-              Отмена
-            </Button>
-            <Button size="sm" onClick={submitRename} disabled={!renameValue.trim() || updateList.isPending}>
-              Сохранить
-            </Button>
-          </>
-        }
-      >
-        <Input
-          autoFocus
-          value={renameValue}
-          onChange={(e) => setRenameValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submitRename()}
-        />
-      </Modal>
+      <NewListModal
+        open={creating !== null}
+        workspaceId={workspaceId}
+        templates={templates.filter((list) => !list.archivedAt)}
+        initialTemplateId={creating?.templateId}
+        onClose={() => setCreating(null)}
+        onCreated={(list) => {
+          setCreating(null);
+          setTab("active");
+          openList(list.id, list.name);
+        }}
+      />
     </PanelShell>
   );
 }
 
-/** One list's card: name, checkable items, an inline "add item" field, and "clear checked" once anything is ticked. */
+function NewListModal({
+  open,
+  workspaceId,
+  templates,
+  initialTemplateId,
+  onClose,
+  onCreated
+}: {
+  open: boolean;
+  workspaceId: string | undefined;
+  templates: List[];
+  initialTemplateId?: string;
+  onClose: () => void;
+  onCreated: (list: List) => void;
+}): React.ReactElement {
+  const createList = useCreateList(workspaceId);
+  const { toast } = useToast();
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<ListKind | "">("");
+  const [templateId, setTemplateId] = useState("");
+
+  // Re-seed each time the dialog opens (a template button pre-selects its template and suggests its name).
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const seedKey = open ? (initialTemplateId ?? "") : null;
+  if (seedKey !== seededFor) {
+    setSeededFor(seedKey);
+    if (seedKey !== null) {
+      setTemplateId(seedKey);
+      setName(templates.find((t) => t.id === seedKey)?.name.replace(/ — шаблон$/, "") ?? "");
+      setKind("");
+    }
+  }
+
+  function submit(): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    createList.mutate(
+      { name: trimmed, ...(kind ? { kind } : {}), ...(templateId ? { templateId } : {}) },
+      {
+        onSuccess: (list) => {
+          setName("");
+          toast({ title: "Список создан", tone: "success" });
+          onCreated(list);
+        },
+        onError: (error) => toast({ title: "Не удалось создать список", description: describeError(error), tone: "danger" })
+      }
+    );
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Новый список"
+      footer={
+        <>
+          <Button variant="subtle" size="sm" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button size="sm" onClick={submit} disabled={!name.trim()} status={createList.isPending ? "pending" : "idle"}>
+            Создать
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Input autoFocus value={name} maxLength={120} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Название списка" />
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Вид</span>
+            <Select value={kind} onChange={(e) => setKind(e.target.value as ListKind | "")}>
+              <option value="">{templateId ? "Как у шаблона" : LIST_KIND_LABELS.general}</option>
+              {LIST_KINDS.map((value) => (
+                <option key={value} value={value}>
+                  {LIST_KIND_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted-foreground">Из шаблона</span>
+            <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} disabled={templates.length === 0}>
+              <option value="">{templates.length === 0 ? "Шаблонов нет" : "Пустой список"}</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} ({template.items.length})
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const PREVIEW_LIMIT = 6;
+
+/** One list's card: name, kind, progress, a preview of the entries (or all of them), a quick-add line. */
 function ListCard({
   list,
   workspaceId,
-  onRename,
-  onArchive
+  mode,
+  onCreateFromTemplate
 }: {
   list: List;
-  workspaceId: string | undefined;
-  onRename: () => void;
-  onArchive: () => void;
+  workspaceId: string;
+  mode: Tab;
+  onCreateFromTemplate: () => void;
 }): React.ReactElement {
-  const [draft, setDraft] = useState("");
-  const createItem = useCreateListItem(workspaceId);
-  const updateItem = useUpdateListItem(workspaceId);
-  const deleteItem = useDeleteListItem(workspaceId);
-  const clearChecked = useClearCheckedItems(workspaceId);
-  const { toast } = useToast();
-  // A bridge plugin (lists.item, e.g. «Покупки → Склад») may mark entries and take over ticking them.
-  const itemBridge = useSlotContributions("lists.item")[0]?.meta?.api;
-  const { api } = useCore();
-  const queryClient = useQueryClient();
-  const { isEnabled } = useEnabledModules();
+  const [expanded, setExpanded] = useState(false);
+  const actions = useListActions(workspaceId, list);
 
-  // Unchecked first (what's left to do), checked at the bottom — display-only,
-  // nothing persisted (see List's model comment on why there's no sortOrder).
-  const sortedItems = useMemo(
-    () => [...list.items].sort((a, b) => Number(a.checked) - Number(b.checked)),
-    [list.items]
-  );
-  const previewLimit = 6;
-  const visibleItems = sortedItems.slice(0, previewLimit);
-  const overflow = sortedItems.length - visibleItems.length;
-  const checkedCount = list.items.filter((item) => item.checked).length;
-
-  function addItem(): void {
-    const label = draft.trim();
-    if (!label) return;
-    createItem.mutate({ listId: list.id, input: { label } }, { onSuccess: () => setDraft("") });
-  }
-
-  function toggle(item: ListItem): void {
-    if (!item.checked && itemBridge && workspaceId) {
-      const completion = itemBridge.completeItem({ api, queryClient, workspaceId, listId: list.id, item, isModuleEnabled: isEnabled });
-      if (completion) {
-        completion.catch((error: unknown) => toast({ title: "Не удалось отметить пункт", description: describeError(error), tone: "danger" }));
-        return;
-      }
-    }
-    updateItem.mutate({ listId: list.id, itemId: item.id, input: { checked: !item.checked } });
-  }
-
-  function clearDone(): void {
-    const snapshot = list.items.filter((item) => item.checked);
-    if (snapshot.length === 0) return;
-    clearChecked.mutate(list.id, {
-      onSuccess: () =>
-        toast({
-          title: "Отмеченные очищены",
-          action: {
-            label: "Отменить",
-            onClick: () => {
-              void (async () => {
-                for (const item of snapshot) {
-                  const created = await createItem.mutateAsync({ listId: list.id, input: { label: item.label } });
-                  if (item.checked) {
-                    await updateItem.mutateAsync({ listId: list.id, itemId: created.id, input: { checked: true } });
-                  }
-                }
-              })();
-            }
-          }
-        }),
-      onError: () => toast({ title: "Не удалось очистить отмеченные", tone: "danger" })
-    });
-  }
-
-  const hasChecked = checkedCount > 0;
+  // Unchecked first (what's left to do), then manual order — display-only, nothing persisted.
+  const sortedItems = useMemo(() => sortListItems(list.items), [list.items]);
+  const progress = listProgress(list.items);
+  const visible = expanded ? sortedItems : sortedItems.slice(0, PREVIEW_LIMIT);
+  const hidden = sortedItems.length - visible.length;
+  const done = progress.total > 0 && progress.checked === progress.total;
+  const editable = mode === "active";
 
   return (
-    <div className="flex flex-col rounded-xl border border-border p-3">
+    <div className={cx("flex flex-col rounded-xl border border-border p-3", mode === "archive" && "opacity-80")}>
       <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={onRename} className="min-w-0 truncate text-left text-title text-foreground hover:underline">
+        <button
+          type="button"
+          onClick={() => openList(list.id, list.name)}
+          className="min-w-0 truncate text-left text-title text-foreground hover:underline"
+          title="Открыть список"
+        >
           {list.name}
         </button>
-        <FuseButton label="В архив" armedLabel="Ещё раз — архив" doneLabel="В архиве" icon={Archive} onCommit={onArchive} />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <ItemOpenButton onOpen={() => openList(list.id, list.name)} />
+          <ListMenu workspaceId={workspaceId} list={list} />
+        </div>
       </div>
-      {list.items.length > 0 ? (
-        <p className="mt-1 text-micro text-subtle-foreground">
-          {checkedCount} из {list.items.length}
-        </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-subtle-foreground">
+        {list.kind !== "general" ? <Badge tone="neutral">{LIST_KIND_LABELS[list.kind]}</Badge> : null}
+        {progress.total > 0 ? (
+          <span className={cx(done && "text-success")}>
+            {progress.checked} из {progress.total}
+          </span>
+        ) : null}
+        {progress.priceMinor > 0 ? <span>{formatMoney(progress.priceMinor)}</span> : null}
+      </div>
+      {progress.total > 0 ? (
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
+          <div className={cx("h-full rounded-full transition-[width]", done ? "bg-success" : "bg-accent")} style={{ width: `${(progress.checked / progress.total) * 100}%` }} />
+        </div>
       ) : null}
 
       {sortedItems.length === 0 ? (
         <div className="mt-2">
-          <EmptyState icon={ListChecks} title="Пусто" description="Добавьте первый пункт." />
+          <EmptyState icon={ListChecks} title="Пусто" description={editable ? "Добавьте первый пункт." : undefined} />
         </div>
       ) : (
         <ul className="mt-2 space-y-1">
-          {visibleItems.map((item) => (
+          {visible.map((item) => (
             <li key={item.id}>
-              <SwipeRow
-                actions={[
-                  {
-                    label: "Удалить",
-                    icon: X,
-                    tone: "danger",
-                    onSelect: () => deleteItem.mutate({ listId: list.id, itemId: item.id })
-                  }
-                ]}
-              >
-                <div className="group flex items-center gap-2 px-0.5 py-0.5">
-                  <CheckToggle checked={item.checked} onClick={() => toggle(item)} label={item.label} size="sm" />
-                  <span className={cx("min-w-0 flex-1 truncate text-body text-foreground", item.checked && "text-muted-foreground line-through")}>
-                    {item.label}
-                  </span>
-                  {itemBridge && workspaceId ? <itemBridge.ItemExtra workspaceId={workspaceId} listId={list.id} item={item} /> : null}
-                  <IconButton
-                    label="Удалить пункт"
-                    size="sm"
-                    className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:hidden"
-                    onClick={() => deleteItem.mutate({ listId: list.id, itemId: item.id })}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </IconButton>
-                </div>
-              </SwipeRow>
+              <ListItemRow
+                workspaceId={workspaceId}
+                listId={list.id}
+                item={item}
+                itemBridge={actions.itemBridge}
+                compact
+                onToggle={() => actions.toggle(item)}
+                onDelete={() => actions.remove(item)}
+              />
             </li>
           ))}
         </ul>
       )}
 
-      {overflow > 0 ? (
-        <p className="mt-1 text-micro text-subtle-foreground">ещё {overflow}</p>
-      ) : null}
-
-      <div className="mt-2 flex items-center gap-1.5">
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addItem()}
-          placeholder="Добавить пункт"
-          className="h-8 text-xs"
-        />
-        <IconButton label="Добавить пункт" size="sm" onClick={addItem} disabled={!draft.trim()}>
-          <Plus className="h-4 w-4" />
-        </IconButton>
-      </div>
-
-      {hasChecked ? (
+      {sortedItems.length > PREVIEW_LIMIT ? (
         <button
           type="button"
-          onClick={clearDone}
-          className="mt-2 self-start text-micro text-subtle-foreground hover:text-foreground"
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-1 self-start text-micro text-subtle-foreground hover:text-foreground"
         >
-          {`Очистить отмеченные (${checkedCount}) — можно отменить`}
+          {expanded ? "Свернуть" : `Показать все (ещё ${hidden})`}
+        </button>
+      ) : null}
+
+      {editable ? (
+        <div className="mt-2">
+          <ItemAdder workspaceId={workspaceId} listId={list.id} compact />
+        </div>
+      ) : null}
+
+      {mode === "templates" ? (
+        <Button size="sm" className="mt-2 self-start" onClick={onCreateFromTemplate}>
+          <FilePlus2 className="h-4 w-4" /> Создать список
+        </Button>
+      ) : null}
+
+      {editable && progress.checked > 0 ? (
+        <button type="button" onClick={actions.clearDone} className="mt-2 self-start text-micro text-subtle-foreground hover:text-foreground">
+          {`Очистить отмеченные (${progress.checked}) — можно отменить`}
         </button>
       ) : null}
     </div>
+  );
+}
+
+function ItemOpenButton({ onOpen }: { onOpen: () => void }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Открыть список целиком"
+      title="Открыть список целиком"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-white/10 hover:text-foreground"
+    >
+      <ExternalLink className="h-4 w-4" />
+    </button>
   );
 }

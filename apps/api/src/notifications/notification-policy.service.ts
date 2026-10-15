@@ -9,8 +9,10 @@ import { PrismaService } from "../common/prisma.service";
  * that exact delivery, closer to a manual "напомнить сейчас" than an
  * ambient cron — so it only respects quiet hours below, not a togglable
  * on/off. A dedicated toggle can be added later without touching callers.
+ * `"contact"` (birthdays, «пора связаться») is in the same position: quiet
+ * hours apply, there is no separate toggle yet.
  */
-export type ReminderKind = "task" | "event" | "finance" | "inventory" | "entity";
+export type ReminderKind = "task" | "event" | "finance" | "inventory" | "entity" | "contact";
 
 interface RecipientPreferences {
   taskReminders: boolean;

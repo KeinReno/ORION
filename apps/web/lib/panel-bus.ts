@@ -45,6 +45,15 @@ export function openProject(projectId: string, title?: string): void {
 }
 
 /**
+ * A list opens as its own dock tab (`list:<id>`): a full-width view with every entry, groups,
+ * drag-reorder and the entry editor — the card on the board only previews it. Opening the same list
+ * twice just focuses its tab; `title` is a first-paint hint, the panel renames the tab itself.
+ */
+export function openList(listId: string, title?: string): void {
+  openPanel(`list:${listId}`, title);
+}
+
+/**
  * S09 — "lost intent": `focusTask(id)` used to just loop over whatever
  * listeners happened to be subscribed at that exact instant. If the target
  * panel hadn't mounted yet (e.g. it's being opened for the first time by
@@ -179,6 +188,9 @@ export function openEntity(type: SearchableEntityType, id: string, title?: strin
       return;
     case "contact":
       focusContact(id);
+      return;
+    case "list":
+      openList(id, title);
       return;
   }
 }

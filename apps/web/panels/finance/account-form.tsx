@@ -1,6 +1,6 @@
 "use client";
 
-import type { Account, AccountKind } from "@orion/shared-types";
+import { ACCOUNT_CONTEXT_LABEL, type Account, type AccountContext, type AccountKind } from "@orion/shared-types";
 import { Button, Input, Select } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { parseMoneyInput, fromKopecks } from "../../lib/format";
@@ -30,6 +30,7 @@ const ACCOUNT_CURRENCY_LABEL: Record<string, string> = {
 export interface AccountFormValues {
   name: string;
   kind: AccountKind;
+  context: AccountContext;
   currency: string;
   startingBalance: number;
 }
@@ -49,13 +50,14 @@ export function AccountForm({
 }): React.ReactElement {
   const [name, setName] = useState(initial?.name ?? "");
   const [kind, setKind] = useState<AccountKind>(initial?.kind ?? "cash");
+  const [context, setContext] = useState<AccountContext>(initial?.context ?? "personal");
   const [currency, setCurrency] = useState(initial?.currency ?? "RUB");
   const [startingBalance, setStartingBalance] = useState(fromKopecks(initial?.startingBalance));
 
   function submit(event: FormEvent): void {
     event.preventDefault();
     if (!name.trim()) return;
-    void onSubmit({ name: name.trim(), kind, currency, startingBalance: parseMoneyInput(startingBalance) ?? 0 });
+    void onSubmit({ name: name.trim(), kind, context, currency, startingBalance: parseMoneyInput(startingBalance) ?? 0 });
   }
 
   return (
@@ -83,6 +85,16 @@ export function AccountForm({
           </Select>
         </label>
       </div>
+      <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
+        Чьи деньги
+        <Select value={context} onChange={(e) => setContext(e.target.value as AccountContext)}>
+          {(Object.keys(ACCOUNT_CONTEXT_LABEL) as AccountContext[]).map((value) => (
+            <option key={value} value={value}>
+              {ACCOUNT_CONTEXT_LABEL[value]}
+            </option>
+          ))}
+        </Select>
+      </label>
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
         Начальный баланс, {currency}
         {initial ? (

@@ -37,6 +37,8 @@ export const obligationSchema = z.object({
   accountId: z.string().nullable(),
   categoryId: z.string().nullable(),
   note: z.string(),
+  /** С кем долг (человек, банк, магазин); пусто — не указано. */
+  counterparty: z.string(),
   closedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
@@ -54,6 +56,7 @@ export const createObligationInputSchema = z.object({
   accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   note: z.string().max(2000).default(""),
+  counterparty: z.string().trim().max(120).optional(),
   /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
   homeId: z.string().nullable().optional()
 });
@@ -70,6 +73,7 @@ export const updateObligationInputSchema = z.object({
   accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   note: z.string().max(2000).optional(),
+  counterparty: z.string().trim().max(120).optional(),
   /** null — открыть заново. */
   closedAt: z.string().datetime().nullable().optional()
 });
@@ -79,7 +83,12 @@ export type UpdateObligationInput = z.infer<typeof updateObligationInputSchema>;
 export const payObligationInputSchema = z.object({
   accountId: z.string(),
   amount: z.number().int().positive().max(2_000_000_000).optional(),
-  paidAt: z.string().datetime().optional()
+  paidAt: z.string().datetime().optional(),
+  /**
+   * Частичное погашение: уменьшает остаток, но не закрывает срок и не двигает дату следующего платежа. Нужен остаток
+   * (`principal`); несколько частичных платежей за один срок допустимы, регулярный платёж за срок — один.
+   */
+  partial: z.boolean().optional()
 });
 export type PayObligationInput = z.infer<typeof payObligationInputSchema>;
 

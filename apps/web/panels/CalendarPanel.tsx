@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useContactCards,
   useCreateEvent,
   useCreateNote,
   useCreateTask,
@@ -50,6 +51,8 @@ import {
   CALENDAR_SOURCES,
   CALENDAR_SOURCE_MODULE,
   eventItems,
+  birthdayItems,
+  contactIdFromBirthdayItem,
   financeItems,
   noteItems,
   taskItems,
@@ -152,6 +155,7 @@ export function CalendarPanel(): React.ReactElement {
   const notesOn = isEnabled("notes");
   const financeOn = isEnabled("finance");
   const projectsOn = isEnabled("projects");
+  const contactsOn = isEnabled("contacts");
 
   const [range, setRange] = useState<EventRange | undefined>(initialEventRange);
   const eventsQuery = useEvents(wsId, range);
@@ -159,11 +163,13 @@ export function CalendarPanel(): React.ReactElement {
   const notesQuery = useNotes(notesOn ? wsId : undefined);
   const recurringQuery = useRecurringTransactions(financeOn ? wsId : undefined);
   const { data: projectList } = useProjects(projectsOn ? wsId : undefined);
+  const contactsQuery = useContactCards(contactsOn ? wsId : undefined);
 
   const events = eventsQuery.data;
   const tasks = tasksQuery.data;
   const notes = notesQuery.data;
   const recurring = recurringQuery.data;
+  const contacts = contactsQuery.data;
 
   const createEvent = useCreateEvent(wsId);
   const updateEvent = useUpdateEvent(wsId);
@@ -193,8 +199,9 @@ export function CalendarPanel(): React.ReactElement {
     if (enabled.has("tasks")) out.push(...taskItems(tasks));
     if (enabled.has("notes")) out.push(...noteItems(notes));
     if (enabled.has("finance")) out.push(...financeItems(recurring));
+    if (enabled.has("contacts")) out.push(...birthdayItems(contacts, range));
     return out;
-  }, [enabled, events, tasks, notes, recurring]);
+  }, [enabled, events, tasks, notes, recurring, contacts, range]);
 
   // Search narrows what is drawn, never what is loaded: clearing it brings everything back.
   const [filter, setFilter] = useState("");
@@ -248,6 +255,11 @@ export function CalendarPanel(): React.ReactElement {
 
   function openItem(id: string): void {
     setFocusedId(id);
+    const birthdayContactId = contactIdFromBirthdayItem(id);
+    if (birthdayContactId) {
+      openEntity("contact", birthdayContactId);
+      return;
+    }
     const event = findEvent(id);
     if (event) {
       setSelected(event);

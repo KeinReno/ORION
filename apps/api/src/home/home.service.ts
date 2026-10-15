@@ -1,7 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Contact as ContactRow, Home as HomeRow, Meter as MeterRow, MeterReading as ReadingRow, Prisma } from "@prisma/client";
 import {
+  CONTRIBUTION_PERIOD_DAYS,
   METER_KIND_UNIT,
+  TASK_CLOSED_STATUSES,
+  buildContributions,
+  entryMinutes,
   homeKindSchema,
   isTaskClosed,
   meterKindSchema,
@@ -14,7 +18,10 @@ import {
   type CreateHomeInput,
   type CreateMeterInput,
   type CreateMeterReadingInput,
+  type ContributionPeriod,
+  type ContributionTask,
   type Home,
+  type HomeContributions,
   type HomeOverview,
   type Meter,
   type UpdateContactInput,
@@ -111,7 +118,7 @@ export class HomeService {
           ? tx.financeObligation.findMany({ where: { workspaceId, homeId }, select: { id: true, closedAt: true } })
           : Promise.resolve([]),
         tx.meter.findMany({ where: { workspaceId, homeId }, orderBy: { createdAt: "asc" } }),
-        tx.contact.findMany({ where: { workspaceId, homeId }, orderBy: { name: "asc" } })
+        tx.contact.findMany({ where: { workspaceId, homeId, archivedAt: null }, orderBy: { name: "asc" } })
       ]);
 
       const elsewhere = { homeId: { not: null as string | null, notIn: [homeId] }, workspaceId };
@@ -221,6 +228,69 @@ export class HomeService {
         });
       }
       return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
+    });
+  }
+
+  // ---------------------------------------------------------- contributions
+
+  /**
+   * Кто сколько закрыл дел дома за период (см. `buildContributions`). `homeId = null` — по делам всех
+   * объектов. Исполнитель — автор последнего перехода в `done` из журнала TaskActivity; назначенный —
+   * отдельно, поэтому «взял чужое» видно. Нужен доступ к модулю «Задачи».
+   */
+  async contributions(userId: string, workspaceId: string, period: ContributionPeriod, homeId: string | null): Promise<HomeContributions> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      if (homeId) await this.assertHomeTx(tx, workspaceId, homeId);
+      await this.modules.assertEnabledTx(tx, userId, workspaceId, "tasks");
+      const now = new Date();
+      const windowStart = new Date(now.getTime() - CONTRIBUTION_PERIOD_DAYS[period] * 24 * 60 * 60 * 1000);
+
+      const [memberRows, rows] = await Promise.all([
+        tx.workspaceMember.findMany({ where: { workspaceId }, select: { id: true, userId: true, user: { select: { name: true } } } }),
+        tx.task.findMany({
+          where: {
+            workspaceId,
+            homeId: homeId ?? { not: null },
+            OR: [{ status: "done", completedAt: { gte: windowStart } }, { status: { notIn: [...TASK_CLOSED_STATUSES] } }]
+          },
+          select: {
+            id: true,
+            status: true,
+            completedAt: true,
+            dueAt: true,
+            assigneeId: true,
+            estimatedMinutes: true,
+            timeEntries: { select: { startedAt: true, endedAt: true } }
+          },
+          take: 5000
+        })
+      ]);
+
+      const doneIds = rows.filter((t) => t.status === "done").map((t) => t.id);
+      const closers = doneIds.length
+        ? await tx.taskActivity.findMany({
+            where: { workspaceId, taskId: { in: doneIds }, field: "status", toValue: "done" },
+            orderBy: { createdAt: "asc" },
+            select: { taskId: true, actorId: true }
+          })
+        : [];
+      // Последний переход в done выигрывает: дело могли переоткрыть и закрыть другим человеком.
+      const closerByTask = new Map(closers.map((c) => [c.taskId, c.actorId]));
+      const userByMember = new Map(memberRows.map((m) => [m.id, m.userId]));
+
+      const tasks: ContributionTask[] = rows.map((t) => {
+        const tracked = t.timeEntries.reduce((sum, e) => sum + entryMinutes({ startedAt: e.startedAt.toISOString(), endedAt: e.endedAt?.toISOString() ?? null }, now), 0);
+        return {
+          status: t.status,
+          completedAt: t.completedAt?.toISOString() ?? null,
+          dueAt: t.dueAt?.toISOString() ?? null,
+          assigneeUserId: t.assigneeId ? userByMember.get(t.assigneeId) ?? null : null,
+          closerUserId: closerByTask.get(t.id) ?? null,
+          minutes: tracked > 0 ? tracked : t.estimatedMinutes
+        };
+      });
+      return buildContributions({ period, now, members: memberRows.map((m) => ({ userId: m.userId, name: m.user.name })), tasks });
     });
   }
 
@@ -344,7 +414,8 @@ export class HomeService {
         data: {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.role !== undefined ? { role: input.role } : {}),
-          ...(input.phone !== undefined ? { phone: input.phone } : {}),
+          // «Контакты» keeps a list next to the primary phone; a plain phone edit here replaces that list.
+          ...(input.phone !== undefined ? { phone: input.phone, phones: input.phone ? [{ label: "", value: input.phone }] : [] } : {}),
           ...(input.note !== undefined ? { note: input.note } : {})
         }
       });

@@ -1,5 +1,7 @@
 "use client";
 
+import { KaidenLogo } from "../../components/kaiden-logo";
+
 import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
@@ -799,7 +801,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         drawerOpen={drawerOpen}
         onDrawerClose={() => setDrawerOpen(false)}
         header={({ open }) => (
-          <div className="flex items-center gap-1 rounded-lg px-1 py-1.5">
+          <div className="flex flex-col gap-2 rounded-lg px-1 py-1.5">
+            <div className="flex items-center gap-2" title="KAIDEN Orion">
+              <KaidenLogo className="h-7 w-7" />
+              {open ? <span className="text-sm font-semibold tracking-tight text-foreground">ORION</span> : <span className="sr-only">ORION</span>}
+            </div>
             {/*
              * Collapsed rail = avatar only (it still opens the list); expanded adds the
              * previous/next arrows and the name. Notifications live in the dockview tab

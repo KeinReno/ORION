@@ -25,7 +25,16 @@ const DEFAULT_PAGE_SIZE = 50;
 export interface TransactionFilters {
   accountId?: string;
   categoryId?: string;
+  /** Operations booked to one project (the "what did this project cost" slice). */
+  projectId?: string;
+  /** Operations whose (source) account has this context. */
+  context?: string;
   tag?: string;
+  /** Case-insensitive substring of the note. */
+  q?: string;
+  /** Kopecks; matches an operation that has a line within the range (for a plain operation, its amount). */
+  minAmount?: number;
+  maxAmount?: number;
   /** "YYYY-MM" — matches occurredAt within that calendar month. Ignored if `from`/`to` is given. */
   month?: string;
   /** ISO datetimes — an arbitrary range, takes priority over `month` when either is set. */
@@ -49,7 +58,16 @@ export class TransactionsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const where: Prisma.TransactionWhereInput = { workspaceId };
       if (filters.accountId) where.accountId = filters.accountId;
-      if (filters.categoryId) where.lines = { some: { categoryId: filters.categoryId } };
+      const lineFilters: Prisma.TransactionLineWhereInput[] = [];
+      if (filters.categoryId) lineFilters.push({ categoryId: filters.categoryId });
+      if (Number.isFinite(filters.minAmount)) lineFilters.push({ amount: { gte: filters.minAmount } });
+      if (Number.isFinite(filters.maxAmount)) lineFilters.push({ amount: { lte: filters.maxAmount } });
+      // One `some` with every condition: «a category AND an amount» must hold for the same line.
+      if (lineFilters.length > 0) where.lines = { some: { AND: lineFilters } };
+      const text = filters.q?.trim();
+      if (text) where.note = { contains: text, mode: "insensitive" };
+      if (filters.projectId) where.projectId = filters.projectId;
+      if (filters.context) where.account = { context: filters.context };
       if (filters.tag) where.tags = { has: filters.tag };
       // An explicit from/to range wins over `month` — see TransactionFilters.
       const range = explicitRange(filters.from, filters.to) ?? monthRange(filters.month);
@@ -138,11 +156,13 @@ export class TransactionsService {
         : [];
       const kindById = new Map(categories.map((category) => [category.id, category.kind as string]));
 
+      const refs = input.rows.map((row) => row.ref);
+      // A reference is known if a row carries it — or a transfer absorbed the row that did («Сопоставление переводов»).
       const existing = await tx.transaction.findMany({
-        where: { workspaceId, importedRef: { in: input.rows.map((row) => row.ref) } },
-        select: { importedRef: true }
+        where: { workspaceId, OR: [{ importedRef: { in: refs } }, { mergedRefs: { hasSome: refs } }] },
+        select: { importedRef: true, mergedRefs: true }
       });
-      const known = new Set(existing.map((row) => row.importedRef));
+      const known = new Set<string | null>(existing.flatMap((row) => [row.importedRef, ...row.mergedRefs]));
 
       const errors: FinanceImportResult["errors"] = [];
       const accepted: FinanceImportInput["rows"] = [];

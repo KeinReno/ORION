@@ -61,7 +61,7 @@ export function ImportView({ workspaceId: ws, workspaceLabel, onDirtyChange }: O
   return <div className="space-y-4">
     <ConfirmDialog open={pendingRun !== null} title="Открыть другой импорт?" description="Текущий выбор файлов ещё не сохранён в предпросмотр. Он будет сброшен." confirmLabel="Открыть импорт" danger={false} onCancel={() => setPendingRun(null)} onConfirm={() => { if (pendingRun) void load(pendingRun, true); }} />
     <p className="text-sm text-muted-foreground">Импорт в «{workspaceLabel}» использует выбранные файлы. Поддерживаются резюме MD/TXT, снимки вакансий и журналы JSON. Скрипты и браузерные сессии исключаются до загрузки. PDF/DOC/RTF пока пропускаются.</p>
-    <fieldset disabled={busy} className="space-y-3 rounded-xl border border-border p-4"><legend className="px-1 font-medium">Выбор данных</legend>
+    <fieldset disabled={busy} className="min-w-0 space-y-3 rounded-xl border border-border p-4"><legend className="px-1 font-medium">Выбор данных</legend>
       <label className="block text-sm">Папка с материалами HH<input ref={folder} type="file" multiple className="mt-1 block max-w-full text-sm" onChange={(e) => void select(e.target.files)} /></label>
       <label className="block text-sm">Или отдельные файлы<input type="file" multiple accept=".json,.md,.txt" className="mt-1 block max-w-full text-sm" onChange={(e) => void select(e.target.files)} /></label>
       <p className="text-sm">Выбрано поддерживаемых файлов: {files.length}. Исключено / не поддерживается: {excluded}. До 250 файлов и 1 МБ за один пакет.</p>

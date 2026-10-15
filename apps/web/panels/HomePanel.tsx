@@ -15,6 +15,7 @@ import type { PanelComponentProps } from "../lib/panel-registry";
 import { sectionViewPanelId } from "../lib/section-views";
 import { HomeCaptures } from "./home/home-captures";
 import { HomeActivity } from "./home/home-activity";
+import { HomeContributions } from "./home/home-contributions";
 import { HomeContacts } from "./home/home-contacts";
 import { HomeMeters } from "./home/home-meters";
 import { HomePayments } from "./home/home-payments";
@@ -76,6 +77,7 @@ export function HomePanel({ params, api }: PanelComponentProps): React.ReactElem
     ...pluginTabs.map((p) => ({ value: p.meta?.tabId ?? p.pluginId, label: p.meta?.label ?? p.pluginId })),
     { value: "meters", label: "Счётчики" },
     { value: "tasks", label: "Дела" },
+    ...(isEnabled("tasks") ? [{ value: "contributions", label: "Вклад" }] : []),
     { value: "related", label: "Связанное" }
   ];
   const section = useSectionView(params, api, "Дом", tabs);
@@ -162,6 +164,7 @@ export function HomePanel({ params, api }: PanelComponentProps): React.ReactElem
                 ))}
               </div>
             )}
+            {(homes ?? []).length > 0 && isEnabled("tasks") ? <HomeContributions workspaceId={workspaceId} /> : null}
             <div className="grid gap-3 [@container(min-width:680px)]:grid-cols-3">
               {isEnabled("tasks") ? <FamilyShortcut icon={ClipboardList} title="Дела" description="Задачи всей семьи" onClick={() => openPanel("tasks")} /> : null}
               {isEnabled("lists") ? <FamilyShortcut icon={Link2} title="Списки" description="Покупки и планы" onClick={() => openPanel("lists")} /> : null}
@@ -192,6 +195,7 @@ export function HomePanel({ params, api }: PanelComponentProps): React.ReactElem
                 </> : null}
                 {displayedTab === "meters" ? <HomeMeters workspaceId={workspaceId} home={home} overview={overview} /> : null}
                 {displayedTab === "tasks" && isEnabled("tasks") ? <HomeTasks workspaceId={workspaceId} home={home} overview={overview} /> : null}
+                {displayedTab === "contributions" && isEnabled("tasks") ? <HomeContributions workspaceId={workspaceId} homeId={home.id} title={`Кто что делает · ${home.name}`} /> : null}
                 {displayedTab === "related" ? <div className="grid gap-4 [@container(min-width:900px)]:grid-cols-2">
                   {isEnabled("lists") ? <HomeShopping workspaceId={workspaceId} home={home} overview={overview} /> : null}
                   {isEnabled("inventory") ? <HomeThings workspaceId={workspaceId} home={home} overview={overview} /> : null}

@@ -1,5 +1,7 @@
 "use client";
 
+import { KaidenLogo } from "./kaiden-logo";
+
 import { AuroraBackground, SpotlightCard } from "@orion/ui";
 import { motion } from "framer-motion";
 import { LayoutGrid, Lock, Sparkles } from "lucide-react";
@@ -39,9 +41,7 @@ export function AuthShell({
           className="hidden flex-col gap-6 lg:flex"
         >
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent-text">
-              <Sparkles className="h-5 w-5" />
-            </span>
+            <KaidenLogo className="h-9 w-9" />
             <span className="text-lg font-semibold tracking-tight text-foreground">ORION</span>
           </div>
           <h1 className="text-3xl font-semibold leading-tight text-foreground">
@@ -72,9 +72,7 @@ export function AuthShell({
         >
           <SpotlightCard className="w-full max-w-sm lg:ml-auto">
             <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
-                <Sparkles className="h-4 w-4" />
-              </span>
+              <KaidenLogo className="h-8 w-8" />
               <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
             </div>
             <h2 className="mb-1 text-lg font-semibold text-foreground">{title}</h2>

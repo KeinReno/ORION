@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createNoteInputSchema } from "./note";
 import { createTaskInputSchema } from "./task";
 
-export const searchableEntityTypeSchema = z.enum(["project", "task", "note", "event", "document", "transaction", "contact"]);
+export const searchableEntityTypeSchema = z.enum(["project", "task", "note", "event", "document", "transaction", "contact", "list"]);
 export type SearchableEntityType = z.infer<typeof searchableEntityTypeSchema>;
 
 export const globalSearchResultSchema = z.object({

@@ -1,5 +1,7 @@
 "use client";
 
+import { KaidenLogo } from "../../components/kaiden-logo";
+
 import {
   useChangePassword,
   useDeleteAvatar,
@@ -10,7 +12,7 @@ import {
 } from "@orion/core-react";
 import { AuroraBackground, Button, Input, SpotlightCard, useToast } from "@orion/ui";
 import { motion } from "framer-motion";
-import { ArrowLeft, LogOut, Sparkles } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
@@ -104,9 +106,7 @@ export default function AccountPage(): React.ReactElement {
       >
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent-text">
-              <Sparkles className="h-4 w-4" />
-            </span>
+            <KaidenLogo className="h-8 w-8" />
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
           </div>
           <h1 className="mb-1 text-lg font-semibold text-foreground">Учётная запись</h1>

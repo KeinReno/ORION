@@ -88,3 +88,9 @@ Slots Tasks/Finance/Documents дают доменный контекст соо�
 Полезный R0 можно выпустить отдельно; ИИ-менеджер не считается готовым до проверенной R1. Для live acceptance нужен явный выбор аккаунта и конкретного внешнего действия владельцем.
 
 Подготовка этого ADR не означает принятие proposal и не включает никакой существующий модуль/плагин.
+
+## Реализация R0.2, 14 октября 2026
+
+В рамках разрешённого владельцем продолжения реализованы typed slots `opportunities.views` (workspaceId/workspaceLabel/canManage/onDirtyChange; meta tabId/label/ownerOnly) и `opportunities.details.sections` (workspaceId/readonly Opportunity DTO/canManage). Реальные портовые контракты v1: `opportunities/public.ts` / OPPORTUNITIES_IMPORT_PORT и `opportunities-profiles/public.ts` / PROFILE_IMPORT_PORT. Composition отдельная, HH/profile логика не включена в Base.
+
+Два compiled-in default-off plugin: profiles и HH file import. Остальные предложенные слоты/assessment/execution/bridges остаются proposal, не заявляются как готовые. Фактический объём, лимиты и проверка — `docs/OPPORTUNITY_HUB_PROGRESS.md` R0.2; полный внешний runtime/approvals этот срез не создаёт.

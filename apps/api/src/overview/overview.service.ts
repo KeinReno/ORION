@@ -121,6 +121,7 @@ export class OverviewService {
             workspaceName: ws.name,
             name: account.name,
             kind: account.kind as MyOverview["accounts"][number]["kind"],
+            context: account.context as MyOverview["accounts"][number]["context"],
             currency: account.currency,
             startingBalance: account.startingBalance,
             balance: account.startingBalance + (netByAccount.get(account.id) ?? 0),

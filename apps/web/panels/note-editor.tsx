@@ -20,7 +20,9 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  ClipboardCopy,
   Copy,
+  Download,
   FileStack,
   Hash,
   History,
@@ -36,6 +38,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
+import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
 import { openPanel } from "../lib/panel-bus";
 import { buildPanelDragId } from "../lib/panel-drag";
 import { panelDragHandleProps } from "../lib/panel-drag-handle";
@@ -356,6 +359,18 @@ export function NoteEditor({
     if (onDuplicate) {
       menuItems.push({ label: "Дублировать", icon: Copy, onSelect: () => onDuplicate(note) });
     }
+    menuItems.push(
+      { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },
+      {
+        label: "Копировать Markdown",
+        icon: ClipboardCopy,
+        onSelect: () =>
+          void copyNoteMarkdown(note).then(
+            () => toast({ title: "Скопировано", tone: "success" }),
+            () => toast({ title: "Не удалось скопировать", tone: "danger" })
+          )
+      }
+    );
     if (onToggleTemplate) {
       menuItems.push({
         label: note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном",

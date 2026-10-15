@@ -1,8 +1,8 @@
 "use client";
 
 import type { CalendarItem } from "@orion/ui";
-import type { Event, Note, OrionModuleId, RecurringTransaction, Task } from "@orion/shared-types";
-import { isTaskClosed } from "@orion/shared-types";
+import type { ContactCard, Event, Note, OrionModuleId, RecurringTransaction, Task } from "@orion/shared-types";
+import { isTaskClosed, nextBirthday } from "@orion/shared-types";
 import { formatMoney } from "./format";
 
 /**
@@ -13,7 +13,7 @@ import { formatMoney } from "./format";
  * `panel-registry.ts`.
  */
 
-export type CalendarSourceId = "events" | "tasks" | "notes" | "finance";
+export type CalendarSourceId = "events" | "tasks" | "notes" | "finance" | "contacts";
 
 export interface CalendarSourceMeta {
   id: CalendarSourceId;
@@ -26,7 +26,8 @@ export const CALENDAR_SOURCES: CalendarSourceMeta[] = [
   { id: "events", label: "События", toneKey: "__event__" },
   { id: "tasks", label: "Задачи", toneKey: "__task__" },
   { id: "notes", label: "Заметки", toneKey: "__note__" },
-  { id: "finance", label: "Платежи", toneKey: "__finance__" }
+  { id: "finance", label: "Платежи", toneKey: "__finance__" },
+  { id: "contacts", label: "Дни рождения", toneKey: "__birthday__" }
 ];
 
 /** Neighbour overlay. `null` = this panel's own events, always on while Calendar is open. */
@@ -34,7 +35,8 @@ export const CALENDAR_SOURCE_MODULE: Record<CalendarSourceId, OrionModuleId | nu
   events: null,
   tasks: "tasks",
   notes: "notes",
-  finance: "finance"
+  finance: "finance",
+  contacts: "contacts"
 };
 
 export function eventItems(events: Event[] | undefined): CalendarItem[] {
@@ -93,4 +95,39 @@ export function financeItems(recurring: RecurringTransaction[] | undefined): Cal
       kind: "finance",
       readOnly: true
     }));
+}
+
+/** Prefix of a birthday pill id: `birthday-<contactId>-<year>`. */
+export const BIRTHDAY_ITEM_PREFIX = "birthday-";
+
+export function contactIdFromBirthdayItem(itemId: string): string | null {
+  return itemId.startsWith(BIRTHDAY_ITEM_PREFIX) ? itemId.slice(BIRTHDAY_ITEM_PREFIX.length, -5) : null;
+}
+
+/** Every birthday that falls into the years the visible range touches, as all-day read-only pills. */
+export function birthdayItems(contacts: ContactCard[] | undefined, range: { from: string; to: string } | undefined): CalendarItem[] {
+  if (!range) return [];
+  const firstYear = new Date(range.from).getFullYear();
+  const lastYear = new Date(range.to).getFullYear();
+  const items: CalendarItem[] = [];
+  for (const contact of contacts ?? []) {
+    if (!contact.birthday || contact.archivedAt) continue;
+    for (let year = firstYear; year <= lastYear; year += 1) {
+      // Reuse the leap-day rule: ask for the occurrence on 1 January of that year.
+      const occurrence = nextBirthday(contact.birthday, `${year}-01-01`);
+      if (!occurrence) continue;
+      const [y, m, d] = occurrence.date.split("-").map(Number) as [number, number, number];
+      items.push({
+        id: `${BIRTHDAY_ITEM_PREFIX}${contact.id}-${y}`,
+        // All-day pills carry the UTC-midnight of their date; the calendar re-anchors it to the local day (see allDayAnchor).
+        start: new Date(Date.UTC(y, m - 1, d)).toISOString(),
+        allDay: true,
+        label: `🎂 ${contact.name}${occurrence.turning !== null ? ` · ${occurrence.turning}` : ""}`,
+        tone: "__birthday__",
+        kind: "birthday",
+        readOnly: true
+      });
+    }
+  }
+  return items;
 }

@@ -9,6 +9,7 @@ import {
   FileText,
   FolderKanban,
   Inbox,
+  ListChecks,
   ListTodo,
   Plus,
   Receipt,
@@ -17,7 +18,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { openEntity, openPanel } from "./panel-bus";
+import { useCaptureToList } from "./capture-to-list";
+import { openEntity, openList, openPanel } from "./panel-bus";
 import { selectPaletteResults, type PaletteEntry } from "./palette-results";
 import { panelRegistry } from "./panel-registry";
 import { useActiveWorkspace } from "./use-active-workspace";
@@ -37,7 +39,8 @@ const PANEL_FOR_TYPE: Record<string, string> = {
   event: "calendar",
   document: "documents",
   transaction: "finance",
-  contact: "contacts"
+  contact: "contacts",
+  list: "lists"
 };
 
 /** Icon + panel for a server-side search hit, by entity type (`GlobalSearchResult.type`). */
@@ -48,7 +51,8 @@ const SEARCH_RESULT_ICONS: Record<string, LucideIcon> = {
   event: CalendarDays,
   document: FileText,
   transaction: Receipt,
-  contact: UserRound
+  contact: UserRound,
+  list: ListChecks
 };
 const SEARCH_RESULT_LABELS: Record<string, string> = {
   project: "проект",
@@ -96,6 +100,7 @@ export function CommandCenter(): React.ReactElement {
   const createNote = useCreateNote(isEnabled("notes") ? workspace?.id : undefined);
   const createTask = useCreateTask(isEnabled("tasks") ? workspace?.id : undefined);
   const captureInbox = useCaptureInboxItem(workspace?.id);
+  const captureToList = useCaptureToList(workspace?.id);
   const { toast } = useToast();
 
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -316,7 +321,7 @@ export function CommandCenter(): React.ReactElement {
 
   async function submitCapture(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const resolved = resolveQuickCapture(capture, { tasks: isEnabled("tasks"), notes: isEnabled("notes") });
+    const resolved = resolveQuickCapture(capture, { tasks: isEnabled("tasks"), notes: isEnabled("notes"), lists: isEnabled("lists") });
     if (resolved.kind === "error") {
       toast({ title: resolved.message, tone: "danger" });
       return;
@@ -334,6 +339,13 @@ export function CommandCenter(): React.ReactElement {
       } else if (resolved.kind === "note") {
         await createNote.mutateAsync({ title: resolved.title, body: "", tags: [] });
         toast({ title: "Заметка добавлена", tone: "success" });
+      } else if (resolved.kind === "list") {
+        const { list, added } = await captureToList(resolved.text);
+        toast({
+          title: added > 1 ? `Добавлено в «${list.name}»: ${added}` : `Добавлено в «${list.name}»`,
+          action: { label: "Открыть", onClick: () => openList(list.id, list.name) },
+          tone: "success"
+        });
       } else {
         await captureInbox.mutateAsync({ title: resolved.title, body: "", kind: "inbox" });
         toast({ title: "Добавлено в инбокс", tone: "success" });
@@ -415,7 +427,7 @@ export function CommandCenter(): React.ReactElement {
             autoFocus
             value={capture}
             onChange={(e) => setCapture(e.target.value)}
-            placeholder={quickCapturePlaceholder({ tasks: isEnabled("tasks"), notes: isEnabled("notes") })}
+            placeholder={quickCapturePlaceholder({ tasks: isEnabled("tasks"), notes: isEnabled("notes"), lists: isEnabled("lists") })}
           />
           <p className="text-2xs text-subtle-foreground">
             Enter — в инбокс. «/task » и «/note » создают задачу или заметку сразу. «!» — задача на сегодня, «#тег» — проект.

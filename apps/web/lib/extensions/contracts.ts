@@ -342,6 +342,19 @@ export interface ListsItemApi {
 
 export type ListsItemSlotProps = Record<string, never>;
 
+/** lists.actions — a list-level action of a bridge plugin in the list's header (ADR-0009: «Записать расход»). */
+export interface ListsActionsSlotProps {
+  workspaceId: string;
+  list: import("@orion/shared-types").List;
+}
+
+/** lists.item.mark — a small mark a plugin puts next to an entry («записано в финансах»). */
+export interface ListsItemMarkSlotProps {
+  workspaceId: string;
+  listId: string;
+  item: ListItem;
+}
+
 /** inventory.item.actions — extra actions in the window of one stock item (ADR-0009: «В список покупок»). */
 export interface InventoryItemActionsSlotProps {
   workspaceId: string;
@@ -396,6 +409,8 @@ export interface SlotContracts {
   "inventory.costing": InventoryCostingSlotProps;
   "inventory.item.actions": InventoryItemActionsSlotProps;
   "lists.item": ListsItemSlotProps;
+  "lists.actions": ListsActionsSlotProps;
+  "lists.item.mark": ListsItemMarkSlotProps;
   "calendar.event.recurrence": EventRecurrenceSlotProps;
   "calendar.event.reminders": EventRemindersSlotProps;
   "finance.transactions.top": FinanceTransactionsTopSlotProps;

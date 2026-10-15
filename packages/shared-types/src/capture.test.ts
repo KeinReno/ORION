@@ -119,3 +119,21 @@ describe("quickCaptureHint", () => {
     expect(quickCaptureHint(resolveQuickCapture("   ", both))).toBeNull();
   });
 });
+
+describe("list capture", () => {
+  const withLists = { tasks: true, notes: true, lists: true };
+  it("routes /купить, /список and /list to the shopping list", () => {
+    expect(resolveQuickCapture("/купить молоко, 2 л", withLists)).toEqual({ kind: "list", text: "молоко, 2 л" });
+    expect(resolveQuickCapture("/список хлеб", withLists)).toEqual({ kind: "list", text: "хлеб" });
+    expect(resolveQuickCapture("/list bread", withLists)).toEqual({ kind: "list", text: "bread" });
+  });
+  it("explains when the module is off or the text is missing", () => {
+    expect(resolveQuickCapture("/купить хлеб", both)).toEqual({ kind: "error", message: "Модуль «Списки» выключен" });
+    expect(resolveQuickCapture("/купить", withLists)).toEqual({ kind: "error", message: "Укажите, что добавить в список" });
+  });
+  it("hints the destination and advertises the shortcut only when lists are on", () => {
+    expect(quickCaptureHint(resolveQuickCapture("/купить хлеб", withLists))).toBe("→ список покупок");
+    expect(quickCapturePlaceholder(withLists)).toContain("/купить");
+    expect(quickCapturePlaceholder(both)).not.toContain("/купить");
+  });
+});

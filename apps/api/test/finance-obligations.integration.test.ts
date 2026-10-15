@@ -127,6 +127,41 @@ describe("Finance obligations (plan vs ledger)", () => {
     expect(await balanceOf(base, alice.accessToken, accountId)).toBe(1020000);
   });
 
+  it("keeps the counterparty, and partial repayments lower the principal without moving the due date or closing the period", async () => {
+    const { alice, base, accountId } = await setup("partial");
+    const { data: o } = await request<Obl & { counterparty: string }>(`${base}/obligations`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { name: "Займ", counterparty: "Пётр", principal: 300000, payment: 100000, interval: "monthly", nextDueAt: "2026-07-10T09:00:00.000Z" }
+    });
+    expect(o.counterparty).toBe("Пётр");
+
+    // Two partial repayments inside one period: both fine, the schedule stays put.
+    const one = await request<Pay>(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId, amount: 40000, partial: true } });
+    const two = await request<Pay>(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId, amount: 10000, partial: true } });
+    expect(one.status).toBe(201);
+    expect(two.status).toBe(201);
+    expect(two.data.obligation).toMatchObject({ principal: 250000, nextDueAt: "2026-07-10T09:00:00.000Z", closedAt: null });
+    expect(await balanceOf(base, alice.accessToken, accountId)).toBe(1000000 - 50000);
+
+    // The regular payment of that period is still available, once.
+    expect((await request<Pay>(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId } })).data.obligation.nextDueAt).toBe("2026-08-10T09:00:00.000Z");
+
+    const history = await request<{ totalAmount: number }[]>(`${base}/obligations/${o.id}/payments`, { method: "GET", token: alice.accessToken });
+    expect(history.data.map((t) => t.totalAmount).sort((a, b) => a - b)).toEqual([10000, 40000, 100000]);
+
+    // Paying everything off by a partial repayment closes the obligation.
+    const last = await request<Pay>(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId, amount: 150000, partial: true } });
+    expect(last.data.obligation.principal).toBe(0);
+    expect(last.data.obligation.closedAt).not.toBeNull();
+  });
+
+  it("a partial repayment needs a tracked principal", async () => {
+    const { alice, base, accountId } = await setup("partial-none");
+    const { data: o } = await request<Obl>(`${base}/obligations`, { method: "POST", token: alice.accessToken, body: { name: "Подписка", kind: "subscription", payment: 5000, nextDueAt: "2026-07-10T09:00:00.000Z" } });
+    expect((await request(`${base}/obligations/${o.id}/pay`, { method: "POST", token: alice.accessToken, body: { accountId, amount: 1000, partial: true } })).status).toBe(400);
+  });
+
   it("refuses a foreign account, and another workspace's obligation is invisible", async () => {
     const one = await setup("mine");
     const two = await setup("theirs");

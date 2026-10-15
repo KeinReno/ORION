@@ -1,13 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import {
   createListInputSchema,
   createListItemInputSchema,
+  createListItemsBulkInputSchema,
+  duplicateListInputSchema,
+  reorderInputSchema,
+  restoreListItemsInputSchema,
   updateListInputSchema,
   updateListItemInputSchema,
+  type ClearCheckedResult,
   type CreateListInput,
   type CreateListItemInput,
+  type CreateListItemsBulkInput,
+  type DuplicateListInput,
   type List,
   type ListItem,
+  type ReorderInput,
+  type RestoreListItemsInput,
   type UpdateListInput,
   type UpdateListItemInput
 } from "@orion/shared-types";
@@ -26,9 +35,29 @@ export class ListsController {
   list(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
-    @Query("includeArchived") includeArchived?: string
+    @Query("includeArchived") includeArchived?: string,
+    @Query("templates") templates?: string
   ): Promise<List[]> {
-    return this.lists.list(user.userId, workspaceId, { includeArchived: includeArchived === "true" });
+    return this.lists.list(user.userId, workspaceId, { includeArchived: includeArchived === "true", templates: templates === "true" });
+  }
+
+  /** Manual order of the lists. Declared before the `:listId` routes so "order" is never read as an id. */
+  @Put("order")
+  reorder(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(reorderInputSchema)) body: ReorderInput
+  ): Promise<void> {
+    return this.lists.reorder(user.userId, workspaceId, body);
+  }
+
+  @Get(":listId")
+  get(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string
+  ): Promise<List> {
+    return this.lists.get(user.userId, workspaceId, listId);
   }
 
   @Post()
@@ -60,6 +89,36 @@ export class ListsController {
     return this.lists.archive(user.userId, workspaceId, listId);
   }
 
+  /** Real deletion, allowed only for an archived list or a template (see ListsService.deletePermanently). */
+  @Delete(":listId/permanent")
+  deletePermanently(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string
+  ): Promise<void> {
+    return this.lists.deletePermanently(user.userId, workspaceId, listId);
+  }
+
+  @Post(":listId/duplicate")
+  duplicate(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string,
+    @Body(new ZodValidationPipe(duplicateListInputSchema)) body: DuplicateListInput
+  ): Promise<List> {
+    return this.lists.duplicate(user.userId, workspaceId, listId, body);
+  }
+
+  /** «Новый круг»: untick everything (see ListsService.reset). */
+  @Post(":listId/reset")
+  reset(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string
+  ): Promise<List> {
+    return this.lists.reset(user.userId, workspaceId, listId);
+  }
+
   @Post(":listId/items")
   createItem(
     @CurrentUser() user: RequestUser,
@@ -68,6 +127,37 @@ export class ListsController {
     @Body(new ZodValidationPipe(createListItemInputSchema)) body: CreateListItemInput
   ): Promise<ListItem> {
     return this.lists.createItem(user.userId, workspaceId, listId, body);
+  }
+
+  @Post(":listId/items/bulk")
+  createItemsBulk(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string,
+    @Body(new ZodValidationPipe(createListItemsBulkInputSchema)) body: CreateListItemsBulkInput
+  ): Promise<ListItem[]> {
+    return this.lists.createItemsBulk(user.userId, workspaceId, listId, body);
+  }
+
+  @Put(":listId/items/order")
+  reorderItems(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string,
+    @Body(new ZodValidationPipe(reorderInputSchema)) body: ReorderInput
+  ): Promise<List> {
+    return this.lists.reorderItems(user.userId, workspaceId, listId, body);
+  }
+
+  /** Puts deleted entries back whole (the «Отменить» of «Очистить отмеченные»). */
+  @Post(":listId/items/restore")
+  restoreItems(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("listId") listId: string,
+    @Body(new ZodValidationPipe(restoreListItemsInputSchema)) body: RestoreListItemsInput
+  ): Promise<List> {
+    return this.lists.restoreItems(user.userId, workspaceId, listId, body);
   }
 
   @Patch(":listId/items/:itemId")
@@ -92,13 +182,13 @@ export class ListsController {
     return this.lists.deleteItem(user.userId, workspaceId, listId, itemId);
   }
 
-  /** Deletes every checked item in the list at once — the "clear completed" action. */
+  /** Deletes every checked item in the list at once — the "clear completed" action; returns what it removed. */
   @Post(":listId/items/clear-checked")
   clearChecked(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
     @Param("listId") listId: string
-  ): Promise<void> {
+  ): Promise<ClearCheckedResult> {
     return this.lists.clearChecked(user.userId, workspaceId, listId);
   }
 }

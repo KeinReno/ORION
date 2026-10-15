@@ -96,6 +96,38 @@ describe("Global goals over projects", () => {
     expect(list.data[0].plans.find((p) => p.projectName === "Пустой")?.progress).toBeNull();
   });
 
+  it("план сообщает следующую задачу, блокировки и просрочку — звезда в созвездии не указывает на то, что нельзя начать", async () => {
+    const alice = await register("pulse");
+    const base = `/workspaces/${alice.workspaceId}/goals`;
+    const goal = await request<{ id: string }>(base, { method: "POST", token: alice.accessToken, body: { title: "Путь" } });
+    const p = await project(alice, "Маршрут");
+    const mk = async (body: Record<string, unknown>) => {
+      const created = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/tasks`, {
+        method: "POST", token: alice.accessToken, body: { projectId: p, ...body }
+      });
+      expect(created.status).toBe(201);
+      return created.data.id;
+    };
+    const first = await mk({ title: "Сначала это" });
+    await mk({ title: "Потом это", dependencyIds: [first] }); // ждёт «Сначала это»
+    await mk({ title: "Просроченная", dueAt: "2020-01-01T00:00:00.000Z" });
+    await request(`${base}/${goal.data.id}/plans`, { method: "POST", token: alice.accessToken, body: { projectId: p } });
+
+    type Pulse = { nextTask: { title: string; overdue: boolean } | null; blocked: number; overdue: number; lastActivityAt: string | null };
+    const plan = async () => (await request<Array<{ plans: Pulse[] }>>(base, { method: "GET", token: alice.accessToken })).data[0].plans[0];
+
+    const before = await plan();
+    expect(before.nextTask).toMatchObject({ title: "Просроченная", overdue: true }); // ближайший срок раньше всех
+    expect(before.blocked).toBe(1);
+    expect(before.overdue).toBe(1);
+    expect(before.lastActivityAt).not.toBeNull();
+
+    // Закрыли «Сначала это» — зависимая задача перестала быть заблокированной.
+    const closed = await request(`/workspaces/${alice.workspaceId}/tasks/${first}`, { method: "PATCH", token: alice.accessToken, body: { status: "done" } });
+    expect(closed.status).toBe(200);
+    expect((await plan()).blocked).toBe(0);
+  });
+
   it("чужой проект и чужая цель недоступны; удаление проекта убирает только связь", async () => {
     const alice = await register("alice2");
     const mallory = await register("mallory");

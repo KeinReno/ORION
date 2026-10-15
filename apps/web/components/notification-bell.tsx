@@ -8,7 +8,7 @@ import {
 } from "@orion/core-react";
 import type { Notification } from "@orion/shared-types";
 import { Button, EmptyState, IconButton, Popover, Skeleton, cx, useToast } from "@orion/ui";
-import { Bell, BellRing, Boxes, CalendarClock, FolderKanban, Info, ListTodo, MessageSquare, Trash2, Wallet } from "lucide-react";
+import { Bell, BellRing, Boxes, Cake, CalendarClock, FolderKanban, Info, ListTodo, MessageSquare, Trash2, UserRound, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { relativeTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
@@ -23,6 +23,8 @@ const KIND_ICON: Record<Notification["kind"], React.ComponentType<{ className?: 
   task_comment: MessageSquare,
   project_update: FolderKanban,
   entity_reminder: BellRing,
+  contact_birthday: Cake,
+  contact_followup: UserRound,
   system: Info
 };
 
@@ -34,6 +36,8 @@ const KIND_LABEL: Record<Notification["kind"], string> = {
   task_comment: "Комментарий",
   project_update: "Проект",
   entity_reminder: "Напоминание",
+  contact_birthday: "День рождения",
+  contact_followup: "Связаться",
   system: "Система"
 };
 

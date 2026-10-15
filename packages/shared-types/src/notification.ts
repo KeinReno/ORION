@@ -21,6 +21,8 @@ export const notificationSchema = z.object({
     "task_comment",
     "project_update",
     "entity_reminder",
+    "contact_birthday",
+    "contact_followup",
     "system"
   ]),
   title: z.string(),

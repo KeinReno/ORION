@@ -271,6 +271,52 @@ describe("Module Home", () => {
     expect((await request<{ paidMinor: number }>(`${path}/months/2026-08/payments/${linked.data.payments[0].id}`, { method: "DELETE", token: alice.accessToken })).data.paidMinor).toBe(0);
   });
 
+  it("вклад: исполнитель — тот, кто закрыл дело; «взял чужое» отдельно; доли в сумме дают 1", async () => {
+    const alice = await register("contrib-alice");
+    const bob = await register("contrib-bob");
+    const mallory = await register("contrib-mallory");
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const invite = await request<{ acceptUrl: string }>(`${ws}/invites`, { method: "POST", token: alice.accessToken, body: { email: bob.email } });
+    const inviteToken = new URL(invite.data.acceptUrl).searchParams.get("token")!;
+    expect((await request(`/invites/${inviteToken}/accept`, { method: "POST", token: bob.accessToken })).status).toBe(201);
+
+    const home = await request<{ id: string }>(`${ws}/homes`, { method: "POST", token: alice.accessToken, body: { name: "Квартира" } });
+    const mk = async (title: string, token: string, extra: object = {}) =>
+      (await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token, body: { title, homeId: home.data.id, ...extra } })).data.id;
+    const close = (id: string, token: string) => request(`${ws}/tasks/${id}`, { method: "PATCH", token, body: { status: "done" } });
+
+    const a1 = await mk("Посуда", alice.accessToken);
+    const a2 = await mk("Пылесос", alice.accessToken);
+    const b1 = await mk("Мусор", bob.accessToken);
+    const open = await mk("Окна", alice.accessToken);
+    const outside = (await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Не по дому" } })).data.id;
+    for (const [id, token] of [[a1, alice.accessToken], [a2, bob.accessToken], [b1, bob.accessToken], [outside, alice.accessToken]] as const) {
+      expect((await close(id, token)).status).toBe(200);
+    }
+
+    interface Out { totalDone: number; undetermined: number; openUnassigned: number; members: Array<{ userId: string; done: number; share: number; takenOver: number }> }
+    const forHome = await request<Out>(`${ws}/homes/contributions?period=month&homeId=${home.data.id}`, { method: "GET", token: alice.accessToken });
+    expect(forHome.status).toBe(200);
+    expect(forHome.data.totalDone).toBe(3);
+    const byUser = new Map(forHome.data.members.map((m) => [m.userId, m]));
+    expect(byUser.get(alice.user.id)?.done).toBe(1);
+    expect(byUser.get(bob.user.id)?.done).toBe(2);
+    expect(forHome.data.members.reduce((sum, m) => sum + m.share, 0) + forHome.data.undetermined / forHome.data.totalDone).toBeCloseTo(1);
+    expect(forHome.data.openUnassigned).toBe(1);
+    void open;
+
+    // Без homeId — по всем объектам; дело без дома не считается.
+    expect((await request<Out>(`${ws}/homes/contributions`, { method: "GET", token: bob.accessToken })).data.totalDone).toBe(3);
+
+    expect((await request(`${ws}/homes/contributions?period=year`, { method: "GET", token: alice.accessToken })).status).toBe(400);
+    expect((await request(`${ws}/homes/contributions?homeId=00000000-0000-0000-0000-000000000000`, { method: "GET", token: alice.accessToken })).status).toBe(404);
+    expect([403, 404]).toContain((await request(`${ws}/homes/contributions`, { method: "GET", token: mallory.accessToken })).status);
+
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: ["tasks"] } }));
+    expect((await request(`${ws}/homes/contributions`, { method: "GET", token: alice.accessToken })).status).toBe(409);
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: [] } }));
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

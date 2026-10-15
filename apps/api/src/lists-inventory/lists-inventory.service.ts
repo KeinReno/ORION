@@ -13,6 +13,9 @@ import { toItemDto } from "../lists/lists.service";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
+/** Entries are returned with the name of whoever ticked them, like everywhere in «Списки». */
+const WHO = { checkedBy: { select: { name: true } } } as const;
+
 /**
  * Plugin «Покупки → Склад» (`lists-inventory`): the bridge between «Списки» and
  * «Склад». It owns no table — only three columns on `list_items` — and writes
@@ -44,7 +47,8 @@ export class ListsInventoryService {
       }
       return tx.listItem.update({
         where: { id: itemId },
-        data: { inventoryItemId: input.inventoryItemId, quantity: input.quantity ?? item.quantity }
+        data: { inventoryItemId: input.inventoryItemId, quantity: input.quantity ?? item.quantity },
+        include: WHO
       });
     });
     return toItemDto(row);
@@ -65,7 +69,9 @@ export class ListsInventoryService {
       const item = await this.assertListItemTx(tx, workspaceId, listId, itemId);
       if (!item.inventoryItemId) throw new BadRequestException("Пункт не связан с позицией склада");
       if (item.stockedMovementId) {
-        const row = item.checked ? item : await tx.listItem.update({ where: { id: itemId }, data: { checked: true } });
+        const row = item.checked
+          ? await tx.listItem.findUniqueOrThrow({ where: { id: itemId }, include: WHO })
+          : await tx.listItem.update({ where: { id: itemId }, data: { checked: true, checkedAt: new Date(), checkedById: userId }, include: WHO });
         return { row, movement: null, alert: null };
       }
       const list = await tx.list.findUniqueOrThrow({ where: { id: listId }, select: { name: true } });
@@ -75,7 +81,11 @@ export class ListsInventoryService {
         direction: "+",
         note: `Куплено по списку «${list.name}»`
       });
-      const row = await tx.listItem.update({ where: { id: itemId }, data: { checked: true, stockedMovementId: movement.id } });
+      const row = await tx.listItem.update({
+        where: { id: itemId },
+        data: { checked: true, stockedMovementId: movement.id, ...(item.checked ? {} : { checkedAt: new Date(), checkedById: userId }) },
+        include: WHO
+      });
       return { row, movement, alert };
     });
     await this.inventory.deliverAlert(alert);
@@ -98,12 +108,14 @@ export class ListsInventoryService {
       if (list.archivedAt) throw new BadRequestException("Список в архиве");
 
       const open = await tx.listItem.findFirst({ where: { listId: list.id, inventoryItemId, checked: false } });
-      if (open) return open;
+      if (open) return tx.listItem.findUniqueOrThrow({ where: { id: open.id }, include: WHO });
 
       const totals = await tx.inventoryMovement.aggregate({ where: { itemId: inventoryItemId }, _sum: { quantity: true } });
       const quantity = input.quantity ?? restockQuantity(totals._sum.quantity ?? 0, stock.minStock);
+      const last = await tx.listItem.aggregate({ where: { listId: list.id }, _max: { sortOrder: true } });
       return tx.listItem.create({
-        data: { workspaceId, listId: list.id, label: stock.name, inventoryItemId, quantity }
+        data: { workspaceId, listId: list.id, label: stock.name, inventoryItemId, quantity, sortOrder: (last._max.sortOrder ?? 0) + 10 },
+        include: WHO
       });
     });
     return toItemDto(row);

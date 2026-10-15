@@ -36,7 +36,9 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  ClipboardCopy,
   Copy,
+  Download,
   ExternalLink,
   PanelRight,
   FileStack,
@@ -66,6 +68,7 @@ import { detachPanelToWindow } from "../lib/panel-window";
 import { nextListId } from "../lib/list-nav";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
+import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
 import { noteListPreview } from "../lib/note-list-preview";
 import { NO_PROJECT, activeFilterCount, filterNotes } from "../lib/note-filters";
 import { NoteEditor, contentTime, type NoteEditorInput } from "./note-editor";
@@ -513,6 +516,14 @@ export function NotesPanel(): React.ReactElement {
                     event.dataTransfer.effectAllowed = "copy";
                     event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, `note:${note.id}`);
                   }}
+                  // Бросили за пределами окна приложения (другой монитор, рабочий стол) → заметка открывается отдельным окном там.
+                  onDragEnd={(event) => {
+                    const { clientX, clientY, screenX, screenY } = event;
+                    const dropEffect = event.dataTransfer.dropEffect;
+                    if (dropEffect !== "none" || (screenX === 0 && screenY === 0)) return;
+                    const outside = clientX < 0 || clientY < 0 || clientX > window.innerWidth || clientY > window.innerHeight;
+                    if (outside) void detachPanelToWindow(`note:${note.id}`, note.title, { x: screenX, y: screenY });
+                  }}
                   className={cx(
                     "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
                     trash
@@ -601,6 +612,16 @@ export function NotesPanel(): React.ReactElement {
                               { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
                               { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`note:${note.id}`, note.title) },
                               { label: "Дублировать", icon: Copy, onSelect: () => requestLeave(() => void handleDuplicate(note)) },
+                              { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },
+                              {
+                                label: "Копировать Markdown",
+                                icon: ClipboardCopy,
+                                onSelect: () =>
+                                  void copyNoteMarkdown(note).then(
+                                    () => toast({ title: "Скопировано", tone: "success" }),
+                                    () => toast({ title: "Не удалось скопировать", tone: "danger" })
+                                  )
+                              },
                               ...(templatesApi
                                 ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => requestLeave(() => handleToggleTemplate(note)) }]
                                 : []),

@@ -44,6 +44,7 @@ export class AccountsService {
           workspaceId,
           name: input.name,
           kind: input.kind,
+          context: input.context,
           // `currency` was accepted by the contract since v0.14 but never
           // persisted — the column kept its 'RUB' default whatever the user
           // sent. Same class of bug as `archivedAt` in v0.13.
@@ -119,6 +120,7 @@ type AccountRow = {
   workspaceId: string;
   name: string;
   kind: string;
+  context: string;
   currency: string;
   startingBalance: number;
   archivedAt: Date | null;
@@ -132,6 +134,7 @@ function toDto(account: AccountRow, net: number): Account {
     workspaceId: account.workspaceId,
     name: account.name,
     kind: account.kind as Account["kind"],
+    context: account.context as Account["context"],
     currency: account.currency,
     startingBalance: account.startingBalance,
     balance: account.startingBalance + net,

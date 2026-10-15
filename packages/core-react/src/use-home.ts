@@ -8,7 +8,9 @@ import type {
   CreateMeterInput,
   CreateMeterReadingInput,
   ActivityEntry,
+  ContributionPeriod,
   Home,
+  HomeContributions,
   HomeOverview,
   Meter,
   UpdateContactInput,
@@ -34,6 +36,17 @@ export function useHomeOverview(workspaceId: string | undefined, homeId: string 
     queryKey: ["home", workspaceId, "overview", homeId],
     queryFn: () => api.homeOverview(workspaceId as string, homeId as string),
     enabled: Boolean(workspaceId && homeId)
+  });
+}
+
+/** Вклад в дела дома: кто сколько закрыл за период. Без `homeId` — по всем объектам сразу. */
+export function useHomeContributions(workspaceId: string | undefined, period: ContributionPeriod, homeId?: string) {
+  const { api } = useCore();
+  return useQuery<HomeContributions>({
+    queryKey: ["home", workspaceId, "contributions", homeId ?? "all", period],
+    queryFn: () => api.homeContributions(workspaceId as string, period, homeId),
+    enabled: Boolean(workspaceId),
+    refetchInterval: 60_000
   });
 }
 

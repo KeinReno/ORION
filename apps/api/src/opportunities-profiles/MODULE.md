@@ -1,0 +1,9 @@
+# Opportunities Profiles — R0.2
+
+Optional plugin `opportunities-profiles`, default-off, extends `opportunities`. Owns people/team profiles, preferences, factual statements with explicit owner confirmation, tracks and immutable text material versions. Disable preserves all data.
+
+Public schemas: `@orion/shared-types` opportunity-profile.ts. REST: `/workspaces/:workspaceId/opportunity-profiles`. `@orion/core` exposes typed client methods. Read allowed to permitted workspace members; write/confirm/archive owner-only. Creation requires acknowledgement of workspace-wide visibility. No per-profile private ACL in this slice.
+
+Import integration: `public.ts` and `PROFILE_IMPORT_PORT.v1`; import checks membership, enabled Base/plugin and active profile in the caller's transaction. Profiles identified by complete relative candidate folder path, not by name matching. Import appends content-hashed materials, never updates preferences/name or confirms facts automatically. Track fact IDs and material track IDs must belong to the same workspace/profile.
+
+FORCE RLS on four tables; composite workspace/profile foreign keys. CAS revisions for profile changes and fact state. Materials cannot be updated/deleted through this API. Profiles/materials paginated (50); manual facts bounded at 500. Snapshot includes profiles → facts/tracks → materials. Tests: opportunity-extensions.integration.test.ts and shared input contracts. No HH execution, LLM or automatic active-resume choice.

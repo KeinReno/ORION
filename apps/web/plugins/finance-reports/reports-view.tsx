@@ -5,6 +5,7 @@ import { EmptyState, IconButton, Skeleton } from "@orion/ui";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { formatMoney, projectColor } from "../../lib/extensions/host-api";
+import { ReportInsights } from "./insights";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
 
 const MONTHS = 6;
@@ -75,6 +76,7 @@ export function ReportsView(): React.ReactElement {
         entries={breakdown ?? []}
         loading={breakdownLoading}
       />
+      <ReportInsights workspaceId={workspace?.id} month={breakdownMonth} />
     </div>
   );
 }

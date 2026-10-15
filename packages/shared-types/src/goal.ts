@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isTaskClosed, taskPrioritySchema, taskStatusSchema, type TaskPriority, type TaskStatus } from "./task";
 
 /**
  * Global goals (plugin `projects-goals`). A goal is an outcome; its PLANS are projects, each
@@ -13,6 +14,17 @@ export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = {
   dropped: "Отменена"
 };
 
+/** The one task a plan would do next (see `summarizePlanTasks`). */
+export const goalNextTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: taskStatusSchema,
+  priority: taskPrioritySchema,
+  dueAt: z.string().nullable(),
+  overdue: z.boolean()
+});
+export type GoalNextTask = z.infer<typeof goalNextTaskSchema>;
+
 export const goalPlanSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -22,7 +34,15 @@ export const goalPlanSchema = z.object({
   /** The plan's own progress, 0–100; null = the project has no tasks yet, i.e. unknown (not 0). */
   progress: z.number().min(0).max(100).nullable(),
   tasks: z.number().int(),
-  closed: z.number().int()
+  closed: z.number().int(),
+  /** First open, unblocked task in working order; null = nothing to do right now (see `blocked`). */
+  nextTask: goalNextTaskSchema.nullable(),
+  /** Open tasks waiting on another open task. */
+  blocked: z.number().int(),
+  /** Open tasks past their due date. */
+  overdue: z.number().int(),
+  /** Latest change to any task of the project; null = the project has no tasks. */
+  lastActivityAt: z.string().nullable()
 });
 export type GoalPlan = z.infer<typeof goalPlanSchema>;
 
@@ -104,6 +124,65 @@ export function goalProgress(plans: ReadonlyArray<{ weight: number; progress: nu
     total += plan.weight;
   }
   return { progress: total === 0 ? null : Math.round(weighted / total), unknown };
+}
+
+export interface PulseTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueAt: Date | null;
+  sortOrder: number;
+  updatedAt: Date;
+  /** Waits on at least one OPEN task. */
+  blocked: boolean;
+}
+
+export interface PlanPulse {
+  nextTask: GoalNextTask | null;
+  blocked: number;
+  overdue: number;
+  lastActivityAt: string | null;
+}
+
+const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2 };
+const STATUS_RANK: Record<TaskStatus, number> = { in_progress: 0, todo: 1, backlog: 2, done: 3, canceled: 3 };
+
+/**
+ * What a plan (a project's tasks) says about the way forward. The next task is the open,
+ * unblocked one a person would pick: already started first, then the earliest due date, then
+ * priority, then the board order. A blocked task is never "next" — it is counted in `blocked`
+ * so the sky can show a stuck branch instead of pointing at work that cannot start.
+ */
+export function summarizePlanTasks(tasks: ReadonlyArray<PulseTask>, now: Date): PlanPulse {
+  const open = tasks.filter((t) => !isTaskClosed(t.status));
+  const isOverdue = (t: PulseTask): boolean => t.dueAt !== null && t.dueAt.getTime() < now.getTime();
+  const ready = open.filter((t) => !t.blocked);
+  ready.sort(
+    (a, b) =>
+      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+      (a.dueAt?.getTime() ?? Number.POSITIVE_INFINITY) - (b.dueAt?.getTime() ?? Number.POSITIVE_INFINITY) ||
+      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+      a.sortOrder - b.sortOrder ||
+      a.title.localeCompare(b.title, "ru")
+  );
+  const next = ready[0];
+  const last = tasks.reduce<number | null>((max, t) => (max === null || t.updatedAt.getTime() > max ? t.updatedAt.getTime() : max), null);
+  return {
+    nextTask: next
+      ? {
+          id: next.id,
+          title: next.title,
+          status: next.status,
+          priority: next.priority,
+          dueAt: next.dueAt?.toISOString() ?? null,
+          overdue: isOverdue(next)
+        }
+      : null,
+    blocked: open.filter((t) => t.blocked).length,
+    overdue: open.filter(isOverdue).length,
+    lastActivityAt: last === null ? null : new Date(last).toISOString()
+  };
 }
 
 /** Goals nest at most this deep: goal (1) -> sub-goal (2) -> sub-sub-goal (3). */

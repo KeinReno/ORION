@@ -7,21 +7,25 @@ import {
   useDeleteTransaction,
   useFinanceCategories,
   useCore,
+  useProjects,
   useTransactions,
   useUpdateTransaction
 } from "@orion/core-react";
-import type { Transaction } from "@orion/shared-types";
+import { ACCOUNT_CONTEXT_LABEL, type AccountContext, type Transaction } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, Input, Modal, Select, Sheet, Skeleton, useToast } from "@orion/ui";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus, Receipt, Search, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CheckSquare, Copy, Plus, Receipt, Search, Square, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
 import { describeAuthError } from "../../lib/error-message";
-import { formatMoney, projectColor, shortDateTime } from "../../lib/format";
+import { bulkPatch, recreateInput, type BulkChange } from "../../lib/finance-bulk-edit";
+import { formatMoney, projectColor, shortDateTime, toKopecks } from "../../lib/format";
 import { withArchivedFallback } from "../../lib/finance-options";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { useEnabledModules } from "../../lib/use-enabled-modules";
 import type { EntityFocusRequest } from "../../lib/panel-bus";
+import { BulkBar } from "./bulk-bar";
 import { TransactionForm, type TransactionFormValues } from "./transaction-form";
 
 const PAGE_SIZE = 50;
@@ -31,10 +35,23 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   const { workspace } = useActiveWorkspace();
   const [accountFilter, setAccountFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [contextFilter, setContextFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [minText, setMinText] = useState("");
+  const [maxText, setMaxText] = useState("");
+  // The server is asked once typing pauses, not on every keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuery(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const minAmount = minText.trim() ? (toKopecks(minText) ?? undefined) : undefined;
+  const maxAmount = maxText.trim() ? (toKopecks(maxText) ?? undefined) : undefined;
 
   // includeArchived: true so an already-archived account/category referenced
   // by an existing operation doesn't vanish from the edit form's <Select> —
@@ -42,10 +59,19 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   const { data: accounts } = useAccounts(workspace?.id, true);
   const { data: categories } = useFinanceCategories(workspace?.id, true);
   const { data: categoryRules } = useCategoryRules(workspace?.id);
+  // Соседний модуль чужой API не зовёт, пока выключен (CLAUDE.md, инвариант 9).
+  const { isEnabled } = useEnabledModules();
+  const projectsOn = isEnabled("projects");
+  const { data: projects } = useProjects(projectsOn ? workspace?.id : undefined);
   const { data: transactions, isLoading } = useTransactions(workspace?.id, {
     accountId: accountFilter || undefined,
     categoryId: categoryFilter || undefined,
+    projectId: projectsOn ? projectFilter || undefined : undefined,
+    context: contextFilter || undefined,
     tag: tagFilter || undefined,
+    q: query || undefined,
+    minAmount,
+    maxAmount,
     from: from ? new Date(from).toISOString() : undefined,
     to: to ? new Date(to).toISOString() : undefined,
     limit
@@ -58,6 +84,11 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
+  const [copyOf, setCopyOf] = useState<Transaction | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // U02: a document's "связанные записи" (evidence_for pilot) jumps here via
   // focusTransaction(id) — open the same edit Sheet a row click opens.
@@ -81,6 +112,9 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   const activeAccounts = useMemo(() => (accounts ?? []).filter((a) => !a.archivedAt), [accounts]);
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => !c.archivedAt), [categories]);
   const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
+  // The context filter appears only once the accounts really differ: with one kind of money it would be noise.
+  const usedContexts = useMemo(() => [...new Set((accounts ?? []).filter((a) => !a.archivedAt).map((a) => a.context))] as AccountContext[], [accounts]);
+  const projectName = useMemo(() => new Map((projects ?? []).map((p) => [p.id, p.name])), [projects]);
   const categoryById = useMemo(() => new Map((categories ?? []).map((c) => [c.id, c])), [categories]);
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -91,6 +125,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   async function create(values: TransactionFormValues): Promise<void> {
     await createTransaction.mutateAsync(values);
     setCreating(false);
+    setCopyOf(null);
     toast({ title: "Операция добавлена", tone: "success" });
   }
 
@@ -104,12 +139,92 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
     const transaction = pendingDelete;
     if (!transaction) return;
     setPendingDelete(null);
-    deleteTransaction.mutate(transaction.id, { onSuccess: () => toast({ title: "Операция удалена", tone: "default" }) });
+    deleteTransaction.mutate(transaction.id, {
+      onSuccess: () =>
+        toast({
+          title: "Операция удалена",
+          tone: "default",
+          duration: 8000,
+          action: { label: "Вернуть", onClick: () => void restore([transaction]) }
+        })
+    });
+  }
+
+  /** Undo of a delete: the operation is written again from what was on screen. Its links and import reference are not restored. */
+  async function restore(items: Transaction[]): Promise<void> {
+    try {
+      for (const item of items) await createTransaction.mutateAsync(recreateInput(item));
+      toast({ title: items.length > 1 ? `Возвращено операций: ${items.length}` : "Операция возвращена", description: "Связи с записями и ссылка импорта не восстанавливаются.", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось вернуть", description: describeAuthError(error), tone: "danger" });
+    }
+  }
+
+  const chosen = (transactions ?? []).filter((t) => selected.has(t.id));
+  function toggleSelected(id: string): void {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function stopSelecting(): void {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function applyBulk(change: BulkChange): Promise<void> {
+    let done = 0;
+    let skipped = 0;
+    setBulkBusy(true);
+    try {
+      for (const item of chosen) {
+        const patch = bulkPatch(item, change);
+        if (!patch) {
+          skipped += 1;
+          continue;
+        }
+        await updateTransaction.mutateAsync({ transactionId: item.id, input: patch });
+        done += 1;
+      }
+      toast({
+        title: `Изменено: ${done}`,
+        description: skipped > 0 ? `Пропущено: ${skipped} — изменение к ним не применимо (перевод, разбивка по категориям или уже так).` : undefined,
+        tone: done > 0 ? "success" : "default"
+      });
+    } catch (error) {
+      toast({ title: `Остановились на ${done} из ${chosen.length}`, description: describeAuthError(error), tone: "danger" });
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function confirmBulkDelete(): Promise<void> {
+    const items = chosen;
+    setBulkDeleting(false);
+    setBulkBusy(true);
+    let removed = 0;
+    try {
+      for (const item of items) {
+        await deleteTransaction.mutateAsync(item.id);
+        removed += 1;
+      }
+    } catch (error) {
+      toast({ title: `Удалено ${removed} из ${items.length}`, description: describeAuthError(error), tone: "danger" });
+    } finally {
+      setBulkBusy(false);
+    }
+    if (removed > 0) {
+      const gone = items.slice(0, removed);
+      stopSelecting();
+      toast({ title: `Удалено операций: ${removed}`, tone: "default", duration: 8000, action: { label: "Вернуть", onClick: () => void restore(gone) } });
+    }
   }
 
   const hasAccounts = activeAccounts.length > 0;
   const hasMore = (transactions?.length ?? 0) === limit;
-  const filtersOn = Boolean(accountFilter || categoryFilter || tagFilter || from || to);
+  const filtersOn = Boolean(accountFilter || categoryFilter || (projectsOn && projectFilter) || contextFilter || tagFilter || from || to || query || minAmount !== undefined || maxAmount !== undefined);
 
   return (
     <div className="flex flex-col gap-4">
@@ -132,6 +247,26 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
               </option>
             ))}
           </Select>
+          {usedContexts.length > 1 ? (
+            <Select aria-label="Фильтр по контексту" value={contextFilter} onChange={(e) => setContextFilter(e.target.value)}>
+              <option value="">Все деньги</option>
+              {usedContexts.map((value) => (
+                <option key={value} value={value}>
+                  {ACCOUNT_CONTEXT_LABEL[value]}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+          {projectsOn ? (
+            <Select aria-label="Фильтр по проекту" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+              <option value="">Все проекты</option>
+              {(projects ?? []).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           <Input
             type="date"
             value={from}
@@ -141,10 +276,40 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
           />
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-36" title="Дата по" />
         </div>
-        <Button size="sm" onClick={() => setCreating(true)} disabled={!hasAccounts}>
-          <Plus className="h-4 w-4" /> Операция
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant={selecting ? "outline" : "subtle"} onClick={() => (selecting ? stopSelecting() : setSelecting(true))} disabled={!hasAccounts}>
+            {selecting ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />} {selecting ? "Готово" : "Выбрать"}
+          </Button>
+          <Button size="sm" onClick={() => setCreating(true)} disabled={!hasAccounts}>
+            <Plus className="h-4 w-4" /> Операция
+          </Button>
+        </div>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по заметке"
+          aria-label="Поиск по заметке операции"
+          className="w-48"
+        />
+        <Input inputMode="decimal" value={minText} onChange={(e) => setMinText(e.target.value)} placeholder="Сумма от" aria-label="Сумма от" className="w-28" />
+        <Input inputMode="decimal" value={maxText} onChange={(e) => setMaxText(e.target.value)} placeholder="Сумма до" aria-label="Сумма до" className="w-28" />
+      </div>
+
+      {selecting && selected.size > 0 ? (
+        <BulkBar
+          count={selected.size}
+          busy={bulkBusy}
+          categories={activeCategories}
+          projects={projectsOn ? projects : undefined}
+          onApply={(change) => void applyBulk(change)}
+          onDelete={() => setBulkDeleting(true)}
+          onClear={() => setSelected(new Set())}
+        />
+      ) : null}
 
       {allTags.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -203,9 +368,13 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
                 <li key={transaction.id}>
                   <button
                     type="button"
-                    onClick={() => setEditing(transaction)}
-                    className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-row text-left transition-colors hover:border-border hover:bg-card-hover"
+                    onClick={() => (selecting ? toggleSelected(transaction.id) : setEditing(transaction))}
+                    aria-pressed={selecting ? selected.has(transaction.id) : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-row text-left transition-colors hover:border-border hover:bg-card-hover ${selecting && selected.has(transaction.id) ? "border-accent/50 bg-accent/5" : "border-transparent"}`}
                   >
+                    {selecting ? (
+                      selected.has(transaction.id) ? <CheckSquare className="h-4 w-4 shrink-0 text-accent-text" aria-hidden /> : <Square className="h-4 w-4 shrink-0 text-subtle-foreground" aria-hidden />
+                    ) : null}
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                         isTransfer
@@ -241,6 +410,11 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
                             className="rounded-full border px-1.5 py-0.5 font-medium leading-none"
                           >
                             {category.name}
+                          </span>
+                        ) : null}
+                        {transaction.projectId && projectName.get(transaction.projectId) ? (
+                          <span className="rounded-full border border-border px-1.5 py-0.5 font-medium leading-none">
+                            {projectName.get(transaction.projectId)}
                           </span>
                         ) : null}
                         {transaction.tags.map((tag) => (
@@ -289,6 +463,11 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
                 onClick={() => {
                   setAccountFilter("");
                   setCategoryFilter("");
+                  setSearch("");
+                  setMinText("");
+                  setMaxText("");
+                  setProjectFilter("");
+                  setContextFilter("");
                   setTagFilter(null);
                   setFrom("");
                   setTo("");
@@ -305,15 +484,19 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
         />
       )}
 
-      <Modal open={creating} onClose={() => setCreating(false)} title="Новая операция" size="sm">
+      <Modal open={creating} onClose={() => { setCreating(false); setCopyOf(null); }} title={copyOf ? "Копия операции" : "Новая операция"} size="sm">
         <TransactionForm
+          key={copyOf?.id ?? "new"}
+          copyOf={copyOf ?? undefined}
           accounts={activeAccounts}
           categories={activeCategories}
           categoryRules={categoryRules}
+          projects={projectsOn ? projects : undefined}
           defaultAccountId={accountFilter || undefined}
+          defaultProjectId={projectFilter || undefined}
           busy={createTransaction.isPending}
           submitLabel="Добавить"
-          onCancel={() => setCreating(false)}
+          onCancel={() => { setCreating(false); setCopyOf(null); }}
           onSubmit={create}
         />
       </Modal>
@@ -326,6 +509,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
             accounts={withArchivedFallback(accounts ?? [], [editing.accountId, editing.toAccountId])}
             categories={withArchivedFallback(categories ?? [], editing.lines[0]?.categoryId)}
             categoryRules={categoryRules}
+            projects={projectsOn ? projects : undefined}
             busy={updateTransaction.isPending}
             submitLabel="Сохранить"
             onCancel={() => setEditing(null)}
@@ -335,6 +519,21 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
               setEditing(null);
             }}
           />
+        ) : null}
+        {editing ? (
+          <div className="mt-3">
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => {
+                setCopyOf(editing);
+                setEditing(null);
+                setCreating(true);
+              }}
+            >
+              <Copy className="h-4 w-4" /> Дублировать
+            </Button>
+          </div>
         ) : null}
         {editing ? (
           <div className="mt-4 border-t border-border pt-3">
@@ -347,6 +546,15 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
           </div>
         ) : null}
       </Sheet>
+
+      <ConfirmDialog
+        open={bulkDeleting}
+        title={`Удалить операций: ${selected.size}?`}
+        description="Баланс счетов и бюджеты пересчитаются. Сразу после удаления можно нажать «Вернуть» — операции запишутся заново, но без связей с другими записями."
+        confirmLabel="Удалить"
+        onConfirm={() => void confirmBulkDelete()}
+        onCancel={() => setBulkDeleting(false)}
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}

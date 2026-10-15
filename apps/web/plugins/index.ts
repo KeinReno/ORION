@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
 import type { HomeObjectTabSlotProps } from "../lib/extensions/contracts";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -184,6 +184,12 @@ contribute("lists.item", {
   component: NoVisual as unknown as ComponentType<ListsItemSlotProps>,
   meta: { api: listsItemApi }
 });
+
+// «Покупки → Финансы»: bought entries of a list become one expense (ADR-0009, the step after the stock bridge).
+const RecordExpense = dynamic<ListsActionsSlotProps>(() => import("./lists-finance/record-expense").then((m) => m.RecordExpenseAction), { ssr: false });
+const ExpenseMark = dynamic<ListsItemMarkSlotProps>(() => import("./lists-finance/record-expense").then((m) => m.ExpenseMark), { ssr: false });
+contribute("lists.actions", { pluginId: "lists-finance", component: RecordExpense, order: 10 });
+contribute("lists.item.mark", { pluginId: "lists-finance", component: ExpenseMark, order: 10 });
 const AddToShoppingList = dynamic<InventoryItemActionsSlotProps>(() => import("./lists-inventory/to-list-action").then((m) => m.AddToShoppingList), { ssr: false });
 contribute("inventory.item.actions", { pluginId: "lists-inventory", component: AddToShoppingList, order: 10 });
 
@@ -205,6 +211,14 @@ const ObligationsTab = dynamic<FinanceTabSlotProps>(() => import("./finance-obli
 const ForecastTab = dynamic<FinanceTabSlotProps>(() => import("./finance-forecast/forecast-view").then((m) => m.ForecastView), { ssr: false });
 contribute("finance.tabs", { pluginId: "finance-obligations", component: ObligationsTab, order: 35, meta: { tabId: "obligations", label: "Обязательства" } });
 contribute("finance.tabs", { pluginId: "finance-forecast", component: ForecastTab, order: 45, meta: { tabId: "forecast", label: "Прогноз" } });
+const NetWorthTab = dynamic<FinanceTabSlotProps>(() => import("./finance-net-worth/net-worth-view").then((m) => m.NetWorthView), { ssr: false });
+const NetWorthLine = dynamic<DashboardFinanceSlotProps>(() => import("./finance-net-worth/net-worth-view").then((m) => m.NetWorthDashboardLine), { ssr: false });
+contribute("finance.tabs", { pluginId: "finance-net-worth", component: NetWorthTab, order: 47, meta: { tabId: "net-worth", label: "Капитал" } });
+contribute("dashboard.finance", { pluginId: "finance-net-worth", component: NetWorthLine, order: 20 });
+const TransferMatch = dynamic<FinanceTransactionsTopSlotProps>(() => import("./finance-transfer-match/match-banner").then((m) => m.TransferMatchBanner), { ssr: false });
+contribute("finance.transactions.top", { pluginId: "finance-transfer-match", component: TransferMatch, order: 20 });
+const ProjectCostsTab = dynamic<ProjectTabSlotProps>(() => import("./finance-project-costs/costs-tab").then((m) => m.ProjectCostsTab), { ssr: false });
+contribute("projects.tabs", { pluginId: "finance-project-costs", component: ProjectCostsTab, order: 50, meta: { tabId: "costs", label: "Затраты" } });
 contribute("inventory.costing", {
   pluginId: "inventory-costing",
   component: NoVisual as unknown as ComponentType<InventoryCostingSlotProps>,

@@ -165,6 +165,16 @@
 - **Остаётся в базе:** остаток и журнал движений; серверный расчёт `avgCostMinor` и сохранение цены прихода (если её прислали) — от плагина не зависят.
 - **Паритет:** панель и окно позиции на 1280 и 390 px совпали с базовой линией; **выключен** — нет поля цены, строки и карточки, остатки целы.
 
+### `finance-project-costs`, `finance-net-worth`, `finance-transfer-match` (модуль «Финансы») — 15 октября 2026
+
+Новые плагины, а не вынос существующего: решение, границы и правила — [ADR-0013](adr/ADR-0013-finance-project-and-automation-plugins.md).
+
+- **`finance-project-costs`:** вкладка «Затраты» в проекте (`projects.tabs`), серверные суммы, время по ставке отдельно.
+- **`finance-net-worth`:** вкладка «Капитал» (`finance.tabs`) и строка на дашборде (`dashboard.finance`); валюты не смешиваются.
+- **`finance-transfer-match`:** баннер над операциями (`finance.transactions.top`), замена пары «расход + доход» одним переводом; ссылки импорта сохраняются в `Transaction.mergedRefs`.
+- **Расширения существующих плагинов (без новых id):** подсказки регулярных платежей — `finance-recurring`; сравнение месяцев, «куда уходит больше всего», CSV — `finance-reports`; контрагент, частичное погашение и история платежей — `finance-obligations`.
+- **Плагин выключен:** вкладки и баннер скрыты, API отвечает 409; операции, проекты и обязательства не затрагиваются.
+
 ## Итог и что осталось
 
 Вынесено по карте миграции (по умолчанию все включены, parity проверен на каждом): `habits-insights`; `finance-budgeting`, `finance-goals`, `finance-recurring`, `finance-reports`; `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`; `documents-history`, `documents-office`; `notes-history`, `notes-daily`, `notes-templates`; `time-insights`, `time-billing`; `calendar-external`, `calendar-recurrence`, `calendar-reminders`; `projects-planning`; `inventory-alerts`; новые плагины интеграций (11 октября): `finance-quick-entry`, `finance-import`, `finance-obligations`, `finance-forecast` — см. `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`.

@@ -17,6 +17,7 @@ import { formatMoney, shortDateTime } from "../../lib/extensions/host-api";
 import { withArchivedFallback } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { RecurringForm, type RecurringFormValues } from "./recurring-form";
+import { RecurringSuggestions } from "./suggestions";
 
 const INTERVAL_LABEL = { weekly: "каждую неделю", monthly: "каждый месяц" } as const;
 
@@ -76,6 +77,7 @@ export function RecurringView(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-4">
+      <RecurringSuggestions workspaceId={workspace?.id} />
       <div className="flex justify-end">
         <Button size="sm" onClick={() => setCreating(true)} disabled={!hasAccounts}>
           <Plus className="h-4 w-4" /> Правило

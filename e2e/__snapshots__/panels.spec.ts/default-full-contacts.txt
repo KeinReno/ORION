@@ -1,1 +1,3 @@
+button: Ещё
+button: Импорт
 button: Новый контакт

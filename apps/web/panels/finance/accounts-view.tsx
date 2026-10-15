@@ -7,7 +7,7 @@ import {
   useReconcileAccount,
   useUpdateAccount
 } from "@orion/core-react";
-import type { Account } from "@orion/shared-types";
+import { ACCOUNT_CONTEXT_LABEL, type Account } from "@orion/shared-types";
 import {
   Button,
   Card,
@@ -55,7 +55,7 @@ export function AccountsView(): React.ReactElement {
 
   async function save(accountId: string, values: AccountFormValues): Promise<void> {
     try {
-      await updateAccount.mutateAsync({ accountId, input: { name: values.name, kind: values.kind, currency: values.currency } });
+      await updateAccount.mutateAsync({ accountId, input: { name: values.name, kind: values.kind, context: values.context, currency: values.currency } });
       setEditing(null);
       toast({ title: "Сохранено", tone: "success" });
     } catch (error) {
@@ -124,6 +124,7 @@ export function AccountsView(): React.ReactElement {
                   <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
                   <p className="text-2xs text-subtle-foreground">
                     {ACCOUNT_KIND_LABEL[account.kind]}
+                    {account.context !== "personal" ? ` · ${ACCOUNT_CONTEXT_LABEL[account.context]}` : ""}
                     {account.currency !== "RUB" ? ` · ${account.currency}` : ""}
                     {account.archivedAt ? " · в архиве" : ""}
                   </p>

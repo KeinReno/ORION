@@ -10,4 +10,4 @@
 
 Отключение не удаляет. Opportunity классифицирован included в snapshot registry и перечислен в snapshot models. Новый FK требует проверки порядка restore. UI интегрирован в unsaved-drafts guard и keyed по workspace.
 
-Следующий срез: публичные contracts/slots для profiles/import из ADR-0008, затем R0.2. Не объявлять R1 готовым: никаких автономных отправок, grant/runner/LLM в текущем коде нет.
+Публичные contracts/slots R0.2: opportunities/public.ts и import-contract.ts, typed opportunities.views / opportunities.details.sections. Insert-only import не меняет существующую карточку. Profiles/HH принадлежит отдельным optional default-off plugins; их private tables/services запрещены для Base. Не объявлять R1 готовым: никаких автономных отправок, grant/runner/LLM в текущем коде нет.

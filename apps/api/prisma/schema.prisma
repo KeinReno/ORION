@@ -21,6 +21,10 @@ model User {
   passwordChangedAt DateTime?
   createdAt         DateTime           @default(now())
   memberships       WorkspaceMember[]
+  healthSubjects    HealthSubject[]    @relation("HealthSubjectUser")
+  healthGuarded     HealthSubject[]    @relation("HealthSubjectGuardian")
+  healthGrants      HealthGrant[]      @relation("HealthGrantee")
+  checkedListItems  ListItem[]        @relation("ListItemCheckedBy")
   agentTokens       AgentToken[]
   refreshTokens     RefreshToken[]
   preference        UserPreference?
@@ -151,7 +155,7 @@ model Workspace {
   /// catalog modules stay on. Disable never deletes rows; re-enable restores
   /// the panel and API. Shell surfaces (dashboard/inbox/settings/sync) are
   /// not stored here — they are core, not modules.
-  disabledModules String[]    @default(["markets"])
+  disabledModules String[]    @default(["markets", "health"])
   /// Plugin ids whose enabled state was flipped away from PLUGIN_CATALOG's
   /// `defaultEnabled` — NOT a flat "disabled" list like disabledModules,
   /// because a plugin can default off (see isPluginEnabled). Same
@@ -225,6 +229,8 @@ model Workspace {
   homeUtilityPayments   HomeUtilityPayment[]
   meterReadings         MeterReading[]
   contacts              Contact[]
+  contactInteractions   ContactInteraction[]
+  contactRelations      ContactRelation[]
   goals                 Goal[]
   goalPlans             GoalPlan[]
   agentAuditEntries     AgentAuditEntry[]
@@ -237,6 +243,10 @@ model Workspace {
   syncRemote            SyncRemote?
 
   @@map("workspaces")
+  healthSubjects     HealthSubject[]
+  healthGrants       HealthGrant[]
+  healthAppointments HealthAppointment[]
+  healthPreventive   HealthPreventiveItem[]
 }
 
 model Project {
@@ -791,6 +801,13 @@ model List {
   name        String
   /// Non-null = archived: hidden from the active view, items kept.
   archivedAt  DateTime?
+  /// "general" | "shopping" | "todo" | "packing" — closed set in shared-types (`LIST_KINDS`); text, not an enum,
+  /// so a new kind never needs a migration.
+  kind        String    @default("general")
+  /// A template is a list that is only ever copied: it never shows among the active lists.
+  isTemplate  Boolean   @default(false)
+  /// Manual order of the lists among each other (drag-reorder); ties fall back to createdAt.
+  sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -803,9 +820,8 @@ model List {
   @@map("lists")
 }
 
-/// One checkable line in a List. No `sortOrder`: items sort by `createdAt`
-/// server-side; floating unchecked items to the top is a display-only client
-/// concern, not a persisted column (avoids a half-built drag-reorder).
+/// One checkable line in a List. `sortOrder` is the manual order (drag-reorder, new items go last);
+/// floating unchecked items above checked ones stays a display-only client concern.
 model ListItem {
   id          String   @id @default(uuid())
   workspaceId String
@@ -820,6 +836,22 @@ model ListItem {
   /// The receipt created when this item was bought — set once, so ticking it again never
   /// restocks twice. Unchecking keeps the receipt: the movement ledger stays the source of truth.
   stockedMovementId String?  @unique
+  sortOrder   Int      @default(0)
+  /// Free-form measure next to `quantity` ("л", "кг", "уп") — display only.
+  unit        String?
+  note        String   @default("")
+  /// Light "by when" — deliberately not a Task: no status, no recurrence.
+  dueAt       DateTime?
+  /// Group header inside the list ("Овощи", "Молочка"); null = no group.
+  section     String?
+  /// Expected / actual price of the whole line in minor units (kopecks); null = unknown, never 0.
+  priceMinor  Int?
+  /// Who ticked the entry and when (family lists: "купил Аня"). Cleared on untick.
+  checkedAt   DateTime?
+  checkedById String?
+  /// Plugin «Покупки → Финансы» (lists-finance): the expense this purchase was booked as. Several
+  /// entries bought at one till share one transaction; an entry with a value here is never booked twice.
+  expenseTransactionId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -827,10 +859,14 @@ model ListItem {
   list            List               @relation(fields: [listId], references: [id], onDelete: Cascade)
   inventoryItem   InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
   stockedMovement InventoryMovement? @relation(fields: [stockedMovementId], references: [id], onDelete: SetNull)
+  checkedBy       User?              @relation("ListItemCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+  expenseTransaction Transaction?    @relation("ListItemExpense", fields: [expenseTransactionId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([listId])
   @@index([inventoryItemId])
+  @@index([checkedById])
+  @@index([expenseTransactionId])
   @@map("list_items")
 }
 
@@ -1007,6 +1043,8 @@ model Account {
   /// startingBalance plus a sum over its transactions, computed on read
   /// (see AccountsService.list) — one fewer place for the truth to drift.
   startingBalance Int      @default(0)
+  /// Whose money it is: personal | family | work. A label for filtering and totals, not an access rule.
+  context         String   @default("personal")
   archivedAt      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1080,6 +1118,9 @@ model Transaction {
   tags        String[]        @default([])
   reconciledAt DateTime?
   importedRef  String?
+  /// Plugin «Сопоставление переводов»: import references of the rows merged into this transfer, so importing
+  /// the same statements again does not bring the absorbed expense/income back.
+  mergedRefs   String[]        @default([])
   occurredAt  DateTime
   /// S21: set only for transactions materialised by RecurringCheckerService.
   /// `(recurringRuleId, scheduledFor)` is the durable idempotency barrier —
@@ -1104,6 +1145,7 @@ model Transaction {
   recurringRule RecurringTransaction? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
   investmentTrades InvestmentTrade[]
   homeUtilityPayments HomeUtilityPayment[]
+  listItems     ListItem[]            @relation("ListItemExpense")
 
   @@index([workspaceId])
   @@index([projectId])
@@ -1233,6 +1275,8 @@ model FinanceObligation {
   accountId   String?
   categoryId  String?
   note        String    @default("")
+  /// Who the debt is with (a person, bank or shop) — free text; empty = not stated.
+  counterparty String   @default("")
   closedAt    DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -2307,16 +2351,185 @@ model Contact {
   name        String
   /// Who they are: «УК», «сантехник», «бухгалтер», «клиент».
   role        String   @default("")
+  /// Primary phone/email: always the first value of `phones`/`emails` when those
+  /// are set (ContactsService keeps them in sync). «Дом» reads and writes these.
   phone       String   @default("")
   email       String   @default("")
+  /// "person" | "organization".
+  kind        String   @default("person")
+  organization String  @default("")
+  /// Labelled values `[{ label, value }]`. Empty ⇒ the DTO falls back to the primary column.
+  phones      Json     @default("[]")
+  emails      Json     @default("[]")
+  /// Messengers, social profiles, websites: `[{ label, value }]`.
+  links       Json     @default("[]")
+  address     String   @default("")
+  /// A day, not a moment. Year 1904 is the «год неизвестен» sentinel (see CONTACT_BIRTHDAY_NO_YEAR).
+  birthday    DateTime? @db.Date
+  tags        String[] @default([])
+  favorite    Boolean  @default(false)
+  /// «Связаться раз в N дней»; null — без напоминаний.
+  contactEveryDays Int?
+  lastContactedAt  DateTime?
+  /// Archived contacts stay in the workspace and in backups; they just leave the main list.
+  archivedAt  DateTime?
   note        String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  home      Home?     @relation(fields: [homeId], references: [id], onDelete: SetNull)
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  home         Home?                @relation(fields: [homeId], references: [id], onDelete: SetNull)
+  interactions ContactInteraction[]
+  relationsA   ContactRelation[]    @relation("ContactRelationA")
+  relationsB   ContactRelation[]    @relation("ContactRelationB")
+
+  healthAppointments HealthAppointment[]
 
   @@index([workspaceId])
   @@index([homeId])
   @@map("contacts")
+}
+
+/// A line in a contact's communication journal («созвонились», «встреча»).
+/// Writing one moves `Contact.lastContactedAt` forward — the follow-up cadence
+/// counts from there.
+model ContactInteraction {
+  id          String   @id @default(uuid())
+  workspaceId String
+  contactId   String
+  /// "call" | "message" | "meeting" | "email" | "other".
+  kind        String   @default("other")
+  note        String   @default("")
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([contactId, occurredAt])
+  @@map("contact_interactions")
+}
+
+/// «Жена», «коллега» between two contacts. One row per pair: the ids are stored
+/// in sorted order (`contactAId < contactBId`), so A→B and B→A cannot both exist;
+/// the label reads the same from both sides.
+model ContactRelation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  contactAId  String
+  contactBId  String
+  label       String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactA  Contact   @relation("ContactRelationA", fields: [contactAId], references: [id], onDelete: Cascade)
+  contactB  Contact   @relation("ContactRelationB", fields: [contactBId], references: [id], onDelete: Cascade)
+
+  @@unique([contactAId, contactBId])
+  @@index([workspaceId])
+  @@index([contactBId])
+  @@map("contact_relations")
+}
+
+/// Module «Здоровье» (ADR-0012): a PERSON, not the workspace, owns health records. Exactly one of
+/// `userId` (a member keeps their own data) / `guardianUserId` (a dependent without an account) is set.
+/// Visibility is per person, not per workspace — see the RLS in migration `health`.
+model HealthSubject {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  userId         String?
+  guardianUserId String?
+  name           String
+  birthDate      DateTime? @db.Date
+  bloodType      String    @default("")
+  /// [{ substance, reaction }] — validated by the shared-types zod schema, not by the database.
+  allergies      Json      @default("[]")
+  /// ["гипертония", …] — free text typed by the person.
+  conditions     Json      @default("[]")
+  emergencyNote  String    @default("")
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  workspace    Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User?                  @relation("HealthSubjectUser", fields: [userId], references: [id], onDelete: Cascade)
+  guardian     User?                  @relation("HealthSubjectGuardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  grants       HealthGrant[]
+  appointments HealthAppointment[]
+  preventive   HealthPreventiveItem[]
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([guardianUserId])
+  @@map("health_subjects")
+}
+
+/// Explicit access of another member to a person's records: `read` or `write`. Only the owner of the
+/// subject (`own` in `health_subject_access`) can grant or revoke.
+model HealthGrant {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  subjectId     String
+  granteeUserId String
+  level         String   @default("read")
+  createdAt     DateTime @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  grantee   User          @relation("HealthGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, granteeUserId])
+  @@index([workspaceId])
+  @@index([granteeUserId])
+  @@map("health_grants")
+}
+
+/// A visit to a doctor: planned (`doneAt` null) or finished with notes. The doctor is an ordinary Contact.
+model HealthAppointment {
+  id              String    @id @default(uuid())
+  workspaceId     String
+  subjectId       String
+  title           String
+  at              DateTime
+  doctorContactId String?
+  clinic          String    @default("")
+  purpose         String    @default("")
+  questions       String    @default("")
+  outcome         String    @default("")
+  doneAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject       HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  doctorContact Contact?      @relation(fields: [doctorContactId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([subjectId, at])
+  @@map("health_appointments")
+}
+
+/// Recurring checkup / vaccination / test: the next due date is COMPUTED (`preventiveNextDue`), never stored.
+model HealthPreventiveItem {
+  id          String    @id @default(uuid())
+  workspaceId String
+  subjectId   String
+  name        String
+  kind        String    @default("checkup")
+  everyMonths Int?
+  /// First deadline for an item never done yet.
+  firstDueAt  DateTime? @db.Date
+  lastDoneAt  DateTime? @db.Date
+  note        String    @default("")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([subjectId])
+  @@map("health_preventive_items")
 }

@@ -57,6 +57,7 @@ function obligation(over: Partial<Obligation>): Obligation {
     accountId: null,
     categoryId: null,
     note: "",
+    counterparty: "",
     closedAt: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",

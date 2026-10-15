@@ -32,6 +32,7 @@ export function compileHhPlan(input: HhImportPreviewInput): HhPlan {
     if (kind === "resume") {
       if (!input.includeProfiles) { warn(path, "Импорт профилей не выбран"); continue; }
       const parts = path.split("/"); const resumeIndex = parts.findIndex((p) => /^резюме$/i.test(p));
+      if (resumeIndex === 0) { warn(path, "Выберите папку кандидата целиком, а не только вложенную папку Резюме"); continue; }
       const parent = resumeIndex > 0 ? parts.slice(0, resumeIndex) : parts.slice(0, -1);
       if (!parent.length) { warn(path, "Для резюме выберите папку кандидата, чтобы сохранить его принадлежность"); continue; }
       const content = file.text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();

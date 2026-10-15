@@ -13,6 +13,8 @@ describe("controlled HH parsing", () => {
     expect(plan.operations).toHaveLength(2);
     const keys = plan.operations.map((o) => o.kind === "material" ? o.data.profileSourceKey : "");
     expect(new Set(keys).size).toBe(2); expect(keys[0]).toBe("hh-folder:team1/Иван");
+    const incomplete = compileHhPlan(input([{ path: "Резюме/Аналитик.md", text: "CV" }], { includeProfiles: true }));
+    expect(incomplete.operations).toHaveLength(0); expect(incomplete.warnings[0].reason).toContain("кандидата целиком");
   });
   it("allows HH vacancy URLs only and sanitizes HTML/query secrets", () => {
     const records = ["https://hh.ru/vacancy/123?token=secret", "https://hh.ru.evil.test/vacancy/456", "https://user:pass@hh.ru/vacancy/789"].map((url) => ({ title: "Аналитик", url, description: "<b>Опыт</b>", salary: { from: 90000, to: 110000, currency: "RUR", gross: false } }));

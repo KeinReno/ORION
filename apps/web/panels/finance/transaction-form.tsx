@@ -1,6 +1,6 @@
 "use client";
 
-import type { Account, CategoryRule, FinanceCategory, Transaction, TransactionType } from "@orion/shared-types";
+import type { Account, CategoryRule, FinanceCategory, Project, Transaction, TransactionType } from "@orion/shared-types";
 import { Button, IconButton, Input, Select, Textarea } from "@orion/ui";
 import { ArrowRight, Plus, X, Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -12,6 +12,8 @@ export interface TransactionFormValues {
   type: TransactionType;
   note: string;
   tags: string[];
+  /** null = не относится к проекту. */
+  projectId: string | null;
   occurredAt: string;
   lines: { categoryId: string | null; amount: number }[];
 }
@@ -34,10 +36,13 @@ function toLineDraft(categoryId: string | null, amount: number): LineDraft {
  */
 export function TransactionForm({
   initial,
+  copyOf,
   accounts,
   categories,
   categoryRules,
+  projects,
   defaultAccountId,
+  defaultProjectId,
   busy,
   submitLabel,
   onSubmit,
@@ -45,35 +50,42 @@ export function TransactionForm({
   onDelete
 }: {
   initial?: Transaction;
+  /** «Дублировать»: поля берутся отсюда, но это новая операция — с текущей датой. */
+  copyOf?: Transaction;
   accounts: Account[];
   categories: FinanceCategory[];
   /** v0.13 auto-categorization — matched against the note field, applied only here, never server-side. */
   categoryRules?: CategoryRule[];
+  /** Проекты для выбора; без списка (модуль «Проекты» выключен) поле не показывается. */
+  projects?: Project[];
   defaultAccountId?: string;
+  defaultProjectId?: string;
   busy: boolean;
   submitLabel: string;
   onSubmit: (values: TransactionFormValues) => void | Promise<void>;
   onCancel: () => void;
   onDelete?: () => void;
 }): React.ReactElement {
-  const [type, setType] = useState<TransactionType>(initial?.type ?? "expense");
-  const [accountId, setAccountId] = useState(initial?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? "");
-  const [toAccountId, setToAccountId] = useState(initial?.toAccountId ?? "");
+  const seed = initial ?? copyOf;
+  const [type, setType] = useState<TransactionType>(seed?.type ?? "expense");
+  const [accountId, setAccountId] = useState(seed?.accountId ?? defaultAccountId ?? accounts[0]?.id ?? "");
+  const [toAccountId, setToAccountId] = useState(seed?.toAccountId ?? "");
   const [transferAmount, setTransferAmount] = useState(
-    fromKopecks(initial?.type === "transfer" ? initial.totalAmount : undefined)
+    fromKopecks(seed?.type === "transfer" ? seed.totalAmount : undefined)
   );
   const [lines, setLines] = useState<LineDraft[]>(
-    initial && initial.type !== "transfer" && initial.lines.length > 0
-      ? initial.lines.map((l) => toLineDraft(l.categoryId, l.amount))
+    seed && seed.type !== "transfer" && seed.lines.length > 0
+      ? seed.lines.map((l) => toLineDraft(l.categoryId, l.amount))
       : [toLineDraft(null, 0)]
   );
-  const [note, setNote] = useState(initial?.note ?? "");
-  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
+  const [note, setNote] = useState(seed?.note ?? "");
+  const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
   const [tagDraft, setTagDraft] = useState("");
+  const [projectId, setProjectId] = useState(seed?.projectId ?? defaultProjectId ?? "");
   const [occurredAt, setOccurredAt] = useState(toDatetimeLocal(initial?.occurredAt ?? new Date().toISOString()));
   const [error, setError] = useState<string | null>(null);
   // Only auto-fills the first line's category while the user hasn't picked one themselves.
-  const [categoryAutoFilled, setCategoryAutoFilled] = useState(!initial);
+  const [categoryAutoFilled, setCategoryAutoFilled] = useState(!seed);
 
   const categoryOptions = useMemo(
     () => categories.filter((c) => c.kind === (type === "income" ? "income" : "expense")),
@@ -153,6 +165,7 @@ export function TransactionForm({
         type,
         note,
         tags,
+        projectId: projectId || null,
         occurredAt: fromDatetimeLocal(occurredAt) ?? new Date().toISOString(),
         lines: [{ categoryId: null, amount }]
       });
@@ -178,6 +191,7 @@ export function TransactionForm({
       type,
       note,
       tags,
+      projectId: projectId || null,
       occurredAt: fromDatetimeLocal(occurredAt) ?? new Date().toISOString(),
       lines: parsedLines
     });
@@ -316,6 +330,20 @@ export function TransactionForm({
         Дата
         <Input type="datetime-local" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
       </label>
+
+      {projects ? (
+        <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
+          Проект
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <option value="">Без проекта</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
 
       <Textarea
         placeholder="Заметка (необязательно)"

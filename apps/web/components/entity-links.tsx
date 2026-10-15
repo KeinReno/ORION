@@ -20,6 +20,7 @@ import {
   FileText,
   FolderKanban,
   Link2,
+  ListChecks,
   ListTodo,
   PlusCircle,
   Receipt,
@@ -41,7 +42,8 @@ const TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
   event: CalendarDays,
   document: FileText,
   transaction: Receipt,
-  contact: UserRound
+  contact: UserRound,
+  list: ListChecks
 };
 
 const TYPE_LABEL: Record<SearchableEntityType, string> = {
@@ -51,7 +53,8 @@ const TYPE_LABEL: Record<SearchableEntityType, string> = {
   event: "событие",
   document: "документ",
   transaction: "операция",
-  contact: "контакт"
+  contact: "контакт",
+  list: "список"
 };
 
 /**

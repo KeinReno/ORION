@@ -39,6 +39,8 @@ function moduleIdForEntityType(entityType: string | null): OrionModuleId | null 
     case "list":
     case "list_item":
       return "lists";
+    case "contact":
+      return "contacts";
     default:
       return null;
   }

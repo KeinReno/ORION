@@ -64,6 +64,13 @@ export const ENTITY_REGISTRY: Record<SearchableEntityType, EntityAdapter> = {
       return title || "Финансовая операция";
     }
   },
+  list: {
+    moduleId: SEARCH_TYPE_MODULE.list,
+    async summary(tx, workspaceId, id) {
+      const row = await tx.list.findUnique({ where: { id }, select: { workspaceId: true, name: true } });
+      return owned(row, workspaceId, "name");
+    }
+  },
   contact: {
     moduleId: SEARCH_TYPE_MODULE.contact,
     async summary(tx, workspaceId, id) {

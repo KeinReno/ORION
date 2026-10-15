@@ -25,11 +25,13 @@ import { ListsModule } from "./lists/lists.module";
 import { MarketsModule } from "./markets/markets.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { ListsInventoryModule } from "./lists-inventory/lists-inventory.module";
+import { ListsFinanceModule } from "./lists-finance/lists-finance.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { MilestonesModule } from "./milestones/milestones.module";
 import { ModulesModule } from "./modules/modules.module";
 import { ActivityModule } from "./activity/activity.module";
 import { AiModule } from "./ai/ai.module";
+import { HealthModule } from "./health/health.module";
 import { HomeModule } from "./home/home.module";
 import { HomeUtilitiesModule } from "./home-utilities/home-utilities.module";
 import { GoalsModule } from "./goals/goals.module";
@@ -48,6 +50,7 @@ import { UsersModule } from "./users/users.module";
     PluginsModule,
     AiModule,
     HomeModule,
+    HealthModule,
     HomeUtilitiesModule,
     ActivityModule,
     GoalsModule,
@@ -73,6 +76,7 @@ import { UsersModule } from "./users/users.module";
     MarketsModule,
     InventoryModule,
     ListsInventoryModule,
+    ListsFinanceModule,
     ContactsModule,
     MilestonesModule,
     OverviewModule,

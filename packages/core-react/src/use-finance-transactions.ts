@@ -1,13 +1,21 @@
 "use client";
 
-import type { CreateTransactionInput, FinanceImportInput, FinanceImportResult, Transaction, UpdateTransactionInput } from "@orion/shared-types";
+import type { CreateTransactionInput, FinanceImportInput, MergeTransferInput, FinanceImportResult, Transaction, UpdateTransactionInput } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
 export interface TransactionFilters {
   accountId?: string;
   categoryId?: string;
+  projectId?: string;
+  /** personal | family | work — by the operation's account. */
+  context?: string;
   tag?: string;
+  /** Substring of the note, case-insensitive. */
+  q?: string;
+  /** Kopecks; an operation matches when one of its lines is within the range. */
+  minAmount?: number;
+  maxAmount?: number;
   /** "YYYY-MM". Ignored if `from`/`to` is given. */
   month?: string;
   /** ISO datetimes — an arbitrary range, takes priority over `month`. */
@@ -39,7 +47,18 @@ function invalidateTransactionEffects(queryClient: ReturnType<typeof useQueryCli
   queryClient.invalidateQueries({ queryKey: ["finance-budgets", workspaceId] });
   queryClient.invalidateQueries({ queryKey: ["finance-reports-monthly", workspaceId] });
   queryClient.invalidateQueries({ queryKey: ["finance-reports-categories", workspaceId] });
+  queryClient.invalidateQueries({ queryKey: ["finance-project-costs", workspaceId] });
   queryClient.invalidateQueries({ queryKey: ["home-utilities", workspaceId] });
+}
+
+/** Replaces a matched expense + income with one transfer; everything a transaction touches is refreshed. */
+export function useMergeTransferPair(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<Transaction, Error, MergeTransferInput>({
+    mutationFn: (input) => api.mergeTransferPair(workspaceId as string, input),
+    onSuccess: () => invalidateTransactionEffects(queryClient, workspaceId)
+  });
 }
 
 export function useCreateTransaction(workspaceId: string | undefined) {

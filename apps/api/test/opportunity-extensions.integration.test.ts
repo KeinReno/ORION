@@ -99,6 +99,30 @@ describe("Opportunity extensions: profiles/import isolation", () => {
     let again = await preview(a, vacancyFiles(31)); again = (await apply(a, again)).data; again = (await apply(a, again)).data;
     expect(again.report.opportunitiesCreated).toBe(0); expect(again.report.opportunitiesExisting).toBe(31); expect(again.report.capturesCreated).toBe(0);
     expect((await request<Opportunity>(`${a.path}/${card.id}`, a.token)).data.title).toBe("Manual title");
+    const salaryFiles = [{ path: "vacancies_test.json", text: JSON.stringify([{ title: "Synthetic 0", url: "https://hh.ru/vacancy/100000", company: "Test", desc: "Source", salary: { from: 150000, currency: "RUR", gross: false } }]) }];
+    const salaryRun = (await apply(a, await preview(a, salaryFiles))).data;
+    expect(salaryRun.report.opportunitiesCreated).toBe(0); expect(salaryRun.report.capturesCreated).toBe(1);
+    const captures = await prisma.withUser(a.userId, (tx) => tx.opportunityCapture.findMany({ where: { workspaceId: a.workspaceId, sourcePath: "vacancies_test.json" } }));
+    expect(captures.some((capture) => (capture.snapshot as { conditions: { amountMin: number | null } }).conditions.amountMin === 150000)).toBe(true);
+  });
+  it("keeps preview read-only, enforces immutable manifest/expiry and preserves committed portions on cancel", async () => {
+    const a = await register("cancel"); await enable(a, "opportunities-hh-import");
+    const run = await preview(a, vacancyFiles(31));
+    expect(await prisma.withUser(a.userId, (tx) => tx.opportunity.count({ where: { workspaceId: a.workspaceId } }))).toBe(0);
+    const path = `${importPath(a.workspaceId)}/${run.id}`;
+    expect((await request(`${path}/apply`, a.token, "POST", { manifestHash: "f".repeat(64), expectedRevision: 0 })).status).toBe(409);
+    const partial = (await apply(a, run)).data;
+    const canceled = await request<HhImportRun>(`${path}/cancel`, a.token, "POST", { manifestHash: partial.manifestHash, expectedRevision: partial.revision });
+    expect(canceled.data.status).toBe("canceled"); expect(canceled.data.checkpoint).toBe(25);
+    expect((await apply(a, canceled.data)).status).toBe(409);
+    expect(await prisma.withUser(a.userId, (tx) => tx.opportunity.count({ where: { workspaceId: a.workspaceId } }))).toBe(25);
+    const expired = await preview(a);
+    await prisma.withUser(a.userId, (tx) => tx.opportunityImport.update({ where: { id: expired.id }, data: { expiresAt: new Date(0) } }));
+    expect((await apply(a, expired)).status).toBe(409);
+    await request(`/workspaces/${a.workspaceId}/plugins/opportunities-hh-import`, a.token, "PATCH", { enabled: false });
+    expect((await request(path, a.token)).status).toBe(409);
+    await enable(a, "opportunities-hh-import");
+    expect((await request<HhImportRun>(path, a.token)).data.checkpoint).toBe(25);
   });
   it("imports immutable profile versions and legacy outcomes without inventing confirmed facts", async () => {
     const a = await register("legacy"); await enable(a, "opportunities-hh-import");

@@ -12,6 +12,7 @@ import {
   calendarConnectionSchema,
   calendarFeedInfoSchema,
   categoryBreakdownEntrySchema,
+  projectCostsSchema,
   categoryRuleSchema,
   documentSchema,
   documentVersionSchema,
@@ -29,7 +30,11 @@ import {
   listItemSchema,
   listSchema,
   purchaseListItemResultSchema,
+  recordListExpenseResultSchema,
+  clearCheckedResultSchema,
   contactCardSchema,
+  contactInteractionSchema,
+  contactRelationSchema,
   inventoryItemSchema,
   inventoryMovementSchema,
   milestoneCascadeImpactSchema,
@@ -123,7 +128,22 @@ import {
   type CreateHomeInput,
   type CreateMeterInput,
   type CreateMeterReadingInput,
+  type CreateHealthAppointmentInput,
+  type CreateHealthPreventiveInput,
+  type CreateHealthSubjectInput,
+  type HealthAppointment,
+  type HealthGrant,
+  type HealthPreventiveItem,
+  type HealthSubject,
+  type HealthToday,
+  type MarkHealthPreventiveDoneInput,
+  type PutHealthGrantInput,
+  type UpdateHealthAppointmentInput,
+  type UpdateHealthPreventiveInput,
+  type UpdateHealthSubjectInput,
   type Home,
+  type HomeContributions,
+  type ContributionPeriod,
   type HomeOverview,
   type Meter,
   type UpdateContactInput,
@@ -143,6 +163,12 @@ import {
   goalSchema,
   activityEntrySchema,
   contactSchema,
+  healthAppointmentSchema,
+  healthGrantSchema,
+  healthPreventiveItemSchema,
+  healthSubjectSchema,
+  healthTodaySchema,
+  homeContributionsSchema,
   homeOverviewSchema,
   homeSchema,
   meterSchema,
@@ -160,6 +186,13 @@ import {
   type CreateInventoryItemInput,
   type CreateListInput,
   type CreateListItemInput,
+  type CreateListItemsBulkInput,
+  type DuplicateListInput,
+  type ReorderInput,
+  type RestoreListItemsInput,
+  type ClearCheckedResult,
+  type RecordListExpenseInput,
+  type RecordListExpenseResult,
   type CreateInventoryMovementInput,
   type CreateMilestoneInput,
   type MilestoneCascadeImpact,
@@ -210,7 +243,16 @@ import {
   type AddInventoryToListInput,
   type PurchaseListItemResult,
   type ContactCard,
+  type ContactInteraction,
+  type ContactRelation,
+  type BulkContactsInput,
+  type BulkContactsResult,
   type CreateContactCardInput,
+  type CreateContactInteractionInput,
+  type CreateContactRelationInput,
+  type ImportContactsInput,
+  type ImportContactsResult,
+  type MergeContactsInput,
   type UpdateContactCardInput,
   type Milestone,
   type Notification,
@@ -234,7 +276,9 @@ import {
   type EventScope,
   type FinanceCategory,
   type LoginInput,
+  type MergeTransferInput,
   type MonthlyFinanceSummary,
+  type ProjectCosts,
   type MyOverview,
   type Note,
   type NoteAttachment,
@@ -909,6 +953,82 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/homes/${homeId}/activity`, undefined, z.array(activityEntrySchema));
   }
 
+  // ---- Здоровье (ADR-0012): данные принадлежат человеку, не пространству.
+
+  healthToday(workspaceId: string, today: string): Promise<HealthToday> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/today?today=${today}`, undefined, healthTodaySchema);
+  }
+
+  listHealthSubjects(workspaceId: string): Promise<HealthSubject[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects`, undefined, z.array(healthSubjectSchema));
+  }
+
+  createHealthSubject(workspaceId: string, input: CreateHealthSubjectInput): Promise<HealthSubject> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects`, input, healthSubjectSchema);
+  }
+
+  updateHealthSubject(workspaceId: string, subjectId: string, input: UpdateHealthSubjectInput): Promise<HealthSubject> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/health/subjects/${subjectId}`, input, healthSubjectSchema);
+  }
+
+  async deleteHealthSubject(workspaceId: string, subjectId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}`, undefined, z.unknown());
+  }
+
+  listHealthGrants(workspaceId: string, subjectId: string): Promise<HealthGrant[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/grants`, undefined, z.array(healthGrantSchema));
+  }
+
+  putHealthGrant(workspaceId: string, subjectId: string, granteeUserId: string, input: PutHealthGrantInput): Promise<HealthGrant> {
+    return this.request("PUT", `/workspaces/${workspaceId}/health/subjects/${subjectId}/grants/${granteeUserId}`, input, healthGrantSchema);
+  }
+
+  async removeHealthGrant(workspaceId: string, subjectId: string, granteeUserId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/grants/${granteeUserId}`, undefined, z.unknown());
+  }
+
+  listHealthAppointments(workspaceId: string, subjectId: string): Promise<HealthAppointment[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/appointments`, undefined, z.array(healthAppointmentSchema));
+  }
+
+  createHealthAppointment(workspaceId: string, subjectId: string, input: CreateHealthAppointmentInput): Promise<HealthAppointment> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/appointments`, input, healthAppointmentSchema);
+  }
+
+  updateHealthAppointment(workspaceId: string, subjectId: string, appointmentId: string, input: UpdateHealthAppointmentInput): Promise<HealthAppointment> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/health/subjects/${subjectId}/appointments/${appointmentId}`, input, healthAppointmentSchema);
+  }
+
+  async deleteHealthAppointment(workspaceId: string, subjectId: string, appointmentId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/appointments/${appointmentId}`, undefined, z.unknown());
+  }
+
+  listHealthPreventive(workspaceId: string, subjectId: string): Promise<HealthPreventiveItem[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive`, undefined, z.array(healthPreventiveItemSchema));
+  }
+
+  createHealthPreventive(workspaceId: string, subjectId: string, input: CreateHealthPreventiveInput): Promise<HealthPreventiveItem> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive`, input, healthPreventiveItemSchema);
+  }
+
+  updateHealthPreventive(workspaceId: string, subjectId: string, itemId: string, input: UpdateHealthPreventiveInput): Promise<HealthPreventiveItem> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive/${itemId}`, input, healthPreventiveItemSchema);
+  }
+
+  markHealthPreventiveDone(workspaceId: string, subjectId: string, itemId: string, input: MarkHealthPreventiveDoneInput): Promise<HealthPreventiveItem> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive/${itemId}/done`, input, healthPreventiveItemSchema);
+  }
+
+  async deleteHealthPreventive(workspaceId: string, subjectId: string, itemId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive/${itemId}`, undefined, z.unknown());
+  }
+
+  /** Кто сколько закрыл; без `homeId` — по всем делам, привязанным к любому объекту. */
+  homeContributions(workspaceId: string, period: ContributionPeriod, homeId?: string): Promise<HomeContributions> {
+    const query = `?period=${period}${homeId ? `&homeId=${homeId}` : ""}`;
+    return this.request("GET", `/workspaces/${workspaceId}/homes/contributions${query}`, undefined, homeContributionsSchema);
+  }
+
   listUtilityMonths(workspaceId: string, homeId: string): Promise<UtilityMonth[]> {
     return this.request("GET", `/workspaces/${workspaceId}/home-utilities/${homeId}/months`, undefined, z.array(utilityMonthSchema));
   }
@@ -1162,7 +1282,12 @@ export class ApiClient {
     filters?: {
       accountId?: string;
       categoryId?: string;
+      projectId?: string;
+      context?: string;
       tag?: string;
+      q?: string;
+      minAmount?: number;
+      maxAmount?: number;
       month?: string;
       from?: string;
       to?: string;
@@ -1243,6 +1368,16 @@ export class ApiClient {
 
   async deleteObligation(workspaceId: string, obligationId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/finance/obligations/${obligationId}`, undefined, z.unknown());
+  }
+
+  /** Replaces an expense and an income that are one transfer with a single transfer. */
+  mergeTransferPair(workspaceId: string, input: MergeTransferInput): Promise<Transaction> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/transfer-match/merge`, input, transactionSchema);
+  }
+
+  /** Every payment recorded against one obligation, newest first. */
+  listObligationPayments(workspaceId: string, obligationId: string): Promise<Transaction[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/obligations/${obligationId}/payments`, undefined, z.array(transactionSchema));
   }
 
   /** Records the payment as a real transaction and moves the plan on (a repeat for the same due date is a 409). */
@@ -1335,6 +1470,10 @@ export class ApiClient {
       undefined,
       z.array(categoryBreakdownEntrySchema)
     );
+  }
+
+  getProjectCosts(workspaceId: string, projectId: string): Promise<ProjectCosts> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/projects/${encodeURIComponent(projectId)}/costs`, undefined, projectCostsSchema);
   }
 
   listCategoryRules(workspaceId: string): Promise<CategoryRule[]> {
@@ -1811,9 +1950,14 @@ export class ApiClient {
   cancelHhImport(ws: string, id: string, input: HhImportApplyInput) { return this.request("POST", `/workspaces/${ws}/opportunity-hh-import/${id}/cancel`, input, hhImportRunSchema); }
   getHhOpportunitySources(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-hh-import/sources/${id}`, undefined, hhOpportunitySourcesSchema); }
 
-  listLists(workspaceId: string, includeArchived = false): Promise<List[]> {
-    const query = buildQuery({ includeArchived: includeArchived ? "true" : undefined });
+  listLists(workspaceId: string, options: { includeArchived?: boolean; templates?: boolean } = {}): Promise<List[]> {
+    const query = buildQuery({ includeArchived: options.includeArchived ? "true" : undefined, templates: options.templates ? "true" : undefined });
     return this.request("GET", `/workspaces/${workspaceId}/lists${query}`, undefined, z.array(listSchema));
+  }
+
+  /** One list in any state (active, archived, template) — what a list's own tab opens. */
+  getList(workspaceId: string, listId: string): Promise<List> {
+    return this.request("GET", `/workspaces/${workspaceId}/lists/${listId}`, undefined, listSchema);
   }
 
   createList(workspaceId: string, input: CreateListInput): Promise<List> {
@@ -1829,8 +1973,31 @@ export class ApiClient {
     return this.request("DELETE", `/workspaces/${workspaceId}/lists/${listId}`, undefined, listSchema);
   }
 
+  /** Real deletion; the server accepts it only for an archived list or a template. */
+  async deleteListPermanently(workspaceId: string, listId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/lists/${listId}/permanent`, undefined, z.unknown());
+  }
+
+  /** Manual order of the lists (ids first to last). */
+  async reorderLists(workspaceId: string, input: ReorderInput): Promise<void> {
+    await this.request("PUT", `/workspaces/${workspaceId}/lists/order`, input, z.unknown());
+  }
+
+  duplicateList(workspaceId: string, listId: string, input: DuplicateListInput = {}): Promise<List> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/duplicate`, input, listSchema);
+  }
+
+  /** «Новый круг»: unticks everything and forgets who bought what. */
+  resetList(workspaceId: string, listId: string): Promise<List> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/reset`, undefined, listSchema);
+  }
+
   createListItem(workspaceId: string, listId: string, input: CreateListItemInput): Promise<ListItem> {
     return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items`, input, listItemSchema);
+  }
+
+  createListItemsBulk(workspaceId: string, listId: string, input: CreateListItemsBulkInput): Promise<ListItem[]> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/bulk`, input, z.array(listItemSchema));
   }
 
   /** Also used to toggle `checked` — one endpoint for both label edits and the checkbox. */
@@ -1842,9 +2009,19 @@ export class ApiClient {
     await this.request("DELETE", `/workspaces/${workspaceId}/lists/${listId}/items/${itemId}`, undefined, z.unknown());
   }
 
-  /** Deletes every checked item in the list at once. */
-  async clearCheckedItems(workspaceId: string, listId: string): Promise<void> {
-    await this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/clear-checked`, undefined, z.unknown());
+  /** Manual order of the entries of one list. */
+  reorderListItems(workspaceId: string, listId: string, input: ReorderInput): Promise<List> {
+    return this.request("PUT", `/workspaces/${workspaceId}/lists/${listId}/items/order`, input, listSchema);
+  }
+
+  /** Deletes every checked item in the list at once; returns them whole so «Отменить» can restore them. */
+  clearCheckedItems(workspaceId: string, listId: string): Promise<ClearCheckedResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/clear-checked`, undefined, clearCheckedResultSchema);
+  }
+
+  /** Puts entries removed by `clearCheckedItems` back, links and receipts intact. */
+  restoreListItems(workspaceId: string, listId: string, input: RestoreListItemsInput): Promise<List> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists/${listId}/items/restore`, input, listSchema);
   }
 
   // --- Контакты -------------------------------------------------------------
@@ -1871,6 +2048,43 @@ export class ApiClient {
     await this.request("DELETE", `/workspaces/${workspaceId}/contacts/${contactId}`, undefined, z.unknown());
   }
 
+  bulkContactCards(workspaceId: string, input: BulkContactsInput): Promise<BulkContactsResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts/bulk`, input, z.object({ affected: z.number() }));
+  }
+
+  importContactCards(workspaceId: string, input: ImportContactsInput): Promise<ImportContactsResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts/import`, input, z.object({ created: z.number(), skipped: z.number() }));
+  }
+
+  /** Folds the other contacts into this one (data, journal, relations, links, reminders move over). */
+  mergeContactCards(workspaceId: string, contactId: string, input: MergeContactsInput): Promise<ContactCard> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts/${contactId}/merge`, input, contactCardSchema);
+  }
+
+  listContactInteractions(workspaceId: string, contactId: string): Promise<ContactInteraction[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/contacts/${contactId}/interactions`, undefined, z.array(contactInteractionSchema));
+  }
+
+  createContactInteraction(workspaceId: string, contactId: string, input: CreateContactInteractionInput): Promise<ContactInteraction> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts/${contactId}/interactions`, input, contactInteractionSchema);
+  }
+
+  async deleteContactInteraction(workspaceId: string, contactId: string, interactionId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/contacts/${contactId}/interactions/${interactionId}`, undefined, z.unknown());
+  }
+
+  listContactRelations(workspaceId: string, contactId: string): Promise<ContactRelation[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/contacts/${contactId}/relations`, undefined, z.array(contactRelationSchema));
+  }
+
+  createContactRelation(workspaceId: string, contactId: string, input: CreateContactRelationInput): Promise<ContactRelation> {
+    return this.request("POST", `/workspaces/${workspaceId}/contacts/${contactId}/relations`, input, contactRelationSchema);
+  }
+
+  async deleteContactRelation(workspaceId: string, contactId: string, relationId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/contacts/${contactId}/relations/${relationId}`, undefined, z.unknown());
+  }
+
   // --- Покупки → Склад (plugin lists-inventory) -----------------------------
   // The bridge between a shopping list and stock; 409 when Lists, Inventory or the plugin is off.
 
@@ -1881,6 +2095,13 @@ export class ApiClient {
   /** Ticks the entry and, the first time only, writes the stock receipt. */
   purchaseListItem(workspaceId: string, listId: string, itemId: string): Promise<PurchaseListItemResult> {
     return this.request("POST", `/workspaces/${workspaceId}/lists-inventory/lists/${listId}/items/${itemId}/purchase`, undefined, purchaseListItemResultSchema);
+  }
+
+  // --- Покупки → Финансы (plugin lists-finance) -----------------------------
+  // Books bought entries as one expense; 409 when Lists, Finance or the plugin is off, or an entry is already booked.
+
+  recordListExpense(workspaceId: string, listId: string, input: RecordListExpenseInput): Promise<RecordListExpenseResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/lists-finance/lists/${listId}/expense`, input, recordListExpenseResultSchema);
   }
 
   /** «В список покупок»: returns the open entry for this stock item in `listId`, creating it if needed. */

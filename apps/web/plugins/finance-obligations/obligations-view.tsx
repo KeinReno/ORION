@@ -4,6 +4,7 @@ import {
   useAccounts,
   useCreateObligation,
   useDeleteObligation,
+  useObligationPayments,
   useObligations,
   usePayObligation,
   useUpdateObligation
@@ -30,10 +31,11 @@ interface FormValues {
   nextDue: string;
   accountId: string;
   note: string;
+  counterparty: string;
 }
 
 function emptyForm(): FormValues {
-  return { name: "", kind: "debt", direction: "owe", principal: "", payment: "", interval: "monthly", nextDue: "", accountId: "", note: "" };
+  return { name: "", kind: "debt", direction: "owe", principal: "", payment: "", interval: "monthly", nextDue: "", accountId: "", note: "", counterparty: "" };
 }
 
 function fromObligation(o: Obligation): FormValues {
@@ -46,7 +48,8 @@ function fromObligation(o: Obligation): FormValues {
     interval: o.interval,
     nextDue: o.nextDueAt ? o.nextDueAt.slice(0, 10) : "",
     accountId: o.accountId ?? "",
-    note: o.note
+    note: o.note,
+    counterparty: o.counterparty
   };
 }
 
@@ -71,7 +74,8 @@ export function toInput(values: FormValues): { ok: true; input: CreateObligation
       interval: values.interval,
       nextDueAt: values.nextDue ? new Date(`${values.nextDue}T09:00:00.000Z`).toISOString() : null,
       accountId: values.accountId || null,
-      note: values.note.trim()
+      note: values.note.trim(),
+      counterparty: values.counterparty.trim()
     }
   };
 }
@@ -93,7 +97,8 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
 
   const [editing, setEditing] = useState<{ obligation: Obligation | null; values: FormValues } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [paying, setPaying] = useState<{ obligation: Obligation; accountId: string; amount: string } | null>(null);
+  const [paying, setPaying] = useState<{ obligation: Obligation; accountId: string; amount: string; partial: boolean } | null>(null);
+  const [history, setHistory] = useState<Obligation | null>(null);
   const [deleting, setDeleting] = useState<Obligation | null>(null);
 
   const now = useMemo(() => new Date(), []);
@@ -123,7 +128,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
     const amount = toKopecks(paying.amount);
     if (amount === null) return;
     try {
-      await pay.mutateAsync({ obligationId: paying.obligation.id, input: { accountId: paying.accountId, amount } });
+      await pay.mutateAsync({ obligationId: paying.obligation.id, input: { accountId: paying.accountId, amount, ...(paying.partial ? { partial: true } : {}) } });
       toast({ title: "Платёж записан в операции", tone: "success" });
       setPaying(null);
     } catch (error) {
@@ -158,6 +163,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                     {o.name}
+                    {o.counterparty ? <span className="text-xs font-normal text-muted-foreground">· {o.counterparty}</span> : null}
                     <Badge tone="neutral">{OBLIGATION_KIND_LABEL[o.kind]}</Badge>
                     {o.direction === "owed" ? <Badge tone="success">мне должны</Badge> : null}
                     {state === "overdue" ? <Badge tone="danger">просрочено</Badge> : state === "soon" ? <Badge tone="warning">скоро</Badge> : null}
@@ -168,7 +174,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
                     {o.principal !== null ? ` · осталось ${formatMoney(o.principal)}` : ""}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setPaying({ obligation: o, accountId: o.accountId ?? "", amount: fromKopecks(o.payment) })}>
+                <Button size="sm" variant="outline" onClick={() => setPaying({ obligation: o, accountId: o.accountId ?? "", amount: fromKopecks(o.payment), partial: false })}>
                   {o.direction === "owed" ? "Получено" : "Оплатить"}
                 </Button>
                 <DropdownMenu
@@ -180,6 +186,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
                   )}
                   items={[
                     { label: "Изменить", onSelect: () => { setEditing({ obligation: o, values: fromObligation(o) }); setFormError(null); } },
+                    { label: "История платежей", onSelect: () => setHistory(o) },
                     { label: "Закрыть", onSelect: () => void update.mutateAsync({ obligationId: o.id, input: { closedAt: new Date().toISOString() } }) },
                     "separator",
                     { label: "Удалить", tone: "danger", onSelect: () => setDeleting(o) }
@@ -213,6 +220,10 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
             <label className="flex flex-col gap-1 text-label text-subtle-foreground">
               Название
               <Input value={editing.values.name} onChange={(e) => setEditing({ ...editing, values: { ...editing.values, name: e.target.value } })} maxLength={120} autoFocus />
+            </label>
+            <label className="flex flex-col gap-1 text-label text-subtle-foreground">
+              С кем (человек, банк, магазин)
+              <Input value={editing.values.counterparty} onChange={(e) => setEditing({ ...editing, values: { ...editing.values, counterparty: e.target.value } })} maxLength={120} placeholder="не указано" />
             </label>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-1 text-label text-subtle-foreground">
@@ -301,8 +312,15 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
               Сумма
               <Input inputMode="decimal" value={paying.amount} onChange={(e) => setPaying({ ...paying, amount: e.target.value })} />
             </label>
+            {paying.obligation.principal !== null ? (
+              <label className="flex items-start gap-2 text-label text-muted-foreground">
+                <input type="checkbox" className="mt-0.5" checked={paying.partial} onChange={(e) => setPaying({ ...paying, partial: e.target.checked })} />
+                <span>Частичное погашение: уменьшить остаток, срок и график не трогать</span>
+              </label>
+            ) : null}
             <p className="text-micro text-subtle-foreground">
-              В операциях появится {paying.obligation.direction === "owed" ? "доход" : "расход"}; срок сдвинется на следующий период.
+              В операциях появится {paying.obligation.direction === "owed" ? "доход" : "расход"}
+              {paying.partial ? "; остаток уменьшится, срок останется прежним." : "; срок сдвинется на следующий период."}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="subtle" size="sm" onClick={() => setPaying(null)}>
@@ -316,6 +334,10 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
         ) : null}
       </Modal>
 
+      <Modal open={history !== null} onClose={() => setHistory(null)} title={history ? `Платежи: ${history.name}` : "Платежи"} size="sm">
+        {history ? <PaymentHistory workspaceId={id} obligation={history} accountName={(accountId) => accounts?.find((a) => a.id === accountId)?.name ?? "—"} /> : null}
+      </Modal>
+
       <ConfirmDialog
         open={deleting !== null}
         title="Удалить обязательство?"
@@ -327,6 +349,37 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
         }}
         onCancel={() => setDeleting(null)}
       />
+    </div>
+  );
+}
+
+/** Payments recorded against one obligation, with what is still left. They are ordinary operations: editing them is done in «Транзакции». */
+function PaymentHistory({ workspaceId, obligation, accountName }: { workspaceId: string | undefined; obligation: Obligation; accountName: (accountId: string) => string }): React.ReactElement {
+  const { data, isLoading } = useObligationPayments(workspaceId, obligation.id);
+  if (isLoading) return <Skeleton className="h-20" />;
+  const payments = data ?? [];
+  const paid = payments.reduce((sum, payment) => sum + payment.totalAmount, 0);
+  if (payments.length === 0) return <p className="text-sm text-muted-foreground">Платежей по этому обязательству ещё не записано.</p>;
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        Записано платежей: {payments.length}, на {formatMoney(paid)}
+        {obligation.principal !== null ? ` · осталось ${formatMoney(obligation.principal)}` : ""}
+        {obligation.counterparty ? ` · ${obligation.counterparty}` : ""}
+      </p>
+      <ul className="max-h-72 space-y-1 overflow-y-auto">
+        {payments.map((payment) => (
+          <li key={payment.id} className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">
+              {shortDate(payment.occurredAt)} · {accountName(payment.accountId)}
+            </span>
+            <span className="font-mono tabular-nums text-foreground">
+              {payment.type === "income" ? "+" : "−"}
+              {formatMoney(payment.totalAmount)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

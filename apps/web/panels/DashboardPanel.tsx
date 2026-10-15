@@ -1,15 +1,18 @@
 "use client";
 
 import { DashboardAnalytics, DashboardAnalyticsView } from "./dashboard/analytics";
+import { DashboardListsCard } from "./dashboard/lists-card";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { ApiError } from "@orion/core";
 import {
   useAccounts,
   useCaptureInboxItem,
+  useContactCards,
   useCreateNote,
   useCreateTask,
   useEvents,
   useHabits,
+  useLists,
   useInbox,
   useNotes,
   useRunningTimer,
@@ -51,12 +54,14 @@ import {
   AlertCircle,
   ArrowRight,
   CalendarClock,
+  Cake,
   Inbox,
   LayoutDashboard,
   Sparkles,
   StickyNote,
   Target,
   Timer,
+  UserRound,
   Wallet
 } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
@@ -64,8 +69,10 @@ import { OnboardingCard } from "../components/onboarding-card";
 import { ExtensionSlot } from "../lib/extensions/slot";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { describeError } from "../lib/error-message";
+import { daysUntilLabel, upcomingContactEvents } from "../lib/contacts";
 import { formatMoney, relativeTime, shortDateTime, sumByCurrency } from "../lib/format";
-import { openEntity, openPanel } from "../lib/panel-bus";
+import { useCaptureToList } from "../lib/capture-to-list";
+import { openEntity, openList, openPanel } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useDayKey, useLocalNow } from "../lib/use-day-boundary";
 import { useEnabledModules } from "../lib/use-enabled-modules";
@@ -103,6 +110,8 @@ function DashboardOverview(): React.ReactElement {
   const financeOn = isEnabled("finance");
   const calendarOn = isEnabled("calendar");
   const habitsOn = isEnabled("habits");
+  const contactsOn = isEnabled("contacts");
+  const listsOn = isEnabled("lists");
   const timeOn = isEnabled("time");
   // `localNow`/`todayKey` only change at a real local-day boundary or a
   // visibility/focus wake (S10, see use-day-boundary.ts) — not on every
@@ -140,11 +149,13 @@ function DashboardOverview(): React.ReactElement {
   const { data: accounts } = useAccounts(financeOn ? wsId : undefined);
   const { data: events } = useEvents(calendarOn ? wsId : undefined, calendarOn ? eventRange : undefined);
   const { data: habits } = useHabits(habitsOn ? wsId : undefined, false, todayKey);
+  const { data: contactCards } = useContactCards(contactsOn ? wsId : undefined);
   const { data: inboxQueue } = useInbox(wsId, false);
   const { data: running } = useRunningTimer(timeOn ? wsId : undefined);
   const createTask = useCreateTask(tasksOn ? wsId : undefined);
   const createNote = useCreateNote(notesOn ? wsId : undefined);
   const captureInbox = useCaptureInboxItem(wsId);
+  const captureToList = useCaptureToList(listsOn ? wsId : undefined);
   const updateTask = useUpdateTask(tasksOn ? wsId : undefined);
   const startTimer = useStartTimer(timeOn ? wsId : undefined);
   const stopTimer = useStopTimer(timeOn ? wsId : undefined);
@@ -216,17 +227,22 @@ function DashboardOverview(): React.ReactElement {
   const showToday = todayEvents.length > 0 || todayRest.length > 0;
   const showNearest = nearbyEvents.length > 0 || (tasksOn && parts.upcoming.length > 0);
   const showNotes = notesOn && recentNotes.length > 0;
-  const showSecondary = showToday || showNearest || weekVisible || financeOn || showNotes;
+  // Birthdays within two weeks and «пора связаться» — a short glance, the full list lives in «Контакты».
+  const peopleSoon = useMemo(() => upcomingContactEvents(contactCards ?? [], todayKey, 14).slice(0, 5), [contactCards, todayKey]);
+  const showPeople = contactsOn && peopleSoon.length > 0;
+  const { data: dashboardLists } = useLists(listsOn ? wsId : undefined);
+  const showLists = listsOn && (dashboardLists ?? []).some((list) => list.items.some((item) => !item.checked));
+  const showSecondary = showToday || showNearest || weekVisible || financeOn || showNotes || showPeople || showLists;
   const quiet =
     !loading && !tasksBlockError && !notesBlockError && !hasAlerts && !showFocus && !showSecondary;
 
   const capturePreview = capture.trim()
-    ? resolveQuickCapture(capture, { tasks: tasksOn, notes: notesOn })
+    ? resolveQuickCapture(capture, { tasks: tasksOn, notes: notesOn, lists: listsOn })
     : null;
   const captureHintText = capturePreview ? quickCaptureHint(capturePreview) : null;
 
   async function runCapture(text: string): Promise<void> {
-    const resolved = resolveQuickCapture(text, { tasks: tasksOn, notes: notesOn });
+    const resolved = resolveQuickCapture(text, { tasks: tasksOn, notes: notesOn, lists: listsOn });
     if (resolved.kind === "error") {
       toast({ title: resolved.message, tone: "danger" });
       return;
@@ -244,6 +260,13 @@ function DashboardOverview(): React.ReactElement {
       } else if (resolved.kind === "note") {
         await createNote.mutateAsync({ title: resolved.title, body: "", tags: [] });
         toast({ title: "Заметка добавлена", tone: "success" });
+      } else if (resolved.kind === "list") {
+        const { list, added } = await captureToList(resolved.text);
+        toast({
+          title: added > 1 ? `Добавлено в «${list.name}»: ${added}` : `Добавлено в «${list.name}»`,
+          action: { label: "Открыть", onClick: () => openList(list.id, list.name) },
+          tone: "success"
+        });
       } else {
         await captureInbox.mutateAsync({ title: resolved.title, body: "", kind: "inbox" });
         toast({ title: "Добавлено в инбокс", tone: "success" });
@@ -355,7 +378,7 @@ function DashboardOverview(): React.ReactElement {
                     id="orion-quick-capture"
                     value={capture}
                     onChange={(e) => setCapture(e.target.value)}
-                    placeholder={quickCapturePlaceholder({ tasks: tasksOn, notes: notesOn })}
+                    placeholder={quickCapturePlaceholder({ tasks: tasksOn, notes: notesOn, lists: listsOn })}
                     aria-label="Быстрый ввод"
                   />
                   <Button type="submit" size="sm" disabled={captureBusy || !capture.trim()} className="shrink-0">
@@ -579,6 +602,30 @@ function DashboardOverview(): React.ReactElement {
                     )}
                   </Section>
                 ) : null}
+
+                {showPeople ? (
+                  <Section title="Люди" icon={UserRound} onOpen={() => openPanel("contacts")}>
+                    <ul>
+                      {peopleSoon.map((event) => (
+                        <li key={`${event.kind}-${event.contact.id}`}>
+                          <button
+                            type="button"
+                            onClick={() => openEntity("contact", event.contact.id, event.contact.name)}
+                            className="flex w-full items-center gap-2 rounded-lg px-1 py-row text-left hover:bg-white/5"
+                          >
+                            {event.kind === "birthday" ? <Cake className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden /> : <UserRound className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden />}
+                            <span className="min-w-0 flex-1 truncate text-body text-foreground">{event.contact.name}</span>
+                            <span className={cx("shrink-0 text-micro", event.daysUntil <= 0 ? "text-warning" : "text-subtle-foreground")}>
+                              {event.kind === "birthday" ? `ДР ${daysUntilLabel(event.daysUntil)}` : event.daysUntil < 0 ? "пора связаться" : `связаться ${daysUntilLabel(event.daysUntil)}`}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </Section>
+                ) : null}
+
+                {showLists ? <DashboardListsCard workspaceId={wsId} /> : null}
 
                 {showNotes ? (
                   <Section title="Недавние заметки" icon={StickyNote} onOpen={() => openPanel("notes")}>
