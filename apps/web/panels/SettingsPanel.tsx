@@ -39,6 +39,7 @@ import { describeAuthError } from "../lib/error-message";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
 import { BackgroundEffectSettingsForm } from "./settings/background-effect-form";
+import { ThemePreview } from "./settings/theme-preview";
 import { ModulesSettings } from "./settings/modules-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
@@ -516,9 +517,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
             ) : (
               <Card className="space-y-4">
                 <p className="text-2xs text-subtle-foreground">
-                  Акцент и плотность применяются сразу ко всему приложению. Тема пока одна — тёмная (окно докинга
-                  работает на тёмной теме dockview), поэтому переключателя темы здесь нет; поле в профиле сохраняется
-                  на будущее.
+                  Акцент, плотность и фон применяются сразу. Новые палитры можно проверить в разделе «Предпросмотр тем» ниже.
                 </p>
                 <Field label="Акцент">
                   <SegmentedControl<UserPreference["accent"]>
@@ -713,6 +712,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     {form.onboardingCompletedAt ? "Показать подсказку снова" : "Скрыть подсказку"}
                   </Button>
                 </div>
+                <ThemePreview />
               </Card>
             )}
           </PanelSection>
