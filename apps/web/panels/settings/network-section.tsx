@@ -4,6 +4,7 @@ import {
   useActivateLanClient,
   useApproveLanPair,
   useDenyLanPair,
+  useCloseLanFirewall,
   useDisableLanHost,
   useDiscoverLanNodes,
   useEnableLanHost,
@@ -123,6 +124,7 @@ function HostSection(): React.ReactElement {
   const enable = useEnableLanHost();
   const disable = useDisableLanHost();
   const firewall = useOpenLanFirewall();
+  const closeFirewall = useCloseLanFirewall();
   const { toast } = useToast();
   const hostOn = host.data?.mode === "host";
   const pinAccounts = useLanPinAccounts(!hostOn);
@@ -150,6 +152,8 @@ function HostSection(): React.ReactElement {
 
   async function onDisable(): Promise<void> {
     try {
+      // Правила брандмауэра убираем вместе с хостом (снова запрос прав администратора); отказ не мешает выключению.
+      if (data.firewall === "present") await closeFirewall.mutateAsync().catch(() => undefined);
       const result = await disable.mutateAsync();
       toast({ title: result.restarting ? "Выключаю «Хост LAN»…" : "Режим сохранён", description: "Данные не затронуты.", tone: "success" });
     } catch (error) {

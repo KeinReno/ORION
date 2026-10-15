@@ -2213,6 +2213,10 @@ export class ApiClient {
     return this.request("POST", "/lan/host/firewall", {}, z.object({ ok: z.boolean() }));
   }
 
+  closeLanFirewall(): Promise<{ ok: boolean }> {
+    return this.request("DELETE", "/lan/host/firewall", undefined, z.object({ ok: z.boolean() }));
+  }
+
   listLanDevices(): Promise<LanDevice[]> {
     return this.request("GET", "/lan/host/devices", undefined, z.array(lanDeviceSchema));
   }

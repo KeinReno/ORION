@@ -65,6 +65,11 @@ export function useOpenLanFirewall() {
   });
 }
 
+export function useCloseLanFirewall() {
+  const { api } = useCore();
+  return useMutation<{ ok: boolean }, Error, void>({ mutationFn: () => api.closeLanFirewall() });
+}
+
 export function useLanDevices(enabled = true) {
   const { api } = useCore();
   return useQuery<LanDevice[]>({ queryKey: ["lan", "devices"], queryFn: () => api.listLanDevices(), enabled, refetchInterval: 10_000 });
