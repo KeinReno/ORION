@@ -23,6 +23,9 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src http: https:; frame-ancestors 'none'"
     }
   },
+  "plugins": {
+    "deep-link": { "desktop": { "schemes": ["orion"] } }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],

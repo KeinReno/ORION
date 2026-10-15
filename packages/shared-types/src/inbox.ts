@@ -14,6 +14,8 @@ export const inboxItemSchema = z.object({
   targetId: z.string().nullable(),
   projectId: z.string().nullable(),
   processedAt: z.string().nullable(),
+  /** Name of the AI agent that filed this entry; `null` for a person's own. */
+  createdByAgent: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
