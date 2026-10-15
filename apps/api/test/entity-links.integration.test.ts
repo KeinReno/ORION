@@ -251,6 +251,175 @@ describe("EntityLink typed registry (U01)", () => {
     expect(pages).toBeGreaterThan(1);
   });
 
+  it("ADR-0014: one document hangs on a finance account AND a task; unlinking removes only the link", async () => {
+    const alice = await register("ctxpanel");
+    const account = await createAccount(alice, "Сбер");
+    const task = await createTask(alice, "Подписать");
+    const doc = await createDocument(alice, "Договор.pdf");
+
+    const onAccount = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/links`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { sourceType: "document", sourceId: doc.id, targetType: "account", targetId: account.id, kind: "related_to" }
+    });
+    expect(onAccount.status).toBe(201);
+    const onTask = await request(`/workspaces/${alice.workspaceId}/links`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { sourceType: "document", sourceId: doc.id, targetType: "task", targetId: task.id, kind: "supports" }
+    });
+    expect(onTask.status).toBe(201);
+
+    const fromAccount = await request<{ items: Array<{ title: string; sourceType: string }> }>(
+      `/workspaces/${alice.workspaceId}/links?type=account&id=${account.id}`,
+      { method: "GET", token: alice.accessToken }
+    );
+    expect(fromAccount.data.items.map((item) => item.title)).toEqual(["Договор.pdf"]);
+
+    const unlink = await request(`/workspaces/${alice.workspaceId}/links/${onAccount.data.id}`, { method: "DELETE", token: alice.accessToken });
+    expect(unlink.status).toBeLessThan(300);
+    const after = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=account&id=${account.id}`, { method: "GET", token: alice.accessToken });
+    expect(after.data.items).toHaveLength(0);
+    // The document itself, and its other link, are untouched.
+    const docs = await request<Array<{ id: string }>>(`/workspaces/${alice.workspaceId}/documents`, { method: "GET", token: alice.accessToken });
+    expect(docs.data.map((d) => d.id)).toContain(doc.id);
+    const fromTask = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=task&id=${task.id}`, { method: "GET", token: alice.accessToken });
+    expect(fromTask.data.items).toHaveLength(1);
+  });
+
+  it("ADR-0014: another user gets neither the links, nor the account's name, of someone else's workspace", async () => {
+    const alice = await register("ctxowner");
+    const mallory = await register("ctxoutsider");
+    const account = await createAccount(alice, "Секретный счёт");
+    const doc = await createDocument(alice, "Выписка.pdf");
+    const linked = await request(`/workspaces/${alice.workspaceId}/links`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { sourceType: "document", sourceId: doc.id, targetType: "account", targetId: account.id, kind: "related_to" }
+    });
+    expect(linked.status).toBe(201);
+
+    // Not a member: refused outright.
+    const foreign = await request(`/workspaces/${alice.workspaceId}/links?type=account&id=${account.id}`, { method: "GET", token: mallory.accessToken });
+    expect(foreign.status).toBe(403);
+    // Her own workspace, someone else's id: no title leaks, the object does not exist for her.
+    const probe = await request(`/workspaces/${mallory.workspaceId}/links?type=account&id=${account.id}`, { method: "GET", token: mallory.accessToken });
+    expect(probe.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(probe.data)).not.toContain("Секретный счёт");
+    // And she cannot link her own document to Alice's account.
+    const ownDoc = await createDocument(mallory, "Моё.pdf");
+    const cross = await request(`/workspaces/${mallory.workspaceId}/links`, {
+      method: "POST",
+      token: mallory.accessToken,
+      body: { sourceType: "document", sourceId: ownDoc.id, targetType: "account", targetId: account.id, kind: "related_to" }
+    });
+    expect(cross.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("links live records to a goal by role without copying or changing its progress", async () => {
+    const alice = await register("goal-links");
+    const goal = await request<{ id: string; progress: number | null }>(`/workspaces/${alice.workspaceId}/goals`, {
+      method: "POST", token: alice.accessToken, body: { title: "Переехать" }
+    });
+    expect(goal.status).toBe(201);
+    const task = await createTask(alice, "Выбрать квартиру");
+    const note = await createNote(alice, "Что проверить при осмотре");
+    for (const [sourceType, sourceId, kind] of [["task", task.id, "goal_step"], ["note", note.id, "goal_material"]] as const) {
+      const linked = await request(`/workspaces/${alice.workspaceId}/links`, {
+        method: "POST", token: alice.accessToken,
+        body: { sourceType, sourceId, targetType: "goal", targetId: goal.data.id, kind }
+      });
+      expect(linked.status).toBe(201);
+    }
+    const links = await request<{ items: Array<{ kind: string; title: string }> }>(
+      `/workspaces/${alice.workspaceId}/links?type=goal&id=${goal.data.id}`,
+      { method: "GET", token: alice.accessToken }
+    );
+    expect(links.data.items.map((link) => link.kind).sort()).toEqual(["goal_material", "goal_step"]);
+    expect(links.data.items.map((link) => link.title).sort()).toEqual(["Выбрать квартиру", "Что проверить при осмотре"].sort());
+    const after = await request<Array<{ id: string; progress: number | null }>>(`/workspaces/${alice.workspaceId}/goals`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(after.data.find((item) => item.id === goal.data.id)?.progress).toBeNull();
+
+    const foreign = await register("goal-links-foreign");
+    const outside = await request(`/workspaces/${foreign.workspaceId}/links?type=goal&id=${goal.data.id}`, {
+      method: "GET", token: foreign.accessToken
+    });
+    expect(outside.status).toBeGreaterThanOrEqual(400);
+    expect(JSON.stringify(outside.data)).not.toContain("Переехать");
+
+    const disabled = await request(`/workspaces/${alice.workspaceId}/plugins/projects-goals`, {
+      method: "PATCH", token: alice.accessToken, body: { enabled: false }
+    });
+    expect(disabled.status).toBe(200);
+    const hiddenLinks = await request(`/workspaces/${alice.workspaceId}/links?type=goal&id=${goal.data.id}`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(hiddenLinks.status).toBe(403);
+    const hiddenSearch = await request<Array<{ type: string }>>(`/workspaces/${alice.workspaceId}/search?q=${encodeURIComponent("Переехать")}`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(hiddenSearch.data.some((item) => item.type === "goal")).toBe(false);
+    const hiddenTaskLinks = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=task&id=${task.id}`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(hiddenTaskLinks.data.items).toHaveLength(0);
+    const reenabled = await request(`/workspaces/${alice.workspaceId}/plugins/projects-goals`, {
+      method: "PATCH", token: alice.accessToken, body: { enabled: true }
+    });
+    expect(reenabled.status).toBe(200);
+    const restored = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=goal&id=${goal.data.id}`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(restored.data.items).toHaveLength(2);
+  });
+
+  it("connects a savings goal as a measurable source and keeps plugin access gates", async () => {
+    const alice = await register("savings-measure");
+    const account = await createAccount(alice, "Копилка");
+    const savings = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/finance/goals`, {
+      method: "POST", token: alice.accessToken, body: { name: "Резерв 300 000 ₽", accountId: account.id, targetAmount: 30000000 }
+    });
+    expect(savings.status).toBe(201);
+    const goal = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/goals`, {
+      method: "POST", token: alice.accessToken, body: { title: "Создать резерв" }
+    });
+    expect(goal.status).toBe(201);
+    const found = await request<Array<{ type: string; id: string }>>(`/workspaces/${alice.workspaceId}/search?q=${encodeURIComponent("Резерв 300")}`, { method: "GET", token: alice.accessToken });
+    expect(found.data).toContainEqual(expect.objectContaining({ type: "savings_goal", id: savings.data.id }));
+    const linked = await request(`/workspaces/${alice.workspaceId}/links`, {
+      method: "POST", token: alice.accessToken,
+      body: { sourceType: "savings_goal", sourceId: savings.data.id, targetType: "goal", targetId: goal.data.id, kind: "goal_measure" }
+    });
+    expect(linked.status).toBe(201);
+    const disabled = await request(`/workspaces/${alice.workspaceId}/plugins/finance-goals`, { method: "PATCH", token: alice.accessToken, body: { enabled: false } });
+    expect(disabled.status).toBe(200);
+    const hidden = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=goal&id=${goal.data.id}`, { method: "GET", token: alice.accessToken });
+    expect(hidden.data.items).toHaveLength(0);
+  });
+
+  it("allows a chain of goal prerequisites but rejects a cycle", async () => {
+    const alice = await register("goal-chain");
+    const goals = await Promise.all(["Основа", "Подготовка", "Результат"].map(async (title) => {
+      const response = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/goals`, { method: "POST", token: alice.accessToken, body: { title } });
+      expect(response.status).toBe(201);
+      return response.data.id;
+    }));
+    async function dependency(sourceId: string, targetId: string): Promise<number> {
+      const response = await request(`/workspaces/${alice.workspaceId}/links`, {
+        method: "POST", token: alice.accessToken,
+        body: { sourceType: "goal", sourceId, targetType: "goal", targetId, kind: "goal_prerequisite" }
+      });
+      return response.status;
+    }
+    expect(await dependency(goals[0], goals[1])).toBe(201);
+    expect(await dependency(goals[1], goals[2])).toBe(201);
+    expect(await dependency(goals[2], goals[0])).toBe(400);
+    const links = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=goal&id=${goals[0]}`, { method: "GET", token: alice.accessToken });
+    expect(links.data.items).toHaveLength(1);
+  });
+
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

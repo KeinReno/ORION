@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import type { OrionModuleId, SearchableEntityType } from "@orion/shared-types";
+import type { OrionModuleId, OrionPluginId, SearchableEntityType } from "@orion/shared-types";
 import { SEARCH_TYPE_MODULE } from "@orion/shared-types";
 
 /**
@@ -15,11 +15,28 @@ import { SEARCH_TYPE_MODULE } from "@orion/shared-types";
  */
 export interface EntityAdapter {
   moduleId: OrionModuleId;
+  pluginId?: OrionPluginId;
   /** Safe display summary, or `null` if the row doesn't exist or isn't owned by `workspaceId`. */
   summary(tx: Prisma.TransactionClient, workspaceId: string, id: string): Promise<string | null>;
 }
 
 export const ENTITY_REGISTRY: Record<SearchableEntityType, EntityAdapter> = {
+  goal: {
+    moduleId: SEARCH_TYPE_MODULE.goal,
+    pluginId: "projects-goals",
+    async summary(tx, workspaceId, id) {
+      const row = await tx.goal.findUnique({ where: { id }, select: { workspaceId: true, title: true } });
+      return owned(row, workspaceId, "title");
+    }
+  },
+  savings_goal: {
+    moduleId: SEARCH_TYPE_MODULE.savings_goal,
+    pluginId: "finance-goals",
+    async summary(tx, workspaceId, id) {
+      const row = await tx.savingsGoal.findUnique({ where: { id }, select: { workspaceId: true, name: true } });
+      return owned(row, workspaceId, "name");
+    }
+  },
   project: {
     moduleId: SEARCH_TYPE_MODULE.project,
     async summary(tx, workspaceId, id) {
@@ -68,6 +85,13 @@ export const ENTITY_REGISTRY: Record<SearchableEntityType, EntityAdapter> = {
     moduleId: SEARCH_TYPE_MODULE.list,
     async summary(tx, workspaceId, id) {
       const row = await tx.list.findUnique({ where: { id }, select: { workspaceId: true, name: true } });
+      return owned(row, workspaceId, "name");
+    }
+  },
+  account: {
+    moduleId: SEARCH_TYPE_MODULE.account,
+    async summary(tx, workspaceId, id) {
+      const row = await tx.account.findUnique({ where: { id }, select: { workspaceId: true, name: true } });
       return owned(row, workspaceId, "name");
     }
   },

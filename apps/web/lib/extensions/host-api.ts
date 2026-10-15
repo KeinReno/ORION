@@ -10,11 +10,13 @@
 export { FilterChip } from "../../components/filter-chip";
 export { Meter } from "../../components/project-bits";
 export { fromDateInput, toDateInput } from "../date-input";
-export { formatBytes } from "../document-icons";
+export { documentIcon, formatBytes } from "../document-icons";
+export { computeLinkOptions } from "../entity-link-options";
+export { ENTITY_TYPE_LABEL } from "../entity-type-meta";
 export { describeAuthError, describeError } from "../error-message";
 export { buildImportRows, fileFingerprint, type ImportOptions, importRef, parseCsv } from "../finance-csv";
 export { compareBreakdowns, topPayees, transactionsToCsv } from "../finance-insights";
-export { assetShares, buildNetWorth } from "../finance-net-worth";
+export { assetShares, buildNetWorth, convertNetWorth } from "../finance-net-worth";
 export { suggestRecurring } from "../finance-recurring-suggest";
 export { buildForecast, dueState, plannedPayments } from "../finance-forecast";
 export { withArchivedFallback } from "../finance-options";

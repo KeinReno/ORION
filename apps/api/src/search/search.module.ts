@@ -21,6 +21,7 @@ import { ReminderCheckerService } from "./reminder-checker.service";
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, NotesModule],
   controllers: [SearchController, RemindersController],
-  providers: [SearchService, RemindersService, ReminderCheckerService]
+  providers: [SearchService, RemindersService, ReminderCheckerService],
+  exports: [SearchService]
 })
 export class SearchModule {}

@@ -68,6 +68,7 @@ import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
+import { usePublishResourceContext } from "../lib/resource-context-store";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { projectFocus } from "../lib/project-focus";
@@ -141,6 +142,7 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
   // The tab was opened with the name the caller knew (or just "Проект" after
   // a layout restore) — keep it in sync with the real, possibly renamed, project.
   const projectName = project?.name;
+  usePublishResourceContext(project ? { type: "project", id: project.id, title: project.name } : null);
   const lockedView = params?.locked === true;
   useEffect(() => {
     if (projectName && !lockedView) api?.setTitle(projectName);

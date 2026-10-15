@@ -35,6 +35,7 @@ import { AccountAvatar } from "../../components/account-avatar";
 import { CommandCenter } from "../../lib/command-center";
 import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
+import { ResourcesDock, ResourcesToggle } from "../../components/resources/resources-dock";
 import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
 import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
@@ -66,6 +67,7 @@ import {
   resolveDropAction
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
+import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -76,6 +78,12 @@ import { NodeBadge } from "../../components/node-badge";
 import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
+
+// The context panel names the section of whichever dock panel is active (ADR-0014).
+setSectionResolver((panelId) => {
+  const definition = getPanelDefinition(panelId);
+  return definition ? { panelId, moduleId: definition.moduleId ?? null, label: definition.label } : null;
+});
 
 const NO_DISABLED_MODULES: string[] = [];
 const NO_PLUGIN_OVERRIDES: string[] = [];
@@ -230,6 +238,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
           focusPanel("settings");
         }}
       />
+      <ResourcesToggle />
       <FloatHeaderAction {...props} />
       <DetachHeaderAction {...props} />
       <RunningTimerChip />
@@ -584,7 +593,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       apiRef.current = api;
       registerPanelBus({ openPanel });
 
-      api.onDidActivePanelChange((panel) => setActivePanelId(panel?.id ?? null));
+      api.onDidActivePanelChange((panel) => {
+        setActivePanelId(panel?.id ?? null);
+        resourceContextActions.setActivePanel(panel?.id ?? null);
+      });
 
       // U06 (24-CONNECTED-CORE-BACKLOG.md) — sidebar drag→Dockview. This
       // rides entirely on dockview-core's own external-drag machinery
@@ -952,15 +964,19 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               {getPanelDefinition(activePanelId ?? "dashboard")?.label ?? "ORION"}
             </span>
             <RunningTimerChip />
+            <ResourcesToggle size="md" />
             <NotificationBell />
             <IconButton label="Настройки" onClick={() => openPanel("settings")}>
               <Settings className="h-4 w-4" />
             </IconButton>
           </header>
         ) : null}
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
-        </main>
+        <div className="flex min-h-0 flex-1">
+          <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+            <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
+          </main>
+          <ResourcesDock />
+        </div>
       </div>
       <ConfirmDialog
         open={pendingSwitch !== null}
