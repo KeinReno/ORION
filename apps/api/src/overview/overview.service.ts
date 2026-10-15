@@ -122,6 +122,8 @@ export class OverviewService {
             name: account.name,
             kind: account.kind as MyOverview["accounts"][number]["kind"],
             context: account.context as MyOverview["accounts"][number]["context"],
+            visibility: account.visibility === "private" ? "private" : "workspace",
+            ownerId: account.ownerId,
             currency: account.currency,
             startingBalance: account.startingBalance,
             balance: account.startingBalance + (netByAccount.get(account.id) ?? 0),

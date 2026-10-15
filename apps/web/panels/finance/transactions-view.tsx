@@ -16,6 +16,7 @@ import { Button, ConfirmDialog, EmptyState, Input, Modal, Select, Sheet, Skeleto
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CheckSquare, Copy, Plus, Receipt, Search, Square, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ExtensionSlot } from "../../lib/extensions/slot";
+import { usePublishResourceContext } from "../../lib/resource-context-store";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
 import { describeAuthError } from "../../lib/error-message";
@@ -83,6 +84,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  usePublishResourceContext(editing ? { type: "transaction", id: editing.id, title: editing.note || "Финансовая операция" } : null);
   const [pendingDelete, setPendingDelete] = useState<Transaction | null>(null);
   const [copyOf, setCopyOf] = useState<Transaction | null>(null);
   const [selecting, setSelecting] = useState(false);

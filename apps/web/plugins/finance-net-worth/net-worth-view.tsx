@@ -1,11 +1,12 @@
 "use client";
 
-import { useAccounts, useMonthlyFinanceSummary, useObligations } from "@orion/core-react";
-import { Card, EmptyState, Skeleton, StatCard } from "@orion/ui";
+import { useAccounts, useExchangeRates, useMonthlyFinanceSummary, useObligations } from "@orion/core-react";
+import { formatRate } from "@orion/shared-types";
+import { Card, EmptyState, Select, Skeleton, StatCard } from "@orion/ui";
 import { Landmark } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { DashboardFinanceSlotProps, FinanceTabSlotProps } from "../../lib/extensions/contracts";
-import { assetShares, buildNetWorth, formatMoney, useActiveWorkspace, useEnabledModules } from "../../lib/extensions/host-api";
+import { assetShares, buildNetWorth, convertNetWorth, formatMoney, shortDate, useActiveWorkspace, useEnabledModules } from "../../lib/extensions/host-api";
 
 const KIND_LABEL = { cash: "Наличные", card: "Карты", savings: "Накопления", other: "Прочее" } as const;
 const MONTHS = 12;
@@ -30,6 +31,14 @@ export function NetWorthView({ workspaceId }: FinanceTabSlotProps): React.ReactE
   const { accounts, worth, isLoading } = useNetWorthData(id);
   const { data: monthly } = useMonthlyFinanceSummary(id, MONTHS);
   const singleCurrency = worth.currencies.length === 1 ? worth.currencies[0]!.currency : null;
+  // Hand-entered rates (plugin «Курсы валют»); with the plugin off the list is empty and nothing is converted.
+  const { data: rates } = useExchangeRates(worth.currencies.length > 1 ? id : undefined);
+  const [target, setTarget] = useState("");
+  const onDay = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const converted = useMemo(
+    () => (target && rates && rates.length > 0 ? convertNetWorth(worth, target, rates, onDay) : null),
+    [target, rates, worth, onDay]
+  );
 
   if (isLoading) return <Skeleton className="h-40" />;
   if (worth.currencies.length === 0) {
@@ -38,7 +47,50 @@ export function NetWorthView({ workspaceId }: FinanceTabSlotProps): React.ReactE
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      {worth.currencies.map((entry) => (
+      {worth.currencies.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Итог в одной валюте:</span>
+          <Select aria-label="Показать капитал в валюте" value={target} onChange={(e) => setTarget(e.target.value)} className="w-28">
+            <option value="">по отдельности</option>
+            {worth.currencies.map((entry) => (
+              <option key={entry.currency} value={entry.currency}>
+                {entry.currency}
+              </option>
+            ))}
+          </Select>
+          {!rates || rates.length === 0 ? <span className="text-subtle-foreground">нужны курсы — вкладка «Курсы» (плагин «Курсы валют»)</span> : null}
+        </div>
+      ) : null}
+
+      {converted ? (
+        <section className="space-y-2" aria-label={`Капитал в ${converted.currency}`}>
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]">
+            <StatCard label={`Чистый капитал, ${converted.currency}`} value={<span className={converted.net < 0 ? "text-destructive" : undefined}>{formatMoney(converted.net, converted.currency)}</span>} />
+            <StatCard label="На счетах" value={formatMoney(converted.assets, converted.currency)} />
+            <StatCard label="Я должен" value={formatMoney(converted.owe, converted.currency)} />
+            <StatCard label="Мне должны" value={formatMoney(converted.owed, converted.currency)} />
+          </div>
+          {converted.missing.length > 0 ? (
+            <p className="text-xs text-warning">Нет курса для {converted.missing.join(", ")} — эти деньги в итог не вошли. Введите курс во вкладке «Курсы».</p>
+          ) : null}
+          {converted.used.length > 0 ? (
+            <p className="text-2xs text-subtle-foreground">
+              По вашим курсам:{" "}
+              {converted.used
+                .map((item) => {
+                  const pair = item.lookup.inverse
+                    ? `1 ${converted.currency} = ${formatRate(item.lookup.rateMicro)} ${item.from}`
+                    : `1 ${item.from} = ${formatRate(item.lookup.rateMicro)} ${converted.currency}`;
+                  return `${pair} (от ${shortDate(`${item.lookup.day}T12:00:00.000Z`)})`;
+                })
+                .join("; ")}
+              .
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {(converted ? [] : worth.currencies).map((entry) => (
         <section key={entry.currency} className="space-y-2">
           {worth.currencies.length > 1 ? <p className="text-xs font-medium text-muted-foreground">{entry.currency}</p> : null}
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))]">

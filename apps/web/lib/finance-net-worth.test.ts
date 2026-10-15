@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Account, Obligation } from "@orion/shared-types";
-import { assetShares, buildNetWorth } from "./finance-net-worth";
+import { assetShares, buildNetWorth, convertNetWorth } from "./finance-net-worth";
 
 const account = (id: string, balance: number, currency = "RUB", kind: Account["kind"] = "card", archivedAt: string | null = null): Account => ({
-  id, workspaceId: "w", name: id, kind, context: "personal", currency, startingBalance: 0, balance, archivedAt, createdAt: "", updatedAt: ""
+  id, workspaceId: "w", name: id, kind, context: "personal", visibility: "workspace", ownerId: null, currency, startingBalance: 0, balance, archivedAt, createdAt: "", updatedAt: ""
 });
 const obligation = (patch: Partial<Obligation>): Obligation => ({
   id: "o", workspaceId: "w", name: "Кредит", kind: "credit", direction: "owe", principal: 100000, payment: 10000, interval: "monthly",
@@ -41,5 +41,34 @@ describe("assetShares", () => {
   it("shares positive balances of one currency by account kind", () => {
     const shares = assetShares([account("c", 750, "RUB", "cash"), account("s", 250, "RUB", "savings"), account("x", 999, "USD", "cash"), account("n", -5)], "RUB");
     expect(shares.map((s) => [s.kind, s.share])).toEqual([["cash", 0.75], ["savings", 0.25]]);
+  });
+});
+
+describe("convertNetWorth", () => {
+  const rates = [
+    { id: "1", workspaceId: "w", base: "USD", quote: "RUB", rateMicro: 90_000_000, day: "2026-10-01", createdAt: "" },
+    { id: "2", workspaceId: "w", base: "RUB", quote: "EUR", rateMicro: 100_000, day: "2026-10-01", createdAt: "" }
+  ];
+
+  it("converts every part and builds the net from the converted parts", () => {
+    const worth = buildNetWorth([account("r", 1_000_000), account("u", 10_000, "USD")], [obligation({ principal: 200_000, accountId: "r" }), obligation({ id: "x", principal: 1000, accountId: "u" })]);
+    const converted = convertNetWorth(worth, "RUB", rates, "2026-10-15");
+    expect(converted).toMatchObject({ currency: "RUB", assets: 1_000_000 + 900_000, owe: 200_000 + 90_000, missing: [] });
+    expect(converted.net).toBe(converted.assets - converted.accountDebt - converted.owe + converted.owed);
+    expect(converted.used.map((u) => u.from)).toEqual(["USD"]);
+  });
+
+  it("leaves a currency without a rate OUT and says which", () => {
+    const worth = buildNetWorth([account("r", 1_000_000), account("k", 5_000, "KZT")], []);
+    const converted = convertNetWorth(worth, "RUB", rates, "2026-10-15");
+    expect(converted.assets).toBe(1_000_000);
+    expect(converted.missing).toEqual(["KZT"]);
+  });
+
+  it("uses an inverse rate and ignores a rate dated after the day", () => {
+    const worth = buildNetWorth([account("e", 5_000, "EUR")], []);
+    const converted = convertNetWorth(worth, "RUB", rates, "2026-10-15"); // RUB→EUR 0,1 inverted: 1 EUR = 10 RUB
+    expect(converted).toMatchObject({ assets: 50_000, missing: [] });
+    expect(convertNetWorth(worth, "RUB", rates, "2026-09-30").missing).toEqual(["EUR"]);
   });
 });

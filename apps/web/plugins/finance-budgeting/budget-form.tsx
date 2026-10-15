@@ -9,6 +9,7 @@ export interface BudgetFormValues {
   categoryId: string;
   month: string;
   limitAmount: number;
+  rollover: boolean;
 }
 
 /** "YYYY-MM" (native `<input type="month">`) → first-of-month ISO datetime, matching createBudgetInputSchema. */
@@ -40,6 +41,7 @@ export function BudgetForm({
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? expenseCategories[0]?.id ?? "");
   const [month, setMonth] = useState(initial ? isoToMonthInput(initial.month) : defaultMonth);
   const [limitAmount, setLimitAmount] = useState(fromKopecks(initial?.limitAmount));
+  const [rollover, setRollover] = useState(initial?.rollover ?? false);
   const [error, setError] = useState<string | null>(null);
 
   function submit(event: FormEvent): void {
@@ -50,7 +52,7 @@ export function BudgetForm({
       return;
     }
     if (!categoryId) return;
-    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks });
+    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks, rollover });
   }
 
   return (
@@ -90,6 +92,10 @@ export function BudgetForm({
           autoFocus
         />
         {error ? <span className="text-destructive">{error}</span> : null}
+      </label>
+      <label className="flex items-start gap-2 text-2xs text-muted-foreground">
+        <input type="checkbox" className="mt-0.5" checked={rollover} onChange={(e) => setRollover(e.target.checked)} />
+        <span>Переносить остаток: что не потрачено в прошлом месяце, добавится к лимиту этого (перерасход не переносится)</span>
       </label>
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="subtle" size="sm" onClick={onCancel}>

@@ -1,4 +1,4 @@
-import type { Account, Obligation } from "@orion/shared-types";
+import { convertWithRate, findRate, type Account, type ExchangeRate, type Obligation, type RateLookup } from "@orion/shared-types";
 
 /**
  * Net worth (чистый капитал) — what the accounts hold minus what is owed plus what is owed to you, per currency.
@@ -85,4 +85,35 @@ export function assetShares(accounts: readonly Account[], currency: string): { k
   return [...totals.entries()]
     .map(([kind, amount]) => ({ kind, amount, share: sum > 0 ? amount / sum : 0 }))
     .sort((a, b) => b.amount - a.amount);
+}
+
+export interface ConvertedNetWorth extends NetWorthCurrency {
+  /** The rates that were applied, for the line «по курсу от …». */
+  used: { from: string; lookup: RateLookup }[];
+  /** Currencies that have money here but no entered rate to the target: left OUT of the figures, never guessed. */
+  missing: string[];
+}
+
+/**
+ * The whole net worth in ONE currency, from hand-entered rates (`findRate`: newest rate on or before `onDay`, direct or
+ * inverse, no triangulation). Every part (assets, overdraft, debts, receivables) is converted on its own and `net` is
+ * built from the converted parts, so the lines on the screen add up. A currency without a rate is listed in `missing`
+ * and does not take part: a total that silently drops it would look complete.
+ */
+export function convertNetWorth(worth: NetWorth, target: string, rates: readonly ExchangeRate[], onDay: string): ConvertedNetWorth {
+  const result: ConvertedNetWorth = { currency: target, assets: 0, accountDebt: 0, owe: 0, owed: 0, net: 0, used: [], missing: [] };
+  for (const entry of worth.currencies) {
+    const lookup = findRate(rates, entry.currency, target, onDay);
+    if (!lookup) {
+      result.missing.push(entry.currency);
+      continue;
+    }
+    if (entry.currency !== target) result.used.push({ from: entry.currency, lookup });
+    result.assets += convertWithRate(entry.assets, lookup);
+    result.accountDebt += convertWithRate(entry.accountDebt, lookup);
+    result.owe += convertWithRate(entry.owe, lookup);
+    result.owed += convertWithRate(entry.owed, lookup);
+  }
+  result.net = result.assets - result.accountDebt - result.owe + result.owed;
+  return result;
 }

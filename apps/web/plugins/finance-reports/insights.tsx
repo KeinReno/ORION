@@ -1,10 +1,10 @@
 "use client";
 
-import { useAccounts, useCategoryBreakdown, useCore, useFinanceCategories, useTransactions } from "@orion/core-react";
+import { useAccounts, useCategoryBreakdown, useCore, useFinanceCategories, useProjects, useTransactions } from "@orion/core-react";
 import { Button, Skeleton, useToast } from "@orion/ui";
 import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
-import { compareBreakdowns, describeAuthError, formatMoney, topPayees, transactionsToCsv } from "../../lib/extensions/host-api";
+import { compareBreakdowns, describeAuthError, formatMoney, topPayees, transactionsToCsv, useEnabledModules } from "../../lib/extensions/host-api";
 
 const EXPORT_LIMIT = 5000;
 /** Sample the payee list from the month's operations; a month with more than this shows its biggest spenders of the first page. */
@@ -99,6 +99,9 @@ function ExportButton({ workspaceId, month }: { workspaceId: string | undefined;
   const { api } = useCore();
   const { data: accounts } = useAccounts(workspaceId, true);
   const { data: categories } = useFinanceCategories(workspaceId, true);
+  // «Проекты» — соседний модуль: пока он выключен, его API не зовём (названия проектов в файле тогда пустые).
+  const { isEnabled } = useEnabledModules();
+  const { data: projects } = useProjects(isEnabled("projects") ? workspaceId : undefined, true);
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
 
@@ -109,10 +112,11 @@ function ExportButton({ workspaceId, month }: { workspaceId: string | undefined;
       const rows = await api.listTransactions(workspaceId, { month, limit: EXPORT_LIMIT });
       const accountName = new Map((accounts ?? []).map((account) => [account.id, account.name]));
       const categoryName = new Map((categories ?? []).map((category) => [category.id, category.name]));
+      const projectName = new Map((projects ?? []).map((project) => [project.id, project.name]));
       const csv = transactionsToCsv(rows, {
         account: (id) => accountName.get(id) ?? "—",
         category: (id) => categoryName.get(id) ?? "—",
-        project: (id) => id
+        project: (id) => projectName.get(id) ?? ""
       });
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
