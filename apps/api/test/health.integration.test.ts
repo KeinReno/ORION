@@ -60,8 +60,8 @@ describe("Module Health", () => {
     const alice = await register(`${prefix}-alice`);
     const bob = await register(`${prefix}-bob`);
     const ws = `/workspaces/${alice.workspaceId}`;
-    // Модуль выключен по умолчанию: включаем явно.
-    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: [] } }));
+    // Модуль выключен по умолчанию: включаем явно. Личное пространство приглашений не принимает — делаем общим.
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: [], isPersonal: false } }));
     const invite = await request<{ acceptUrl: string }>(`${ws}/invites`, { method: "POST", token: alice.accessToken, body: { email: bob.email } });
     const token = new URL(invite.data.acceptUrl).searchParams.get("token")!;
     expect((await request(`/invites/${token}/accept`, { method: "POST", token: bob.accessToken })).status).toBe(201);
@@ -221,6 +221,196 @@ describe("Module Health", () => {
     // Удаление человека уносит его записи.
     expect((await request(base, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
     expect(await prisma.asSystem((tx) => tx.healthAppointment.count({ where: { subjectId: self.data.id } }))).toBe(0);
+  });
+
+  it("лекарства: отметка идемпотентна, остаток сходится, соблюдение считается, наблюдатель не отмечает", async () => {
+    const { alice, bob, ws } = await setup("meds");
+    const self = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const base = `${ws}/health/subjects/${self.data.id}/medications`;
+    const day = "2026-10-15";
+
+    // График обязателен, если не «по требованию».
+    expect((await request(base, { method: "POST", token: alice.accessToken, body: { name: "Без графика" } })).status).toBe(400);
+    expect((await request(base, { method: "POST", token: alice.accessToken, body: { name: "Кривое время", times: ["8:00"] } })).status).toBe(400);
+
+    const med = await request<{ id: string; stock: number | null; lowStock: boolean; times: string[] }>(base, {
+      method: "POST", token: alice.accessToken, body: { name: "Витамин D", dose: "1 капсула", times: ["20:00", "08:00"], stock: 2, lowStockAt: 1 }
+    });
+    expect(med.status).toBe(201);
+    expect(med.data.times).toEqual(["08:00", "20:00"]);
+    const intakes = `${base}/${med.data.id}/intakes`;
+    const stock = async () => (await request<Array<{ id: string; stock: number | null; lowStock: boolean }>>(`${base}?today=${day}`, { method: "GET", token: alice.accessToken })).data.find((m) => m.id === med.data.id)!;
+
+    const slots = await request<Array<{ time: string; status: string | null }>>(`${base}/schedule?day=${day}`, { method: "GET", token: alice.accessToken });
+    expect(slots.data.map((d) => [d.time, d.status])).toEqual([["08:00", null], ["20:00", null]]);
+
+    expect((await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "08:00", status: "taken" } })).status).toBe(204);
+    expect(await stock()).toMatchObject({ stock: 1, lowStock: true });
+    // Повторная отметка того же — ничего не меняет.
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "08:00", status: "taken" } });
+    expect((await stock()).stock).toBe(1);
+    // «Принял» → «пропустил» возвращает единицу; обратно — снова списывает.
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "08:00", status: "skipped" } });
+    expect((await stock()).stock).toBe(2);
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "08:00", status: "taken" } });
+    expect((await stock()).stock).toBe(1);
+    // Снятая отметка возвращает единицу и слот становится неотмеченным.
+    expect((await request(`${intakes}?day=${day}&time=08:00`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    expect((await stock()).stock).toBe(2);
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "08:00", status: "taken" } });
+
+    // «Сегодня»: остаётся только неотмеченный вечерний приём.
+    const today = await request<{ doses: Array<{ name: string; time: string; subjectName: string }> }>(`${ws}/health/today?today=${day}`, { method: "GET", token: alice.accessToken });
+    expect(today.data.doses.map((d) => [d.name, d.time, d.subjectName])).toEqual([["Витамин D", "20:00", "Анна"]]);
+
+    // Остаток не уходит ниже нуля.
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day, time: "20:00", status: "taken" } });
+    await request(intakes, { method: "PUT", token: alice.accessToken, body: { day: "2026-10-16", time: "08:00", status: "taken" } });
+    expect((await stock()).stock).toBe(0);
+
+    // Правка не должна оставлять лекарство без графика.
+    expect((await request(`${base}/${med.data.id}`, { method: "PATCH", token: alice.accessToken, body: { times: [] } })).status).toBe(400);
+
+    // Соблюдение: курс с 10.10, окно — 10..14.10 по два слота = 10.
+    const course = await request<{ id: string }>(base, { method: "POST", token: alice.accessToken, body: { name: "Курс", times: ["09:00", "21:00"], startOn: "2026-10-10" } });
+    const courseIntakes = `${base}/${course.data.id}/intakes`;
+    for (const [d, t, status] of [["2026-10-10", "09:00", "taken"], ["2026-10-11", "09:00", "taken"], ["2026-10-12", "21:00", "taken"], ["2026-10-13", "09:00", "skipped"]] as const) {
+      await request(courseIntakes, { method: "PUT", token: alice.accessToken, body: { day: d, time: t, status } });
+    }
+    const listed = await request<Array<{ id: string; adherence: { planned: number; taken: number; skipped: number } }>>(`${base}?today=${day}`, { method: "GET", token: alice.accessToken });
+    expect(listed.data.find((m) => m.id === course.data.id)!.adherence).toEqual({ planned: 10, taken: 3, skipped: 1 });
+
+    // Наблюдатель видит, но не отмечает и не получает напоминаний; чужой без допуска не видит вовсе.
+    expect((await request(base, { method: "GET", token: bob.accessToken })).status).toBe(404);
+    await request(`${ws}/health/subjects/${self.data.id}/grants/${bob.user.id}`, { method: "PUT", token: alice.accessToken, body: { level: "read" } });
+    expect((await request(base, { method: "GET", token: bob.accessToken })).status).toBe(200);
+    expect((await request(`${base}/schedule?day=${day}`, { method: "GET", token: bob.accessToken })).status).toBe(200);
+    expect((await request(intakes, { method: "PUT", token: bob.accessToken, body: { day, time: "20:00", status: "skipped" } })).status).toBe(403);
+    expect((await request(`${intakes}?day=${day}&time=20:00`, { method: "DELETE", token: bob.accessToken })).status).toBe(403);
+    expect((await request(base, { method: "POST", token: bob.accessToken, body: { name: "x", asNeeded: true } })).status).toBe(403);
+    expect((await request<{ doses: unknown[] }>(`${ws}/health/today?today=${day}`, { method: "GET", token: bob.accessToken })).data.doses).toEqual([]);
+    expect(await prisma.withUser(bob.user.id, async (tx) => (await tx.healthIntake.deleteMany({ where: { subjectId: self.data.id } })).count)).toBe(0);
+    expect(await prisma.withUser(bob.user.id, async (tx) => (await tx.healthMedication.updateMany({ where: { subjectId: self.data.id }, data: { name: "Взлом" } })).count)).toBe(0);
+
+    // Архив убирает лекарство из расписания, история остаётся.
+    await request(`${base}/${med.data.id}`, { method: "PATCH", token: alice.accessToken, body: { archivedAt: new Date().toISOString() } });
+    expect((await request<unknown[]>(`${base}/schedule?day=${day}`, { method: "GET", token: alice.accessToken })).data.every((d) => (d as { name: string }).name !== "Витамин D")).toBe(true);
+    expect(await prisma.asSystem((tx) => tx.healthIntake.count({ where: { medicationId: med.data.id } }))).toBeGreaterThan(0);
+  });
+
+  it("показатели: опечатки отвергаются, ряд и личный диапазон работают, наблюдатель только смотрит", async () => {
+    const { alice, bob, ws } = await setup("meas");
+    const self = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const base = `${ws}/health/subjects/${self.data.id}`;
+    const post = (body: unknown, token = alice.accessToken) => request<{ id: string; value: number; value2: number | null }>(`${base}/measurements`, { method: "POST", token, body });
+
+    expect((await post({ kind: "weight", value: 7000 })).status).toBe(400);
+    expect((await post({ kind: "blood_pressure", value: 120 })).status).toBe(400);
+    expect((await post({ kind: "blood_pressure", value: 120, value2: 130 })).status).toBe(400);
+    expect((await post({ kind: "pulse", value: 70, value2: 80 })).status).toBe(400);
+    expect((await post({ kind: "mood", value: 5 })).status).toBe(400);
+
+    const w1 = await post({ kind: "weight", value: 72.4, measuredAt: "2026-10-01T08:00:00.000Z", context: "натощак" });
+    expect(w1.status).toBe(201);
+    expect(w1.data.value).toBe(72.4);
+    await post({ kind: "weight", value: 71.9, measuredAt: "2026-10-10T08:00:00.000Z" });
+    const bp = await post({ kind: "blood_pressure", value: 128, value2: 84, measuredAt: "2026-10-12T08:00:00.000Z" });
+    expect(bp.data).toMatchObject({ value: 128, value2: 84 });
+
+    // Свежие первыми; фильтры по виду и окну.
+    const all = await request<Array<{ kind: string; value: number }>>(`${base}/measurements`, { method: "GET", token: alice.accessToken });
+    expect(all.data.map((m) => m.kind)).toEqual(["blood_pressure", "weight", "weight"]);
+    const weights = await request<Array<{ value: number }>>(`${base}/measurements?kind=weight&from=2026-10-05T00:00:00.000Z`, { method: "GET", token: alice.accessToken });
+    expect(weights.data.map((m) => m.value)).toEqual([71.9]);
+    expect((await request(`${base}/measurements?kind=mood`, { method: "GET", token: alice.accessToken })).status).toBe(400);
+    expect((await request(`${base}/measurements?from=вчера`, { method: "GET", token: alice.accessToken })).status).toBe(400);
+
+    // Личный диапазон.
+    expect((await request(`${base}/measurement-targets/weight`, { method: "PUT", token: alice.accessToken, body: { min: 80, max: 70 } })).status).toBe(400);
+    const target = await request<{ min: number | null; max: number | null }>(`${base}/measurement-targets/weight`, { method: "PUT", token: alice.accessToken, body: { min: 60, max: 72 } });
+    expect(target.data).toEqual(expect.objectContaining({ min: 60, max: 72 }));
+    await request(`${base}/measurement-targets/weight`, { method: "PUT", token: alice.accessToken, body: { min: null, max: 71 } });
+    expect((await request<Array<{ kind: string; min: number | null; max: number | null }>>(`${base}/measurement-targets`, { method: "GET", token: alice.accessToken })).data).toEqual([expect.objectContaining({ kind: "weight", min: null, max: 71 })]);
+
+    // Чужой без допуска не видит; наблюдатель читает, но не пишет и не удаляет — ни по HTTP, ни в БД.
+    expect((await request(`${base}/measurements`, { method: "GET", token: bob.accessToken })).status).toBe(404);
+    expect((await request(`${base}/measurement-targets`, { method: "GET", token: bob.accessToken })).status).toBe(404);
+    await request(`${base}/grants/${bob.user.id}`, { method: "PUT", token: alice.accessToken, body: { level: "read" } });
+    expect((await request(`${base}/measurements`, { method: "GET", token: bob.accessToken })).data).toHaveLength(3);
+    expect((await post({ kind: "weight", value: 70 }, bob.accessToken)).status).toBe(403);
+    expect((await request(`${base}/measurements/${w1.data.id}`, { method: "DELETE", token: bob.accessToken })).status).toBe(403);
+    expect((await request(`${base}/measurement-targets/weight`, { method: "PUT", token: bob.accessToken, body: { min: 1, max: 2 } })).status).toBe(403);
+    expect(await prisma.withUser(bob.user.id, async (tx) => (await tx.healthMeasurement.deleteMany({ where: { subjectId: self.data.id } })).count)).toBe(0);
+    expect(await prisma.withUser(bob.user.id, async (tx) => (await tx.healthTarget.deleteMany({ where: { subjectId: self.data.id } })).count)).toBe(0);
+
+    // «Ведёт вместе» вносит; удаление чужой записи другого человека невозможно.
+    await request(`${base}/grants/${bob.user.id}`, { method: "PUT", token: alice.accessToken, body: { level: "write" } });
+    expect((await post({ kind: "pulse", value: 64 }, bob.accessToken)).status).toBe(201);
+    expect((await request(`${base}/measurements/${w1.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    expect((await request(`${base}/measurements/${w1.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(404);
+  });
+
+  it("симптомы и сводка: эпизоды пишутся, сводка собирает только доступное и только текущее", async () => {
+    const { alice, bob, ws } = await setup("sym");
+    const self = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна", bloodType: "A(II) Rh+", allergies: [{ substance: "Арахис", reaction: "сыпь" }], emergencyNote: "Муж: +7 900 000-00-00" } });
+    const base = `${ws}/health/subjects/${self.data.id}`;
+
+    // Симптомы: сила 0–10, конец не раньше начала.
+    const symPost = (body: unknown, token = alice.accessToken) => request<{ id: string; endedAt: string | null }>(`${base}/symptoms`, { method: "POST", token, body });
+    expect((await symPost({ name: "Головная боль", severity: 11 })).status).toBe(400);
+    expect((await symPost({ name: "Головная боль", severity: 4, startedAt: "2026-10-10T10:00:00.000Z", endedAt: "2026-10-09T10:00:00.000Z" })).status).toBe(400);
+    const open = await symPost({ name: "Головная боль", severity: 6, triggers: "недосып" });
+    expect(open.status).toBe(201);
+    expect(open.data.endedAt).toBeNull();
+    await symPost({ name: "Старый кашель", severity: 3, startedAt: "2025-01-01T08:00:00.000Z", endedAt: "2025-01-05T08:00:00.000Z" });
+
+    const closed = await request<{ endedAt: string | null }>(`${base}/symptoms/${open.data.id}`, { method: "PATCH", token: alice.accessToken, body: { endedAt: new Date().toISOString() } });
+    expect(closed.data.endedAt).not.toBeNull();
+    expect((await request(`${base}/symptoms/${open.data.id}`, { method: "PATCH", token: alice.accessToken, body: { endedAt: "2000-01-01T00:00:00.000Z" } })).status).toBe(400);
+    const recent = await request<Array<{ name: string }>>(`${base}/symptoms?from=2026-01-01T00:00:00.000Z`, { method: "GET", token: alice.accessToken });
+    expect(recent.data.map((x) => x.name)).toEqual(["Головная боль"]);
+
+    // Наполняем остальное, чтобы сводка было что собирать.
+    await request(`${base}/medications`, { method: "POST", token: alice.accessToken, body: { name: "Витамин D", dose: "1 капсула", times: ["08:00"] } });
+    await request(`${base}/medications`, { method: "POST", token: alice.accessToken, body: { name: "Давно закончил", times: ["08:00"], endOn: "2020-01-01" } });
+    await request(`${base}/measurements`, { method: "POST", token: alice.accessToken, body: { kind: "weight", value: 70, measuredAt: "2026-10-01T08:00:00.000Z" } });
+    await request(`${base}/measurements`, { method: "POST", token: alice.accessToken, body: { kind: "weight", value: 69.5, measuredAt: "2026-10-10T08:00:00.000Z" } });
+    await request(`${base}/measurement-targets/weight`, { method: "PUT", token: alice.accessToken, body: { min: 60, max: 72 } });
+    await request(`${base}/appointments`, { method: "POST", token: alice.accessToken, body: { title: "Терапевт", at: new Date(Date.now() + 5 * 86_400_000).toISOString() } });
+    const done = await request<{ id: string }>(`${base}/appointments`, { method: "POST", token: alice.accessToken, body: { title: "Окулист", at: "2026-09-01T09:00:00.000Z" } });
+    await request(`${base}/appointments/${done.data.id}`, { method: "PATCH", token: alice.accessToken, body: { doneAt: "2026-09-01T10:00:00.000Z", outcome: "ок" } });
+
+    interface Summary {
+      subject: { name: string; bloodType: string; allergies: Array<{ substance: string }>; emergencyNote: string };
+      medications: Array<{ name: string }>;
+      measurements: Array<{ kind: string; latest: { value: number }; recent: unknown[]; target: { min: number; max: number } | null }>;
+      upcomingAppointments: Array<{ title: string }>;
+      recentAppointments: Array<{ title: string; outcome: string }>;
+      symptoms: Array<{ name: string }>;
+    }
+    const sum = await request<Summary>(`${base}/summary`, { method: "GET", token: alice.accessToken });
+    expect(sum.status).toBe(200);
+    expect(sum.data.subject).toMatchObject({ name: "Анна", bloodType: "A(II) Rh+", emergencyNote: "Муж: +7 900 000-00-00" });
+    expect(sum.data.subject.allergies).toEqual([{ substance: "Арахис", reaction: "сыпь" }]);
+    expect(sum.data.medications.map((m) => m.name)).toEqual(["Витамин D"]);
+    expect(sum.data.measurements).toHaveLength(1);
+    expect(sum.data.measurements[0]).toMatchObject({ kind: "weight", latest: { value: 69.5 }, target: { min: 60, max: 72 } });
+    expect(sum.data.measurements[0].recent).toHaveLength(2);
+    expect(sum.data.upcomingAppointments.map((a) => a.title)).toEqual(["Терапевт"]);
+    expect(sum.data.recentAppointments).toEqual([expect.objectContaining({ title: "Окулист", outcome: "ок" })]);
+    expect(sum.data.symptoms.map((x) => x.name)).toEqual(["Головная боль"]);
+
+    // Доступ: без допуска — 404; read видит сводку, но не пишет симптомы; архивное лекарство в сводку не попадает.
+    expect((await request(`${base}/summary`, { method: "GET", token: bob.accessToken })).status).toBe(404);
+    expect((await request(`${base}/symptoms`, { method: "GET", token: bob.accessToken })).status).toBe(404);
+    await request(`${base}/grants/${bob.user.id}`, { method: "PUT", token: alice.accessToken, body: { level: "read" } });
+    expect((await request(`${base}/summary`, { method: "GET", token: bob.accessToken })).status).toBe(200);
+    expect((await symPost({ name: "x", severity: 1 }, bob.accessToken)).status).toBe(403);
+    expect((await request(`${base}/symptoms/${open.data.id}`, { method: "DELETE", token: bob.accessToken })).status).toBe(403);
+    expect(await prisma.withUser(bob.user.id, async (tx) => (await tx.healthSymptom.deleteMany({ where: { subjectId: self.data.id } })).count)).toBe(0);
+
+    expect((await request(`${base}/symptoms/${open.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    expect((await request(`${base}/symptoms/${open.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(404);
   });
 
   async function register(name: string): Promise<Session> {
