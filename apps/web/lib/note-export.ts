@@ -3,6 +3,8 @@ import type { Note } from "@orion/shared-types";
 /** Имя файла без символов, запрещённых в Windows/macOS/Linux. */
 export function noteFileName(note: Pick<Note, "title">): string {
   const base = note.title
+    // Control characters are exactly what must be stripped: they are invalid in file names.
+    // eslint-disable-next-line no-control-regex
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
