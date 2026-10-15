@@ -111,6 +111,7 @@ const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
 const transactionChannel = makeIntentChannel<EntityFocusRequest>("finance");
 const contactChannel = makeIntentChannel<EntityFocusRequest>("contacts");
+const goalChannel = makeFocusChannel("goals");
 let focusNonce = 0;
 const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
 let browserNonce = 0;
@@ -153,6 +154,9 @@ export const useTransactionFocusRequest = transactionChannel.useIntent;
 export function focusContact(id: string): void { contactChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
 export const useContactFocusRequest = contactChannel.useIntent;
 
+export const focusGoal = goalChannel.focus;
+export const useFocusedGoalId = goalChannel.useFocusedId;
+
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);
@@ -186,11 +190,21 @@ export function openEntity(type: SearchableEntityType, id: string, title?: strin
     case "project":
       openProject(id, title);
       return;
+    case "goal":
+      focusGoal(id);
+      return;
     case "contact":
       focusContact(id);
       return;
     case "list":
       openList(id, title);
+      return;
+    case "account":
+      // Accounts have no page of their own: Finance opens, the account lives on its «Счета» tab.
+      openPanel("finance");
+      return;
+    case "savings_goal":
+      openPanel("view:finance~goals", "Финансы · Цели");
       return;
   }
 }

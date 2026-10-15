@@ -22,6 +22,7 @@ export const ORION_PLUGIN_IDS = [
   "finance-reports",
   "tasks-saved-views",
   "documents-history",
+  "documents-resources",
   "documents-office",
   "notes-history",
   "time-insights",
@@ -50,7 +51,11 @@ export const ORION_PLUGIN_IDS = [
   "lists-finance",
   "finance-project-costs",
   "finance-net-worth",
-  "finance-transfer-match"
+  "finance-transfer-match",
+  "finance-templates",
+  "finance-split",
+  "finance-exchange-rates",
+  "finance-ai-drafts"
 ] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
@@ -190,6 +195,16 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Пункт «История версий…» в меню файла", "Восстановление прежней версии"],
     disableBehavior:
       "Пункт меню и окно истории скрываются; версии продолжают сохраняться при замене содержимого, поэтому история будет на месте при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "documents-resources",
+    extendsModuleId: "documents",
+    label: "Файлы в контекстной панели",
+    summary: "Вкладка «Ресурсы» правой панели: файлы, связанные с выбранным объектом или разделом.",
+    provides: ["Список связанных файлов с предпросмотром", "Связать файл с объектом и открепить связь"],
+    disableBehavior:
+      "Вкладка «Ресурсы» показывает «недоступно». Связи и сами файлы не удаляются и вернутся при повторном включении.",
     defaultEnabled: true
   },
   {
@@ -465,6 +480,42 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Находит расход на одном счёте и доход на другом, которые на деле один перевод между вашими счетами (после импорта двух выписок), и по кнопке заменяет их одним переводом.",
     provides: ["Подсказка над операциями «Похоже на перевод»", "Объединение двух операций в перевод"],
     disableBehavior: "Подсказка скрывается; операции не затрагиваются. Уже объединённые переводы остаются переводами.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-templates",
+    extendsModuleId: "finance",
+    label: "Шаблоны операций",
+    summary: "Заготовки для операций, которые повторяются без расписания («обед», «заправка»): счёт, категория, сумма и заметка уже заполнены, остаётся нажать и подтвердить.",
+    provides: ["Полоса шаблонов над операциями", "Создание и правка шаблонов"],
+    disableBehavior: "Полоса скрывается и API недоступно; сохранённые шаблоны остаются и вернутся при включении. Записанные по ним операции — обычные.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-split",
+    extendsModuleId: "finance",
+    label: "Общие расходы",
+    summary: "Кто за что заплатил и кто кому должен: делите общий расход между участниками пространства, смотрите баланс и записывайте взаиморасчёты. Счета и их остатки не меняются.",
+    provides: ["Вкладка «Общие расходы»", "Баланс «кто кому должен» и подсказка расчётов"],
+    disableBehavior: "Вкладка скрывается и API недоступно; расходы, доли и расчёты сохраняются и вернутся при включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-exchange-rates",
+    extendsModuleId: "finance",
+    label: "Курсы валют",
+    summary: "Курсы, которые вы вводите сами (по дням), и пересчёт «Капитала» в одну валюту. Внешнего источника нет: каждую цифру можно объяснить курсом и датой.",
+    provides: ["Вкладка «Курсы»", "Пересчёт капитала в выбранную валюту"],
+    disableBehavior: "Вкладка скрывается, капитал снова показывается по каждой валюте отдельно; введённые курсы сохраняются.",
+    defaultEnabled: true
+  },
+  {
+    id: "finance-ai-drafts",
+    extendsModuleId: "finance",
+    label: "Черновики от ИИ",
+    summary: "Внешний ИИ-агент (с разрешением «finance:draft») присылает операцию, прочитанную с чека, как ЧЕРНОВИК. Вы видите предпросмотр, правите любое поле и сами подтверждаете — без вашего решения ничего не записывается.",
+    provides: ["Блок «ИИ предлагает» над операциями", "Эндпоинты агента /ai/v1/finance/refs и /ai/v1/finance/drafts"],
+    disableBehavior: "Блок скрывается, агентам отвечает 409; присланные черновики сохраняются и вернутся при включении. Записанные из них операции — обычные.",
     defaultEnabled: true
   }
 ];

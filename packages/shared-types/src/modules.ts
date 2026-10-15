@@ -127,7 +127,10 @@ export const SEARCH_TYPE_MODULE: Record<SearchableEntityType, OrionModuleId> = {
   document: "documents",
   transaction: "finance",
   contact: "contacts",
-  list: "lists"
+  list: "lists",
+  account: "finance",
+  goal: "projects",
+  savings_goal: "finance"
 };
 
 export const INBOX_TARGET_MODULE: Record<"task" | "note" | "event", OrionModuleId> = {

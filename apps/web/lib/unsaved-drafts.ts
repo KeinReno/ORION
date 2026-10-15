@@ -23,6 +23,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+/** The dock panel id the calling component renders in (null outside a dock panel, e.g. a detached window). */
+export function usePanelId(): string | null {
+  return useContext(DraftPanelContext);
+}
+
 /** Marks `id` as holding unsaved text; returns the function that clears it. */
 export function PanelDraftScope({ panelId, children }: { panelId: string; children?: ReactNode }): React.ReactElement {
   return createElement(DraftPanelContext.Provider, { value: panelId }, children);

@@ -1,4 +1,20 @@
 import {
+  SYNC_PROTOCOL_VERSION,
+  pushSyncOpsResultSchema,
+  replicaPullSchema,
+  replicaSnapshotSchema,
+  syncDeviceSchema,
+  syncModeStateSchema,
+  type PushSyncOpsInput,
+  type PushSyncOpsResult,
+  type RegisterSyncDeviceInput,
+  type ReplicaPull,
+  type ReplicaSnapshot,
+  type SyncDevice,
+  type SyncMode,
+  type SyncModeState
+} from "@orion/shared-types";
+import {
   lanClientPairingSchema,
   lanDeviceSchema,
   lanDiscoveredNodeSchema,
@@ -15,7 +31,7 @@ import {
   type LanPendingPair,
   type LanPinAccount
 } from "@orion/shared-types";
-import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery } from "@orion/shared-types";
+import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
 import {
@@ -29,6 +45,12 @@ import {
   calendarConnectionSchema,
   calendarFeedInfoSchema,
   categoryBreakdownEntrySchema,
+  exchangeRateSchema,
+  financeDraftSchema,
+  financeTemplateSchema,
+  settlementSchema,
+  splitOverviewSchema,
+  splitSchema,
   projectCostsSchema,
   categoryRuleSchema,
   documentSchema,
@@ -95,6 +117,7 @@ import {
   workspaceModuleStateSchema,
   workspaceSchema,
   workspaceInviteSchema,
+  workspaceTransferPreviewSchema,
   createdWorkspaceInviteSchema,
   workspaceMemberSchema,
   inviteLookupSchema,
@@ -137,7 +160,12 @@ import {
   type ProjectCapture,
   type ProjectCaptureKind,
   type AgentAuditEntry,
+  type AgentAuditQuery,
+  type AgentProposalBulkInput,
+  type AgentProposalBulkResult,
+  type UpdateAgentTokenInput,
   type AgentToken,
+  type AgentConnectionInfo,
   type ActivityEntry,
   type AttachToHomeInput,
   type Contact,
@@ -145,6 +173,20 @@ import {
   type CreateHomeInput,
   type CreateMeterInput,
   type CreateMeterReadingInput,
+  type CreateHealthSymptomInput,
+  type HealthSummary,
+  type HealthSymptom,
+  type UpdateHealthSymptomInput,
+  type CreateHealthMeasurementInput,
+  type HealthMeasurement,
+  type HealthMeasurementKind,
+  type HealthTarget,
+  type PutHealthTargetInput,
+  type CreateHealthMedicationInput,
+  type HealthDose,
+  type HealthMedication,
+  type PutHealthIntakeInput,
+  type UpdateHealthMedicationInput,
   type CreateHealthAppointmentInput,
   type CreateHealthPreventiveInput,
   type CreateHealthSubjectInput,
@@ -170,6 +212,8 @@ import {
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
+  type GoalHistory,
+  goalHistorySchema,
   type UpdateGoalInput,
   type UpdateGoalPlanInput,
   type CreateAgentTokenInput,
@@ -177,10 +221,17 @@ import {
   type UpdateProjectCaptureInput,
   projectCaptureSchema,
   agentTokenSchema,
+  agentConnectionInfoSchema,
   goalSchema,
   activityEntrySchema,
   contactSchema,
   healthAppointmentSchema,
+  healthMeasurementSchema,
+  healthSummarySchema,
+  healthSymptomSchema,
+  healthTargetSchema,
+  healthDoseSchema,
+  healthMedicationSchema,
   healthGrantSchema,
   healthPreventiveItemSchema,
   healthSubjectSchema,
@@ -191,6 +242,7 @@ import {
   meterSchema,
   agentProposalSchema,
   agentAuditEntrySchema,
+  agentProposalBulkResultSchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
   type TaskActivity,
@@ -293,10 +345,23 @@ import {
   type EventScope,
   type FinanceCategory,
   type LoginInput,
+  type CreateFinanceTemplateInput,
+  type AcceptFinanceDraftInput,
+  type ExchangeRate,
+  type FinanceDraft,
+  type UpsertExchangeRateInput,
+  type CreateSettlementInput,
+  type CreateSplitInput,
+  type Settlement,
+  type Split,
+  type SplitOverview,
+  type FinanceTemplate,
   type MergeTransferInput,
+  type UpdateFinanceTemplateInput,
   type MonthlyFinanceSummary,
   type ProjectCosts,
   type MyOverview,
+  type WorkspaceTransferPreview,
   type Note,
   type NoteAttachment,
   type NoteBacklink,
@@ -761,6 +826,25 @@ export class ApiClient {
     return this.request("POST", `/workspaces/${workspaceId}/documents`, input, documentSchema);
   }
 
+  /** ТЗ-05: файл `.orion` для переноса пространства на другой узел (только владелец). Пароль — необязателен. */
+  exportWorkspace(workspaceId: string, passphrase?: string): Promise<Blob> {
+    return this.requestBlob("POST", `/workspaces/${workspaceId}/export`, false, passphrase ? { passphrase } : {});
+  }
+
+  /** ТЗ-05: предпросмотр (`dryRun`) или применение переноса — всегда создаёт НОВОЕ пространство. */
+  importWorkspace(
+    file: File | Blob,
+    options: { dryRun: boolean; name?: string; passphrase?: string; expectedHash?: string }
+  ): Promise<WorkspaceTransferPreview> {
+    const form = new FormData();
+    form.append("file", file, "name" in file ? file.name : "workspace.orion");
+    form.append("dryRun", String(options.dryRun));
+    if (options.name) form.append("name", options.name);
+    if (options.passphrase) form.append("passphrase", options.passphrase);
+    if (options.expectedHash) form.append("expectedHash", options.expectedHash);
+    return this.request("POST", "/workspaces/import", form, workspaceTransferPreviewSchema);
+  }
+
   /** Upload one or more files into `parentId` (null = workspace root). Sent as `multipart/form-data`. */
   uploadDocuments(workspaceId: string, parentId: string | null, files: File[]): Promise<DocumentItem[]> {
     const form = new FormData();
@@ -1020,6 +1104,80 @@ export class ApiClient {
     await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/appointments/${appointmentId}`, undefined, z.unknown());
   }
 
+  listHealthMedications(workspaceId: string, subjectId: string, today: string): Promise<HealthMedication[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications?today=${today}`, undefined, z.array(healthMedicationSchema));
+  }
+
+  healthSchedule(workspaceId: string, subjectId: string, day: string): Promise<HealthDose[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications/schedule?day=${day}`, undefined, z.array(healthDoseSchema));
+  }
+
+  createHealthMedication(workspaceId: string, subjectId: string, input: CreateHealthMedicationInput): Promise<HealthMedication> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications`, input, healthMedicationSchema);
+  }
+
+  updateHealthMedication(workspaceId: string, subjectId: string, medicationId: string, input: UpdateHealthMedicationInput): Promise<HealthMedication> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications/${medicationId}`, input, healthMedicationSchema);
+  }
+
+  async putHealthIntake(workspaceId: string, subjectId: string, medicationId: string, input: PutHealthIntakeInput): Promise<void> {
+    await this.request("PUT", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications/${medicationId}/intakes`, input, z.unknown());
+  }
+
+  async removeHealthIntake(workspaceId: string, subjectId: string, medicationId: string, day: string, time: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/medications/${medicationId}/intakes?day=${day}&time=${encodeURIComponent(time)}`, undefined, z.unknown());
+  }
+
+  listHealthMeasurements(workspaceId: string, subjectId: string, filter: { kind?: HealthMeasurementKind; from?: string }): Promise<HealthMeasurement[]> {
+    const query = new URLSearchParams();
+    if (filter.kind) query.set("kind", filter.kind);
+    if (filter.from) query.set("from", filter.from);
+    const suffix = query.size ? `?${query.toString()}` : "";
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurements${suffix}`, undefined, z.array(healthMeasurementSchema));
+  }
+
+  createHealthMeasurement(workspaceId: string, subjectId: string, input: CreateHealthMeasurementInput): Promise<HealthMeasurement> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurements`, input, healthMeasurementSchema);
+  }
+
+  async deleteHealthMeasurement(workspaceId: string, subjectId: string, measurementId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurements/${measurementId}`, undefined, z.unknown());
+  }
+
+  listHealthTargets(workspaceId: string, subjectId: string): Promise<HealthTarget[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurement-targets`, undefined, z.array(healthTargetSchema));
+  }
+
+  putHealthTarget(workspaceId: string, subjectId: string, kind: HealthMeasurementKind, input: PutHealthTargetInput): Promise<HealthTarget> {
+    return this.request("PUT", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurement-targets/${kind}`, input, healthTargetSchema);
+  }
+
+  async deleteHealthTarget(workspaceId: string, subjectId: string, kind: HealthMeasurementKind): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/measurement-targets/${kind}`, undefined, z.unknown());
+  }
+
+  listHealthSymptoms(workspaceId: string, subjectId: string, from?: string): Promise<HealthSymptom[]> {
+    const suffix = from ? `?from=${encodeURIComponent(from)}` : "";
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/symptoms${suffix}`, undefined, z.array(healthSymptomSchema));
+  }
+
+  createHealthSymptom(workspaceId: string, subjectId: string, input: CreateHealthSymptomInput): Promise<HealthSymptom> {
+    return this.request("POST", `/workspaces/${workspaceId}/health/subjects/${subjectId}/symptoms`, input, healthSymptomSchema);
+  }
+
+  updateHealthSymptom(workspaceId: string, subjectId: string, symptomId: string, input: UpdateHealthSymptomInput): Promise<HealthSymptom> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/health/subjects/${subjectId}/symptoms/${symptomId}`, input, healthSymptomSchema);
+  }
+
+  async deleteHealthSymptom(workspaceId: string, subjectId: string, symptomId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/health/subjects/${subjectId}/symptoms/${symptomId}`, undefined, z.unknown());
+  }
+
+  /** Сводка для карточки врача и экстренной карточки; запрашивается по нажатию, не кэшируется надолго. */
+  healthSummary(workspaceId: string, subjectId: string): Promise<HealthSummary> {
+    return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/summary`, undefined, healthSummarySchema);
+  }
+
   listHealthPreventive(workspaceId: string, subjectId: string): Promise<HealthPreventiveItem[]> {
     return this.request("GET", `/workspaces/${workspaceId}/health/subjects/${subjectId}/preventive`, undefined, z.array(healthPreventiveItemSchema));
   }
@@ -1126,6 +1284,10 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/goals`, undefined, z.array(goalSchema));
   }
 
+  listProjectGoalsHistory(workspaceId: string, weeks: number): Promise<GoalHistory> {
+    return this.request("GET", `/workspaces/${workspaceId}/goals/history?weeks=${weeks}`, undefined, goalHistorySchema);
+  }
+
   createProjectGoal(workspaceId: string, input: CreateGoalInput): Promise<Goal> {
     return this.request("POST", `/workspaces/${workspaceId}/goals`, input, goalSchema);
   }
@@ -1154,6 +1316,11 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/agent-tokens`, undefined, z.array(agentTokenSchema));
   }
 
+  /** Real command/paths of this install, for the «Подключить агента» wizard (TZ-02). */
+  getAgentConnection(workspaceId: string): Promise<AgentConnectionInfo> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-connection`, undefined, agentConnectionInfoSchema);
+  }
+
   /** The only response that carries the token secret. */
   createAgentToken(workspaceId: string, input: CreateAgentTokenInput): Promise<CreatedAgentToken> {
     return this.request("POST", `/workspaces/${workspaceId}/agent-tokens`, input, createdAgentTokenSchema);
@@ -1163,8 +1330,28 @@ export class ApiClient {
     await this.request("DELETE", `/workspaces/${workspaceId}/agent-tokens/${tokenId}`, undefined, z.unknown());
   }
 
-  listAgentAudit(workspaceId: string): Promise<AgentAuditEntry[]> {
-    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/audit`, undefined, z.array(agentAuditEntrySchema));
+  updateAgentToken(workspaceId: string, tokenId: string, input: UpdateAgentTokenInput): Promise<AgentToken> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/agent-tokens/${tokenId}`, input, agentTokenSchema);
+  }
+
+  async revokeAllAgentTokens(workspaceId: string): Promise<number> {
+    const result = await this.request("POST", `/workspaces/${workspaceId}/agent-tokens/revoke-all`, {}, z.object({ revoked: z.number() }));
+    return result.revoked;
+  }
+
+  undoAgentCreation(workspaceId: string, entryId: string): Promise<AgentAuditEntry> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/audit/${entryId}/undo`, {}, agentAuditEntrySchema);
+  }
+
+  decideAgentProposalsBulk(workspaceId: string, input: AgentProposalBulkInput): Promise<AgentProposalBulkResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/bulk`, input, agentProposalBulkResultSchema);
+  }
+
+  listAgentAudit(workspaceId: string, query: AgentAuditQuery = {}): Promise<AgentAuditEntry[]> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) if (value !== undefined) params.set(key, String(value));
+    const qs = params.toString();
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/audit${qs ? `?${qs}` : ""}`, undefined, z.array(agentAuditEntrySchema));
   }
 
   async deleteProjectCapture(workspaceId: string, projectId: string, captureId: string, kind: ProjectCaptureKind): Promise<void> {
@@ -1385,6 +1572,66 @@ export class ApiClient {
 
   async deleteObligation(workspaceId: string, obligationId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/finance/obligations/${obligationId}`, undefined, z.unknown());
+  }
+
+  listFinanceDrafts(workspaceId: string): Promise<FinanceDraft[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/drafts`, undefined, z.array(financeDraftSchema));
+  }
+
+  acceptFinanceDraft(workspaceId: string, draftId: string, input: AcceptFinanceDraftInput): Promise<{ draft: FinanceDraft; transaction: Transaction }> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/drafts/${draftId}/accept`, input, z.object({ draft: financeDraftSchema, transaction: transactionSchema }));
+  }
+
+  rejectFinanceDraft(workspaceId: string, draftId: string): Promise<FinanceDraft> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/drafts/${draftId}/reject`, {}, financeDraftSchema);
+  }
+
+  listExchangeRates(workspaceId: string): Promise<ExchangeRate[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/exchange-rates`, undefined, z.array(exchangeRateSchema));
+  }
+
+  saveExchangeRate(workspaceId: string, input: UpsertExchangeRateInput): Promise<ExchangeRate> {
+    return this.request("PUT", `/workspaces/${workspaceId}/finance/exchange-rates`, input, exchangeRateSchema);
+  }
+
+  async deleteExchangeRate(workspaceId: string, rateId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/finance/exchange-rates/${rateId}`, undefined, z.unknown());
+  }
+
+  getSplitOverview(workspaceId: string): Promise<SplitOverview> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/splits`, undefined, splitOverviewSchema);
+  }
+
+  createSplit(workspaceId: string, input: CreateSplitInput): Promise<Split> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/splits`, input, splitSchema);
+  }
+
+  async deleteSplit(workspaceId: string, splitId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/finance/splits/${splitId}`, undefined, z.unknown());
+  }
+
+  createSettlement(workspaceId: string, input: CreateSettlementInput): Promise<Settlement> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/splits/settlements`, input, settlementSchema);
+  }
+
+  async deleteSettlement(workspaceId: string, settlementId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/finance/splits/settlements/${settlementId}`, undefined, z.unknown());
+  }
+
+  listFinanceTemplates(workspaceId: string): Promise<FinanceTemplate[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/templates`, undefined, z.array(financeTemplateSchema));
+  }
+
+  createFinanceTemplate(workspaceId: string, input: CreateFinanceTemplateInput): Promise<FinanceTemplate> {
+    return this.request("POST", `/workspaces/${workspaceId}/finance/templates`, input, financeTemplateSchema);
+  }
+
+  updateFinanceTemplate(workspaceId: string, templateId: string, input: UpdateFinanceTemplateInput): Promise<FinanceTemplate> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/finance/templates/${templateId}`, input, financeTemplateSchema);
+  }
+
+  async deleteFinanceTemplate(workspaceId: string, templateId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/finance/templates/${templateId}`, undefined, z.unknown());
   }
 
   /** Replaces an expense and an income that are one transfer with a single transfer. */
@@ -1950,6 +2197,7 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/opportunities/export`, undefined, z.array(opportunitySchema));
   }
 
+  selectOpportunityResume(ws: string, id: string, input: SelectOpportunityResumeInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/active-resume`, input, opportunityProfileSchema); }
   listOpportunityProfiles(ws: string, cursor?: string, includeArchived = false) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles${buildQuery({ cursor, includeArchived: String(includeArchived) })}`, undefined, opportunityProfilePageSchema); }
   createOpportunityProfile(ws: string, input: CreateOpportunityProfileInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles`, input, opportunityProfileSchema); }
   getOpportunityProfile(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles/${id}`, undefined, opportunityProfileDetailSchema); }
@@ -2341,11 +2589,15 @@ export class ApiClient {
    * parsing JSON — for binary downloads (see `getDocumentBlob`). Shares the
    * same `401 → /auth/refresh → retry once` behaviour.
    */
-  private async requestBlob(method: string, path: string, isRetry = false): Promise<Blob> {
+  private async requestBlob(method: string, path: string, isRetry = false, body?: unknown): Promise<Blob> {
     const token = await this.options.tokenStore.get();
     const response = await fetch(`${this.options.baseUrl}${path}`, {
       method,
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -2357,7 +2609,7 @@ export class ApiClient {
           const payload = await safeJson(response);
           throw new ApiError(response.status, extractMessage(payload) ?? response.statusText, payload);
         }
-        return this.requestBlob(method, path, true);
+        return this.requestBlob(method, path, true, body);
       }
       const payload = await safeJson(response);
       throw new ApiError(response.status, extractMessage(payload) ?? response.statusText, payload);
