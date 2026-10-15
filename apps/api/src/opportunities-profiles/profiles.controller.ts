@@ -6,11 +6,13 @@ import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { RequirePlugin } from "../plugins/require-plugin";
 import { ProfilesService } from "./profiles.service";
+import { selectOpportunityResumeInputSchema, type SelectOpportunityResumeInput } from "@orion/shared-types";
 const page = z.object({ cursor: z.string().uuid().optional(), includeArchived: z.enum(["true", "false"]).optional() }).strict();
 @RequirePlugin("opportunities-profiles")
 @Controller("workspaces/:workspaceId/opportunity-profiles")
 export class ProfilesController {
   constructor(private readonly service: ProfilesService) {}
+  @Post(":id/active-resume") selectResume(@CurrentUser() u: RequestUser, @Param("workspaceId") ws: string, @Param("id", ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(selectOpportunityResumeInputSchema)) b: SelectOpportunityResumeInput) { return this.service.selectResume(u.userId, ws, id, b); }
   @Get() list(@CurrentUser() u: RequestUser, @Param("workspaceId") ws: string, @Query(new ZodValidationPipe(page)) q: z.infer<typeof page>) { return this.service.list(u.userId, ws, q.cursor, q.includeArchived === "true"); }
   @Post() create(@CurrentUser() u: RequestUser, @Param("workspaceId") ws: string, @Body(new ZodValidationPipe(createOpportunityProfileInputSchema)) b: CreateOpportunityProfileInput) { return this.service.create(u.userId, ws, b); }
   @Get(":id") detail(@CurrentUser() u: RequestUser, @Param("workspaceId") ws: string, @Param("id", ParseUUIDPipe) id: string) { return this.service.detail(u.userId, ws, id); }

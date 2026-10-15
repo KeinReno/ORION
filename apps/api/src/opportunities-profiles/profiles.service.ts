@@ -6,8 +6,13 @@ import { PrismaService } from "../common/prisma.service";
 import { PluginsService } from "../plugins/plugins.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import type { ProfileImportMaterial, ProfileImportPort } from "./import-contract";
+import type { SelectOpportunityResumeInput } from "@orion/shared-types";
 
-export function profileDto(row: ProfileRow) { return opportunityProfileSchema.parse({ id: row.id, workspaceId: row.workspaceId, displayName: row.displayName, kind: row.kind, ownerUserId: row.ownerUserId, sourceKey: row.sourceKey, preferences: row.preferences, revision: row.revision, archivedAt: row.archivedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }); }
+// Reserved profile setting; existing snapshots preserve this JSON without a schema migration.
+function settings(row: ProfileRow): Prisma.JsonObject { return row.preferences && typeof row.preferences === "object" && !Array.isArray(row.preferences) ? row.preferences : {}; }
+function activeResumeId(row: ProfileRow): string | null { const id = settings(row)._activeResumeMaterialId; return typeof id === "string" ? id : null; }
+
+export function profileDto(row: ProfileRow) { return opportunityProfileSchema.parse({ id: row.id, workspaceId: row.workspaceId, displayName: row.displayName, kind: row.kind, ownerUserId: row.ownerUserId, sourceKey: row.sourceKey, preferences: row.preferences, activeResumeMaterialId: activeResumeId(row), revision: row.revision, archivedAt: row.archivedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }); }
 export function factDto(row: FactRow) { return opportunityFactSchema.parse({ id: row.id, profileId: row.profileId, statement: row.statement, category: row.category, source: row.source, state: row.state, revision: row.revision, confirmedBy: row.confirmedBy, confirmedAt: row.confirmedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() }); }
 export function trackDto(row: TrackRow) { return opportunityTrackSchema.parse({ id: row.id, profileId: row.profileId, name: row.name, factIds: row.factIds, sourceKey: row.sourceKey, createdAt: row.createdAt.toISOString() }); }
 export function materialDto(row: MaterialRow) { return opportunityMaterialSchema.parse({ id: row.id, profileId: row.profileId, trackId: row.trackId, title: row.title, type: row.type, contentHash: row.contentHash, sourcePath: row.sourcePath, sourceKey: row.sourceKey, createdAt: row.createdAt.toISOString() }); }
@@ -41,9 +46,10 @@ export class ProfilesService implements ProfileImportPort {
   }
   async update(userId: string, ws: string, id: string, input: UpdateOpportunityProfileInput) {
     return this.prisma.withUser(userId, async (tx) => {
-      await this.guard(tx, userId, ws, true); await this.owned(tx, ws, id);
+      await this.guard(tx, userId, ws, true); const current = await this.owned(tx, ws, id);
+      if (current.revision !== input.expectedRevision) throw new ConflictException("Профиль изменён в другом окне. Обновите данные.");
       const { expectedRevision, archivedAt, ...data } = input;
-      const changed = await tx.opportunityProfile.updateMany({ where: { id, workspaceId: ws, revision: expectedRevision }, data: { ...data, revision: { increment: 1 }, ...(archivedAt !== undefined ? { archivedAt: archivedAt ? new Date(archivedAt) : null } : {}) } });
+      const changed = await tx.opportunityProfile.updateMany({ where: { id, workspaceId: ws, revision: expectedRevision }, data: { ...data, ...(data.preferences ? { preferences: { ...settings(current), ...data.preferences } as Prisma.InputJsonObject } : {}), revision: { increment: 1 }, ...(archivedAt !== undefined ? { archivedAt: archivedAt ? new Date(archivedAt) : null } : {}) } });
       if (!changed.count) throw new ConflictException("Профиль изменён в другом окне. Обновите данные.");
       return profileDto(await this.owned(tx, ws, id));
     });
@@ -53,7 +59,20 @@ export class ProfilesService implements ProfileImportPort {
       await this.guard(tx, userId, ws); const profile = await this.owned(tx, ws, id);
       const facts = await tx.opportunityFact.findMany({ where: { workspaceId: ws, profileId: id }, orderBy: { createdAt: "asc" } });
       const tracks = await tx.opportunityTrack.findMany({ where: { workspaceId: ws, profileId: id }, orderBy: { createdAt: "asc" } });
-      return { ...profileDto(profile), facts: facts.map(factDto), tracks: tracks.map(trackDto), materials: await this.materialPageTx(tx, ws, id) };
+      const activeId = activeResumeId(profile);
+      const active = activeId ? await tx.opportunityMaterial.findFirst({ where: { id: activeId, workspaceId: ws, profileId: id, type: "resume" } }) : null;
+      return { ...profileDto(profile), activeResume: active ? materialDto(active) : null, facts: facts.map(factDto), tracks: tracks.map(trackDto), materials: await this.materialPageTx(tx, ws, id) };
+    });
+  }
+  async selectResume(userId: string, ws: string, id: string, input: SelectOpportunityResumeInput) {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.guard(tx, userId, ws, true);
+      const current = await this.owned(tx, ws, id, true);
+      if (current.revision !== input.expectedRevision) throw new ConflictException("Профиль изменён в другом окне. Обновите данные перед выбором резюме.");
+      if (input.materialId && !await tx.opportunityMaterial.findFirst({ where: { id: input.materialId, workspaceId: ws, profileId: id, type: "resume" } })) throw new NotFoundException("Версия резюме не принадлежит этому профилю");
+      const changed = await tx.opportunityProfile.updateMany({ where: { id, workspaceId: ws, revision: input.expectedRevision }, data: { preferences: { ...settings(current), _activeResumeMaterialId: input.materialId } as Prisma.InputJsonObject, revision: { increment: 1 } } });
+      if (!changed.count) throw new ConflictException("Профиль изменён в другом окне. Обновите данные перед выбором резюме.");
+      return profileDto(await this.owned(tx, ws, id));
     });
   }
   async addFact(userId: string, ws: string, id: string, input: CreateOpportunityFactInput) {

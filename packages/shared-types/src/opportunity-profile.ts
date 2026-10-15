@@ -19,9 +19,11 @@ export const updateOpportunityProfileInputSchema = z.object({
   preferences: profilePreferencesSchema.optional(), archivedAt: z.string().datetime().nullable().optional()
 }).strict().refine((v) => Object.keys(v).length > 1, "Укажите изменение");
 export type UpdateOpportunityProfileInput = z.infer<typeof updateOpportunityProfileInputSchema>;
+export const selectOpportunityResumeInputSchema = z.object({ expectedRevision: z.number().int().nonnegative(), materialId: z.string().uuid().nullable() }).strict();
+export type SelectOpportunityResumeInput = z.infer<typeof selectOpportunityResumeInputSchema>;
 export const opportunityProfileSchema = z.object({
   id: z.string(), workspaceId: z.string(), displayName: z.string(), kind: z.enum(["person", "team"]),
-  preferences: preferencesResponse, ownerUserId: z.string(), sourceKey: z.string().nullable(), revision: z.number(),
+  preferences: preferencesResponse, activeResumeMaterialId: z.string().uuid().nullable(), ownerUserId: z.string(), sourceKey: z.string().nullable(), revision: z.number(),
   archivedAt: z.string().nullable(), createdAt: z.string(), updatedAt: z.string()
 });
 export type OpportunityProfile = z.infer<typeof opportunityProfileSchema>;
@@ -42,5 +44,5 @@ export const opportunityMaterialSchema = z.object({ id: z.string(), profileId: z
 export type OpportunityMaterial = z.infer<typeof opportunityMaterialSchema>;
 export const opportunityMaterialContentSchema = opportunityMaterialSchema.extend({ content: z.string() });
 export const opportunityMaterialPageSchema = z.object({ items: z.array(opportunityMaterialSchema), nextCursor: z.string().nullable() });
-export const opportunityProfileDetailSchema = opportunityProfileSchema.extend({ facts: z.array(opportunityFactSchema), tracks: z.array(opportunityTrackSchema), materials: opportunityMaterialPageSchema });
+export const opportunityProfileDetailSchema = opportunityProfileSchema.extend({ activeResume: opportunityMaterialSchema.nullable(), facts: z.array(opportunityFactSchema), tracks: z.array(opportunityTrackSchema), materials: opportunityMaterialPageSchema });
 export type OpportunityProfileDetail = z.infer<typeof opportunityProfileDetailSchema>;
