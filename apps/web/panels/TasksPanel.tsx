@@ -28,6 +28,7 @@ import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
 import { useFocusedTaskId, useTasksProjectSignal } from "../lib/panel-bus";
+import { usePublishResourceContext } from "../lib/resource-context-store";
 import {
   TASK_PRIORITY_LABEL,
   TASK_PRIORITY_ORDER,
@@ -36,6 +37,7 @@ import {
   TaskForm,
   type TaskFormValues
 } from "./task-form";
+import { ReplicaBanner } from "../components/replica-banner";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../lib/use-enabled-plugins";
@@ -188,6 +190,8 @@ export function TasksPanel(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const focusedTask = (tasks ?? []).find((task) => task.id === (editingId ?? selectedId));
+  usePublishResourceContext(focusedTask ? { type: "task", id: focusedTask.id, title: focusedTask.title } : null);
   const editingIdRef = useRef<string | null>(null);
   editingIdRef.current = editingId;
   const [bodyRef, bodyWidth] = useResizeWidth<HTMLDivElement>();
@@ -525,6 +529,7 @@ export function TasksPanel(): React.ReactElement {
           ) : null}
         </div>
       </PanelHeader>
+      <ReplicaBanner workspaceId={workspace?.id} />
 
       <div ref={bodyRef} className="flex min-h-0 flex-1">
       {!editing || splitDetail ? (

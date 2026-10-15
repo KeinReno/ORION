@@ -66,12 +66,14 @@ import { openPanel, useFocusedNoteId } from "../lib/panel-bus";
 import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { detachPanelToWindow } from "../lib/panel-window";
 import { nextListId } from "../lib/list-nav";
+import { ReplicaBanner } from "../components/replica-banner";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
 import { noteListPreview } from "../lib/note-list-preview";
 import { NO_PROJECT, activeFilterCount, filterNotes } from "../lib/note-filters";
 import { NoteEditor, contentTime, type NoteEditorInput } from "./note-editor";
+import { usePublishResourceContext } from "../lib/resource-context-store";
 
 type SortKey = "updated" | "created" | "title";
 
@@ -225,6 +227,7 @@ export function NotesPanel(): React.ReactElement {
   // actually leaves it; never make a search result decide draft lifetime.
   const selected = matchedSelected ?? (selectedSnapshotRef.current?.id === selectedId ? selectedSnapshotRef.current : null);
   const composing = selectedId === NEW_NOTE;
+  usePublishResourceContext(selected ? { type: "note", id: selected.id, title: selected.title } : null);
   const listHidden = twoPane && listCollapsed && (composing || selected !== null);
 
   useEffect(() => {
@@ -762,6 +765,7 @@ export function NotesPanel(): React.ReactElement {
           />
         ) : null}
       </PanelHeader>
+      <ReplicaBanner workspaceId={workspace?.id} />
 
       <div ref={wrapRef} className="flex min-h-0 flex-1">
         {trash ? (

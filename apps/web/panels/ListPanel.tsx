@@ -21,6 +21,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useRowDnd } from "../lib/use-row-dnd";
 import { ItemAdder } from "./lists/item-adder";
 import { ItemEditor } from "./lists/item-editor";
+import { ReplicaBanner } from "../components/replica-banner";
 import { ListItemRow } from "./lists/list-item-row";
 import { ListMenu } from "./lists/list-menu";
 import { useListActions } from "./lists/use-list-actions";
@@ -190,6 +191,7 @@ function ListView({ list, workspaceId, onClose }: { list: List; workspaceId: str
         ) : null}
       </PanelHeader>
 
+      <ReplicaBanner workspaceId={workspaceId} />
       <PanelBody>
         <div className="mx-auto w-full max-w-3xl space-y-4">
           <ItemAdder workspaceId={workspaceId} listId={list.id} />

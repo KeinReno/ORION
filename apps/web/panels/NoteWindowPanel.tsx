@@ -7,6 +7,7 @@ import { FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { saveNoteWithRevision } from "../lib/note-save";
+import { ReplicaBanner } from "../components/replica-banner";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { NoteEditor, type NoteEditorInput } from "./note-editor";
@@ -62,6 +63,7 @@ export function NoteWindowPanel({ params, api }: PanelComponentProps): React.Rea
 
   return (
     <PanelShell>
+      <ReplicaBanner workspaceId={workspaceId} />
       <NoteEditor
         key={`${note.id}:${reloadKey}`}
         note={note}

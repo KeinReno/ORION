@@ -124,6 +124,12 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("financeCategoryRules", (tx) => tx.categoryRule),
   spec("financeSavingsGoals", (tx) => tx.savingsGoal),
   spec("financeObligations", (tx) => tx.financeObligation),
+  spec("financeTemplates", (tx) => tx.financeTemplate),
+  // Shares reference their split, so the split rows are inserted first.
+  spec("financeSplits", (tx) => tx.financeSplit),
+  spec("financeSplitShares", (tx) => tx.financeSplitShare),
+  spec("financeSettlements", (tx) => tx.financeSettlement),
+  spec("financeExchangeRates", (tx) => tx.financeExchangeRate),
   spec("marketWatchItems", (tx) => tx.marketWatchItem),
   spec("investmentTrades", (tx) => tx.investmentTrade),
   spec("timeEntries", (tx) => tx.timeEntry),
@@ -333,6 +339,16 @@ export class SnapshotService {
         restrictedModules: workspace.restrictedModules
       }
     };
+  }
+
+  /**
+   * ТЗ-05: вставить уже переписанные (новые id/workspaceId) строки в НОВОЕ пространство.
+   * Ничего не очищает — в отличие от `apply`, это создание, а не замена.
+   */
+  async insertInto(tx: Tx, tables: Record<string, unknown[]>): Promise<void> {
+    for (const m of SNAPSHOT_MODELS) {
+      await m.insert(tx, tables[m.key] ?? []);
+    }
   }
 
   /** Счётчики строк по модулям — для превью восстановления, без чтения самих строк целиком. */

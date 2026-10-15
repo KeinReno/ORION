@@ -105,6 +105,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@orion/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6

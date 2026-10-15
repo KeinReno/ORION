@@ -90,7 +90,7 @@ export class TasksService {
    * or close one itself, and does not re-check membership — it trusts the
    * caller's transaction was already gated.
    */
-  async createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput): Promise<TaskModel> {
+  async createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, clientId?: string): Promise<TaskModel> {
     const project = await this.resolveProjectTx(tx, workspaceId, input.projectId, input.projectTag);
     await this.assertParentTx(tx, workspaceId, input.parentId ?? null);
     const dependencyIds = unique(input.dependencyIds ?? []);
@@ -100,6 +100,7 @@ export class TasksService {
     if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
     const created = await tx.task.create({
       data: {
+        ...(clientId ? { id: clientId } : {}),
         workspaceId,
         title: input.title,
         description: input.description,
@@ -124,9 +125,17 @@ export class TasksService {
 
   /** `agentName`: see `create()` — stamps the journal rows of this edit as the agent's. */
   async update(userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput, agentName?: string): Promise<Task> {
-    const { expectedRevision, ...input } = rawInput;
     const task = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return this.updateTx(tx, userId, workspaceId, taskId, rawInput, agentName);
+    });
+    return toDto(task);
+  }
+
+  /** Тело `update()` без обёртки `withUser` — им пользуется гибридная синхронизация (ADR-0016); членство проверил вызывающий. */
+  async updateTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput, agentName?: string): Promise<TaskModel> {
+    const { expectedRevision, ...input } = rawInput;
+    {
       const current = await this.assertOwnedTx(tx, workspaceId, taskId);
       const data: Prisma.TaskUncheckedUpdateInput = {};
 
@@ -279,8 +288,7 @@ export class TasksService {
       }
 
       return tx.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
-    });
-    return toDto(task);
+    }
   }
 
   async remove(userId: string, workspaceId: string, taskId: string): Promise<void> {
@@ -500,3 +508,5 @@ function toDto(task: TaskModel): Task {
 function viewDto(row: { id: string; workspaceId: string; name: string; filters: Prisma.JsonValue; createdAt: Date; updatedAt: Date }): SavedTaskView {
   return { id: row.id, workspaceId: row.workspaceId, name: row.name, filters: row.filters as TaskViewFilters, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
 }
+
+export { toDto as toTaskDto };

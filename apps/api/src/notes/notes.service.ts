@@ -228,11 +228,14 @@ export class NotesService {
     userId: string,
     workspaceId: string,
     input: CreateNoteInput,
-    agentName?: string
+    agentName?: string,
+    /** Гибридная синхронизация (ADR-0016): идентификатор, выданный устройством. */
+    clientId?: string
   ): Promise<DbNote> {
     await this.assertProjectTx(tx, workspaceId, input.projectId ?? null);
     const created = await tx.note.create({
       data: {
+        ...(clientId ? { id: clientId } : {}),
         workspaceId,
         title: input.title,
         summary: input.summary,
@@ -258,11 +261,19 @@ export class NotesService {
    * re-resolves everyone else's links that might now point here (or stop).
    */
   async update(userId: string, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string): Promise<Note> {
+    const note = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return this.updateTx(tx, workspaceId, noteId, input, agentName);
+    });
+    return toDto(note);
+  }
+
+  /** Тело `update()` без обёртки `withUser` — им пользуется гибридная синхронизация (ADR-0016); членство проверил вызывающий. */
+  async updateTx(tx: Prisma.TransactionClient, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string): Promise<DbNote> {
     const { expectedRevision, ...patch } = input;
     const touchesContent =
       patch.title !== undefined || patch.summary !== undefined || patch.body !== undefined || patch.tags !== undefined;
-    const note = await this.prisma.withUser(userId, async (tx) => {
-      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    {
       const before = await this.assertOwnedTx(tx, workspaceId, noteId);
       if (patch.projectId !== undefined) await this.assertProjectTx(tx, workspaceId, patch.projectId);
       if (touchesContent) await this.maybeSnapshot(tx, before);
@@ -311,8 +322,15 @@ export class NotesService {
       if (patch.body !== undefined) await this.syncOutgoingLinks(tx, updated);
       if (patch.title !== undefined) await this.reresolveIncomingLinks(tx, updated);
       return updated;
-    });
-    return toDto(note);
+    }
+  }
+
+  /** Мягкое удаление (корзина) внутри чужой транзакции — см. `updateTx`. */
+  async removeTx(tx: Prisma.TransactionClient, workspaceId: string, noteId: string): Promise<void> {
+    await this.assertOwnedTx(tx, workspaceId, noteId);
+    await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date() } });
+    await tx.noteLink.deleteMany({ where: { sourceNoteId: noteId } });
+    await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null } });
   }
 
   /** Soft delete — moves the note to the trash. NoteTrashPurgeService hard-deletes it later. */
@@ -661,3 +679,5 @@ function toDto(note: NoteRow): Note {
     updatedAt: note.updatedAt.toISOString()
   };
 }
+
+export { toDto as toNoteDto };

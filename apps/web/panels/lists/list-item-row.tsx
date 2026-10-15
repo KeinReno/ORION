@@ -1,9 +1,11 @@
 "use client";
 
+import { useReplicaEntityState } from "@orion/core-react";
 import { formatListQuantity, type ListItem } from "@orion/shared-types";
 import { CheckToggle, IconButton, SwipeRow, cx } from "@orion/ui";
 import { CalendarClock, GripVertical, StickyNote, X } from "lucide-react";
 import type { DragEvent } from "react";
+import { SyncStateMark } from "../../components/replica-banner";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import type { ListsItemApi } from "../../lib/extensions/contracts";
 import { formatMoney, shortDate } from "../../lib/format";
@@ -57,6 +59,7 @@ export function ListItemRow({
 }): React.ReactElement {
   const amount = formatListQuantity(item);
   const overdue = isItemOverdue(item);
+  const syncState = useReplicaEntityState(workspaceId, "listItem", item.id);
   const labelClass = cx("min-w-0 flex-1 truncate text-left text-body text-foreground", item.checked && "text-muted-foreground line-through");
 
   return (
@@ -91,6 +94,7 @@ export function ListItemRow({
             {shortDate(item.dueAt)}
           </span>
         ) : null}
+        <SyncStateMark state={syncState} />
         {item.note ? <StickyNote className="h-3 w-3 shrink-0 text-subtle-foreground" aria-label="Есть заметка" /> : null}
         {!compact && item.priceMinor !== null ? (
           <span className="shrink-0 text-micro tabular-nums text-muted-foreground">{formatMoney(item.priceMinor)}</span>
