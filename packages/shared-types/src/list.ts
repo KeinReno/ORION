@@ -332,7 +332,7 @@ export function groupListItems<T extends Pick<ListItem, "section">>(items: reado
 }
 
 /** Plain text of a list that `parseListText` reads back (`[ ]` / `[x]` markers, `, 2 л`, `# группа`). */
-export function formatListAsText(list: Pick<List, "name" | "items">): string {
+export function formatListAsText(list: { name: string; items: readonly Pick<ListItem, "checked" | "sortOrder" | "createdAt" | "section" | "label" | "quantity" | "unit">[] }): string {
   const lines: string[] = [list.name];
   for (const group of groupListItems(sortListItems(list.items, false))) {
     if (group.section) lines.push("", `# ${group.section}`);
