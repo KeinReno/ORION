@@ -24,6 +24,17 @@ module.exports = {
        * same as the reference library.
        */
       colors: {
+        // KAIDEN v1: additive bridge; existing utility names keep their legacy values.
+        "ui-button": "rgb(var(--kaiden-button-bg) / <alpha-value>)",
+        "ui-button-foreground": "rgb(var(--kaiden-button-fg) / <alpha-value>)",
+        "ui-accent-hover": "rgb(var(--kaiden-accent-hover) / <alpha-value>)",
+        "ui-focus": "rgb(var(--kaiden-focus-ring) / <alpha-value>)",
+        "ui-header": "rgb(var(--kaiden-panel-header-bg) / <alpha-value>)",
+        "ui-primary": "rgb(var(--kaiden-text-primary) / <alpha-value>)",
+        "ui-secondary": "rgb(var(--kaiden-text-secondary) / <alpha-value>)",
+        "ui-border": "rgb(var(--kaiden-border-default) / <alpha-value>)",
+        "ui-border-strong": "rgb(var(--kaiden-border-strong) / <alpha-value>)",
+        "ui-hover": "rgb(var(--kaiden-bg-hover) / <alpha-value>)",
         background: "#0a0a0c",
         panel: "#0d0d11",
         card: "#141419",

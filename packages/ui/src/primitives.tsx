@@ -78,11 +78,11 @@ export function Button({
       disabled={disabled || status === "pending"}
       className={clsx(
         "inline-flex select-none items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,transform] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-accent/60 disabled:pointer-events-none disabled:opacity-50",
+        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 disabled:pointer-events-none disabled:opacity-50",
         "active:scale-[0.97]",
         size === "sm" ? "px-2.5 py-1.5 text-label" : "px-4 py-2 text-body",
-        variant === "primary" && "bg-accent text-accent-foreground hover:bg-accent-hover",
-        variant === "outline" && "border border-border-strong bg-transparent text-foreground hover:bg-card-hover",
+        variant === "primary" && "bg-ui-button text-ui-button-foreground hover:bg-ui-accent-hover",
+        variant === "outline" && "border border-ui-border-strong bg-transparent text-ui-primary hover:bg-ui-hover",
         variant === "ghost" && "bg-white/5 text-foreground hover:bg-white/10",
         variant === "subtle" && "bg-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground",
         variant === "danger" && "bg-destructive/10 text-destructive hover:bg-destructive/20",
