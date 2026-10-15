@@ -28,7 +28,7 @@ export class WorkspaceInvitesController {
     @Param("workspaceId") workspaceId: string,
     @Body(new ZodValidationPipe(createWorkspaceInviteInputSchema)) body: CreateWorkspaceInviteInput
   ): Promise<CreatedWorkspaceInvite> {
-    return this.invites.create(user.userId, workspaceId, body.email);
+    return this.invites.create(user.userId, workspaceId, body.email, body.role);
   }
 
   @Delete(":inviteId")

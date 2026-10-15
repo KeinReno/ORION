@@ -35,6 +35,12 @@ export class WorkspaceMembersService {
         if (otherOwners === 0) throw new BadRequestException("В пространстве должен остаться хотя бы один владелец");
       }
       await tx.workspaceMember.delete({ where: { id: memberId } });
+      // ТЗ-05: токен агента — делегированный доступ человека. Ушёл из пространства —
+      // его агенты теряют доступ немедленно, а не «до истечения срока».
+      await tx.agentToken.updateMany({
+        where: { workspaceId, createdById: target.userId, revokedAt: null },
+        data: { revokedAt: new Date() }
+      });
     });
   }
 

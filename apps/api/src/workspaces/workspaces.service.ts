@@ -41,7 +41,7 @@ export class WorkspacesService {
           name,
           icsToken: randomBytes(24).toString("base64url"),
           // Solo-dev kernel: money/stock stay in the catalog but out of the way.
-          disabledModules: template === "solo-dev" ? ["finance", "inventory", "markets", "health"] : ["markets", "health"]
+          disabledModules: disabledModulesFor(template)
         }
       });
       await tx.workspaceMember.create({ data: { workspaceId: workspace.id, userId, role: "owner" } });
@@ -104,9 +104,10 @@ export class WorkspacesService {
    */
   async searchMembers(userId: string, workspaceId: string, query: string): Promise<WorkspaceMemberSearchResult[]> {
     const trimmed = query.trim();
-    if (trimmed.length < 2) return [];
     const rows = await this.prisma.withUser(userId, async (tx) => {
+      // Роль проверяется до любых ранних выходов: посторонний не должен получать 200 даже на пустой запрос (ТЗ-05).
       await this.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
+      if (trimmed.length < 2) return [];
       return tx.workspaceMember.findMany({
         where: {
           workspaceId,
@@ -172,6 +173,18 @@ export class WorkspacesService {
   }
 }
 
+/**
+ * Стартовый набор выключенных модулей по шаблону. «Дом» (ТЗ-05) — общее
+ * пространство семьи: списки, задачи, календарь, дом/коммуналка, склад, контакты,
+ * документы; финансы выключены (включаются в Настройки → Модули), здоровье — личное
+ * дело человека (ADR-0012) и тоже выключено. Выключение не удаляет данных.
+ */
+function disabledModulesFor(template?: WorkspaceTemplate): string[] {
+  if (template === "solo-dev") return ["finance", "inventory", "markets", "health"];
+  if (template === "home") return ["finance", "markets", "health", "projects", "time", "habits", "opportunities", "notes"];
+  return ["markets", "health"];
+}
+
 function toWorkspaceDto(
   workspace: {
     id: string;
@@ -179,6 +192,7 @@ function toWorkspaceDto(
     disabledModules: string[];
     pluginOverrides: string[];
     restrictedModules: string[];
+    isPersonal: boolean;
   },
   role: Workspace["role"]
 ): Workspace {
@@ -188,6 +202,7 @@ function toWorkspaceDto(
     role,
     disabledModules: workspace.disabledModules,
     pluginOverrides: workspace.pluginOverrides,
-    restrictedModules: workspace.restrictedModules
+    restrictedModules: workspace.restrictedModules,
+    isPersonal: workspace.isPersonal
   };
 }

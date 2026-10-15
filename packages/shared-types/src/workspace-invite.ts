@@ -26,12 +26,19 @@ export type WorkspaceInvite = z.infer<typeof workspaceInviteSchema>;
  * ever stores `tokenHash`.
  */
 export const createdWorkspaceInviteSchema = workspaceInviteSchema.extend({
-  acceptUrl: z.string()
+  acceptUrl: z.string(),
+  /** Тот же токен без адреса — код, который можно ввести на устройстве в LAN вместо перехода по ссылке. Показывается один раз. */
+  code: z.string()
 });
 export type CreatedWorkspaceInvite = z.infer<typeof createdWorkspaceInviteSchema>;
 
+/** Роль, с которой человек войдёт. `owner` приглашением не выдаётся; `lead` может назначить только владелец. */
+export const inviteRoleSchema = z.enum(["member", "lead"]);
+export type InviteRole = z.infer<typeof inviteRoleSchema>;
+
 export const createWorkspaceInviteInputSchema = z.object({
-  email: z.string().trim().email("Введите корректный email")
+  email: z.string().trim().email("Введите корректный email"),
+  role: inviteRoleSchema.default("member")
 });
 export type CreateWorkspaceInviteInput = z.infer<typeof createWorkspaceInviteInputSchema>;
 

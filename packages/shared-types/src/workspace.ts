@@ -15,7 +15,9 @@ export const workspaceSchema = z.object({
   /** Plugin ids whose enabled state differs from PLUGIN_CATALOG's default — see `isPluginEnabled`. Same "disable ≠ delete" rule. */
   pluginOverrides: z.array(z.string()),
   /** Module ids visible only to `owner`/`lead` — see `isModuleRestricted`/`effectiveDisabledModules`. */
-  restrictedModules: z.array(z.string())
+  restrictedModules: z.array(z.string()),
+  /** ТЗ-05: личное пространство, созданное при регистрации — его нельзя открыть другим (приглашения отклоняются). */
+  isPersonal: z.boolean()
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 
@@ -25,12 +27,15 @@ export type Workspace = z.infer<typeof workspaceSchema>;
  * apart from real data, not a general multi-workspace feature yet (no
  * invites, no per-workspace billing, etc.).
  */
-export const workspaceTemplateSchema = z.enum(["blank", "solo-dev"]);
+export const workspaceTemplateSchema = z.enum(["blank", "solo-dev", "home"]);
 export type WorkspaceTemplate = z.infer<typeof workspaceTemplateSchema>;
 
 export const createWorkspaceInputSchema = z.object({
   name: z.string().min(1, "Название обязательно").max(80),
-  /** `solo-dev` fills the space as a kernel for one person building a product (ORION). */
+  /**
+   * `solo-dev` fills the space as a kernel for one person building a product (ORION).
+   * `home` (ТЗ-05) — общий «Дом»: списки, задачи, календарь, дом/коммуналка, склад; финансы выключены (включаются в Настройки → Модули).
+   */
   template: workspaceTemplateSchema.optional()
 });
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceInputSchema>;
