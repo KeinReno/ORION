@@ -208,7 +208,9 @@ export function TasksPanel(): React.ReactElement {
     { dueFilter, statusFilter, priorityFilter, groupBy, projectFilter, editingId },
     (saved) => {
       setDueFilter(saved.dueFilter); setStatusFilter(saved.statusFilter); setPriorityFilter(saved.priorityFilter);
-      setGroupBy(saved.groupBy); setProjectFilter(saved.projectFilter);
+      // A saved project filter / grouping is meaningless (and invisible) while Projects is off: never restore it.
+      const projectsOn = isEnabled("projects");
+      setGroupBy(!projectsOn && saved.groupBy === "project" ? "status" : saved.groupBy); setProjectFilter(projectsOn ? saved.projectFilter : null);
       if (saved.editingId) { setEditingIdUnchecked(saved.editingId); setSelectedId(saved.editingId); }
     });
   const staleChecked = useRef(false);

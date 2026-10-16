@@ -41,4 +41,12 @@ describe("view state", () => {
     const broken = { getItem: () => null, setItem: () => { throw new Error("quota"); } };
     expect(() => writeViewState(broken, key, "tasks", tasksViewStateSchema, tasks)).not.toThrow();
   });
+  it("persists the \"no project\" filter of tasks and notes instead of dropping the whole state", () => {
+    const s = memory();
+    writeViewState(s, key, "tasks", tasksViewStateSchema, { ...tasks, projectFilter: "__none__" });
+    expect(readViewState(s, key, "tasks", tasksViewStateSchema)?.projectFilter).toBe("__none__");
+    const notes = { view: "active", sort: "updated", groupByProject: false, tagFilters: [], tagMode: "any", projectFilter: "__none__", pinnedOnly: false, selectedId: null } as const;
+    writeViewState(s, key, "notes", notesViewStateSchema, notes);
+    expect(readViewState(s, key, "notes", notesViewStateSchema)).toEqual(notes);
+  });
 });

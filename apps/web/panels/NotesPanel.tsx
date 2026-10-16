@@ -233,8 +233,9 @@ export function NotesPanel(): React.ReactElement {
   const restoredView = useViewState("notes", notesViewStateSchema, workspace?.id,
     { view, sort, groupByProject, tagFilters, tagMode, projectFilter, pinnedOnly, selectedId: selectedId === NEW_NOTE ? null : selectedId },
     (saved) => {
-      setView(saved.view); setSort(saved.sort); setGroupByProject(saved.groupByProject); setTagFilters(saved.tagFilters);
-      setTagMode(saved.tagMode); setProjectFilter(saved.projectFilter); setPinnedOnly(saved.pinnedOnly);
+      setView(saved.view); setSort(saved.sort); setGroupByProject(projectsOn && saved.groupByProject); setTagFilters(saved.tagFilters);
+      // The earlier "Projects is off" reset runs before this restore; normalize here so the saved filter cannot come back.
+      setTagMode(saved.tagMode); setProjectFilter(projectsOn ? saved.projectFilter : null); setPinnedOnly(saved.pinnedOnly);
       if (saved.selectedId) { selectedIdRef.current = saved.selectedId; setSelectedId(saved.selectedId); }
     });
   const staleChecked = useRef(false);

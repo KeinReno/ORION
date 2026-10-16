@@ -14,13 +14,15 @@ const MAX_PANELS = 40;
 export const viewStateKey = (userId: string, workspaceId: string): string => `orion.viewState:${userId}:${workspaceId}`;
 
 const id = z.string().uuid();
+/** The "Без проекта" filter value used by the notes and tasks panels. */
+const projectFilterValue = z.union([id, z.literal("__none__")]);
 
 export const tasksViewStateSchema = z.object({
   dueFilter: z.enum(["all", "overdue", "today", "week", "none"]),
   statusFilter: z.array(z.enum(["backlog", "todo", "in_progress", "done", "canceled"])).max(5),
   priorityFilter: z.array(z.enum(["low", "normal", "high"])).max(3),
   groupBy: z.enum(["status", "project", "due", "priority"]),
-  projectFilter: id.nullable(),
+  projectFilter: projectFilterValue.nullable(),
   editingId: id.nullable()
 }).strict();
 export type TasksViewState = z.infer<typeof tasksViewStateSchema>;
@@ -31,7 +33,7 @@ export const notesViewStateSchema = z.object({
   groupByProject: z.boolean(),
   tagFilters: z.array(z.string().min(1).max(64)).max(20),
   tagMode: z.enum(["any", "all"]),
-  projectFilter: id.nullable(),
+  projectFilter: projectFilterValue.nullable(),
   pinnedOnly: z.boolean(),
   selectedId: id.nullable()
 }).strict();

@@ -113,3 +113,47 @@ test("documents folder and projects layout survive a reload; a removed folder ex
   await expect(page.getByText("Внутри.txt", { exact: true })).toHaveCount(0);
   await expect(page.getByText(folder.name, { exact: true })).toHaveCount(0);
 });
+
+test("a saved project filter is not restored while Projects is off; records and links stay", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const account = await register(request, "view-state-modules");
+  const headers = { Authorization: `Bearer ${account.accessToken}` };
+  const base = `${apiUrl()}/workspaces/${account.workspaceId}`;
+  const post = async (path: string, data: unknown) => {
+    const response = await request.post(`${base}/${path}`, { headers, data });
+    expect(response.ok(), await response.text()).toBe(true); return response.json();
+  };
+  const project = await post("projects", { name: "Фильтруемый проект" });
+  const inProject = await post("notes", { title: "Заметка проекта", body: "", tags: [], projectId: project.id });
+  const loose = await post("notes", { title: "Заметка без проекта", body: "", tags: [] });
+  const taskIn = await post("tasks", { title: "Задача проекта", status: "todo", projectId: project.id });
+  const taskLoose = await post("tasks", { title: "Задача без проекта", status: "todo" });
+  await request.patch(`${apiUrl()}/settings/preferences`, { headers, data: { theme: "kaiden-precision" } });
+  await signIn(page, account); await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
+
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  await page.getByRole("combobox", { name: "Фильтр по проекту", exact: true }).selectOption(project.id);
+  await expect(page.getByText(loose.title, { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Задачи", exact: true }).click();
+  await page.getByRole("button", { name: project.name, exact: true }).first().click();
+  await expect(page.getByText(taskLoose.title, { exact: true })).toHaveCount(0);
+  await page.waitForTimeout(700);
+
+  const off = await request.patch(`${base}/modules/projects`, { headers, data: { enabled: false } });
+  expect(off.ok(), await off.text()).toBe(true);
+  await page.reload();
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  await expect(page.getByText(loose.title, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(inProject.title, { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Задачи", exact: true }).click();
+  await expect(page.getByText(taskLoose.title, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(taskIn.title, { exact: true }).first()).toBeVisible();
+
+  // Nothing was deleted: notes, tasks and the project survive, and the notes still point at the project.
+  const notes = (await (await request.get(`${base}/notes`, { headers })).json()) as { id: string; projectId: string | null }[];
+  expect(notes.find(n => n.id === inProject.id)?.projectId).toBe(project.id);
+  expect(notes.some(n => n.id === loose.id)).toBe(true);
+  const tasks = (await (await request.get(`${base}/tasks`, { headers })).json()) as { id: string; projectId: string | null }[];
+  expect(tasks.find(t => t.id === taskIn.id)?.projectId).toBe(project.id);
+});
