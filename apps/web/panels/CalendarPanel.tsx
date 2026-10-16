@@ -63,6 +63,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
 import { ExtensionSlot } from "../lib/extensions/slot";
+import { ObjectOpenMenu } from "../components/object-open-menu";
 
 const SOURCES_KEY = "orion.calendar.sources";
 
@@ -325,6 +326,9 @@ export function CalendarPanel(): React.ReactElement {
     function onKey(event: KeyboardEvent): void {
       if (!panelVisible || selected || newSlot || pendingScope) return;
       if (isTypingTarget(event.target)) return;
+      // Controls and object-opening menus own their keys; don't navigate or
+      // reschedule the focused calendar item while the user operates them.
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest("button, a, [role=menu], [role=tablist]"))) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         if (event.shiftKey) {
           const item = items.find((entry) => entry.id === focusedIdRef.current);
@@ -517,6 +521,11 @@ export function CalendarPanel(): React.ReactElement {
           <>
             <Calendar
               items={items}
+              renderAgendaItemActions={item => {
+                if (item.kind !== "task" && item.kind !== "note") return null;
+                if ((item.kind === "task" && !tasksOn) || (item.kind === "note" && !notesOn)) return null;
+                return <ObjectOpenMenu view={{ object: { workspaceId: wsId ?? "", entityType: item.kind, entityId: item.id }, viewId: "detail" }} title={item.label} />;
+              }}
               onRangeChange={setRange}
               onItemClick={openItem}
               onItemReschedule={reschedule}

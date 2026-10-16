@@ -46,6 +46,8 @@ export interface CalendarProps {
   headerExtra?: ReactNode;
   /** Keyboard-focused pill (↑/↓ in the panel). Distinct from the open Sheet. */
   focusedId?: string | null;
+  /** Optional sibling controls in the roomy agenda rows. Grids keep their compact interaction. */
+  renderAgendaItemActions?: (item: CalendarItem) => ReactNode;
 }
 
 const VIEW_OPTIONS = [
@@ -64,7 +66,8 @@ export function Calendar({
   onSlotCreate,
   onRangeChange,
   headerExtra,
-  focusedId
+  focusedId,
+  renderAgendaItemActions
 }: CalendarProps): React.ReactElement {
   const [cursor, setCursor] = useState(() => new Date());
   const [uncontrolledView, setUncontrolledView] = useState<CalendarView>("month");
@@ -219,7 +222,7 @@ export function Calendar({
           focusedId={focusedId}
         />
       ) : view === "agenda" ? (
-        <Agenda items={items} onItemClick={onItemClick} focusedId={focusedId} />
+        <Agenda items={items} onItemClick={onItemClick} focusedId={focusedId} renderItemActions={renderAgendaItemActions} />
       ) : (
         <TimeGrid
           days={days}
