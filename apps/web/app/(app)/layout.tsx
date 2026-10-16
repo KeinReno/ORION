@@ -72,6 +72,7 @@ import {
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
 import { objectViewPanel } from "../../lib/object-view";
+import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
 import { canStep, clearHistory, EMPTY_NAV_HISTORY, recordVisit, stepHistory, type NavHistory } from "../../lib/nav-history";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -580,8 +581,16 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       try {
         const raw = window.localStorage.getItem(key);
         if (raw) {
-          api.fromJSON(JSON.parse(raw));
-          restored = true;
+          // Unknown panels are dropped and floating groups pulled back on screen, instead of one bad
+          // tab discarding the whole saved layout.
+          const clean = sanitizeDockLayout(JSON.parse(raw), (id) => getPanelDefinition(id) !== undefined, { width: window.innerWidth, height: window.innerHeight });
+          if (clean) {
+            api.fromJSON(clean.layout as unknown as Parameters<DockviewApi["fromJSON"]>[0]);
+            restored = true;
+            if (clean.removedPanels.length > 0 || clean.movedFloating > 0) {
+              navigationToast.current({ title: "Рабочее место восстановлено частично", description: "Часть вкладок больше недоступна или окна возвращены в границы экрана." });
+            }
+          }
         }
       } catch {
         // corrupt or incompatible saved layout (e.g. a removed panel id) — fall through to the default
