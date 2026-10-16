@@ -67,7 +67,7 @@ export function sanitizeDockLayout(input: unknown, keep: (panelId: string) => bo
   const grid = layout.grid as Json;
   const removed: string[] = [];
   const groups = new Set<string>();
-  if (!cleanNode(grid.root, keep, removed, groups)) return null;
+  const gridUsable = cleanNode(grid.root, keep, removed, groups);
 
   let movedFloating = 0;
   const floating = Array.isArray(layout.floatingGroups) ? layout.floatingGroups : [];
@@ -84,6 +84,21 @@ export function sanitizeDockLayout(input: unknown, keep: (panelId: string) => bo
       if (typeof entry.data.id === "string") groups.add(entry.data.id);
       return true;
     });
+  }
+
+  // The tiled grid lost every tab but floating / pop-out groups still hold usable ones: tile those
+  // groups instead, so a valid tab is never discarded because of an unknown neighbour.
+  if (!gridUsable) {
+    const survivors = [...(layout.floatingGroups as Json[]), ...(Array.isArray(layout.popoutGroups) ? (layout.popoutGroups as Json[]) : [])];
+    if (survivors.length === 0) return null;
+    const total = typeof grid.width === "number" && grid.width > 0 ? grid.width : view.width;
+    grid.root = {
+      type: "branch",
+      size: typeof grid.height === "number" && grid.height > 0 ? grid.height : view.height,
+      data: survivors.map((entry) => ({ type: "leaf", size: Math.round(total / survivors.length), data: entry.data }))
+    };
+    layout.floatingGroups = [];
+    layout.popoutGroups = [];
   }
 
   const panels = layout.panels as Json;
