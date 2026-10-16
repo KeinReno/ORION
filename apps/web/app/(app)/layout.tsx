@@ -29,7 +29,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -72,6 +72,7 @@ import {
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
 import { objectViewPanel } from "../../lib/object-view";
+import { canStep, clearHistory, EMPTY_NAV_HISTORY, recordVisit, stepHistory, type NavHistory } from "../../lib/nav-history";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -463,6 +464,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const layoutKeyRef = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
+  // Back/forward over the panels (objects and views) this window has shown; in memory, per window and workspace.
+  const [navHistory, setNavHistory] = useState<NavHistory>(EMPTY_NAV_HISTORY);
+  const navHistoryRef = useRef(navHistory);
+  navHistoryRef.current = navHistory;
+  useEffect(() => {
+    if (activePanelId) setNavHistory(history => recordVisit(history, activePanelId));
+  }, [activePanelId]);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
   const objectContext = useObjectContext(workspace?.id, activePanelId);
@@ -618,6 +626,33 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }
       } }), [openPanel, placePanel]);
 
+  const canShowPanel = useCallback((panelId: string): boolean => {
+    const definition = getPanelDefinition(panelId);
+    return Boolean(definition) && isPanelAvailable(definition!, disabledModulesRef.current, pluginOverridesRef.current)
+      && !(definition!.id === "projecttasks" && !isModuleEnabled(disabledModulesRef.current, "tasks"));
+  }, []);
+  const goHistory = useCallback((direction: -1 | 1) => {
+    const before = navHistoryRef.current;
+    const step = stepHistory(before, direction, canShowPanel);
+    if (!step) return;
+    setNavHistory(step.history);
+    placePanel(step.target);
+    // A draft guard (or a failed open) leaves the old panel active: keep the history where it was.
+    if (apiRef.current?.activePanel?.id !== step.target) setNavHistory(before);
+  }, [placePanel, canShowPanel]);
+  const goHistoryRef = useRef(goHistory);
+  goHistoryRef.current = goHistory;
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      goHistoryRef.current(event.key === "ArrowLeft" ? -1 : 1);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       const api = event.api;
@@ -715,6 +750,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     } catch {
       // best-effort — see the identical catch in onReady's save timer
     }
+    setNavHistory(clearHistory());
     for (const panel of [...api.panels]) panel.api.close();
     layoutKeyRef.current = nextKey;
     loadLayoutForKey(api, nextKey, namedLayoutsKey(user.id, workspace.id));
@@ -1023,6 +1059,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           </header>
         ) : null}
         {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
+          <div className="flex shrink-0 items-center" role="group" aria-label="История переходов">
+            <IconButton label="Назад (Alt+←)" className="h-11 w-11 sm:h-8 sm:w-8" disabled={!canStep(navHistory, -1, canShowPanel)} onClick={() => goHistory(-1)}><ChevronLeft className="h-4 w-4" /></IconButton>
+            <IconButton label="Вперёд (Alt+→)" className="h-11 w-11 sm:h-8 sm:w-8" disabled={!canStep(navHistory, 1, canShowPanel)} onClick={() => goHistory(1)}><ChevronRight className="h-4 w-4" /></IconButton>
+          </div>
           <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
           <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="hidden text-muted-foreground md:inline">{workspace.name}</span><span aria-hidden className="hidden px-2 md:inline">/</span>{editorContext?.title || activeDefinition?.label || "Рабочая область"}</div>
           {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : editorContext.entityType === "document" ? "документа" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
