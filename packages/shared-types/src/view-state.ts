@@ -37,6 +37,11 @@ export const notesViewStateSchema = z.object({
 }).strict();
 export type NotesViewState = z.infer<typeof notesViewStateSchema>;
 
+export const calendarViewStateSchema = z.object({
+  view: z.enum(["month", "week", "day", "agenda"])
+}).strict();
+export type CalendarViewState = z.infer<typeof calendarViewStateSchema>;
+
 interface Envelope { v: number; state: unknown }
 type Store = Record<string, Envelope>;
 

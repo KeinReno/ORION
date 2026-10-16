@@ -60,3 +60,20 @@ for (const pluginsOff of [false, true]) {
     await expect(page.getByText("Другая задача", { exact: true }).first()).toBeVisible();
   });
 }
+
+test("calendar view survives a reload and falls back safely on a bad value", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const account = await register(request, "view-state-calendar");
+  await signIn(page, account); await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
+  await page.getByRole("button", { name: "Календарь", exact: true }).click();
+  const calendar = page.getByRole("group", { name: "Календарь", exact: true });
+  await expect(calendar.getByRole("tab", { name: "Месяц", exact: true })).toHaveAttribute("aria-selected", "true");
+  await calendar.getByRole("tab", { name: "Неделя", exact: true }).click();
+  await page.waitForTimeout(700);
+  await page.reload();
+  await expect(calendar.getByRole("tab", { name: "Неделя", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.evaluate(() => { for (const key of Object.keys(window.localStorage)) if (key.startsWith("orion.viewState:")) window.localStorage.setItem(key, JSON.stringify({ calendar: { v: 1, state: { view: "year" } } })); });
+  await page.reload();
+  await expect(calendar.getByRole("tab", { name: "Месяц", exact: true })).toHaveAttribute("aria-selected", "true");
+});

@@ -64,6 +64,8 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
 import { ExtensionSlot } from "../lib/extensions/slot";
 import { ObjectOpenMenu } from "../components/object-open-menu";
+import { useViewState } from "../lib/use-view-state";
+import { calendarViewStateSchema } from "@orion/shared-types";
 import { ObjectOpenPopup } from "../components/object-open-popup";
 
 const SOURCES_KEY = "orion.calendar.sources";
@@ -231,6 +233,8 @@ export function CalendarPanel(): React.ReactElement {
   const [selected, setSelected] = useState<Event | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   // Grid views (month/week/day) have no room for a per-item button: right click / Menu key / Shift+F10.
+  const [calendarView, setCalendarView] = useState<"month" | "week" | "day" | "agenda">("month");
+  useViewState("calendar", calendarViewStateSchema, wsId, { view: calendarView }, (saved) => setCalendarView(saved.view));
   const [gridMenu, setGridMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const focusedIdRef = useRef<string | null>(null);
   focusedIdRef.current = focusedId;
@@ -530,6 +534,8 @@ export function CalendarPanel(): React.ReactElement {
             })() : null}
             <Calendar
               items={items}
+              view={calendarView}
+              onViewChange={setCalendarView}
               renderAgendaItemActions={item => {
                 if (item.kind !== "task" && item.kind !== "note") return null;
                 if ((item.kind === "task" && !tasksOn) || (item.kind === "note" && !notesOn)) return null;
