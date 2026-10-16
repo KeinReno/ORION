@@ -108,10 +108,16 @@ export function ProjectRow({
               {pluralDays(freshness.daysOld)}
             </span>
           ) : null}
+          {/* The deadline column only exists on wide lists: below that, the deadline joins the state cell. */}
+          {project.status !== "completed" ? (
+            <span className="[@container(min-width:760px)]:hidden">
+              <DueChip project={project} />
+            </span>
+          ) : null}
         </div>
 
         <div className="hidden [@container(min-width:760px)]:block">
-          <DueChip project={project} />
+          {project.status !== "completed" ? <DueChip project={project} /> : null}
         </div>
 
         <div className="hidden [@container(min-width:960px)]:block">

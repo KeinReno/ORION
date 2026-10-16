@@ -22,7 +22,7 @@ import {
   cx,
   useToast
 } from "@orion/ui";
-import { FolderKanban, Plus, Search, TriangleAlert } from "lucide-react";
+import { ChevronDown, FolderKanban, Plus, Search, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewState } from "../lib/use-view-state";
 import { projectsViewStateSchema } from "@orion/shared-types";
@@ -43,7 +43,8 @@ import {
 import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "../components/project-bits";
 import { ProjectListHeader, ProjectRow } from "./projects/project-row";
 import { DueChip, NextLine } from "./projects/project-vitals";
-import { nextActionByProject, pluralDays, reportFreshness, type ProjectNextAction } from "../lib/project-status";
+import { nextActionByProject, pluralDays, projectsNeedingAttention, reportFreshness, type ProjectNextAction } from "../lib/project-status";
+import { ProjectAttentionBand } from "./projects/project-attention";
 
 /**
  * «Проекты» (v0.14) — a project is what a task's free-form `projectTag` grew
@@ -116,6 +117,9 @@ export function ProjectsPanel(): React.ReactElement {
     const visible = visibleProjectBoard(source, query, statusFilter, sort);
     return sort === "manual" ? applyProjectOrder(visible, manualOrder) : visible;
   }, [source, query, statusFilter, sort, manualOrder]);
+  // The band answers "what needs me today" for the whole live board; it steps aside while the user searches or filters.
+  const attention = useMemo(() => projectsNeedingAttention(source, nextActions), [source, nextActions]);
+  const showAttention = !archived && !query.trim() && statusFilter === null && attention.length > 0;
   const [draggingId, setDraggingId] = useState<string | null>(null);
   /** What the drag in flight will do at its end: an OS window (Ctrl, or dock drop outside the app) or nothing. */
   const dragModeRef = useRef<"dock" | "window" | null>(null);
@@ -215,6 +219,45 @@ export function ProjectsPanel(): React.ReactElement {
     }
   }
 
+  const viewControls = (
+    <>
+      <Select
+        value={sort}
+        onChange={(event) => setSort(event.target.value as ProjectBoardSort)}
+        className="sm:w-56"
+        aria-label="Сортировка"
+      >
+        {(Object.keys(PROJECT_BOARD_SORT_LABEL) as ProjectBoardSort[]).map((value) => (
+          <option key={value} value={value}>
+            Порядок: {PROJECT_BOARD_SORT_LABEL[value]}
+          </option>
+        ))}
+      </Select>
+      <SegmentedControl<BoardLayout>
+        value={layout}
+        onChange={chooseLayout}
+        size="sm"
+        aria-label="Вид списка"
+        options={[
+          { value: "list", label: "Список" },
+          { value: "cards", label: "Карточки" }
+        ]}
+      />
+      <SegmentedControl<"active" | "archive">
+        value={archived ? "archive" : "active"}
+        onChange={(value) => {
+          setArchived(value === "archive");
+        }}
+        size="sm"
+        aria-label="Активные или архив"
+        options={[
+          { value: "active", label: "Активные" },
+          { value: "archive", label: "Архив" }
+        ]}
+      />
+    </>
+  );
+
   return (
     <PanelShell>
       <PanelHeader
@@ -222,9 +265,10 @@ export function ProjectsPanel(): React.ReactElement {
         title="Проекты"
         subtitle={
           projects
-            ? query.trim() || statusFilter
-              ? `${list.length} из ${source.length}`
-              : `${source.length} шт.`
+            ? [
+                query.trim() || statusFilter ? `${list.length} из ${source.length}` : `${source.length} шт.`,
+                ...summaryParts(summary, isEnabled("time"), isEnabled("finance"))
+              ].join(" · ")
             : undefined
         }
         actions={
@@ -233,48 +277,39 @@ export function ProjectsPanel(): React.ReactElement {
           </Button>
         }
       >
-        <div className="relative sm:w-56">
+        <div className="relative w-full sm:w-56">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Поиск проектов"
+            aria-label="Поиск проектов"
             className="pl-8"
           />
         </div>
-        <Select
-          value={sort}
-          onChange={(event) => setSort(event.target.value as ProjectBoardSort)}
-          className="sm:w-40"
-          aria-label="Сортировка"
-        >
-          {(Object.keys(PROJECT_BOARD_SORT_LABEL) as ProjectBoardSort[]).map((value) => (
-            <option key={value} value={value}>
-              {PROJECT_BOARD_SORT_LABEL[value]}
-            </option>
-          ))}
-        </Select>
-        <SegmentedControl<BoardLayout>
-          value={layout}
-          onChange={chooseLayout}
-          size="sm"
-          aria-label="Вид списка"
-          options={[
-            { value: "list", label: "Список" },
-            { value: "cards", label: "Карточки" }
-          ]}
-        />
-        <SegmentedControl<"active" | "archive">
-          value={archived ? "archive" : "active"}
-          onChange={(value) => {
-            setArchived(value === "archive");
-          }}
-          size="sm"
-          options={[
-            { value: "active", label: "Активные" },
-            { value: "archive", label: "Архив" }
-          ]}
-        />
+        {projects && source.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Фильтр по статусу">
+            <FilterChip active={statusFilter === null} onClick={() => setStatusFilter(null)}>
+              Все
+            </FilterChip>
+            {PROJECT_STATUS_ORDER.map((status) => (
+              <FilterChip key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
+                {PROJECT_STATUS_LABEL[status]}
+                {summary.byStatus[status] > 0 ? ` · ${summary.byStatus[status]}` : ""}
+              </FilterChip>
+            ))}
+          </div>
+        ) : null}
+        {/* Wide: the view controls sit inline. Narrow: one disclosure, so the list starts above the fold. */}
+        <div className="ml-auto hidden items-center gap-2 sm:flex">{viewControls}</div>
+        <details className="group w-full sm:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-3 text-label text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+            <span className="flex-1">Вид и порядок · {layout === "list" ? "Список" : "Карточки"} · {archived ? "Архив" : "Активные"}</span>
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+          </summary>
+          <div className="mt-2 flex flex-col items-stretch gap-2">{viewControls}</div>
+        </details>
       </PanelHeader>
 
       <PanelBody className="[container-type:inline-size]">
@@ -315,18 +350,14 @@ export function ProjectsPanel(): React.ReactElement {
           />
         ) : (
           <div className="flex flex-col gap-3">
-            <ProjectRollup summary={summary} />
-            <div className="flex flex-wrap items-center gap-1">
-              <FilterChip active={statusFilter === null} onClick={() => setStatusFilter(null)}>
-                Все
-              </FilterChip>
-              {PROJECT_STATUS_ORDER.map((status) => (
-                <FilterChip key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
-                  {PROJECT_STATUS_LABEL[status]}
-                  {summary.byStatus[status] > 0 ? ` · ${summary.byStatus[status]}` : ""}
-                </FilterChip>
-              ))}
-            </div>
+            {showAttention ? (
+              <ProjectAttentionBand
+                items={attention}
+                nextActions={nextActions}
+                tasksOn={isEnabled("tasks")}
+                onOpen={(project) => openProject(project.id, project.name)}
+              />
+            ) : null}
             {filteredOut ? (
               <EmptyState
                 icon={FolderKanban}
@@ -415,7 +446,7 @@ function ProjectCard({
   // One mono line, only the modules that are actually on — not five equal chips.
   const meta: string[] = [];
   if (timeOn && project.trackedMinutes > 0) meta.push(formatDuration(project.trackedMinutes));
-  if (financeOn) {
+  if (financeOn && (project.budgetAmount !== null || project.spentAmount > 0)) {
     meta.push(
       project.budgetAmount !== null
         ? `${formatMoney(project.spentAmount, project.currency)} / ${formatMoney(project.budgetAmount, project.currency)}`
@@ -453,7 +484,7 @@ function ProjectCard({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <DueChip project={project} />
+        {project.status !== "completed" ? <DueChip project={project} /> : null}
         {nextAction && nextAction.overdue > 0 ? (
           <span className="inline-flex items-center gap-1 text-micro text-destructive">
             <TriangleAlert className="h-3 w-3" aria-hidden />
@@ -462,7 +493,7 @@ function ProjectCard({
         ) : null}
       </div>
 
-      {tasksOn ? (
+      {tasksOn && project.counts.tasks > 0 ? (
         <div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
             <div
@@ -500,56 +531,20 @@ function ProjectCard({
   );
 }
 
-function ProjectRollup({ summary }: { summary: ProjectBoardSummary }): React.ReactElement {
-  const { isEnabled } = useEnabledModules();
-  const timeOn = isEnabled("time");
-  const financeOn = isEnabled("finance");
-  const money = financeOn ? summary.money.filter((bucket) => bucket.budget > 0 || bucket.spent > 0) : [];
-  return (
-    <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-xl border border-border bg-white/[0.02] px-3 py-2.5">
-      <RollupStat label="Проектов" value={String(summary.total)} />
-      <RollupStat
-        label="Просрочено"
-        value={String(summary.overdue)}
-        tone={summary.overdue > 0 ? "danger" : undefined}
-      />
-      {timeOn ? <RollupStat label="Учтено" value={formatDuration(summary.trackedMinutes)} /> : null}
-      {timeOn && summary.unratedMinutes > 0 ? (
-        <RollupStat label="Без ставки" value={formatDuration(summary.unratedMinutes)} />
-      ) : null}
-      {money.map((bucket) => {
-        const suffix = summary.money.length > 1 ? ` · ${bucket.currency}` : "";
-        return (
-          <RollupStat
-            key={bucket.currency}
-            label={`${bucket.budget > 0 ? "Потрачено / бюджет" : "Потрачено"}${suffix}`}
-            value={
-              bucket.budget > 0
-                ? `${formatMoney(bucket.spent, bucket.currency)} из ${formatMoney(bucket.budget, bucket.currency)}`
-                : formatMoney(bucket.spent, bucket.currency)
-            }
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function RollupStat({
-  label,
-  value,
-  tone
-}: {
-  label: string;
-  value: string;
-  tone?: "danger";
-}): React.ReactElement {
-  return (
-    <div>
-      <p className={`font-mono text-sm font-semibold tabular-nums ${tone === "danger" ? "text-destructive" : "text-foreground"}`}>
-        {value}
-      </p>
-      <p className="text-2xs text-subtle-foreground">{label}</p>
-    </div>
-  );
+/** Board totals as short phrases for the header subtitle; zero time and empty money say nothing. */
+function summaryParts(summary: ProjectBoardSummary, timeOn: boolean, financeOn: boolean): string[] {
+  const parts: string[] = [];
+  if (summary.overdue > 0) parts.push(`просрочено: ${summary.overdue}`);
+  if (timeOn && summary.trackedMinutes > 0) parts.push(`учтено ${formatDuration(summary.trackedMinutes)}`);
+  if (timeOn && summary.unratedMinutes > 0) parts.push(`без ставки ${formatDuration(summary.unratedMinutes)}`);
+  if (financeOn) {
+    for (const bucket of summary.money) {
+      if (bucket.budget <= 0 && bucket.spent <= 0) continue;
+      const suffix = summary.money.length > 1 ? ` ${bucket.currency}` : "";
+      parts.push(bucket.budget > 0
+        ? `потрачено ${formatMoney(bucket.spent, bucket.currency)} из ${formatMoney(bucket.budget, bucket.currency)}${suffix}`
+        : `потрачено ${formatMoney(bucket.spent, bucket.currency)}${suffix}`);
+    }
+  }
+  return parts;
 }

@@ -83,6 +83,8 @@ import { TaskRow } from "./projects/task-row";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { DueChip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
+import { OverviewGlance } from "./projects/overview-glance";
+import { nearestMilestone } from "../lib/project-status";
 import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 /** "overview", "tasks", "materials", "access" are the module's own; any other id (the plan) is a tab a plugin adds via `projects.tabs`. */
@@ -648,6 +650,17 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
+        {tasksOn ? (
+          <OverviewGlance
+            project={project}
+            fireCount={fire.length}
+            next={focus.next[0] ?? null}
+            milestone={nearestMilestone(milestones)}
+            onOpenTask={onOpenTask}
+            onGoTasks={() => onGoTo("tasks")}
+            onGoPlan={hasPlan ? () => onGoTo("plan") : null}
+          />
+        ) : null}
         <ProjectStatusSection
           workspaceId={workspaceId}
           projectId={project.id}
