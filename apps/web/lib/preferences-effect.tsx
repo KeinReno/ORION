@@ -1,7 +1,7 @@
 "use client";
 
 import { usePreferences, useSession } from "@orion/core-react";
-import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, type WebglBackgroundStyle } from "@orion/ui";
+import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, themeVariables, type WebglBackgroundStyle } from "@orion/ui";
 import { useEffect, useState } from "react";
 
 const INTENSITY_OPACITY: Record<string, number> = { low: 0.5, medium: 0.85, high: 1 };
@@ -23,8 +23,8 @@ function hexToRgbTriplet(hex: string | null | undefined): string | null {
  * and `surfaceStyle` makes the sidebar/panels/cards translucent so that
  * background actually shows through — all are plain `data-*` attributes
  * read by CSS in globals.css, the same mechanism as `accent`/`density`.
- * `theme` stays a stored field with one rendered theme — the settings screen
- * says so out loud instead of showing a control that pretends otherwise.
+ * Precision is an explicit, saved user-global opt-in. Workspace switches never
+ * rewrite it; nested panel previews retain their own scoped tokens.
  *
  * The four WebGL background variants (liquid-ether/light-pillar/dark-veil/
  * shape-waves) can't be pure CSS like aurora/grid — `backgroundSpeed`/
@@ -56,6 +56,9 @@ function AppearanceSync(): React.ReactElement | null {
     root.dataset.background = data.backgroundStyle;
     root.dataset.backgroundIntensity = data.backgroundIntensity;
     root.dataset.surface = data.surfaceStyle;
+    root.dataset.orionDesign = data.theme === "kaiden-precision" ? "precision" : "legacy";
+    const precisionVariables = data.theme === "kaiden-precision" ? themeVariables("kaiden-precision") : {};
+    for (const [key, value] of Object.entries(precisionVariables)) root.style.setProperty(key, value);
     root.style.setProperty("--orion-panel-opacity", String(data.panelOpacity));
     root.style.setProperty("--orion-panel-blur", `${data.panelBlur}px`);
     root.style.setProperty("--orion-panel-tint", hexToRgbTriplet(data.panelAccent) ?? "13 13 17");
@@ -68,11 +71,15 @@ function AppearanceSync(): React.ReactElement | null {
     if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
       setAccentRgb([parts[0] / 255, parts[1] / 255, parts[2] / 255]);
     }
+    return () => {
+      delete root.dataset.orionDesign;
+      for (const key of Object.keys(precisionVariables)) root.style.removeProperty(key);
+    };
   }, [data]);
 
   if (!data) return null;
 
-  const isWebglBackground = (WEBGL_BACKGROUND_STYLES as readonly string[]).includes(data.backgroundStyle);
+  const isWebglBackground = data.theme !== "kaiden-precision" && (WEBGL_BACKGROUND_STYLES as readonly string[]).includes(data.backgroundStyle);
 
   return (
     <>

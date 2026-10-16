@@ -517,8 +517,17 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
             ) : (
               <Card className="space-y-4">
                 <p className="text-2xs text-subtle-foreground">
-                  Акцент, плотность и фон применяются сразу. Новые палитры можно проверить в разделе «Предпросмотр тем» ниже.
+                  Оформление сохраняется в вашей учётной записи. KAIDEN Precision включает новую навигацию и спокойную графитовую палитру. Прежние настройки акцента и фона сохраняются для возврата.
                 </p>
+                <Field label="Оформление Orion">
+                  <Select aria-label="Оформление Orion" value={form.theme}
+                    onChange={(event) => setForm({ ...form, theme: event.target.value as UserPreference["theme"] })}>
+                    <option value={form.theme === "kaiden-precision" ? "dark" : form.theme}>Прежний интерфейс</option>
+                    <option value="kaiden-precision">KAIDEN Precision — новая оболочка</option>
+                  </Select>
+                </Field>
+                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Золотой акцент и плоские поверхности задаёт Precision. Плотность и положение меню настраиваются независимо.</p> : null}
+                {form.theme !== "kaiden-precision" ? <>
                 <Field label="Акцент">
                   <SegmentedControl<UserPreference["accent"]>
                     value={form.accent}
@@ -526,6 +535,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     options={ACCENT_OPTIONS}
                   />
                 </Field>
+                </> : null}
                 <Field label="Плотность">
                   <SegmentedControl<UserPreference["density"]> value={form.density} onChange={(density) => setForm({ ...form, density })} options={[{ value: "compact", label: "Компактная" }, { value: "comfortable", label: "Свободная" }]} />
                 </Field>
@@ -554,6 +564,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     «Копить» — каждый открытый раздел остаётся вкладкой. «Заменять» — раздел открывается на месте текущей вкладки; закрепить другую рядом можно перетаскиванием из меню или через «⋯».
                   </p>
                 </Field>
+                {form.theme !== "kaiden-precision" ? <>
                 <Field label="Фон">
                   <SegmentedControl<UserPreference["backgroundStyle"]>
                     value={form.backgroundStyle}
@@ -652,6 +663,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     </Field>
                   </div>
                 ) : null}
+                </> : null}
                 <Field label="Номера заметок">
                   <div className="flex items-center gap-2">
                     <Switch checked={form.showNoteIds} onChange={(showNoteIds) => setForm({ ...form, showNoteIds })} />

@@ -44,14 +44,18 @@ export function useThemeScopeProps(): {
  * The host owns layout through className. Shared overlays carry the scope across their portals.
  * Custom plugin portals can apply useThemeScopeProps() to their existing root.
  */
-export function ThemeProvider({ flag, theme, definition, style, children, ...props }: HTMLAttributes<HTMLDivElement> & {
+export function ThemeProvider({ flag, theme, definition, inherit = false, style, children, ...props }: HTMLAttributes<HTMLDivElement> & {
   flag?: string;
   theme?: ThemeId;
   /** Data-only v1 document. Invalid input keeps the selected built-in/legacy fallback. */
   definition?: unknown;
+  /** Restore the owner's effective theme without unmounting a preview's children. */
+  inherit?: boolean;
 }): React.ReactElement {
+  const parent = useContext(ThemeContext);
   const effectiveTheme = resolveTheme(flag, theme);
   const context = useMemo(() => {
+    if (inherit && parent) return parent;
     const parsed = flag === THEME_FOUNDATION_FLAG ? parseThemeDocument(definition) : null;
     return {
       schemaVersion: DESIGN_SYSTEM_VERSION,
@@ -59,7 +63,7 @@ export function ThemeProvider({ flag, theme, definition, style, children, ...pro
       variables: parsed?.ok ? themeDocumentVariables(parsed.value) : themeVariables(effectiveTheme),
       colorScheme: parsed?.ok ? parsed.value.baseMode : undefined
     };
-  }, [definition, effectiveTheme, flag]);
+  }, [definition, effectiveTheme, flag, inherit, parent]);
   return (
     <ThemeContext.Provider value={context}>
       <div {...props} data-kaiden-theme={context.theme} data-kaiden-version={DESIGN_SYSTEM_VERSION}

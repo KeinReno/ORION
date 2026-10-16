@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const themePreferenceSchema = z.enum(["system", "dark", "light"]);
+// Existing values keep their original appearance; Precision is an explicit redesign opt-in.
+export const themePreferenceSchema = z.enum(["system", "dark", "light", "kaiden-precision"]);
 export const densityPreferenceSchema = z.enum(["compact", "comfortable"]);
 /**
  * Decorative backdrop behind the app shell — "none" keeps the flat background.

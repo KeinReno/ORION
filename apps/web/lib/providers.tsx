@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { API_BASE_URL } from "./api-base";
 import { CrossWindowSync } from "./cross-window-sync-provider";
 import { PreferencesEffect } from "./preferences-effect";
+import { ApplicationTheme } from "./application-theme";
 
 export function Providers({ children }: { children: ReactNode }): React.ReactElement {
   const [storage] = useState(() => new BrowserLocalStorage());
@@ -16,7 +17,7 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
           so the login screen never fires a doomed preferences request. */}
       <PreferencesEffect />
       <CrossWindowSync />
-      <ToastProvider>{children}</ToastProvider>
+      <ApplicationTheme><ToastProvider>{children}</ToastProvider></ApplicationTheme>
     </CoreProvider>
   );
 }

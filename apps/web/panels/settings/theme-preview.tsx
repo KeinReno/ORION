@@ -128,7 +128,7 @@ export function ThemePreview(): React.ReactElement {
           <Button type="button" size="sm" variant="outline" onClick={() => setPreview(value => !value)}>{preview ? "Отменить предпросмотр" : "Включить предпросмотр"}</Button>
           <Button type="button" size="sm" variant="subtle" onClick={() => { ++importSequence.current; setImporting(false); setSelected("precision"); setCustom(null); setPreview(false); setError(null); }}>Сбросить образец</Button>
         </div>
-        <ThemeProvider flag={preview ? "kaiden-theme-v1" : undefined} definition={theme} className="rounded-lg border p-4"
+        <ThemeProvider inherit={!preview} flag={preview ? "kaiden-theme-v1" : undefined} definition={theme} className="rounded-lg border p-4"
           style={{ backgroundColor: "rgb(var(--kaiden-bg-canvas))", color: "rgb(var(--kaiden-text-primary))", borderColor: "rgb(var(--kaiden-border-default))" }}>
           <ThemeSample preview={preview} onCancel={() => setPreview(false)} />
         </ThemeProvider>

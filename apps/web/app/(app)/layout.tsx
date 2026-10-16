@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   IconButton,
   Sidebar,
+  Sheet,
   Workbench,
   positionToDirection,
   useEscapeKey,
@@ -27,12 +28,15 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal } from "lucide-react";
+import { Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
-import { CommandCenter } from "../../lib/command-center";
+import { CommandCenter, showCommandPalette } from "../../lib/command-center";
+import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspace-context";
+import { ProjectContextInspector } from "../../components/project-context-inspector";
+import { projectContextId } from "../../lib/shell-context";
 import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
 import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
@@ -65,7 +69,7 @@ import {
   readDraggedPanelId,
   resolveDropAction
 } from "../../lib/panel-drop";
-import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
+import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -247,7 +251,10 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
 
 export default function AppLayout({ children }: { children: ReactNode }): React.ReactElement {
   const router = useRouter();
+  const { toast } = useToast();
   const { user, isLoading, status, previousUser, retry: retrySession } = useSession();
+  const navigationToast = useRef(toast);
+  navigationToast.current = toast;
   const logout = useLogout();
   // A window opened with `?workspaceId=` starts on that workspace. Only when this window has no
   // choice of its own yet (a reload keeps its own), and before the "no workspace → /spaces"
@@ -268,6 +275,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // viewer is a plain member — see `effectiveDisabledModules`.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
+  const precision = preferences?.theme === "kaiden-precision";
+  const [contextHidden, setContextHidden] = useState(false);
+  const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const wideInspector = useMediaQuery("(min-width: 1360px)");
   const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
 
   // The user's own sidebar folders: personal, saved with their preferences.
@@ -451,6 +463,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
+  const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
+  useEffect(() => { setInspectorOpen(false); setMobileContextOpen(false); }, [workspace?.id]);
   useEscapeKey(() => setDrawerOpen(false), compact && drawerOpen);
 
   // Real total (S15), not `items.length` — the server caps the response at 250 rows.
@@ -482,6 +496,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       const api = apiRef.current;
       if (!api) return;
       const previous = api.activePanel;
+      // Compact navigation and replace-current mode close panels. Never bypass their draft guards.
+      const closing = compactRef.current ? api.panels.filter(panel => panel.id !== panelId)
+        : openTabsModeRef.current === "replace" && fromMenu && !position && previous?.id !== panelId && previous ? [previous] : [];
+      if (closing.some(panel => hasUnsavedDrafts(panel.id))) {
+        navigationToast.current({ title: "Сначала сохраните изменения", description: "Переход закроет панель с несохранённым черновиком. Сохраните его и повторите переход." });
+        return;
+      }
       const existing = api.getPanel(panelId);
       if (existing) {
         existing.api.setActive();
@@ -702,6 +723,30 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     }
   }, [status, workspacesLoading, workspace, router]);
 
+  const projectViews = [
+    { id: "project", label: "Обзор" }, { id: "projecttasks", label: "Задачи" },
+    { id: "projectmaterials", label: "Материалы" }, { id: "projectplan", label: "План" },
+    { id: "projectaccess", label: "Доступ" }
+  ].filter(view => {
+    // Catalog lookup: getPanelDefinition deliberately rejects bare instanced kinds.
+    const definition = panelRegistry.find(panel => panel.id === view.id);
+    return definition && isPanelAvailable(definition, disabledModules, pluginOverrides)
+      && (view.id !== "projecttasks" || isModuleEnabled(disabledModules, "tasks"));
+  });
+  const openContextProject = (panelId: string, title: string, mode: ProjectOpenMode): void => {
+    const definition = getPanelDefinition(panelId);
+    if (!definition || !isPanelAvailable(definition, disabledModules, pluginOverrides)) return;
+    if (mode === "window") {
+      void detachPanelToWindow(panelId, title).catch(() => toast({ title: "Не удалось открыть окно", tone: "danger" }));
+    } else if (mode === "beside" && !compact) {
+      const referenceGroup = apiRef.current?.activeGroup;
+      placePanel(panelId, referenceGroup ? { referenceGroup, direction: "right" } : undefined, title);
+    } else if (definition.id === "project") {
+      openEntity("project", panelInstanceId(panelId)!, title);
+    } else openPanel(panelId, title);
+    setMobileContextOpen(false);
+  };
+
   if (status === "unavailable") {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
@@ -728,6 +773,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     <div
       className={cx(
         "flex h-dvh bg-background",
+        precision && "orion-shell--precision",
         compact && "orion-shell--compact",
         // The phone always uses the left drawer; the menu's own edge applies to the desktop shell.
         !compact && sidebarPosition === "right" && "flex-row-reverse",
@@ -787,6 +833,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         />
       ) : null}
       <Sidebar
+        allIconsVisible={precision}
         folders={folderViews}
         onToggleFolder={(id) => saveFolders(toggleFolder(sidebarFolders, id))}
         onCreateFolder={(panelId) => setFolderDialog({ mode: "create", panelId })}
@@ -811,14 +858,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
              * previous/next arrows and the name. Notifications live in the dockview tab
              * strip — the bell used to be clipped out of the 60px rail here.
              */}
-            <WorkspaceSwitcher
+            {!precision ? <WorkspaceSwitcher
               groups={switcherGroups}
               active={workspace}
               expanded={open}
               onSelect={requestWorkspaceSwitch}
               onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
               onOpenSpaces={() => leaveWorkbench("spaces")}
-            />
+            /> : null}
           </div>
         )}
         links={orderedNav.map((panel) => ({
@@ -957,10 +1004,42 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             </IconButton>
           </header>
         ) : null}
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
+        {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
+          <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
+          <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="text-muted-foreground">{workspace.name}</span><span aria-hidden className="px-2">/</span>{activeDefinition?.label ?? "Рабочая область"}</div>
+          <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
+          <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
+            { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
+            ...layoutNames.map(name => ({ label: name, onSelect: () => applyLayout(name) })),
+            { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
+          ]} />
+          {activeProjectId ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
+          <button type="button" aria-label="Учётная запись" onClick={() => leaveWorkbench("account")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
+        </header> : null}
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border">
+            <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+              projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
+              links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => openFromMenu(panel.id) }))}
+              switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={requestWorkspaceSwitch} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
+              onOpen={openContextProject} onClose={() => { document.getElementById("orion-context-toggle")?.focus(); setContextHidden(true); }} />
+          </div> : null}
+          <div className="min-h-0 min-w-0 flex-1">
+            <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
+          </div>
+          {precision && inspectorOpen && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
         </main>
       </div>
+      <Sheet open={Boolean(precision && compact && mobileContextOpen)} onClose={() => setMobileContextOpen(false)} title="Навигация пространства" bare width="22rem">
+        <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+          projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
+          links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => { openFromMenu(panel.id); setMobileContextOpen(false); } }))}
+          switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={id => { requestWorkspaceSwitch(id); setMobileContextOpen(false); }} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
+          onOpen={openContextProject} onClose={() => setMobileContextOpen(false)} />
+      </Sheet>
+      <Sheet open={Boolean(precision && inspectorOpen && activeProjectId && !wideInspector)} onClose={() => setInspectorOpen(false)} title="Контекст проекта" bare width="22rem">
+        {activeProjectId ? <ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => { openContextProject(id, title, "open"); setInspectorOpen(false); }} onClose={() => setInspectorOpen(false)} /> : null}
+      </Sheet>
       <ConfirmDialog
         open={pendingSwitch !== null}
         title="Есть несохранённый текст"

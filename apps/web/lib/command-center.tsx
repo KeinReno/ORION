@@ -25,6 +25,9 @@ import { panelRegistry } from "./panel-registry";
 import { useActiveWorkspace } from "./use-active-workspace";
 import { useEnabledModules } from "./use-enabled-modules";
 
+/** The shell button and keyboard shortcut open the same command surface. */
+export function showCommandPalette(): void { window.dispatchEvent(new Event("orion:open-command-palette")); }
+
 interface Command extends PaletteEntry {
   hint?: string;
   icon: LucideIcon;
@@ -109,6 +112,11 @@ export function CommandCenter(): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(0);
   const [capture, setCapture] = useState("");
   const [capturePrefill, setCapturePrefill] = useState("");
+  useEffect(() => {
+    const open = (): void => setPaletteOpen(true);
+    window.addEventListener("orion:open-command-palette", open);
+    return () => window.removeEventListener("orion:open-command-palette", open);
+  }, []);
   const [gotoArmed, setGotoArmed] = useState(false);
   const gotoArmedRef = useRef(false);
 
@@ -358,7 +366,7 @@ export function CommandCenter(): React.ReactElement {
 
   return (
     <>
-      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} size="md">
+      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="md">
         <div className="space-y-3">
           <Input
             autoFocus
