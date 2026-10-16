@@ -19,11 +19,11 @@ export function useObjectContext(workspaceId: string | undefined, panelId: strin
 /** A module publishes only its own editor; no global active-object mutable pointer. */
 export function usePublishObjectContext(record: Omit<PanelObjectContext, "panelId">): void {
   const panelId = useContext(Scope);
-  const { workspaceId, entityType, entityId, title, saveState, hasPendingChanges } = record;
+  const { workspaceId, entityType, entityId, title, saveState, hasPendingChanges, saveMode } = record;
   useEffect(() => {
     if (!panelId || !workspaceId) return;
-    return store.publish({ panelId, workspaceId, entityType, entityId, title, saveState, hasPendingChanges });
-  }, [panelId, workspaceId, entityType, entityId, title, saveState, hasPendingChanges]);
+    return store.publish({ panelId, workspaceId, entityType, entityId, title, saveState, hasPendingChanges, saveMode });
+  }, [panelId, workspaceId, entityType, entityId, title, saveState, hasPendingChanges, saveMode]);
 }
 
 /** Read at the time of navigation, rather than closing over a stale render. */

@@ -24,7 +24,6 @@ import {
   PanelShell,
   SegmentedControl,
   Select,
-  Sheet,
   Skeleton,
   cx,
   isTypingTarget,
@@ -645,6 +644,7 @@ export function NotesPanel(): React.ReactElement {
       <NoteEditor
         key={`${selected?.id ?? NEW_NOTE}:${editorReloadKey}`}
         note={selected}
+        compact={!twoPane}
         workspaceId={workspace?.id}
         projects={isEnabled("projects") ? (projectList ?? []) : undefined}
         busy={createNote.isPending}
@@ -764,26 +764,13 @@ export function NotesPanel(): React.ReactElement {
       </PanelHeader>
 
       <div ref={wrapRef} className="flex min-h-0 flex-1">
-        {trash ? (
-          <div className="flex min-w-0 flex-1 flex-col">{list}</div>
-        ) : twoPane ? (
-          <>
-            <div className={cx("shrink-0 flex-col border-r border-border", listHidden ? "hidden" : "flex w-[20rem]")}>{list}</div>
-            <div className="min-w-0 flex-1">{editor}</div>
-          </>
-        ) : (
-          <>
-            <div className="flex min-w-0 flex-1 flex-col">{list}</div>
-            <Sheet
-              open={composing || Boolean(selected)}
-              onClose={() => selectNote(null)}
-              title={composing ? "Новая заметка" : "Заметка"}
-              bare
-            >
-              {editor}
-            </Sheet>
-          </>
-        )}
+        <div className={cx("min-w-0 flex-col", twoPane && !trash ? "w-[20rem] shrink-0 border-r border-border" : "flex-1",
+          listHidden || (!twoPane && !trash && (composing || selected)) ? "hidden" : "flex")}>
+          {list}
+        </div>
+        <div className={cx("min-h-0 min-w-0 flex-1", (trash || (!twoPane && !composing && !selected)) && "hidden")}>
+          {editor}
+        </div>
       </div>
 
       <ConfirmDialog

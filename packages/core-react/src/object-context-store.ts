@@ -7,6 +7,7 @@ export interface PanelObjectContext {
   title: string;
   saveState: "saved" | "dirty" | "saving" | "error" | "conflict";
   hasPendingChanges: boolean;
+  saveMode?: "autosave" | "explicit";
 }
 
 export function createObjectContextStore() {
