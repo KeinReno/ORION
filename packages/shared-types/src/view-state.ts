@@ -37,6 +37,23 @@ export const notesViewStateSchema = z.object({
 }).strict();
 export type NotesViewState = z.infer<typeof notesViewStateSchema>;
 
+export const documentsViewStateSchema = z.object({
+  view: z.enum(["active", "trash"]),
+  cwd: id.nullable(),
+  selectedFileId: id.nullable(),
+  sort: z.enum(["name", "date", "size", "type"]),
+  layout: z.enum(["list", "grid"])
+}).strict();
+export type DocumentsViewState = z.infer<typeof documentsViewStateSchema>;
+
+export const projectsViewStateSchema = z.object({
+  archived: z.boolean(),
+  statusFilter: z.enum(["active", "on_hold", "completed"]).nullable(),
+  sort: z.enum(["lifecycle", "manual", "shared", "name", "due", "progress", "spent", "time"]),
+  layout: z.enum(["list", "cards"])
+}).strict();
+export type ProjectsViewState = z.infer<typeof projectsViewStateSchema>;
+
 export const calendarViewStateSchema = z.object({
   view: z.enum(["month", "week", "day", "agenda"])
 }).strict();

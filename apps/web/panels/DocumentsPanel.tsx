@@ -65,6 +65,8 @@ import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
 import { useFocusedDocumentId } from "../lib/panel-bus";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
+import { useViewState } from "../lib/use-view-state";
+import { documentsViewStateSchema } from "@orion/shared-types";
 
 type SortKey = "name" | "date" | "size" | "type";
 type Layout = "list" | "grid";
@@ -133,6 +135,25 @@ export function DocumentsPanel(): React.ReactElement {
   const [sort, setSort] = useState<SortKey>("name");
   const [layout, setLayout] = useState<Layout>("list");
   const [groupFilter, setGroupFilter] = useState<DocGroup | null>(null);
+  // Folder, open file, view, sort and layout survive a restart. Ids are only addresses: one that is
+  // gone (or no longer visible to this user) is dropped with a plain explanation, never shown.
+  const appliedView = useRef(view); // the view whose transient selection is current; a restored view must not reset it
+  const restoredView = useViewState("documents", documentsViewStateSchema, workspaceId,
+    { view, cwd, selectedFileId, sort, layout },
+    (saved) => {
+      appliedView.current = saved.view; setView(saved.view); setSort(saved.sort); setLayout(saved.layout); setCwd(saved.cwd);
+      if (saved.selectedFileId) { selectedFileIdRef.current = saved.selectedFileId; setSelectedFileId(saved.selectedFileId); }
+    });
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || !restoredView || !docs || isLoading) return;
+    staleChecked.current = true;
+    const missingFolder = restoredView.cwd !== null && !docs.some((d) => d.id === restoredView.cwd);
+    const missingFile = restoredView.selectedFileId !== null && !docs.some((d) => d.id === restoredView.selectedFileId);
+    if (missingFolder) setCwd(null);
+    if (missingFile) { selectedFileIdRef.current = null; setSelectedFileId(null); }
+    if (missingFolder || missingFile) toast({ title: "Прежнее место недоступно", description: "Папка или файл удалены, перемещены или у вас больше нет доступа." });
+  }, [restoredView, docs, isLoading, toast]);
   const [uploadChips, setUploadChips] = useState<
     { id: string; label: string; sublabel?: string; status: CallChipStatus; files: File[]; parentId: string | null }[]
   >([]);
@@ -160,6 +181,8 @@ export function DocumentsPanel(): React.ReactElement {
 
   // Leaving the active view / navigating resets transient selection.
   useEffect(() => {
+    if (appliedView.current === view) return;
+    appliedView.current = view;
     setCwd(null);
     setSelectedFileId(null);
     setChecked(new Set());

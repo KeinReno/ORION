@@ -24,6 +24,8 @@ import {
 } from "@orion/ui";
 import { FolderKanban, Plus, Search, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useViewState } from "../lib/use-view-state";
+import { projectsViewStateSchema } from "@orion/shared-types";
 import { describeError } from "../lib/error-message";
 import { formatMoney } from "../lib/format";
 import { openProject } from "../lib/panel-bus";
@@ -98,6 +100,8 @@ export function ProjectsPanel(): React.ReactElement {
   // "Мой порядок": the viewer's own drag order, kept in localStorage (never shared).
   const { user } = useSession();
   const orderKey = user && workspaceId ? projectOrderKey(user.id, workspaceId) : null;
+  useViewState("projects", projectsViewStateSchema, workspaceId, { archived, statusFilter, sort, layout },
+    (saved) => { setArchived(saved.archived); setStatusFilter(saved.statusFilter); setSort(saved.sort); setLayout(saved.layout); });
   const [manualOrder, setManualOrder] = useState<string[]>([]);
   useEffect(() => {
     try {

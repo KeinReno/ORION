@@ -77,3 +77,39 @@ test("calendar view survives a reload and falls back safely on a bad value", asy
   await page.reload();
   await expect(calendar.getByRole("tab", { name: "Месяц", exact: true })).toHaveAttribute("aria-selected", "true");
 });
+
+test("documents folder and projects layout survive a reload; a removed folder explains itself", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const account = await register(request, "view-state-docs");
+  await disableAllPlugins(request, account);
+  const headers = { Authorization: `Bearer ${account.accessToken}` };
+  const base = `${apiUrl()}/workspaces/${account.workspaceId}/documents`;
+  const folder = await (await request.post(base, { headers, data: { name: "Восстанавливаемая папка" } })).json();
+  const uploaded = await request.post(`${base}/upload`, { headers, multipart: { parentId: folder.id, files: { name: "Внутри.txt", mimeType: "text/plain", buffer: Buffer.from("текст") } } });
+  expect(uploaded.ok(), await uploaded.text()).toBe(true);
+  await request.patch(`${apiUrl()}/settings/preferences`, { headers, data: { theme: "kaiden-precision" } });
+  await signIn(page, account); await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
+
+  await page.getByRole("button", { name: "Проекты", exact: true }).click();
+  await page.getByRole("tab", { name: "Карточки", exact: true }).click();
+  await page.getByRole("tab", { name: "Архив", exact: true }).click();
+  await page.getByRole("button", { name: "Документы", exact: true }).click();
+  await page.getByText(folder.name, { exact: true }).first().click();
+  await expect(page.getByText("Внутри.txt", { exact: true }).first()).toBeVisible();
+  await page.waitForTimeout(700);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Документы", exact: true }).click();
+  await expect(page.getByText("Внутри.txt", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Проекты", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Карточки", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Архив", exact: true })).toHaveAttribute("aria-selected", "true");
+
+  expect((await request.delete(`${base}/${folder.id}`, { headers })).ok()).toBe(true);
+  await page.reload();
+  await expect(page.getByText("Прежнее место недоступно", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Документы", exact: true }).click();
+  await expect(page.getByText("Внутри.txt", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(folder.name, { exact: true })).toHaveCount(0);
+});
