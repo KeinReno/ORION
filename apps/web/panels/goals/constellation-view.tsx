@@ -12,6 +12,7 @@ import { goalsAt, progressDelta } from "../../lib/goal-history";
 import { applyPins, loadPins, loadVisibleLinks, pinsOf, savePins, saveVisibleLinks, type SkyPins } from "../../lib/goal-sky-layout";
 import { GoalInspector } from "./goal-inspector";
 import { SkyCanvas } from "./sky-canvas";
+import styles from "./sky-canvas.module.css";
 import { SkyOverview } from "./sky-overview";
 
 /** How far back the "как было" slider goes. */
@@ -277,7 +278,7 @@ export function ConstellationView({ workspaceId, goals, projects, onShowInList, 
         <div className="grid min-w-0 items-start gap-4 [@container(min-width:850px)]:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-2">
             {open.stars.length === 1 ? (
-              <div className="relative flex min-h-[18rem] flex-col items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-[radial-gradient(ellipse_at_50%_25%,#252033_0%,#11121c_45%,#090a10_100%)] px-6 py-8 text-center">
+              <div className={`relative flex min-h-[18rem] flex-col items-center justify-center overflow-hidden rounded-xl border border-accent/25 px-6 py-8 text-center ${styles.sky}`}>
                 <div className="pointer-events-none absolute inset-x-1/2 top-0 h-44 w-44 -translate-x-1/2 rounded-full bg-accent/10 blur-3xl" aria-hidden />
                 <Sparkles className="relative mb-4 h-8 w-8 text-accent" aria-hidden />
                 <p className="relative max-w-sm text-base font-semibold text-foreground">У результата пока нет маршрута</p>

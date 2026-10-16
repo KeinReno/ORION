@@ -1,0 +1,95 @@
+.sky {
+  background:
+    radial-gradient(ellipse 42% 36% at 50% 24%, rgb(var(--orion-accent) / 0.19), transparent 100%),
+    radial-gradient(ellipse 35% 40% at 13% 80%, rgb(var(--orion-accent) / 0.09), transparent 100%),
+    radial-gradient(ellipse 38% 28% at 90% 74%, rgb(132 142 208 / 0.09), transparent 100%),
+    #090a12;
+  scrollbar-color: rgb(var(--orion-accent) / 0.4) transparent;
+  scrollbar-width: thin;
+}
+
+.fullMap {
+  min-width: 520px;
+}
+
+.miniMap {
+  transition: filter 280ms ease-out;
+}
+
+.sky:hover .miniMap {
+  filter: brightness(1.18);
+}
+
+.starLabel {
+  paint-order: stroke fill;
+  stroke: #090a12;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.starNode:hover .nodeCore {
+  filter: drop-shadow(0 0 5px rgb(var(--orion-accent) / 0.72));
+}
+
+.nodeCore {
+  transition: filter 180ms ease-out;
+}
+
+.twinkle,
+.frontier,
+.selectedHalo,
+.routeFlow {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.twinkle {
+  animation: twinkle 5.8s ease-in-out infinite;
+}
+
+.frontier {
+  animation: frontier 3.8s ease-in-out infinite;
+}
+
+.selectedHalo {
+  animation: selected 4.6s ease-in-out infinite;
+}
+
+.routeFlow {
+  animation: route 12s linear infinite;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.16; }
+  48% { opacity: 0.48; }
+}
+
+@keyframes frontier {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  52% { opacity: 0.8; transform: scale(1.28); }
+}
+
+@keyframes selected {
+  0%, 100% { opacity: 0.38; transform: scale(0.96); }
+  55% { opacity: 0.76; transform: scale(1.09); }
+}
+
+@keyframes route {
+  to { stroke-dashoffset: -48; }
+}
+
+@media (min-width: 640px) {
+  .fullMap { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .twinkle,
+  .frontier,
+  .selectedHalo,
+  .routeFlow { animation: none; }
+
+  .miniMap { transition: none; }
+  .nodeCore { transition: none; }
+}

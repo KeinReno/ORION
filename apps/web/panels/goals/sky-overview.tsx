@@ -6,6 +6,7 @@ import { Sparkles, Trophy } from "lucide-react";
 import { shortDate } from "../../lib/format";
 import { skyHealth, type Constellation, type SkyHealth } from "../../lib/goal-constellation";
 import { SkyCanvas } from "./sky-canvas";
+import styles from "./sky-canvas.module.css";
 
 const HEALTH_BADGE: Record<SkyHealth["tone"], { tone: "success" | "warning" | "accent" | "neutral"; label: string }> = {
   done: { tone: "success", label: "достигнуто" },
@@ -35,12 +36,12 @@ function SkyTile({
       type="button"
       onClick={() => onOpen(constellation.rootId)}
       aria-label={`Открыть созвездие «${root.label}»`}
-      className="space-y-2 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      className="group space-y-2 rounded-xl text-left transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 motion-reduce:transform-none"
     >
       {constellation.stars.length === 1 ? (
-        <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-xl border border-accent/20 bg-[radial-gradient(ellipse_at_50%_20%,#262032_0%,#11121b_55%,#090a10_100%)]">
+        <div className={`relative flex h-32 items-center justify-center overflow-hidden rounded-xl border border-accent/20 ${styles.sky}`}>
           <div className="absolute h-16 w-16 rounded-full bg-accent/10 blur-2xl" aria-hidden />
-          <Sparkles className="relative h-7 w-7 text-accent" aria-hidden />
+          <Sparkles className="relative h-7 w-7 text-accent transition-transform duration-300 ease-out group-hover:scale-110 motion-reduce:transform-none" aria-hidden />
           <span className="absolute bottom-3 text-2xs text-subtle-foreground">Откройте и задайте первый шаг</span>
         </div>
       ) : <SkyCanvas constellation={constellation} goals={goals} lens="progress" selectedId={null} mode="mini" />}

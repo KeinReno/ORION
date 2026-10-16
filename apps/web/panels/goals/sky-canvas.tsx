@@ -19,6 +19,7 @@ import {
 } from "../../lib/goal-constellation";
 import { applyPins, clampToSky } from "../../lib/goal-sky-layout";
 import { openEntity } from "../../lib/panel-bus";
+import styles from "./sky-canvas.module.css";
 
 export const STATE_LABEL: Record<StarState, string> = {
   done: "достигнуто",
@@ -268,7 +269,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl border border-border bg-[radial-gradient(ellipse_at_center,#16161f_0%,#07070b_100%)]"
+      className={`relative rounded-xl border border-border ${full ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"} ${styles.sky}`}
       onDragOver={
         full
           ? (event) => {
@@ -298,7 +299,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
         viewBox={`0 0 ${CONSTELLATION_W} ${CONSTELLATION_H}`}
         role="group"
         aria-label={`Созвездие ${byId.get(constellation.rootId)?.label ?? ""}`}
-        className={`block h-auto w-full text-accent ${full ? (dragging ? "cursor-grabbing touch-pan-y" : "cursor-grab touch-pan-y") : "pointer-events-none"}`}
+        className={`block h-auto w-full text-accent ${full ? `${styles.fullMap} ${dragging ? "cursor-grabbing touch-pan-y" : "cursor-grab touch-pan-y"}` : `pointer-events-none ${styles.miniMap}`}`}
         style={{ aspectRatio: `${CONSTELLATION_W} / ${CONSTELLATION_H}` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -312,7 +313,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
         </defs>
 
         {dust.map((d, i) => (
-          <circle key={i} cx={d.x} cy={d.y} r={d.r} className="fill-foreground" opacity={d.o} />
+          <circle key={i} cx={d.x} cy={d.y} r={d.r} className={`fill-foreground ${full && i % 7 === 0 ? styles.twinkle : ""}`} opacity={d.o} style={full && i % 7 === 0 ? { animationDelay: `${i * -0.61}s` } : undefined} />
         ))}
 
         {full && constellation.stars.length > 1 ? (
@@ -329,17 +330,21 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
             const b = byId.get(link.to)!;
             const route = hot.has(link.from) && hot.has(link.to);
             const faded = visible !== null && !(visible.has(link.from) && visible.has(link.to));
+            const curve = `M ${b.x} ${b.y} C ${b.x} ${(a.y + b.y) / 2}, ${a.x} ${(a.y + b.y) / 2}, ${a.x} ${a.y}`;
             return (
-              <path
-                key={`${link.from}-${link.to}`}
-                d={`M ${b.x} ${b.y} C ${b.x} ${(a.y + b.y) / 2}, ${a.x} ${(a.y + b.y) / 2}, ${a.x} ${a.y}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={0.8 + link.share * 2.4 + (route ? 0.8 : 0)}
-                strokeDasharray={link.lit || route ? undefined : "3 4"}
-                opacity={faded ? 0.08 : route ? 0.9 : link.lit ? 0.6 : 0.38}
-                className={link.lit || route ? undefined : "text-subtle-foreground"}
-              />
+              <g key={`${link.from}-${link.to}`}>
+                {full && route && !faded ? <path d={curve} fill="none" stroke="currentColor" strokeWidth={5} opacity={0.32} filter={`url(#${glowId})`} pointerEvents="none" /> : null}
+                <path
+                  d={curve}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={0.8 + link.share * 2.4 + (route ? 0.8 : 0)}
+                  strokeDasharray={link.lit || route ? undefined : "3 4"}
+                  opacity={faded ? 0.08 : route ? 0.82 : link.lit ? 0.48 : 0.27}
+                  className={link.lit || route ? undefined : "text-subtle-foreground"}
+                />
+                {full && route && !faded ? <path d={curve} fill="none" className={`stroke-foreground ${styles.routeFlow}`} strokeWidth={1.1} strokeDasharray="2 10" strokeLinecap="round" opacity={0.65} pointerEvents="none" /> : null}
+              </g>
             );
           })}
 
@@ -368,25 +373,27 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                 aria-label={`${KIND_LABEL[star.kind]} ${star.label}: ${STATE_LABEL[star.state]}${star.progress === null ? "" : `, ${star.progress}%`}${star.frontier ? ", следующий шаг готов" : ""}${star.overdue ? `, просрочено задач: ${star.overdue}` : ""}${star.blocked ? `, блокировано: ${star.blocked}` : ""}${star.stalled ? ", стоит" : ""}${star.pace.state === "behind" ? ", отстаёт от срока" : ""}${star.pace.state === "late" ? ", срок прошёл" : ""}${star.sharedWith.length ? ", проект служит и другим целям" : ""}`}
                 aria-pressed={full ? isSelected : undefined}
                 onKeyDown={full ? (event) => onStarKey(event, star) : undefined}
-                className={`outline-none [&:focus-visible>circle.core]:stroke-foreground ${full ? "cursor-pointer" : ""}`}
+                className={`outline-none [&:focus-visible>circle.core]:stroke-foreground ${styles.starNode} ${full ? "cursor-pointer" : ""}`}
                 opacity={faded ? 0.15 : dragging?.id === star.id ? 0.35 : 1}
               >
                 <title>{`${KIND_LABEL[star.kind]}: ${star.label}. ${STATE_LABEL[star.state]}`}</title>
-                {lit || isSelected ? <circle cx={star.x} cy={star.y} r={star.r * 2.6} fill="currentColor" opacity={star.state === "done" ? 0.55 : isSelected ? 0.3 : 0.24} filter={`url(#${glowId})`} /> : null}
+                {lit || isSelected ? <circle cx={star.x} cy={star.y} r={star.r * 3.2} fill="currentColor" opacity={star.state === "done" ? 0.56 : isSelected ? 0.43 : 0.26} filter={`url(#${glowId})`} pointerEvents="none" /> : null}
                 {star.frontier && !faded ? (
                   <circle
                     cx={star.x}
                     cy={star.y}
-                    r={star.r + 3}
+                    r={star.r + 7}
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth={1.5}
-                    className="motion-safe:animate-ping [transform-box:fill-box] [transform-origin:center]"
+                    strokeWidth={1.1}
+                    className={styles.frontier}
+                    pointerEvents="none"
                   />
                 ) : null}
                 {star.stalled ? <circle cx={star.x} cy={star.y} r={star.r + 4.5} fill="none" strokeWidth={1.25} strokeDasharray="2 3" className="stroke-warning" /> : null}
                 {star.pace.state !== "none" ? <PaceRing star={star} /> : null}
-                {isSelected ? <circle cx={star.x} cy={star.y} r={star.r + 8} fill="none" stroke="currentColor" strokeWidth={1} opacity={0.8} /> : null}
+                {isSelected ? <circle cx={star.x} cy={star.y} r={star.r + 9} fill="none" stroke="currentColor" strokeWidth={1.2} className={styles.selectedHalo} pointerEvents="none" /> : null}
+                {star.depth === 0 ? <path d={`M ${star.x} ${star.y - star.r - 18} v 7 M ${star.x} ${star.y + star.r + 11} v 7 M ${star.x - star.r - 18} ${star.y} h 7 M ${star.x + star.r + 11} ${star.y} h 7`} fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" opacity={0.72} pointerEvents="none" /> : null}
                 {legal || dropHot ? (
                   <circle cx={star.x} cy={star.y} r={star.r + 10} fill="none" strokeWidth={dropHot ? 2.5 : 1} strokeDasharray={dropHot ? undefined : "4 3"} className={dropHot ? "stroke-foreground" : "stroke-accent"} />
                 ) : null}
@@ -401,7 +408,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                     transform={`rotate(45 ${star.x} ${star.y})`}
                     strokeWidth={1.5}
                     strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${starClasses(star.state)}`}
+                    className={`core ${styles.nodeCore} ${starClasses(star.state)}`}
                   />
                 ) : (
                   <circle
@@ -410,14 +417,15 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                     r={star.r}
                     strokeWidth={1.5}
                     strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${starClasses(star.state)}`}
+                    className={`core ${styles.nodeCore} ${starClasses(star.state)}`}
                   />
                 )}
+                {lit ? <circle cx={star.x - star.r * 0.2} cy={star.y - star.r * 0.2} r={Math.max(1.3, star.r * 0.16)} className="fill-foreground" opacity={0.86} pointerEvents="none" /> : null}
                 {star.sharedWith.length > 0 ? <circle cx={star.x + star.r * 0.85} cy={star.y + star.r * 0.85} r={2.6} className="fill-foreground stroke-background" strokeWidth={1} /> : null}
                 {star.overdue > 0 ? <circle cx={star.x + star.r * 0.8} cy={star.y - star.r * 0.8} r={3} className="fill-destructive" /> : null}
                 {star.blocked > 0 ? <circle cx={star.x - star.r * 0.8} cy={star.y - star.r * 0.8} r={3} className="fill-warning" /> : null}
                 {label ? (
-                  <text x={star.x} y={star.y + star.r + 16} textAnchor="middle" className={`pointer-events-none text-[12px] ${hot.has(star.id) || star.depth === 0 ? "fill-foreground" : "fill-subtle-foreground"}`}>
+                  <text x={star.x} y={star.y + star.r + 18} textAnchor="middle" className={`pointer-events-none text-[13px] ${styles.starLabel} ${hot.has(star.id) || star.depth === 0 ? "fill-foreground" : "fill-subtle-foreground"}`}>
                     {label}
                   </text>
                 ) : null}
