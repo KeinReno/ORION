@@ -447,7 +447,8 @@ export function TasksPanel(): React.ReactElement {
           </Button>
         }
       >
-        <ExtensionSlot
+        {/* On a narrow panel the open task replaces the list: its filters would only push the editor down. */}
+        {editing && !splitDetail ? null : <ExtensionSlot
           name="tasks.views.bar"
           props={{
             workspaceId: workspace?.id,
@@ -463,8 +464,8 @@ export function TasksPanel(): React.ReactElement {
               chooseScope("all");
             }
           }}
-        />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        />}
+        <div className={cx("ml-auto flex flex-wrap items-center gap-2", editing && !splitDetail && "hidden")}>
           <div className="relative sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск задач" className="pl-8" />
@@ -504,7 +505,7 @@ export function TasksPanel(): React.ReactElement {
             />
           ) : null}
           {scope === "all" && projectChips.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex max-w-full flex-nowrap items-center gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible" role="group" aria-label="Фильтр по проекту">
               <FilterChip active={projectFilter === null} onClick={() => setProjectFilter(null)}>
                 Все
               </FilterChip>
@@ -515,7 +516,7 @@ export function TasksPanel(): React.ReactElement {
                   onClick={() => setProjectFilter(project.id)}
                   color={project.name}
                 >
-                  {project.name}
+                  <span className="block max-w-[11rem] truncate" title={project.name}>{project.name}</span>
                 </FilterChip>
               ))}
             </div>
@@ -678,7 +679,7 @@ export function TasksPanel(): React.ReactElement {
                   const hidden = column.tasks.length - shown.length;
                   if (column.tasks.length === 0) {
                     return (
-                      <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-micro text-subtle-foreground">
+                      <p className={cx("rounded-xl border border-dashed border-border px-3 text-center text-micro text-subtle-foreground", activeViewMeta ? "py-6" : "py-1.5")}>
                         Пусто
                       </p>
                     );

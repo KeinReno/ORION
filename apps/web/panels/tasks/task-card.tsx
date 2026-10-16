@@ -113,7 +113,7 @@ export function TaskCard({
         }
       }}
       className={cx(
-        "group flex cursor-pointer flex-col gap-2 rounded-2xl border bg-card px-3 py-card-row transition-colors hover:border-border-strong hover:bg-card-hover",
+        "group relative flex cursor-pointer flex-col gap-2 rounded-2xl border bg-card px-3 py-card-row transition-colors hover:border-border-strong hover:bg-card-hover",
         focused || selected ? "border-accent" : "border-border",
         nested && "ml-4",
         closed && "opacity-60"
@@ -170,7 +170,8 @@ export function TaskCard({
           </Tooltip>
         ) : null}
       </div>
-      <div className="hidden flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 sm:flex" onClick={(event) => event.stopPropagation()} role="presentation">
+      {/* Quick status moves appear over the card on hover/focus and reserve no height (the same moves are in the "⋯" menu). */}
+      <div className="absolute bottom-2 right-3 z-10 hidden flex-wrap justify-end gap-1 rounded-lg bg-card/95 p-0.5 opacity-0 shadow-md shadow-black/30 transition-opacity group-hover:opacity-100 focus-within:opacity-100 sm:flex" onClick={(event) => event.stopPropagation()} role="presentation">
         {TASK_STATUS_ORDER.filter((status) => status !== task.status).map((status) => <button key={status} type="button" onClick={() => onMove(status)} className="rounded-md border border-border px-1.5 py-0.5 text-micro text-muted-foreground hover:bg-white/5 hover:text-foreground">→ {TASK_STATUS_LABEL[status]}</button>)}
       </div>
     </div>
