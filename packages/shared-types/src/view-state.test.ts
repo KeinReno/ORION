@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notesViewStateSchema, readViewState, tasksViewStateSchema, type TasksViewState, viewStateKey, VIEW_STATE_VERSION, writeViewState } from "./view-state";
+import { notesViewStateSchema, readViewState, tasksViewStateSchema, type NotesViewState, type TasksViewState, viewStateKey, VIEW_STATE_VERSION, writeViewState } from "./view-state";
 
 function memory(): Storage {
   const map = new Map<string, string>();
@@ -45,7 +45,7 @@ describe("view state", () => {
     const s = memory();
     writeViewState(s, key, "tasks", tasksViewStateSchema, { ...tasks, projectFilter: "__none__" });
     expect(readViewState(s, key, "tasks", tasksViewStateSchema)?.projectFilter).toBe("__none__");
-    const notes = { view: "active", sort: "updated", groupByProject: false, tagFilters: [], tagMode: "any", projectFilter: "__none__", pinnedOnly: false, selectedId: null } as const;
+    const notes: NotesViewState = { view: "active", sort: "updated", groupByProject: false, tagFilters: [], tagMode: "any", projectFilter: "__none__", pinnedOnly: false, selectedId: null };
     writeViewState(s, key, "notes", notesViewStateSchema, notes);
     expect(readViewState(s, key, "notes", notesViewStateSchema)).toEqual(notes);
   });
