@@ -56,6 +56,8 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useViewState } from "../lib/use-view-state";
+import { notesViewStateSchema } from "@orion/shared-types";
 import { noteNumberLabel } from "@orion/shared-types";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
@@ -225,6 +227,25 @@ export function NotesPanel(): React.ReactElement {
   const selected = matchedSelected ?? (selectedSnapshotRef.current?.id === selectedId ? selectedSnapshotRef.current : null);
   const composing = selectedId === NEW_NOTE;
   const listHidden = twoPane && listCollapsed && (composing || selected !== null);
+
+  // Filters, sort and the open note survive a restart (never the text or the search query). A restored
+  // id is only an address: if the note is gone or not visible to this user, say so and open nothing.
+  const restoredView = useViewState("notes", notesViewStateSchema, workspace?.id,
+    { view, sort, groupByProject, tagFilters, tagMode, projectFilter, pinnedOnly, selectedId: selectedId === NEW_NOTE ? null : selectedId },
+    (saved) => {
+      setView(saved.view); setSort(saved.sort); setGroupByProject(saved.groupByProject); setTagFilters(saved.tagFilters);
+      setTagMode(saved.tagMode); setProjectFilter(saved.projectFilter); setPinnedOnly(saved.pinnedOnly);
+      if (saved.selectedId) { selectedIdRef.current = saved.selectedId; setSelectedId(saved.selectedId); }
+    });
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || !restoredView || !notes || isLoading) return;
+    staleChecked.current = true;
+    if (restoredView.selectedId && !notes.some((n) => n.id === restoredView.selectedId)) {
+      selectedIdRef.current = null; setSelectedId(null);
+      toast({ title: "Прежняя заметка недоступна", description: "Она удалена, перемещена или у вас больше нет доступа." });
+    }
+  }, [restoredView, notes, isLoading, toast]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {

@@ -23,6 +23,8 @@ import {
 import { motion, useReducedMotion } from "framer-motion";
 import { ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useViewState } from "../lib/use-view-state";
+import { tasksViewStateSchema } from "@orion/shared-types";
 import { useObjectNavigation } from "../lib/use-object-navigation";
 import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
@@ -200,6 +202,24 @@ export function TasksPanel(): React.ReactElement {
   const splitDetail = bodyWidth >= DETAIL_SPLIT_MIN;
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
+  // Filters, grouping and the open task survive a restart. A restored id is only an address:
+  // if the task is gone or no longer visible to this user, say so and open nothing.
+  const restoredView = useViewState("tasks", tasksViewStateSchema, workspace?.id,
+    { dueFilter, statusFilter, priorityFilter, groupBy, projectFilter, editingId },
+    (saved) => {
+      setDueFilter(saved.dueFilter); setStatusFilter(saved.statusFilter); setPriorityFilter(saved.priorityFilter);
+      setGroupBy(saved.groupBy); setProjectFilter(saved.projectFilter);
+      if (saved.editingId) { setEditingIdUnchecked(saved.editingId); setSelectedId(saved.editingId); }
+    });
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || !restoredView || !tasks) return;
+    staleChecked.current = true;
+    if (restoredView.editingId && !tasks.some((t) => t.id === restoredView.editingId)) {
+      setEditingIdUnchecked(null); setSelectedId(null);
+      toast({ title: "Прежняя задача недоступна", description: "Она удалена или у вас больше нет доступа." });
+    }
+  }, [restoredView, tasks, toast]);
 
   // Перетаскивание/«Вверх»/«Вниз» — ручной порядок (`sortOrder`), детали в
   // panels/tasks/subtasks.tsx, чтобы доска осталась про раскладку.
