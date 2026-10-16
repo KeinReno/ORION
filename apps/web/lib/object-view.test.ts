@@ -8,7 +8,7 @@ const ref = (entityType: SearchableEntityType, viewId = "detail"): ViewRef => ({
 
 describe("explicit object views", () => {
   it("addresses existing standalone editors and project views without copying records", () => {
-    for (const type of ["task", "note", "project", "list"] as const) expect(objectViewPanel(ref(type), workspaceId)).toBe(`${type}:${entityId}`);
+    for (const type of ["task", "note", "project", "list", "document"] as const) expect(objectViewPanel(ref(type), workspaceId)).toBe(`${type}:${entityId}`);
     expect(objectViewPanel(ref("project", "materials"), workspaceId)).toBe(`projectmaterials:${entityId}`);
     expect(objectViewPanel(ref("project", "plan"), workspaceId)).toBe(`projectplan:${entityId}`);
   });
@@ -16,7 +16,7 @@ describe("explicit object views", () => {
     expect(objectViewPanel(ref("note"), entityId)).toBeNull();
     expect(objectViewPanel(ref("note"), null)).toBeNull();
     for (const view of ["missing", "constructor", "toString", "__proto__"]) expect(objectViewPanel(ref("project", view), workspaceId)).toBeNull();
-    expect(objectViewPanel(ref("document"), workspaceId)).toBeNull();
+    expect(objectViewPanel(ref("event"), workspaceId)).toBeNull();
     expect(objectViewPanel(ref("note", "plan"), workspaceId)).toBeNull();
   });
   it("validates persisted/untrusted addresses and does not accept injected panel syntax", () => {

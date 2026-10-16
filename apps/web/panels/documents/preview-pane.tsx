@@ -10,6 +10,7 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
+import { ObjectOpenMenu } from "../../components/object-open-menu";
 
 export function PreviewPane({
   doc,
@@ -36,7 +37,13 @@ export function PreviewPane({
   const [name, setName] = useState(doc.name);
   const debouncedName = useDebouncedValue(name.trim(), 900);
   const dirty = name.trim() !== doc.name;
+  const [editorDirty, setEditorDirty] = useState(false);
+  const renameDirty = Boolean(onRename && dirty);
   const lastSent = useRef(doc.name);
+  useEffect(() => {
+    onEditorDirtyChange(editorDirty || renameDirty || renameBusy);
+    return () => onEditorDirtyChange(false);
+  }, [editorDirty, renameDirty, renameBusy, onEditorDirtyChange]);
 
   useEffect(() => {
     setName(doc.name);
@@ -77,6 +84,7 @@ export function PreviewPane({
           <p className="mt-1 text-2xs text-subtle-foreground">{formatBytes(doc.sizeBytes)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <ObjectOpenMenu view={{ object: { workspaceId: workspace?.id ?? "", entityType: "document", entityId: doc.id }, viewId: "detail" }} title={doc.name} />
           {onToggleList ? (
             <IconButton
               label={listCollapsed ? "Показать список файлов" : "Скрыть список файлов"}
@@ -138,7 +146,7 @@ export function PreviewPane({
             key={doc.id}
             workspaceId={workspace.id}
             doc={doc}
-            onDirtyChange={onEditorDirtyChange}
+            onDirtyChange={setEditorDirty}
             fallback={<FilePreview mime={doc.mimeType ?? ""} name={doc.name} url={url} onDownload={onDownload} className="h-full" />}
           />
         ) : (

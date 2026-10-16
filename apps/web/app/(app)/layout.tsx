@@ -466,7 +466,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
   const objectContext = useObjectContext(workspace?.id, activePanelId);
-  const editorContext = objectContext && ["task", "note"].includes(objectContext.entityType) ? objectContext : null;
+  const editorContext = objectContext && ["task", "note", "document"].includes(objectContext.entityType) ? objectContext : null;
   const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
   useEffect(() => { setInspectorOpen(false); setMobileContextOpen(false); }, [workspace?.id]);
   useEscapeKey(() => setDrawerOpen(false), compact && drawerOpen);
@@ -1025,7 +1025,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
           <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
           <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="hidden text-muted-foreground md:inline">{workspace.name}</span><span aria-hidden className="hidden px-2 md:inline">/</span>{editorContext?.title || activeDefinition?.label || "Рабочая область"}</div>
-          {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
+          {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : editorContext.entityType === "document" ? "документа" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
           <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
           <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
             { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },

@@ -102,7 +102,7 @@ export function ProjectMaterials({
     }
     for (const doc of documents ?? []) {
       if (doc.projectId !== project.id || doc.kind !== "file" || doc.deletedAt) continue;
-      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id) });
+      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id), view: { object: { workspaceId: workspaceId ?? "", entityType: "document", entityId: doc.id }, viewId: "detail" } });
     }
     for (const item of project.activity) {
       const kind = activityKind(item.type);

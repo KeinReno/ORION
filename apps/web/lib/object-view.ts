@@ -1,6 +1,6 @@
 import { viewRefSchema, type ViewRef } from "@orion/shared-types";
 
-const DETAIL_PANELS: Readonly<Record<string, string>> = { task: "task", note: "note", project: "project", list: "list" };
+const DETAIL_PANELS: Readonly<Record<string, string>> = { task: "task", note: "note", project: "project", list: "list", document: "document" };
 const PROJECT_VIEWS: Readonly<Record<string, string>> = { tasks: "projecttasks", materials: "projectmaterials", plan: "projectplan", access: "projectaccess" };
 
 /** Only registered standalone views, in this window's workspace. Never guess a panel from a title. */

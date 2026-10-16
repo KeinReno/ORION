@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-16T12:42:23.826Z",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "ace8ee61ca8123bd7faf6e3fac43ffddd5a7ae9c",
+  "scope": "Standalone active files through existing PreviewPane and documents.editor slot; shared opening commands",
+  "unit": {
+    "passed": 809,
+    "files": 105
+  },
+  "pluginContracts": {
+    "passed": 10,
+    "files": 1
+  },
+  "browser": {
+    "passed": 68,
+    "failed": 0,
+    "duration": "3.1m",
+    "stage": "final production build after desktop export",
+    "newDocumentScenarios": 3,
+    "profiles": [
+      "default-full",
+      "plugins-off"
+    ],
+    "web": "localhost:3110",
+    "api": "localhost:4100",
+    "database": "isolated 127.0.0.1:5547",
+    "accounts": "synthetic"
+  },
+  "verified": [
+    "DOCX plugin creation and standalone tab over same ID",
+    "failed content save preserves draft; retry writes saved bytes",
+    "background metadata 503 keeps existing editor mounted and draft intact",
+    "metadata 403 hides content; authorized retry restores viewer",
+    "1920→390→1920 retains draft; no page horizontal overflow at 390",
+    "compact navigation blocked while document dirty",
+    "reload and separate web window read saved DOCX text with original workspace and ID",
+    "plugins-off TXT view and unchanged original bytes",
+    "folder excluded from standalone opening menu",
+    "foreign and deleted file neutral unavailable state without filename/content",
+    "XLSX existing editor/table smoke; unchanged bytes and one original record"
+  ],
+  "typecheck": "passed",
+  "architecture": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": [
+      "CalendarPanel:361",
+      "DocumentsPanel:261"
+    ]
+  },
+  "desktopStaticExport": "passed; 47 pages; performed before final web build",
+  "productionBuild": "pnpm build passed (API/web)",
+  "databaseMigration": "none in this slice",
+  "dependencies": "unchanged",
+  "primaryCheckoutAndDatabase": "not modified",
+  "notVerified": [
+    "native Tauri runtime and physical monitors",
+    "complete format/formula/chart matrix",
+    "concurrent editors writing same file",
+    "durable recovery of unsaved document after forced termination",
+    "full backend integration suite"
+  ],
+  "remaining": [
+    "context back/forward history",
+    "serialized view-state and window recovery",
+    "full view catalog and remaining opening entry points/calendar grids",
+    "module visual migration",
+    "theme library/overrides/contrast matrix",
+    "native acceptance"
+  ]
+}
