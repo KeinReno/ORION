@@ -23,6 +23,7 @@ import {
 import { motion, useReducedMotion } from "framer-motion";
 import { ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useObjectNavigation } from "../lib/use-object-navigation";
 import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
@@ -184,7 +185,11 @@ export function TasksPanel(): React.ReactElement {
     }
   }
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingIdUnchecked] = useState<string | null>(null);
+  const allowObjectNavigation = useObjectNavigation(workspace?.id);
+  const setEditingId = useCallback((next: string | null) => {
+    if (allowObjectNavigation(next)) setEditingIdUnchecked(next);
+  }, [allowObjectNavigation]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
@@ -206,7 +211,7 @@ export function TasksPanel(): React.ReactElement {
       setEditingId(focusedTaskId);
       setSelectedId(focusedTaskId);
     }
-  }, [focusedTaskId]);
+  }, [focusedTaskId, setEditingId]);
 
   const projectSignal = useTasksProjectSignal();
   useEffect(() => {
@@ -322,7 +327,7 @@ export function TasksPanel(): React.ReactElement {
     }
   }, [tasks, groupBy, projectList, updateTask]);
 
-  // ↑/↓ moves the selection; Enter opens the detail Sheet.
+  // ↑/↓ moves the selection; Enter opens the persistent detail pane.
   // Shift+←/→ moves the selected card to the adjacent droppable column.
   // Skip while a modal/sheet/field is open so we don't steal keys from the form.
   useEffect(() => {
@@ -362,7 +367,7 @@ export function TasksPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, creating, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds]);
+  }, [panelVisible, creating, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds, setEditingId]);
 
   function confirmDelete(): void {
     const task = pendingDelete;
@@ -370,7 +375,7 @@ export function TasksPanel(): React.ReactElement {
     setPendingDelete(null);
     deleteTask.mutate(task.id, {
       onSuccess: () => {
-        setEditingId((cur) => (cur === task.id ? null : cur));
+        setEditingIdUnchecked((cur) => (cur === task.id ? null : cur));
         setSelectedId((cur) => (cur === task.id ? null : cur));
         toast({ title: "Задача удалена" });
       }

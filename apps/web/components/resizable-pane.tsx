@@ -24,6 +24,7 @@ export function ResizablePane({
   defaultWidth = 416,
   minWidth = 320,
   maxWidth = 840,
+  resizable = true,
   className,
   children
 }: {
@@ -31,6 +32,8 @@ export function ResizablePane({
   defaultWidth?: number;
   minWidth?: number;
   maxWidth?: number;
+  /** Disable sizing without remounting children when a detail pane becomes full width. */
+  resizable?: boolean;
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
@@ -90,15 +93,16 @@ export function ResizablePane({
   }
 
   return (
-    <div ref={ref} style={{ width }} className={cx("relative shrink-0", className)}>
+    <div ref={ref} style={resizable ? { width } : undefined} className={cx("relative", resizable ? "shrink-0" : "min-w-0 flex-1", className)}>
       <div
+        hidden={!resizable}
         role="separator"
         aria-orientation="vertical"
         aria-label="Ширина панели"
         aria-valuenow={width}
         aria-valuemin={minWidth}
         aria-valuemax={maxWidth}
-        tabIndex={0}
+        tabIndex={resizable ? 0 : -1}
         onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
         onDoubleClick={() => {

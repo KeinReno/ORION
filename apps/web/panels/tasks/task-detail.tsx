@@ -3,6 +3,7 @@
 import { ApiError } from "@orion/core";
 import { taskConflictSchema } from "@orion/shared-types";
 import {
+  usePublishObjectContext,
   useRunningTimer,
   useStartTimer,
   useStopTimer,
@@ -40,6 +41,7 @@ import { buildPanelDragId } from "../../lib/panel-drag";
 import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../../lib/panel-window";
 import { describeError } from "../../lib/error-message";
+import { useUnsavedDraft } from "../../lib/unsaved-drafts";
 import { relativeTime } from "../../lib/format";
 import {
   TASK_PRIORITY_LABEL,
@@ -113,6 +115,7 @@ export function TaskDetail({
   onDelete: () => void;
   onOpenTask: (taskId: string) => void;
 }): React.ReactElement {
+  const { toast } = useToast();
   const [fields, setFields] = useState<Fields>(() => fieldsFromTask(task));
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -145,6 +148,25 @@ export function TaskDetail({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const taskId = task.id;
+
+  const hasPendingChanges = saveState === "saving" || Boolean(conflict) || !sameFields(baseline.current, fields);
+  useUnsavedDraft(hasPendingChanges);
+  usePublishObjectContext({ workspaceId: workspaceId ?? "", entityType: "task", entityId: task.id,
+    title: fields.title || task.title, saveState: conflict ? "conflict" : saveState, hasPendingChanges });
+  useEffect(() => {
+    if (!hasPendingChanges) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasPendingChanges]);
+
+  function close(): void {
+    if (hasPendingChanges) {
+      toast({ title: "Изменения ещё не сохранены", description: "Дождитесь сохранения или устраните ошибку в задаче." });
+      return;
+    }
+    onClose();
+  }
 
   async function flush(): Promise<void> {
     if (timer.current) {
@@ -266,13 +288,13 @@ export function TaskDetail({
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-panel">
+    <section aria-label="Детали задачи" className="flex h-full min-h-0 flex-col bg-panel">
       <header
-        className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5"
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2.5"
         {...(standalone ? {} : panelDragHandleProps(buildPanelDragId("task", task.id)))}
       >
         {compact ? (
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button size="sm" variant="ghost" onClick={close}>
             <ArrowLeft className="h-4 w-4" /> Задачи
           </Button>
         ) : null}
@@ -280,7 +302,7 @@ export function TaskDetail({
           aria-label="Статус"
           value={fields.status}
           onChange={(event) => set("status", event.target.value as TaskStatus)}
-          className="w-auto !min-w-[10.5rem]"
+          className="min-w-0 flex-1 sm:flex-none sm:w-auto sm:!min-w-[10.5rem]"
         >
           {TASK_STATUS_ORDER.map((status) => (
             <option key={status} value={status}>
@@ -300,7 +322,7 @@ export function TaskDetail({
             items={menuItems}
           />
           {compact ? null : (
-            <IconButton label="Закрыть" size="sm" onClick={onClose}>
+            <IconButton label="Закрыть" size="sm" onClick={close}>
               <X className="h-4 w-4" />
             </IconButton>
           )}
@@ -323,7 +345,7 @@ export function TaskDetail({
         ) : null}
 
         {saveState === "error" && saveError ? (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-label text-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-label text-foreground">
             <span>{saveError}</span>
             <Button size="sm" variant="subtle" onClick={() => void flush()}>
               Повторить
@@ -331,9 +353,9 @@ export function TaskDetail({
           </div>
         ) : null}
 
-        {/* The save state sits above the title, not in the cramped header, so it never wraps. */}
+        {/* Keep save feedback by the title and allow errors to wrap in narrow panes. */}
         <div className="-mb-2 flex min-h-4 justify-end">
-          <AutosaveStatus state={saveState} className="whitespace-nowrap" />
+          <AutosaveStatus errorText="Не удалось сохранить — оставьте задачу открытой и повторите" state={saveState} className="min-w-0 text-right" />
         </div>
 
         <input
@@ -344,7 +366,7 @@ export function TaskDetail({
           className="w-full bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3">
           <Prop label="Срок">
             <Input type="datetime-local" value={fields.dueAt} onChange={(event) => set("dueAt", event.target.value)} />
           </Prop>
@@ -453,7 +475,7 @@ export function TaskDetail({
           {task.completedAt ? ` · завершено ${relativeTime(task.completedAt)}` : ""}
         </p>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -556,9 +578,8 @@ export function DetailSlot({
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  if (!split) return <div className={cx(className, "flex-1")}>{children}</div>;
   return (
-    <ResizablePane storageKey="orion.task-detail.width.v1" className={cx(className, "border-l")}>
+    <ResizablePane storageKey="orion.task-detail.width.v1" resizable={split} className={cx(className, split && "border-l")}>
       {children}
     </ResizablePane>
   );

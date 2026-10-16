@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-16T07:53:03.256044+00:00",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "4b9d87416f42a9f7c4313dfa229404319ace7626",
+  "unit": {
+    "passed": 803,
+    "files": 103
+  },
+  "browser": {
+    "passed": 55,
+    "failed": 0,
+    "target": "web production localhost:3110; synthetic accounts and isolated API:4100/PG:5547"
+  },
+  "architecture": "passed",
+  "typecheck": "passed; full check plus production build type checks",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": [
+      "CalendarPanel.tsx:357",
+      "DocumentsPanel.tsx:261"
+    ]
+  },
+  "webBuild": "passed; final build after desktop export",
+  "desktopStaticExport": "passed; built before final web build",
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "draftDurability": "editor kept mounted; no new durable local draft storage",
+  "regressionsVerified": [
+    "503 save failure retains fields",
+    "resize wide/narrow/wide retains failed draft",
+    "switch to another task blocked while pending",
+    "workspace switch cancellation retains draft",
+    "inactive dock tab does not override active context",
+    "CAS conflict and explicit keep-mine resolution",
+    "project inspector hides for task and returns on close",
+    "consecutive project-task saves use latest revision",
+    "390px editor and error reflow without horizontal overflow",
+    "legacy themes and default-full/plugins-off action inventory retained"
+  ],
+  "buildOrder": "desktop export -> web production build with test API -> next start -> browser checks; export uses .next internally"
+}

@@ -2,10 +2,11 @@
 
 import { KaidenLogo } from "../../components/kaiden-logo";
 
-import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
+import { ObjectContextScope, useObjectContext, useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
   AppBackground,
+  AutosaveStatus,
   DropdownMenu,
   IconButton,
   Sidebar,
@@ -108,7 +109,7 @@ function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[
 const panelComponents: Record<string, (props: IDockviewPanelProps) => React.ReactElement> = Object.fromEntries(
   panelRegistry.map((panel) => [
     panel.id,
-    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))
+    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api })))
   ])
 );
 
@@ -463,6 +464,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
+  const objectContext = useObjectContext(workspace?.id, activePanelId);
+  const taskContext = objectContext?.entityType === "task" ? objectContext : null;
   const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
   useEffect(() => { setInspectorOpen(false); setMobileContextOpen(false); }, [workspace?.id]);
   useEscapeKey(() => setDrawerOpen(false), compact && drawerOpen);
@@ -1006,14 +1009,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         ) : null}
         {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
           <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
-          <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="text-muted-foreground">{workspace.name}</span><span aria-hidden className="px-2">/</span>{activeDefinition?.label ?? "Рабочая область"}</div>
+          <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="hidden text-muted-foreground md:inline">{workspace.name}</span><span aria-hidden className="hidden px-2 md:inline">/</span>{taskContext?.title || activeDefinition?.label || "Рабочая область"}</div>
+          {taskContext ? <div role="status" aria-label="Сохранение задачи" className="hidden shrink-0 sm:block">{taskContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте задачу открытой и повторите" state={taskContext.saveState} />}</div> : null}
           <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
           <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
             { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
             ...layoutNames.map(name => ({ label: name, onSelect: () => applyLayout(name) })),
             { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
           ]} />
-          {activeProjectId ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
+          {activeProjectId && !taskContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
           <button type="button" aria-label="Учётная запись" onClick={() => leaveWorkbench("account")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
         </header> : null}
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -1027,7 +1031,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           <div className="min-h-0 min-w-0 flex-1">
             <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
           </div>
-          {precision && inspectorOpen && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
+          {precision && inspectorOpen && !taskContext && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
         </main>
       </div>
       <Sheet open={Boolean(precision && compact && mobileContextOpen)} onClose={() => setMobileContextOpen(false)} title="Навигация пространства" bare width="22rem">
@@ -1037,7 +1041,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={id => { requestWorkspaceSwitch(id); setMobileContextOpen(false); }} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
           onOpen={openContextProject} onClose={() => setMobileContextOpen(false)} />
       </Sheet>
-      <Sheet open={Boolean(precision && inspectorOpen && activeProjectId && !wideInspector)} onClose={() => setInspectorOpen(false)} title="Контекст проекта" bare width="22rem">
+      <Sheet open={Boolean(precision && inspectorOpen && !taskContext && activeProjectId && !wideInspector)} onClose={() => setInspectorOpen(false)} title="Контекст проекта" bare width="22rem">
         {activeProjectId ? <ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => { openContextProject(id, title, "open"); setInspectorOpen(false); }} onClose={() => setInspectorOpen(false)} /> : null}
       </Sheet>
       <ConfirmDialog

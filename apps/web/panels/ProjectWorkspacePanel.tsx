@@ -1,5 +1,6 @@
 "use client";
 
+import { useObjectNavigation } from "../lib/use-object-navigation";
 import {
   useArchiveProject,
   useCreateNote,
@@ -228,6 +229,7 @@ function ProjectWorkspace({
   const createNote = useCreateNote(notesOn ? workspaceId : undefined);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const allowObjectNavigation = useObjectNavigation(workspaceId);
 
   const [chosenTab, setChosenTab] = useState<ProjectTab>("overview");
   const [editing, setEditing] = useState(false);
@@ -286,6 +288,7 @@ function ProjectWorkspace({
   }
 
   function setTab(next: ProjectTab): void {
+    if (next !== tab && !allowObjectNavigation()) return;
     setChosenTab(next);
     try {
       localStorage.setItem(projectTabKey(project.id), next);
