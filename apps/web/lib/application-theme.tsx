@@ -1,7 +1,8 @@
 "use client";
 
 import { usePreferences, useSession } from "@orion/core-react";
-import { ThemeProvider, PRECISION_THEME } from "@orion/ui";
+import { ThemeProvider } from "@orion/ui";
+import { effectiveApplicationTheme } from "./effective-application-theme";
 import type { ReactNode } from "react";
 
 /** User-global scope, shared by the workbench and detached routes. Panel previews remain nested scopes. */
@@ -14,5 +15,5 @@ function SignedInTheme({ children }: { children: ReactNode }): React.ReactElemen
   const { data } = usePreferences();
   const precision = data?.theme === "kaiden-precision";
   return <ThemeProvider className="contents" flag={precision ? "kaiden-theme-v1" : undefined}
-    definition={precision ? PRECISION_THEME : undefined}>{children}</ThemeProvider>;
+    definition={effectiveApplicationTheme(data)}>{children}</ThemeProvider>;
 }

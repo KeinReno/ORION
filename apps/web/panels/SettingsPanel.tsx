@@ -526,7 +526,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     <option value="kaiden-precision">KAIDEN Precision — новая оболочка</option>
                   </Select>
                 </Field>
-                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Золотой акцент и плоские поверхности задаёт Precision. Плотность и положение меню настраиваются независимо.</p> : null}
+                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Precision задаёт структуру оболочки. Свою палитру можно сохранить и применить ниже. Плотность и положение меню настраиваются независимо.</p> : null}
                 {form.theme !== "kaiden-precision" ? <>
                 <Field label="Акцент">
                   <SegmentedControl<UserPreference["accent"]>

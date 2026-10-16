@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  themeDocumentSchema,
   DEFAULT_BACKGROUND_EFFECT_SETTINGS,
   sidebarFoldersSchema,
   sidebarOrderSchema,
@@ -11,7 +12,7 @@ import {
   type WorkspaceOrganization,
   type WorkspaceSphere
 } from "@orion/shared-types";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../common/prisma.service";
 import { NotificationPolicyService } from "../notifications/notification-policy.service";
@@ -37,8 +38,11 @@ export class SettingsService {
   async update(userId: string, input: UpdateUserPreferenceInput): Promise<UserPreference> {
     // Prisma's JSON columns want `Prisma.InputJsonValue`, not the plain typed
     // object the zod schema gives us — everything else passes through as-is.
+    const { customTheme, ...fields } = input;
     const data = {
-      ...input,
+      ...fields,
+      ...(customTheme !== undefined ? { customTheme: customTheme === null ? Prisma.DbNull : customTheme as Prisma.InputJsonValue } : {}),
+      ...(input.customTheme === null ? { customThemeEnabled: false } : {}),
       ...(input.backgroundEffectSettings ? { backgroundEffectSettings: input.backgroundEffectSettings as Prisma.InputJsonValue } : {}),
       ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {}),
       ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {})
@@ -180,6 +184,8 @@ function filterOrganization(
 
 function toDto(preference: {
   theme: string;
+  customTheme?: Prisma.JsonValue;
+  customThemeEnabled?: boolean;
   accent: string;
   density: string;
   backgroundStyle: string;
@@ -208,8 +214,11 @@ function toDto(preference: {
   openTabsMode: string;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
+  const parsedTheme = themeDocumentSchema.safeParse(preference.customTheme);
   return {
     ...preference,
+    customTheme: parsedTheme.success ? parsedTheme.data : null,
+    customThemeEnabled: parsedTheme.success && preference.customThemeEnabled === true,
     backgroundEffectSettings: mergeBackgroundEffectSettings(preference.backgroundEffectSettings),
     // A damaged value must not break the settings screen: read it defensively, fall back to no folders.
     sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],

@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-16T11:21:45.1840495Z",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "be5826163cee2089659931ddc96b037dba30a63d",
+  "scope": "One account-owned palette; explicit apply enables Precision",
+  "unit": {
+    "passed": 806,
+    "files": 104
+  },
+  "integration": {
+    "database": "isolated 127.0.0.1:5547",
+    "files": 2,
+    "passed": 8,
+    "suites": [
+      "custom-theme",
+      "user-hidden-modules"
+    ]
+  },
+  "browser": {
+    "fullRegression": {
+      "stage": "Before final export-validation guard",
+      "failed": 0,
+      "passed": 59
+    },
+    "web": "localhost:3110",
+    "api": "localhost:4100",
+    "finalFocused": {
+      "stage": "After export-validation guard and final desktop/web builds",
+      "failed": 0,
+      "passed": 5,
+      "suites": [
+        "saved-custom-theme",
+        "theme-preview"
+      ]
+    }
+  },
+  "typecheck": "passed before final export guard; final web/desktop builds also checked types",
+  "architecture": "passed",
+  "lint": {
+    "existingWarnings": [
+      "CalendarPanel:357",
+      "DocumentsPanel:261"
+    ],
+    "errors": 0
+  },
+  "apiBuild": "passed",
+  "migration": "applied only to isolated DB 5547",
+  "desktopStaticExport": "passed after final export guard, before web build",
+  "webProductionBuild": "passed after final export guard and desktop export",
+  "verified": [
+    "dark/light actual button and body colors",
+    "preview cancellation does not apply globally",
+    "503 keeps candidate and current palette; retry",
+    "fresh context with auth only restores server palette",
+    "reload",
+    "detached web window",
+    "reset synchronizes both windows and retains saved JSON",
+    "old preferences preserved",
+    "owner-only API",
+    "strict invalid document rejection",
+    "blank-name export shows alert"
+  ],
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "remaining": [
+    "multiple-theme library",
+    "other presets",
+    "workspace overrides",
+    "independent shell/palette selection",
+    "full module/contrast matrix"
+  ]
+}

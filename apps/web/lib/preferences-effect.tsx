@@ -1,7 +1,8 @@
 "use client";
 
 import { usePreferences, useSession } from "@orion/core-react";
-import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, themeVariables, type WebglBackgroundStyle } from "@orion/ui";
+import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, themeDocumentVariables, type WebglBackgroundStyle } from "@orion/ui";
+import { effectiveApplicationTheme } from "./effective-application-theme";
 import { useEffect, useState } from "react";
 
 const INTENSITY_OPACITY: Record<string, number> = { low: 0.5, medium: 0.85, high: 1 };
@@ -57,7 +58,12 @@ function AppearanceSync(): React.ReactElement | null {
     root.dataset.backgroundIntensity = data.backgroundIntensity;
     root.dataset.surface = data.surfaceStyle;
     root.dataset.orionDesign = data.theme === "kaiden-precision" ? "precision" : "legacy";
-    const precisionVariables = data.theme === "kaiden-precision" ? themeVariables("kaiden-precision") : {};
+    const effectiveTheme = effectiveApplicationTheme(data);
+    const precisionVariables = effectiveTheme ? themeDocumentVariables(effectiveTheme) : {};
+    if (effectiveTheme) {
+      root.dataset.orionPalette = effectiveTheme.id;
+      root.style.setProperty("color-scheme", effectiveTheme.baseMode);
+    }
     for (const [key, value] of Object.entries(precisionVariables)) root.style.setProperty(key, value);
     root.style.setProperty("--orion-panel-opacity", String(data.panelOpacity));
     root.style.setProperty("--orion-panel-blur", `${data.panelBlur}px`);
@@ -73,6 +79,8 @@ function AppearanceSync(): React.ReactElement | null {
     }
     return () => {
       delete root.dataset.orionDesign;
+      delete root.dataset.orionPalette;
+      root.style.removeProperty("color-scheme");
       for (const key of Object.keys(precisionVariables)) root.style.removeProperty(key);
     };
   }, [data]);

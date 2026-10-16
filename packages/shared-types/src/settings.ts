@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { themeDocumentSchema } from "./theme-document";
 
 // Existing values keep their original appearance; Precision is an explicit redesign opt-in.
 export const themePreferenceSchema = z.enum(["system", "dark", "light", "kaiden-precision"]);
@@ -99,6 +100,8 @@ export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
+  customTheme: themeDocumentSchema.nullable().optional(),
+  customThemeEnabled: z.boolean().optional(),
   accent: z.enum(["violet", "blue", "green", "amber", "rose"]),
   density: densityPreferenceSchema,
   backgroundStyle: backgroundStylePreferenceSchema,
@@ -138,7 +141,12 @@ export const userPreferenceSchema = z.object({
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;
 
-export const updateUserPreferenceInputSchema = userPreferenceSchema.partial();
+export const updateUserPreferenceInputSchema = userPreferenceSchema.partial().superRefine((input, ctx) => {
+  // Enabling must carry the document atomically; a racing clear can never leave a dangling active theme.
+  if (input.customThemeEnabled === true && !input.customTheme) {
+    ctx.addIssue({ code: "custom", path: ["customTheme"], message: "Для применения передайте сохранённую палитру." });
+  }
+});
 export type UpdateUserPreferenceInput = z.infer<typeof updateUserPreferenceInputSchema>;
 
 /**

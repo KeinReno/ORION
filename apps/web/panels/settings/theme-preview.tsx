@@ -1,5 +1,8 @@
 "use client";
 
+import { usePreferences, useUpdatePreferences } from "@orion/core-react";
+import { describeError } from "../../lib/error-message";
+
 import {
   ARCTIC_THEME, Button, Input, MAX_THEME_JSON_LENGTH, Modal, PRECISION_THEME,
   Select, Textarea, ThemeProvider, Tooltip, exportThemeDocument, parseThemeDocument,
@@ -49,8 +52,12 @@ function ThemeSample({ preview, onCancel }: { preview: boolean; onCancel: () => 
   );
 }
 
-/** Ephemeral Theme Engine slice. No preferences mutation or storage writes. */
+/** Preview stays local; only the explicit save/apply action writes user preferences. */
 export function ThemePreview(): React.ReactElement {
+  const preferences = usePreferences();
+  const updatePreferences = useUpdatePreferences();
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const saved = parseThemeDocument(preferences.data?.customTheme);
   const [selected, setSelected] = useState("precision");
   const [custom, setCustom] = useState<ThemeDocument | null>(null);
   const [preview, setPreview] = useState(false);
@@ -61,6 +68,7 @@ export function ThemePreview(): React.ReactElement {
   const ids = useId();
   const theme = selected === "custom" && custom ? custom : selected === "arctic" ? ARCTIC_THEME : PRECISION_THEME;
   const contrast = themeTextContrast(theme);
+  useEffect(() => setSaveMessage(null), [theme]);
 
   async function importTheme(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0];
@@ -80,8 +88,33 @@ export function ThemePreview(): React.ReactElement {
     finally { if (sequence === importSequence.current) setImporting(false); }
   }
 
+  async function saveAndApply(): Promise<void> {
+    setSaveMessage(null); setError(null);
+    try {
+      const candidate = parseThemeDocument(theme);
+      if (!candidate.ok) throw new Error(candidate.error);
+      const confirmed = await updatePreferences.mutateAsync({ theme: "kaiden-precision", customTheme: candidate.value, customThemeEnabled: true });
+      const stored = parseThemeDocument(confirmed.customTheme);
+      if (!confirmed.customThemeEnabled || confirmed.theme !== "kaiden-precision" || !stored.ok || exportThemeDocument(stored.value) !== exportThemeDocument(candidate.value)) {
+        throw new Error("Сервер не подтвердил запись темы. Проверьте версию API.");
+      }
+      setSaveMessage("Тема сохранена в учётной записи и применена.");
+    } catch (failure) { setError(`Не удалось сохранить тему. ${describeError(failure)}`); }
+  }
+
+  async function restorePalette(): Promise<void> {
+    setSaveMessage(null); setError(null);
+    try {
+      const confirmed = await updatePreferences.mutateAsync({ customThemeEnabled: false });
+      if (confirmed.customThemeEnabled !== false) throw new Error("Сервер не подтвердил возврат палитры.");
+      setSaveMessage("Стандартная палитра восстановлена. Ваша тема остаётся сохранённой.");
+    } catch (failure) { setError(`Не удалось вернуть палитру. ${describeError(failure)}`); }
+  }
+
   function exportTheme(): void {
-    const url = URL.createObjectURL(new Blob([exportThemeDocument(theme)], { type: "application/json;charset=utf-8" }));
+    const checked = parseThemeDocument(theme);
+    if (!checked.ok) { setError(checked.error); return; }
+    const url = URL.createObjectURL(new Blob([exportThemeDocument(checked.value)], { type: "application/json;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = `${theme.id}.json`;
@@ -94,8 +127,9 @@ export function ThemePreview(): React.ReactElement {
   return (
     <details className="border-t border-border pt-3">
       <summary className="cursor-pointer text-label text-foreground">Предпросмотр тем</summary>
-      <div className="mt-4 space-y-4" role="region" aria-label="Предпросмотр тем">
-        <p className="text-xs text-muted-foreground">Палитра применяется только к образцу ниже. Копия хранится до выхода из раздела «Внешний вид»; экспортируйте её, чтобы сохранить.</p>
+      <div className="mt-4" role="region" aria-label="Предпросмотр тем">
+      <fieldset disabled={updatePreferences.isPending} className="min-w-0 space-y-4">
+        <p className="text-xs text-muted-foreground">До нажатия «Сохранить и применить» цвета меняются только в образце. Применение включает оболочку Precision и сохраняет тему в вашей учётной записи. Несохранённая копия хранится до выхода из этого раздела; её можно экспортировать.</p>
         <label className="block space-y-1" htmlFor={`${ids}-preset`}>
           <span className="text-label">Палитра образца</span>
           <Select id={`${ids}-preset`} name="theme-preview-preset" value={selected} onChange={event => { ++importSequence.current; setImporting(false); setSelected(event.target.value); setError(null); }} className="w-full">
@@ -111,6 +145,8 @@ export function ThemePreview(): React.ReactElement {
           }}>{custom && selected !== "custom" ? "Заменить копию" : "Создать копию"}</Button>
           <Button type="button" size="sm" variant="outline" onClick={exportTheme}>Экспортировать тему</Button>
         </div>
+        {selected === "custom" && custom ? <label className="block space-y-1" htmlFor={`${ids}-custom-name`}><span className="text-label">Название темы</span><Input id={`${ids}-custom-name`} value={custom.name} maxLength={80} onChange={event => { ++importSequence.current; setImporting(false); setCustom(current => current ? { ...current, name: event.target.value } : null); }} /></label> : null}
+        {saved.ok ? <div className="space-y-2 text-label"><p>Сохранённая тема: {saved.value.name}{preferences.data?.customThemeEnabled && preferences.data.theme === "kaiden-precision" ? " · применяется" : " · не применяется"}</p><Button type="button" size="sm" variant="outline" disabled={updatePreferences.isPending} onClick={() => { ++importSequence.current; setImporting(false); setCustom(saved.value); setSelected("custom"); setError(null); }}>Загрузить сохранённую</Button></div> : null}
         <div className="grid grid-cols-2 gap-3">
           {EDITABLE_COLORS.map(({ key, label }) => <label key={key} className="block space-y-1" htmlFor={`${ids}-${key}`}>
             <span className="text-label">{label}</span>
@@ -122,16 +158,22 @@ export function ThemePreview(): React.ReactElement {
           <span className="text-label">Импортировать файл темы (.json)</span>
           <Input id={`${ids}-import`} name="theme-preview-import" type="file" accept=".json,application/json" disabled={importing} onChange={event => { void importTheme(event); }} />
         </label>
+        {saveMessage ? <p role="status" className="text-label text-muted-foreground">{saveMessage}</p> : null}
         {error ? <p role="alert" className="text-xs text-destructive">{error} Предыдущая палитра сохранена.</p> : null}
         <p className="text-xs text-muted-foreground">Контраст основного текста: {contrast.toFixed(1)}:1.{contrast < 4.5 ? " Ниже 4.5:1 — измените текст или поверхность." : ""}</p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => setPreview(value => !value)}>{preview ? "Отменить предпросмотр" : "Включить предпросмотр"}</Button>
           <Button type="button" size="sm" variant="subtle" onClick={() => { ++importSequence.current; setImporting(false); setSelected("precision"); setCustom(null); setPreview(false); setError(null); }}>Сбросить образец</Button>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" disabled={selected !== "custom" || !parseThemeDocument(theme).ok || importing || updatePreferences.isPending} onClick={() => void saveAndApply()}>{updatePreferences.isPending ? "Сохраняю…" : "Сохранить и применить"}</Button>
+          <Button type="button" size="sm" variant="outline" disabled={!preferences.data?.customThemeEnabled || updatePreferences.isPending} onClick={() => void restorePalette()}>Вернуть стандартную палитру</Button>
+        </div>
         <ThemeProvider inherit={!preview} flag={preview ? "kaiden-theme-v1" : undefined} definition={theme} className="rounded-lg border p-4"
           style={{ backgroundColor: "rgb(var(--kaiden-bg-canvas))", color: "rgb(var(--kaiden-text-primary))", borderColor: "rgb(var(--kaiden-border-default))" }}>
           <ThemeSample preview={preview} onCancel={() => setPreview(false)} />
         </ThemeProvider>
+      </fieldset>
       </div>
     </details>
   );
