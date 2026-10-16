@@ -11,7 +11,7 @@ import {
   useReminders
 } from "@orion/core-react";
 import { RELATION_KIND_CATALOG, type GlobalSearchResult, type SearchableEntityType } from "@orion/shared-types";
-import { Button, DropdownMenu, IconButton, Input, Skeleton, Textarea, cx, useToast } from "@orion/ui";
+import { Button, IconButton, Input, Skeleton, Textarea, cx, useToast } from "@orion/ui";
 import {
   Bell,
   CalendarDays,
@@ -22,7 +22,6 @@ import {
   Link2,
   ListChecks,
   ListTodo,
-  MoreHorizontal,
   PlusCircle,
   Receipt,
   StickyNote,
@@ -34,8 +33,8 @@ import {
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { computeLinkOptions, type EntityLinkOption } from "../lib/entity-link-options";
 import { describeError } from "../lib/error-message";
-import { openEntity, openObject, useObjectOpeningAvailable } from "../lib/panel-bus";
-import { objectViewPanel } from "../lib/object-view";
+import { openEntity } from "../lib/panel-bus";
+import { ObjectOpenMenu } from "./object-open-menu";
 
 const TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
   project: FolderKanban,
@@ -97,7 +96,6 @@ export function EntityLinksSection({
   const deleteLink = useDeleteEntityLink(workspaceId);
   const createAndLink = useCreateAndLink(workspaceId);
   const { toast } = useToast();
-  const objectOpeningAvailable = useObjectOpeningAvailable();
 
   // U03 Часть 1: "Создать задачу" / "Написать заметку" — a minimal inline
   // form whose submit goes through `createAndLink` (one atomic server
@@ -446,7 +444,6 @@ export function EntityLinksSection({
           {others.map((other) => {
             const Icon = TYPE_ICON[other.type];
             const view = { object: { workspaceId: workspaceId ?? "", entityType: other.type, entityId: other.id }, viewId: "detail" };
-            const standalone = objectOpeningAvailable && objectViewPanel(view, workspaceId ?? null) !== null;
             return (
               <li
                 key={other.link.id}
@@ -462,12 +459,7 @@ export function EntityLinksSection({
                   <span className="max-w-48 truncate">{other.title || "Без названия"}</span>
                   <span className="text-subtle-foreground">{TYPE_LABEL[other.type]}</span>
                 </button>
-                {standalone ? <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label={`Открытие: ${other.title || "Без названия"}`} size="sm" onClick={toggle}><MoreHorizontal className="h-3.5 w-3.5" /></IconButton>}
-                  items={[
-                    { label: "Открыть в новой вкладке", onSelect: () => openObject(view, "tab", other.title) },
-                    { label: "Открыть рядом", onSelect: () => openObject(view, "beside", other.title) },
-                    { label: "Открыть в отдельном окне", onSelect: () => openObject(view, "window", other.title) }
-                  ]} /> : null}
+                <ObjectOpenMenu view={view} title={other.title} />
                 <IconButton
                   label="Убрать связь"
                   size="sm"

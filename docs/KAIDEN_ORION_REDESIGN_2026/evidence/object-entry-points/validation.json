@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-16T11:55:17.7615072Z",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "9b47ed57807849cb4dd0ea1be4888d70bd0a252e",
+  "scope": "Common explicit object menu in search, project note materials, and linked records",
+  "unit": {
+    "passed": 809,
+    "files": 105
+  },
+  "pluginContracts": {
+    "passed": 10,
+    "files": 1
+  },
+  "browser": {
+    "stage": "final production build",
+    "database": "isolated 127.0.0.1:5547",
+    "web": "localhost:3110",
+    "api": "localhost:4100",
+    "passed": 63,
+    "failed": 0
+  },
+  "newScenarios": [
+    "default-full",
+    "plugins-off"
+  ],
+  "verified": [
+    "local menu survives server result replacement with changed label",
+    "search task opens standalone tab",
+    "search note opens beside failed task draft",
+    "keyboard Enter activates menu command",
+    "same note from project feed focuses existing editor",
+    "return to existing project materials and switch columns",
+    "column note opens separate window with original workspace and ID",
+    "source task draft retained across all transitions",
+    "retry saves original task",
+    "exactly one task and one note remain"
+  ],
+  "testResponseOverride": "Search response label changed only in synthetic browser route to prove server result rendered; database record unchanged",
+  "typecheck": "passed; final builds also checked final source",
+  "architecture": "passed",
+  "lint": {
+    "existingWarnings": [
+      "CalendarPanel:357",
+      "DocumentsPanel:261"
+    ],
+    "errors": 0
+  },
+  "desktopStaticExport": "passed before final production build",
+  "productionBuild": "pnpm build passed (API/web)",
+  "migration": "none",
+  "dependencies": "unchanged",
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "remaining": [
+    "calendar and other entry points",
+    "standalone document view",
+    "context back/forward history",
+    "view state and window recovery",
+    "full object/view catalog",
+    "mixed-space"
+  ]
+}
