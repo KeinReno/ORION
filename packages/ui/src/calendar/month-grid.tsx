@@ -16,6 +16,7 @@ import {
   startOfDay,
   WEEKDAY_LABELS,
   type CalendarItem,
+  type ItemContextHandler,
   type ReschedulePayload,
   type SlotCreatePayload
 } from "./shared";
@@ -36,6 +37,7 @@ interface MonthGridProps {
   today: Date;
   items: CalendarItem[];
   onItemClick?: (id: string) => void;
+  onItemContextMenu?: ItemContextHandler;
   onItemReschedule?: (id: string, payload: ReschedulePayload) => void;
   onSlotCreate?: (payload: SlotCreatePayload) => void;
   focusedId?: string | null;
@@ -53,6 +55,7 @@ export function MonthGrid({
   today,
   items,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   focusedId
@@ -87,6 +90,7 @@ export function MonthGrid({
             today={today}
             items={items}
             onItemClick={onItemClick}
+            onItemContextMenu={onItemContextMenu}
             onItemReschedule={onItemReschedule}
             onSlotCreate={onSlotCreate}
             focusedId={focusedId}
@@ -104,6 +108,7 @@ function WeekRow({
   today,
   items,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   focusedId,
@@ -113,7 +118,7 @@ function WeekRow({
   month: number;
   today: Date;
   compact: boolean;
-} & Pick<MonthGridProps, "items" | "onItemClick" | "onItemReschedule" | "onSlotCreate" | "focusedId">): React.ReactElement {
+} & Pick<MonthGridProps, "items" | "onItemClick" | "onItemContextMenu" | "onItemReschedule" | "onSlotCreate" | "focusedId">): React.ReactElement {
   const weekStartMs = startOfDay(week[0]).getTime();
   const weekEndMs = weekStartMs + 7 * 86_400_000;
 
@@ -179,6 +184,7 @@ function WeekRow({
                 <Pill
                   item={b.item}
                   onClick={onItemClick}
+                  onContextMenu={onItemContextMenu}
                   focused={b.item.id === focusedId}
                   draggable={Boolean(onItemReschedule) && calendarItemMode(b.item) !== "none"}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", b.item.id)}
@@ -230,6 +236,7 @@ function WeekRow({
                     key={item.id}
                     item={item}
                     onClick={onItemClick}
+                    onContextMenu={onItemContextMenu}
                     showTime
                     focused={item.id === focusedId}
                     draggable={Boolean(onItemReschedule) && calendarItemMode(item) !== "none"}
@@ -265,7 +272,7 @@ function WeekRow({
                           {day.getDate()} {MONTH_LABELS[day.getMonth()]}
                         </p>
                         {singles.map((item) => (
-                          <Pill key={item.id} item={item} onClick={onItemClick} showTime focused={item.id === focusedId} />
+                          <Pill key={item.id} item={item} onClick={onItemClick} onContextMenu={onItemContextMenu} showTime focused={item.id === focusedId} />
                         ))}
                       </div>
                     )}

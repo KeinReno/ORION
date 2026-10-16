@@ -64,6 +64,7 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
 import { ExtensionSlot } from "../lib/extensions/slot";
 import { ObjectOpenMenu } from "../components/object-open-menu";
+import { ObjectOpenPopup } from "../components/object-open-popup";
 
 const SOURCES_KEY = "orion.calendar.sources";
 
@@ -229,6 +230,8 @@ export function CalendarPanel(): React.ReactElement {
   const createNote = useCreateNote(notesOn ? wsId : undefined);
   const [selected, setSelected] = useState<Event | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // Grid views (month/week/day) have no room for a per-item button: right click / Menu key / Shift+F10.
+  const [gridMenu, setGridMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const focusedIdRef = useRef<string | null>(null);
   focusedIdRef.current = focusedId;
   const [pendingScope, setPendingScope] = useState<PendingScope | null>(null);
@@ -519,6 +522,12 @@ export function CalendarPanel(): React.ReactElement {
           <CalendarSkeleton />
         ) : (
           <>
+            {gridMenu ? (() => {
+              const item = items.find(candidate => candidate.id === gridMenu.id);
+              return item && (item.kind === "task" || item.kind === "note")
+                ? <ObjectOpenPopup view={{ object: { workspaceId: wsId ?? "", entityType: item.kind, entityId: item.id }, viewId: "detail" }} title={item.label} at={gridMenu} onClose={() => setGridMenu(null)} />
+                : null;
+            })() : null}
             <Calendar
               items={items}
               renderAgendaItemActions={item => {
@@ -528,6 +537,12 @@ export function CalendarPanel(): React.ReactElement {
               }}
               onRangeChange={setRange}
               onItemClick={openItem}
+              onItemContextMenu={(id, at) => {
+                const item = items.find(candidate => candidate.id === id);
+                if (!item || (item.kind !== "task" && item.kind !== "note")) return;
+                if ((item.kind === "task" && !tasksOn) || (item.kind === "note" && !notesOn)) return;
+                setGridMenu({ id, ...at });
+              }}
               onItemReschedule={reschedule}
               onSlotCreate={setNewSlot}
               focusedId={focusedId}

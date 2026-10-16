@@ -184,6 +184,18 @@ export const PALETTE_SWATCHES = PALETTE.map((p, i) => ({ key: `c${i}`, color: p.
 
 /* ------------------------------------------------------------------- Pill */
 
+/** Context-menu request for an item: right click, the Menu key or Shift+F10 on a focused item. */
+export type ItemContextHandler = (id: string, at: { x: number; y: number }) => void;
+
+/** Keyboard-opened context menus report (0, 0): anchor those to the element itself. */
+export function contextPoint(e: React.MouseEvent<HTMLElement>): { x: number; y: number } {
+  if (e.clientX === 0 && e.clientY === 0) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: rect.left, y: rect.bottom };
+  }
+  return { x: e.clientX, y: e.clientY };
+}
+
 export function Pill({
   item,
   onClick,
@@ -191,6 +203,7 @@ export function Pill({
   onDragStart,
   showTime = false,
   focused = false,
+  onContextMenu,
   className
 }: {
   item: CalendarItem;
@@ -199,6 +212,7 @@ export function Pill({
   onDragStart?: (e: React.DragEvent) => void;
   showTime?: boolean;
   focused?: boolean;
+  onContextMenu?: ItemContextHandler;
   className?: string;
 }): React.ReactElement {
   const style = item.overdue ? undefined : toneStyle(item.tone ?? "__event__");
@@ -218,6 +232,12 @@ export function Pill({
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(item.id);
+      }}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(item.id, contextPoint(e));
       }}
       title={item.label}
       style={style}

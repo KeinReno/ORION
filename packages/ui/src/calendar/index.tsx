@@ -14,11 +14,13 @@ import {
   startOfWeek,
   type CalendarItem,
   type CalendarView,
+  type ItemContextHandler,
   type ReschedulePayload,
   type SlotCreatePayload
 } from "./shared";
 
 export type {
+  ItemContextHandler,
   CalendarItem,
   CalendarView,
   ReschedulePayload,
@@ -31,6 +33,8 @@ export interface CalendarProps {
   view?: CalendarView;
   onViewChange?: (view: CalendarView) => void;
   onItemClick?: (id: string) => void;
+  /** Right click / Menu key / Shift+F10 on a grid item. The consumer owns the menu; Calendar knows no domain commands. */
+  onItemContextMenu?: ItemContextHandler;
   /** Move or resize — time-grid views send `end`, month/agenda send only `start`. */
   onItemReschedule?: (id: string, payload: ReschedulePayload) => void;
   /** Empty slot picked — a day (month) or a time range (week/day). */
@@ -62,6 +66,7 @@ export function Calendar({
   view: controlledView,
   onViewChange,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   onRangeChange,
@@ -217,6 +222,7 @@ export function Calendar({
           today={today}
           items={items}
           onItemClick={onItemClick}
+          onItemContextMenu={onItemContextMenu}
           onItemReschedule={onItemReschedule}
           onSlotCreate={onSlotCreate}
           focusedId={focusedId}
@@ -229,6 +235,7 @@ export function Calendar({
           today={today}
           items={items}
           onItemClick={onItemClick}
+          onItemContextMenu={onItemContextMenu}
           onItemReschedule={onItemReschedule}
           onSlotCreate={onSlotCreate}
           focusedId={focusedId}
