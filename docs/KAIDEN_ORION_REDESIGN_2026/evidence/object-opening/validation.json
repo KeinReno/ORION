@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-16T11:41:26.3446348Z",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "49d4442",
+  "scope": "Initial ObjectRef/ViewRef and explicit opening of linked standalone views in current workspace",
+  "unit": {
+    "passed": 809,
+    "stage": "after final source change",
+    "files": 105
+  },
+  "pluginContracts": {
+    "passed": 10,
+    "files": 1
+  },
+  "browser": {
+    "stage": "final production build",
+    "api": "localhost:4100",
+    "passed": 61,
+    "database": "isolated 127.0.0.1:5547",
+    "failed": 0,
+    "web": "localhost:3110"
+  },
+  "newBrowserScenarios": [
+    "default-full",
+    "plugins-off"
+  ],
+  "verified": [
+    "Enter activates linked-object command",
+    "note opens beside source task",
+    "failed task draft retained",
+    "repeat opening focuses existing note editor",
+    "note title saved through original API",
+    "separate window has original workspace and record ID",
+    "narrow transition blocked while source draft unsaved",
+    "retry saves retained task draft"
+  ],
+  "unitNegatives": [
+    "foreign workspace",
+    "missing workspace",
+    "unknown view",
+    "prototype keys",
+    "unsupported standalone entity type",
+    "malformed record ID",
+    "unrecognized view state fields"
+  ],
+  "typecheck": "passed; final desktop and production builds also checked final source types",
+  "architecture": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": [
+      "CalendarPanel:357",
+      "DocumentsPanel:261"
+    ]
+  },
+  "desktopStaticExport": "passed before final production build",
+  "productionBuild": "pnpm build passed: API and web",
+  "newDatabaseMigration": "none",
+  "dependencies": "unchanged",
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "limits": [
+    "no context back/forward history",
+    "no full view-state or window recovery",
+    "no mixed-space views",
+    "not all entry points migrated",
+    "document standalone view not added",
+    "single-panel detached host does not offer new dock commands"
+  ]
+}

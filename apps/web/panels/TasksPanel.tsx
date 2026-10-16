@@ -334,6 +334,9 @@ export function TasksPanel(): React.ReactElement {
     function onKey(event: KeyboardEvent): void {
       if (!panelVisible || creating || pendingDelete) return;
       if (isTypingTarget(event.target)) return;
+      // Native controls and menus own their keys. In particular, Enter on a
+      // linked-object command must not be swallowed by the list shortcut.
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest("button, a, [role=menu], [role=tablist]"))) return;
       if (event.key === "Escape" && editingIdRef.current) {
         setEditingId(null);
         return;

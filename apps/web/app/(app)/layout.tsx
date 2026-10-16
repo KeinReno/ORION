@@ -71,6 +71,7 @@ import {
   resolveDropAction
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
+import { objectViewPanel } from "../../lib/object-view";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -601,12 +602,26 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     [openPanel, applyNamedToApi]
   );
 
+  useEffect(() => registerPanelBus({ openPanel, openObject: (view, mode, title) => {
+        const panelId = objectViewPanel(view, getActiveWorkspaceId());
+        const definition = panelId ? getPanelDefinition(panelId) : undefined;
+        if (!panelId || !definition || !isPanelAvailable(definition, disabledModulesRef.current, pluginOverridesRef.current)
+          || (definition.id === "projecttasks" && !isModuleEnabled(disabledModulesRef.current, "tasks"))) {
+          navigationToast.current({ title: "Представление недоступно", description: "Проверьте текущее пространство и включённые модули." });
+          return;
+        }
+        if (mode === "window") {
+          void detachPanelToWindow(panelId, title ?? definition.label).catch(() => navigationToast.current({ title: "Не удалось открыть окно" }));
+        } else {
+          const referenceGroup = apiRef.current?.activeGroup;
+          placePanel(panelId, mode === "beside" && !compactRef.current && referenceGroup ? { referenceGroup, direction: "right" } : undefined, title);
+        }
+      } }), [openPanel, placePanel]);
+
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       const api = event.api;
       apiRef.current = api;
-      registerPanelBus({ openPanel });
-
       api.onDidActivePanelChange((panel) => setActivePanelId(panel?.id ?? null));
 
       // U06 (24-CONNECTED-CORE-BACKLOG.md) — sidebar drag→Dockview. This
@@ -677,7 +692,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }, 300);
       });
     },
-    [openPanel, placePanel, loadLayoutForKey, user, workspace]
+    [placePanel, loadLayoutForKey, user, workspace]
   );
 
   // U04: the sidebar's workspace `<select>` (and /spaces) switch the active

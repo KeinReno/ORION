@@ -52,3 +52,4 @@ export * from "./opportunity-profile";
 export * from "./opportunity-hh-import";
 
 export * from "./theme-document";
+export * from "./object-navigation";
