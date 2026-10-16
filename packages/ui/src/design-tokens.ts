@@ -76,7 +76,7 @@ export const PRECISION_TOKENS: DesignTokens = {
   "text-secondary": "178 176 169",
   "text-subtle": "166 164 159",
   "border-default": "65 66 72",
-  "border-strong": "98 99 106",
+  "border-strong": "102 103 110",
   "accent-base": "201 168 106",
   "accent-hover": "222 192 139",
   "accent-foreground": "22 23 26",

@@ -92,3 +92,32 @@ test("copy editing, JSON export/import and invalid import work with plugins disa
   await expect(region.getByRole("button", { name: "Включить предпросмотр", exact: true })).toBeVisible();
 });
 
+
+const PRESET_TEXT: Record<string, string> = {
+  obsidian: "rgb(236, 236, 238)", midnight: "rgb(234, 240, 250)", emerald: "rgb(238, 243, 240)", crimson: "rgb(244, 238, 239)"
+};
+test("every built-in preset previews its own palette without writing preferences", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const account = await register(request, "theme-presets");
+  await signIn(page, account);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
+  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+  await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
+  const region = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
+  const headers = { Authorization: `Bearer ${account.accessToken}` };
+  const before = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
+  const writes: string[] = [];
+  page.on("request", req => { if (req.url().endsWith("/settings/preferences") && ["PATCH", "POST", "PUT", "DELETE"].includes(req.method())) writes.push(req.method()); });
+  const select = region.getByRole("combobox", { name: "Палитра образца", exact: true });
+  await expect(select.locator("option")).toHaveText(["KAIDEN Precision", "Obsidian", "Midnight", "Emerald", "Crimson", "Arctic (светлая)"]);
+  await region.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
+  for (const [id, text] of Object.entries(PRESET_TEXT)) {
+    await select.selectOption(id);
+    const sample = region.locator(`[data-kaiden-theme="${id}"]`).first();
+    await expect(sample.getByLabel("Название образца", { exact: true })).toHaveCSS("color", text);
+    await page.screenshot({ path: `tmp/redesign/theme-preset-${id}.png` });
+  }
+  expect(writes).toEqual([]);
+  expect(await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json()).toEqual(before);
+});

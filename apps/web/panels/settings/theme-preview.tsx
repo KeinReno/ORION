@@ -4,7 +4,7 @@ import { usePreferences, useUpdatePreferences } from "@orion/core-react";
 import { describeError } from "../../lib/error-message";
 
 import {
-  ARCTIC_THEME, Button, Input, MAX_THEME_JSON_LENGTH, Modal, PRECISION_THEME,
+  Button, Input, MAX_THEME_JSON_LENGTH, Modal, PRECISION_THEME, THEME_PRESETS,
   Select, Textarea, ThemeProvider, Tooltip, exportThemeDocument, parseThemeDocument,
   themeTextContrast, useToast, withThemeColor, type ThemeColor, type ThemeDocument
 } from "@orion/ui";
@@ -53,6 +53,9 @@ function ThemeSample({ preview, onCancel }: { preview: boolean; onCancel: () => 
 }
 
 /** Preview stays local; only the explicit save/apply action writes user preferences. */
+/** The selector value of a built-in preset; Precision keeps its historical "precision" key. */
+const presetKey = (preset: ThemeDocument): string => (preset.id === PRECISION_THEME.id ? "precision" : preset.id);
+
 export function ThemePreview(): React.ReactElement {
   const preferences = usePreferences();
   const updatePreferences = useUpdatePreferences();
@@ -66,7 +69,7 @@ export function ThemePreview(): React.ReactElement {
   const importSequence = useRef(0);
   useEffect(() => () => { ++importSequence.current; }, []);
   const ids = useId();
-  const theme = selected === "custom" && custom ? custom : selected === "arctic" ? ARCTIC_THEME : PRECISION_THEME;
+  const theme = selected === "custom" && custom ? custom : THEME_PRESETS.find(preset => presetKey(preset) === selected) ?? PRECISION_THEME;
   const contrast = themeTextContrast(theme);
   useEffect(() => setSaveMessage(null), [theme]);
 
@@ -133,7 +136,7 @@ export function ThemePreview(): React.ReactElement {
         <label className="block space-y-1" htmlFor={`${ids}-preset`}>
           <span className="text-label">Палитра образца</span>
           <Select id={`${ids}-preset`} name="theme-preview-preset" value={selected} onChange={event => { ++importSequence.current; setImporting(false); setSelected(event.target.value); setError(null); }} className="w-full">
-            <option value="precision">KAIDEN Precision</option><option value="arctic">Arctic (светлая)</option>
+            {THEME_PRESETS.map(preset => <option key={preset.id} value={presetKey(preset)}>{preset.name}{preset.baseMode === "light" ? " (светлая)" : ""}</option>)}
             {custom ? <option value="custom">{custom.name}</option> : null}
           </Select>
         </label>

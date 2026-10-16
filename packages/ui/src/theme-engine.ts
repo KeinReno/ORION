@@ -25,7 +25,7 @@ export const PRECISION_THEME: ThemeDocument = {
   colors: {
     canvas: "#0f1012", surface: "#16171a", elevated: "#1d1e22", hover: "#27282d",
     textPrimary: "#f2f0ea", textSecondary: "#b2b0a9", textSubtle: "#a6a49f",
-    border: "#414248", borderStrong: "#62636a", accent: "#c9a86a", accentHover: "#dec08b",
+    border: "#414248", borderStrong: "#66676e", accent: "#c9a86a", accentHover: "#dec08b",
     accentForeground: "#16171a", focus: "#dec08b", success: "#10b981", warning: "#f59e0b",
     danger: "#f43f5e", info: "#60a5fa", tint: "#ffffff"
   }
@@ -40,6 +40,29 @@ export const ARCTIC_THEME: ThemeDocument = {
     danger: "#b42332", info: "#305c8c", tint: "#17212b"
   }
 };
+
+export const OBSIDIAN_THEME: ThemeDocument = {
+  schemaVersion: 1, id: "obsidian", name: "Obsidian", baseMode: "dark",
+  colors: { canvas: "#0e0e10", surface: "#151517", elevated: "#1c1c1f", hover: "#26262a", textPrimary: "#ececee", textSecondary: "#b0b0b6", textSubtle: "#a0a0a8", border: "#3f3f46", borderStrong: "#62626b", accent: "#a78bfa", accentHover: "#c4b5fd", accentForeground: "#14101f", focus: "#c4b5fd", success: "#34d399", warning: "#fbbf24", danger: "#fb7185", info: "#60a5fa", tint: "#ffffff" }
+};
+
+export const MIDNIGHT_THEME: ThemeDocument = {
+  schemaVersion: 1, id: "midnight", name: "Midnight", baseMode: "dark",
+  colors: { canvas: "#0a1020", surface: "#101a2e", elevated: "#172338", hover: "#1f2d47", textPrimary: "#eaf0fa", textSecondary: "#aebbd0", textSubtle: "#9aa9c0", border: "#3a4a66", borderStrong: "#5d7093", accent: "#6baaff", accentHover: "#94c2ff", accentForeground: "#08111f", focus: "#94c2ff", success: "#34d399", warning: "#fbbf24", danger: "#fb7185", info: "#60a5fa", tint: "#ffffff" }
+};
+
+export const EMERALD_THEME: ThemeDocument = {
+  schemaVersion: 1, id: "emerald", name: "Emerald", baseMode: "dark",
+  colors: { canvas: "#0e1210", surface: "#151b18", elevated: "#1c2420", hover: "#26312c", textPrimary: "#eef3f0", textSecondary: "#aebbb4", textSubtle: "#9eada5", border: "#3d4a43", borderStrong: "#5f7167", accent: "#34d399", accentHover: "#6ee7b7", accentForeground: "#06140e", focus: "#6ee7b7", success: "#4ade80", warning: "#fbbf24", danger: "#fb7185", info: "#60a5fa", tint: "#ffffff" }
+};
+
+export const CRIMSON_THEME: ThemeDocument = {
+  schemaVersion: 1, id: "crimson", name: "Crimson", baseMode: "dark",
+  colors: { canvas: "#120d0f", surface: "#1a1215", elevated: "#231a1d", hover: "#2f2226", textPrimary: "#f4eeef", textSecondary: "#bcadb0", textSubtle: "#aa9a9e", border: "#4a3a3f", borderStrong: "#78616a", accent: "#f0647a", accentHover: "#f68a9a", accentForeground: "#1a0a0e", focus: "#f68a9a", success: "#34d399", warning: "#fbbf24", danger: "#ff8a80", info: "#60a5fa", tint: "#ffffff" }
+};
+
+/** Built-in starting themes, in the order the preview selector shows them. */
+export const THEME_PRESETS: readonly ThemeDocument[] = [PRECISION_THEME, OBSIDIAN_THEME, MIDNIGHT_THEME, EMERALD_THEME, CRIMSON_THEME, ARCTIC_THEME];
 
 export type ThemeParseResult = { ok: true; value: ThemeDocument } | { ok: false; error: string };
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -102,12 +125,20 @@ export function themeDocumentVariables(theme: ThemeDocument): ThemeVariables {
   return variables;
 }
 
-export function themeTextContrast(theme: ThemeDocument): number {
-  const luminance = (hex: string): number => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+function relativeLuminance(hex: string): number {
+  return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map(n => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
     .reduce((sum, n, i) => sum + n * [0.2126, 0.7152, 0.0722][i], 0);
-  const a = luminance(theme.colors.textPrimary), b = luminance(theme.colors.surface);
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/** WCAG 2 contrast ratio of two #RRGGBB colors (1–21). */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a), lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+export function themeTextContrast(theme: ThemeDocument): number {
+  return contrastRatio(theme.colors.textPrimary, theme.colors.surface);
 }
 
 /** Color editor keeps the accent's hover/focus/foreground coherent; imports may specify them separately. */

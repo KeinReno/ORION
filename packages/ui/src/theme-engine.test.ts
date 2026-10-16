@@ -64,3 +64,35 @@ describe("data-only theme engine v1", () => {
     expect(() => themeDocumentVariables({ ...PRECISION_THEME, colors: { ...PRECISION_THEME.colors, accent: "var(--other)" } })).toThrow();
   });
 });
+
+import { THEME_PRESETS, contrastRatio } from "./theme-engine";
+
+describe("built-in presets meet the contrast rules of 04_DESIGN_SYSTEM_THEMES", () => {
+  it("has unique ids and roundtrips every preset", () => {
+    expect(new Set(THEME_PRESETS.map(t => t.id)).size).toBe(THEME_PRESETS.length);
+    expect(THEME_PRESETS.map(t => t.id)).toEqual(expect.arrayContaining(["kaiden-precision", "obsidian", "arctic", "midnight", "emerald", "crimson"]));
+    for (const theme of THEME_PRESETS) expect(parseThemeDocument(exportThemeDocument(theme))).toEqual({ ok: true, value: theme });
+  });
+  describe.each(THEME_PRESETS.map(t => [t.name, t] as const))("%s", (_name, t) => {
+    const c = t.colors;
+    it("text is >= 4.5:1 on every surface, including hover", () => {
+      for (const text of [c.textPrimary, c.textSecondary, c.textSubtle]) for (const bg of [c.canvas, c.surface, c.elevated, c.hover]) {
+        expect(contrastRatio(text, bg), `${text} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+    it("accent text/controls: accent on surface >= 3, foreground on accent and hover >= 4.5, focus ring >= 3", () => {
+      expect(contrastRatio(c.accent, c.surface)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(c.accentForeground, c.accent)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(c.accentForeground, c.accentHover)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(c.focus, c.surface)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(c.focus, c.canvas)).toBeGreaterThanOrEqual(3);
+    });
+    it("status colors and strong borders are >= 3:1 on the surface", () => {
+      for (const color of [c.success, c.warning, c.danger, c.info, c.borderStrong]) expect(contrastRatio(color, c.surface), color).toBeGreaterThanOrEqual(3);
+    });
+    it("mode matches the canvas luminance", () => {
+      const dark = contrastRatio(c.canvas, "#000000") < contrastRatio(c.canvas, "#ffffff");
+      expect(dark).toBe(t.baseMode === "dark");
+    });
+  });
+});
