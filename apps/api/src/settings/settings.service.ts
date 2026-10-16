@@ -26,13 +26,28 @@ export class SettingsService {
     private readonly workspaces: WorkspacesService
   ) {}
 
+  /**
+   * The user's preference row, created on first use. Several first requests of a new session (preferences,
+   * organization, …) arrive together and Prisma's upsert is not always a single atomic statement, so the
+   * loser of that race got a unique-constraint 500. It now treats P2002 as "someone else just created it".
+   */
+  private async preferenceRow(userId: string, data: Prisma.UserPreferenceUncheckedUpdateInput = {}) {
+    try {
+      return await this.prisma.userPreference.upsert({
+        where: { userId },
+        create: { userId, ...data } as Prisma.UserPreferenceUncheckedCreateInput,
+        update: data
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        return this.prisma.userPreference.update({ where: { userId }, data });
+      }
+      throw error;
+    }
+  }
+
   async get(userId: string): Promise<UserPreference> {
-    const preference = await this.prisma.userPreference.upsert({
-      where: { userId },
-      create: { userId },
-      update: {}
-    });
-    return toDto(preference);
+    return toDto(await this.preferenceRow(userId));
   }
 
   async update(userId: string, input: UpdateUserPreferenceInput): Promise<UserPreference> {
@@ -47,11 +62,7 @@ export class SettingsService {
       ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {}),
       ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {})
     };
-    const preference = await this.prisma.userPreference.upsert({
-      where: { userId },
-      create: { userId, ...data },
-      update: data
-    });
+    const preference = await this.preferenceRow(userId, data);
     // Reminder delivery reads a cached copy of these preferences (the crons
     // evaluate them per row) — a save must take effect on the next tick, not
     // "some time in the next minute".
@@ -70,7 +81,7 @@ export class SettingsService {
    */
   async getOrganization(userId: string): Promise<WorkspaceOrganization> {
     const [preference, memberWorkspaceIds] = await Promise.all([
-      this.prisma.userPreference.upsert({ where: { userId }, create: { userId }, update: {} }),
+      this.preferenceRow(userId),
       this.currentWorkspaceIds(userId)
     ]);
     return filterOrganization(preference, memberWorkspaceIds);
@@ -122,7 +133,7 @@ export class SettingsService {
 
   async setWorkspaceFavorite(userId: string, workspaceId: string, favorite: boolean): Promise<WorkspaceOrganization> {
     await this.workspaces.assertMember(userId, workspaceId);
-    const preference = await this.prisma.userPreference.upsert({ where: { userId }, create: { userId }, update: {} });
+    const preference = await this.preferenceRow(userId);
     const current = new Set(preference.favoriteWorkspaceIds);
     if (favorite) current.add(workspaceId);
     else current.delete(workspaceId);
@@ -144,7 +155,7 @@ export class SettingsService {
     userId: string,
     mutate: (spheres: WorkspaceSphere[]) => WorkspaceSphere[]
   ): Promise<WorkspaceOrganization> {
-    const preference = await this.prisma.userPreference.upsert({ where: { userId }, create: { userId }, update: {} });
+    const preference = await this.preferenceRow(userId);
     const spheres = parseSpheres(preference.spheres);
     const next = mutate(spheres);
     if (next.length > 50) throw new BadRequestException("Слишком много сфер");
