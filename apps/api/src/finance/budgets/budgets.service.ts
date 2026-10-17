@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { Budget, CreateBudgetInput, UpdateBudgetInput } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
-import { assertCategoryInWorkspace, budgetCarryOverTx, budgetSpentTx, firstOfMonth, monthRange } from "../finance-refs.util";
+import { assertCategoryInWorkspace, budgetCarryOverTx, budgetSpentTx, firstOfMonth, monthRange, primaryCurrencyTx } from "../finance-refs.util";
 
 @Injectable()
 export class BudgetsService {
@@ -14,7 +14,7 @@ export class BudgetsService {
 
   /**
    * `spent` is computed per budget (sum of that budget's category's expense
-   * transactions within its month) rather than with one combined query —
+   * lines within its month, from accounts in the budget's currency) rather than with one combined query —
    * budgets can span different months, and a personal workspace has few
    * enough of them that the N+1 here is simpler than it's worth optimising.
    */
@@ -27,7 +27,7 @@ export class BudgetsService {
       const budgets = await tx.budget.findMany({ where, orderBy: { month: "desc" } });
       const withSpent: Budget[] = [];
       for (const budget of budgets) {
-        const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
+        const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month, budget.currency);
         const carry = await budgetCarryOverTx(tx, workspaceId, budget);
         withSpent.push(toDto(budget, spent, carry));
       }
@@ -41,14 +41,23 @@ export class BudgetsService {
       const budget = await this.prisma.withUser(userId, async (tx) => {
         await this.workspaces.assertMemberTx(tx, userId, workspaceId);
         await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
+        // No currency given (an older client) → the workspace's primary one, not a blind RUB.
+        const currency = input.currency ?? (await primaryCurrencyTx(tx, workspaceId));
         return tx.budget.create({
-          data: { workspaceId, categoryId: input.categoryId, month, limitAmount: input.limitAmount, rollover: input.rollover ?? false }
+          data: {
+            workspaceId,
+            categoryId: input.categoryId,
+            month,
+            limitAmount: input.limitAmount,
+            currency,
+            rollover: input.rollover ?? false
+          }
         });
       });
       return toDto(budget, 0, 0);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictException("Бюджет для этой категории на этот месяц уже есть");
+        throw new ConflictException("Бюджет для этой категории на этот месяц в этой валюте уже есть");
       }
       throw error;
     }
@@ -59,7 +68,7 @@ export class BudgetsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, budgetId);
       const budget = await tx.budget.update({ where: { id: budgetId }, data: input });
-      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
+      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month, budget.currency);
       const carry = await budgetCarryOverTx(tx, workspaceId, budget);
       return { budget, spent, carry };
     });
@@ -82,7 +91,15 @@ export class BudgetsService {
   }
 }
 
-type BudgetRow = { id: string; workspaceId: string; categoryId: string; month: Date; limitAmount: number; rollover: boolean };
+type BudgetRow = {
+  id: string;
+  workspaceId: string;
+  categoryId: string;
+  month: Date;
+  limitAmount: number;
+  currency: string;
+  rollover: boolean;
+};
 
 function toDto(budget: BudgetRow, spent: number, carryOver: number): Budget {
   return {
@@ -91,6 +108,7 @@ function toDto(budget: BudgetRow, spent: number, carryOver: number): Budget {
     categoryId: budget.categoryId,
     month: budget.month.toISOString(),
     limitAmount: budget.limitAmount,
+    currency: budget.currency,
     rollover: budget.rollover,
     carryOver,
     spent

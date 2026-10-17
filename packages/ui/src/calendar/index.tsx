@@ -26,7 +26,7 @@ export type {
   ReschedulePayload,
   SlotCreatePayload
 } from "./shared";
-export { PALETTE_SWATCHES, calendarItemMode, toneStyle } from "./shared";
+export { PALETTE_SWATCHES, allDayAnchor, allDayDateISO, calendarItemMode, toneStyle } from "./shared";
 
 export interface CalendarProps {
   items: CalendarItem[];

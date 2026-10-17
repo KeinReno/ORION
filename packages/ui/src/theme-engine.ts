@@ -27,7 +27,7 @@ export const PRECISION_THEME: ThemeDocument = {
     textPrimary: "#f2f0ea", textSecondary: "#b2b0a9", textSubtle: "#a6a49f",
     border: "#414248", borderStrong: "#66676e", accent: "#c9a86a", accentHover: "#dec08b",
     accentForeground: "#16171a", focus: "#dec08b", success: "#10b981", warning: "#f59e0b",
-    danger: "#f43f5e", info: "#60a5fa", tint: "#ffffff"
+    danger: "#fb7185", info: "#60a5fa", tint: "#ffffff"
   }
 };
 export const ARCTIC_THEME: ThemeDocument = {
@@ -133,6 +133,7 @@ export function themeDocumentVariables(theme: ThemeDocument): ThemeVariables {
   variables["--orion-success"] = rgb(c.success);
   variables["--orion-warning"] = rgb(c.warning);
   variables["--orion-danger"] = rgb(c.danger);
+  variables["--orion-danger-fill"] = rgb(fillUnderWhite(c.danger));
   // Inline code in the markdown editor is a pale violet on dark; on a light surface it follows the secondary text.
   if (parsed.value.baseMode === "light") variables["--orion-code-text"] = rgb(c.textSecondary);
   variables["--orion-tone-scale"] = parsed.value.baseMode === "light" ? "0.3" : "1"; // calendar tone pills
@@ -150,6 +151,21 @@ function relativeLuminance(hex: string): number {
   return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map(n => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
     .reduce((sum, n, i) => sum + n * [0.2126, 0.7152, 0.0722][i], 0);
+}
+
+/**
+ * The palette's danger colour is tuned for text on the palette's surface; a solid badge with white text on it needs
+ * a darker shade. Darken in small steps until white reaches 4.5:1 (a light palette's red usually already does and is
+ * returned unchanged). The dominant channel darkens slowest, so a pink turns into a deeper red rather than brown.
+ */
+function fillUnderWhite(hex: string): string {
+  const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const top = Math.max(...channels);
+  for (let k = 1; k > 0; k -= 0.02) {
+    const shade = "#" + channels.map(n => Math.round(n * (n === top ? k ** 0.35 : k)).toString(16).padStart(2, "0")).join("");
+    if (contrastRatio("#ffffff", shade) >= 4.5) return shade;
+  }
+  return "#000000";
 }
 
 /** WCAG 2 contrast ratio of two #RRGGBB colors (1–21). */

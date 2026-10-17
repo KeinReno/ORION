@@ -4,7 +4,7 @@ import type { Event, Project, RecurrenceSpec } from "@orion/shared-types";
 import { Button, Input, PALETTE_SWATCHES, Select, Textarea } from "@orion/ui";
 import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { fromDateInput, toDateInput } from "../lib/date-input";
+import { toDateInput } from "../lib/date-input";
 import { ExtensionSlot } from "../lib/extensions/slot";
 import { fromDatetimeLocal, toDatetimeLocal } from "../lib/format";
 
@@ -34,6 +34,36 @@ export interface EventFormValues {
   projectId: string | null;
 }
 
+
+/*
+ * All-day dates are date-only (Event.startAt/endAt = UTC midnights, endAt
+ * exclusive — see shared-types event.ts). The form edits them as plain
+ * "YYYY-MM-DD" strings with an INCLUSIVE last day, which is what a person
+ * means by «Конец», and converts at the edges only:
+ *  - reading a stored all-day value → its UTC date (not the local one, which
+ *    is the previous day for anyone west of UTC);
+ *  - writing → UTC midnight of that date (not local midnight, which is the
+ *    previous UTC day for anyone east of UTC — Moscow included).
+ */
+const DAY_MS = 86_400_000;
+
+function utcDateInput(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function dateInputToUtcIso(value: string): string {
+  return `${value}T00:00:00.000Z`;
+}
+
+function nextDateInput(value: string): string {
+  return utcDateInput(new Date(new Date(dateInputToUtcIso(value)).getTime() + DAY_MS).toISOString());
+}
+
+/** Inclusive last day of a stored all-day range (endAt is exclusive). */
+function lastDayInput(startIso: string, endIso: string): string {
+  const last = new Date(new Date(endIso).getTime() - DAY_MS);
+  return last.getTime() < new Date(startIso).getTime() ? utcDateInput(startIso) : utcDateInput(last.toISOString());
+}
 
 export function EventForm({
   initial,
@@ -70,6 +100,13 @@ export function EventForm({
   const [allDay, setAllDay] = useState(initial?.allDay ?? defaultAllDay);
   const [start, setStart] = useState(startSeed);
   const [end, setEnd] = useState(endSeed);
+  // Seeds that are already date-only (an all-day event, or an all-day slot
+  // from the «весь день» band) are read by UTC date; timed seeds by local date.
+  const seedIsDateOnly = initial ? initial.allDay : defaultAllDay;
+  const [startDate, setStartDate] = useState(() => (seedIsDateOnly ? utcDateInput(startSeed) : toDateInput(startSeed)));
+  const [lastDate, setLastDate] = useState(() =>
+    seedIsDateOnly ? lastDayInput(startSeed, endSeed) : toDateInput(startSeed)
+  );
   const [colorTag, setColorTag] = useState(initial?.colorTag ?? "");
   const [projectId, setProjectId] = useState(initial?.projectId ?? "");
   const [reminders, setReminders] = useState<number[]>(initial?.reminders ?? []);
@@ -77,13 +114,34 @@ export function EventForm({
   // The rule is edited by the calendar-recurrence plugin's section; without it the stored rule is kept as is.
   const [recurrence, setRecurrence] = useState<RecurrenceSpec | null>(initial?.recurrence ?? null);
 
+  // Switching modes carries the chosen day across instead of reinterpreting
+  // the other mode's value (a UTC-midnight all-day start read as a timed
+  // instant is 03:00 in Moscow, 17:00 the day before in California).
+  function toggleAllDay(next: boolean): void {
+    if (next) {
+      const first = toDateInput(start);
+      const last = toDateInput(end);
+      setStartDate(first);
+      setLastDate(last < first ? first : last);
+    } else {
+      const [y, m, d] = startDate.split("-").map(Number);
+      const nine = new Date(y, m - 1, d, 9, 0, 0);
+      setStart(nine.toISOString());
+      setEnd(new Date(nine.getTime() + 3_600_000).toISOString());
+    }
+    setAllDay(next);
+  }
+
   function submit(event: FormEvent): void {
     event.preventDefault();
     if (!title.trim()) return;
-    const startISO = allDay ? fromDateInput(toDateInput(start)) : start;
-    let endISO = allDay ? fromDateInput(toDateInput(end)) : end;
-    if (new Date(endISO).getTime() <= new Date(startISO).getTime()) {
-      endISO = new Date(new Date(startISO).getTime() + (allDay ? 86_400_000 : 3_600_000)).toISOString();
+    let startISO = start;
+    let endISO = end;
+    if (allDay) {
+      startISO = dateInputToUtcIso(startDate);
+      endISO = dateInputToUtcIso(nextDateInput(lastDate < startDate ? startDate : lastDate));
+    } else if (new Date(endISO).getTime() <= new Date(startISO).getTime()) {
+      endISO = new Date(new Date(startISO).getTime() + 3_600_000).toISOString();
     }
     void onSubmit({
       title: title.trim(),
@@ -111,7 +169,7 @@ export function EventForm({
       />
 
       <label className="flex items-center gap-2 text-2xs text-subtle-foreground">
-        <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+        <input type="checkbox" checked={allDay} onChange={(e) => toggleAllDay(e.target.checked)} />
         Весь день
       </label>
 
@@ -119,7 +177,15 @@ export function EventForm({
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Начало
           {allDay ? (
-            <Input type="date" value={toDateInput(start)} onChange={(e) => setStart(fromDateInput(e.target.value))} />
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                setStartDate(e.target.value);
+                if (lastDate < e.target.value) setLastDate(e.target.value);
+              }}
+            />
           ) : (
             <Input
               type="datetime-local"
@@ -131,7 +197,12 @@ export function EventForm({
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Конец
           {allDay ? (
-            <Input type="date" value={toDateInput(end)} onChange={(e) => setEnd(fromDateInput(e.target.value))} />
+            <Input
+              type="date"
+              value={lastDate}
+              min={startDate}
+              onChange={(e) => e.target.value && setLastDate(e.target.value)}
+            />
           ) : (
             <Input
               type="datetime-local"

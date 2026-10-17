@@ -1221,16 +1221,22 @@ model Budget {
   workspaceId String
   categoryId  String
   /// First-of-month, 00:00 — a real DateTime (not a "YYYY-MM" string) so it
-  /// sorts and compares natively, one per category per month.
+  /// sorts and compares natively, one per category per month and currency.
   month       DateTime
   limitAmount Int
   /// Envelope mode: what was left unspent in the previous month's budget of this category is added to this month's limit.
   rollover    Boolean  @default(false)
+  /// ISO 4217 code the limit is in; `spent` counts only expense lines from
+  /// accounts in this currency (see budgetSpentTx), and rollover inherits only
+  /// from the previous month's budget of the same category AND currency. One
+  /// budget per category, month and currency — a workspace with RUB and USD
+  /// accounts can cap both.
+  currency    String   @default("RUB")
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category  FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@unique([categoryId, month])
+  @@unique([categoryId, month, currency])
   @@index([workspaceId])
   @@map("finance_budgets")
 }

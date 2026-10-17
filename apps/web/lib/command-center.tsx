@@ -372,7 +372,7 @@ export function CommandCenter(): React.ReactElement {
 
   return (
     <>
-      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="md">
+      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="md" returnFocus={false}>
         <div className="space-y-3">
           <Input
             autoFocus

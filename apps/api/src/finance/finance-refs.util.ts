@@ -1,5 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { primaryAccountCurrency } from "@orion/shared-types";
 
 /**
  * Three of the five finance services reference an Account and/or a
@@ -70,7 +71,8 @@ export function firstOfMonth(date: Date): Date {
 }
 
 /**
- * Sum of expense-line amounts for a category within one calendar month.
+ * Sum of expense-line amounts for a category within one calendar month, in
+ * one currency.
  * Filters on the *line's* categoryId (v0.9 — a split transaction can put only
  * part of its total against this category) via a Prisma relation filter on the
  * parent transaction, rather than a raw join.
@@ -78,18 +80,22 @@ export function firstOfMonth(date: Date): Date {
  * Shared since v0.16 by BudgetsService (the `spent` it returns) and
  * BudgetAlertsService (the overrun check after a new expense) — two copies of
  * this rule would eventually disagree about what "spent" means.
+ *
+ * Only the budget's own currency counts: a USD expense is not "spent" out of a
+ * RUB limit (an expense's currency is its source account's).
  */
 export async function budgetSpentTx(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   categoryId: string,
-  month: Date
+  month: Date,
+  currency: string
 ): Promise<number> {
   const range = monthRange(toMonthKey(month)) as { start: Date; end: Date };
   const sum = await tx.transactionLine.aggregate({
     where: {
       categoryId,
-      transaction: { workspaceId, type: "expense", occurredAt: { gte: range.start, lt: range.end } }
+      transaction: { workspaceId, type: "expense", occurredAt: { gte: range.start, lt: range.end }, account: { currency } }
     },
     _sum: { amount: true }
   });
@@ -100,24 +106,37 @@ const MAX_ROLLOVER_MONTHS = 12;
 
 /**
  * What a budget inherits from earlier months. Only a budget with `rollover` inherits, and only from the budget of the
- * SAME category in the month right before it (a month without a budget breaks the chain — nothing is guessed). Only
+ * SAME category and SAME currency in the month right before it (a month without such a budget breaks the chain —
+ * nothing is guessed, and a USD leftover never tops up a RUB limit). Only
  * a positive leftover is carried; an overspend is not charged to the next month. Capped at a year of chain.
  */
 export async function budgetCarryOverTx(
   tx: Prisma.TransactionClient,
   workspaceId: string,
-  budget: { categoryId: string; month: Date; rollover: boolean },
+  budget: { categoryId: string; month: Date; currency: string; rollover: boolean },
   depth = 0
 ): Promise<number> {
   if (!budget.rollover || depth >= MAX_ROLLOVER_MONTHS) return 0;
   const previousMonth = new Date(Date.UTC(budget.month.getUTCFullYear(), budget.month.getUTCMonth() - 1, 1));
-  const previous = await tx.budget.findUnique({ where: { categoryId_month: { categoryId: budget.categoryId, month: previousMonth } } });
+  const previous = await tx.budget.findUnique({
+    where: { categoryId_month_currency: { categoryId: budget.categoryId, month: previousMonth, currency: budget.currency } }
+  });
   if (!previous || previous.workspaceId !== workspaceId) return 0;
   const [carry, spent] = await Promise.all([
     budgetCarryOverTx(tx, workspaceId, previous, depth + 1),
-    budgetSpentTx(tx, workspaceId, previous.categoryId, previous.month)
+    budgetSpentTx(tx, workspaceId, previous.categoryId, previous.month, previous.currency)
   ]);
   return Math.max(0, previous.limitAmount + carry - spent);
+}
+
+/**
+ * The workspace's primary currency (`primaryAccountCurrency`: the one most of its live accounts are in) — what a
+ * budget created without an explicit currency is denominated in. RLS applies: a member sees only the accounts
+ * visible to them, which is also the set their figures are built from.
+ */
+export async function primaryCurrencyTx(tx: Prisma.TransactionClient, workspaceId: string): Promise<string> {
+  const accounts = await tx.account.findMany({ where: { workspaceId }, select: { currency: true, archivedAt: true } });
+  return primaryAccountCurrency(accounts);
 }
 
 /**

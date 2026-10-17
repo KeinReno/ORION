@@ -119,7 +119,7 @@ export function NotificationBell({ size = "md" }: { size?: "sm" | "md" }): React
               <span
                 aria-hidden
                 className={cx(
-                  "absolute flex items-center justify-center rounded-full bg-destructive font-semibold text-white ring-2 ring-background",
+                  "absolute flex items-center justify-center rounded-full bg-destructive-fill font-semibold text-white ring-2 ring-background",
                   size === "sm"
                     ? "right-0 top-0 h-3 min-w-3 px-0.5 text-[0.5rem] leading-none"
                     : "right-0 top-0 h-3.5 min-w-3.5 px-0.5 text-[0.5625rem] leading-none"

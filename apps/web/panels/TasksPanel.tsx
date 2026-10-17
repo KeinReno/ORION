@@ -1,6 +1,15 @@
 "use client";
 
-import { useCreateTask, useDeleteTask, useMilestones, useProjects, useTasks, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
+import {
+  useCreateTask,
+  useDeleteTask,
+  useMilestones,
+  useProjects,
+  useSession,
+  useTasks,
+  useUpdateTask,
+  useWorkspaceMembers
+} from "@orion/core-react";
 import type { CreateTaskInput, Task, TaskPriority, TaskStatus, TaskViewFilters, UpdateTaskInput } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import {
@@ -281,6 +290,11 @@ export function TasksPanel(): React.ReactElement {
   // Hand-made order (up / down, drop on a card) is part of the tasks-planning plugin.
   const planningOn = useSlotContributions("tasks.planning").length > 0;
   const memberById = useMemo(() => new Map((memberList ?? []).map((m) => [m.id, m])), [memberList]);
+  const { user: sessionUser } = useSession();
+  const myMemberId = useMemo(
+    () => (memberList ?? []).find((m) => m.userId === sessionUser?.id)?.id ?? null,
+    [memberList, sessionUser?.id]
+  );
   function assigneeOf(task: Task): TaskAssignee | undefined {
     const m = task.assigneeId ? memberById.get(task.assigneeId) : undefined;
     return m ? { userId: m.userId, name: m.name, hasAvatar: m.hasAvatar } : undefined;
@@ -794,6 +808,9 @@ export function TasksPanel(): React.ReactElement {
         <TaskForm
           projects={isEnabled("projects") ? (projectList ?? []) : undefined}
           members={teamOn ? (memberList ?? []) : undefined}
+          // In «Только мои» a new unassigned task would vanish from the board
+          // the moment it's created — start it assigned to the creator.
+          defaultAssigneeId={teamOn && onlyMine ? myMemberId : null}
           tasks={tasks ?? []}
           milestones={isEnabled("projects") ? (milestoneList ?? []) : undefined}
           parentOptions={parentSelectOptions}

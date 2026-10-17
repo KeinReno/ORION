@@ -125,7 +125,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("financeTransactions", (tx) => tx.transaction),
   spec("financeTransactionLines", (tx) => tx.transactionLine),
   spec("homeUtilityPayments", (tx) => tx.homeUtilityPayment),
-  spec("financeBudgets", (tx) => tx.budget),
+  specBudgets("financeBudgets", (tx) => tx.budget),
   spec("financeRecurring", (tx) => tx.recurringTransaction),
   spec("financeCategoryRules", (tx) => tx.categoryRule),
   spec("financeSavingsGoals", (tx) => tx.savingsGoal),
@@ -231,6 +231,37 @@ function spec(key: string, pick: (tx: Tx) => unknown): ModelSpec {
       rows.length === 0
         ? Promise.resolve()
         : as(tx).createMany({ data: rows, skipDuplicates: true })
+  };
+}
+
+/**
+ * `Budget.currency` (миграция 20261017100000_budget_currency) — снапшот, снятый
+ * до неё, несёт бюджеты без валюты. Без этой подстановки `createMany` поставил
+ * бы колоночный DEFAULT 'RUB', и долларовое пространство после восстановления
+ * получило бы рублёвые лимиты. Правило — то же, что у миграции: если все счета
+ * пространства (они восстанавливаются раньше, см. порядок SNAPSHOT_MODELS) в
+ * одной валюте — она; иначе 'RUB', в которой лимиты тогда и показывались.
+ */
+function specBudgets(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  return {
+    ...base,
+    insert: async (tx, rows) => {
+      const budgets = rows as Array<Record<string, unknown>>;
+      const legacy = budgets.filter((row) => typeof row.currency !== "string");
+      if (legacy.length === 0) return base.insert(tx, rows);
+      const workspaceIds = [...new Set(legacy.map((row) => String(row.workspaceId)))];
+      const accounts = await tx.account.findMany({ where: { workspaceId: { in: workspaceIds } }, select: { workspaceId: true, currency: true } });
+      const single = new Map<string, string>();
+      for (const workspaceId of workspaceIds) {
+        const currencies = new Set(accounts.filter((a) => a.workspaceId === workspaceId).map((a) => a.currency));
+        if (currencies.size === 1) single.set(workspaceId, [...currencies][0]!);
+      }
+      return base.insert(
+        tx,
+        budgets.map((row) => (typeof row.currency === "string" ? row : { ...row, currency: single.get(String(row.workspaceId)) ?? "RUB" }))
+      );
+    }
   };
 }
 

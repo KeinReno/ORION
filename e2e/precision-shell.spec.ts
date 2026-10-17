@@ -115,7 +115,8 @@ test("Precision at 390px with plugins off: context drawer, keyboard search and n
   await page.getByRole("button", { name: "Поиск и команды", exact: true }).click();
   const palette = page.getByRole("dialog", { name: "Поиск и команды", exact: true });
   await expect(palette).toBeVisible();
-  await expect(palette).toBeFocused();
+  // The search field's autoFocus wins: typing goes straight into it (the dialog no longer pulls focus off it).
+  await expect(palette.getByRole("textbox", { name: "Поиск команд и записей", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Поиск и команды", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Мобильный проект", exact: true })).toBeVisible();

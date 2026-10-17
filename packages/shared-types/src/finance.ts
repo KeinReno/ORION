@@ -302,11 +302,19 @@ export const budgetSchema = z.object({
   /** First-of-month, ISO. */
   month: z.string(),
   limitAmount: z.number().int().positive(),
+  /**
+   * ISO 4217 code the limit is denominated in. `spent` and `carryOver` count
+   * only this currency: expense lines from accounts in this currency, and the
+   * previous month's budget of the same category in this same currency —
+   * summing a USD and a RUB expense into one "spent" figure is not an amount
+   * of anything (same bug class as `sumByCurrency` on the client).
+   */
+  currency: z.string(),
   /** Режим «конвертов»: остаток прошлого месяца добавляется к лимиту этого. */
   rollover: z.boolean(),
   /** Сколько перенесено с прошлых месяцев (только положительный остаток; 0, если перенос выключен) — считает сервер. */
   carryOver: z.number().int().nonnegative(),
-  /** Sum of expense transactions in that category for that month — computed by BudgetsService. */
+  /** Sum of expense lines in that category, month and currency — computed by BudgetsService. */
   spent: z.number().int()
 });
 export type Budget = z.infer<typeof budgetSchema>;
@@ -320,6 +328,13 @@ export const createBudgetInputSchema = z.object({
   categoryId: z.string(),
   month: z.string().datetime(),
   limitAmount: z.number().int().positive("Лимит должен быть больше нуля"),
+  /**
+   * Валюта лимита. Не передана — сервер берёт основную валюту пространства
+   * (`primaryAccountCurrency` по его счетам), а не слепой RUB: у пространства
+   * только с долларовыми счетами бюджет по умолчанию в USD. Сменить валюту у
+   * существующего бюджета нельзя — это другой бюджет.
+   */
+  currency: z.string().length(3, "Код валюты — три буквы").optional(),
   rollover: z.boolean().optional()
 });
 export type CreateBudgetInput = z.infer<typeof createBudgetInputSchema>;
@@ -381,10 +396,19 @@ export type UpdateRecurringTransactionInput = z.infer<typeof updateRecurringTran
  * the balance across every account as of the end of that month; a transfer
  * never appears in it (see `transactionTypeSchema` comment) — only
  * income/expense do.
+ *
+ * Every aggregate carries `currency`: the server returns one row per
+ * (month, currency) / (category, currency), grouped by the account's
+ * currency, instead of silently adding kopecks of different currencies
+ * together. A single-currency workspace gets exactly one row per month, as
+ * before; a workspace with no accounts gets one RUB series of zeros.
+ * Monthly rows come currency by currency (alphabetical), oldest month first
+ * within each currency.
  */
 export const monthlyFinanceSummarySchema = z.object({
   /** "YYYY-MM". */
   month: z.string(),
+  currency: z.string(),
   income: z.number().int(),
   expense: z.number().int(),
   netWorth: z.number().int()
@@ -394,6 +418,51 @@ export type MonthlyFinanceSummary = z.infer<typeof monthlyFinanceSummarySchema>;
 export const categoryBreakdownEntrySchema = z.object({
   categoryId: z.string().nullable(),
   categoryName: z.string(),
+  currency: z.string(),
   amount: z.number().int()
 });
 export type CategoryBreakdownEntry = z.infer<typeof categoryBreakdownEntrySchema>;
+
+/** Валюта, когда счетов ещё нет, — та же, что по умолчанию у `Account.currency`. */
+export const DEFAULT_FINANCE_CURRENCY = "RUB";
+
+/**
+ * Основная валюта пространства — в ней показываются сводки по умолчанию, пока
+ * человек не выбрал другую, и в ней создаётся бюджет без явной валюты. Это
+ * валюта большинства действующих (не архивных) счетов; при равенстве — первая
+ * по алфавиту, чтобы выбор не зависел от порядка строк; без действующих
+ * счетов — валюта архивных, без счетов вовсе — RUB. Одна реализация для
+ * сервера и клиента: `archivedAt` у сервера `Date`, у клиента ISO-строка.
+ */
+export function primaryAccountCurrency(accounts: readonly { currency: string; archivedAt?: unknown }[]): string {
+  const live = accounts.filter((account) => !account.archivedAt);
+  const pool = live.length > 0 ? live : accounts;
+  const counts = new Map<string, number>();
+  for (const account of pool) counts.set(account.currency, (counts.get(account.currency) ?? 0) + 1);
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [currency, count] of counts) {
+    if (best === null || count > bestCount || (count === bestCount && currency < best)) {
+      best = currency;
+      bestCount = count;
+    }
+  }
+  return best ?? DEFAULT_FINANCE_CURRENCY;
+}
+
+/** Валюты, встречающиеся в строках сводки, в порядке сервера (по алфавиту), без повторов. */
+export function financeRowCurrencies(rows: readonly { currency: string }[]): string[] {
+  return [...new Set(rows.map((row) => row.currency))];
+}
+
+/**
+ * Какую валюту показать: выбранную человеком, если она есть среди строк; иначе
+ * основную (`preferred`, обычно `primaryAccountCurrency`), если она есть; иначе
+ * первую из строк. `null` — строк нет. Сводки никогда не складывают валюты:
+ * экран показывает одну из них за раз.
+ */
+export function pickFinanceCurrency(available: readonly string[], picked: string | null | undefined, preferred?: string | null): string | null {
+  if (picked && available.includes(picked)) return picked;
+  if (preferred && available.includes(preferred)) return preferred;
+  return available[0] ?? null;
+}
