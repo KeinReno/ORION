@@ -87,6 +87,7 @@ export function ThemePreview(): React.ReactElement {
       if (!parsed.ok) { setError(parsed.error); return; }
       setCustom(parsed.value);
       setSelected("custom");
+      setPreview(true);
     } catch { if (sequence === importSequence.current) setError("Не удалось прочитать файл темы."); }
     finally { if (sequence === importSequence.current) setImporting(false); }
   }
@@ -114,6 +115,13 @@ export function ThemePreview(): React.ReactElement {
     } catch (failure) { setError(`Не удалось вернуть палитру. ${describeError(failure)}`); }
   }
 
+  /** Editing a built-in palette edits a copy of it, so presets stay untouched. */
+  function editColor(key: ThemeColor, value: string): void {
+    if (selected === "custom" && custom) setCustom(withThemeColor(custom, key, value));
+    else setCustom(withThemeColor({ ...theme, id: `custom-${Date.now().toString(36)}`, name: `${theme.name} — копия`.slice(0, 80), colors: { ...theme.colors } }, key, value));
+    setSelected("custom"); setPreview(true); setError(null);
+  }
+
   function exportTheme(): void {
     const checked = parseThemeDocument(theme);
     if (!checked.ok) { setError(checked.error); return; }
@@ -132,10 +140,10 @@ export function ThemePreview(): React.ReactElement {
       <summary className="cursor-pointer text-label text-foreground">Предпросмотр тем</summary>
       <div className="mt-4" role="region" aria-label="Предпросмотр тем">
       <fieldset disabled={updatePreferences.isPending} className="min-w-0 space-y-4">
-        <p className="text-xs text-muted-foreground">До нажатия «Сохранить и применить» цвета меняются только в образце. Применение включает оболочку Precision и сохраняет тему в вашей учётной записи. Несохранённая копия хранится до выхода из этого раздела; её можно экспортировать.</p>
+        <p className="text-xs text-muted-foreground">Выбранная палитра сразу показывается в образце ниже, а в остальном приложении цвета меняются только после «Сохранить и применить». Изменение цвета встроенной палитры создаёт её копию. Применение включает оболочку Precision и сохраняет тему в вашей учётной записи. Несохранённая копия хранится до выхода из этого раздела; её можно экспортировать.</p>
         <label className="block space-y-1" htmlFor={`${ids}-preset`}>
           <span className="text-label">Палитра образца</span>
-          <Select id={`${ids}-preset`} name="theme-preview-preset" value={selected} onChange={event => { ++importSequence.current; setImporting(false); setSelected(event.target.value); setError(null); }} className="w-full">
+          <Select id={`${ids}-preset`} name="theme-preview-preset" value={selected} onChange={event => { ++importSequence.current; setImporting(false); setSelected(event.target.value); setPreview(true); setError(null); }} className="w-full">
             {THEME_PRESETS.map(preset => <option key={preset.id} value={presetKey(preset)}>{preset.name}{preset.baseMode === "light" ? " (светлая)" : ""}</option>)}
             {custom ? <option value="custom">{custom.name}</option> : null}
           </Select>
@@ -144,7 +152,7 @@ export function ThemePreview(): React.ReactElement {
           <Button type="button" size="sm" variant="outline" disabled={selected === "custom"} onClick={() => {
             ++importSequence.current; setImporting(false);
             setCustom({ ...theme, id: `custom-${Date.now().toString(36)}`, name: `${theme.name} — копия`.slice(0, 80), colors: { ...theme.colors } });
-            setSelected("custom"); setError(null);
+            setSelected("custom"); setPreview(true); setError(null);
           }}>{custom && selected !== "custom" ? "Заменить копию" : "Создать копию"}</Button>
           <Button type="button" size="sm" variant="outline" onClick={exportTheme}>Экспортировать тему</Button>
         </div>
@@ -153,8 +161,12 @@ export function ThemePreview(): React.ReactElement {
         <div className="grid grid-cols-2 gap-3">
           {EDITABLE_COLORS.map(({ key, label }) => <label key={key} className="block space-y-1" htmlFor={`${ids}-${key}`}>
             <span className="text-label">{label}</span>
-            <Input id={`${ids}-${key}`} name={`theme-color-${key}`} type="color" disabled={selected !== "custom"} value={theme.colors[key]} className="h-9 p-1"
-              onChange={event => { ++importSequence.current; setImporting(false); setCustom(current => current ? withThemeColor(current, key, event.target.value) : null); }} />
+            <span className="flex items-center gap-2">
+              <input id={`${ids}-${key}`} name={`theme-color-${key}`} type="color" value={theme.colors[key]}
+                className="h-9 w-14 shrink-0 cursor-pointer rounded-lg border border-ui-border bg-transparent p-1"
+                onChange={event => { ++importSequence.current; setImporting(false); editColor(key, event.target.value); }} />
+              <span className="font-mono text-label text-muted-foreground">{theme.colors[key]}</span>
+            </span>
           </label>)}
         </div>
         <label className="block space-y-1" htmlFor={`${ids}-import`}>
@@ -169,7 +181,7 @@ export function ThemePreview(): React.ReactElement {
           <Button type="button" size="sm" variant="subtle" onClick={() => { ++importSequence.current; setImporting(false); setSelected("precision"); setCustom(null); setPreview(false); setError(null); }}>Сбросить образец</Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" disabled={selected !== "custom" || !parseThemeDocument(theme).ok || importing || updatePreferences.isPending} onClick={() => void saveAndApply()}>{updatePreferences.isPending ? "Сохраняю…" : "Сохранить и применить"}</Button>
+          <Button type="button" size="sm" disabled={!parseThemeDocument(theme).ok || importing || updatePreferences.isPending} onClick={() => void saveAndApply()}>{updatePreferences.isPending ? "Сохраняю…" : "Сохранить и применить"}</Button>
           <Button type="button" size="sm" variant="outline" disabled={!preferences.data?.customThemeEnabled || updatePreferences.isPending} onClick={() => void restorePalette()}>Вернуть стандартную палитру</Button>
         </div>
         <ThemeProvider inherit={!preview} flag={preview ? "kaiden-theme-v1" : undefined} definition={theme} className="rounded-lg border p-4"

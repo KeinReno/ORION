@@ -19,7 +19,7 @@ for (const width of [1280, 390]) {
     page.on("request", req => { if (req.url().endsWith("/settings/preferences") && ["PATCH", "POST", "PUT", "DELETE"].includes(req.method())) writes.push(req.method()); });
     const accentBefore = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--orion-accent"));
     await region.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("arctic");
-    await region.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
+    await expect(region.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
     const sample = region.locator('[data-kaiden-theme="arctic"]').first();
     const name = sample.getByLabel("Название образца", { exact: true });
     await expect(name).toHaveCSS("color", "rgb(23, 33, 43)");
@@ -85,7 +85,7 @@ test("copy editing, JSON export/import and invalid import work with plugins disa
   await file.setInputFiles({ name: "good.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ schemaVersion: 1, id: "my-import", name: "Мой образец", baseMode: "light", colors: { accent: "#136b60" } })) });
   await expect(region.getByRole("alert")).toHaveCount(0);
   await expect(region.getByRole("combobox", { name: "Палитра образца", exact: true })).toHaveValue("custom");
-  await region.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
+  await expect(region.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
   await expect(region.locator('[data-kaiden-theme="my-import"]').first()).toHaveCSS("color-scheme", "light");
   await region.getByRole("button", { name: "Сбросить образец", exact: true }).click();
   await expect(region.getByRole("combobox", { name: "Палитра образца", exact: true })).toHaveValue("precision");
