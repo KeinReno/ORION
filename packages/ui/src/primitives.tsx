@@ -280,6 +280,21 @@ export function Spinner({ className }: { className?: string }): React.ReactEleme
   );
 }
 
+/**
+ * Full-screen wait state for the boot path (session, workspaces, a detached
+ * panel window). A bare muted "Загрузка…" line read as a frozen app on the dark
+ * shell, so the spinner is large and the label is kept as an exact text node:
+ * e2e waits for it to disappear.
+ */
+export function LoadingScreen({ label = "Загрузка…" }: { label?: string }): React.ReactElement {
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-3 text-sm text-muted-foreground" aria-busy="true">
+      <Spinner className="h-7 w-7 border-[3px]" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
 export function EmptyState({
   icon: Icon,
   title,

@@ -2,6 +2,7 @@
 
 import { ObjectContextScope, useSession } from "@orion/core-react";
 import { isPluginEnabled } from "@orion/shared-types";
+import { LoadingScreen } from "@orion/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { getPanelDefinition, instancePanelId } from "../../../lib/panel-registry";
@@ -73,7 +74,7 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
   }
 
   if (isLoading || !user || workspacesLoading || !workspace) {
-    return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Загрузка…</div>;
+    return <LoadingScreen />;
   }
 
   if (!definition) {

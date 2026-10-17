@@ -25,6 +25,7 @@ import {
   type IDockviewHeaderActionsProps,
   type IDockviewPanelProps,
   ConfirmDialog,
+  LoadingScreen,
   cx,
   type MenuItem,
   type SidebarFolderView
@@ -842,7 +843,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }
 
   if (isLoading || !user || workspacesLoading || !workspace) {
-    return <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Загрузка…</div>;
+    return <LoadingScreen />;
   }
 
   return (
