@@ -14,48 +14,22 @@ import { RELATION_KIND_CATALOG, type GlobalSearchResult, type SearchableEntityTy
 import { Button, IconButton, Input, Skeleton, Textarea, cx, useToast } from "@orion/ui";
 import {
   Bell,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
-  FileText,
-  FolderKanban,
   Link2,
-  ListChecks,
-  ListTodo,
   PlusCircle,
-  Receipt,
-  StickyNote,
   Trash2,
-  UserRound,
   X,
-  type LucideIcon
 } from "lucide-react";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { computeLinkOptions, type EntityLinkOption } from "../lib/entity-link-options";
+import { ENTITY_TYPE_ICON, ENTITY_TYPE_LABEL } from "../lib/entity-type-meta";
 import { describeError } from "../lib/error-message";
 import { openEntity } from "../lib/panel-bus";
+import { ObjectOpenMenu } from "./object-open-menu";
 
-const TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
-  project: FolderKanban,
-  task: ListTodo,
-  note: StickyNote,
-  event: CalendarDays,
-  document: FileText,
-  transaction: Receipt,
-  contact: UserRound,
-  list: ListChecks
-};
-
-const TYPE_LABEL: Record<SearchableEntityType, string> = {
-  project: "проект",
-  task: "задача",
-  note: "заметка",
-  event: "событие",
-  document: "документ",
-  transaction: "операция",
-  contact: "контакт",
-  list: "список"
-};
+const TYPE_ICON = ENTITY_TYPE_ICON;
+const TYPE_LABEL = ENTITY_TYPE_LABEL;
 
 /**
  * «Связанные записи» — typed links between any two entities (`entity_links`).
@@ -442,6 +416,7 @@ export function EntityLinksSection({
         <ul className="flex flex-wrap gap-1.5">
           {others.map((other) => {
             const Icon = TYPE_ICON[other.type];
+            const view = { object: { workspaceId: workspaceId ?? "", entityType: other.type, entityId: other.id }, viewId: "detail" };
             return (
               <li
                 key={other.link.id}
@@ -457,6 +432,7 @@ export function EntityLinksSection({
                   <span className="max-w-48 truncate">{other.title || "Без названия"}</span>
                   <span className="text-subtle-foreground">{TYPE_LABEL[other.type]}</span>
                 </button>
+                <ObjectOpenMenu view={view} title={other.title} />
                 <IconButton
                   label="Убрать связь"
                   size="sm"

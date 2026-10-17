@@ -468,8 +468,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   обязателен пароль с `passwordScore >= 2`. `POST /auth/login` защищён
   `LoginRateLimitGuard` (10 попыток/5 мин, in-memory). Исходящие удалённые
   запросы (WebDAV remote, calendar ICS) идут через
-  `apps/api/src/common/remote-url-guard.ts` (`assertPublicRemoteUrl`,
-  `rejectRedirect`, лимит тела 5 МиБ) — SSRF-заслон. Веб-клиент (`login`/
+  `apps/api/src/common/remote-url-guard.ts` — SSRF-заслон:
+  `assertPublicRemoteUrl` (400 при сохранении), а сам запрос — только через
+  `fetchPublicText` (ICS) или `publicOnlyAgents()` (WebDAV): DNS проверяется
+  в момент соединения (`publicOnlyLookup`), редиректы не следуются, тело
+  режется на 5 МиБ при чтении. Голый `fetch()` для пользовательского URL не
+  использовать — он резолвит DNS сам, мимо проверки. Веб-клиент (`login`/
   `register`) пока не различает режимы визуально — сервер просто отклоняет
   запрещённые в `server` пути 403/400; это известный UX-разрыв, не баг с точки
   зрения безопасности.
@@ -599,6 +603,7 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   `pnpm build:desktop-export` — новая команда (`package.json`), собирает
   статический экспорт `apps/web/.next-desktop`; это единственный измеримый
   критерий готовности desktop-релиза, добавлен отдельным шагом в CI.
+- **Гибридная синхронизация (ТЗ-06, ADR-0016).** `Workspace.syncMode` (`local|shared|hybrid`, по умолчанию `shared`; не восстанавливается из снапшота). Триггеры БД на `lists`/`list_items`/`notes`/`tasks` пишут в `sync_changes` «что тронуто» при ЛЮБОЙ записи — поэтому **новый путь записи в эти таблицы ничего не обязан знать о sync**, но обязан не ломать триггер (не отключать, не писать из-под роли без доступа к функции). `GET sync/replica/changes` читает текущие строки по курсору `(xid, id)`; приём операций — `HybridSyncService.push` (`decideOp` из `shared-types`, чистая функция), в транзакции с `app.sync_apply='on'`. Новая синхронизируемая сущность = класс в `sync-classification.ts` + поля в `hybrid-sync.ts` + адаптер в `HybridSyncService` + триггер в миграции + запись в реестре снапшота; тест сходимости (`packages/core/src/sync/convergence.fuzz.test.ts`) и интеграционный `hybrid-sync.integration.test.ts` обязаны остаться зелёными. Клиент: `ReplicaEngine` (`@orion/core`), хуки `useHybridReplica`/`use-lists|notes|tasks` в `@orion/core-react` берут данные из копии, пока режим гибридный. Деньги, файлы и здоровье офлайн не пишутся.
 - **Desktop launcher — readiness и single-instance.**
   `scripts/readiness.mjs` (`pollReadiness`) опрашивает `GET /system/health`
   и различает `ready`/`wrong-service`/`crashed`/`timeout` — TCP-connect
@@ -609,9 +614,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   `tauri-plugin-single-instance` (для него нужен Rust/Cargo, недоступный в
   агентских сессиях) — минимально достаточный Node-уровневый лок, не умеет
   фокусировать уже открытое окно. Production CSP в
-  `apps/desktop/src-tauri/tauri.conf.json` больше не `null` — выведена чтением
-  кода (`script-src 'self'`, `style-src 'self' 'unsafe-inline'` для
-  Tailwind/CodeMirror, `worker-src 'self' blob:` для pdf.js, `connect-src
-  'self' http://127.0.0.1:* http://localhost:*`). Ни CSP-совместимость, ни
-  сам `tauri dev`/`tauri:build` не проверялись живьём ни в одной сессии
-  бэклога — нет Rust/Cargo/Tauri CLI в среде агента.
+  `apps/desktop/src-tauri/tauri.conf.json` больше не `null`:
+  `script-src 'self' 'wasm-unsafe-eval'` (WebAssembly modern-xlsx — без него
+  сохранение книги с диаграммой молча зависало), `style-src 'self'
+  'unsafe-inline'` для Tailwind/CodeMirror, `worker-src 'self' blob:` и
+  `connect-src 'self' blob: http://127.0.0.1:* http://localhost:*` (pdf.js
+  читает файл через `blob:`-URL — без него ни один PDF не открывался),
+  `frame-src http: https:` для встроенного браузера. Сам `tauri
+  dev`/`tauri:build` (WebView2, нативное окно) живьём не запускался — нет
+  Rust/Cargo/Tauri CLI в среде агента.

@@ -29,6 +29,7 @@ import { Cloud, DatabaseBackup, Lock, RefreshCw, ShieldCheck, TriangleAlert } fr
 import { useEffect, useState, type FormEvent } from "react";
 import { describeAuthError } from "../lib/error-message";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { HybridModeSection } from "./sync/hybrid-mode-section";
 
 const BACKUP_STEPS = ["Собираю данные…", "Шифрую снимок…", "Загружаю на WebDAV…"];
 const RESTORE_PREVIEW_STEPS = ["Скачиваю снимок…", "Расшифровываю…", "Считаю изменения…"];
@@ -185,6 +186,7 @@ export function SyncPanel(): React.ReactElement {
             }
           />
         ) : null}
+        {workspace ? <HybridModeSection workspaceId={workspace.id} /> : null}
         <PanelSection title="Облако">
           <Card>
             {remote.isLoading ? (

@@ -21,9 +21,10 @@ import {
   Skeleton,
   useToast
 } from "@orion/ui";
-import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Plus, Scale, Trash2, Wallet } from "lucide-react";
+import { ArchiveRestore, Archive, MoreHorizontal, Paperclip, Pencil, Plus, Scale, Trash2, Wallet } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeAuthError } from "../../lib/error-message";
+import { showResourcesFor } from "../../lib/resource-context-store";
 import { formatMoney, parseMoneyInput } from "../../lib/format";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ACCOUNT_KIND_LABEL, AccountForm, type AccountFormValues } from "./account-form";
@@ -55,7 +56,7 @@ export function AccountsView(): React.ReactElement {
 
   async function save(accountId: string, values: AccountFormValues): Promise<void> {
     try {
-      await updateAccount.mutateAsync({ accountId, input: { name: values.name, kind: values.kind, context: values.context, currency: values.currency } });
+      await updateAccount.mutateAsync({ accountId, input: { name: values.name, kind: values.kind, context: values.context, visibility: values.visibility, currency: values.currency } });
       setEditing(null);
       toast({ title: "Сохранено", tone: "success" });
     } catch (error) {
@@ -124,6 +125,7 @@ export function AccountsView(): React.ReactElement {
                   <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
                   <p className="text-2xs text-subtle-foreground">
                     {ACCOUNT_KIND_LABEL[account.kind]}
+                    {account.visibility === "private" ? " · 🔒 только вы" : ""}
                     {account.context !== "personal" ? ` · ${ACCOUNT_CONTEXT_LABEL[account.context]}` : ""}
                     {account.currency !== "RUB" ? ` · ${account.currency}` : ""}
                     {account.archivedAt ? " · в архиве" : ""}
@@ -136,6 +138,7 @@ export function AccountsView(): React.ReactElement {
                     </IconButton>
                   )}
                   items={[
+                    { label: "Файлы и связи", icon: Paperclip, onSelect: () => showResourcesFor("finance", { type: "account", id: account.id, title: account.name }) },
                     { label: "Изменить", icon: Pencil, onSelect: () => setEditing(account) },
                     { label: "Сверить баланс", icon: Scale, onSelect: () => setReconciling(account) },
                     account.archivedAt

@@ -52,6 +52,19 @@ describe("Opportunity extensions: profiles/import isolation", () => {
   async function apply(a: Awaited<ReturnType<typeof register>>, run: HhImportRun) {
     return request<HhImportRun>(`${importPath(a.workspaceId)}/${run.id}/apply`, a.token, "POST", { expectedRevision: run.revision, manifestHash: run.manifestHash });
   }
+  it("bulk import preserves manual cards and counts repeated external IDs once while retaining distinct captures", async () => {
+    const a = await register("bulk"); await enable(a, "opportunities-hh-import");
+    const manual = (await request<Opportunity>(a.path, a.token, "POST", { kind: "job", title: "Manual title", sourceType: "hh", externalId: "999001" })).data;
+    const files = [{ path: "vacancies_bulk.json", text: JSON.stringify(Array.from({ length: 25 }, (_, n) => ({ title: `Snapshot ${n}`, url: `https://hh.ru/vacancy/${n < 5 ? "999001" : "999002"}`, salary: { from: 100000 + n } }))) }];
+    const run = await preview(a, files);
+    const done = await apply(a, run);
+    expect(done.status).toBe(201);
+    expect(done.data.report).toMatchObject({ opportunitiesCreated: 1, opportunitiesExisting: 24, capturesCreated: 25 });
+    const again = await apply(a, await preview(a, files));
+    expect(again.data.report).toMatchObject({ opportunitiesCreated: 0, opportunitiesExisting: 25, capturesCreated: 0 });
+    expect((await request<Opportunity>(`${a.path}/${manual.id}`, a.token)).data.title).toBe("Manual title");
+    expect((await request<OpportunityPage>(a.path, a.token)).data.items).toHaveLength(2);
+  });
   it("keeps plugins off by default and Base working, retains data after disable", async () => {
     const a = await register("off");
     expect((await request(profilePath(a.workspaceId), a.token)).status).toBe(409);

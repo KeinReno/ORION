@@ -4,10 +4,11 @@ import { ModulesModule } from "../modules/modules.module";
 import { PluginsController } from "./plugins.controller";
 import { PluginEnabledGuard } from "./plugin-enabled.guard";
 import { PluginsService } from "./plugins.service";
+import { CapabilityLifecycleModule } from "../common/capability-lifecycle";
 
 @Global()
 @Module({
-  imports: [WorkspacesModule, ModulesModule],
+  imports: [WorkspacesModule, ModulesModule, CapabilityLifecycleModule],
   controllers: [PluginsController],
   providers: [PluginsService, PluginEnabledGuard],
   exports: [PluginsService, PluginEnabledGuard]

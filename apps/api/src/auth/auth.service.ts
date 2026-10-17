@@ -125,7 +125,7 @@ export class AuthService {
         }
       });
       const workspace = await tx.workspace.create({
-        data: { name: `${input.name} — личное пространство`, icsToken: randomBytes(24).toString("base64url") }
+        data: { name: `${input.name} — личное пространство`, icsToken: randomBytes(24).toString("base64url"), isPersonal: true }
       });
       await tx.workspaceMember.create({
         data: { workspaceId: workspace.id, userId: created.id, role: "owner" }
@@ -379,7 +379,7 @@ function toSessionUser(user: UserLike): SessionUser {
   };
 }
 
-function passwordScore(password: string): number {
+export function passwordScore(password: string): number {
   if (/^\d{4}$/.test(password)) return 0;
   let score = 0;
   if (password.length >= 8) score += 1;

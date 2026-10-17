@@ -1,7 +1,7 @@
 "use client";
 
 import { useBudgets, useCreateBudget, useDeleteBudget, useFinanceCategories, useUpdateBudget } from "@orion/core-react";
-import type { Budget } from "@orion/shared-types";
+import { budgetAvailable, type Budget } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, IconButton, Modal, useToast } from "@orion/ui";
 import { ChevronLeft, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -59,7 +59,7 @@ export function BudgetsView(): React.ReactElement {
 
   async function save(budgetId: string, values: BudgetFormValues): Promise<void> {
     try {
-      await updateBudget.mutateAsync({ budgetId, input: { limitAmount: values.limitAmount } });
+      await updateBudget.mutateAsync({ budgetId, input: { limitAmount: values.limitAmount, rollover: values.rollover } });
       setEditing(null);
       toast({ title: "Сохранено", tone: "success" });
     } catch (error) {
@@ -95,7 +95,8 @@ export function BudgetsView(): React.ReactElement {
         <ul className="space-y-3">
           {budgets.map((budget) => {
             const category = categories?.find((c) => c.id === budget.categoryId);
-            const ratio = budget.limitAmount > 0 ? budget.spent / budget.limitAmount : 0;
+            const available = budgetAvailable(budget);
+            const ratio = available > 0 ? budget.spent / available : 0;
             const over = ratio > 1;
             return (
               <li key={budget.id} className="rounded-xl border border-border p-3">
@@ -103,7 +104,7 @@ export function BudgetsView(): React.ReactElement {
                   <span className="text-sm font-medium text-foreground">{category?.name ?? "Категория"}</span>
                   <div className="flex items-center gap-1">
                     <span className={`font-mono text-xs tabular-nums ${over ? "text-destructive" : "text-muted-foreground"}`}>
-                      {formatMoney(budget.spent)} из {formatMoney(budget.limitAmount)}
+                      {formatMoney(budget.spent)} из {formatMoney(available)}
                     </span>
                     <IconButton label="Изменить лимит" size="sm" onClick={() => setEditing(budget)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -113,6 +114,12 @@ export function BudgetsView(): React.ReactElement {
                     </IconButton>
                   </div>
                 </div>
+                {budget.rollover ? (
+                  <p className="mt-1 text-2xs text-subtle-foreground">
+                    Лимит {formatMoney(budget.limitAmount)}
+                    {budget.carryOver > 0 ? ` + перенос ${formatMoney(budget.carryOver)} с прошлых месяцев` : " · перенос остатка включён, переносить пока нечего"}
+                  </p>
+                ) : null}
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                   <div
                     className={`h-full rounded-full transition-[width] duration-500 ease-out ${over ? "bg-destructive" : "bg-accent"}`}

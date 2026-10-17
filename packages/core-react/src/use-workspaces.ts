@@ -11,6 +11,7 @@ import type {
   WorkspaceMember,
   WorkspaceMemberSearchResult,
   WorkspaceModuleState,
+  WorkspaceTransferPreview,
   ResolveUserByEmailResult
 } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +32,30 @@ export function useCreateWorkspace() {
   return useMutation({
     mutationFn: (input: CreateWorkspaceInput) => api.createWorkspace(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] })
+  });
+}
+
+/** ТЗ-05 §5.5: предпросмотр/применение переноса `.orion` — новое пространство, существующее не трогается. */
+export function useImportWorkspace() {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<
+    WorkspaceTransferPreview,
+    Error,
+    { file: File; dryRun: boolean; name?: string; passphrase?: string; expectedHash?: string }
+  >({
+    mutationFn: ({ file, ...options }) => api.importWorkspace(file, options),
+    onSuccess: (result) => {
+      if (result.applied) void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    }
+  });
+}
+
+/** Файл `.orion` для переноса (только владелец). Возвращает Blob — сохранение выбирает вызывающий. */
+export function useExportWorkspace(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useMutation({
+    mutationFn: (passphrase?: string) => api.exportWorkspace(workspaceId as string, passphrase)
   });
 }
 

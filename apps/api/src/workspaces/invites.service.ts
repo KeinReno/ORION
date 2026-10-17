@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { createHash, randomBytes } from "node:crypto";
-import type { CreatedWorkspaceInvite, InviteLookup, WorkspaceInvite } from "@orion/shared-types";
+import type { CreatedWorkspaceInvite, InviteLookup, InviteRole, WorkspaceInvite } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "./workspaces.service";
 
@@ -32,16 +32,24 @@ export class WorkspaceInvitesService {
     });
   }
 
-  async create(userId: string, workspaceId: string, email: string): Promise<CreatedWorkspaceInvite> {
+  async create(userId: string, workspaceId: string, email: string, role: InviteRole = "member"): Promise<CreatedWorkspaceInvite> {
     const normalizedEmail = email.trim().toLowerCase();
     return this.prisma.withUser(userId, async (tx) => {
-      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
-
+      const caller = await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
+      // ТЗ-05: роль «лид» назначает только владелец — иначе лид раздавал бы себе подобных (смена роли и так owner-only).
+      if (role === "lead" && caller.role !== "owner") {
+        throw new ForbiddenException("Приглашать с ролью «лид» может только владелец");
+      }
       const existingMember = await tx.workspaceMember.findFirst({
         where: { workspaceId, user: { email: normalizedEmail } }
       });
       if (existingMember) throw new BadRequestException("Этот пользователь уже участник пространства");
 
+      // Просроченное, но так и не принятое приглашение не должно навсегда блокировать новое для того же email.
+      await tx.workspaceInvite.updateMany({
+        where: { workspaceId, email: normalizedEmail, status: "pending", expiresAt: { lt: new Date() } },
+        data: { status: "expired" }
+      });
       const pending = await tx.workspaceInvite.findFirst({
         where: { workspaceId, email: normalizedEmail, status: "pending" }
       });
@@ -53,6 +61,7 @@ export class WorkspaceInvitesService {
           workspaceId,
           email: normalizedEmail,
           tokenHash: hashToken(raw),
+          role,
           invitedById: userId,
           expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000)
         }
@@ -70,7 +79,7 @@ export class WorkspaceInvitesService {
       // link has to leave via *some* visible channel. Once real email
       // delivery exists, this log line goes with it — see class doc comment.
       this.logger.log(`(dry-run invite) → ${normalizedEmail}: workspace ${workspaceId}, invite ${row.id}`);
-      return { ...toDto(row), acceptUrl };
+      return { ...toDto(row), acceptUrl, code: raw };
     });
   }
 
@@ -136,7 +145,14 @@ export class WorkspaceInvitesService {
   }
 }
 
+/**
+ * Адрес, по которому приглашённый откроет ссылку. На хосте LAN (ТЗ-04/05)
+ * `ORION_PUBLIC_URL` — адрес узла, видимый из локальной сети; без него — первый
+ * из `WEB_ORIGIN` (локальный режим, как раньше).
+ */
 function webOrigin(): string {
+  const publicUrl = process.env.ORION_PUBLIC_URL?.trim();
+  if (publicUrl) return publicUrl.replace(/\/+$/, "");
   return (process.env.WEB_ORIGIN ?? "http://localhost:3010").split(",")[0]!.trim();
 }
 

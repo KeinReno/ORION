@@ -129,6 +129,42 @@ describe("Finance project costs", () => {
     expect((await request(`${base}/accounts`, { method: "POST", token, body: { name: "Плохая", context: "nonsense" } })).status).toBe(400);
   });
 
+  it("budget rollover carries only a positive leftover, only along an unbroken chain", async () => {
+    const { token, workspaceId } = await register("rollover");
+    const base = `/workspaces/${workspaceId}/finance`;
+    const account = (await request<{ id: string }>(`${base}/accounts`, { method: "POST", token, body: { name: "Карта", startingBalance: 0 } })).data.id;
+    const cat = (await request<{ id: string }>(`${base}/categories`, { method: "POST", token, body: { name: "Еда", kind: "expense" } })).data.id;
+    const spend = (at: string, amount: number) =>
+      request(`${base}/transactions`, { method: "POST", token, body: { accountId: account, type: "expense", occurredAt: at, lines: [{ categoryId: cat, amount }] } });
+    const budget = (month: string, limitAmount: number, rollover: boolean) =>
+      request<{ id: string }>(`${base}/budgets`, { method: "POST", token, body: { categoryId: cat, month, limitAmount, rollover } });
+    type B = { month: string; limitAmount: number; carryOver: number; rollover: boolean; spent: number };
+    const month = async (m: string) => (await request<B[]>(`${base}/budgets?month=${m}`, { method: "GET", token })).data[0]!;
+
+    await budget("2026-07-01T00:00:00.000Z", 100000, true);
+    await spend("2026-07-10T10:00:00.000Z", 70000); // leftover 30000
+    await budget("2026-08-01T00:00:00.000Z", 100000, true);
+    await spend("2026-08-10T10:00:00.000Z", 120000); // limit 100000 + carry 30000 = 130000, leftover 10000
+    await budget("2026-09-01T00:00:00.000Z", 100000, true);
+    await budget("2026-11-01T00:00:00.000Z", 100000, true); // October has no budget: the chain is broken
+
+    expect((await month("2026-07")).carryOver).toBe(0);
+    expect((await month("2026-08")).carryOver).toBe(30000);
+    expect((await month("2026-09")).carryOver).toBe(10000);
+    expect((await month("2026-11")).carryOver).toBe(0);
+
+    // An overspend is not charged to the next month.
+    await spend("2026-09-12T10:00:00.000Z", 500000);
+    await budget("2026-10-01T00:00:00.000Z", 100000, true);
+    expect((await month("2026-10")).carryOver).toBe(0);
+
+    // Without the switch there is no carry, whatever the past looks like.
+    const plain = await request<{ id: string }>(`${base}/budgets`, { method: "POST", token, body: { categoryId: cat, month: "2027-01-01T00:00:00.000Z", limitAmount: 5000 } });
+    expect(plain.status).toBe(201);
+    const jan = await month("2027-01");
+    expect(jan).toMatchObject({ rollover: false, carryOver: 0 });
+  });
+
   it("rejects a project from another workspace and respects the plugin switch", async () => {
     const alice = await register("alice");
     const bob = await register("bob");

@@ -2,7 +2,7 @@ import { Logger } from "@nestjs/common";
 // webdav v4 — CommonJS-сборка, обычный импорт работает под ts-node-dev без
 // ESM-плясок (тот же пакет уже используется в storage/webdav.storage.ts).
 import { createClient, type FileStat, type WebDAVClient } from "webdav";
-import { MAX_REMOTE_RESPONSE_BYTES } from "../common/remote-url-guard";
+import { MAX_REMOTE_RESPONSE_BYTES, publicOnlyAgents } from "../common/remote-url-guard";
 
 /**
  * S05 — redirect/size limits для WebDAV-транспорта (в отличие от `fetch()`,
@@ -78,7 +78,11 @@ export class WebdavRemote {
       // S05: response-size cap, same limit as ICS feeds (see block comment
       // above) — official `WebDAVClientOptions` field, forwarded straight
       // into the internal axios client's `maxContentLength`.
-      maxContentLength: MAX_REMOTE_RESPONSE_BYTES
+      maxContentLength: MAX_REMOTE_RESPONSE_BYTES,
+      // DNS pinned at connect time (see remote-url-guard `publicOnlyLookup`):
+      // `remoteFor`'s pre-request re-check alone left a window in which a
+      // rebinding resolver could answer differently for the real socket.
+      ...publicOnlyAgents()
     });
     this.root = joinPath(cfg.baseDir, cfg.workspaceId);
   }

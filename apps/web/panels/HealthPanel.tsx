@@ -10,12 +10,15 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { HealthAppointments } from "./health/appointments";
+import { HealthMeasurements } from "./health/measurements";
+import { HealthMedications } from "./health/medications";
 import { HealthPreventive } from "./health/preventive";
 import { HealthProfile, SubjectForm } from "./health/profile";
+import { HealthSymptoms } from "./health/symptoms";
 import { HealthToday } from "./health/today";
 
 const SELECTED_KEY = "orion.health.subject";
-type Tab = "today" | "appointments" | "preventive" | "profile";
+type Tab = "today" | "medications" | "measurements" | "symptoms" | "appointments" | "preventive" | "profile";
 
 /**
  * «Здоровье» (ADR-0012): данные принадлежат ЧЕЛОВЕКУ. Селектор «о ком смотрим» всегда виден; человек,
@@ -112,6 +115,9 @@ export function HealthPanel(_props: PanelComponentProps): React.ReactElement {
                 onChange={setTab}
                 options={[
                   { value: "today", label: "Сегодня" },
+                  { value: "medications", label: "Лекарства" },
+                  { value: "measurements", label: "Показатели" },
+                  { value: "symptoms", label: "Самочувствие" },
                   { value: "appointments", label: "Визиты" },
                   { value: "preventive", label: "Профилактика" },
                   { value: "profile", label: "Карточка" }
@@ -120,6 +126,9 @@ export function HealthPanel(_props: PanelComponentProps): React.ReactElement {
             </div>
             <div role="tabpanel">
               {tab === "today" ? <HealthToday workspaceId={workspaceId} subjects={list} onOpen={(id, next) => select(id, next)} /> : null}
+              {tab === "medications" ? <HealthMedications workspaceId={workspaceId} subject={subject} /> : null}
+              {tab === "measurements" ? <HealthMeasurements workspaceId={workspaceId} subject={subject} /> : null}
+              {tab === "symptoms" ? <HealthSymptoms workspaceId={workspaceId} subject={subject} /> : null}
               {tab === "appointments" ? <HealthAppointments workspaceId={workspaceId} subject={subject} contactsEnabled={isEnabled("contacts")} /> : null}
               {tab === "preventive" ? <HealthPreventive workspaceId={workspaceId} subject={subject} /> : null}
               {tab === "profile" ? <HealthProfile workspaceId={workspaceId} subject={subject} onDeleted={() => setSelectedId(null)} /> : null}

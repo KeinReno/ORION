@@ -2,13 +2,15 @@
 
 import { KaidenLogo } from "../../components/kaiden-logo";
 
-import { useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
+import { ObjectContextScope, useObjectContext, useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
   AppBackground,
+  AutosaveStatus,
   DropdownMenu,
   IconButton,
   Sidebar,
+  Sheet,
   Workbench,
   positionToDirection,
   useEscapeKey,
@@ -27,14 +29,18 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
-import { CommandCenter } from "../../lib/command-center";
+import { CommandCenter, showCommandPalette } from "../../lib/command-center";
+import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspace-context";
+import { ProjectContextInspector } from "../../components/project-context-inspector";
+import { projectContextId } from "../../lib/shell-context";
 import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
+import { ResourcesDock, ResourcesToggle } from "../../components/resources/resources-dock";
 import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
 import { WorkspaceSwitcher } from "../../components/workspace-switcher";
 import { RunningTimerChip } from "../../components/running-timer-chip";
@@ -65,16 +71,27 @@ import {
   readDraggedPanelId,
   resolveDropAction
 } from "../../lib/panel-drop";
-import { openPanel as focusPanel, registerPanelBus } from "../../lib/panel-bus";
+import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
+import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
+import { objectViewPanel } from "../../lib/object-view";
+import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
+import { canStep, clearHistory, EMPTY_NAV_HISTORY, recordVisit, stepHistory, type NavHistory } from "../../lib/nav-history";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
+import { NodeBadge } from "../../components/node-badge";
 import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
+
+// The context panel names the section of whichever dock panel is active (ADR-0014).
+setSectionResolver((panelId) => {
+  const definition = getPanelDefinition(panelId);
+  return definition ? { panelId, moduleId: definition.moduleId ?? null, label: definition.label } : null;
+});
 
 const NO_DISABLED_MODULES: string[] = [];
 const NO_PLUGIN_OVERRIDES: string[] = [];
@@ -104,7 +121,7 @@ function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[
 const panelComponents: Record<string, (props: IDockviewPanelProps) => React.ReactElement> = Object.fromEntries(
   panelRegistry.map((panel) => [
     panel.id,
-    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))
+    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api })))
   ])
 );
 
@@ -229,6 +246,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
           focusPanel("settings");
         }}
       />
+      <ResourcesToggle />
       <FloatHeaderAction {...props} />
       <DetachHeaderAction {...props} />
       <RunningTimerChip />
@@ -247,7 +265,10 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
 
 export default function AppLayout({ children }: { children: ReactNode }): React.ReactElement {
   const router = useRouter();
+  const { toast } = useToast();
   const { user, isLoading, status, previousUser, retry: retrySession } = useSession();
+  const navigationToast = useRef(toast);
+  navigationToast.current = toast;
   const logout = useLogout();
   // A window opened with `?workspaceId=` starts on that workspace. Only when this window has no
   // choice of its own yet (a reload keeps its own), and before the "no workspace → /spaces"
@@ -268,6 +289,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // viewer is a plain member — see `effectiveDisabledModules`.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
+  const precision = preferences?.theme === "kaiden-precision";
+  const [contextHidden, setContextHidden] = useState(false);
+  const [mobileContextOpen, setMobileContextOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const wideInspector = useMediaQuery("(min-width: 1360px)");
   const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
 
   // The user's own sidebar folders: personal, saved with their preferences.
@@ -449,8 +475,19 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const layoutKeyRef = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
+  // Back/forward over the panels (objects and views) this window has shown; in memory, per window and workspace.
+  const [navHistory, setNavHistory] = useState<NavHistory>(EMPTY_NAV_HISTORY);
+  const navHistoryRef = useRef(navHistory);
+  navHistoryRef.current = navHistory;
+  useEffect(() => {
+    if (activePanelId) setNavHistory(history => recordVisit(history, activePanelId));
+  }, [activePanelId]);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
+  const objectContext = useObjectContext(workspace?.id, activePanelId);
+  const editorContext = objectContext && ["task", "note", "document"].includes(objectContext.entityType) ? objectContext : null;
+  const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
+  useEffect(() => { setInspectorOpen(false); setMobileContextOpen(false); }, [workspace?.id]);
   useEscapeKey(() => setDrawerOpen(false), compact && drawerOpen);
 
   // Real total (S15), not `items.length` — the server caps the response at 250 rows.
@@ -482,6 +519,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       const api = apiRef.current;
       if (!api) return;
       const previous = api.activePanel;
+      // Compact navigation and replace-current mode close panels. Never bypass their draft guards.
+      const closing = compactRef.current ? api.panels.filter(panel => panel.id !== panelId)
+        : openTabsModeRef.current === "replace" && fromMenu && !position && previous?.id !== panelId && previous ? [previous] : [];
+      if (closing.some(panel => hasUnsavedDrafts(panel.id))) {
+        navigationToast.current({ title: "Сначала сохраните изменения", description: "Переход закроет панель с несохранённым черновиком. Сохраните его и повторите переход." });
+        return;
+      }
       const existing = api.getPanel(panelId);
       if (existing) {
         existing.api.setActive();
@@ -547,8 +591,16 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       try {
         const raw = window.localStorage.getItem(key);
         if (raw) {
-          api.fromJSON(JSON.parse(raw));
-          restored = true;
+          // Unknown panels are dropped and floating groups pulled back on screen, instead of one bad
+          // tab discarding the whole saved layout.
+          const clean = sanitizeDockLayout(JSON.parse(raw), (id) => getPanelDefinition(id) !== undefined, { width: window.innerWidth, height: window.innerHeight });
+          if (clean) {
+            api.fromJSON(clean.layout as unknown as Parameters<DockviewApi["fromJSON"]>[0]);
+            restored = true;
+            if (clean.removedPanels.length > 0 || clean.movedFloating > 0) {
+              navigationToast.current({ title: "Рабочее место восстановлено частично", description: "Часть вкладок больше недоступна или окна возвращены в границы экрана." });
+            }
+          }
         }
       } catch {
         // corrupt or incompatible saved layout (e.g. a removed panel id) — fall through to the default
@@ -577,13 +629,57 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     [openPanel, applyNamedToApi]
   );
 
+  useEffect(() => registerPanelBus({ openPanel, openObject: (view, mode, title) => {
+        const panelId = objectViewPanel(view, getActiveWorkspaceId());
+        const definition = panelId ? getPanelDefinition(panelId) : undefined;
+        if (!panelId || !definition || !isPanelAvailable(definition, disabledModulesRef.current, pluginOverridesRef.current)
+          || (definition.id === "projecttasks" && !isModuleEnabled(disabledModulesRef.current, "tasks"))) {
+          navigationToast.current({ title: "Представление недоступно", description: "Проверьте текущее пространство и включённые модули." });
+          return;
+        }
+        if (mode === "window") {
+          void detachPanelToWindow(panelId, title ?? definition.label).catch(() => navigationToast.current({ title: "Не удалось открыть окно" }));
+        } else {
+          const referenceGroup = apiRef.current?.activeGroup;
+          placePanel(panelId, mode === "beside" && !compactRef.current && referenceGroup ? { referenceGroup, direction: "right" } : undefined, title);
+        }
+      } }), [openPanel, placePanel]);
+
+  const canShowPanel = useCallback((panelId: string): boolean => {
+    const definition = getPanelDefinition(panelId);
+    return Boolean(definition) && isPanelAvailable(definition!, disabledModulesRef.current, pluginOverridesRef.current)
+      && !(definition!.id === "projecttasks" && !isModuleEnabled(disabledModulesRef.current, "tasks"));
+  }, []);
+  const goHistory = useCallback((direction: -1 | 1) => {
+    const before = navHistoryRef.current;
+    const step = stepHistory(before, direction, canShowPanel);
+    if (!step) return;
+    setNavHistory(step.history);
+    placePanel(step.target);
+    // A draft guard (or a failed open) leaves the old panel active: keep the history where it was.
+    if (apiRef.current?.activePanel?.id !== step.target) setNavHistory(before);
+  }, [placePanel, canShowPanel]);
+  const goHistoryRef = useRef(goHistory);
+  goHistoryRef.current = goHistory;
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      goHistoryRef.current(event.key === "ArrowLeft" ? -1 : 1);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       const api = event.api;
       apiRef.current = api;
-      registerPanelBus({ openPanel });
-
-      api.onDidActivePanelChange((panel) => setActivePanelId(panel?.id ?? null));
+      api.onDidActivePanelChange((panel) => {
+        setActivePanelId(panel?.id ?? null);
+        resourceContextActions.setActivePanel(panel?.id ?? null);
+      });
 
       // U06 (24-CONNECTED-CORE-BACKLOG.md) — sidebar drag→Dockview. This
       // rides entirely on dockview-core's own external-drag machinery
@@ -653,7 +749,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }, 300);
       });
     },
-    [openPanel, placePanel, loadLayoutForKey, user, workspace]
+    [placePanel, loadLayoutForKey, user, workspace]
   );
 
   // U04: the sidebar's workspace `<select>` (and /spaces) switch the active
@@ -676,6 +772,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     } catch {
       // best-effort — see the identical catch in onReady's save timer
     }
+    setNavHistory(clearHistory());
     for (const panel of [...api.panels]) panel.api.close();
     layoutKeyRef.current = nextKey;
     loadLayoutForKey(api, nextKey, namedLayoutsKey(user.id, workspace.id));
@@ -701,6 +798,30 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       router.replace("/spaces");
     }
   }, [status, workspacesLoading, workspace, router]);
+
+  const projectViews = [
+    { id: "project", label: "Обзор" }, { id: "projecttasks", label: "Задачи" },
+    { id: "projectmaterials", label: "Материалы" }, { id: "projectplan", label: "План" },
+    { id: "projectaccess", label: "Доступ" }
+  ].filter(view => {
+    // Catalog lookup: getPanelDefinition deliberately rejects bare instanced kinds.
+    const definition = panelRegistry.find(panel => panel.id === view.id);
+    return definition && isPanelAvailable(definition, disabledModules, pluginOverrides)
+      && (view.id !== "projecttasks" || isModuleEnabled(disabledModules, "tasks"));
+  });
+  const openContextProject = (panelId: string, title: string, mode: ProjectOpenMode): void => {
+    const definition = getPanelDefinition(panelId);
+    if (!definition || !isPanelAvailable(definition, disabledModules, pluginOverrides)) return;
+    if (mode === "window") {
+      void detachPanelToWindow(panelId, title).catch(() => toast({ title: "Не удалось открыть окно", tone: "danger" }));
+    } else if (mode === "beside" && !compact) {
+      const referenceGroup = apiRef.current?.activeGroup;
+      placePanel(panelId, referenceGroup ? { referenceGroup, direction: "right" } : undefined, title);
+    } else if (definition.id === "project") {
+      openEntity("project", panelInstanceId(panelId)!, title);
+    } else openPanel(panelId, title);
+    setMobileContextOpen(false);
+  };
 
   if (status === "unavailable") {
     return (
@@ -728,6 +849,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     <div
       className={cx(
         "flex h-dvh bg-background",
+        precision && "orion-shell--precision",
         compact && "orion-shell--compact",
         // The phone always uses the left drawer; the menu's own edge applies to the desktop shell.
         !compact && sidebarPosition === "right" && "flex-row-reverse",
@@ -787,6 +909,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         />
       ) : null}
       <Sidebar
+        allIconsVisible={precision}
         folders={folderViews}
         onToggleFolder={(id) => saveFolders(toggleFolder(sidebarFolders, id))}
         onCreateFolder={(panelId) => setFolderDialog({ mode: "create", panelId })}
@@ -811,14 +934,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
              * previous/next arrows and the name. Notifications live in the dockview tab
              * strip — the bell used to be clipped out of the 60px rail here.
              */}
-            <WorkspaceSwitcher
+            {!precision ? <WorkspaceSwitcher
               groups={switcherGroups}
               active={workspace}
               expanded={open}
               onSelect={requestWorkspaceSwitch}
               onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
               onOpenSpaces={() => leaveWorkbench("spaces")}
-            />
+            /> : null}
           </div>
         )}
         links={orderedNav.map((panel) => ({
@@ -951,16 +1074,55 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               {getPanelDefinition(activePanelId ?? "dashboard")?.label ?? "ORION"}
             </span>
             <RunningTimerChip />
+            <ResourcesToggle size="md" />
             <NotificationBell />
             <IconButton label="Настройки" onClick={() => openPanel("settings")}>
               <Settings className="h-4 w-4" />
             </IconButton>
           </header>
         ) : null}
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
+        {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
+          <div className="flex shrink-0 items-center" role="group" aria-label="История переходов">
+            <IconButton label="Назад (Alt+←)" className="h-11 w-11 sm:h-8 sm:w-8" disabled={!canStep(navHistory, -1, canShowPanel)} onClick={() => goHistory(-1)}><ChevronLeft className="h-4 w-4" /></IconButton>
+            <IconButton label="Вперёд (Alt+→)" className="h-11 w-11 sm:h-8 sm:w-8" disabled={!canStep(navHistory, 1, canShowPanel)} onClick={() => goHistory(1)}><ChevronRight className="h-4 w-4" /></IconButton>
+          </div>
+          <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
+          <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="hidden text-muted-foreground md:inline">{workspace.name}</span><span aria-hidden className="hidden px-2 md:inline">/</span>{editorContext?.title || activeDefinition?.label || "Рабочая область"}</div>
+          {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : editorContext.entityType === "document" ? "документа" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
+          <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
+          <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
+            { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
+            ...layoutNames.map(name => ({ label: name, onSelect: () => applyLayout(name) })),
+            { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
+          ]} />
+          {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
+          <button type="button" aria-label="Учётная запись" onClick={() => leaveWorkbench("account")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
+        </header> : null}
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border">
+            <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+              projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
+              links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => openFromMenu(panel.id) }))}
+              switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={requestWorkspaceSwitch} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
+              onOpen={openContextProject} onClose={() => { document.getElementById("orion-context-toggle")?.focus(); setContextHidden(true); }} />
+          </div> : null}
+          <div className="min-h-0 min-w-0 flex-1">
+            <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
+          </div>
+          {precision && inspectorOpen && !editorContext && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
+          <ResourcesDock />
         </main>
       </div>
+      <Sheet open={Boolean(precision && compact && mobileContextOpen)} onClose={() => setMobileContextOpen(false)} title="Навигация пространства" bare width="22rem">
+        <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+          projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
+          links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => { openFromMenu(panel.id); setMobileContextOpen(false); } }))}
+          switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={id => { requestWorkspaceSwitch(id); setMobileContextOpen(false); }} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
+          onOpen={openContextProject} onClose={() => setMobileContextOpen(false)} />
+      </Sheet>
+      <Sheet open={Boolean(precision && inspectorOpen && !editorContext && activeProjectId && !wideInspector)} onClose={() => setInspectorOpen(false)} title="Контекст проекта" bare width="22rem">
+        {activeProjectId ? <ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => { openContextProject(id, title, "open"); setInspectorOpen(false); }} onClose={() => setInspectorOpen(false)} /> : null}
+      </Sheet>
       <ConfirmDialog
         open={pendingSwitch !== null}
         title="Есть несохранённый текст"
@@ -996,6 +1158,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }}
         onCancel={() => setPendingTabClose(null)}
       />
+      <NodeBadge />
       {children}
     </div>
   );

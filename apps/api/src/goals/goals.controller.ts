@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import {
   addGoalPlanInputSchema,
   createGoalInputSchema,
@@ -7,6 +7,7 @@ import {
   type AddGoalPlanInput,
   type CreateGoalInput,
   type Goal,
+  type GoalHistory,
   type UpdateGoalInput,
   type UpdateGoalPlanInput
 } from "@orion/shared-types";
@@ -26,6 +27,15 @@ export class GoalsController {
   @Get()
   list(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<Goal[]> {
     return this.goals.list(user.userId, workspaceId);
+  }
+
+  @Get("history")
+  history(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Query("weeks") weeks?: string
+  ): Promise<GoalHistory> {
+    return this.goals.history(user.userId, workspaceId, Number(weeks) || 12);
   }
 
   @Post()

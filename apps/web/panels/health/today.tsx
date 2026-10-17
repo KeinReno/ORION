@@ -3,7 +3,8 @@
 import { useHealthToday } from "@orion/core-react";
 import { HEALTH_PREVENTIVE_KIND_LABEL, habitLocalDayKey, type HealthSubject } from "@orion/shared-types";
 import { Button, EmptyState, Skeleton } from "@orion/ui";
-import { CalendarClock, ShieldCheck } from "lucide-react";
+import { CalendarClock, Pill, ShieldCheck } from "lucide-react";
+import { DoseActions } from "./medications";
 import { SectionCard } from "../home/shared";
 
 const when = (iso: string): string => new Date(iso).toLocaleString("ru-RU", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -17,7 +18,7 @@ export function HealthToday({
 }: {
   workspaceId: string | undefined;
   subjects: HealthSubject[];
-  onOpen: (subjectId: string, tab: "appointments" | "preventive") => void;
+  onOpen: (subjectId: string, tab: "appointments" | "preventive" | "medications") => void;
 }): React.ReactElement {
   const today = habitLocalDayKey();
   const { data, isLoading, isError, refetch } = useHealthToday(workspaceId, today);
@@ -27,11 +28,30 @@ export function HealthToday({
   if (isError || !data) {
     return <EmptyState icon={ShieldCheck} title="Не удалось загрузить" action={<Button size="sm" onClick={() => void refetch()}>Повторить</Button>} />;
   }
-  if (data.appointments.length === 0 && data.preventive.length === 0) {
+  if (data.appointments.length === 0 && data.preventive.length === 0 && data.doses.length === 0) {
     return <EmptyState icon={ShieldCheck} title="Сейчас ничего не требует внимания" description="Запланируйте визит или добавьте профилактику — ближайшее появится здесь." />;
   }
   return (
     <div className="grid gap-4 [@container(min-width:760px)]:grid-cols-2">
+      {data.doses.length > 0 ? (
+        <div className="[@container(min-width:760px)]:col-span-2">
+          <SectionCard title="Принять сегодня" icon={Pill} summary={`${data.doses.length}`}>
+            <ul className="flex flex-col divide-y divide-border/60">
+              {data.doses.map((dose) => (
+                <li key={`${dose.subjectId}|${dose.medicationId}|${dose.time}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-label">
+                  <span className="w-12 shrink-0 font-mono tabular-nums">{dose.time}</span>
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onOpen(dose.subjectId, "medications")}>
+                    <span className="font-medium">{dose.name}</span>
+                    <span className="text-muted-foreground">{dose.dose ? ` · ${dose.dose}` : ""}</span>
+                    <span className="ml-2 text-2xs text-muted-foreground">{dose.subjectName}</span>
+                  </button>
+                  <DoseActions dose={dose} subjectId={dose.subjectId} workspaceId={workspaceId} canWrite />
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        </div>
+      ) : null}
       <SectionCard title="Ближайшие визиты" icon={CalendarClock} summary="14 дней">
         {data.appointments.length === 0 ? (
           <p className="text-label text-muted-foreground">Визитов в ближайшие две недели нет.</p>

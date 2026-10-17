@@ -25,6 +25,14 @@ import { ProjectCostsController } from "./project-costs/project-costs.controller
 import { ProjectCostsService } from "./project-costs/project-costs.service";
 import { TransferMatchController } from "./transfer-match/transfer-match.controller";
 import { TransferMatchService } from "./transfer-match/transfer-match.service";
+import { TemplatesController } from "./templates/templates.controller";
+import { TemplatesService } from "./templates/templates.service";
+import { SplitsController } from "./splits/splits.controller";
+import { SplitsService } from "./splits/splits.service";
+import { ExchangeRatesController } from "./exchange-rates/exchange-rates.controller";
+import { ExchangeRatesService } from "./exchange-rates/exchange-rates.service";
+import { FinanceDraftsController } from "./drafts/finance-drafts.controller";
+import { FinanceDraftsService } from "./drafts/finance-drafts.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
 import { FinanceExpenseReader } from "./public/expense-reader";
 import { FinanceExpenseWriter } from "./public/expense-writer";
@@ -50,7 +58,11 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
     GoalsController,
     ObligationsController,
     ProjectCostsController,
-    TransferMatchController
+    TransferMatchController,
+    TemplatesController,
+    SplitsController,
+    ExchangeRatesController,
+    FinanceDraftsController
   ],
   providers: [
     AccountsService,
@@ -65,10 +77,14 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
     ObligationsService,
     ProjectCostsService,
     TransferMatchService,
+    TemplatesService,
+    SplitsService,
+    ExchangeRatesService,
+    FinanceDraftsService,
     BudgetAlertsService,
     FinanceExpenseReader,
     FinanceExpenseWriter
   ],
-  exports: [FinanceExpenseReader, FinanceExpenseWriter]
+  exports: [FinanceExpenseReader, FinanceExpenseWriter, FinanceDraftsService]
 })
 export class FinanceModule {}

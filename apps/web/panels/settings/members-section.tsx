@@ -12,6 +12,7 @@ import type { WorkspaceInvite, WorkspaceMember, WorkspaceRole } from "@orion/sha
 import { Badge, Button, Card, ConfirmDialog, Input, Select, Skeleton, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
+import { ExportWorkspaceCard } from "../../components/workspace-transfer";
 import { describeAuthError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -40,6 +41,7 @@ export function MembersSettings(): React.ReactElement {
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"member" | "lead">("member");
   const [pendingRemove, setPendingRemove] = useState<WorkspaceMember | null>(null);
   const isOwner = workspace?.role === "owner";
   const canManageMembers = isOwner || workspace?.role === "lead";
@@ -56,12 +58,12 @@ export function MembersSettings(): React.ReactElement {
   async function onInvite(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const result = await createInvite.mutateAsync({ email });
+      const result = await createInvite.mutateAsync({ email, role: inviteRole });
       setEmail("");
       void navigator.clipboard.writeText(result.acceptUrl);
       toast({
         title: `Приглашение для ${result.email} создано`,
-        description: "Ссылка скопирована в буфер обмена — email пока не отправляется автоматически.",
+        description: `Ссылка скопирована в буфер обмена. Если ссылка не открывается на другом устройстве, дайте код: ${result.code}`,
         tone: "success"
       });
     } catch (error) {
@@ -140,7 +142,14 @@ export function MembersSettings(): React.ReactElement {
         )}
       </section>
 
-      {canManageMembers ? (
+      {canManageMembers && workspace?.isPersonal ? (
+        <p className="rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+          Это ваше личное пространство — оно создаётся для одного человека и не предлагается как общее. Чтобы работать вместе,
+          создайте общее пространство (например, «Дом») на экране «Пространства» и приглашайте туда.
+        </p>
+      ) : null}
+
+      {canManageMembers && !workspace?.isPersonal ? (
         <section className="space-y-2">
           <h3 className="text-xs font-medium uppercase tracking-wide text-subtle-foreground">Пригласить по email</h3>
           <Card>
@@ -148,6 +157,13 @@ export function MembersSettings(): React.ReactElement {
               <label className="flex-1 space-y-1">
                 <span className="text-xs text-muted-foreground">Email</span>
                 <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">Роль</span>
+                <Select className="w-36" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "member" | "lead")}>
+                  <option value="member">{ROLE_LABEL.member}</option>
+                  {isOwner ? <option value="lead">{ROLE_LABEL.lead}</option> : null}
+                </Select>
               </label>
               <Button
                 type="submit"
@@ -157,7 +173,8 @@ export function MembersSettings(): React.ReactElement {
               </Button>
             </form>
             <p className="mt-2 text-2xs text-subtle-foreground">
-              Отправки писем пока нет — ссылка на приглашение копируется в буфер обмена, передайте её вручную.
+              Отправки писем пока нет — ссылка копируется в буфер обмена, передайте её вручную. Человек сначала создаёт свой аккаунт
+              (тот же email), затем принимает приглашение. Роль «Тимлид» может выдать только владелец.
             </p>
           </Card>
         </section>
@@ -174,7 +191,9 @@ export function MembersSettings(): React.ReactElement {
                     {invite.email}
                     <Badge tone="neutral">{STATUS_LABEL[invite.status]}</Badge>
                   </p>
-                  <p className="mt-0.5 text-2xs text-muted-foreground">Истекает {shortDateTime(invite.expiresAt)}</p>
+                  <p className="mt-0.5 text-2xs text-muted-foreground">
+                    {ROLE_LABEL[invite.role]} · истекает {shortDateTime(invite.expiresAt)}
+                  </p>
                 </div>
                 <Button size="sm" variant="outline" disabled={revokeInvite.isPending} onClick={() => void onRevoke(invite)}>
                   Отозвать
@@ -184,6 +203,8 @@ export function MembersSettings(): React.ReactElement {
           </div>
         </section>
       ) : null}
+
+      {isOwner && workspace ? <ExportWorkspaceCard workspaceId={workspace.id} workspaceName={workspace.name} /> : null}
 
       <ConfirmDialog
         open={pendingRemove !== null}

@@ -96,6 +96,30 @@ export async function budgetSpentTx(
   return sum._sum.amount ?? 0;
 }
 
+const MAX_ROLLOVER_MONTHS = 12;
+
+/**
+ * What a budget inherits from earlier months. Only a budget with `rollover` inherits, and only from the budget of the
+ * SAME category in the month right before it (a month without a budget breaks the chain — nothing is guessed). Only
+ * a positive leftover is carried; an overspend is not charged to the next month. Capped at a year of chain.
+ */
+export async function budgetCarryOverTx(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  budget: { categoryId: string; month: Date; rollover: boolean },
+  depth = 0
+): Promise<number> {
+  if (!budget.rollover || depth >= MAX_ROLLOVER_MONTHS) return 0;
+  const previousMonth = new Date(Date.UTC(budget.month.getUTCFullYear(), budget.month.getUTCMonth() - 1, 1));
+  const previous = await tx.budget.findUnique({ where: { categoryId_month: { categoryId: budget.categoryId, month: previousMonth } } });
+  if (!previous || previous.workspaceId !== workspaceId) return 0;
+  const [carry, spent] = await Promise.all([
+    budgetCarryOverTx(tx, workspaceId, previous, depth + 1),
+    budgetSpentTx(tx, workspaceId, previous.categoryId, previous.month)
+  ]);
+  return Math.max(0, previous.limitAmount + carry - spent);
+}
+
 /**
  * An arbitrary `[from, to)` range from two ISO datetimes — the v0.13
  * alternative to `monthRange` for callers that want "this quarter" or

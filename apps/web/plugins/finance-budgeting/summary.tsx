@@ -2,6 +2,7 @@
 
 import { useBudgets } from "@orion/core-react";
 import { StatCard, cx } from "@orion/ui";
+import { budgetAvailable } from "@orion/shared-types";
 import type { DashboardFinanceSlotProps, FinanceSummarySlotProps } from "../../lib/extensions/contracts";
 
 function currentMonthKey(): string {
@@ -12,7 +13,7 @@ function currentMonthKey(): string {
 export function BudgetSummaryStat({ workspaceId }: FinanceSummarySlotProps): React.ReactElement | null {
   const { data: budgets } = useBudgets(workspaceId, currentMonthKey());
   if (!budgets || budgets.length === 0) return null;
-  const overBudgetCount = budgets.filter((b) => b.spent > b.limitAmount).length;
+  const overBudgetCount = budgets.filter((b) => b.spent > budgetAvailable(b)).length;
   return (
     <StatCard
       label="Бюджеты"
@@ -31,7 +32,7 @@ export function BudgetSummaryStat({ workspaceId }: FinanceSummarySlotProps): Rea
 export function BudgetDashboardLine({ workspaceId, month }: DashboardFinanceSlotProps): React.ReactElement | null {
   const { data: budgets } = useBudgets(workspaceId, month);
   if (!budgets || budgets.length === 0) return null;
-  const overBudgetCount = budgets.filter((b) => b.spent > b.limitAmount).length;
+  const overBudgetCount = budgets.filter((b) => b.spent > budgetAvailable(b)).length;
   return (
     <p className={cx("mt-1 text-micro", overBudgetCount > 0 ? "text-destructive" : "text-muted-foreground")}>
       {overBudgetCount > 0

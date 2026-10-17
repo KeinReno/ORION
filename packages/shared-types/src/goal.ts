@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { milestoneStatusSchema } from "./milestone";
 import { isTaskClosed, taskPrioritySchema, taskStatusSchema, type TaskPriority, type TaskStatus } from "./task";
 
 /**
@@ -25,6 +26,17 @@ export const goalNextTaskSchema = z.object({
 });
 export type GoalNextTask = z.infer<typeof goalNextTaskSchema>;
 
+/** A project milestone seen from a goal: a waypoint on the way through the plan. */
+export const goalMilestoneSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: milestoneStatusSchema,
+  dueAt: z.string().nullable(),
+  tasks: z.number().int(),
+  closed: z.number().int()
+});
+export type GoalMilestone = z.infer<typeof goalMilestoneSchema>;
+
 export const goalPlanSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -42,7 +54,9 @@ export const goalPlanSchema = z.object({
   /** Open tasks past their due date. */
   overdue: z.number().int(),
   /** Latest change to any task of the project; null = the project has no tasks. */
-  lastActivityAt: z.string().nullable()
+  lastActivityAt: z.string().nullable(),
+  /** The project's milestones in plan order (all of them; the sky shows a window, see `milestoneWindow`). */
+  milestones: z.array(goalMilestoneSchema)
 });
 export type GoalPlan = z.infer<typeof goalPlanSchema>;
 
@@ -185,6 +199,52 @@ export function summarizePlanTasks(tasks: ReadonlyArray<PulseTask>, now: Date): 
   };
 }
 
+/** How many milestones the sky draws per plan. */
+export const MILESTONE_WINDOW = 4;
+
+/**
+ * Which milestones to draw on a plan's branch: the whole route when it is short, otherwise a
+ * window that starts one step behind the first unfinished milestone (so the last passed waypoint
+ * stays visible) — the sky shows where you are, not the entire history.
+ */
+export function milestoneWindow<T extends { status: "planned" | "in_progress" | "done" }>(milestones: ReadonlyArray<T>): T[] {
+  if (milestones.length <= MILESTONE_WINDOW) return [...milestones];
+  const firstOpen = milestones.findIndex((m) => m.status !== "done");
+  const from = firstOpen === -1 ? milestones.length - MILESTONE_WINDOW : Math.min(Math.max(0, firstOpen - 1), milestones.length - MILESTONE_WINDOW);
+  return milestones.slice(from, from + MILESTONE_WINDOW);
+}
+
+export type GoalPaceState = "on_track" | "behind" | "late" | "unknown" | "none";
+
+export interface GoalPace {
+  state: GoalPaceState;
+  /** Share of the time between start and deadline that has passed, 0–100; null = no deadline. */
+  elapsed: number | null;
+}
+
+/** Progress may trail the clock by this many points before the goal counts as behind. */
+export const PACE_TOLERANCE = 15;
+
+/**
+ * Is the goal keeping up with its deadline? The clock runs from `start` (the goal's creation —
+ * there is no separate start date yet) to `dueAt`; the goal is "behind" when its progress trails
+ * the elapsed share of that span by more than PACE_TOLERANCE, "late" once the deadline passed
+ * unfinished. Unknown progress is "unknown", never assumed 0 — and finished or dropped goals have no pace.
+ */
+export function goalPace(
+  goal: { status: GoalStatus; createdAt: string; dueAt: string | null; progress: number | null },
+  now: Date
+): GoalPace {
+  if (goal.status !== "active" || goal.dueAt === null) return { state: "none", elapsed: null };
+  const start = new Date(goal.createdAt).getTime();
+  const due = new Date(goal.dueAt).getTime();
+  const span = due - start;
+  const elapsed = span <= 0 ? 100 : Math.min(100, Math.max(0, Math.round(((now.getTime() - start) / span) * 100)));
+  if (now.getTime() > due) return { state: goal.progress === 100 ? "none" : "late", elapsed: 100 };
+  if (goal.progress === null) return { state: "unknown", elapsed };
+  return { state: goal.progress < elapsed - PACE_TOLERANCE ? "behind" : "on_track", elapsed };
+}
+
 /** Goals nest at most this deep: goal (1) -> sub-goal (2) -> sub-sub-goal (3). */
 export const GOAL_MAX_DEPTH = 3;
 
@@ -287,4 +347,43 @@ export function goalSubtreeHeight(goalId: string, nodes: ReadonlyArray<{ id: str
     return best + 1;
   };
   return walk(goalId);
+}
+
+/** One reconstructed moment of a project: how many tasks existed and how many of them were closed. */
+export const goalHistoryCountSchema = z.object({ tasks: z.number().int(), closed: z.number().int() });
+export type GoalHistoryCount = z.infer<typeof goalHistoryCountSchema>;
+
+/** Progress of the projects behind the goals at weekly points in the past (oldest first, newest = now). */
+export const goalHistorySchema = z.object({
+  points: z.array(z.string()),
+  /** projectId -> one count per point. */
+  projects: z.record(z.array(goalHistoryCountSchema))
+});
+export type GoalHistory = z.infer<typeof goalHistorySchema>;
+
+export const GOAL_HISTORY_MAX_WEEKS = 52;
+
+/** `weeks + 1` weekly moments, oldest first, the last one being `now`. */
+export function historyPoints(now: Date, weeks: number): Date[] {
+  const count = Math.min(GOAL_HISTORY_MAX_WEEKS, Math.max(1, Math.round(weeks)));
+  return Array.from({ length: count + 1 }, (_, i) => new Date(now.getTime() - (count - i) * 7 * 86_400_000));
+}
+
+/**
+ * What a project looked like at each point, rebuilt from its tasks' own dates — there is no stored
+ * history. A task counts from its creation; it counts as closed from `closedAt`. This is an honest
+ * approximation: tasks deleted since, or reopened after being closed, are invisible to it.
+ */
+export function projectHistory(tasks: ReadonlyArray<{ createdAt: Date; closedAt: Date | null }>, points: ReadonlyArray<Date>): GoalHistoryCount[] {
+  return points.map((point) => {
+    const t = point.getTime();
+    let total = 0;
+    let closed = 0;
+    for (const task of tasks) {
+      if (task.createdAt.getTime() > t) continue;
+      total += 1;
+      if (task.closedAt !== null && task.closedAt.getTime() <= t) closed += 1;
+    }
+    return { tasks: total, closed };
+  });
 }

@@ -3,6 +3,7 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { isIP } from "node:net";
 import { HttpExceptionFilter } from "./common/http-exception.filter";
 import { RequestLoggingInterceptor } from "./common/request-logging.interceptor";
+import { configureLan } from "./lan/configure-lan";
 
 const DEFAULT_WEB_ORIGIN = "http://localhost:3010";
 const DEFAULT_DESKTOP_ORIGINS = ["http://tauri.localhost", "tauri://localhost"];
@@ -24,6 +25,7 @@ export function configureApp(app: INestApplication): void {
   // The default JSON limit (100 kB) is smaller than a 2000-row import batch; everything else stays tiny.
   (app as NestExpressApplication).useBodyParser("json", { limit: "2mb" });
   app.enableCors({ origin: origins, credentials: true });
+  configureLan(app);
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new RequestLoggingInterceptor());
   app.enableShutdownHooks();

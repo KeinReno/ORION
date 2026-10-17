@@ -82,29 +82,38 @@ export class EventsService {
   }
 
   async create(userId: string, workspaceId: string, input: CreateEventInput): Promise<Event> {
-    const { startAt, endAt } = normaliseRange(input.startAt, input.endAt, input.allDay);
     const event = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await assertProjectTx(tx, workspaceId, input.projectId ?? null);
-      return tx.event.create({
-        data: {
-          workspaceId,
-          title: input.title,
-          description: input.description,
-          location: input.location ?? null,
-          url: input.url ?? null,
-          startAt,
-          endAt,
-          allDay: input.allDay,
-          tz: input.tz ?? null,
-          colorTag: input.colorTag ?? null,
-          recurrence: input.recurrence ? (recurrenceSpecSchema.parse(input.recurrence) as Prisma.InputJsonValue) : Prisma.DbNull,
-          reminders: input.reminders,
-          projectId: input.projectId ?? null
-        }
-      });
+      return this.createTx(tx, workspaceId, input);
     });
     return toDto(event);
+  }
+
+  /**
+   * The body of `create()`, minus the `withUser` wrap — so the Agent Gateway's `capture` can create the event in the
+   * SAME transaction as its idempotency record (same shape as `TasksService.createTx`). The caller owns the
+   * transaction and the membership check.
+   */
+  async createTx(tx: Prisma.TransactionClient, workspaceId: string, input: CreateEventInput) {
+    const { startAt, endAt } = normaliseRange(input.startAt, input.endAt, input.allDay);
+    await assertProjectTx(tx, workspaceId, input.projectId ?? null);
+    return tx.event.create({
+      data: {
+        workspaceId,
+        title: input.title,
+        description: input.description,
+        location: input.location ?? null,
+        url: input.url ?? null,
+        startAt,
+        endAt,
+        allDay: input.allDay,
+        tz: input.tz ?? null,
+        colorTag: input.colorTag ?? null,
+        recurrence: input.recurrence ? (recurrenceSpecSchema.parse(input.recurrence) as Prisma.InputJsonValue) : Prisma.DbNull,
+        reminders: input.reminders,
+        projectId: input.projectId ?? null
+      }
+    });
   }
 
   /**

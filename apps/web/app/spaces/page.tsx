@@ -4,12 +4,14 @@ import { KaidenLogo } from "../../components/kaiden-logo";
 
 import { useCreateWorkspace, useLogout, useSession, useWorkspaces } from "@orion/core-react";
 import type { WorkspaceRole } from "@orion/shared-types";
-import { AuroraBackground, Button, Input, SpotlightCard } from "@orion/ui";
+import { AuroraBackground, Button, Input, Select, SpotlightCard } from "@orion/ui";
 import { motion } from "framer-motion";
 import { ChevronRight, FolderPlus, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
+import { JoinByCodeCard } from "../../components/join-by-code";
+import { ImportWorkspaceCard } from "../../components/workspace-transfer";
 import { describeAuthError } from "../../lib/error-message";
 import { setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 
@@ -28,7 +30,7 @@ export default function SpacesPage(): React.ReactElement {
   const logout = useLogout();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
-  const [soloTemplate, setSoloTemplate] = useState(true);
+  const [template, setTemplate] = useState<"" | "solo-dev" | "home">("solo-dev");
 
   useEffect(() => {
     // "unavailable" (API unreachable) must not bounce to /login — that's
@@ -44,7 +46,7 @@ export default function SpacesPage(): React.ReactElement {
     router.replace("/dashboard");
   }
 
-  async function createSpace(input: { name: string; template?: "solo-dev" }): Promise<void> {
+  async function createSpace(input: { name: string; template?: "solo-dev" | "home" }): Promise<void> {
     const created = await create.mutateAsync(input);
     enter(created.id);
   }
@@ -54,7 +56,7 @@ export default function SpacesPage(): React.ReactElement {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      await createSpace({ name: trimmed, template: soloTemplate ? "solo-dev" : undefined });
+      await createSpace({ name: trimmed, template: template || undefined });
     } catch {
       return;
     }
@@ -173,14 +175,13 @@ export default function SpacesPage(): React.ReactElement {
                 onChange={(e) => setName(e.target.value)}
                 required
               />
-              <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={soloTemplate}
-                  onChange={(e) => setSoloTemplate(e.target.checked)}
-                />
-                Заполнить как ядро соло-разработчика
+              <label className="space-y-1 text-sm text-muted-foreground">
+                <span>Шаблон</span>
+                <Select value={template} onChange={(e) => setTemplate(e.target.value as "" | "solo-dev" | "home")}>
+                  <option value="solo-dev">Ядро соло-разработчика</option>
+                  <option value="home">Дом — общее пространство семьи (списки, задачи, календарь, дом, склад)</option>
+                  <option value="">Пустое</option>
+                </Select>
               </label>
               {create.isError ? (
                 <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -206,6 +207,9 @@ export default function SpacesPage(): React.ReactElement {
               Новое пространство
             </button>
           )}
+
+          <JoinByCodeCard onJoined={() => undefined} />
+          <ImportWorkspaceCard onImported={enter} />
 
           <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
             <a

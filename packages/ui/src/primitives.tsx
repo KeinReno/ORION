@@ -51,7 +51,7 @@ function StatusFlashIcon({ flash, transition }: { flash: "success" | "error"; tr
       initial={{ scale: 0.4, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={transition}
-      className={clsx("flex items-center justify-center", flash === "success" ? "text-success" : "text-destructive")}
+      className={clsx("flex items-center justify-center", flash === "success" ? "text-ui-success" : "text-ui-danger")}
     >
       {flash === "success" ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
     </motion.span>
@@ -77,15 +77,15 @@ export function Button({
     <button
       disabled={disabled || status === "pending"}
       className={clsx(
-        "inline-flex select-none items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,transform] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-accent/60 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex select-none items-center justify-center gap-2 rounded-ui-button font-medium transition-[color,background-color,border-color,transform] outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 disabled:pointer-events-none disabled:opacity-50",
         "active:scale-[0.97]",
         size === "sm" ? "px-2.5 py-1.5 text-label" : "px-4 py-2 text-body",
-        variant === "primary" && "bg-accent text-accent-foreground hover:bg-accent-hover",
-        variant === "outline" && "border border-border-strong bg-transparent text-foreground hover:bg-card-hover",
-        variant === "ghost" && "bg-white/5 text-foreground hover:bg-white/10",
-        variant === "subtle" && "bg-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground",
-        variant === "danger" && "bg-destructive/10 text-destructive hover:bg-destructive/20",
+        variant === "primary" && "bg-ui-button text-ui-button-foreground hover:bg-ui-accent-hover",
+        variant === "outline" && "border border-ui-border-strong bg-transparent text-ui-primary hover:bg-ui-hover",
+        variant === "ghost" && "bg-ui-tint/5 text-ui-primary hover:bg-ui-tint/10",
+        variant === "subtle" && "bg-transparent text-ui-secondary hover:bg-ui-tint/5 hover:text-ui-primary",
+        variant === "danger" && "bg-ui-danger/10 text-ui-danger hover:bg-ui-danger/20",
         className
       )}
       {...props}
@@ -127,11 +127,11 @@ export function IconButton({
       title={label}
       disabled={disabled || status === "pending"}
       className={clsx(
-        "inline-flex shrink-0 items-center justify-center rounded-md text-muted-foreground transition-[color,background-color,transform] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-accent/60 active:scale-[0.93]",
+        "inline-flex shrink-0 items-center justify-center rounded-md text-ui-secondary transition-[color,background-color,transform] outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 active:scale-[0.93]",
         size === "sm" ? "h-7 w-7" : "h-8 w-8",
-        tone === "default" && "hover:bg-white/10 hover:text-foreground",
-        tone === "danger" && "hover:bg-destructive/15 hover:text-destructive",
+        tone === "default" && "hover:bg-ui-tint/10 hover:text-ui-primary",
+        tone === "danger" && "hover:bg-ui-danger/15 hover:text-ui-danger",
         className
       )}
       {...props}
@@ -146,8 +146,8 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>): React.React
     <input
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
-        "placeholder:text-subtle-foreground outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
+        "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
+        "placeholder:text-ui-subtle outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
         props.className
       )}
     />
@@ -159,8 +159,8 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): Re
     <textarea
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-border bg-white/[0.03] px-3 py-2 text-body text-foreground transition-colors",
-        "placeholder:text-subtle-foreground outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
+        "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
+        "placeholder:text-ui-subtle outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
         props.className
       )}
     />
@@ -177,9 +177,9 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
         // it sits next to in a form row (S12 control-height audit).
         // A native select is as wide as its longest option; min-w-0/max-w-full keep a
         // long option from stretching the card or form it sits in.
-        "min-w-0 max-w-full rounded-lg border border-border bg-white/[0.03] px-2.5 py-2 text-body text-foreground transition-colors",
-        "outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/25",
-        "[&>option]:bg-card [&>option]:text-foreground",
+        "min-w-0 max-w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-2.5 py-2 text-body text-ui-primary transition-colors",
+        "outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
+        "[&>option]:bg-ui-overlay [&>option]:text-ui-primary",
         className
       )}
     />

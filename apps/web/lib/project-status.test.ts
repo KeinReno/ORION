@@ -2,10 +2,13 @@ import type { Milestone, Task } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import {
   daysUntil,
+  nearestMilestone,
   nextActionByProject,
   planStrip,
   pluralDays,
+  projectAttention,
   projectDueLabel,
+  projectsNeedingAttention,
   reportContradicted,
   reportFreshness
 } from "./project-status";
@@ -177,5 +180,53 @@ describe("nextActionByProject", () => {
     expect(result.get("p1")?.next?.id).toBe("p1-late");
     expect(result.get("p2")).toMatchObject({ next: null, open: 1 });
     expect(result.has("p3")).toBe(false);
+  });
+});
+
+describe("projectAttention", () => {
+  const base = { status: "active", archivedAt: null, dueAt: null, reportedHealth: null, reportedAt: null };
+  const action = (overdue: number) => ({ next: null, open: overdue, overdue });
+  it("says nothing about a quiet project (absence is not 'all fine')", () => {
+    expect(projectAttention(base, undefined, NOW)).toBeNull();
+    expect(projectAttention({ ...base, reportedHealth: "on_track", reportedAt: at(-1) }, action(0), NOW)).toBeNull();
+  });
+  it("never flags paused, finished or archived projects", () => {
+    const loud = { ...base, reportedHealth: "delayed", dueAt: at(-9) };
+    expect(projectAttention({ ...loud, status: "on_hold" }, action(3), NOW)).toBeNull();
+    expect(projectAttention({ ...loud, status: "completed" }, action(3), NOW)).toBeNull();
+    expect(projectAttention({ ...loud, archivedAt: at(-1) }, action(3), NOW)).toBeNull();
+  });
+  it("lists reasons in words, most serious first", () => {
+    const got = projectAttention({ ...base, reportedHealth: "delayed", dueAt: at(-3), reportedAt: at(-1) }, action(2), NOW)!;
+    expect(got.reasons).toEqual(["Автор отметил задержку", "Срок прошёл 3 дня назад", "Просрочено задач: 2"]);
+  });
+  it("flags a stale report and a risk on their own", () => {
+    expect(projectAttention({ ...base, reportedHealth: "on_track", reportedAt: at(-20) }, undefined, NOW)!.reasons).toEqual(["Отчёту 20 дней"]);
+    expect(projectAttention({ ...base, reportedHealth: "at_risk", reportedAt: at(-1) }, undefined, NOW)!.reasons).toEqual(["Автор отметил риск"]);
+  });
+  it("orders flagged projects by urgency, then name", () => {
+    const list = [
+      { ...base, id: "a", name: "Б", reportedHealth: "at_risk", reportedAt: at(-1) },
+      { ...base, id: "b", name: "А", reportedHealth: "delayed", reportedAt: at(-1) },
+      { ...base, id: "c", name: "В" },
+      { ...base, id: "d", name: "Я", reportedHealth: "at_risk", reportedAt: at(-2) }
+    ];
+    expect(projectsNeedingAttention(list, new Map(), NOW).map((x) => x.project.id)).toEqual(["b", "a", "d"]);
+  });
+});
+
+describe("nearestMilestone", () => {
+  const ms = (id: string, patch: Partial<Milestone>): Milestone => ({
+    id, workspaceId: "ws", projectId: "p", title: id, note: "", status: "planned", startAt: null, dueAt: null, estimatedMinutes: null,
+    order: 0, dependencyIds: [], blocked: false, createdAt: at(-30), updatedAt: at(-30), ...patch
+  });
+  it("is null with no open milestone", () => {
+    expect(nearestMilestone([])).toBeNull();
+    expect(nearestMilestone([ms("a", { status: "done", dueAt: at(1) })])).toBeNull();
+  });
+  it("takes the soonest deadline among open ones and puts undated last", () => {
+    const list = [ms("late", { dueAt: at(30) }), ms("none", {}), ms("soon", { dueAt: at(3), status: "in_progress" }), ms("done", { dueAt: at(1), status: "done" })];
+    expect(nearestMilestone(list)?.id).toBe("soon");
+    expect(nearestMilestone([ms("b", { order: 2 }), ms("a", { order: 1 })])?.id).toBe("a");
   });
 });

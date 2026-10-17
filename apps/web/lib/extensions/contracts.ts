@@ -373,10 +373,25 @@ export interface SidebarWidgetSlotProps {
   onOpenCalendar: () => void;
 }
 
+/**
+ * shell.context.resources — the body of the «Ресурсы» tab of the context panel (ADR-0014). The shell owns
+ * the frame, the tabs and the context; a provider draws the resources it owns for that context. With no
+ * provider enabled the panel says the tab is unavailable instead of drawing an empty box.
+ */
+export type ResourceContext =
+  | { kind: "section"; panelId: string; moduleId: OrionModuleId | null; label: string }
+  | { kind: "entity"; ref: import("@orion/shared-types").EntityRef; title: string; sectionLabel: string };
+
+export interface ResourcesSlotProps {
+  workspaceId: string;
+  context: ResourceContext;
+}
+
 export interface OpportunitiesViewSlotProps { workspaceId: string; workspaceLabel: string; canManage: boolean; onDirtyChange: (dirty: boolean) => void }
-export interface OpportunitiesDetailsSlotProps { workspaceId: string; opportunity: import("@orion/shared-types").Opportunity; canManage: boolean }
+export interface OpportunitiesDetailsSlotProps { workspaceId: string; opportunity: import("@orion/shared-types").Opportunity; canManage: boolean; onDirtyChange?: (dirty: boolean) => void }
 export interface HomeObjectTabSlotProps { workspaceId: string | undefined; home: import("@orion/shared-types").Home; overview: import("@orion/shared-types").HomeOverview; financeAvailable: boolean; onOpenTab?: (tabId: string) => void }
 export interface SlotContracts {
+  "shell.context.resources": ResourcesSlotProps;
   "home.object.tabs": HomeObjectTabSlotProps;
   "home.object.overview.cards": HomeObjectTabSlotProps;
   "opportunities.views": OpportunitiesViewSlotProps;

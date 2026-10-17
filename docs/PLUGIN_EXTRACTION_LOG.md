@@ -175,6 +175,11 @@
 - **Расширения существующих плагинов (без новых id):** подсказки регулярных платежей — `finance-recurring`; сравнение месяцев, «куда уходит больше всего», CSV — `finance-reports`; контрагент, частичное погашение и история платежей — `finance-obligations`.
 - **Плагин выключен:** вкладки и баннер скрыты, API отвечает 409; операции, проекты и обязательства не затрагиваются.
 
+### `finance-templates`, `finance-split`, `finance-exchange-rates`, `finance-ai-drafts` (модуль «Финансы») — 15 октября 2026
+
+Ещё четыре новых плагина того же [ADR-0013](adr/ADR-0013-finance-project-and-automation-plugins.md): шаблоны операций (`finance.transactions.top`), общие расходы и курсы валют (`finance.tabs`; курсы дополнительно включают пересчёт во вкладке «Капитал»), черновики операций от ИИ-агентов (`finance.transactions.top` + scope `finance:draft` моста). В базе добавлены **личные счета** (`Account.visibility`/`ownerId` и политики RLS) — это правило данных, а не плагин.
+- **Плагин выключен:** вкладки и блоки скрыты, API отвечает 409 (агентам — тоже); шаблоны, расходы, курсы и черновики сохраняются и вернутся при включении.
+
 ## Итог и что осталось
 
 Вынесено по карте миграции (по умолчанию все включены, parity проверен на каждом): `habits-insights`; `finance-budgeting`, `finance-goals`, `finance-recurring`, `finance-reports`; `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`; `documents-history`, `documents-office`; `notes-history`, `notes-daily`, `notes-templates`; `time-insights`, `time-billing`; `calendar-external`, `calendar-recurrence`, `calendar-reminders`; `projects-planning`; `inventory-alerts`; новые плагины интеграций (11 октября): `finance-quick-entry`, `finance-import`, `finance-obligations`, `finance-forecast` — см. `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`.
@@ -190,3 +195,7 @@
 | `notes-knowledge` | Будущий слой знаний — отдельное решение (карта §6). |
 
 Открытые решения владельца: ADR-0001 … ADR-0004 (все «предложено, не принято»).
+
+### `documents-resources` (модуль «Документы») — 15 октября 2026
+
+Новый плагин, а не вынос существующего: поставщик вкладки «Ресурсы» правой контекстной панели ([ADR-0014](adr/ADR-0014-context-resources-panel.md)). Слот `shell.context.resources` (props: `workspaceId`, `context`); `extendsModuleId: "documents"`, по умолчанию включён. Без плагина (или без «Документов») вкладка показывает «Ресурсы недоступны», «Связи» и «Свойства» работают; файлы и связи не удаляются.

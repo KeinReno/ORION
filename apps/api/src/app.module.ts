@@ -15,6 +15,7 @@ import { DocumentsModule } from "./documents/documents.module";
 import { SyncModule } from "./sync/sync.module";
 import { SettingsModule } from "./settings/settings.module";
 import { SystemModule } from "./system/system.module";
+import { LanModule } from "./lan/lan.module";
 import { CapturesModule } from "./captures/captures.module";
 import { ProjectsModule } from "./projects/projects.module";
 import { SearchModule } from "./search/search.module";
@@ -64,6 +65,7 @@ import { UsersModule } from "./users/users.module";
     SyncModule,
     SettingsModule,
     SystemModule,
+    LanModule,
     ProjectsModule,
     CapturesModule,
     InboxModule,

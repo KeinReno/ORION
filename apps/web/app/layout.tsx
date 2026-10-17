@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Providers } from "../lib/providers";
+import "@orion/ui/src/theme.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

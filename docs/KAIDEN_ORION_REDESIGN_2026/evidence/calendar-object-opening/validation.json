@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-16T12:12:48.8882277Z",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "7a2d1150e1055669bef8d6d2a00242f0828eeafb",
+  "scope": "Calendar agenda only: explicit opening of original tasks and notes",
+  "unit": {
+    "passed": 809,
+    "files": 105
+  },
+  "pluginContracts": {
+    "passed": 10,
+    "files": 1
+  },
+  "browser": {
+    "finalFocused": {
+      "failed": 0,
+      "stage": "same final production build, no code or timeout changes",
+      "profiles": [
+        "default-full",
+        "plugins-off"
+      ],
+      "passed": 2
+    },
+    "database": "isolated 127.0.0.1:5547",
+    "initialRegression": {
+      "failed": 1,
+      "passed": 64,
+      "elapsedMs": 8650,
+      "transactionLimitMs": 5000,
+      "timestamp": "2026-10-16T12:08:53.467Z",
+      "error": "HTTP 500: expired Prisma transaction while disabling finance-transfer-match",
+      "total": 65,
+      "failedStage": "disableAllPlugins fixture before calendar UI",
+      "requestId": "0186164a-5675-44fd-9a6b-452b27086860",
+      "failedScenario": "calendar-object-opening plugins-off"
+    },
+    "web": "localhost:3110",
+    "api": "localhost:4100"
+  },
+  "verified": [
+    "Enter opens original task beside calendar",
+    "agenda view/filter retained on return",
+    "failed task draft retained while opening note",
+    "note separate window receives original workspace and ID",
+    "note opens standalone tab",
+    "no duplicate task editor from keyboard interception",
+    "retry saves retained draft",
+    "exactly one task, one note and one native event",
+    "original dueAt/eventAt/startAt/endAt unchanged",
+    "native event still opens original editor and closes without write"
+  ],
+  "typecheck": "passed",
+  "architecture": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": [
+      "CalendarPanel:361",
+      "DocumentsPanel:261"
+    ]
+  },
+  "desktopStaticExport": "passed before final production build",
+  "productionBuild": "pnpm build passed (API/web)",
+  "databaseMigration": "none",
+  "dependencies": "unchanged",
+  "initialSetupDelayCause": "not determined; recorded from API log, not masked by retry configuration",
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "remaining": [
+    "opening commands in month/week/day grids",
+    "standalone document view",
+    "context back/forward history",
+    "view-state/window recovery",
+    "full module visual migration"
+  ]
+}

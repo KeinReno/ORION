@@ -1,0 +1,52 @@
+// Synthetic HTTP acceptance of an isolated packaged runtime. No HH requests or real personal data.
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+const server = new URL(process.env.ORION_HUB_SMOKE_API_URL ?? "http://127.0.0.1:4118");
+if (!["localhost", "127.0.0.1"].includes(server.hostname) || server.port === "4000" || server.protocol !== "http:") throw new Error("Use a dedicated local test runtime, never the user's API on port 4000");
+let checks = 0;
+async function request(path, token = "", body, expected = 200, method = body === undefined ? "GET" : "POST") {
+  const response = await fetch(new URL(path, server), { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  assert.equal(response.status, expected, `${method} ${path}: HTTP ${response.status}`);
+  checks += 1; return response.json();
+}
+await request("/system/health");
+const email = `hub-packaged-${randomUUID()}@example.test`;
+const account = await request("/auth/register", "", { name: "Synthetic Hub packaged smoke", email, password: "synthetic-test-password-123" }, 201);
+const token = account.accessToken;
+const [workspace] = await request("/workspaces/me", token);
+const base = `/workspaces/${workspace.id}`;
+for (const id of ["opportunities-profiles", "opportunities-hh-import", "opportunities-assistant", "opportunities-execution", "opportunities-manager"]) await request(`${base}/plugins/${id}`, token, { enabled: true }, 200, "PATCH");
+const profile = await request(`${base}/opportunity-profiles`, token, { displayName: "Synthetic Candidate", acknowledgeWorkspaceVisibility: true }, 201);
+const profilePath = `${base}/opportunity-profiles/${profile.id}`;
+const fact = await request(`${profilePath}/facts`, token, { statement: "Писал SQL запросы для отчётности", source: "Synthetic fixture" }, 201);
+await request(`${profilePath}/facts/${fact.id}`, token, { expectedRevision: fact.revision, state: "confirmed" }, 200, "PATCH");
+const material = await request(`${profilePath}/materials`, token, { title: "Synthetic Resume", type: "resume", content: "SQL analyst" }, 201);
+const current = await request(profilePath, token);
+await request(`${profilePath}/active-resume`, token, { expectedRevision: current.revision, materialId: material.id }, 201);
+const opportunity = await request(`${base}/opportunities`, token, { kind: "job", title: "Synthetic Analyst", description: "Требования:\n- Опыт написания SQL запросов", sourceType: "hh", externalId: "8800001", canonicalUrl: "https://hh.ru/vacancy/8800001", conditions: { workFormat: "remote", amountMin: 150000, amountMax: 200000, paymentBasis: "monthly", taxBasis: "net" } }, 201);
+const draft = await request(`${base}/opportunity-assistant/drafts`, token, { opportunityId: opportunity.id, profileId: profile.id, kind: "response" }, 201);
+await request(`${base}/opportunity-assistant/drafts/${draft.id}/approve`, token, { expectedRevision: draft.revision, textHash: draft.textHash }, 201);
+const dry = await request(`${base}/opportunity-assistant/drafts/${draft.id}/dry-run`, token, {}, 201);
+assert.equal(dry.send, false); assert.deepEqual(dry.blockers, []);
+const connection = await request(`${base}/opportunity-execution/connections`, token, { profileId: profile.id, accountLabel: "Simulation only" }, 201);
+const bind = await request("/opportunities-executor/v1/bind", "", { pairingCode: connection.pairingCode, externalAccountId: "synthetic-packaged-account", runnerId: "packaged-smoke", contractVersion: "opportunities-executor/v1" });
+const attempt = await request(`${base}/opportunity-execution/attempts`, token, { draftId: draft.id, connectionId: connection.id, idempotencyKey: randomUUID() }, 201);
+await request(`${base}/opportunity-execution/attempts/${attempt.id}/approve`, token, { expectedRevision: attempt.revision, payloadHash: attempt.payloadHash }, 201);
+const { job } = await request("/opportunities-executor/v1/claim", bind.runnerToken, {});
+assert.equal(job.attemptId, attempt.id);
+const lease = { attemptId: job.attemptId, leaseToken: job.leaseToken };
+const reserved = await request("/opportunities-executor/v1/reserve", bind.runnerToken, { ...lease, observedAccountId: "synthetic-packaged-account", baselineExists: false });
+assert.equal(reserved.proceed, true);
+const result = await request("/opportunities-executor/v1/result", bind.runnerToken, { ...lease, outcome: "confirmed", evidence: [{ kind: "event_id", at: new Date().toISOString(), accountId: "synthetic-packaged-account", recipientExternalId: "8800001", ref: "synthetic-packaged-event" }] });
+assert.equal(result.state, "confirmed"); assert.equal(result.accepted, true);
+const stored = await request(`${base}/opportunity-execution/attempts/${attempt.id}`, token);
+assert.equal(stored.confirmationBasis, "runner_observed");
+await request(`${base}/plugins/opportunities-execution`, token, { enabled: false }, 200, "PATCH");
+await request(`${base}/plugins/opportunities-execution`, token, { enabled: true }, 200, "PATCH");
+const [paused] = await request(`${base}/opportunity-execution/connections`, token);
+assert.equal(paused.state, "paused");
+assert.equal((await request("/opportunities-executor/v1/claim", bind.runnerToken, {})).job, null);
+await request(`${base}/opportunity-execution/connections/${connection.id}/revoke`, token, { expectedRevision: paused.revision }, 201);
+await request("/opportunities-executor/v1/claim", bind.runnerToken, {}, 401);
+console.log(JSON.stringify({ checks, workspaceId: workspace.id, email, source: "isolated packaged runtime", externalRequests: 0, sendsToHH: 0 }));

@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { Budget, CreateBudgetInput, UpdateBudgetInput } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
-import { assertCategoryInWorkspace, budgetSpentTx, firstOfMonth, monthRange } from "../finance-refs.util";
+import { assertCategoryInWorkspace, budgetCarryOverTx, budgetSpentTx, firstOfMonth, monthRange } from "../finance-refs.util";
 
 @Injectable()
 export class BudgetsService {
@@ -28,7 +28,8 @@ export class BudgetsService {
       const withSpent: Budget[] = [];
       for (const budget of budgets) {
         const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
-        withSpent.push(toDto(budget, spent));
+        const carry = await budgetCarryOverTx(tx, workspaceId, budget);
+        withSpent.push(toDto(budget, spent, carry));
       }
       return withSpent;
     });
@@ -41,10 +42,10 @@ export class BudgetsService {
         await this.workspaces.assertMemberTx(tx, userId, workspaceId);
         await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
         return tx.budget.create({
-          data: { workspaceId, categoryId: input.categoryId, month, limitAmount: input.limitAmount }
+          data: { workspaceId, categoryId: input.categoryId, month, limitAmount: input.limitAmount, rollover: input.rollover ?? false }
         });
       });
-      return toDto(budget, 0);
+      return toDto(budget, 0, 0);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new ConflictException("Бюджет для этой категории на этот месяц уже есть");
@@ -54,14 +55,15 @@ export class BudgetsService {
   }
 
   async update(userId: string, workspaceId: string, budgetId: string, input: UpdateBudgetInput): Promise<Budget> {
-    const { budget, spent } = await this.prisma.withUser(userId, async (tx) => {
+    const { budget, spent, carry } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, budgetId);
       const budget = await tx.budget.update({ where: { id: budgetId }, data: input });
       const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
-      return { budget, spent };
+      const carry = await budgetCarryOverTx(tx, workspaceId, budget);
+      return { budget, spent, carry };
     });
-    return toDto(budget, spent);
+    return toDto(budget, spent, carry);
   }
 
   async remove(userId: string, workspaceId: string, budgetId: string): Promise<void> {
@@ -80,15 +82,17 @@ export class BudgetsService {
   }
 }
 
-type BudgetRow = { id: string; workspaceId: string; categoryId: string; month: Date; limitAmount: number };
+type BudgetRow = { id: string; workspaceId: string; categoryId: string; month: Date; limitAmount: number; rollover: boolean };
 
-function toDto(budget: BudgetRow, spent: number): Budget {
+function toDto(budget: BudgetRow, spent: number, carryOver: number): Budget {
   return {
     id: budget.id,
     workspaceId: budget.workspaceId,
     categoryId: budget.categoryId,
     month: budget.month.toISOString(),
     limitAmount: budget.limitAmount,
+    rollover: budget.rollover,
+    carryOver,
     spent
   };
 }

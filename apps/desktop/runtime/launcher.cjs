@@ -114,21 +114,49 @@ async function main() {
   await startPostgres(config);
   await provision(config);
   await migrate(config);
-  const env = {
+  const baseEnv = {
     ...process.env,
     NODE_ENV: 'production', APP_VERSION: require(path.join(api, 'package.json')).version,
-    ORION_MODE: 'local', HOST: '127.0.0.1', PORT: String(apiPort),
+    PORT: String(apiPort),
     DATABASE_URL: dbUrl('orion', config.adminPassword, 'orion'),
     APP_DATABASE_URL: dbUrl('orion_app', config.appPassword, 'orion'),
     JWT_SECRET: config.jwtSecret, SYNC_SECRET: config.syncSecret,
     STORAGE_DRIVER: 'local', STORAGE_DIR: path.join(data, 'documents'),
+    // ТЗ-04: настройки узла (режим, устройства, сертификат) лежат рядом с данными; API сам перезапускается лаунчером.
+    ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
   };
-  log(`Starting ORION API on 127.0.0.1:${apiPort}`);
+  superviseApi(baseEnv);
+}
+
+// ТЗ-04: «Хост LAN» — это тот же серверный режим (ORION_MODE=server), а не копия его проверок.
+// HTTP остаётся на 127.0.0.1 для окна ORION этого ПК и проверки готовности, а сам API дополнительно
+// слушает TLS на LAN-порту. PostgreSQL по-прежнему только на 127.0.0.1 (см. startPostgres).
+function lanEnv() {
+  let node = null;
+  try { node = JSON.parse(fs.readFileSync(path.join(data, 'lan-node.json'), 'utf8')); } catch { /* файла нет — «Локальный» */ }
+  if (!node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
+  const port = Number.isInteger(node.port) ? node.port : 4443;
+  const address = Object.values(os.networkInterfaces()).flat().find(item => item && item.family === 'IPv4' && !item.internal && !item.address.startsWith('169.254.'));
+  return {
+    ORION_MODE: 'server', ORION_LAN_HOST: '1', HOST: '127.0.0.1',
+    PUBLIC_API_URL: `https://${address ? address.address : os.hostname()}:${port}`,
+    WEB_ORIGINS: 'http://tauri.localhost',
+  };
+}
+
+function superviseApi(baseEnv) {
+  const mode = lanEnv();
+  const env = { ...baseEnv, ...mode };
+  log(`Starting ORION API on 127.0.0.1:${apiPort} (${mode.ORION_LAN_HOST ? 'LAN host' : 'local'})`);
   const child = spawn(process.execPath, [path.join(api, 'dist', 'main.js')], { cwd: api, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', chunk => log(chunk.toString().trimEnd()));
   child.stderr.on('data', chunk => log(chunk.toString().trimEnd()));
   child.on('error', error => { log(`API failed: ${error.message}`); process.exitCode = 1; });
-  child.on('exit', code => { log(`API exited (${code})`); process.exitCode = code || 1; });
+  child.on('exit', code => {
+    // 75 — API просит применить новый режим узла (Хост LAN ⇄ Локальный): перечитываем lan-node.json и поднимаем заново.
+    if (code === 75) { log('API restarting to apply node mode'); setTimeout(() => superviseApi(baseEnv), 500); return; }
+    log(`API exited (${code})`); process.exitCode = code || 1;
+  });
 }
 
 main().catch(error => { log(`Startup failed: ${error.message}`); process.exitCode = 1; });

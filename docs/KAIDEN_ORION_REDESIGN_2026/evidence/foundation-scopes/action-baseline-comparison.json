@@ -1,0 +1,50 @@
+{
+  "sourceRevision": "6da3c12",
+  "matches": [
+    {
+      "test": "panels-default-full-finance-renders-and-keeps-its-actions",
+      "file": "default-full-finance.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-default-full-goals-renders-and-keeps-its-actions",
+      "file": "default-full-goals.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-default-full-home-renders-and-keeps-its-actions",
+      "file": "default-full-home.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-default-full-inbox-renders-and-keeps-its-actions",
+      "file": "default-full-inbox.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-plugins-off-dashboard-renders-and-keeps-its-actions",
+      "file": "plugins-off-dashboard.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-plugins-off-finance-renders-and-keeps-its-actions",
+      "file": "plugins-off-finance.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-plugins-off-home-renders-and-keeps-its-actions",
+      "file": "plugins-off-home.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-plugins-off-inbox-renders-and-keeps-its-actions",
+      "file": "plugins-off-inbox.txt",
+      "identical": true
+    },
+    {
+      "test": "panels-default-full-dashboard-renders-and-keeps-its-actions",
+      "file": "default-full-dashboard.txt",
+      "identical": true
+    }
+  ]
+}

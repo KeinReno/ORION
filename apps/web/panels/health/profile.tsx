@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeleteHealthSubject, useHealthGrants, usePutHealthGrant, useRemoveHealthGrant, useUpdateHealthSubject, useWorkspaceMembers } from "@orion/core-react";
+import { useDeleteHealthSubject, useFetchHealthSummary, useHealthGrants, usePutHealthGrant, useRemoveHealthGrant, useUpdateHealthSubject, useWorkspaceMembers } from "@orion/core-react";
 import {
   HEALTH_GRANT_LABEL,
   type CreateHealthSubjectInput,
@@ -9,9 +9,10 @@ import {
   type HealthSubject
 } from "@orion/shared-types";
 import { Button, ConfirmDialog, Input, Select, Textarea, useToast } from "@orion/ui";
-import { IdCard, Share2, Trash2 } from "lucide-react";
+import { IdCard, Printer, Share2, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
+import { buildHealthCardHtml, printHtml, type HealthCardKind } from "../../lib/health-card";
 import { SectionCard } from "../home/shared";
 
 const SEPARATOR = " — ";
@@ -67,6 +68,16 @@ export function HealthProfile({ workspaceId, subject, onDeleted }: { workspaceId
   const [conditions, setConditions] = useState(subject.conditions.join("\n"));
   const [emergency, setEmergency] = useState(subject.emergencyNote);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const fetchSummary = useFetchHealthSummary(workspaceId);
+
+  /** Сводка запрашивается в момент нажатия, чтобы в карточке были свежие данные; в печать уходит только по вашему действию. */
+  async function printCard(kind: HealthCardKind): Promise<void> {
+    try {
+      printHtml(buildHealthCardHtml(await fetchSummary.mutateAsync(subject.id), kind));
+    } catch (error) {
+      toast({ title: "Не удалось подготовить карточку", description: describeError(error), tone: "danger" });
+    }
+  }
 
   async function save(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -100,6 +111,14 @@ export function HealthProfile({ workspaceId, subject, onDeleted }: { workspaceId
             </div>
           ) : null}
         </form>
+      </SectionCard>
+
+      <SectionCard title="Распечатать или сохранить в PDF" icon={Printer}>
+        <p className="text-label text-muted-foreground">Документ собирается из ваших записей по нажатию и никуда не отправляется. Откроется окно печати — там же можно выбрать «Сохранить как PDF».</p>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => void printCard("doctor")} disabled={fetchSummary.isPending}>Карточка для врача</Button>
+          <Button size="sm" variant="ghost" onClick={() => void printCard("emergency")} disabled={fetchSummary.isPending}>Экстренная карточка</Button>
+        </div>
       </SectionCard>
 
       {own ? <Sharing workspaceId={workspaceId} subject={subject} /> : null}

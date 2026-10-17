@@ -1,19 +1,29 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  AGENT_PROPOSAL_TTL_DAYS,
+  agentEventPatchSchema,
   agentJobStatusSchema,
+  agentNotePatchSchema,
   agentProposalActionSchema,
+  agentProposalDiffEntrySchema,
+  agentTaskPatchSchema,
   type AgentJob,
   type AgentJobStatus,
   type AgentProposal,
+  type AgentProposalAction,
+  type AgentProposalBulkResult,
   type CreateAgentJobInput,
   type CreateAgentProposalInput,
   type UpdateAgentJobInput
 } from "@orion/shared-types";
+import { z } from "zod";
 import { PrismaService } from "../common/prisma.service";
+import { EventsService } from "../events/events.service";
 import { NotesService } from "../notes/notes.service";
 import { TasksService } from "../tasks/tasks.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { buildProposalDiff, patchFields, type DiffKind } from "./agent-diff";
 import type { AgentContext } from "./agent-tokens.service";
 
 const TERMINAL: AgentJobStatus[] = ["done", "failed", "canceled"];
@@ -29,7 +39,8 @@ export class AgentJobsService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly tasks: TasksService,
-    private readonly notes: NotesService
+    private readonly notes: NotesService,
+    private readonly events: EventsService
   ) {}
 
   // ---------------------------------------------------------------- jobs
@@ -93,17 +104,43 @@ export class AgentJobsService {
 
   // ----------------------------------------------------------- proposals
 
+  /**
+   * Files a request. Deletions carry no patch. An `*.update` carries the change plus a before/after preview computed
+   * NOW, so the human sees exactly what they approve even if the object moves on meanwhile. A second request for the
+   * same object from the same token replaces the pending one (the agent refined its idea) instead of piling up.
+   */
   async propose(agent: AgentContext, input: CreateAgentProposalInput): Promise<AgentProposal> {
+    const patch = input.action.endsWith(".update") ? parsePatch(input.action, input.patch) : null;
     const row = await this.prisma.withUser(agent.userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
-      const title = await this.targetTitleTx(tx, agent.workspaceId, input.action, input.targetId);
+      const target = await this.loadTargetTx(tx, agent.workspaceId, input.action, input.targetId);
+      const diff = patch ? buildProposalDiff(diffKind(input.action), target.current, patch) : [];
+      if (patch && diff.length === 0) throw new BadRequestException("Предложенное изменение ничего не меняет");
+      const expiresAt = new Date(Date.now() + AGENT_PROPOSAL_TTL_DAYS * 24 * 3600 * 1000);
       const existing = await tx.agentProposal.findFirst({
         where: { workspaceId: agent.workspaceId, tokenId: agent.tokenId, action: input.action, targetId: input.targetId, status: "pending" },
         include: { token: { select: { name: true } } }
       });
-      if (existing) return existing;
+      if (existing && !patch) return existing;
+      if (existing && patch) {
+        return tx.agentProposal.update({
+          where: { id: existing.id },
+          data: { patch: patch as Prisma.InputJsonValue, diff: diff as unknown as Prisma.InputJsonValue, reason: input.reason, targetTitle: target.title, expiresAt },
+          include: { token: { select: { name: true } } }
+        });
+      }
       return tx.agentProposal.create({
-        data: { workspaceId: agent.workspaceId, tokenId: agent.tokenId, action: input.action, targetId: input.targetId, targetTitle: title, reason: input.reason },
+        data: {
+          workspaceId: agent.workspaceId,
+          tokenId: agent.tokenId,
+          action: input.action,
+          targetId: input.targetId,
+          targetTitle: target.title,
+          reason: input.reason,
+          patch: patch ? (patch as Prisma.InputJsonValue) : undefined,
+          diff: patch ? (diff as unknown as Prisma.InputJsonValue) : undefined,
+          expiresAt
+        },
         include: { token: { select: { name: true } } }
       });
     });
@@ -118,31 +155,33 @@ export class AgentJobsService {
         where: { workspaceId },
         include: { token: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
-        take: 50
+        take: 100
       });
     });
     const dto = rows.map(proposalDto);
     return [...dto.filter((p) => p.status === "pending"), ...dto.filter((p) => p.status !== "pending")];
   }
 
-  /** Approve = the human does it: the removal runs under THEIR rights, once. */
+  /**
+   * Approve = the human does it: the change runs under THEIR rights, once. The claim is one atomic `updateMany`
+   * (pending → approved, not lapsed), so two concurrent approvals cannot both run the change.
+   */
   async approve(userId: string, workspaceId: string, proposalId: string): Promise<AgentProposal> {
     const claimed = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const result = await tx.agentProposal.updateMany({
-        where: { id: proposalId, workspaceId, status: "pending" },
+        where: { id: proposalId, workspaceId, status: "pending", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
         data: { status: "approved", decidedAt: new Date() }
       });
       if (result.count === 0) {
         const exists = await tx.agentProposal.findFirst({ where: { id: proposalId, workspaceId } });
-        throw exists ? new ConflictException("Запрос уже обработан") : new NotFoundException("Запрос не найден");
+        if (!exists) throw new NotFoundException("Запрос не найден");
+        throw new ConflictException(exists.status === "pending" ? "Срок запроса истёк" : "Запрос уже обработан");
       }
       return tx.agentProposal.findUniqueOrThrow({ where: { id: proposalId }, include: { token: { select: { name: true } } } });
     });
     try {
-      const action = agentProposalActionSchema.parse(claimed.action);
-      if (action === "task.delete") await this.tasks.remove(userId, workspaceId, claimed.targetId);
-      else await this.notes.remove(userId, workspaceId, claimed.targetId);
+      await this.execute(userId, workspaceId, claimed);
     } catch (error) {
       // Already gone is fine; anything else puts the request back so the human can retry or reject.
       if (!(error instanceof NotFoundException)) {
@@ -153,6 +192,43 @@ export class AgentJobsService {
       }
     }
     return proposalDto(claimed);
+  }
+
+  /** Several at once; one failure does not stop the rest. */
+  async decideMany(userId: string, workspaceId: string, ids: string[], decision: "approve" | "reject"): Promise<AgentProposalBulkResult> {
+    // A non-member gets one clear 403 instead of a list of per-item failures.
+    await this.prisma.withUser(userId, (tx) => this.workspaces.assertMemberTx(tx, userId, workspaceId));
+    const results: AgentProposalBulkResult["results"] = [];
+    for (const id of [...new Set(ids)]) {
+      try {
+        if (decision === "approve") await this.approve(userId, workspaceId, id);
+        else await this.reject(userId, workspaceId, id);
+        results.push({ id, ok: true, error: null });
+      } catch (error) {
+        results.push({ id, ok: false, error: error instanceof HttpException ? error.message : "Не удалось выполнить" });
+      }
+    }
+    return { results };
+  }
+
+  private async execute(userId: string, workspaceId: string, row: ProposalRow): Promise<void> {
+    const action = agentProposalActionSchema.parse(row.action);
+    const agentName = row.token.name;
+    switch (action) {
+      case "task.delete":
+        return this.tasks.remove(userId, workspaceId, row.targetId);
+      case "note.delete":
+        return this.notes.remove(userId, workspaceId, row.targetId);
+      case "task.update":
+        await this.tasks.update(userId, workspaceId, row.targetId, agentTaskPatchSchema.parse(row.patch ?? {}), agentName);
+        return;
+      case "note.update":
+        await this.notes.update(userId, workspaceId, row.targetId, agentNotePatchSchema.parse(row.patch ?? {}), agentName);
+        return;
+      case "event.update":
+        await this.events.update(userId, workspaceId, row.targetId, agentEventPatchSchema.parse(row.patch ?? {}), "all");
+        return;
+    }
   }
 
   async reject(userId: string, workspaceId: string, proposalId: string): Promise<AgentProposal> {
@@ -171,16 +247,45 @@ export class AgentJobsService {
     return proposalDto(row);
   }
 
-  private async targetTitleTx(tx: Prisma.TransactionClient, workspaceId: string, action: string, targetId: string): Promise<string> {
-    if (action === "task.delete") {
+  /** The object a proposal is about: its title for the human, its stored fields for the before/after preview. */
+  private async loadTargetTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    action: AgentProposalAction,
+    targetId: string
+  ): Promise<{ title: string; current: Record<string, unknown> }> {
+    if (action.startsWith("task.")) {
       const task = await tx.task.findUnique({ where: { id: targetId } });
       if (!task || task.workspaceId !== workspaceId) throw new NotFoundException("Задача не найдена");
-      return task.title;
+      return { title: task.title, current: task as unknown as Record<string, unknown> };
     }
-    const note = await tx.note.findUnique({ where: { id: targetId } });
-    if (!note || note.workspaceId !== workspaceId || note.deletedAt) throw new NotFoundException("Заметка не найдена");
-    return note.title;
+    if (action.startsWith("note.")) {
+      const note = await tx.note.findUnique({ where: { id: targetId } });
+      if (!note || note.workspaceId !== workspaceId || note.deletedAt) throw new NotFoundException("Заметка не найдена");
+      return { title: note.title, current: note as unknown as Record<string, unknown> };
+    }
+    const event = await tx.event.findUnique({ where: { id: targetId } });
+    if (!event || event.workspaceId !== workspaceId) throw new NotFoundException("Событие не найдено");
+    if (event.readOnly) throw new BadRequestException("Внешнее событие доступно только для чтения");
+    return { title: event.title, current: event as unknown as Record<string, unknown> };
   }
+}
+
+function diffKind(action: AgentProposalAction): DiffKind {
+  return action.startsWith("task.") ? "task" : action.startsWith("note.") ? "note" : "event";
+}
+
+const PATCH_SCHEMAS: Record<DiffKind, z.ZodTypeAny> = { task: agentTaskPatchSchema, note: agentNotePatchSchema, event: agentEventPatchSchema };
+
+/** Validate against the same patch an agent could send directly; `expectedRevision` is dropped (the human approves the current object). */
+export function parsePatch(action: AgentProposalAction, raw: unknown): Record<string, unknown> {
+  const kind = diffKind(action);
+  const parsed = PATCH_SCHEMAS[kind].safeParse(raw);
+  if (!parsed.success) throw new BadRequestException(parsed.error.flatten());
+  const fields = new Set(patchFields(kind));
+  const patch = Object.fromEntries(Object.entries(parsed.data as Record<string, unknown>).filter(([k, v]) => fields.has(k) && v !== undefined));
+  if (Object.keys(patch).length === 0) throw new BadRequestException("Пустое изменение");
+  return patch;
 }
 
 type JobRow = Prisma.AgentTaskGetPayload<{ include: { from: { select: { name: true } }; to: { select: { name: true } } } }>;
@@ -212,7 +317,14 @@ function proposalDto(row: ProposalRow): AgentProposal {
     targetId: row.targetId,
     targetTitle: row.targetTitle,
     reason: row.reason,
-    status: row.status === "approved" || row.status === "rejected" ? row.status : "pending",
+    status:
+      row.status === "approved" || row.status === "rejected"
+        ? row.status
+        : row.expiresAt && row.expiresAt.getTime() <= Date.now()
+          ? "expired"
+          : "pending",
+    diff: z.array(agentProposalDiffEntrySchema).catch([]).parse(row.diff ?? []),
+    expiresAt: row.expiresAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     decidedAt: row.decidedAt?.toISOString() ?? null
   };

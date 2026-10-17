@@ -9,6 +9,7 @@ datasource db {
 
 model User {
   id                String            @id @default(uuid())
+  syncDevices       SyncDevice[]
   /// Optional for local accounts — invite-by-email still needs it when used.
   email             String?           @unique
   passwordHash      String
@@ -65,6 +66,8 @@ model UserPreference {
   id                   String   @id @default(uuid())
   userId               String   @unique
   theme                String   @default("system")
+  customTheme          Json?
+  customThemeEnabled   Boolean  @default(false)
   accent               String   @default("violet")
   density              String   @default("comfortable")
   /// "none" | "aurora" | "grid" | "liquid-ether" | "light-pillar" | "dark-veil" | "shape-waves"
@@ -168,7 +171,17 @@ model Workspace {
   /// (ModulesService.assertEnabledTx) — Postgres RLS stays membership-only,
   /// same as every other table (see CLAUDE.md "Postgres RLS").
   restrictedModules String[]  @default([])
+  /// ТЗ-05: the space made at registration ("<имя> — личное пространство").
+  /// A personal space is never offered as shared: invites into it are refused
+  /// (WorkspaceInvitesService.create). Shared spaces ("Дом", projects) are separate.
+  isPersonal Boolean          @default(false)
+  /// TZ-06 / ADR-0015: "local" | "shared" | "hybrid". Only "hybrid" lets devices keep a local copy and
+  /// queue writes; node config, deliberately NOT restored from a snapshot (see snapshot-registry).
+  syncMode  String            @default("shared")
   createdAt DateTime          @default(now())
+  syncChanges   SyncChange[]
+  syncOps       SyncOp[]
+  syncStamps    SyncEntityStamp[]
   members       WorkspaceMember[]
   invites       WorkspaceInvite[]
   notes         Note[]
@@ -196,6 +209,12 @@ model Workspace {
   categoryRules         CategoryRule[]
   savingsGoals          SavingsGoal[]
   financeObligations    FinanceObligation[]
+  financeTemplates      FinanceTemplate[]
+  financeSplits         FinanceSplit[]
+  financeExchangeRates  FinanceExchangeRate[]
+  financeDrafts         FinanceDraft[]
+  financeSplitShares    FinanceSplitShare[]
+  financeSettlements    FinanceSettlement[]
   marketWatchItems      MarketWatchItem[]
   investmentTrades      InvestmentTrade[]
   documents             Document[]
@@ -215,6 +234,14 @@ model Workspace {
   opportunityImports OpportunityImport[]
   opportunityCaptures OpportunityCapture[]
   opportunityHistorys OpportunityHistory[]
+  opportunityAssessments OpportunityAssessment[]
+  opportunityDrafts OpportunityDraft[]
+  opportunityConnections OpportunityConnection[]
+  opportunityAttempts OpportunityAttempt[]
+  opportunityGrants OpportunityGrant[]
+  opportunityBudgets OpportunityBudget[]
+  opportunityPolicies OpportunityPolicy[]
+  opportunityManagerActions OpportunityManagerAction[]
 
   inventoryItems        InventoryItem[]
   inventoryMovements    InventoryMovement[]
@@ -222,7 +249,8 @@ model Workspace {
   milestoneDependencies MilestoneDependency[]
   captures              Capture[]
   agentTokens           AgentToken[]
-  homes                 Home[]
+  agentCaptures         AgentCapture[]
+  homes                Home[]
   meters                Meter[]
   homeUtilityMonths     HomeUtilityMonth[]
   homeElectricityTariffs HomeElectricityTariff[]
@@ -247,6 +275,11 @@ model Workspace {
   healthGrants       HealthGrant[]
   healthAppointments HealthAppointment[]
   healthPreventive   HealthPreventiveItem[]
+  healthMedications  HealthMedication[]
+  healthIntakes      HealthIntake[]
+  healthMeasurements HealthMeasurement[]
+  healthTargets      HealthTarget[]
+  healthSymptoms     HealthSymptom[]
 }
 
 model Project {
@@ -1045,6 +1078,11 @@ model Account {
   startingBalance Int      @default(0)
   /// Whose money it is: personal | family | work. A label for filtering and totals, not an access rule.
   context         String   @default("personal")
+  /// workspace | private. A private account — and every operation, rule, goal and obligation on it — is visible only to
+  /// `ownerId` (enforced by Row Level Security, not by code). If the owner leaves the workspace it becomes visible again.
+  visibility      String   @default("workspace")
+  /// Who created the account (plain id, no foreign key); null for accounts older than this column.
+  ownerId         String?
   archivedAt      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1186,6 +1224,8 @@ model Budget {
   /// sorts and compares natively, one per category per month.
   month       DateTime
   limitAmount Int
+  /// Envelope mode: what was left unspent in the previous month's budget of this category is added to this month's limit.
+  rollover    Boolean  @default(false)
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category  FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -1476,6 +1516,8 @@ model InboxItem {
   targetId    String?
   projectId   String?
   processedAt DateTime?
+  /// Name of the agent token that put this here (AI Bridge capture); null for a person's own entry.
+  createdByAgent String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1874,6 +1916,18 @@ model AgentToken {
   tokenHash   String    @unique
   prefix      String
   scopes      String[]
+  /// Autonomy mode (TZ-03): "observer" | "assistant" | "manager". Narrows the scopes, never widens them.
+  mode        String    @default("assistant")
+  /// Permission matrix {module: [ops]} or null = derived from `scopes` alone (a token issued before the matrix).
+  permissions Json?
+  /// Empty = every project.
+  allowedProjectIds    String[] @default([])
+  /// "finance" | "documents" | "delete" — enforced on the server whatever the matrix says.
+  forbidden            String[] @default([])
+  /// Direct writes per hour; null = unlimited.
+  writeLimitPerHour    Int?
+  /// Projects where a manager token may save an explicit decision note without asking. Empty = off.
+  autoCommitProjectIds String[] @default([])
   expiresAt   DateTime?
   revokedAt   DateTime?
   lastUsedAt  DateTime?
@@ -1887,10 +1941,31 @@ model AgentToken {
   jobsGiven AgentTask[]       @relation("AgentTaskFrom")
   jobsTaken AgentTask[]       @relation("AgentTaskTo")
   proposals AgentProposal[]
+  captures  AgentCapture[]
 
   @@index([workspaceId])
   @@index([createdById])
   @@map("agent_tokens")
+}
+
+/// Idempotency ledger of `POST /ai/v1/capture` (TZ-02): one row per (token, idempotencyKey). The unique index is the
+/// barrier — a retry (or a racing duplicate) finds the first call's record instead of creating a second one.
+model AgentCapture {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  tokenId        String
+  idempotencyKey String
+  /// What the first call produced: note | task | event | inbox.
+  kind           String
+  targetId       String
+  createdAt      DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  token     AgentToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenId, idempotencyKey])
+  @@index([workspaceId])
+  @@map("agent_captures")
 }
 
 /// Append-only record of what an agent did (or tried to). Kept when the token is deleted.
@@ -1902,12 +1977,22 @@ model AgentAuditEntry {
   action      String
   resource    String?
   status      Int
+  /// Module touched ("tasks", "notes", …) and a one-sentence "what the agent did" (TZ-03).
+  module      String?
+  summary     String?
+  /// The note/task the call created — what "Отменить создание" targets.
+  objectType  String?
+  objectId    String?
+  undoneAt    DateTime?
+  /// A direct write that succeeded: counted against `AgentToken.writeLimitPerHour`.
+  wrote       Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   token     AgentToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([tokenId, createdAt])
   @@map("agent_audit_entries")
 }
 
@@ -2011,11 +2096,16 @@ model AgentProposal {
   id          String    @id @default(uuid())
   workspaceId String
   tokenId     String
-  /// "task.delete" | "note.delete"
+  /// "task.delete" | "note.delete" | "task.update" | "note.update" | "event.update"
   action      String
   targetId    String
   targetTitle String
   reason      String    @default("")
+  /// The requested change of an "*.update" proposal, and the before/after preview computed when it was filed.
+  patch       Json?
+  diff        Json?
+  /// Lapses after this instant (null = never, the legacy deletion requests).
+  expiresAt   DateTime?
   /// "pending" | "approved" | "rejected"
   status      String    @default("pending")
   createdAt   DateTime  @default(now())
@@ -2053,6 +2143,10 @@ model Opportunity {
   @@index([workspaceId, archivedAt, id])
   captures OpportunityCapture[]
   historyImports OpportunityHistory[]
+  assessments OpportunityAssessment[]
+  drafts OpportunityDraft[]
+  attempts OpportunityAttempt[]
+  managerActions OpportunityManagerAction[]
   @@unique([id, workspaceId], map: "opportunity_scope")
   @@map("opportunities")
 }
@@ -2073,6 +2167,10 @@ model OpportunityProfile {
   tracks OpportunityTrack[]
   materials OpportunityMaterial[]
   history OpportunityHistory[]
+  assessments OpportunityAssessment[]
+  drafts OpportunityDraft[]
+  connections OpportunityConnection[]
+  attempts OpportunityAttempt[]
   @@unique([id, workspaceId], map: "opportunity_profile_scope")
   @@unique([workspaceId, sourceKey], map: "opportunity_profile_source")
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2091,6 +2189,7 @@ model OpportunityFact {
   revision Int @default(0)
   confirmedBy String?
   confirmedAt DateTime?
+  archivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
@@ -2106,7 +2205,10 @@ model OpportunityTrack {
   name String
   factIds Json @default("[]")
   sourceKey String
+  revision Int @default(0)
+  archivedAt DateTime?
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   materials OpportunityMaterial[]
   @@unique([workspaceId, profileId, sourceKey], map: "opportunity_track_source")
@@ -2458,6 +2560,10 @@ model HealthSubject {
   grants       HealthGrant[]
   appointments HealthAppointment[]
   preventive   HealthPreventiveItem[]
+  medications  HealthMedication[]
+  measurements HealthMeasurement[]
+  targets      HealthTarget[]
+  symptoms     HealthSymptom[]
 
   @@unique([workspaceId, userId])
   @@index([workspaceId])
@@ -2532,4 +2638,547 @@ model HealthPreventiveItem {
   @@index([workspaceId])
   @@index([subjectId])
   @@map("health_preventive_items")
+}
+
+/// A medicine on a person's list (ADR-0012). Dose and schedule are EXACTLY what the person typed — ORION
+/// never suggests or checks them. Archived, not deleted: the intake history stays.
+model HealthMedication {
+  id          String    @id @default(uuid())
+  workspaceId String
+  subjectId   String
+  name        String
+  form        String    @default("")
+  dose        String    @default("")
+  /// Local clock times "HH:MM" of the scheduled doses (empty for an as-needed medicine).
+  times       String[]  @default([])
+  /// 0 = Monday … 6 = Sunday (same convention as habits); empty = every day.
+  weekdays    Int[]     @default([])
+  startOn     DateTime? @db.Date
+  endOn       DateTime? @db.Date
+  asNeeded    Boolean   @default(false)
+  /// Units left; null = not tracked. A taken dose takes one, undoing it gives it back.
+  stock       Int?
+  lowStockAt  Int?
+  note        String    @default("")
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  intakes   HealthIntake[]
+
+  @@index([workspaceId])
+  @@index([subjectId])
+  @@map("health_medications")
+}
+
+/// One mark on one scheduled slot ("taken" / "skipped"). A slot with no row is simply not marked yet; "missed"
+/// is computed from the clock, never stored. Unique per (medication, day, time): a double click is idempotent.
+model HealthIntake {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  subjectId    String
+  medicationId String
+  day          DateTime @db.Date
+  time         String
+  status       String
+  createdAt    DateTime @default(now())
+
+  workspace  Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  medication HealthMedication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  @@unique([medicationId, day, time])
+  @@index([workspaceId])
+  @@index([subjectId, day])
+  @@map("health_intakes")
+}
+
+/// One reading of a body metric (ADR-0012). The unit is fixed per `kind` (HEALTH_MEASUREMENT_KINDS in shared-types),
+/// so values from different days are always comparable. Blood pressure keeps systolic in `value`, diastolic in `value2`.
+model HealthMeasurement {
+  id          String   @id @default(uuid())
+  workspaceId String
+  subjectId   String
+  kind        String
+  value       Decimal  @db.Decimal(8, 2)
+  value2      Decimal? @db.Decimal(8, 2)
+  measuredAt  DateTime
+  /// "натощак", "после нагрузки" — free text typed by the person.
+  context     String   @default("")
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([subjectId, kind, measuredAt])
+  @@map("health_measurements")
+}
+
+/// The person's OWN range for a metric ("вне вашего диапазона"). ORION never invents a "norm". For blood pressure
+/// the range applies to the systolic value.
+model HealthTarget {
+  id          String   @id @default(uuid())
+  workspaceId String
+  subjectId   String
+  kind        String
+  min         Decimal? @db.Decimal(8, 2)
+  max         Decimal? @db.Decimal(8, 2)
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, kind])
+  @@index([workspaceId])
+  @@map("health_targets")
+}
+
+/// Plugin «Шаблоны операций» (finance-templates): a saved starting point for an operation that repeats but not on a
+/// schedule («обед», «заправка»). It is NOT money — nothing here moves a balance; using it writes an ordinary
+/// transaction. References (account, category, project) are plain ids without foreign keys on purpose: a template
+/// whose account was deleted must still open, and the user just picks another one.
+model FinanceTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  /// income | expense | transfer
+  type        String   @default("expense")
+  accountId   String?
+  toAccountId String?
+  categoryId  String?
+  projectId   String?
+  /// Minor units; null = ask for the amount every time.
+  amount      Int?
+  note        String   @default("")
+  tags        String[] @default([])
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("finance_templates")
+}
+
+/// Plugin «Общие расходы» (finance-split): a ledger BETWEEN PEOPLE of one workspace — who paid for something shared and
+/// who owes whom. It is separate from the account ledger on purpose: a split moves no account balance. User ids are
+/// plain strings without a foreign key (like template references): the history must survive a member leaving, and a
+/// snapshot restore must not depend on the user existing at the target.
+model FinanceSplit {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  title         String
+  /// Total paid, minor units. The shares add up to exactly this.
+  amount        Int
+  currency      String   @default("RUB")
+  paidById      String
+  occurredAt    DateTime
+  note          String   @default("")
+  /// The ordinary operation that is this payment, when the user pointed at one (informational, no foreign key).
+  transactionId String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  shares    FinanceSplitShare[]
+
+  @@index([workspaceId])
+  @@map("finance_splits")
+}
+
+model FinanceSplitShare {
+  id          String @id @default(uuid())
+  workspaceId String
+  splitId     String
+  userId      String
+  /// What this person owes for the expense, minor units (the payer's own share included).
+  share       Int
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  split     FinanceSplit @relation(fields: [splitId], references: [id], onDelete: Cascade)
+
+  @@unique([splitId, userId])
+  @@index([workspaceId])
+  @@map("finance_split_shares")
+}
+
+/// «Петя отдал Ане 1000»: a payment between two members that reduces what is owed. Not an account operation.
+model FinanceSettlement {
+  id          String   @id @default(uuid())
+  workspaceId String
+  fromUserId  String
+  toUserId    String
+  amount      Int
+  currency    String   @default("RUB")
+  occurredAt  DateTime
+  note        String   @default("")
+  createdById String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("finance_settlements")
+}
+
+/// Plugin «Курсы валют» (finance-exchange-rates): a rate typed by hand, valid from `day`. There is no external source on
+/// purpose. `rateMicro` = `quote` per ONE `base`, times 1 000 000.
+model FinanceExchangeRate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  base        String
+  quote       String
+  rateMicro   Int
+  day         DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, base, quote, day])
+  @@index([workspaceId])
+  @@map("finance_exchange_rates")
+}
+
+/// Plugin «Черновики от ИИ» (finance-ai-drafts): an operation PROPOSED by an agent through the AI bridge (it read a
+/// receipt). Not money: no balance, no report. Only a human's confirmation writes a real Transaction, and `transactionId`
+/// then records which. Like AgentProposal it belongs to this node's agent tokens, so it is not part of a snapshot.
+model FinanceDraft {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  /// The token that proposed it; its name is copied so the history survives a revoked token.
+  tokenId       String
+  tokenName     String
+  /// pending | approved | rejected
+  status        String    @default("pending")
+  /// income | expense (a draft is never a transfer)
+  type          String
+  amount        Int
+  currency      String?
+  occurredAt    DateTime
+  merchant      String    @default("")
+  note          String    @default("")
+  accountId     String?
+  categoryId    String?
+  confidence    Float?
+  sourceNote    String    @default("")
+  transactionId String?
+  createdAt     DateTime  @default(now())
+  decidedAt     DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("finance_drafts")
+}
+
+/// A symptom episode (ADR-0012): what, how strong (0–10, the person's own scale), when it started and whether it
+/// is over. Only a record — ORION never links an episode to a diagnosis.
+model HealthSymptom {
+  id          String    @id @default(uuid())
+  workspaceId String
+  subjectId   String
+  name        String
+  severity    Int
+  startedAt   DateTime
+  endedAt     DateTime?
+  triggers    String    @default("")
+  relief      String    @default("")
+  note        String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subject   HealthSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([subjectId, startedAt])
+  @@map("health_symptoms")
+}
+
+
+/// TZ-06 / ADR-0015: change feed. A DB trigger writes one row per touched list/list item/note/task, from ANY
+/// write path (REST, sync push, cron, restore). It records WHAT was touched, never values: `pull` reads the
+/// current rows. `xid` orders rows by transaction so a late commit with a smaller `id` is never skipped.
+model SyncChange {
+  id          BigInt   @id @default(autoincrement())
+  workspaceId String
+  entityType  String
+  entityId    String
+  parentId    String?
+  /// "upsert" | "delete"
+  kind        String
+  xid         Unsupported("xid8") @default(dbgenerated("pg_current_xact_id()"))
+  at          DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, xid, id])
+  @@index([entityType, entityId])
+  @@map("sync_changes")
+}
+
+/// Outcome ledger of pushed operations: idempotency (`opId`), body hash (op_id_reuse) and device-rollback
+/// detection (`deviceId` + `deviceSeq` is unique).
+model SyncOp {
+  id          String   @id @default(uuid())
+  workspaceId String
+  opId        String
+  deviceId    String
+  deviceSeq   Int
+  payloadHash String
+  outcome     String
+  result      Json
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, opId])
+  @@unique([deviceId, deviceSeq])
+  @@index([workspaceId, createdAt])
+  @@map("sync_ops")
+}
+
+/// Per-field LWW stamps (HLC) of entities written through sync. A field without a stamp was written by plain
+/// REST and is compared by the row's `updatedAt`.
+model SyncEntityStamp {
+  entityType  String
+  entityId    String
+  workspaceId String
+  stamps      Json
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([entityType, entityId])
+  @@index([workspaceId])
+  @@map("sync_entity_stamps")
+}
+
+/// A device a user registered for hybrid sync. Revoking it stops its pushes; it does not recall downloaded data.
+model SyncDevice {
+  id         String    @id
+  userId     String
+  name       String
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sync_devices")
+}
+
+model OpportunityAssessment {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  providerId String
+  providerVersion String
+  inputHash String
+  score Int?
+  confidence String
+  inputs Json
+  result Json
+  createdById String
+  createdAt DateTime @default(now())
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  drafts OpportunityDraft[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_assessment_scope")
+  @@index([workspaceId, opportunityId, profileId, createdAt])
+  @@map("opportunity_assessments")
+}
+
+model OpportunityDraft {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  assessmentId String?
+  kind String
+  question String?
+  sections Json
+  notes Json @default("[]")
+  materials Json @default("[]")
+  inputHash String
+  textHash String
+  reviewState String @default("draft")
+  approvedBy String?
+  approvedAt DateTime?
+  approvedTextHash String?
+  templateVersion String
+  revision Int @default(0)
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  assessment OpportunityAssessment? @relation(fields: [assessmentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  attempts OpportunityAttempt[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_draft_scope")
+  @@index([workspaceId, opportunityId, createdAt])
+  @@map("opportunity_drafts")
+}
+
+model OpportunityConnection {
+  id String @id @default(uuid())
+  workspaceId String
+  profileId String
+  ownerUserId String
+  provider String @default("hh")
+  accountLabel String
+  externalAccountId String?
+  accountDisplay String?
+  runnerId String?
+  runnerTokenHash String? @unique
+  pairingHash String? @unique
+  pairingExpiresAt DateTime?
+  state String @default("pending_link")
+  pausedReason String?
+  dailyLimit Int @default(5)
+  minIntervalSec Int @default(180)
+  timezone String @default("Europe/Moscow")
+  consecutiveFailures Int @default(0)
+  runnerSeenAt DateTime?
+  linkedAt DateTime?
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  attempts OpportunityAttempt[]
+  policies OpportunityPolicy[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_connection_scope")
+  @@index([workspaceId])
+  @@map("opportunity_connections")
+}
+
+model OpportunityAttempt {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  connectionId String
+  draftId String
+  actionType String @default("apply")
+  idempotencyKey String
+  payload Json
+  payloadHash String
+  state String @default("awaiting_approval")
+  reviewNotes Json @default("[]")
+  reviewAcknowledged Boolean @default(false)
+  cancelRequested Boolean @default(false)
+  submitReserved Boolean @default(false)
+  submitStartedAt DateTime?
+  initiatedBy String?
+  leaseHash String?
+  leaseRunnerId String?
+  leaseExpiresAt DateTime?
+  claimCount Int @default(0)
+  evidence Json @default("[]")
+  confirmationBasis String?
+  errorCode String?
+  message String?
+  timeline Json @default("[]")
+  revision Int @default(0)
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  connection OpportunityConnection @relation(fields: [connectionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  draft OpportunityDraft @relation(fields: [draftId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  grants OpportunityGrant[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, idempotencyKey], map: "opportunity_attempt_idem")
+  @@unique([id, workspaceId], map: "opportunity_attempt_scope")
+  @@index([workspaceId, connectionId, state])
+  @@map("opportunity_attempts")
+}
+
+model OpportunityGrant {
+  id String @id @default(uuid())
+  workspaceId String
+  attemptId String
+  payloadHash String
+  grantedBy String
+  state String @default("active")
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  attempt OpportunityAttempt @relation(fields: [attemptId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, attemptId])
+  @@map("opportunity_grants")
+}
+
+model OpportunityBudget {
+  id String @id @default(uuid())
+  workspaceId String
+  accountKey String
+  actionType String
+  localDate String
+  used Int @default(0)
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, accountKey, actionType, localDate], map: "opportunity_budget_key")
+  @@map("opportunity_budgets")
+}
+
+model OpportunityPolicy {
+  id String @id @default(uuid())
+  workspaceId String
+  connectionId String
+  profileId String
+  ownerUserId String
+  state String @default("active")
+  pausedReason String?
+  minScore Int @default(70)
+  minConfidence String @default("medium")
+  requiredFactIds Json @default("[]")
+  dailyLimit Int
+  maxTotal Int
+  remaining Int
+  quietStart String?
+  quietEnd String?
+  timezone String @default("Europe/Moscow")
+  expiresAt DateTime
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  connection OpportunityConnection @relation(fields: [connectionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  actions OpportunityManagerAction[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_policy_scope")
+  @@index([workspaceId, connectionId])
+  @@map("opportunity_policies")
+}
+
+model OpportunityManagerAction {
+  id String @id @default(uuid())
+  workspaceId String
+  policyId String
+  opportunityId String
+  kind String @default("apply")
+  state String
+  reason String @default("")
+  details Json @default("[]")
+  attemptId String?
+  policyRevision Int
+  createdAt DateTime @default(now())
+  policy OpportunityPolicy @relation(fields: [policyId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([policyId, opportunityId], map: "opportunity_manager_once")
+  @@index([workspaceId, policyId, createdAt])
+  @@map("opportunity_manager_actions")
 }

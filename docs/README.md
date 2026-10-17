@@ -1,17 +1,23 @@
 # Документация ORION
 
-Для продуктового обзора начать с [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md), затем читать [ROADMAP.md](ROADMAP.md). Агент перед изменением кода сначала выполняет обязательный порядок чтения из [AGENTS.md](../AGENTS.md). Слово «планируется» не означает, что функция уже есть в коде.
+Текущее состояние кода, что проверено и что не сделано — [STATUS.md](STATUS.md). Для продуктового обзора начать с [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md), затем читать [ROADMAP.md](ROADMAP.md). Агент перед изменением кода сначала выполняет обязательный порядок чтения из [AGENTS.md](../AGENTS.md). Слово «планируется» не означает, что функция уже есть в коде.
 
 | Задача | Документ |
 | --- | --- |
 | Архитектурные инварианты и правила для агента | [../AGENTS.md](../AGENTS.md), [../ORION_CONSTITUTION.md](../ORION_CONSTITUTION.md) |
 | Граница Core / Module / Plugin и текущая миграция | [MODULES_AND_PLUGINS.md](MODULES_AND_PLUGINS.md), [AI_FIRST_EXTENSION_ARCHITECTURE.md](AI_FIRST_EXTENSION_ARCHITECTURE.md), [AI_REFACTOR_MIGRATION_MAP.md](AI_REFACTOR_MIGRATION_MAP.md) |
 | Оболочка и UX существующих модулей | [FRONTEND_WORKSPACE_SPEC.md](FRONTEND_WORKSPACE_SPEC.md), [UI_AUDIT_2026-10-11.md](UI_AUDIT_2026-10-11.md) |
-| Контекстная панель ресурсов и межмодульные связи (согласованная концепция; не реализовано) | [CONTEXTUAL_RESOURCES_PANEL.md](CONTEXTUAL_RESOURCES_PANEL.md) |
+| Контекстная панель ресурсов и межмодульные связи (MVP этапа A реализован; этапы B–C — нет) | [CONTEXTUAL_RESOURCES_PANEL.md](CONTEXTUAL_RESOURCES_PANEL.md), [ADR-0014](adr/ADR-0014-context-resources-panel.md) |
+| ТЗ для исполнителей: панель ресурсов, Agent Gateway/Manager, LAN, общие пространства, Hybrid Sync | [tz/README.md](tz/README.md) |
+| Гибридная синхронизация (локальные копии, очередь записи; списки → заметки и задачи) | [SYNC.md](SYNC.md), [ADR-0016](adr/ADR-0016-hybrid-sync-protocol.md), [tz/TZ-06-hybrid-sync.md](tz/TZ-06-hybrid-sync.md) |
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Многопользовательская модель и WebDAV | [SYNC.md](SYNC.md) |
 | KAIDEN Opportunity Hub: первый срез, ТЗ профилей/импорта/ИИ-менеджера | [OPPORTUNITY_HUB_SPEC.md](OPPORTUNITY_HUB_SPEC.md), [OPPORTUNITY_HUB_PROGRESS.md](OPPORTUNITY_HUB_PROGRESS.md), [ADR-0008](adr/ADR-0008-opportunity-hub.md) |
+| Agent Gateway: capture, context, связи, поиск, MCP в установленной версии, мастер «Подключить агента» (реализовано, ТЗ-02) | [ADR-0018](adr/ADR-0018-agent-gateway.md), [AGENT_MANUAL.md](AGENT_MANUAL.md), [tz/TZ-02-agent-gateway.md](tz/TZ-02-agent-gateway.md) |
+| Agent Manager: режимы автономности, матрица прав, превью изменений, журнал и откат (реализовано, ТЗ-03) | [ADR-0007](adr/ADR-0007-ai-bridge.md), [ADR-0017](adr/ADR-0017-agent-remote-access.md) (удалённый доступ, без кода), [tz/TZ-03-agent-manager.md](tz/TZ-03-agent-manager.md) |
+| LAN Host/Client: режимы узла, mDNS, доверие устройств, TLS (реализовано, ТЗ-04) | [ADR-0015](adr/ADR-0015-lan-host-client.md), [tz/TZ-04-lan-host-client.md](tz/TZ-04-lan-host-client.md), [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
+| Общие пространства и доступ: «Дом» + личные, приглашения с ролью, аудит изоляции, перенос базы `.orion` как нового пространства (реализовано, ТЗ-05; п. 5.6 — нет) | [TEAM_AND_ACCESS.md](TEAM_AND_ACCESS.md), [tz/TZ-05-shared-workspaces-identity.md](tz/TZ-05-shared-workspaces-identity.md) |
 | Поздние направления | [KNOWLEDGE_HUB.md](KNOWLEDGE_HUB.md), [INTEGRATIONS_COMPASS_FINCONTROL.md](INTEGRATIONS_COMPASS_FINCONTROL.md), [adr/](adr/) |
 | Журнал текущей экстракции плагинов | [PLUGIN_EXTRACTION_LOG.md](PLUGIN_EXTRACTION_LOG.md) |
 

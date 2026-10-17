@@ -1,6 +1,6 @@
 "use client";
 
-import { ACCOUNT_CONTEXT_LABEL, type Account, type AccountContext, type AccountKind } from "@orion/shared-types";
+import { ACCOUNT_CONTEXT_LABEL, type Account, type AccountContext, type AccountKind, type AccountVisibility } from "@orion/shared-types";
 import { Button, Input, Select } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { parseMoneyInput, fromKopecks } from "../../lib/format";
@@ -31,6 +31,7 @@ export interface AccountFormValues {
   name: string;
   kind: AccountKind;
   context: AccountContext;
+  visibility: AccountVisibility;
   currency: string;
   startingBalance: number;
 }
@@ -51,13 +52,14 @@ export function AccountForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [kind, setKind] = useState<AccountKind>(initial?.kind ?? "cash");
   const [context, setContext] = useState<AccountContext>(initial?.context ?? "personal");
+  const [visibility, setVisibility] = useState<AccountVisibility>(initial?.visibility ?? "workspace");
   const [currency, setCurrency] = useState(initial?.currency ?? "RUB");
   const [startingBalance, setStartingBalance] = useState(fromKopecks(initial?.startingBalance));
 
   function submit(event: FormEvent): void {
     event.preventDefault();
     if (!name.trim()) return;
-    void onSubmit({ name: name.trim(), kind, context, currency, startingBalance: parseMoneyInput(startingBalance) ?? 0 });
+    void onSubmit({ name: name.trim(), kind, context, visibility, currency, startingBalance: parseMoneyInput(startingBalance) ?? 0 });
   }
 
   return (
@@ -94,6 +96,18 @@ export function AccountForm({
             </option>
           ))}
         </Select>
+      </label>
+      <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
+        Кто видит счёт
+        <Select value={visibility} onChange={(e) => setVisibility(e.target.value as AccountVisibility)}>
+          <option value="workspace">Все в пространстве</option>
+          <option value="private">Только я</option>
+        </Select>
+        {visibility === "private" ? (
+          <span className="text-subtle-foreground">
+            Счёт, его операции, правила и платежи не увидит никто, кроме вас: ни участники, ни владелец пространства. Итоги и отчёты у каждого считаются по тому, что ему видно. Если вы покинете пространство, счёт снова станет виден остальным.
+          </span>
+        ) : null}
       </label>
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
         Начальный баланс, {currency}

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import {
   createAndLinkInputSchema,
   createEntityLinkInputSchema,
@@ -35,7 +35,9 @@ export class SearchController {
     @Query("cursor") cursor?: string,
     @Query("limit") limit?: string
   ): Promise<EntityLinkPage> {
-    return this.searchService.listLinks(user.userId, workspaceId, searchableEntityTypeSchema.parse(type), id, {
+    const entityType = searchableEntityTypeSchema.safeParse(type);
+    if (!entityType.success) throw new BadRequestException("Неизвестный тип объекта");
+    return this.searchService.listLinks(user.userId, workspaceId, entityType.data, id ?? "", {
       cursor: cursor || undefined,
       limit: limit ? Number(limit) : undefined
     });

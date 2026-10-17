@@ -21,13 +21,17 @@ import {
   useToast
 } from "@orion/ui";
 import { motion, useReducedMotion } from "framer-motion";
-import { ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useViewState } from "../lib/use-view-state";
+import { tasksViewStateSchema } from "@orion/shared-types";
+import { useObjectNavigation } from "../lib/use-object-navigation";
 import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
 import { useFocusedTaskId, useTasksProjectSignal } from "../lib/panel-bus";
+import { usePublishResourceContext } from "../lib/resource-context-store";
 import {
   TASK_PRIORITY_LABEL,
   TASK_PRIORITY_ORDER,
@@ -36,6 +40,7 @@ import {
   TaskForm,
   type TaskFormValues
 } from "./task-form";
+import { ReplicaBanner } from "../components/replica-banner";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../lib/use-enabled-plugins";
@@ -63,6 +68,7 @@ const NO_PROJECT = "__none__";
  * not part of any project and so never show up on a project's own screen.
  */
 type TaskScope = "all" | "loose";
+const GROUP_LABEL: Record<GroupBy, string> = { status: "По статусу", project: "По проекту", priority: "По приоритету", due: "По сроку" };
 const SCOPE_KEY = "orion.tasks.scope";
 const VIEW_KEY = "orion.tasks.view";
 
@@ -184,10 +190,16 @@ export function TasksPanel(): React.ReactElement {
     }
   }
   const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingIdUnchecked] = useState<string | null>(null);
+  const allowObjectNavigation = useObjectNavigation(workspace?.id);
+  const setEditingId = useCallback((next: string | null) => {
+    if (allowObjectNavigation(next)) setEditingIdUnchecked(next);
+  }, [allowObjectNavigation]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const focusedTask = (tasks ?? []).find((task) => task.id === (editingId ?? selectedId));
+  usePublishResourceContext(focusedTask ? { type: "task", id: focusedTask.id, title: focusedTask.title } : null);
   const editingIdRef = useRef<string | null>(null);
   editingIdRef.current = editingId;
   const [bodyRef, bodyWidth] = useResizeWidth<HTMLDivElement>();
@@ -195,6 +207,26 @@ export function TasksPanel(): React.ReactElement {
   const splitDetail = bodyWidth >= DETAIL_SPLIT_MIN;
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
+  // Filters, grouping and the open task survive a restart. A restored id is only an address:
+  // if the task is gone or no longer visible to this user, say so and open nothing.
+  const restoredView = useViewState("tasks", tasksViewStateSchema, workspace?.id,
+    { dueFilter, statusFilter, priorityFilter, groupBy, projectFilter, editingId },
+    (saved) => {
+      setDueFilter(saved.dueFilter); setStatusFilter(saved.statusFilter); setPriorityFilter(saved.priorityFilter);
+      // A saved project filter / grouping is meaningless (and invisible) while Projects is off: never restore it.
+      const projectsOn = isEnabled("projects");
+      setGroupBy(!projectsOn && saved.groupBy === "project" ? "status" : saved.groupBy); setProjectFilter(projectsOn ? saved.projectFilter : null);
+      if (saved.editingId) { setEditingIdUnchecked(saved.editingId); setSelectedId(saved.editingId); }
+    });
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || !restoredView || !tasks) return;
+    staleChecked.current = true;
+    if (restoredView.editingId && !tasks.some((t) => t.id === restoredView.editingId)) {
+      setEditingIdUnchecked(null); setSelectedId(null);
+      toast({ title: "Прежняя задача недоступна", description: "Она удалена или у вас больше нет доступа." });
+    }
+  }, [restoredView, tasks, toast]);
 
   // Перетаскивание/«Вверх»/«Вниз» — ручной порядок (`sortOrder`), детали в
   // panels/tasks/subtasks.tsx, чтобы доска осталась про раскладку.
@@ -206,7 +238,7 @@ export function TasksPanel(): React.ReactElement {
       setEditingId(focusedTaskId);
       setSelectedId(focusedTaskId);
     }
-  }, [focusedTaskId]);
+  }, [focusedTaskId, setEditingId]);
 
   const projectSignal = useTasksProjectSignal();
   useEffect(() => {
@@ -322,13 +354,16 @@ export function TasksPanel(): React.ReactElement {
     }
   }, [tasks, groupBy, projectList, updateTask]);
 
-  // ↑/↓ moves the selection; Enter opens the detail Sheet.
+  // ↑/↓ moves the selection; Enter opens the persistent detail pane.
   // Shift+←/→ moves the selected card to the adjacent droppable column.
   // Skip while a modal/sheet/field is open so we don't steal keys from the form.
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
       if (!panelVisible || creating || pendingDelete) return;
       if (isTypingTarget(event.target)) return;
+      // Native controls and menus own their keys. In particular, Enter on a
+      // linked-object command must not be swallowed by the list shortcut.
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest("button, a, [role=menu], [role=tablist]"))) return;
       if (event.key === "Escape" && editingIdRef.current) {
         setEditingId(null);
         return;
@@ -362,7 +397,7 @@ export function TasksPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, creating, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds]);
+  }, [panelVisible, creating, pendingDelete, selectedId, columns, applyDrop, visibleTaskIds, setEditingId]);
 
   function confirmDelete(): void {
     const task = pendingDelete;
@@ -370,7 +405,7 @@ export function TasksPanel(): React.ReactElement {
     setPendingDelete(null);
     deleteTask.mutate(task.id, {
       onSuccess: () => {
-        setEditingId((cur) => (cur === task.id ? null : cur));
+        setEditingIdUnchecked((cur) => (cur === task.id ? null : cur));
         setSelectedId((cur) => (cur === task.id ? null : cur));
         toast({ title: "Задача удалена" });
       }
@@ -405,6 +440,33 @@ export function TasksPanel(): React.ReactElement {
   const total = tasks?.length ?? 0;
   const openCount = (tasks ?? []).filter((t) => !isTaskClosed(t.status)).length;
 
+  const groupViewControls = (
+    <>
+      <SegmentedControl<GroupBy>
+            value={groupBy}
+            onChange={setGroupBy}
+            size="sm"
+            options={[
+              { value: "status", label: "По статусу" },
+              { value: "project", label: "По проекту" },
+              { value: "priority", label: "По приоритету" },
+              { value: "due", label: "По сроку" }
+            ]}
+          />
+          {viewPlugins.length > 0 ? (
+            <SegmentedControl<BoardView>
+              value={activeView}
+              onChange={(next) => {
+                viewTouched.current = true;
+                setView(next);
+              }}
+              size="sm"
+              options={[...viewPlugins.map((c) => ({ value: c.meta!.viewId, label: c.meta!.label })), { value: "list", label: "Список" }]}
+            />
+          ) : null}
+    </>
+  );
+
   return (
     <PanelShell>
       <PanelHeader
@@ -417,7 +479,8 @@ export function TasksPanel(): React.ReactElement {
           </Button>
         }
       >
-        <ExtensionSlot
+        {/* On a narrow panel the open task replaces the list: its filters would only push the editor down. */}
+        {editing && !splitDetail ? null : <ExtensionSlot
           name="tasks.views.bar"
           props={{
             workspaceId: workspace?.id,
@@ -433,8 +496,8 @@ export function TasksPanel(): React.ReactElement {
               chooseScope("all");
             }
           }}
-        />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        />}
+        <div className={cx("ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2", editing && !splitDetail && "hidden")}>
           <div className="relative sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск задач" className="pl-8" />
@@ -474,7 +537,7 @@ export function TasksPanel(): React.ReactElement {
             />
           ) : null}
           {scope === "all" && projectChips.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex max-w-full flex-nowrap items-center gap-1 overflow-x-auto sm:flex-wrap sm:overflow-visible" role="group" aria-label="Фильтр по проекту">
               <FilterChip active={projectFilter === null} onClick={() => setProjectFilter(null)}>
                 Все
               </FilterChip>
@@ -485,33 +548,20 @@ export function TasksPanel(): React.ReactElement {
                   onClick={() => setProjectFilter(project.id)}
                   color={project.name}
                 >
-                  {project.name}
+                  <span className="block max-w-[11rem] truncate" title={project.name}>{project.name}</span>
                 </FilterChip>
               ))}
             </div>
           ) : null}
-          <SegmentedControl<GroupBy>
-            value={groupBy}
-            onChange={setGroupBy}
-            size="sm"
-            options={[
-              { value: "status", label: "По статусу" },
-              { value: "project", label: "По проекту" },
-              { value: "priority", label: "По приоритету" },
-              { value: "due", label: "По сроку" }
-            ]}
-          />
-          {viewPlugins.length > 0 ? (
-            <SegmentedControl<BoardView>
-              value={activeView}
-              onChange={(next) => {
-                viewTouched.current = true;
-                setView(next);
-              }}
-              size="sm"
-              options={[...viewPlugins.map((c) => ({ value: c.meta!.viewId, label: c.meta!.label })), { value: "list", label: "Список" }]}
-            />
-          ) : null}
+          {/* Wide: grouping and view sit inline. Narrow: one disclosure instead of a row that runs off the edge. */}
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">{groupViewControls}</div>
+          <details className="group w-full sm:hidden">
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-2.5 text-label text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+              <span className="flex-1">Группировка и вид · {GROUP_LABEL[groupBy]}{viewPlugins.length > 0 ? ` · ${activeViewMeta?.label ?? "Список"}` : ""}</span>
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2">{groupViewControls}</div>
+          </details>
           {teamOn ? (
             <FilterChip
               active={onlyMine}
@@ -525,6 +575,7 @@ export function TasksPanel(): React.ReactElement {
           ) : null}
         </div>
       </PanelHeader>
+      <ReplicaBanner workspaceId={workspace?.id} />
 
       <div ref={bodyRef} className="flex min-h-0 flex-1">
       {!editing || splitDetail ? (
@@ -648,7 +699,7 @@ export function TasksPanel(): React.ReactElement {
                   const hidden = column.tasks.length - shown.length;
                   if (column.tasks.length === 0) {
                     return (
-                      <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-micro text-subtle-foreground">
+                      <p className={cx("rounded-xl border border-dashed border-border px-3 text-center text-micro text-subtle-foreground", activeViewMeta ? "py-6" : "py-1.5")}>
                         Пусто
                       </p>
                     );

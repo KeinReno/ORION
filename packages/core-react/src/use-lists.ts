@@ -13,8 +13,9 @@ import type {
   UpdateListInput,
   UpdateListItemInput
 } from "@orion/shared-types";
-import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryKey, type UseQueryResult } from "@tanstack/react-query";
 import { useCore } from "./provider";
+import { fromReplica, useHybridReplica, type HybridReplica } from "./use-replica";
 
 /**
  * How often a visible list is re-read. Lists are shared by everyone in the workspace (a family
@@ -31,37 +32,82 @@ export const LISTS_POLL_MS = 15_000;
  */
 export function useLists(workspaceId: string | undefined, includeArchived = false) {
   const { api } = useCore();
-  return useQuery<List[]>({
+  const replica = useHybridReplica(workspaceId);
+  const query = useQuery<List[]>({
     queryKey: ["lists", workspaceId, includeArchived],
     queryFn: () => api.listLists(workspaceId as string, { includeArchived }),
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(workspaceId) && !replica,
     refetchInterval: LISTS_POLL_MS
   });
+  if (replica) {
+    const data = replica.engine.lists().lists.filter((list) => !list.isTemplate && (includeArchived || !list.archivedAt));
+    return fromReplica(query, replica, data);
+  }
+  return query;
 }
+
 
 export function useListTemplates(workspaceId: string | undefined, enabled = true) {
   const { api } = useCore();
-  return useQuery<List[]>({
+  const replica = useHybridReplica(workspaceId);
+  const query = useQuery<List[]>({
     queryKey: ["lists", workspaceId, "templates"],
     queryFn: () => api.listLists(workspaceId as string, { templates: true, includeArchived: true }),
-    enabled: Boolean(workspaceId) && enabled
+    enabled: Boolean(workspaceId) && enabled && !replica
   });
+  if (replica) return fromReplica(query, replica, replica.engine.lists().lists.filter((list) => list.isTemplate));
+  return query;
 }
 
 /** One list in any state — what a list's own tab or window opens. */
 export function useList(workspaceId: string | undefined, listId: string | undefined) {
   const { api } = useCore();
-  return useQuery<List>({
+  const replica = useHybridReplica(workspaceId);
+  const query = useQuery<List>({
     queryKey: ["lists", workspaceId, "one", listId],
     queryFn: () => api.getList(workspaceId as string, listId as string),
-    enabled: Boolean(workspaceId && listId),
+    enabled: Boolean(workspaceId && listId) && !replica,
     refetchInterval: LISTS_POLL_MS
   });
+  if (replica) {
+    const found = replica.engine.lists().lists.find((list) => list.id === listId);
+    if (found) return fromReplica(query, replica, found);
+    // Копия загружена, а списка в ней нет — это «не найден», а не вечная загрузка.
+    if (replica.engine.hasCopy()) {
+      return { ...fromReplica(query, replica, undefined as never), isError: true, isSuccess: false, status: "error", error: new Error("Список не найден") } as UseQueryResult<List>;
+    }
+    return fromReplica(query, replica, undefined as never);
+  }
+  return query;
 }
 
 function useInvalidateLists(workspaceId: string | undefined): () => void {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ["lists", workspaceId] });
+  const replica = useHybridReplica(workspaceId);
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ["lists", workspaceId] });
+    // Операции, которым нужен узел (дубликат, «новый круг»…), меняют данные там — подтягиваем в копию.
+    if (replica) void replica.engine.sync();
+  };
+}
+
+/** Постановка операции в очередь копии + немедленная попытка отправки (офлайн она просто останется в очереди). */
+async function enqueueAndKick(
+  replica: HybridReplica,
+  input: Parameters<HybridReplica["engine"]["enqueue"]>[0]
+): Promise<{ entityId: string }> {
+  const op = await replica.engine.enqueue(input);
+  void replica.engine.sync();
+  return { entityId: op.entityId };
+}
+
+function defined<T extends Record<string, unknown>>(fields: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+}
+
+function nextItemOrder(replica: HybridReplica, listId: string): number {
+  const list = replica.engine.lists().lists.find((entry) => entry.id === listId);
+  return (list?.items.reduce((max, item) => Math.max(max, item.sortOrder), 0) ?? 0) + 10;
 }
 
 /** Cached values are either a list of lists or one list (see the keys above); a patch has to handle both. */
@@ -95,8 +141,23 @@ function rollback(queryClient: ReturnType<typeof useQueryClient>, snapshot: Snap
 export function useCreateList(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<List, Error, CreateListInput>({
-    mutationFn: (input: CreateListInput) => api.createList(workspaceId as string, input),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async (input: CreateListInput) => {
+      // Копия из шаблона / привязка к дому требуют узла — идут обычным запросом.
+      if (replica && !input.templateId && !input.homeId) {
+        const lists = replica.engine.lists().lists;
+        const { entityId } = await enqueueAndKick(replica, {
+          entity: "list",
+          kind: "create",
+          fields: { name: input.name, ...(input.kind ? { kind: input.kind } : {}), sortOrder: lists.reduce((max, l) => Math.max(max, l.sortOrder), 0) + 10 }
+        });
+        return replica.engine.lists().lists.find((list) => list.id === entityId) as List;
+      }
+      return api.createList(workspaceId as string, input);
+    },
     onSuccess: invalidate
   });
 }
@@ -104,8 +165,17 @@ export function useCreateList(workspaceId: string | undefined) {
 export function useUpdateList(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<List, Error, { listId: string; input: UpdateListInput }>({
-    mutationFn: ({ listId, input }) => api.updateList(workspaceId as string, listId, input),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async ({ listId, input }) => {
+      if (replica && input.isTemplate === undefined) {
+        await enqueueAndKick(replica, { entity: "list", kind: "patch", entityId: listId, fields: defined({ name: input.name, kind: input.kind, archivedAt: input.archivedAt }) });
+        return replica.engine.lists().lists.find((list) => list.id === listId) as List;
+      }
+      return api.updateList(workspaceId as string, listId, input);
+    },
     onSuccess: invalidate
   });
 }
@@ -114,8 +184,17 @@ export function useUpdateList(workspaceId: string | undefined) {
 export function useArchiveList(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<List, Error, string>({
-    mutationFn: (listId: string) => api.archiveList(workspaceId as string, listId),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async (listId: string) => {
+      if (replica) {
+        await enqueueAndKick(replica, { entity: "list", kind: "patch", entityId: listId, fields: { archivedAt: new Date().toISOString() } });
+        return replica.engine.lists().lists.find((list) => list.id === listId) as List;
+      }
+      return api.archiveList(workspaceId as string, listId);
+    },
     onSuccess: invalidate
   });
 }
@@ -124,8 +203,17 @@ export function useArchiveList(workspaceId: string | undefined) {
 export function useDeleteListPermanently(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<void, Error, string>({
-    mutationFn: (listId: string) => api.deleteListPermanently(workspaceId as string, listId),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async (listId: string) => {
+      if (replica) {
+        await enqueueAndKick(replica, { entity: "list", kind: "delete", entityId: listId });
+        return;
+      }
+      return api.deleteListPermanently(workspaceId as string, listId);
+    },
     onSuccess: invalidate
   });
 }
@@ -176,8 +264,23 @@ export function useResetList(workspaceId: string | undefined) {
 export function useCreateListItem(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<ListItem, Error, { listId: string; input: CreateListItemInput }>({
-    mutationFn: ({ listId, input }) => api.createListItem(workspaceId as string, listId, input),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async ({ listId, input }) => {
+      if (replica) {
+        const { entityId } = await enqueueAndKick(replica, {
+          entity: "listItem",
+          kind: "create",
+          parentId: listId,
+          fields: { ...defined({ ...input }), sortOrder: nextItemOrder(replica, listId) }
+        });
+        const list = replica.engine.lists().lists.find((entry) => entry.id === listId);
+        return list?.items.find((item) => item.id === entityId) as ListItem;
+      }
+      return api.createListItem(workspaceId as string, listId, input);
+    },
     onSuccess: invalidate
   });
 }
@@ -185,8 +288,24 @@ export function useCreateListItem(workspaceId: string | undefined) {
 export function useCreateListItemsBulk(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<ListItem[], Error, { listId: string; input: CreateListItemsBulkInput }>({
-    mutationFn: ({ listId, input }) => api.createListItemsBulk(workspaceId as string, listId, input),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async ({ listId, input }) => {
+      if (replica) {
+        const ids: string[] = [];
+        let order = nextItemOrder(replica, listId);
+        for (const entry of input.items) {
+          const { entityId } = await enqueueAndKick(replica, { entity: "listItem", kind: "create", parentId: listId, fields: { ...defined({ ...entry }), sortOrder: order } });
+          ids.push(entityId);
+          order += 10;
+        }
+        const list = replica.engine.lists().lists.find((l) => l.id === listId);
+        return (list?.items ?? []).filter((item) => ids.includes(item.id));
+      }
+      return api.createListItemsBulk(workspaceId as string, listId, input);
+    },
     onSuccess: invalidate
   });
 }
@@ -207,9 +326,19 @@ export function useUpdateListItem(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
 
   return useMutation<ListItem, Error, UpdateListItemVars, Snapshot>({
-    mutationFn: ({ listId, itemId, input }) => api.updateListItem(workspaceId as string, listId, itemId, input),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async ({ listId, itemId, input }) => {
+      if (replica) {
+        await enqueueAndKick(replica, { entity: "listItem", kind: "patch", entityId: itemId, parentId: listId, fields: defined({ ...input }) });
+        const list = replica.engine.lists().lists.find((entry) => entry.id === listId);
+        return list?.items.find((item) => item.id === itemId) as ListItem;
+      }
+      return api.updateListItem(workspaceId as string, listId, itemId, input);
+    },
     onMutate: ({ listId, itemId, input }) =>
       optimistic(queryClient, workspaceId, listId, (list) => ({
         ...list,
@@ -238,8 +367,17 @@ export function useUpdateListItem(workspaceId: string | undefined) {
 export function useDeleteListItem(workspaceId: string | undefined) {
   const { api } = useCore();
   const invalidate = useInvalidateLists(workspaceId);
+  const replica = useHybridReplica(workspaceId);
   return useMutation<void, Error, { listId: string; itemId: string }>({
-    mutationFn: ({ listId, itemId }) => api.deleteListItem(workspaceId as string, listId, itemId),
+    // Гибрид: запись идёт в локальную очередь и без сети — react-query не должен приостанавливать её до появления связи.
+    networkMode: replica ? "always" : "online",
+    mutationFn: async ({ listId, itemId }) => {
+      if (replica) {
+        await enqueueAndKick(replica, { entity: "listItem", kind: "delete", entityId: itemId, parentId: listId });
+        return;
+      }
+      return api.deleteListItem(workspaceId as string, listId, itemId);
+    },
     onSuccess: invalidate
   });
 }

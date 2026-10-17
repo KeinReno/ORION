@@ -128,6 +128,62 @@ describe("Global goals over projects", () => {
     expect((await plan()).blocked).toBe(0);
   });
 
+  it("план отдаёт вехи проекта по порядку с числом задач — из них на небе строится цепочка", async () => {
+    const alice = await register("milestones");
+    const base = `/workspaces/${alice.workspaceId}/goals`;
+    const goal = await request<{ id: string }>(base, { method: "POST", token: alice.accessToken, body: { title: "Маршрут с вехами" } });
+    const p = await project(alice, "С вехами");
+    const mkMilestone = async (title: string, order: number, status?: string) => {
+      const created = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/milestones`, {
+        method: "POST", token: alice.accessToken, body: { projectId: p, title, order, ...(status ? { status } : {}) }
+      });
+      expect(created.status).toBe(201);
+      return created.data.id;
+    };
+    const second = await mkMilestone("Вторая", 2);
+    await mkMilestone("Первая", 1, "done");
+    for (const title of ["a", "b"]) {
+      const t = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/tasks`, {
+        method: "POST", token: alice.accessToken, body: { title, projectId: p, milestoneId: second }
+      });
+      expect(t.status).toBe(201);
+    }
+    await request(`${base}/${goal.data.id}/plans`, { method: "POST", token: alice.accessToken, body: { projectId: p } });
+
+    type Ms = { title: string; status: string; tasks: number; closed: number };
+    const list = await request<Array<{ plans: Array<{ milestones: Ms[] }> }>>(base, { method: "GET", token: alice.accessToken });
+    const milestones = list.data[0].plans[0].milestones;
+    expect(milestones.map((m) => m.title)).toEqual(["Первая", "Вторая"]); // порядок плана, не порядок создания
+    expect(milestones[0]).toMatchObject({ status: "done", tasks: 0 });
+    expect(milestones[1]).toMatchObject({ status: "planned", tasks: 2, closed: 0 });
+  });
+
+  it("история целей: недельные срезы по задачам проектов; чужое пространство её не видит", async () => {
+    const alice = await register("history");
+    const mallory = await register("history-mallory");
+    const base = `/workspaces/${alice.workspaceId}/goals`;
+    const goal = await request<{ id: string }>(base, { method: "POST", token: alice.accessToken, body: { title: "История" } });
+    const p = await project(alice, "Для истории");
+    await task(alice, p, "сделана", "done");
+    await task(alice, p, "открыта");
+    await request(`${base}/${goal.data.id}/plans`, { method: "POST", token: alice.accessToken, body: { projectId: p } });
+
+    type History = { points: string[]; projects: Record<string, Array<{ tasks: number; closed: number }>> };
+    const week = await request<History>(`${base}/history?weeks=3`, { method: "GET", token: alice.accessToken });
+    expect(week.status).toBe(200);
+    expect(week.data.points).toHaveLength(4); // три недели назад ... сейчас
+    const series = week.data.projects[p];
+    expect(series).toHaveLength(4);
+    expect(series[0]).toEqual({ tasks: 0, closed: 0 }); // три недели назад задач ещё не было
+    expect(series[3]).toEqual({ tasks: 2, closed: 1 }); // сейчас: две задачи, одна закрыта
+
+    const clamped = await request<History>(`${base}/history?weeks=9999`, { method: "GET", token: alice.accessToken });
+    expect(clamped.data.points).toHaveLength(53); // не больше года
+
+    const denied = await request(`${base}/history`, { method: "GET", token: mallory.accessToken });
+    expect([403, 404]).toContain(denied.status);
+  });
+
   it("чужой проект и чужая цель недоступны; удаление проекта убирает только связь", async () => {
     const alice = await register("alice2");
     const mallory = await register("mallory");

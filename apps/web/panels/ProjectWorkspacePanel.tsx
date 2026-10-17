@@ -1,5 +1,6 @@
 "use client";
 
+import { useObjectNavigation } from "../lib/use-object-navigation";
 import {
   useArchiveProject,
   useCreateNote,
@@ -68,6 +69,7 @@ import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
+import { usePublishResourceContext } from "../lib/resource-context-store";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
 import { projectFocus } from "../lib/project-focus";
@@ -82,6 +84,8 @@ import { TaskRow } from "./projects/task-row";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { DueChip, ProjectStatusMenu } from "./projects/project-vitals";
 import { ProjectStatusSection } from "./projects/status-updates";
+import { OverviewGlance } from "./projects/overview-glance";
+import { nearestMilestone } from "../lib/project-status";
 import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 /** "overview", "tasks", "materials", "access" are the module's own; any other id (the plan) is a tab a plugin adds via `projects.tabs`. */
@@ -141,6 +145,7 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
   // The tab was opened with the name the caller knew (or just "Проект" after
   // a layout restore) — keep it in sync with the real, possibly renamed, project.
   const projectName = project?.name;
+  usePublishResourceContext(project ? { type: "project", id: project.id, title: project.name } : null);
   const lockedView = params?.locked === true;
   useEffect(() => {
     if (projectName && !lockedView) api?.setTitle(projectName);
@@ -228,6 +233,7 @@ function ProjectWorkspace({
   const createNote = useCreateNote(notesOn ? workspaceId : undefined);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const allowObjectNavigation = useObjectNavigation(workspaceId);
 
   const [chosenTab, setChosenTab] = useState<ProjectTab>("overview");
   const [editing, setEditing] = useState(false);
@@ -286,6 +292,7 @@ function ProjectWorkspace({
   }
 
   function setTab(next: ProjectTab): void {
+    if (next !== tab && !allowObjectNavigation()) return;
     setChosenTab(next);
     try {
       localStorage.setItem(projectTabKey(project.id), next);
@@ -645,6 +652,17 @@ function OverviewTab({
   return (
     <div className="grid grid-cols-1 gap-6 [@container(min-width:1152px)]:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
+        {tasksOn ? (
+          <OverviewGlance
+            project={project}
+            fireCount={fire.length}
+            next={focus.next[0] ?? null}
+            milestone={nearestMilestone(milestones)}
+            onOpenTask={onOpenTask}
+            onGoTasks={() => onGoTo("tasks")}
+            onGoPlan={hasPlan ? () => onGoTo("plan") : null}
+          />
+        ) : null}
         <ProjectStatusSection
           workspaceId={workspaceId}
           projectId={project.id}

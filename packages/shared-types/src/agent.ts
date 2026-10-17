@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { updateNoteInputSchema } from "./note";
+import { updateTaskInputSchema } from "./task";
 
 /**
  * ORION AI Bridge (docs/adr/ADR-0007-ai-bridge.md). An agent token is a revocable
  * credential issued by a workspace member; it acts with that member's rights, inside
  * one workspace, and only for the scopes ticked at creation. It never widens access.
  */
-export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "events:read", "events:write", "agents:message", "agents:delegate"] as const;
+export const AGENT_SCOPES = ["tasks:read", "tasks:write", "notes:read", "notes:write", "projects:read", "events:read", "events:write", "agents:message", "agents:delegate", "finance:draft", "links:write"] as const;
 export const agentScopeSchema = z.enum(AGENT_SCOPES);
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 
@@ -18,7 +20,9 @@ export const AGENT_SCOPE_LABEL: Record<AgentScope, string> = {
   "events:read": "Читать события календаря",
   "events:write": "Создавать и менять события календаря",
   "agents:message": "Переписываться с другими агентами",
-  "agents:delegate": "Давать и брать задания у других агентов"
+  "agents:delegate": "Давать и брать задания у других агентов",
+  "finance:draft": "Предлагать операции в финансах (черновики; записывает только человек)",
+  "links:write": "Связывать объекты между собой (проекты, задачи, заметки, события)"
 };
 
 /**
@@ -57,6 +61,61 @@ export type AgentEventPatch = z.infer<typeof agentEventPatchSchema>;
 
 export const AGENT_TOKEN_PREFIX = "orion_agt_";
 
+/**
+ * Autonomy mode of a token (docs/tz/TZ-03, ADR-0007). A mode NARROWS the scopes, it never widens them:
+ * - `observer`  — reads only; any write is 403.
+ * - `assistant` — creates notes/tasks/events at once; changing an EXISTING object becomes a proposal a human approves.
+ * - `manager`   — writes at once inside the scopes and limits; the dangerous (delete, finance, rights) is still a proposal.
+ */
+export const AGENT_MODES = ["observer", "assistant", "manager"] as const;
+export const agentModeSchema = z.enum(AGENT_MODES);
+export type AgentMode = z.infer<typeof agentModeSchema>;
+export const AGENT_MODE_LABEL: Record<AgentMode, string> = { observer: "Наблюдатель", assistant: "Помощник", manager: "ИИ-менеджер" };
+export const AGENT_MODE_HINT: Record<AgentMode, string> = {
+  observer: "Только читает. Любая запись отклоняется.",
+  assistant: "Создаёт заметки, задачи и события сразу; изменения существующего — только через ваше подтверждение.",
+  manager: "Пишет сразу в пределах разрешений и лимитов; удаление и финансы — всё равно только через подтверждение."
+};
+
+/** The permission matrix: module × operation. `propose` = may file a request a human approves. */
+export const AGENT_PERMISSION_MODULES = ["tasks", "notes", "events", "projects", "finance"] as const;
+export const agentPermissionModuleSchema = z.enum(AGENT_PERMISSION_MODULES);
+export type AgentPermissionModule = z.infer<typeof agentPermissionModuleSchema>;
+export const AGENT_PERMISSION_MODULE_LABEL: Record<AgentPermissionModule, string> = {
+  tasks: "Задачи",
+  notes: "Заметки",
+  events: "Календарь",
+  projects: "Проекты",
+  finance: "Финансы (черновики)"
+};
+export const AGENT_PERMISSION_OPS = ["read", "create", "update", "propose"] as const;
+export const agentPermissionOpSchema = z.enum(AGENT_PERMISSION_OPS);
+export type AgentPermissionOp = z.infer<typeof agentPermissionOpSchema>;
+export const AGENT_PERMISSION_OP_LABEL: Record<AgentPermissionOp, string> = {
+  read: "Читать",
+  create: "Создавать",
+  update: "Менять",
+  propose: "Предлагать"
+};
+export const agentPermissionsSchema = z.object({
+  tasks: z.array(agentPermissionOpSchema).optional(),
+  notes: z.array(agentPermissionOpSchema).optional(),
+  events: z.array(agentPermissionOpSchema).optional(),
+  projects: z.array(agentPermissionOpSchema).optional(),
+  finance: z.array(agentPermissionOpSchema).optional()
+});
+export type AgentPermissions = z.infer<typeof agentPermissionsSchema>;
+
+/** "Never" flags, enforced on the server whatever the matrix says. */
+export const AGENT_FORBIDDEN = ["finance", "documents", "delete"] as const;
+export const agentForbiddenSchema = z.enum(AGENT_FORBIDDEN);
+export type AgentForbidden = z.infer<typeof agentForbiddenSchema>;
+export const AGENT_FORBIDDEN_LABEL: Record<AgentForbidden, string> = {
+  finance: "Никогда: финансы",
+  documents: "Никогда: документы",
+  delete: "Никогда: удаление"
+};
+
 export const agentTokenSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
@@ -64,6 +123,16 @@ export const agentTokenSchema = z.object({
   /** First characters of the secret — enough to recognise the token, useless as a credential. */
   prefix: z.string(),
   scopes: z.array(agentScopeSchema),
+  mode: agentModeSchema,
+  /** `null` = the matrix is derived from `scopes` alone (a token issued before the matrix existed). */
+  permissions: agentPermissionsSchema.nullable(),
+  /** Empty = every project. Otherwise the token touches only objects of these projects. */
+  allowedProjectIds: z.array(z.string()),
+  forbidden: z.array(agentForbiddenSchema),
+  /** Direct writes per hour; `null` = unlimited. */
+  writeLimitPerHour: z.number().int().nullable(),
+  /** Projects where a `manager` token may save an explicit decision note (tag «решение») without asking. Empty = off. */
+  autoCommitProjectIds: z.array(z.string()),
   expiresAt: z.string().nullable(),
   revokedAt: z.string().nullable(),
   lastUsedAt: z.string().nullable(),
@@ -75,12 +144,46 @@ export type AgentToken = z.infer<typeof agentTokenSchema>;
 export const createdAgentTokenSchema = agentTokenSchema.extend({ secret: z.string() });
 export type CreatedAgentToken = z.infer<typeof createdAgentTokenSchema>;
 
-export const createAgentTokenInputSchema = z.object({
-  name: z.string().trim().min(1, "Название обязательно").max(80),
-  scopes: z.array(agentScopeSchema).min(1, "Выберите хотя бы одно разрешение").max(AGENT_SCOPES.length),
-  expiresInDays: z.number().int().min(1).max(365).default(30)
-});
-export type CreateAgentTokenInput = z.infer<typeof createAgentTokenInputSchema>;
+const agentRestrictionFields = {
+  allowedProjectIds: z.array(z.string().min(1)).max(100).default([]),
+  forbidden: z.array(agentForbiddenSchema).max(AGENT_FORBIDDEN.length).default([]),
+  writeLimitPerHour: z.number().int().min(1).max(10_000).nullable().default(null),
+  autoCommitProjectIds: z.array(z.string().min(1)).max(100).default([])
+};
+
+/**
+ * Either `scopes` (the flat list, still valid) or `permissions` (the matrix) must grant something; with a matrix the
+ * server derives the scopes. `agents:*` scopes ride along in `scopes` — they are not matrix modules.
+ */
+export const createAgentTokenInputSchema = z
+  .object({
+    name: z.string().trim().min(1, "Название обязательно").max(80),
+    scopes: z.array(agentScopeSchema).max(AGENT_SCOPES.length).default([]),
+    permissions: agentPermissionsSchema.optional(),
+    mode: agentModeSchema.default("assistant"),
+    ...agentRestrictionFields,
+    /** `null` = no expiry (the settings screen warns about it). */
+    expiresInDays: z.number().int().min(1).max(365).nullable().default(30)
+  })
+  .refine((v) => v.scopes.length > 0 || Object.values(v.permissions ?? {}).some((ops) => (ops?.length ?? 0) > 0), {
+    message: "Выберите хотя бы одно разрешение",
+    path: ["scopes"]
+  });
+export type CreateAgentTokenInput = z.input<typeof createAgentTokenInputSchema>;
+export type ParsedCreateAgentTokenInput = z.infer<typeof createAgentTokenInputSchema>;
+
+/** What may change on a live token. Rights can only be narrowed here (the matrix is intersected with the scopes). */
+export const updateAgentTokenInputSchema = z
+  .object({
+    mode: agentModeSchema,
+    permissions: agentPermissionsSchema,
+    allowedProjectIds: agentRestrictionFields.allowedProjectIds,
+    forbidden: agentRestrictionFields.forbidden,
+    writeLimitPerHour: agentRestrictionFields.writeLimitPerHour,
+    autoCommitProjectIds: agentRestrictionFields.autoCommitProjectIds
+  })
+  .partial();
+export type UpdateAgentTokenInput = z.infer<typeof updateAgentTokenInputSchema>;
 
 export const agentAuditEntrySchema = z.object({
   id: z.string(),
@@ -89,6 +192,15 @@ export const agentAuditEntrySchema = z.object({
   action: z.string(),
   resource: z.string().nullable(),
   status: z.number().int(),
+  /** Module the call touched (`tasks`, `notes`, …); `null` for messaging and refusals before the module is known. */
+  module: z.string().nullable(),
+  /** One human sentence: what the agent did (type, object, fields). */
+  summary: z.string().nullable(),
+  objectType: z.string().nullable(),
+  objectId: z.string().nullable(),
+  /** A note/task the agent created and a human has not yet reverted. */
+  undoable: z.boolean(),
+  undoneAt: z.string().nullable(),
   createdAt: z.string()
 });
 export type AgentAuditEntry = z.infer<typeof agentAuditEntrySchema>;
@@ -148,14 +260,45 @@ export const updateAgentJobInputSchema = z.object({
 });
 export type UpdateAgentJobInput = z.infer<typeof updateAgentJobInputSchema>;
 
-export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete"] as const;
+export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete", "task.update", "note.update", "event.update"] as const;
 export const agentProposalActionSchema = z.enum(AGENT_PROPOSAL_ACTIONS);
 export type AgentProposalAction = z.infer<typeof agentProposalActionSchema>;
 
 export const AGENT_PROPOSAL_ACTION_LABEL: Record<AgentProposalAction, string> = {
   "task.delete": "Удалить задачу",
-  "note.delete": "Удалить заметку"
+  "note.delete": "Удалить заметку",
+  "task.update": "Изменить задачу",
+  "note.update": "Изменить заметку",
+  "event.update": "Изменить событие"
 };
+
+/** A proposal nobody decided within this many days lapses (`expired`) and can no longer be approved. */
+export const AGENT_PROPOSAL_TTL_DAYS = 7;
+
+/** What an agent may change on a task / note — no delete, no reassignment, no dependency rewiring. */
+export const agentTaskPatchSchema = updateTaskInputSchema.pick({
+  title: true,
+  description: true,
+  status: true,
+  priority: true,
+  dueAt: true,
+  expectedRevision: true
+});
+export const agentNotePatchSchema = updateNoteInputSchema.pick({
+  title: true,
+  summary: true,
+  body: true,
+  tags: true,
+  expectedRevision: true
+});
+
+export const agentProposalDiffEntrySchema = z.object({
+  field: z.string(),
+  label: z.string(),
+  before: z.string().nullable(),
+  after: z.string().nullable()
+});
+export type AgentProposalDiffEntry = z.infer<typeof agentProposalDiffEntrySchema>;
 
 export const agentProposalSchema = z.object({
   id: z.string(),
@@ -165,15 +308,73 @@ export const agentProposalSchema = z.object({
   targetId: z.string(),
   targetTitle: z.string(),
   reason: z.string(),
-  status: z.enum(["pending", "approved", "rejected"]),
+  /** `expired` is computed: a pending proposal past its `expiresAt`. */
+  status: z.enum(["pending", "approved", "rejected", "expired"]),
+  /** Before/after of the fields an `*.update` proposal changes; empty for deletions. */
+  diff: z.array(agentProposalDiffEntrySchema),
+  expiresAt: z.string().nullable(),
   createdAt: z.string(),
   decidedAt: z.string().nullable()
 });
 export type AgentProposal = z.infer<typeof agentProposalSchema>;
 
-export const createAgentProposalInputSchema = z.object({
-  action: agentProposalActionSchema,
-  targetId: z.string().min(1),
-  reason: z.string().max(2000).default("")
-});
+export const createAgentProposalInputSchema = z
+  .object({
+    action: agentProposalActionSchema,
+    targetId: z.string().min(1),
+    reason: z.string().max(2000).default(""),
+    /** The change an `*.update` proposal asks for; checked against the per-object patch schema on the server. */
+    patch: z.record(z.string(), z.unknown()).optional()
+  })
+  .refine((v) => !v.action.endsWith(".update") || (v.patch !== undefined && Object.keys(v.patch).length > 0), {
+    message: "Для изменения нужно указать patch",
+    path: ["patch"]
+  });
 export type CreateAgentProposalInput = z.infer<typeof createAgentProposalInputSchema>;
+
+/** The reply of a write endpoint when the token's mode turned the change into a proposal (HTTP 202). */
+export interface AgentProposedResult {
+  proposed: true;
+  proposal: AgentProposal;
+}
+
+export const agentProposalBulkInputSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+  decision: z.enum(["approve", "reject"])
+});
+export type AgentProposalBulkInput = z.infer<typeof agentProposalBulkInputSchema>;
+
+export const agentProposalBulkResultSchema = z.object({
+  results: z.array(z.object({ id: z.string(), ok: z.boolean(), error: z.string().nullable() }))
+});
+export type AgentProposalBulkResult = z.infer<typeof agentProposalBulkResultSchema>;
+
+export const AGENT_AUDIT_RESULTS = ["ok", "proposed", "denied", "limited", "error"] as const;
+export const agentAuditResultSchema = z.enum(AGENT_AUDIT_RESULTS);
+export type AgentAuditResult = z.infer<typeof agentAuditResultSchema>;
+export const AGENT_AUDIT_RESULT_LABEL: Record<AgentAuditResult, string> = {
+  ok: "Выполнено",
+  proposed: "Предложено",
+  denied: "Отказано",
+  limited: "Лимит",
+  error: "Ошибка"
+};
+
+/** `result` from an HTTP status: 2xx ok, 202 proposed, 401/403 denied, 429 limited, the rest error. */
+export function agentAuditResultOf(status: number): AgentAuditResult {
+  if (status === 202) return "proposed";
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 401 || status === 403) return "denied";
+  if (status === 429) return "limited";
+  return "error";
+}
+
+export const agentAuditQuerySchema = z.object({
+  tokenId: z.string().min(1).optional(),
+  module: z.string().min(1).max(40).optional(),
+  result: agentAuditResultSchema.optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional()
+});
+export type AgentAuditQuery = z.infer<typeof agentAuditQuerySchema>;

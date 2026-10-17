@@ -9,6 +9,7 @@ import { usePanelVisible } from "./panel-shell";
 import { Button, IconButton, Input } from "./primitives";
 import { useEscapeKey, useMounted, useOnClickOutside } from "./hooks";
 import { computeFocusTrapAction } from "./focus-trap";
+import { useThemeScopeProps } from "./theme-provider";
 
 /** Portal overlays must not stay on screen after their host panel is hidden. */
 function useOverlayOpen(open: boolean): boolean {
@@ -152,6 +153,7 @@ export function Modal({
   size?: ModalSize;
 }): React.ReactElement | null {
   const mounted = useMounted();
+  const themeScope = useThemeScopeProps();
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const labelId = useId();
@@ -182,6 +184,7 @@ export function Modal({
     <AnimatePresence>
       {shown ? (
         <motion.div
+          {...themeScope}
           key="modal"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -200,22 +203,22 @@ export function Modal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: pop, ease: "easeOut" }}
             className={clsx(
-              "relative z-10 my-8 w-full rounded-2xl border border-border bg-card/85 shadow-2xl shadow-black/40 outline-none backdrop-blur-xl",
+              "relative z-10 my-8 w-full rounded-2xl border border-ui-overlay-border bg-ui-overlay/85 shadow-2xl shadow-black/40 outline-none backdrop-blur-xl",
               size === "sm" && "max-w-sm",
               size === "md" && "max-w-lg",
               size === "lg" && "max-w-2xl"
             )}
           >
             {title ? (
-              <div className="border-b border-border px-5 py-3.5">
-                <h2 id={labelId} className="text-sm font-semibold text-foreground">
+              <div className="border-b border-ui-overlay-border px-5 py-3.5">
+                <h2 id={labelId} className="text-sm font-semibold text-ui-primary">
                   {title}
                 </h2>
-                {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+                {description ? <p className="mt-0.5 text-xs text-ui-secondary">{description}</p> : null}
               </div>
             ) : null}
             <div className="px-5 py-4">{children}</div>
-            {footer ? <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div> : null}
+            {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
           </motion.div>
         </motion.div>
       ) : null}
@@ -246,6 +249,7 @@ export function Sheet({
   bare?: boolean;
 }): React.ReactElement | null {
   const mounted = useMounted();
+  const themeScope = useThemeScopeProps();
   const panelRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   // Same as Modal: the title names the dialog for screen readers (and for getByRole(..., { name })).
@@ -276,6 +280,7 @@ export function Sheet({
     <AnimatePresence>
       {shown ? (
         <motion.div
+          {...themeScope}
           key="sheet"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -295,11 +300,11 @@ export function Sheet({
             exit={{ x: "100%" }}
             transition={{ type: "tween", duration: slide, ease: "easeOut" }}
             style={{ width }}
-            className="relative z-10 flex h-full max-w-[92vw] flex-col border-l border-border bg-card/90 shadow-2xl shadow-black/50 outline-none backdrop-blur-xl"
+            className="relative z-10 flex h-full max-w-[92vw] flex-col border-l border-ui-overlay-border bg-ui-overlay/90 shadow-2xl shadow-black/50 outline-none backdrop-blur-xl"
           >
             {title ? (
-              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-                <h2 id={labelId} className="text-sm font-semibold text-foreground">{title}</h2>
+              <div className="flex items-center justify-between border-b border-ui-overlay-border px-5 py-3.5">
+                <h2 id={labelId} className="text-sm font-semibold text-ui-primary">{title}</h2>
                 <IconButton label="Закрыть" size="sm" onClick={onClose}>
                   <X className="h-4 w-4" />
                 </IconButton>
@@ -310,7 +315,7 @@ export function Sheet({
             ) : (
               <div className="orion-scroll flex-1 overflow-y-auto px-5 py-4">{children}</div>
             )}
-            {footer ? <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div> : null}
+            {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
           </motion.div>
         </motion.div>
       ) : null}
@@ -418,6 +423,7 @@ export function Popover({
   backdrop?: boolean;
 }): React.ReactElement {
   const mounted = useMounted();
+  const themeScope = useThemeScopeProps();
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
   const setOpen = useCallback(
@@ -486,6 +492,7 @@ export function Popover({
                     />
                   ) : null}
                   <motion.div
+                    {...themeScope}
                     key="popover-panel"
                     ref={panelRef}
                     initial={{ opacity: 0, scale: 0.97, y: -4 }}
@@ -493,6 +500,7 @@ export function Popover({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.12 }}
                     style={{
+                      ...themeScope.style,
                       position: "fixed",
                       top: pos.top,
                       bottom: pos.bottom,
@@ -500,7 +508,7 @@ export function Popover({
                       width: pos.width,
                       maxHeight: pos.maxHeight
                     }}
-                    className="z-[90] overflow-y-auto rounded-xl border border-border bg-card/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md"
+                    className="z-[90] overflow-y-auto rounded-xl border border-ui-overlay-border bg-ui-overlay/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md"
                   >
                     {children({ close: () => setOpen(false) })}
                   </motion.div>

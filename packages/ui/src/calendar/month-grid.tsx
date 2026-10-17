@@ -16,6 +16,7 @@ import {
   startOfDay,
   WEEKDAY_LABELS,
   type CalendarItem,
+  type ItemContextHandler,
   type ReschedulePayload,
   type SlotCreatePayload
 } from "./shared";
@@ -36,6 +37,7 @@ interface MonthGridProps {
   today: Date;
   items: CalendarItem[];
   onItemClick?: (id: string) => void;
+  onItemContextMenu?: ItemContextHandler;
   onItemReschedule?: (id: string, payload: ReschedulePayload) => void;
   onSlotCreate?: (payload: SlotCreatePayload) => void;
   focusedId?: string | null;
@@ -53,6 +55,7 @@ export function MonthGrid({
   today,
   items,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   focusedId
@@ -87,6 +90,7 @@ export function MonthGrid({
             today={today}
             items={items}
             onItemClick={onItemClick}
+            onItemContextMenu={onItemContextMenu}
             onItemReschedule={onItemReschedule}
             onSlotCreate={onSlotCreate}
             focusedId={focusedId}
@@ -104,6 +108,7 @@ function WeekRow({
   today,
   items,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   focusedId,
@@ -113,7 +118,7 @@ function WeekRow({
   month: number;
   today: Date;
   compact: boolean;
-} & Pick<MonthGridProps, "items" | "onItemClick" | "onItemReschedule" | "onSlotCreate" | "focusedId">): React.ReactElement {
+} & Pick<MonthGridProps, "items" | "onItemClick" | "onItemContextMenu" | "onItemReschedule" | "onSlotCreate" | "focusedId">): React.ReactElement {
   const weekStartMs = startOfDay(week[0]).getTime();
   const weekEndMs = weekStartMs + 7 * 86_400_000;
 
@@ -179,6 +184,7 @@ function WeekRow({
                 <Pill
                   item={b.item}
                   onClick={onItemClick}
+                  onContextMenu={onItemContextMenu}
                   focused={b.item.id === focusedId}
                   draggable={Boolean(onItemReschedule) && calendarItemMode(b.item) !== "none"}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", b.item.id)}
@@ -211,15 +217,19 @@ function WeekRow({
                 sameDay(day, today) ? "border-accent/40 bg-accent/[0.06]" : "border-white/5 hover:border-border",
                 // Days of the neighbouring months are set back by a darker cell and softer events, not by fading the
                 // whole cell: a faded date number stops being readable (contrast < 2:1).
-                !inMonth && "bg-black/30 [&>div:last-child]:opacity-75"
+                !inMonth && "bg-background [&>div:last-child]:opacity-75"
               )}
             >
               <div className="mb-0.5 flex items-center justify-between">
                 <span
                   className={clsx(
                     "text-2xs",
-                    sameDay(day, today) ? "font-semibold text-accent-text" : "text-subtle-foreground"
+                    // Today is a filled badge, not just a coloured number: findable at a glance and not colour-only.
+                    sameDay(day, today)
+                      ? "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 font-semibold text-accent-foreground"
+                      : "text-subtle-foreground"
                   )}
+                  aria-current={sameDay(day, today) ? "date" : undefined}
                 >
                   {day.getDate()}
                 </span>
@@ -230,6 +240,7 @@ function WeekRow({
                     key={item.id}
                     item={item}
                     onClick={onItemClick}
+                    onContextMenu={onItemContextMenu}
                     showTime
                     focused={item.id === focusedId}
                     draggable={Boolean(onItemReschedule) && calendarItemMode(item) !== "none"}
@@ -265,7 +276,7 @@ function WeekRow({
                           {day.getDate()} {MONTH_LABELS[day.getMonth()]}
                         </p>
                         {singles.map((item) => (
-                          <Pill key={item.id} item={item} onClick={onItemClick} showTime focused={item.id === focusedId} />
+                          <Pill key={item.id} item={item} onClick={onItemClick} onContextMenu={onItemContextMenu} showTime focused={item.id === focusedId} />
                         ))}
                       </div>
                     )}

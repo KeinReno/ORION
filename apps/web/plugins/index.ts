@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
 import type { HomeObjectTabSlotProps } from "../lib/extensions/contracts";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps, ResourcesSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -11,6 +11,12 @@ const HhSources = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportu
 contribute("opportunities.views", { pluginId: "opportunities-profiles", component: ProfilesView, order: 10, meta: { tabId: "profiles", label: "Профили" } });
 contribute("opportunities.views", { pluginId: "opportunities-hh-import", component: HhImportView, order: 20, meta: { tabId: "hh-import", label: "Импорт HH", ownerOnly: true } });
 contribute("opportunities.details.sections", { pluginId: "opportunities-hh-import", component: HhSources });
+const AssistantSection = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportunities-assistant/AssistantSection").then((m) => m.AssistantSection), { ssr: false });
+contribute("opportunities.details.sections", { pluginId: "opportunities-assistant", component: AssistantSection, order: 20 });
+const ExecutionView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-execution/ExecutionView").then((m) => m.ExecutionView), { ssr: false });
+contribute("opportunities.views", { pluginId: "opportunities-execution", component: ExecutionView, order: 30, meta: { tabId: "execution", label: "Отправка", ownerOnly: true } });
+const ManagerView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-manager/ManagerView").then((m) => m.ManagerView), { ssr: false });
+contribute("opportunities.views", { pluginId: "opportunities-manager", component: ManagerView, order: 40, meta: { tabId: "manager", label: "Менеджер", ownerOnly: true } });
 const HomeUtilitiesTab = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesView), { ssr: false });
 contribute("home.object.tabs", { pluginId: "home-utilities", component: HomeUtilitiesTab, order: 10, meta: { tabId: "utilities", label: "Коммуналка" } });
 const HomeUtilitiesSummary = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesSummary), { ssr: false });
@@ -62,6 +68,10 @@ contribute("tasks.views.bar", { pluginId: "tasks-saved-views", component: SavedV
 
 const DocumentHistorySheet = dynamic<DocumentsHistorySlotProps>(() => import("./documents-history/history-sheet").then((m) => m.DocumentHistorySheet), { ssr: false });
 contribute("documents.history", { pluginId: "documents-history", component: DocumentHistorySheet, meta: { actionLabel: "История версий…" } });
+
+/** Provider of the «Ресурсы» tab of the right-hand context panel (ADR-0014). */
+const ContextResources = dynamic<ResourcesSlotProps>(() => import("./documents-resources/resources-view").then((m) => m.ResourcesView), { ssr: false });
+contribute("shell.context.resources", { pluginId: "documents-resources", component: ContextResources });
 
 /** Documents office plugin. The codecs load on demand (first click / first office file), never with the panel. */
 const OfficeEditorSlot = dynamic<DocumentsEditorSlotProps>(() => import("./documents-office/OfficeEditor").then((m) => m.OfficeEditor), { ssr: false });
@@ -217,6 +227,14 @@ contribute("finance.tabs", { pluginId: "finance-net-worth", component: NetWorthT
 contribute("dashboard.finance", { pluginId: "finance-net-worth", component: NetWorthLine, order: 20 });
 const TransferMatch = dynamic<FinanceTransactionsTopSlotProps>(() => import("./finance-transfer-match/match-banner").then((m) => m.TransferMatchBanner), { ssr: false });
 contribute("finance.transactions.top", { pluginId: "finance-transfer-match", component: TransferMatch, order: 20 });
+const TemplatesStrip = dynamic<FinanceTransactionsTopSlotProps>(() => import("./finance-templates/templates-bar").then((m) => m.TemplatesBar), { ssr: false });
+contribute("finance.transactions.top", { pluginId: "finance-templates", component: TemplatesStrip, order: 15 });
+const SplitTab = dynamic<FinanceTabSlotProps>(() => import("./finance-split/split-view").then((m) => m.SplitView), { ssr: false });
+contribute("finance.tabs", { pluginId: "finance-split", component: SplitTab, order: 55, meta: { tabId: "split", label: "Общие расходы" } });
+const RatesTab = dynamic<FinanceTabSlotProps>(() => import("./finance-exchange-rates/rates-view").then((m) => m.RatesView), { ssr: false });
+contribute("finance.tabs", { pluginId: "finance-exchange-rates", component: RatesTab, order: 48, meta: { tabId: "rates", label: "Курсы" } });
+const DraftsBanner = dynamic<FinanceTransactionsTopSlotProps>(() => import("./finance-ai-drafts/drafts-banner").then((m) => m.DraftsBanner), { ssr: false });
+contribute("finance.transactions.top", { pluginId: "finance-ai-drafts", component: DraftsBanner, order: 5 });
 const ProjectCostsTab = dynamic<ProjectTabSlotProps>(() => import("./finance-project-costs/costs-tab").then((m) => m.ProjectCostsTab), { ssr: false });
 contribute("projects.tabs", { pluginId: "finance-project-costs", component: ProjectCostsTab, order: 50, meta: { tabId: "costs", label: "Затраты" } });
 contribute("inventory.costing", {

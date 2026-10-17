@@ -1,6 +1,6 @@
 "use client";
 
-import { useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
+import { usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
 import { noteNumberLabel, type Note, type Project } from "@orion/shared-types";
 import {
   AutosaveStatus,
@@ -12,12 +12,14 @@ import {
   MarkdownView,
   SegmentedControl,
   Select,
-  Sheet,
+  cx,
+  useResizeWidth,
   markdownOutline,
   useToast,
   type MarkdownEditorApi
 } from "@orion/ui";
 import {
+  ArrowLeft,
   Archive,
   ArchiveRestore,
   ClipboardCopy,
@@ -37,7 +39,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
 import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
 import { openPanel } from "../lib/panel-bus";
 import { buildPanelDragId } from "../lib/panel-drag";
@@ -83,6 +85,7 @@ export function NoteEditor({
   projects,
   busy,
   standalone,
+  compact = false,
   onCreate,
   onSave,
   onClose,
@@ -101,6 +104,7 @@ export function NoteEditor({
   busy: boolean;
   /** Already its own dock panel / window: no "open in a panel" actions. */
   standalone?: boolean;
+  compact?: boolean;
   onCreate: (input: NoteEditorInput) => Promise<void>;
   /**
    * Throws an `AutosaveConflict` (see `../lib/note-autosave`) on a 409 CAS
@@ -139,7 +143,10 @@ export function NoteEditor({
   // The history button exists only while a plugin fills `notes.history`.
   const historyButton = useSlotContributions("notes.history")[0]?.meta;
   const editorApi = useRef<MarkdownEditorApi | null>(null);
+  const inspectorButtonId = useId();
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [editorRef, editorWidth] = useResizeWidth<HTMLFormElement>();
+  const wideInspector = editorWidth >= 1000;
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
   // "compare current fields to what was last saved" dirty check. An
@@ -213,7 +220,10 @@ export function NoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note?.id, workspaceId]);
 
-  const dirty = note ? autosaveState !== "saved" : composeDirty;
+  const dirty = note ? autosaveState !== "saved" || !title.trim() : composeDirty;
+  const visibleSaveState = note && !title.trim() && autosaveState === "saved" ? "dirty" : autosaveState;
+  usePublishObjectContext({ workspaceId: workspaceId ?? "", entityType: "note", entityId: note?.id ?? "compose",
+    title: title || (note ? note.title : "Новая заметка"), saveState: note ? visibleSaveState : composeDirty ? "dirty" : "saved", hasPendingChanges: dirty, saveMode: note ? "autosave" : "explicit" });
   // Autosave can still be pending or fail. Switching workspaces must not dispose
   // its controller before the latest text has been acknowledged by the server.
   useUnsavedDraft(dirty);
@@ -300,6 +310,11 @@ export function NoteEditor({
   }, [hasUnsavedChangesRef, dirty]);
 
   function requestClose(): void {
+    // The list owns the existing discard confirmation. A standalone window has no list guard.
+    if (standalone && dirty) {
+      toast({ title: "Изменения ещё не сохранены", description: "Сохраните заметку или разрешите конфликт перед закрытием." });
+      return;
+    }
     onClose();
   }
 
@@ -384,19 +399,23 @@ export function NoteEditor({
   }
 
   return (
-    <form onSubmit={submit} className="flex h-full flex-col">
-      <div className="orion-scroll flex-1 overflow-y-auto p-5 lg:px-8">
+    <form ref={editorRef} aria-label="Редактор заметки" onSubmit={submit} className="flex h-full min-h-0 min-w-0">
+      <div className={cx("min-h-0 min-w-0 flex-1 flex-col", inspectorOpen && !wideInspector ? "hidden" : "flex")}>
+      {compact ? <div className="shrink-0 border-b border-border px-4 py-2"><Button type="button" size="sm" variant="ghost" onClick={requestClose}><ArrowLeft className="h-4 w-4" /> К заметкам</Button></div> : null}
+      <div className="orion-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:px-8">
         <div className="mx-auto w-full max-w-[65ch] space-y-3">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Заголовок"
+              aria-label="Название заметки"
+              aria-invalid={note !== null && !title.trim()}
               required
-              className="min-w-0 flex-1 bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
+              className="min-w-[min(100%,14rem)] flex-1 bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
             />
-            <div className="flex shrink-0 items-center gap-2 pt-1">
-              <AutosaveStatus state={autosaveState === "conflict" ? "error" : autosaveState} explicit={composing} />
+            <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
+              {autosaveState === "conflict" ? <span role="status" className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте заметку открытой" state={visibleSaveState === "conflict" ? "error" : visibleSaveState} explicit={composing} />}
               {!composing && autosaveState === "error" ? (
                 <Button
                   type="button"
@@ -514,7 +533,7 @@ export function NoteEditor({
                   }))}
                 />
               ) : null}
-              <IconButton label="Свойства, связи и доступ" size="sm" onClick={() => setInspectorOpen(true)}>
+              <IconButton id={inspectorButtonId} aria-expanded={inspectorOpen} label="Свойства, связи и доступ" size="sm" onClick={() => setInspectorOpen(true)}>
                 <SlidersHorizontal className="h-4 w-4" />
               </IconButton>
               {note && historyButton ? (
@@ -606,7 +625,10 @@ export function NoteEditor({
         </div>
       </div>
 
-      <Sheet open={inspectorOpen} onClose={() => setInspectorOpen(false)} title="Свойства" width="26rem">
+      </div>
+      {inspectorOpen ? <aside aria-label="Свойства заметки" onKeyDown={(event) => { if (event.key === "Escape" && event.currentTarget.contains(event.target as Node)) { event.preventDefault(); event.stopPropagation(); setInspectorOpen(false); requestAnimationFrame(() => document.getElementById(inspectorButtonId)?.focus()); } }} className={cx("flex min-h-0 min-w-0 flex-col border-l border-border bg-panel", wideInspector ? "w-80 shrink-0" : "flex-1")}>
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3"><h2 className="text-label font-medium">Свойства заметки</h2><IconButton autoFocus label="Вернуться к тексту заметки" size="sm" onClick={() => { setInspectorOpen(false); requestAnimationFrame(() => document.getElementById(inspectorButtonId)?.focus()); }}><X className="h-4 w-4" /></IconButton></header>
+        <div className="orion-scroll min-h-0 flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {calendarOn ? (
             <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
@@ -680,7 +702,8 @@ export function NoteEditor({
             </div>
           ) : null}
         </div>
-      </Sheet>
+        </div>
+      </aside> : null}
 
       {note ? (
         <ExtensionSlot

@@ -17,12 +17,19 @@ export const accountContextSchema = z.enum(["personal", "family", "work"]);
 export type AccountContext = z.infer<typeof accountContextSchema>;
 export const ACCOUNT_CONTEXT_LABEL: Record<AccountContext, string> = { personal: "Личные", family: "Семейные", work: "Рабочие" };
 
+/** Кто видит счёт: все в пространстве или только владелец (правило базы данных, не просто скрытие в интерфейсе). */
+export const accountVisibilitySchema = z.enum(["workspace", "private"]);
+export type AccountVisibility = z.infer<typeof accountVisibilitySchema>;
+
 export const accountSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   name: z.string(),
   kind: accountKindSchema,
   context: accountContextSchema,
+  visibility: accountVisibilitySchema,
+  /** Кто завёл счёт; null у счетов, созданных до появления личных счетов. */
+  ownerId: z.string().nullable(),
   currency: z.string(),
   startingBalance: z.number().int(),
   /** startingBalance + net of every transaction on this account — computed by AccountsService, never stored. */
@@ -37,6 +44,7 @@ export const createAccountInputSchema = z.object({
   name: z.string().min(1, "Название обязательно").max(100),
   kind: accountKindSchema.default("other"),
   context: accountContextSchema.default("personal"),
+  visibility: accountVisibilitySchema.default("workspace"),
   startingBalance: z.number().int().default(0),
   currency: z.string().length(3).default("RUB")
 });
@@ -46,6 +54,7 @@ export const updateAccountInputSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   kind: accountKindSchema.optional(),
   context: accountContextSchema.optional(),
+  visibility: accountVisibilitySchema.optional(),
   currency: z.string().length(3).optional(),
   startingBalance: z.number().int().optional(),
   archivedAt: z.string().datetime().nullable().optional()
@@ -293,20 +302,31 @@ export const budgetSchema = z.object({
   /** First-of-month, ISO. */
   month: z.string(),
   limitAmount: z.number().int().positive(),
+  /** Режим «конвертов»: остаток прошлого месяца добавляется к лимиту этого. */
+  rollover: z.boolean(),
+  /** Сколько перенесено с прошлых месяцев (только положительный остаток; 0, если перенос выключен) — считает сервер. */
+  carryOver: z.number().int().nonnegative(),
   /** Sum of expense transactions in that category for that month — computed by BudgetsService. */
   spent: z.number().int()
 });
 export type Budget = z.infer<typeof budgetSchema>;
 
+/** Сколько можно потратить в месяце: лимит плюс перенесённый остаток. Единственное место, где это складывается. */
+export function budgetAvailable(budget: Pick<Budget, "limitAmount" | "carryOver">): number {
+  return budget.limitAmount + budget.carryOver;
+}
+
 export const createBudgetInputSchema = z.object({
   categoryId: z.string(),
   month: z.string().datetime(),
-  limitAmount: z.number().int().positive("Лимит должен быть больше нуля")
+  limitAmount: z.number().int().positive("Лимит должен быть больше нуля"),
+  rollover: z.boolean().optional()
 });
 export type CreateBudgetInput = z.infer<typeof createBudgetInputSchema>;
 
 export const updateBudgetInputSchema = z.object({
-  limitAmount: z.number().int().positive().optional()
+  limitAmount: z.number().int().positive().optional(),
+  rollover: z.boolean().optional()
 });
 export type UpdateBudgetInput = z.infer<typeof updateBudgetInputSchema>;
 

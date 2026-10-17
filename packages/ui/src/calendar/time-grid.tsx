@@ -16,7 +16,9 @@ import {
   startOfDay,
   toneStyle,
   WEEKDAY_LABELS,
+  contextPoint,
   type CalendarItem,
+  type ItemContextHandler,
   type ReschedulePayload,
   type SlotCreatePayload
 } from "./shared";
@@ -33,6 +35,7 @@ interface TimeGridProps {
   today: Date;
   items: CalendarItem[];
   onItemClick?: (id: string) => void;
+  onItemContextMenu?: ItemContextHandler;
   onItemReschedule?: (id: string, payload: ReschedulePayload) => void;
   onSlotCreate?: (payload: SlotCreatePayload) => void;
   focusedId?: string | null;
@@ -106,6 +109,7 @@ export function TimeGrid({
   today,
   items,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   focusedId
@@ -291,6 +295,7 @@ export function TimeGrid({
                 key={item.id}
                 item={item}
                 onClick={onItemClick}
+                onContextMenu={onItemContextMenu}
                 focused={item.id === focusedId}
                 draggable={Boolean(onItemReschedule) && calendarItemMode(item) !== "none"}
                 onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
@@ -329,6 +334,7 @@ export function TimeGrid({
               drag={drag}
               colWidthRef={colWidthRef}
               onItemClick={onItemClick}
+              onItemContextMenu={onItemContextMenu}
               focusedId={focusedId}
               draggableItems={Boolean(onItemReschedule)}
               startCreate={(fromMin) => onSlotCreate && setDrag({ kind: "create", dayIndex, fromMin, toMin: fromMin })}
@@ -379,6 +385,7 @@ function DayColumn({
   drag,
   colWidthRef,
   onItemClick,
+  onItemContextMenu,
   focusedId,
   draggableItems,
   startCreate,
@@ -392,6 +399,7 @@ function DayColumn({
   drag: DragState | null;
   colWidthRef: React.MutableRefObject<number>;
   onItemClick?: (id: string) => void;
+  onItemContextMenu?: ItemContextHandler;
   focusedId?: string | null;
   draggableItems: boolean;
   startCreate: (fromMin: number) => void;
@@ -443,11 +451,17 @@ function DayColumn({
             role="button"
             tabIndex={0}
             onClick={() => onItemClick?.(p.item.id)}
+            onContextMenu={(e) => {
+              if (!onItemContextMenu) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onItemContextMenu(p.item.id, contextPoint(e));
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") onItemClick?.(p.item.id);
             }}
             onPointerDown={(e) => {
-              if (!draggableItems || locked) return;
+              if (!draggableItems || locked || e.button !== 0) return; // a right click opens the context menu, never a drag
               e.stopPropagation();
               e.preventDefault();
               startMove(p.item, (p.startMin + p.endMin) / 2, e.clientX, e.clientY);

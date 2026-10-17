@@ -7,11 +7,10 @@ import type {
   EntityLink,
   EntityLinkPage,
   GlobalSearchResult,
-  OrionModuleId,
   RelationKind,
   SearchableEntityType
 } from "@orion/shared-types";
-import { SEARCH_TYPE_MODULE, canonicalizeEndpoints, isRelationPairAllowed } from "@orion/shared-types";
+import { canonicalizeEndpoints, isPluginEnabled, isRelationPairAllowed } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
 import { NotesService } from "../notes/notes.service";
@@ -38,41 +37,61 @@ export class SearchService {
     private readonly notes: NotesService
   ) {}
 
-  async search(userId: string, workspaceId: string, query: string): Promise<GlobalSearchResult[]> {
+  /**
+   * `allowedTypes` narrows the search to those entity types on top of the module gate — the Agent Gateway passes
+   * the types its token has read scopes for, so a token never even queries the rest.
+   */
+  async search(userId: string, workspaceId: string, query: string, allowedTypes?: readonly SearchableEntityType[]): Promise<GlobalSearchResult[]> {
     const term = query.trim();
-    if (term.length < 2) return [];
+    if (term.length < 2) {
+      // ТЗ-05: короткий запрос тоже сперва проверяет членство — иначе посторонний получал 200 вместо 403.
+      await this.workspaces.assertMember(userId, workspaceId);
+      return [];
+    }
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const enabled = await this.modules.accessibleSetTx(tx, userId, workspaceId);
-      const [projects, tasks, notes, events, documents, transactions, contacts, lists] = await Promise.all([
-        enabled.has(SEARCH_TYPE_MODULE.project)
+      const accessible = await this.accessibleTypesTx(tx, userId, workspaceId);
+      // Check both the module and the exact type: one module can expose several types
+      // (projects + goals, finance + accounts). Agent token scopes must not bleed between them.
+      const canSearch = (type: SearchableEntityType): boolean => accessible.has(type) && (!allowedTypes || allowedTypes.includes(type));
+      const [projects, tasks, notes, events, documents, transactions, contacts, lists, goals, accounts, savingsGoals] = await Promise.all([
+        canSearch("project")
           ? tx.project.findMany({ where: { workspaceId, archivedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.task)
+        canSearch("task")
           ? tx.task.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.note)
+        canSearch("note")
           ? tx.note.findMany({ where: { workspaceId, deletedAt: null, isTemplate: false, OR: [{ title: { contains: term, mode: "insensitive" } }, { summary: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.event)
+        canSearch("event")
           ? tx.event.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }, { location: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.document)
+        canSearch("document")
           ? tx.document.findMany({ where: { workspaceId, deletedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { extractedText: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.transaction)
+        canSearch("transaction")
           ? tx.transaction.findMany({ where: { workspaceId, OR: [{ note: { contains: term, mode: "insensitive" } }, { tags: { has: term } }] }, include: { lines: true }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.contact)
+        canSearch("contact")
           ? tx.contact.findMany({ where: { workspaceId, OR: [{ name: { contains: term, mode: "insensitive" } }, { role: { contains: term, mode: "insensitive" } }, { phone: { contains: term } }, { email: { contains: term, mode: "insensitive" } }, { organization: { contains: term, mode: "insensitive" } }, { address: { contains: term, mode: "insensitive" } }, { tags: { has: term } }, { note: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
           : [],
-        enabled.has(SEARCH_TYPE_MODULE.list)
+        canSearch("list")
           ? tx.list.findMany({
               where: { workspaceId, archivedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { items: { some: { label: { contains: term, mode: "insensitive" } } } }] },
               include: { items: { where: { label: { contains: term, mode: "insensitive" } }, select: { label: true }, take: 3 } },
               take: 8,
               orderBy: { updatedAt: "desc" }
             })
+          : [],
+        canSearch("goal")
+          ? tx.goal.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
+          : [],
+        canSearch("account")
+          ? tx.account.findMany({ where: { workspaceId, archivedAt: null, name: { contains: term, mode: "insensitive" } }, take: 8, orderBy: { updatedAt: "desc" } })
+          : [],
+        canSearch("savings_goal")
+          ? tx.savingsGoal.findMany({ where: { workspaceId, archivedAt: null, name: { contains: term, mode: "insensitive" } }, take: 8, orderBy: { createdAt: "desc" } })
           : []
       ]);
       const results: GlobalSearchResult[] = [
@@ -83,7 +102,10 @@ export class SearchService {
         ...documents.map((item) => result("document", item.id, item.name, item.mimeType ?? "Папка", item.extractedText, item.projectId, item.updatedAt)),
         ...transactions.map((item) => result("transaction", item.id, item.note || "Финансовая операция", `${item.type} · ${item.lines.reduce((sum, line) => sum + line.amount, 0)}`, item.tags.join(" · "), item.projectId, item.updatedAt)),
         ...contacts.map((item) => result("contact", item.id, item.name, [item.role, item.organization].filter(Boolean).join(" · ") || "Контакт", [item.phone, item.email, item.note].filter(Boolean).join(" · "), null, item.updatedAt)),
-        ...lists.map((item) => result("list", item.id, item.name, item.isTemplate ? "Шаблон списка" : "Список", item.items.map((entry) => entry.label).join(" · "), null, item.updatedAt))
+        ...lists.map((item) => result("list", item.id, item.name, item.isTemplate ? "Шаблон списка" : "Список", item.items.map((entry) => entry.label).join(" · "), null, item.updatedAt)),
+        ...goals.map((item) => result("goal", item.id, item.title, "Цель", item.description, null, item.updatedAt)),
+        ...accounts.map((item) => result("account", item.id, item.name, item.currency, "", null, item.updatedAt)),
+        ...savingsGoals.map((item) => result("savings_goal", item.id, item.name, "Цель накопления", "", null, item.createdAt))
       ];
       const lower = term.toLocaleLowerCase("ru");
       return results
@@ -104,7 +126,7 @@ export class SearchService {
   async listLinks(userId: string, workspaceId: string, type: SearchableEntityType, id: string, page: EntityLinkPageOptions = {}): Promise<EntityLinkPage> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const accessible = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+      const accessible = await this.accessibleTypesTx(tx, userId, workspaceId);
       this.assertTypeAccessible(accessible, type);
       await this.entityTitleOrThrow(tx, workspaceId, type, id);
 
@@ -130,7 +152,7 @@ export class SearchService {
         // The other side's module may be restricted/disabled for this actor —
         // skip the link entirely rather than calling `entityTitle` on it
         // (which would leak the title even if the caller ignored it).
-        if (!accessible.has(SEARCH_TYPE_MODULE[otherType])) continue;
+        if (!accessible.has(otherType)) continue;
         const title = await this.entityTitle(tx, workspaceId, otherType, otherId);
         if (title === null) continue;
         links.push({
@@ -162,8 +184,8 @@ export class SearchService {
    * inside one transaction. Caller owns the transaction and the leading
    * `assertMemberTx`.
    */
-  private async createLinkTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateEntityLinkInput): Promise<EntityLink> {
-    const accessible = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+  async createLinkTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateEntityLinkInput): Promise<EntityLink> {
+    const accessible = await this.accessibleTypesTx(tx, userId, workspaceId);
     this.assertTypeAccessible(accessible, input.sourceType);
     this.assertTypeAccessible(accessible, input.targetType);
 
@@ -183,6 +205,28 @@ export class SearchService {
     // any normalization so the 404 always reflects what the caller sent.
     await this.entityTitleOrThrow(tx, workspaceId, input.sourceType, input.sourceId);
     const targetTitleRaw = await this.entityTitleOrThrow(tx, workspaceId, input.targetType, input.targetId);
+
+    if (kind === "goal_prerequisite") {
+      // Serialize dependency edits in this workspace. Otherwise two concurrent
+      // requests could each see an acyclic graph and commit a cycle together.
+      await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
+      const edges = await tx.entityLink.findMany({
+        where: { workspaceId, kind },
+        select: { sourceId: true, targetId: true }
+      });
+      // source must finish before target. A path target -> source would close a cycle.
+      const outgoing = new Map<string, string[]>();
+      for (const edge of edges) outgoing.set(edge.sourceId, [...(outgoing.get(edge.sourceId) ?? []), edge.targetId]);
+      const pending = [input.targetId];
+      const visited = new Set<string>();
+      while (pending.length) {
+        const current = pending.pop()!;
+        if (current === input.sourceId) throw new BadRequestException("Зависимость создаёт замкнутый круг целей");
+        if (visited.has(current)) continue;
+        visited.add(current);
+        pending.push(...(outgoing.get(current) ?? []));
+      }
+    }
 
     // Symmetric kinds (related_to) canonicalize endpoint order so A->B and
     // B->A are always the same stored row, not two mirrored ones. Both
@@ -247,7 +291,7 @@ export class SearchService {
   async createAndLink(userId: string, workspaceId: string, input: CreateAndLinkInput): Promise<CreateAndLinkResult> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const accessible = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+      const accessible = await this.accessibleTypesTx(tx, userId, workspaceId);
       this.assertTypeAccessible(accessible, input.entity.type);
       this.assertTypeAccessible(accessible, input.targetType);
 
@@ -270,8 +314,19 @@ export class SearchService {
   }
 
   /** Both sides of a link go through the same module gate as their direct endpoints (403 for a `member`). */
-  private assertTypeAccessible(accessible: Set<OrionModuleId>, type: SearchableEntityType): void {
-    if (!accessible.has(SEARCH_TYPE_MODULE[type])) {
+  private async accessibleTypesTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string): Promise<Set<SearchableEntityType>> {
+    const modules = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+    const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { pluginOverrides: true } });
+    const overrides = workspace?.pluginOverrides ?? [];
+    return new Set(
+      (Object.entries(ENTITY_REGISTRY) as Array<[SearchableEntityType, (typeof ENTITY_REGISTRY)[SearchableEntityType]]>)
+        .filter(([, adapter]) => modules.has(adapter.moduleId) && (!adapter.pluginId || isPluginEnabled(overrides, adapter.pluginId)))
+        .map(([type]) => type)
+    );
+  }
+
+  private assertTypeAccessible(accessible: Set<SearchableEntityType>, type: SearchableEntityType): void {
+    if (!accessible.has(type)) {
       throw new ForbiddenException("Модуль недоступен");
     }
   }
@@ -294,7 +349,7 @@ export class SearchService {
       if (!link || link.workspaceId !== workspaceId) {
         throw new NotFoundException("Связь не найдена");
       }
-      const accessible = await this.modules.accessibleSetTx(tx, userId, workspaceId);
+      const accessible = await this.accessibleTypesTx(tx, userId, workspaceId);
       this.assertTypeAccessible(accessible, link.sourceType as SearchableEntityType);
       this.assertTypeAccessible(accessible, link.targetType as SearchableEntityType);
 

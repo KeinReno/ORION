@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createNoteInputSchema } from "./note";
 import { createTaskInputSchema } from "./task";
 
-export const searchableEntityTypeSchema = z.enum(["project", "task", "note", "event", "document", "transaction", "contact", "list"]);
+export const searchableEntityTypeSchema = z.enum(["project", "task", "note", "event", "document", "transaction", "contact", "list", "account", "goal", "savings_goal"]);
 export type SearchableEntityType = z.infer<typeof searchableEntityTypeSchema>;
 
 export const globalSearchResultSchema = z.object({
@@ -28,7 +28,7 @@ export type GlobalSearchResult = z.infer<typeof globalSearchResultSchema>;
  * Adding a new kind means adding a catalog entry (+ its own tests) — it does
  * not touch storage shape for the existing kinds.
  */
-export const relationKindSchema = z.enum(["related_to", "supports", "evidence_for"]);
+export const relationKindSchema = z.enum(["related_to", "supports", "evidence_for", "goal_step", "goal_measure", "goal_material", "goal_risk", "goal_prerequisite"]);
 export type RelationKind = z.infer<typeof relationKindSchema>;
 
 export interface RelationKindDefinition {
@@ -65,6 +65,36 @@ export const RELATION_KIND_CATALOG: Record<RelationKind, RelationKindDefinition>
     allowedPairs: [["document", "transaction"]],
     label: "подтверждает расход",
     reverseLabel: "подтверждается документом"
+  },
+  goal_step: {
+    symmetric: false,
+    allowedPairs: [["task", "goal"], ["event", "goal"], ["list", "goal"]],
+    label: "шаг к цели",
+    reverseLabel: "шаг"
+  },
+  goal_measure: {
+    symmetric: false,
+    allowedPairs: [["account", "goal"], ["transaction", "goal"], ["savings_goal", "goal"]],
+    label: "показатель цели",
+    reverseLabel: "показатель"
+  },
+  goal_material: {
+    symmetric: false,
+    allowedPairs: [["note", "goal"], ["document", "goal"], ["contact", "goal"], ["list", "goal"], ["project", "goal"]],
+    label: "материал для цели",
+    reverseLabel: "материал"
+  },
+  goal_risk: {
+    symmetric: false,
+    allowedPairs: [["task", "goal"], ["event", "goal"], ["note", "goal"], ["document", "goal"], ["transaction", "goal"]],
+    label: "риск для цели",
+    reverseLabel: "риск"
+  },
+  goal_prerequisite: {
+    symmetric: false,
+    allowedPairs: [["goal", "goal"]],
+    label: "должна завершиться до",
+    reverseLabel: "зависит от"
   }
 };
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { useSession } from "@orion/core-react";
+import { ObjectContextScope, useSession } from "@orion/core-react";
 import { isPluginEnabled } from "@orion/shared-types";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { getPanelDefinition, instancePanelId } from "../../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
+import { PanelDraftScope } from "../../../lib/unsaved-drafts";
 import { useEnabledModules } from "../../../lib/use-enabled-modules";
 
 /**
@@ -93,9 +94,10 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
   }
 
   const Component = definition.component;
+  const scopeId = instanceId ? instancePanelId(panelId, instanceId) : panelId;
   return (
     <div className="h-screen overflow-hidden">
-      <Component params={instanceId ? { instanceId } : undefined} />
+      <PanelDraftScope panelId={scopeId}><ObjectContextScope panelId={scopeId}><Component params={instanceId ? { instanceId } : undefined} /></ObjectContextScope></PanelDraftScope>
     </div>
   );
 }

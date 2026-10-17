@@ -1,18 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { timeLabel, type CalendarItem } from "./shared";
 
 /** Forward-looking flat list, grouped by day, with a leading "Просрочено" bucket. */
 export function Agenda({
   items,
   onItemClick,
-  focusedId
+  focusedId,
+  renderItemActions
 }: {
   items: CalendarItem[];
   onItemClick?: (id: string) => void;
   focusedId?: string | null;
+  renderItemActions?: (item: CalendarItem) => ReactNode;
 }): React.ReactElement {
   const groups = useMemo(() => {
     const now = Date.now();
@@ -49,12 +51,12 @@ export function Agenda({
           </p>
           <div className="flex flex-col gap-1">
             {group.map((item) => (
+              <div key={item.id} className="flex min-w-0 items-center gap-1">
               <button
-                key={item.id}
                 type="button"
                 onClick={() => onItemClick?.(item.id)}
                 className={clsx(
-                  "flex items-center gap-2 rounded-lg border bg-white/[0.02] px-2.5 py-2 text-left text-xs hover:border-border-strong hover:bg-card-hover",
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-white/[0.02] px-2.5 py-2 text-left text-xs hover:border-border-strong hover:bg-card-hover",
                   item.id === focusedId ? "border-accent/40 ring-2 ring-accent" : "border-border"
                 )}
               >
@@ -66,6 +68,8 @@ export function Agenda({
                   {item.label}
                 </span>
               </button>
+              {renderItemActions?.(item)}
+              </div>
             ))}
           </div>
         </div>

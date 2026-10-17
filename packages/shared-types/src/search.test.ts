@@ -22,6 +22,18 @@ describe("RELATION_KIND_CATALOG (U01)", () => {
     expect(isRelationPairAllowed("evidence_for", "transaction", "document")).toBe(false);
     expect(isRelationPairAllowed("evidence_for", "note", "transaction")).toBe(false);
   });
+
+  it("goal roles point from the live source to a goal and keep their intended types", () => {
+    expect(isRelationPairAllowed("goal_step", "task", "goal")).toBe(true);
+    expect(isRelationPairAllowed("goal_step", "goal", "task")).toBe(false);
+    expect(isRelationPairAllowed("goal_measure", "account", "goal")).toBe(true);
+    expect(isRelationPairAllowed("goal_measure", "savings_goal", "goal")).toBe(true);
+    expect(isRelationPairAllowed("goal_measure", "note", "goal")).toBe(false);
+    expect(isRelationPairAllowed("goal_material", "document", "goal")).toBe(true);
+    expect(isRelationPairAllowed("goal_risk", "transaction", "goal")).toBe(true);
+    expect(isRelationPairAllowed("goal_prerequisite", "goal", "goal")).toBe(true);
+    expect(createEntityLinkInputSchema.safeParse({ sourceType: "goal", sourceId: "a", targetType: "goal", targetId: "a", kind: "goal_prerequisite" }).success).toBe(false);
+  });
 });
 
 describe("canonicalizeEndpoints (U01 symmetric normalization)", () => {

@@ -23,6 +23,7 @@ import {
 } from "@orion/shared-types";
 import { z } from "zod";
 import { PrismaService } from "../common/prisma.service";
+import { dosesForDayTx } from "./health-doses";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 type Need = "read" | "write" | "own";
@@ -292,10 +293,13 @@ export class HealthService {
     const today = todayInput && TODAY_RE.test(todayInput) ? todayInput : dayString(new Date());
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const subjects = await tx.healthSubject.findMany({ where: { workspaceId, archivedAt: null }, select: { id: true, name: true } });
+      const subjects = await tx.healthSubject.findMany({
+        where: { workspaceId, archivedAt: null },
+        include: { grants: { where: { granteeUserId: userId }, select: { level: true } } }
+      });
       const names = new Map(subjects.map((s) => [s.id, s.name]));
       const ids = subjects.map((s) => s.id);
-      if (ids.length === 0) return { appointments: [], preventive: [] };
+      if (ids.length === 0) return { appointments: [], preventive: [], doses: [] };
 
       const base = dayDate(today).getTime();
       const [appointments, items] = await Promise.all([
@@ -312,7 +316,10 @@ export class HealthService {
         if (status === "overdue" || status === "soon") preventive.push({ ...dto, status, subjectName: names.get(row.subjectId) ?? "" });
       }
       preventive.sort((a, b) => (a.nextDueAt ?? "").localeCompare(b.nextDueAt ?? ""));
-      return { appointments: appointments.map((row) => ({ ...appointmentDto(row), subjectName: names.get(row.subjectId) ?? "" })), preventive };
+      // Приёмы лекарств напоминаем только тем, кто их ведёт (сам человек, опекун, «ведёт вместе»), не наблюдателю.
+      const writable = subjects.filter((s) => healthCanWrite(accessOf(s, userId) ?? "read")).map((s) => s.id);
+      const doses = (await dosesForDayTx(tx, writable, today)).filter((d) => d.status === null).map((d) => ({ ...d, subjectName: names.get(d.subjectId) ?? "" }));
+      return { appointments: appointments.map((row) => ({ ...appointmentDto(row), subjectName: names.get(row.subjectId) ?? "" })), preventive, doses };
     });
   }
 
@@ -322,7 +329,7 @@ export class HealthService {
    * Resolves the person and the caller's level. 404 when RLS hides them (or they belong to another workspace),
    * 403 when the caller sees them but the level is too low.
    */
-  private async assertSubjectTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, subjectId: string, need: Need): Promise<SubjectWithGrants> {
+  async assertSubjectTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, subjectId: string, need: Need): Promise<SubjectWithGrants> {
     await this.workspaces.assertMemberTx(tx, userId, workspaceId);
     const subject = await tx.healthSubject.findUnique({
       where: { id: subjectId },
@@ -348,7 +355,7 @@ function accessOf(subject: SubjectWithGrants, userId: string): HealthAccess | nu
   return level === "write" ? "write" : level === "read" ? "read" : null;
 }
 
-function subjectDto(row: SubjectWithGrants, userId: string): HealthSubject {
+export function subjectDto(row: SubjectWithGrants, userId: string): HealthSubject {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -368,7 +375,7 @@ function subjectDto(row: SubjectWithGrants, userId: string): HealthSubject {
   };
 }
 
-function appointmentDto(row: AppointmentRow): HealthAppointment {
+export function appointmentDto(row: AppointmentRow): HealthAppointment {
   return {
     id: row.id,
     subjectId: row.subjectId,

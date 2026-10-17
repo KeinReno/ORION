@@ -85,7 +85,8 @@ export function projectColor(tag: string): { color: string; background: string; 
   for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) | 0;
   const hue = Math.abs(hash) % 360;
   return {
-    color: `hsl(${hue} 80% 78%)`,
+    // Lightness comes from the active palette (`--orion-tag-l`): light text on a dark surface, dark text on a light one.
+    color: `hsl(${hue} 80% var(--orion-tag-l, 78%))`,
     background: `hsl(${hue} 70% 60% / 0.16)`,
     borderColor: `hsl(${hue} 70% 60% / 0.35)`
   };

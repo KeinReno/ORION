@@ -1,3 +1,5 @@
+import { applyNodeMode, readNodeMark } from "./node-mode";
+
 const LOCAL_API_URL = "http://localhost:4000";
 
 interface ApiBaseContext {
@@ -41,11 +43,15 @@ export function resolveApiBaseUrl({ envUrl, location, production }: ApiBaseConte
   );
 }
 
-export const API_BASE_URL = resolveApiBaseUrl({
+/** Адрес API этой машины — для управления самим узлом (см. lan-local.ts). */
+export const LOCAL_API_BASE_URL = resolveApiBaseUrl({
   envUrl: process.env.NEXT_PUBLIC_API_URL,
   location: typeof window === "undefined" ? null : window.location,
   production: process.env.NODE_ENV === "production"
 });
+
+/** Адрес API окна: локальный, а в режиме «Клиент LAN» — прокси выбранного узла на локальном API (ТЗ-04). */
+export const API_BASE_URL = applyNodeMode(LOCAL_API_BASE_URL, readNodeMark());
 
 export function accountAvatarUrl(userId: string, bust?: number): string {
   const query = bust != null ? `?t=${bust}` : "";

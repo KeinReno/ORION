@@ -10,6 +10,7 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ShareGrantSection } from "../../components/share-grant-section";
+import { ObjectOpenMenu } from "../../components/object-open-menu";
 
 export function PreviewPane({
   doc,
@@ -36,7 +37,13 @@ export function PreviewPane({
   const [name, setName] = useState(doc.name);
   const debouncedName = useDebouncedValue(name.trim(), 900);
   const dirty = name.trim() !== doc.name;
+  const [editorDirty, setEditorDirty] = useState(false);
+  const renameDirty = Boolean(onRename && dirty);
   const lastSent = useRef(doc.name);
+  useEffect(() => {
+    onEditorDirtyChange(editorDirty || renameDirty || renameBusy);
+    return () => onEditorDirtyChange(false);
+  }, [editorDirty, renameDirty, renameBusy, onEditorDirtyChange]);
 
   useEffect(() => {
     setName(doc.name);
@@ -61,11 +68,11 @@ export function PreviewPane({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-2.5">
-        <div className="min-w-0 flex-1">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-x-2 gap-y-2 border-b border-border px-4 py-2.5">
+        <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
           {onRename ? (
             <label className="flex flex-col gap-1">
-              <span className="flex items-center justify-between gap-2 text-micro uppercase text-subtle-foreground">
+              <span className="flex items-center justify-between gap-2 whitespace-nowrap text-micro uppercase text-subtle-foreground">
                 Имя файла
                 <AutosaveStatus state={renameBusy ? "saving" : dirty ? "dirty" : "saved"} />
               </span>
@@ -76,7 +83,8 @@ export function PreviewPane({
           )}
           <p className="mt-1 text-2xs text-subtle-foreground">{formatBytes(doc.sizeBytes)}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <ObjectOpenMenu view={{ object: { workspaceId: workspace?.id ?? "", entityType: "document", entityId: doc.id }, viewId: "detail" }} title={doc.name} />
           {onToggleList ? (
             <IconButton
               label={listCollapsed ? "Показать список файлов" : "Скрыть список файлов"}
@@ -91,29 +99,18 @@ export function PreviewPane({
           </Button>
         </div>
       </div>
-      {Editor ? (
-        <details className="group shrink-0 border-b border-border">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
-            <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform group-open:rotate-0" aria-hidden />
-            Сведения, связи и доступ
-          </summary>
-          <div className="border-t border-border px-4 py-2">
-            <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
-          </div>
-          <div className="border-t border-border px-4 py-2">
-            <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
-          </div>
-        </details>
-      ) : (
-        <>
-          <div className="shrink-0 border-b border-border px-4 py-2">
-            <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
-          </div>
-          <div className="shrink-0 border-b border-border px-4 py-2">
-            <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
-          </div>
-        </>
-      )}
+      <details className="group shrink-0 border-b border-border">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+          <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform group-open:rotate-0" aria-hidden />
+          {Editor ? "Сведения, связи и доступ" : "Связи, напоминания и доступ"}
+        </summary>
+        <div className="border-t border-border px-4 py-2">
+          <EntityLinksSection workspaceId={workspace?.id} type="document" id={doc.id} />
+        </div>
+        <div className="border-t border-border px-4 py-2">
+          <ShareGrantSection workspaceId={workspace?.id} type="document" id={doc.id} />
+        </div>
+      </details>
       <div className="min-h-0 flex-1">
         {isError ? (
           <div className="p-6">
@@ -138,7 +135,7 @@ export function PreviewPane({
             key={doc.id}
             workspaceId={workspace.id}
             doc={doc}
-            onDirtyChange={onEditorDirtyChange}
+            onDirtyChange={setEditorDirty}
             fallback={<FilePreview mime={doc.mimeType ?? ""} name={doc.name} url={url} onDownload={onDownload} className="h-full" />}
           />
         ) : (

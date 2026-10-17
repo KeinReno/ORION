@@ -29,6 +29,7 @@ import { useMemo, useState } from "react";
 import { describeError } from "../lib/error-message";
 import { formatMoney } from "../lib/format";
 import { openList } from "../lib/panel-bus";
+import { ReplicaBanner } from "../components/replica-banner";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useRowDnd } from "../lib/use-row-dnd";
 import { ItemAdder } from "./lists/item-adder";
@@ -130,6 +131,7 @@ export function ListsPanel(): React.ReactElement {
         </div>
       </PanelHeader>
 
+      <ReplicaBanner workspaceId={workspaceId} />
       <PanelBody className="[container-type:inline-size]">
         {workspaceId === undefined ? (
           workspaceLoading ? (

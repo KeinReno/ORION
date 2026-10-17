@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import { budgetSpentTx, toMonthKey } from "./finance-refs.util";
+import { budgetCarryOverTx, budgetSpentTx, toMonthKey } from "./finance-refs.util";
 import { NotificationCenterService } from "../notifications/notification-center.service";
 import { NotificationPolicyService } from "../notifications/notification-policy.service";
 import { TelegramService } from "../notifications/telegram.service";
@@ -58,7 +58,8 @@ export class BudgetAlertsService {
     const messages: string[] = [];
     for (const budget of budgets) {
       const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
-      if (spent <= budget.limitAmount) continue;
+      const available = budget.limitAmount + (await budgetCarryOverTx(tx, workspaceId, budget));
+      if (spent <= available) continue;
 
       const entityId = `${budget.id}:${toMonthKey(budget.month)}`;
       const alreadyAlerted = await tx.notification.findFirst({
@@ -75,7 +76,7 @@ export class BudgetAlertsService {
       // Message text, not an API field: the "backend never formats money" rule
       // (v0.8) is about DTOs at the boundary — a Telegram line has to be human
       // readable, and the workspace's own currency is still the only one.
-      const body = `Потрачено ${(spent / 100).toFixed(2)} из ${(budget.limitAmount / 100).toFixed(2)} ₽ за месяц`;
+      const body = `Потрачено ${(spent / 100).toFixed(2)} из ${(available / 100).toFixed(2)} ₽ за месяц`;
 
       await this.notifications.createTx(tx, {
         workspaceId,

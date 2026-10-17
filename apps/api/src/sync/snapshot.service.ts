@@ -61,6 +61,12 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   specCanceledImports("opportunityImports", (tx) => tx.opportunityImport),
   spec("opportunityCaptures", (tx) => tx.opportunityCapture),
   spec("opportunityHistory", (tx) => tx.opportunityHistory),
+  spec("opportunityAssessments", (tx) => tx.opportunityAssessment),
+  specResetDraftApproval("opportunityDrafts", (tx) => tx.opportunityDraft),
+  specRestoredConnections("opportunityConnections", (tx) => tx.opportunityConnection),
+  specRestoredAttempts("opportunityAttempts", (tx) => tx.opportunityAttempt),
+  specRestoredPolicies("opportunityPolicies", (tx) => tx.opportunityPolicy),
+  spec("opportunityManagerActions", (tx) => tx.opportunityManagerAction),
   spec("projects", (tx) => tx.project),
   spec("homes", (tx) => tx.home),
   spec("meters", (tx) => tx.meter),
@@ -124,6 +130,12 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("financeCategoryRules", (tx) => tx.categoryRule),
   spec("financeSavingsGoals", (tx) => tx.savingsGoal),
   spec("financeObligations", (tx) => tx.financeObligation),
+  spec("financeTemplates", (tx) => tx.financeTemplate),
+  // Shares reference their split, so the split rows are inserted first.
+  spec("financeSplits", (tx) => tx.financeSplit),
+  spec("financeSplitShares", (tx) => tx.financeSplitShare),
+  spec("financeSettlements", (tx) => tx.financeSettlement),
+  spec("financeExchangeRates", (tx) => tx.financeExchangeRate),
   spec("marketWatchItems", (tx) => tx.marketWatchItem),
   spec("investmentTrades", (tx) => tx.investmentTrade),
   spec("timeEntries", (tx) => tx.timeEntry),
@@ -167,6 +179,41 @@ interface WsDelegate {
   findMany(args: { where: { workspaceId: string } }): Promise<unknown[]>;
   deleteMany(args: { where: { workspaceId: string } }): Promise<unknown>;
   createMany(args: { data: unknown[]; skipDuplicates?: boolean }): Promise<unknown>;
+}
+
+function specResetDraftApproval(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  const reset = (row: Record<string, unknown>) => (row.reviewState === "approved" ? { ...row, reviewState: "draft", approvedBy: null, approvedAt: null, approvedTextHash: null, revision: Number(row.revision ?? 0) + 1 } : row);
+  return { ...base, insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map(reset)) };
+}
+
+function specRestoredConnections(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  // A backup never carries a live link: the runner token and pairing code are dropped, the owner must link the account again.
+  const reset = (row: Record<string, unknown>) => ({ ...row, state: "pending_link", runnerTokenHash: null, pairingHash: null, pairingExpiresAt: null, runnerId: null, runnerSeenAt: null, linkedAt: null, consecutiveFailures: 0, pausedReason: "Восстановлено из резервной копии: войдите заново", revision: Number(row.revision ?? 0) + 1 });
+  // The runner token hash and pairing hash never leave the node, not even inside a backup file.
+  const strip = (row: Record<string, unknown>) => ({ ...row, runnerTokenHash: null, pairingHash: null, pairingExpiresAt: null });
+  return { ...base, load: async (tx, workspaceId) => ((await base.load(tx, workspaceId)) as Array<Record<string, unknown>>).map(strip), insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map(reset)) };
+}
+
+function specRestoredAttempts(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  // The queue is never resumed from a backup. A send that may already have happened stays unconfirmed (never "not sent").
+  const reset = (row: Record<string, unknown>) => {
+    const state = String(row.state);
+    const open = state === "awaiting_approval" || state === "queued" || state === "running";
+    if (!open) return row;
+    const maybeSent = state === "running" && row.submitReserved === true;
+    return { ...row, state: maybeSent ? "sent_unconfirmed" : "canceled", leaseHash: null, leaseRunnerId: null, leaseExpiresAt: null, cancelRequested: false, completedAt: new Date(), errorCode: maybeSent ? "restored_unconfirmed" : "restored_from_backup", message: maybeSent ? "Восстановлено из копии: отправка могла произойти. Сверьте на стороне HH." : "Восстановлено из резервной копии: очередь не возобновляется автоматически.", revision: Number(row.revision ?? 0) + 1 };
+  };
+  return { ...base, insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map(reset)) };
+}
+
+function specRestoredPolicies(key: string, pick: (tx: Tx) => unknown): ModelSpec {
+  const base = spec(key, pick);
+  // Autonomy never comes back from a backup: every policy returns paused and must be resumed by the owner after re-linking the account.
+  const reset = (row: Record<string, unknown>) => (row.state === "active" ? { ...row, state: "paused", pausedReason: "Восстановлено из резервной копии: проверьте и возобновите вручную", revision: Number(row.revision ?? 0) + 1 } : row);
+  return { ...base, insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map(reset)) };
 }
 
 function specCanceledImports(key: string, pick: (tx: Tx) => unknown): ModelSpec {
@@ -333,6 +380,16 @@ export class SnapshotService {
         restrictedModules: workspace.restrictedModules
       }
     };
+  }
+
+  /**
+   * ТЗ-05: вставить уже переписанные (новые id/workspaceId) строки в НОВОЕ пространство.
+   * Ничего не очищает — в отличие от `apply`, это создание, а не замена.
+   */
+  async insertInto(tx: Tx, tables: Record<string, unknown[]>): Promise<void> {
+    for (const m of SNAPSHOT_MODELS) {
+      await m.insert(tx, tables[m.key] ?? []);
+    }
   }
 
   /** Счётчики строк по модулям — для превью восстановления, без чтения самих строк целиком. */

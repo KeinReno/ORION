@@ -1,9 +1,18 @@
-import { checkGoalParent, type Goal, type GoalNextTask } from "@orion/shared-types";
+import {
+  checkGoalParent,
+  goalPace,
+  milestoneWindow,
+  type Goal,
+  type GoalMilestone,
+  type GoalNextTask,
+  type GoalPace
+} from "@orion/shared-types";
 
 /**
  * Goals as constellations (second view of the Goals panel). Every top-level goal is one
  * constellation: the goal is its brightest star, sub-goals and plans (projects) are stars on
- * branches growing outward, so a person can trace the route from the outcome to the work.
+ * branches growing down from the outcome. A person reads their route upwards,
+ * from the first concrete step at the bottom to the intended result at the top.
  * Pure functions, no React: the view only draws what is computed here.
  */
 
@@ -21,13 +30,15 @@ export type StarState = "done" | "lit" | "dim" | "unknown" | "dropped";
 export type Lens = "progress" | "focus" | "stuck";
 
 export interface Star {
-  /** Goal id for a goal; `${goalId}:${planId}` for a plan, so one project can appear under two goals. */
+  /** Goal id for a goal; `${goalId}:${planId}` for a plan; `${goalId}:${planId}:${milestoneId}` for a milestone. */
   id: string;
-  kind: "goal" | "plan";
-  /** The goal this star is (goal) or belongs to (plan). */
+  /** A milestone is a waypoint on a plan's branch; the earliest step is lowest in the drawing. */
+  kind: "goal" | "plan" | "milestone";
+  /** The goal this star is (goal) or belongs to (plan / milestone). */
   goalId: string;
   planId: string | null;
   projectId: string | null;
+  milestoneId: string | null;
   label: string;
   parentId: string | null;
   depth: number;
@@ -48,8 +59,14 @@ export interface Star {
   lastActivityAt: string | null;
   /** Open work, but nothing moved for STALLED_DAYS. */
   stalled: boolean;
-  /** The next step of its branch: a plan that has a task ready to do. The view pulses it. */
+  /** A plan with a task ready to do (whatever else its branch shows). */
+  ready: boolean;
+  /** Where the branch is "now", the one star the view pulses: the first unfinished milestone, or the plan itself when it has none. */
   frontier: boolean;
+  /** Deadline pace of a goal star; { state: "none" } for everything else. */
+  pace: GoalPace;
+  /** Other goals served by the same project (plans only). */
+  sharedWith: string[];
 }
 
 export interface Link {
@@ -84,15 +101,27 @@ function unit(seed: string): number {
   return ((h >>> 0) % 10_000) / 10_000;
 }
 
-type Facts = Pick<Star, "nextTask" | "blocked" | "overdue" | "lastActivityAt" | "stalled" | "frontier">;
-const NO_FACTS: Facts = { nextTask: null, blocked: 0, overdue: 0, lastActivityAt: null, stalled: false, frontier: false };
+type Facts = Pick<Star, "nextTask" | "blocked" | "overdue" | "lastActivityAt" | "stalled" | "frontier" | "ready" | "pace" | "sharedWith">;
+const NO_PACE: GoalPace = { state: "none", elapsed: null };
+const NO_FACTS: Facts = {
+  nextTask: null,
+  blocked: 0,
+  overdue: 0,
+  lastActivityAt: null,
+  stalled: false,
+  frontier: false,
+  ready: false,
+  pace: NO_PACE,
+  sharedWith: []
+};
 
 interface Item {
   id: string;
-  kind: "goal" | "plan";
+  kind: Star["kind"];
   goalId: string;
   planId: string | null;
   projectId: string | null;
+  milestoneId: string | null;
   label: string;
   progress: number | null;
   state: StarState;
@@ -103,20 +132,62 @@ interface Item {
   leaves: number;
 }
 
+/** A milestone's own progress: its tasks' share; a done milestone is 100 whatever its tasks say; no tasks = unknown. */
+function milestoneProgress(m: GoalMilestone): number | null {
+  if (m.status === "done") return 100;
+  return m.tasks === 0 ? null : Math.round((m.closed / m.tasks) * 100);
+}
+
+/** The milestone chain of a plan, nested so each waypoint hangs on the previous one (a path, not a fan). Returns its head. */
+function milestoneChain(goal: Goal, plan: Goal["plans"][number], live: boolean, now: Date): Item[] {
+  const shown = milestoneWindow(plan.milestones);
+  const firstOpen = shown.find((m) => m.status !== "done");
+  const items = shown.map<Item>((m) => {
+    const progress = milestoneProgress(m);
+    const late = m.status !== "done" && m.dueAt !== null && new Date(m.dueAt).getTime() < now.getTime();
+    return {
+      id: `${goal.id}:${plan.id}:${m.id}`,
+      kind: "milestone",
+      goalId: goal.id,
+      planId: plan.id,
+      projectId: plan.projectId,
+      milestoneId: m.id,
+      label: m.title,
+      progress,
+      state: starState(progress, goal.status === "dropped" ? "dropped" : "active"),
+      dueAt: m.dueAt,
+      weight: 1,
+      facts: { ...NO_FACTS, overdue: late ? 1 : 0, frontier: live && m === firstOpen },
+      children: [],
+      leaves: 1
+    };
+  });
+  for (let i = items.length - 1; i > 0; i -= 1) items[i]!.children = [items[i - 1]!];
+  return items.slice(-1);
+}
+
+/** Does this milestone chain still have an unfinished waypoint that the view pulses? */
+function hasPulse(item: Item): boolean {
+  return item.facts.frontier || item.children.some(hasPulse);
+}
+
 /** Items below a goal: its plans first, then sub-goals. Cycles / depth in bad data cannot hang the walk. */
-function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, seen: Set<string>, now: Date): Item {
+function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, seen: Set<string>, now: Date, usage: Map<string, Set<string>>): Item {
   seen.add(goal.id);
   const goalLive = goal.status === "active";
   const children: Item[] = goal.plans.map((plan) => {
     const state = starState(plan.progress, goal.status === "dropped" ? "dropped" : "active");
     const open = plan.tasks - plan.closed > 0;
     const idle = plan.lastActivityAt === null ? 0 : now.getTime() - new Date(plan.lastActivityAt).getTime();
+    const ready = goalLive && plan.nextTask !== null && state !== "done";
+    const chain = milestoneChain(goal, plan, goalLive && state !== "done", now);
     return {
       id: `${goal.id}:${plan.id}`,
       kind: "plan" as const,
       goalId: goal.id,
       planId: plan.id,
       projectId: plan.projectId,
+      milestoneId: null,
       label: plan.projectName,
       progress: plan.progress,
       state,
@@ -128,14 +199,18 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
         overdue: plan.overdue,
         lastActivityAt: plan.lastActivityAt,
         stalled: goalLive && open && state !== "done" && idle > STALLED_DAYS * DAY_MS,
-        frontier: goalLive && plan.nextTask !== null && state !== "done"
+        ready,
+        // The pulse sits on the first unfinished milestone when the branch has one; otherwise on the plan.
+        frontier: ready && !chain.some(hasPulse),
+        pace: NO_PACE,
+        sharedWith: [...(usage.get(plan.projectId) ?? [])].filter((id) => id !== goal.id)
       },
-      children: [],
+      children: chain,
       leaves: 1
     };
   });
   for (const sub of byParent.get(goal.id) ?? []) {
-    if (!seen.has(sub.id)) children.push(buildItem(sub, byParent, sub.subWeight, seen, now));
+    if (!seen.has(sub.id)) children.push(buildItem(sub, byParent, sub.subWeight, seen, now, usage));
   }
   return {
     id: goal.id,
@@ -143,12 +218,13 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
     goalId: goal.id,
     planId: null,
     projectId: null,
+    milestoneId: null,
     label: goal.title,
     progress: goal.progress,
     state: starState(goal.progress, goal.status),
     dueAt: goal.dueAt,
     weight,
-    facts: NO_FACTS,
+    facts: { ...NO_FACTS, pace: goalPace(goal, now) },
     children,
     leaves: Math.max(1, children.reduce((sum, child) => sum + child.leaves, 0))
   };
@@ -156,8 +232,8 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
 
 /**
  * One constellation per top-level goal (a goal whose parent is outside the list also counts as a
- * root, so nothing silently disappears). Radial tree: a subtree gets an angular wedge proportional
- * to its leaf count, depth sets the radius, a small stable jitter makes it read as stars not a chart.
+ * root, so nothing silently disappears). Branches are laid out as a vertical tree:
+ * the result is at the top, current work sits below it, and each parent is centred over its leaves.
  */
 export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new Date()): Constellation[] {
   const ids = new Set(goals.map((g) => g.id));
@@ -170,36 +246,42 @@ export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new 
       roots.push(goal);
     }
   }
-  return roots.map((root) => layout(buildItem(root, byParent, 1, new Set(), now)));
+  // Which goals each project serves, so a project shared by two goals is visible from both.
+  const usage = new Map<string, Set<string>>();
+  for (const goal of goals) {
+    for (const plan of goal.plans) usage.set(plan.projectId, (usage.get(plan.projectId) ?? new Set()).add(goal.id));
+  }
+  return roots.map((root) => layout(buildItem(root, byParent, 1, new Set(), now, usage)));
 }
 
 function layout(root: Item): Constellation {
   const stars: Star[] = [];
   const links: Link[] = [];
-  const cx = CONSTELLATION_W / 2;
-  const cy = CONSTELLATION_H / 2;
   const maxDepth = depthOf(root);
-  // Vertical room per ring; the horizontal stretch is capped so the widest ring still fits the canvas.
-  const ringStep = maxDepth === 0 ? 0 : (CONSTELLATION_H / 2 - 44) / maxDepth;
-  const stretch = Math.min(1.45, (CONSTELLATION_W / 2 - 56) / Math.max(1, ringStep * maxDepth * 1.08));
+  // Sparse trees stay composed near the centre instead of stretching two stars
+  // to opposite edges of the canvas. Dense trees can use the full height.
+  const span = Math.min(CONSTELLATION_H - 106, Math.max(138, maxDepth * 94));
+  const top = (CONSTELLATION_H - span) / 2;
+  const bottom = top + span;
+  const left = 48;
+  const width = CONSTELLATION_W - left * 2;
 
   function place(item: Item, parent: Star | null, depth: number, start: number, end: number, share: number): void {
-    const mid = (start + end) / 2;
-    const jitter = (unit(item.id) - 0.5) * Math.min(0.35, (end - start) / 3);
-    const angle = mid + (depth === 0 ? 0 : jitter);
-    const radius = depth === 0 ? 0 : ringStep * depth * (0.92 + unit(`${item.id}r`) * 0.16);
+    const x = left + ((start + end) / 2) * width;
+    const y = maxDepth === 0 ? CONSTELLATION_H / 2 : top + (depth / maxDepth) * (bottom - top);
     const star: Star = {
       id: item.id,
       kind: item.kind,
       goalId: item.goalId,
       planId: item.planId,
       projectId: item.projectId,
+      milestoneId: item.milestoneId,
       label: item.label,
       parentId: parent?.id ?? null,
       depth,
-      x: cx + Math.cos(angle) * radius * stretch,
-      y: cy + Math.sin(angle) * radius,
-      r: item.kind === "goal" ? (depth === 0 ? 12 : 9) : 4.5 + share * 4,
+      x,
+      y,
+      r: item.kind === "goal" ? (depth === 0 ? 13 : 9) : item.kind === "milestone" ? 5 : 5 + share * 4,
       progress: item.progress,
       state: item.state,
       dueAt: item.dueAt,
@@ -218,8 +300,7 @@ function layout(root: Item): Constellation {
     }
   }
 
-  // A lone root with children uses the full circle; start at the top so the first branch points up.
-  place(root, null, 0, -Math.PI / 2, (3 * Math.PI) / 2, 1);
+  place(root, null, 0, 0, 1, 1);
   return { rootId: root.id, stars, links };
 }
 
@@ -253,32 +334,40 @@ export function isStuck(star: Star): boolean {
 /** Ids that stay fully visible under a lens; null = no fading at all. */
 export function lensVisible(constellation: Constellation, lens: Lens): Set<string> | null {
   if (lens === "progress") return null;
-  return withAncestors(constellation, constellation.stars.filter(lens === "focus" ? (s) => s.frontier : isStuck));
+  const seeds = constellation.stars.filter(lens === "focus" ? (s) => s.frontier : isStuck);
+  return seeds.length === 0 ? null : withAncestors(constellation, seeds);
 }
 
 export interface SkyHealth {
-  /** attention = something is overdue, blocked or stalled; idle = nothing to do right now. */
+  /** attention = something is overdue, blocked, stalled or behind the deadline; idle = nothing to do right now. */
   tone: "done" | "attention" | "ok" | "idle";
   overdue: number;
   blocked: number;
   stalled: number;
-  /** The first frontier star in reading order, for the card's "next step" line. */
+  /** Plans that serve another goal as well. */
+  shared: number;
+  /** The first plan with a ready task in reading order, for the card's "next step" line. */
   next: Star | null;
+  /** Pace of the constellation's root goal. */
+  pace: GoalPace;
 }
 
 export function skyHealth(constellation: Constellation): SkyHealth {
   const root = constellation.stars.find((s) => s.id === constellation.rootId);
   const plans = constellation.stars.filter((s) => s.kind === "plan");
-  const overdue = plans.reduce((n, s) => n + s.overdue, 0);
+  const milestoneOverdue = constellation.stars.filter((s) => s.kind === "milestone").reduce((n, s) => n + s.overdue, 0);
+  const overdue = plans.reduce((n, s) => n + s.overdue, 0) + milestoneOverdue;
   const blocked = plans.reduce((n, s) => n + s.blocked, 0);
   const stalled = plans.filter((s) => s.stalled).length;
-  const next = plans.find((s) => s.frontier) ?? null;
+  const shared = plans.filter((s) => s.sharedWith.length > 0).length;
+  const next = plans.find((s) => s.ready) ?? null;
+  const pace = root?.pace ?? NO_PACE;
   let tone: SkyHealth["tone"] = "ok";
   if (root?.state === "done") tone = "done";
   else if (root?.state === "dropped") tone = "idle";
-  else if (overdue + blocked + stalled > 0) tone = "attention";
+  else if (overdue + blocked + stalled > 0 || pace.state === "behind" || pace.state === "late") tone = "attention";
   else if (next === null) tone = "idle";
-  return { tone, overdue, blocked, stalled, next };
+  return { tone, overdue, blocked, stalled, shared, next, pace };
 }
 
 /** Goals that `goalId` may be dropped onto (null = a new goal). Self, descendants and over-deep placements are out. */

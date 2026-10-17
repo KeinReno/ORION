@@ -6,5 +6,7 @@ export const OPPORTUNITIES_IMPORT_PORT = Symbol("OPPORTUNITIES_IMPORT_PORT.v1");
 export interface OpportunitiesImportPort {
   assertOpportunityTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, id: string): Promise<void>;
   captureOpportunityTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateOpportunityInput): Promise<{ id: string; created: boolean }>;
+  /** Ordered results, bounded batch, insert-only. Existing/manual fields are never overwritten. */
+  captureOpportunitiesTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, inputs: CreateOpportunityInput[]): Promise<{ id: string; created: boolean }[]>;
   resolveExternalTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, sourceType: string, externalId: string): Promise<string | null>;
 }

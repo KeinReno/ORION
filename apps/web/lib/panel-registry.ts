@@ -102,6 +102,7 @@ const LazyBrowserPanel = dynamic(() => import("../panels/BrowserPanel").then((mo
 const LazyBrowserPagePanel = dynamic(() => import("../panels/BrowserPagePanel").then((module) => module.BrowserPagePanel), { ssr: false });
 const LazyMarketsPanel = dynamic(() => import("../panels/MarketsPanel").then((module) => module.MarketsPanel), { ssr: false });
 const LazyDocumentsPanel = dynamic(() => import("../panels/DocumentsPanel").then((module) => module.DocumentsPanel), { ssr: false });
+const LazyDocumentPanel = dynamic(() => import("../panels/DocumentPanel").then((module) => module.DocumentPanel), { ssr: false });
 const LazySyncPanel = dynamic(() => import("../panels/SyncPanel").then((module) => module.SyncPanel), { ssr: false });
 const LazySettingsPanel = dynamic(() => import("../panels/SettingsPanel").then((module) => module.SettingsPanel), { ssr: false });
 
@@ -137,6 +138,7 @@ const MarketsPanel: FunctionComponent<PanelComponentProps> = (props) => createEl
 const BrowserPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPanel as ComponentType<PanelComponentProps>, props);
 const BrowserPagePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPagePanel, props);
 const DocumentsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentsPanel as ComponentType<PanelComponentProps>, props);
+const DocumentPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentPanel as ComponentType<PanelComponentProps>, props);
 const SyncPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySyncPanel as ComponentType<PanelComponentProps>, props);
 const SettingsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySettingsPanel as ComponentType<PanelComponentProps>, props);
 
@@ -266,6 +268,7 @@ export const panelRegistry: PanelDefinition[] = [
     navParent: "browser"
   },
   { id: "documents", label: "Документы", icon: FolderOpen, component: DocumentsPanel, moduleId: "documents", group: "Файлы и система" },
+  { id: "document", label: "Документ", icon: FolderOpen, component: DocumentPanel, moduleId: "documents", hideFromNav: true, instanced: true, navParent: "documents" },
   { id: "sync", label: "Резервные копии", icon: RefreshCw, component: SyncPanel, group: "Файлы и система" },
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true },
   // One tab of any section panel as a panel of its own (dock tab or OS window): `view:<base>~<view>[~<instance>]`.

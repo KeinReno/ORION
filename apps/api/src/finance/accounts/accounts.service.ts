@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type { Account, CreateAccountInput, UpdateAccountInput } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
@@ -45,6 +45,9 @@ export class AccountsService {
           name: input.name,
           kind: input.kind,
           context: input.context,
+          // Whoever creates an account owns it; `private` hides it from everyone else at the database level.
+          visibility: input.visibility,
+          ownerId: userId,
           // `currency` was accepted by the contract since v0.14 but never
           // persisted — the column kept its 'RUB' default whatever the user
           // sent. Same class of bug as `archivedAt` in v0.13.
@@ -59,8 +62,17 @@ export class AccountsService {
   async update(userId: string, workspaceId: string, accountId: string, input: UpdateAccountInput): Promise<Account> {
     const { account, net } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertOwnedTx(tx, workspaceId, accountId);
-      const account = await tx.account.update({ where: { id: accountId }, data: input });
+      const existing = await this.assertOwnedTx(tx, workspaceId, accountId);
+      const data: Prisma.AccountUpdateInput = { ...input };
+      if (input.visibility === "private" && existing.visibility !== "private") {
+        // Hiding a shared account takes it away from everyone else, so not any member may do it: the one who created
+        // it, or — for accounts older than the owner column — the owner of the workspace.
+        const member = await tx.workspaceMember.findFirst({ where: { workspaceId, userId }, select: { role: true } });
+        const mayHide = existing.ownerId === userId || (existing.ownerId === null && member?.role === "owner");
+        if (!mayHide) throw new ForbiddenException("Скрыть общий счёт может тот, кто его завёл (для старых счетов — владелец пространства)");
+        data.ownerId = userId;
+      }
+      const account = await tx.account.update({ where: { id: accountId }, data });
       const netByAccount = await computeNetByAccount(tx, workspaceId);
       return { account, net: netByAccount.get(accountId) ?? 0 };
     });
@@ -121,6 +133,8 @@ type AccountRow = {
   name: string;
   kind: string;
   context: string;
+  visibility: string;
+  ownerId: string | null;
   currency: string;
   startingBalance: number;
   archivedAt: Date | null;
@@ -135,6 +149,8 @@ function toDto(account: AccountRow, net: number): Account {
     name: account.name,
     kind: account.kind as Account["kind"],
     context: account.context as Account["context"],
+    visibility: account.visibility === "private" ? "private" : "workspace",
+    ownerId: account.ownerId,
     currency: account.currency,
     startingBalance: account.startingBalance,
     balance: account.startingBalance + net,

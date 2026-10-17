@@ -104,17 +104,67 @@ fn show_startup_error(message: &str) {
     }
 }
 
+/// `orion://open?type=note&id=…&workspace=…` (a link an AI agent handed to the person) → the web client's `/open`
+/// route, which switches workspace and focuses the object. Navigation only: the page loads the record through the
+/// access-checked API. Anything that is not exactly `orion://open?…` is ignored.
+fn open_orion_link(app: &tauri::AppHandle, url: &str) {
+    use tauri::Manager;
+    let Some(query) = url.strip_prefix("orion://open?") else {
+        return;
+    };
+    if let Some(window) = app.get_webview_window("main") {
+        // serde_json quotes and escapes the string, so the query cannot break out of the JS literal.
+        if let Ok(target) = serde_json::to_string(&format!("/open?{query}")) {
+            let _ = window.eval(&format!("window.location.assign({target})"));
+        }
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// A link that LAUNCHED the app (cold start): the window is not loaded yet, so it waits here until the first page load.
+static PENDING_LINK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 fn main() {
     tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                let pending = PENDING_LINK.lock().ok().and_then(|mut slot| slot.take());
+                if let Some(url) = pending {
+                    open_orion_link(tauri::Manager::app_handle(webview), &url);
+                }
+            }
+        })
+        // Must be first: a second launch (the OS opening an orion:// link) hands its arguments to the running window.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            for arg in argv {
+                open_orion_link(app, &arg);
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            use tauri_plugin_deep_link::DeepLinkExt;
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                if let (Some(url), Ok(mut slot)) = (urls.first(), PENDING_LINK.lock()) {
+                    *slot = Some(url.to_string());
+                }
+            }
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    open_orion_link(&handle, url.as_str());
+                }
+            });
+            // The installer registers the scheme; in a dev build register it at run time.
+            #[cfg(all(windows, debug_assertions))]
+            let _ = app.deep_link().register_all();
             #[cfg(all(windows, not(debug_assertions)))]
             if let Err(message) = start_local_runtime(app) {
                 show_startup_error(&message);
                 return Err(std::io::Error::other(message).into());
             }
-            #[cfg(any(not(windows), debug_assertions))]
-            let _ = app;
             Ok(())
         })
         .run(tauri::generate_context!())

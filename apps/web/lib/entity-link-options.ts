@@ -23,7 +23,7 @@ export interface EntityLinkOption {
   perspectiveLabel: string;
 }
 
-const ALL_KINDS: RelationKind[] = ["supports", "evidence_for", "related_to"];
+const ALL_KINDS: RelationKind[] = ["supports", "evidence_for", "goal_step", "goal_measure", "goal_material", "goal_risk", "goal_prerequisite", "related_to"];
 
 export function computeLinkOptions(
   thisType: SearchableEntityType,

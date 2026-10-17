@@ -355,6 +355,7 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
                                   ) : null}
                                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                     <span className="text-micro text-subtle-foreground">{relativeTime(item.createdAt)}</span>
+                                    {item.createdByAgent ? <span className="text-micro text-subtle-foreground">🤖 {item.createdByAgent}</span> : null}
                                     {item.projectId ? (
                                       <Badge>
                                         <FolderKanban className="h-3 w-3" />{" "}

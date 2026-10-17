@@ -39,6 +39,30 @@ export class InboxService {
     });
   }
 
+  /**
+   * An entry filed by an AI agent (Agent Gateway `capture` without a destination). Always an unprocessed `inbox` item
+   * marked with the agent's name — a person sorts it. The caller owns the transaction, the membership check and the
+   * check that `projectId` belongs to this workspace.
+   */
+  async createFromAgentTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    input: { title: string; body: string; dueAt: string | null; projectId: string | null; agentName: string }
+  ): Promise<{ id: string }> {
+    const row = await tx.inboxItem.create({
+      data: {
+        workspaceId,
+        title: input.title,
+        body: input.body,
+        kind: "inbox",
+        dueAt: input.dueAt ? new Date(input.dueAt) : null,
+        projectId: input.projectId,
+        createdByAgent: input.agentName
+      }
+    });
+    return { id: row.id };
+  }
+
   async capture(userId: string, workspaceId: string, input: CaptureInboxInput): Promise<InboxItem> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -187,7 +211,7 @@ export class InboxService {
 function toDto(row: {
   id: string; workspaceId: string; title: string; body: string; kind: string; dueAt: Date | null;
   targetType: string | null; targetId: string | null; projectId: string | null; processedAt: Date | null;
-  createdAt: Date; updatedAt: Date;
+  createdByAgent: string | null; createdAt: Date; updatedAt: Date;
 }): InboxItem {
   return {
     ...row,

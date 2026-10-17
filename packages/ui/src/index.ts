@@ -31,3 +31,8 @@ export * from "./file-preview";
 export * from "./diff-view";
 export * from "./webgl-backgrounds";
 export * from "./target-cursor";
+export * from "./virtual-list";
+export * from "./context-panel";
+export * from "./design-tokens";
+export * from "./theme-provider";
+export * from "./theme-engine";

@@ -39,11 +39,13 @@ import { describeAuthError } from "../lib/error-message";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
 import { BackgroundEffectSettingsForm } from "./settings/background-effect-form";
+import { ThemePreview } from "./settings/theme-preview";
 import { ModulesSettings } from "./settings/modules-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
+import { NetworkSettings } from "./settings/network-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
 import { SettingsNav } from "./settings/settings-nav";
@@ -61,6 +63,7 @@ type Tab =
   | "workspace"
   | "spheres"
   | "members"
+  | "network"
   | "about";
 type PreferenceKey = keyof UserPreference;
 
@@ -75,6 +78,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "spheres", label: "Сферы" },
   { value: "members", label: "Участники" },
   { value: "agents", label: "ИИ-агенты" },
+  { value: "network", label: "Сеть и устройства" },
   { value: "about", label: "О приложении" }
 ];
 
@@ -509,6 +513,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
           </PanelSection>
         ) : null}
 
+        {tab === "network" ? (
+          <PanelSection title="Сеть и устройства">
+            <NetworkSettings />
+          </PanelSection>
+        ) : null}
+
         {tab === "appearance" ? (
           <PanelSection title="Внешний вид" actions={<LiveSaveHint pending={updatePreferences.isPending} />}>
             {preferences.isError ? preferencesError : !form ? (
@@ -516,10 +526,17 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
             ) : (
               <Card className="space-y-4">
                 <p className="text-2xs text-subtle-foreground">
-                  Акцент и плотность применяются сразу ко всему приложению. Тема пока одна — тёмная (окно докинга
-                  работает на тёмной теме dockview), поэтому переключателя темы здесь нет; поле в профиле сохраняется
-                  на будущее.
+                  Оформление сохраняется в вашей учётной записи. KAIDEN Precision включает новую навигацию и спокойную графитовую палитру. Прежние настройки акцента и фона сохраняются для возврата.
                 </p>
+                <Field label="Оформление Orion">
+                  <Select aria-label="Оформление Orion" value={form.theme}
+                    onChange={(event) => setForm({ ...form, theme: event.target.value as UserPreference["theme"] })}>
+                    <option value={form.theme === "kaiden-precision" ? "dark" : form.theme}>Прежний интерфейс</option>
+                    <option value="kaiden-precision">KAIDEN Precision — новая оболочка</option>
+                  </Select>
+                </Field>
+                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Precision задаёт структуру оболочки. Свою палитру можно сохранить и применить ниже. Плотность и положение меню настраиваются независимо.</p> : null}
+                {form.theme !== "kaiden-precision" ? <>
                 <Field label="Акцент">
                   <SegmentedControl<UserPreference["accent"]>
                     value={form.accent}
@@ -527,6 +544,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     options={ACCENT_OPTIONS}
                   />
                 </Field>
+                </> : null}
                 <Field label="Плотность">
                   <SegmentedControl<UserPreference["density"]> value={form.density} onChange={(density) => setForm({ ...form, density })} options={[{ value: "compact", label: "Компактная" }, { value: "comfortable", label: "Свободная" }]} />
                 </Field>
@@ -555,6 +573,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     «Копить» — каждый открытый раздел остаётся вкладкой. «Заменять» — раздел открывается на месте текущей вкладки; закрепить другую рядом можно перетаскиванием из меню или через «⋯».
                   </p>
                 </Field>
+                {form.theme !== "kaiden-precision" ? <>
                 <Field label="Фон">
                   <SegmentedControl<UserPreference["backgroundStyle"]>
                     value={form.backgroundStyle}
@@ -653,6 +672,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     </Field>
                   </div>
                 ) : null}
+                </> : null}
                 <Field label="Номера заметок">
                   <div className="flex items-center gap-2">
                     <Switch checked={form.showNoteIds} onChange={(showNoteIds) => setForm({ ...form, showNoteIds })} />
@@ -713,6 +733,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     {form.onboardingCompletedAt ? "Показать подсказку снова" : "Скрыть подсказку"}
                   </Button>
                 </div>
+                <ThemePreview />
               </Card>
             )}
           </PanelSection>

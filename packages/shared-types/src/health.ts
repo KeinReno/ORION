@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { healthDoseSchema } from "./health-medications";
 
 /**
  * Module «Здоровье» (ADR-0012, docs/HEALTH_MODULE_SPEC.md). Данные принадлежат ЧЕЛОВЕКУ
@@ -188,7 +189,9 @@ export const healthTodaySchema = z.object({
   /** Ближайшие невыполненные визиты (14 дней вперёд и до 7 дней назад, если не отмечены прошедшими). */
   appointments: z.array(healthAppointmentSchema.extend({ subjectName: z.string() })),
   /** Профилактика с просроченным или близким сроком (30 дней). */
-  preventive: z.array(healthPreventiveItemSchema.extend({ subjectName: z.string(), status: z.enum(["overdue", "soon"]) }))
+  preventive: z.array(healthPreventiveItemSchema.extend({ subjectName: z.string(), status: z.enum(["overdue", "soon"]) })),
+  /** Неотмеченные приёмы лекарств на сегодня — только у людей, которых вы ведёте сами или вместе (не при просмотре). */
+  doses: z.array(healthDoseSchema.extend({ subjectId: z.string(), subjectName: z.string() }))
 });
 export type HealthToday = z.infer<typeof healthTodaySchema>;
 

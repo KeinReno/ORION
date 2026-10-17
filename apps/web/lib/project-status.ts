@@ -131,3 +131,54 @@ export function nextActionByProject(tasks: readonly Task[], now: Date = new Date
   }
   return result;
 }
+
+export interface ProjectAttention {
+  /** Reasons in words, most serious first. Never empty for an item returned by `projectsNeedingAttention`. */
+  reasons: string[];
+  /** Sort key: higher = look at it first. */
+  score: number;
+}
+
+/**
+ * Why a live project deserves a look today — stated, not scored: the author's own "delay / risk",
+ * a passed deadline, overdue tasks, a stale report. Paused, finished and archived projects expect
+ * nothing, so they are never flagged. No reasons = null (the absence is not "all fine").
+ */
+export function projectAttention(
+  project: { status: string; archivedAt: string | null; dueAt: string | null; reportedHealth: string | null; reportedAt: string | null },
+  nextAction: ProjectNextAction | undefined,
+  now: Date = new Date()
+): ProjectAttention | null {
+  if (project.status !== "active" || project.archivedAt) return null;
+  const reasons: string[] = [];
+  let score = 0;
+  if (project.reportedHealth === "delayed") { reasons.push("Автор отметил задержку"); score += 8; }
+  if (project.dueAt && daysUntil(project.dueAt, now) < 0) { reasons.push(`Срок прошёл ${pluralDays(-daysUntil(project.dueAt, now))} назад`); score += 6; }
+  if (nextAction && nextAction.overdue > 0) { reasons.push(`Просрочено задач: ${nextAction.overdue}`); score += 4 + Math.min(nextAction.overdue, 3); }
+  if (project.reportedHealth === "at_risk") { reasons.push("Автор отметил риск"); score += 5; }
+  const freshness = reportFreshness(project, now);
+  if (freshness.kind === "stale") { reasons.push(`Отчёту ${pluralDays(freshness.daysOld)}`); score += 1; }
+  return reasons.length > 0 ? { reasons, score } : null;
+}
+
+/** Projects worth a look, most urgent first (ties: by name, so the order is stable). */
+export function projectsNeedingAttention<T extends { id: string; name: string; status: string; archivedAt: string | null; dueAt: string | null; reportedHealth: string | null; reportedAt: string | null }>(
+  projects: readonly T[],
+  nextActions: ReadonlyMap<string, ProjectNextAction>,
+  now: Date = new Date()
+): { project: T; attention: ProjectAttention }[] {
+  const flagged: { project: T; attention: ProjectAttention }[] = [];
+  for (const project of projects) {
+    const attention = projectAttention(project, nextActions.get(project.id), now);
+    if (attention) flagged.push({ project, attention });
+  }
+  return flagged.sort((a, b) => b.attention.score - a.attention.score || a.project.name.localeCompare(b.project.name, "ru"));
+}
+
+/** The milestone to look at next: not done, soonest deadline first, undated ones last. */
+export function nearestMilestone(milestones: readonly Milestone[]): Milestone | null {
+  const open = milestones.filter((milestone) => milestone.status !== "done");
+  const key = (m: Milestone): number => (m.dueAt ? Date.parse(m.dueAt) : Number.POSITIVE_INFINITY);
+  open.sort((a, b) => (key(a) === key(b) ? a.order - b.order : key(a) - key(b)));
+  return open[0] ?? null;
+}

@@ -80,13 +80,13 @@ const mdHighlight = HighlightStyle.define([
   { tag: t.strong, fontWeight: "700" },
   { tag: t.emphasis, fontStyle: "italic" },
   { tag: t.strikethrough, textDecoration: "line-through" },
-  { tag: t.link, color: "#7c7ff3", textDecoration: "underline" },
-  { tag: t.url, color: "#818cf8" },
-  { tag: t.monospace, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: "#c7d2fe" },
-  { tag: [t.meta, t.processingInstruction], color: "#71717a" },
-  { tag: t.quote, color: "#a1a1aa" },
-  { tag: t.list, color: "#a1a1aa" },
-  { tag: t.contentSeparator, color: "#52525b" }
+  { tag: t.link, color: "rgb(var(--orion-accent-hover, 124 127 243))", textDecoration: "underline" },
+  { tag: t.url, color: "rgb(var(--orion-accent-hover, 129 140 248))" },
+  { tag: t.monospace, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: "rgb(var(--orion-code-text, 199 210 254))" },
+  { tag: [t.meta, t.processingInstruction], color: "rgb(var(--orion-color-subtle, 113 113 122))" },
+  { tag: t.quote, color: "rgb(var(--orion-color-secondary, 161 161 170))" },
+  { tag: t.list, color: "rgb(var(--orion-color-secondary, 161 161 170))" },
+  { tag: t.contentSeparator, color: "rgb(var(--orion-color-subtle, 82 82 91))" }
 ]);
 
 const editorTheme = EditorView.theme(
@@ -94,7 +94,7 @@ const editorTheme = EditorView.theme(
     // No fixed height: the view grows with its content and the surrounding
     // panel scroll region (title + body + tags together) does the scrolling,
     // Obsidian-style — rather than a scrollbar boxed inside the editor.
-    "&": { color: "#f4f4f5", backgroundColor: "transparent", fontSize: "14px" },
+    "&": { color: "rgb(var(--orion-color-text, 244 244 245))", backgroundColor: "transparent", fontSize: "14px" },
     "&.cm-focused": { outline: "none" },
     ".cm-scroller": {
       fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
@@ -108,9 +108,9 @@ const editorTheme = EditorView.theme(
     },
     ".cm-activeLine": { backgroundColor: "transparent" },
     ".cm-gutters": { display: "none" },
-    ".cm-placeholder": { color: "#52525b" },
+    ".cm-placeholder": { color: "rgb(var(--orion-color-subtle, 82 82 91))" },
     // The «/» and wiki-link menus: a card like the rest of the app, not CodeMirror's default grey box.
-    ".cm-tooltip": { border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", backgroundColor: "#16161a", overflow: "hidden", boxShadow: "0 12px 32px rgba(0,0,0,0.45)" },
+    ".cm-tooltip": { border: "1px solid rgb(var(--orion-color-border, 44 44 53))", borderRadius: "12px", backgroundColor: "rgb(var(--orion-color-elevated, 22 22 26))", overflow: "hidden", boxShadow: "0 12px 32px rgba(0,0,0,0.45)" },
     ".cm-tooltip.cm-tooltip-autocomplete > ul": {
       fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
       fontSize: "13px",
@@ -118,11 +118,11 @@ const editorTheme = EditorView.theme(
       maxHeight: "16rem",
       padding: "4px"
     },
-    ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "baseline", gap: "10px", padding: "5px 8px", borderRadius: "8px", color: "#d4d4d8", lineHeight: "1.4" },
-    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "rgba(99,102,241,0.22)", color: "#fafafa" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "baseline", gap: "10px", padding: "5px 8px", borderRadius: "8px", color: "rgb(var(--orion-color-secondary, 212 212 216))", lineHeight: "1.4" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "rgba(99,102,241,0.22)", color: "rgb(var(--orion-color-text, 250 250 250))" },
     ".cm-completionIcon": { display: "none" },
     ".cm-completionLabel": { flexShrink: "0" },
-    ".cm-completionDetail": { marginLeft: "auto", fontStyle: "normal", color: "#71717a", fontSize: "12px", whiteSpace: "nowrap" }
+    ".cm-completionDetail": { marginLeft: "auto", fontStyle: "normal", color: "rgb(var(--orion-color-subtle, 113 113 122))", fontSize: "12px", whiteSpace: "nowrap" }
   },
   { dark: true }
 );

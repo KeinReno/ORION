@@ -1,0 +1,123 @@
+[
+  {
+    "file": "calendar-1280.png",
+    "differentPixels": 0,
+    "totalPixels": 1024000,
+    "bounds": null
+  },
+  {
+    "file": "calendar-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  },
+  {
+    "file": "dashboard-1280.png",
+    "differentPixels": 1018,
+    "totalPixels": 1024000,
+    "bounds": [
+      24,
+      645,
+      611,
+      797
+    ]
+  },
+  {
+    "file": "dashboard-390.png",
+    "differentPixels": 28,
+    "totalPixels": 312000,
+    "bounds": [
+      24,
+      539,
+      366,
+      763
+    ]
+  },
+  {
+    "file": "notes-1280.png",
+    "differentPixels": 540,
+    "totalPixels": 1024000,
+    "bounds": [
+      80,
+      313,
+      159,
+      425
+    ]
+  },
+  {
+    "file": "notes-390.png",
+    "differentPixels": 540,
+    "totalPixels": 312000,
+    "bounds": [
+      80,
+      392,
+      159,
+      504
+    ]
+  },
+  {
+    "file": "opportunities-1280.png",
+    "differentPixels": 0,
+    "totalPixels": 1024000,
+    "bounds": null
+  },
+  {
+    "file": "opportunities-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  },
+  {
+    "file": "projects-1280.png",
+    "differentPixels": 0,
+    "totalPixels": 1024000,
+    "bounds": null
+  },
+  {
+    "file": "projects-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  },
+  {
+    "file": "settings-1280.png",
+    "differentPixels": 0,
+    "totalPixels": 1024000,
+    "bounds": null
+  },
+  {
+    "file": "settings-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  },
+  {
+    "file": "shell-1280.png",
+    "differentPixels": 692390,
+    "totalPixels": 1024000,
+    "bounds": [
+      60,
+      35,
+      1280,
+      800
+    ]
+  },
+  {
+    "file": "shell-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  },
+  {
+    "file": "tasks-1280.png",
+    "differentPixels": 0,
+    "totalPixels": 1024000,
+    "bounds": null
+  },
+  {
+    "file": "tasks-390.png",
+    "differentPixels": 0,
+    "totalPixels": 312000,
+    "bounds": null
+  }
+]

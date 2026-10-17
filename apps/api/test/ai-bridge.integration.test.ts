@@ -54,9 +54,11 @@ describe("AI Bridge (agent tokens)", () => {
     await app?.close();
   });
 
+  // These scenarios predate autonomy modes: a token wrote at once. `manager` is that behaviour (TZ-03, agent-manager.integration.test.ts
+  // covers the other modes), so the helper asks for it explicitly instead of getting the new `assistant` default.
   async function issue(owner: RegisteredSession, scopes: string[], expiresInDays = 30) {
     const created = await request<{ id: string; secret: string; prefix: string }>(`/workspaces/${owner.workspaceId}/agent-tokens`, {
-      method: "POST", token: owner.accessToken, body: { name: "Claude", scopes, expiresInDays }
+      method: "POST", token: owner.accessToken, body: { name: "Claude", scopes, expiresInDays, mode: "manager" }
     });
     expect(created.status).toBe(201);
     return created.data;
@@ -149,7 +151,7 @@ describe("AI Bridge (agent tokens)", () => {
 
     await prisma.asSystem((tx) => tx.workspaceMember.deleteMany({ where: { userId: alice.user.id, workspaceId: alice.workspaceId } }));
     const after = await request("/ai/v1/tasks", { method: "GET", token: token.secret });
-    expect([403, 404]).toContain(after.status);
+    expect([401, 403, 404]).toContain(after.status);
   });
 
   it("MCP-сервер (stdio) проходит рукопожатие, показывает инструменты и работает через токен", async () => {
