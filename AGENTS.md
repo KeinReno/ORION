@@ -4,14 +4,20 @@ This file is the mandatory entry point for AI agents working in this repository.
 
 ## Read before changing code
 
+`docs/PLATFORM.md` (KAIDEN Orion Platform 1.0, approved by the owner on
+2026-10-17) is the governing product direction: task priorities follow its
+stages, and the current stage is Stage 0 (finish the redesign, stabilize).
+`docs/STATUS.md` records what the code actually does today.
+
 Read in this order:
 
-1. `ORION_CONSTITUTION.md`
-2. `docs/MODULES_AND_PLUGINS.md`
-3. `docs/AI_FIRST_EXTENSION_ARCHITECTURE.md`
-4. `docs/AI_REFACTOR_MIGRATION_MAP.md`
-5. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
-6. the public contracts / SDK / extension points used by the task
+1. `docs/PLATFORM.md`
+2. `ORION_CONSTITUTION.md`
+3. `docs/MODULES_AND_PLUGINS.md`
+4. `docs/AI_FIRST_EXTENSION_ARCHITECTURE.md`
+5. `docs/AI_REFACTOR_MIGRATION_MAP.md`
+6. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
+7. the public contracts / SDK / extension points used by the task
 
 For deployment work, also read `docs/DEPLOYMENT_READINESS.md`. For Compass
 Vertex or FinControl work, read `docs/INTEGRATIONS_COMPASS_FINCONTROL.md` and
