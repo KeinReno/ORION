@@ -41,7 +41,7 @@ import {
   type ReschedulePayload,
   type SlotCreatePayload
 } from "@orion/ui";
-import { CalendarDays, CircleHelp, FileText, ListTodo, Plus, Search, TriangleAlert } from "lucide-react";
+import { CalendarDays, ChevronDown, CircleHelp, FileText, ListTodo, Plus, Search, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fromDatetimeLocal, toDatetimeLocal } from "../lib/format";
@@ -235,6 +235,33 @@ export function CalendarPanel(): React.ReactElement {
   // Grid views (month/week/day) have no room for a per-item button: right click / Menu key / Shift+F10.
   const [calendarView, setCalendarView] = useState<"month" | "week" | "day" | "agenda">("month");
   useViewState("calendar", calendarViewStateSchema, wsId, { view: calendarView }, (saved) => setCalendarView(saved.view));
+  const visibleSources = CALENDAR_SOURCES.filter((source) => {
+    const moduleId = CALENDAR_SOURCE_MODULE[source.id];
+    return !moduleId || isEnabled(moduleId);
+  });
+  const sourceCount = { on: visibleSources.filter((source) => enabled.has(source.id)).length, total: visibleSources.length };
+  const sourceChips = visibleSources.map((source) => {
+    const on = enabled.has(source.id);
+    return (
+      <button
+        key={source.id}
+        type="button"
+        aria-pressed={on}
+        onClick={() => toggleSource(source.id)}
+        style={toneStyle(source.toneKey)}
+        className={`rounded-full border px-2 py-0.5 text-micro font-medium transition-opacity ${
+          on ? "opacity-100" : "opacity-40"
+        }`}
+      >
+        <span
+          aria-hidden
+          className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
+          style={{ background: on ? "currentColor" : "transparent", boxShadow: "inset 0 0 0 1px currentColor" }}
+        />
+        {source.label}
+      </button>
+    );
+  });
   const [gridMenu, setGridMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const focusedIdRef = useRef<string | null>(null);
   focusedIdRef.current = focusedId;
@@ -554,31 +581,15 @@ export function CalendarPanel(): React.ReactElement {
               focusedId={focusedId}
               headerExtra={
                 <div className="flex flex-wrap items-center gap-1">
-                  {CALENDAR_SOURCES.filter((source) => {
-                    const moduleId = CALENDAR_SOURCE_MODULE[source.id];
-                    return !moduleId || isEnabled(moduleId);
-                  }).map((source) => {
-                    const on = enabled.has(source.id);
-                    return (
-                      <button
-                        key={source.id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggleSource(source.id)}
-                        style={toneStyle(source.toneKey)}
-                        className={`rounded-full border px-2 py-0.5 text-micro font-medium transition-opacity ${
-                          on ? "opacity-100" : "opacity-40"
-                        }`}
-                      >
-                        <span
-                          aria-hidden
-                          className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                          style={{ background: on ? "currentColor" : "transparent", boxShadow: "inset 0 0 0 1px currentColor" }}
-                        />
-                        {source.label}
-                      </button>
-                    );
-                  })}
+                  {/* Wide: the source chips sit inline. Narrow: one disclosure, so the grid starts above the fold. */}
+                  <div className="hidden flex-wrap items-center gap-1 sm:flex">{sourceChips}</div>
+                  <details className="group w-full sm:hidden">
+                    <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-2.5 text-label text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+                      <span className="flex-1">Источники · {sourceCount.on} из {sourceCount.total}</span>
+                      <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+                    </summary>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">{sourceChips}</div>
+                  </details>
                   <ExtensionSlot name="calendar.toolbar" props={{ workspaceId: wsId }} />
                 </div>
               }

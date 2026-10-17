@@ -224,8 +224,12 @@ function WeekRow({
                 <span
                   className={clsx(
                     "text-2xs",
-                    sameDay(day, today) ? "font-semibold text-accent-text" : "text-subtle-foreground"
+                    // Today is a filled badge, not just a coloured number: findable at a glance and not colour-only.
+                    sameDay(day, today)
+                      ? "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 font-semibold text-accent-foreground"
+                      : "text-subtle-foreground"
                   )}
+                  aria-current={sameDay(day, today) ? "date" : undefined}
                 >
                   {day.getDate()}
                 </span>
