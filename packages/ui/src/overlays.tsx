@@ -165,7 +165,8 @@ export function Modal({
   description,
   children,
   footer,
-  size = "md"
+  size = "md",
+  returnFocus = true
 }: {
   open: boolean;
   onClose: () => void;
@@ -174,6 +175,12 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   size?: ModalSize;
+  /**
+   * Put focus back on the opener when the dialog closes (the default). A launcher whose actions open something
+   * else (the command palette) turns it off: focus jumping back would re-activate the dock group the palette was
+   * called from, and the next «Открыть рядом» would land beside the wrong panel.
+   */
+  returnFocus?: boolean;
 }): React.ReactElement | null {
   const mounted = useMounted();
   const themeScope = useThemeScopeProps();
@@ -197,9 +204,9 @@ export function Modal({
     return () => {
       document.body.style.overflow = overflow;
       cancelAnimationFrame(raf);
-      restoreOpener(opener);
+      if (returnFocus) restoreOpener(opener);
     };
-  }, [shown, openerRef]);
+  }, [shown, openerRef, returnFocus]);
 
   if (!mounted) return null;
 
