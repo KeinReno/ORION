@@ -57,7 +57,7 @@ export class BudgetAlertsService {
 
     const messages: string[] = [];
     for (const budget of budgets) {
-      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month);
+      const spent = await budgetSpentTx(tx, workspaceId, budget.categoryId, budget.month, budget.currency);
       const available = budget.limitAmount + (await budgetCarryOverTx(tx, workspaceId, budget));
       if (spent <= available) continue;
 
@@ -75,8 +75,9 @@ export class BudgetAlertsService {
       const title = `Бюджет превышен: ${category?.name ?? "категория"}`;
       // Message text, not an API field: the "backend never formats money" rule
       // (v0.8) is about DTOs at the boundary — a Telegram line has to be human
-      // readable, and the workspace's own currency is still the only one.
-      const body = `Потрачено ${(spent / 100).toFixed(2)} из ${(available / 100).toFixed(2)} ₽ за месяц`;
+      // readable. The currency is the budget's own, not an assumed ₽.
+      const unit = budget.currency === "RUB" ? "₽" : budget.currency;
+      const body = `Потрачено ${(spent / 100).toFixed(2)} из ${(available / 100).toFixed(2)} ${unit} за месяц`;
 
       await this.notifications.createTx(tx, {
         workspaceId,
