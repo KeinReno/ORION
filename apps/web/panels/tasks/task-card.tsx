@@ -150,7 +150,7 @@ export function TaskCard({
          */}
         {task.status === "in_progress" ? <StatusMark status="running" label="в работе" /> : null}
         {canceled ? <StatusMark status="cancelled" label="отменена" /> : null}
-        {task.projectTag ? <span style={projectColor(task.projectTag)} className="rounded-full border px-2 py-0.5 text-micro font-medium">{task.projectTag}</span> : null}
+        {task.projectTag ? <span style={projectColor(task.projectTag)} title={task.projectTag} className="block max-w-full truncate rounded-full border px-2 py-0.5 text-micro font-medium sm:max-w-[16rem]">{task.projectTag}</span> : null}
         {task.dueAt ? (
           <span
             className={cx("inline-flex items-center gap-1 text-micro", overdue ? "text-destructive" : "text-subtle-foreground")}

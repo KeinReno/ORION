@@ -21,7 +21,7 @@ import {
   useToast
 } from "@orion/ui";
 import { motion, useReducedMotion } from "framer-motion";
-import { ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
+import { ChevronDown, ListTodo, Plus, Search, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useViewState } from "../lib/use-view-state";
 import { tasksViewStateSchema } from "@orion/shared-types";
@@ -66,6 +66,7 @@ const NO_PROJECT = "__none__";
  * not part of any project and so never show up on a project's own screen.
  */
 type TaskScope = "all" | "loose";
+const GROUP_LABEL: Record<GroupBy, string> = { status: "По статусу", project: "По проекту", priority: "По приоритету", due: "По сроку" };
 const SCOPE_KEY = "orion.tasks.scope";
 const VIEW_KEY = "orion.tasks.view";
 
@@ -435,6 +436,33 @@ export function TasksPanel(): React.ReactElement {
   const total = tasks?.length ?? 0;
   const openCount = (tasks ?? []).filter((t) => !isTaskClosed(t.status)).length;
 
+  const groupViewControls = (
+    <>
+      <SegmentedControl<GroupBy>
+            value={groupBy}
+            onChange={setGroupBy}
+            size="sm"
+            options={[
+              { value: "status", label: "По статусу" },
+              { value: "project", label: "По проекту" },
+              { value: "priority", label: "По приоритету" },
+              { value: "due", label: "По сроку" }
+            ]}
+          />
+          {viewPlugins.length > 0 ? (
+            <SegmentedControl<BoardView>
+              value={activeView}
+              onChange={(next) => {
+                viewTouched.current = true;
+                setView(next);
+              }}
+              size="sm"
+              options={[...viewPlugins.map((c) => ({ value: c.meta!.viewId, label: c.meta!.label })), { value: "list", label: "Список" }]}
+            />
+          ) : null}
+    </>
+  );
+
   return (
     <PanelShell>
       <PanelHeader
@@ -465,7 +493,7 @@ export function TasksPanel(): React.ReactElement {
             }
           }}
         />}
-        <div className={cx("ml-auto flex flex-wrap items-center gap-2", editing && !splitDetail && "hidden")}>
+        <div className={cx("ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2", editing && !splitDetail && "hidden")}>
           <div className="relative sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск задач" className="pl-8" />
@@ -521,28 +549,15 @@ export function TasksPanel(): React.ReactElement {
               ))}
             </div>
           ) : null}
-          <SegmentedControl<GroupBy>
-            value={groupBy}
-            onChange={setGroupBy}
-            size="sm"
-            options={[
-              { value: "status", label: "По статусу" },
-              { value: "project", label: "По проекту" },
-              { value: "priority", label: "По приоритету" },
-              { value: "due", label: "По сроку" }
-            ]}
-          />
-          {viewPlugins.length > 0 ? (
-            <SegmentedControl<BoardView>
-              value={activeView}
-              onChange={(next) => {
-                viewTouched.current = true;
-                setView(next);
-              }}
-              size="sm"
-              options={[...viewPlugins.map((c) => ({ value: c.meta!.viewId, label: c.meta!.label })), { value: "list", label: "Список" }]}
-            />
-          ) : null}
+          {/* Wide: grouping and view sit inline. Narrow: one disclosure instead of a row that runs off the edge. */}
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">{groupViewControls}</div>
+          <details className="group w-full sm:hidden">
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-2.5 text-label text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
+              <span className="flex-1">Группировка и вид · {GROUP_LABEL[groupBy]}{viewPlugins.length > 0 ? ` · ${activeViewMeta?.label ?? "Список"}` : ""}</span>
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2">{groupViewControls}</div>
+          </details>
           {teamOn ? (
             <FilterChip
               active={onlyMine}

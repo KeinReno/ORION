@@ -32,7 +32,17 @@ test("tasks screens: list, detail, narrow, empty", async ({ page, request }) => 
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
   await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
   await page.getByRole("navigation", { name: "Разделы" }).getByRole("button", { name: /^Задачи/ }).click();
+  // The open task is restored after the reload (stage 20) and replaces the list: go back to the list explicitly.
+  const detail = page.getByRole("region", { name: "Детали задачи", exact: true });
+  await page.waitForTimeout(1500);
+  if (await detail.isVisible()) await page.getByRole("button", { name: "Задачи", exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Поиск задач", exact: true }).or(page.getByPlaceholder("Поиск задач"))).toBeVisible();
   await expect(page.getByText("Забронировать домик у озера").first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "no horizontal page overflow at 390 px").toBe(true);
+  const toolbar = page.getByRole("banner").or(page.locator("header")).locator("summary", { hasText: "Группировка и вид" });
+  const box = await toolbar.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390, "the grouping disclosure fits the 390 px viewport").toBe(true);
   await shot(page, "list-390");
 });
 

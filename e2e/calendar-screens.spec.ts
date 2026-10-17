@@ -37,22 +37,40 @@ test("calendar screens: month, week, agenda, narrow", async ({ page, request }) 
   await calendar.getByRole("tab", { name: "Список", exact: true }).click();
   await shot(page, "agenda-1600");
   await calendar.getByRole("tab", { name: "Месяц", exact: true }).click();
+  await page.waitForTimeout(800); // the view is saved with a short debounce
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
   await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
   await page.getByRole("navigation", { name: "Разделы" }).getByRole("button", { name: "Календарь", exact: true }).click();
-  await expect(page.getByRole("group", { name: "Календарь", exact: true })).toBeVisible();
-  await shot(page, "month-390");
-  // Sources stay reachable behind the disclosure and still toggle.
-  const disclosure = page.locator("summary").filter({ hasText: "Источники" });
-  if (await disclosure.count()) {
-    await disclosure.click();
-    const tasksChip = page.getByRole("button", { name: "Задачи", exact: true }).filter({ has: page.locator("span[aria-hidden]") }).first();
-    await expect(tasksChip).toBeVisible();
-    await disclosure.click();
-  }
-  await page.getByRole("group", { name: "Календарь", exact: true }).getByRole("tab", { name: "Список", exact: true }).click();
+  const narrow = page.getByRole("group", { name: "Календарь", exact: true });
+  await expect(narrow).toBeVisible();
+  const tab = (name: string) => narrow.getByRole("tab", { name, exact: true });
+
+  // Sources: the disclosure is mandatory at 390 px and every toggle really filters the agenda.
+  await tab("Список").click();
+  await expect(tab("Список")).toHaveAttribute("aria-selected", "true");
+  await expect(narrow.getByText("Вёрстка кабинета клиента")).toBeVisible();
+  const sources = page.locator("details").filter({ has: page.locator("summary", { hasText: "Источники" }) });
+  await sources.locator("summary").click();
+  const tasksChip = sources.getByRole("button", { name: "Задачи", exact: true });
+  await expect(tasksChip).toHaveAttribute("aria-pressed", "true");
+  await tasksChip.click();
+  await expect(tasksChip).toHaveAttribute("aria-pressed", "false");
+  await expect(narrow.getByText("Вёрстка кабинета клиента")).toHaveCount(0);
+  await expect(narrow.getByText("Планёрка команды")).toBeVisible(); // events are another source and stay
+  await tasksChip.click();
+  await expect(tasksChip).toHaveAttribute("aria-pressed", "true");
+  await expect(narrow.getByText("Вёрстка кабинета клиента")).toBeVisible();
+  await sources.locator("summary").click();
   await shot(page, "agenda-390");
+
+  // The month shot shows the month: tab selected and the weekday header of the grid present.
+  await tab("Месяц").click();
+  await expect(tab("Месяц")).toHaveAttribute("aria-selected", "true");
+  await expect(narrow.getByText("Октябрь 2026")).toBeVisible();
+  await expect(narrow.getByText("Пн", { exact: true })).toBeVisible();
+  await expect(narrow.getByText("Ближайшее")).toHaveCount(0);
+  await shot(page, "month-390");
 });
 
 test("calendar screens: empty workspace", async ({ page, request }) => {
