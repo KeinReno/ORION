@@ -23,7 +23,7 @@ for (const mode of ["dark", "light"] as const) {
     await expect(region.getByRole("alert")).toContainText("Название темы должно содержать");
     await region.getByLabel("Название темы", { exact: true }).fill(`Моя тема ${mode}`);
     await region.getByLabel("Акцент", { exact: true }).fill("#357ab5");
-    await region.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
+    await expect(region.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-orion-palette", "kaiden-precision");
     await region.getByRole("button", { name: "Отменить предпросмотр", exact: true }).click();
     if (mode === "dark") {

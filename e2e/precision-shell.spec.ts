@@ -25,7 +25,7 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
   const themePreview = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
   await themePreview.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("arctic");
-  await themePreview.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
+  await expect(themePreview.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
   await expect(themePreview.getByRole("textbox", { name: "Название образца", exact: true })).toHaveCSS("color", "rgb(23, 33, 43)");
   await themePreview.getByRole("button", { name: "Отменить предпросмотр", exact: true }).click();
   await expect(themePreview.locator('[data-kaiden-theme="kaiden-precision"]')).toHaveCount(1);
