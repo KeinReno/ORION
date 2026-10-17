@@ -12,7 +12,7 @@ import type { PanelComponentProps } from "../lib/panel-registry";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useSlotContributions } from "../lib/extensions/slot";
-import { ShareGrantSection } from "../components/share-grant-section";
+import { ProjectAccessSection } from "./projects/project-access";
 import { ProjectMaterials } from "./projects/materials";
 import { ProjectTasks } from "./projects/project-tasks";
 
@@ -210,9 +210,7 @@ export function ProjectAccessPanel({ params, api }: PanelComponentProps): React.
     <ViewFrame icon={ShieldCheck} label="Доступ" query={query}>
       {(project) => (
         <PanelBody className="[container-type:inline-size]">
-          <div className="max-w-3xl">
-            <ShareGrantSection workspaceId={query.workspaceId} type="project" id={project.id} />
-          </div>
+          <ProjectAccessSection workspaceId={query.workspaceId} projectId={project.id} />
         </PanelBody>
       )}
     </ViewFrame>
