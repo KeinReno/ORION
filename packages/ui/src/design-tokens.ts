@@ -89,7 +89,8 @@ export function resolveTheme(flag: unknown, theme: unknown): ThemeId {
   return flag === THEME_FOUNDATION_FLAG && theme === "kaiden-precision" ? "kaiden-precision" : "legacy";
 }
 
-export type ThemeVariables = Record<`--kaiden-${string}`, string>;
+/** `--orion-*` carry the accent and status colours that the app's Tailwind classes read (`text-accent-text`, `bg-warning/10`, …). */
+export type ThemeVariables = Record<`--kaiden-${string}` | `--orion-${string}`, string>;
 
 export function themeVariables(theme: ThemeId): ThemeVariables {
   const tokens = theme === "kaiden-precision" ? PRECISION_TOKENS : LEGACY_TOKENS;

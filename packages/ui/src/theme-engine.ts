@@ -122,6 +122,27 @@ export function themeDocumentVariables(theme: ThemeDocument): ThemeVariables {
     variables[`--kaiden-${COLOR_TOKENS[key]}`] = `${parseInt(hex.slice(1, 3), 16)} ${parseInt(hex.slice(3, 5), 16)} ${parseInt(hex.slice(5, 7), 16)}`;
   }
   variables["--kaiden-interactive-selected"] = variables["--kaiden-accent-base"];
+  // The app's Tailwind classes read accent and status colours from `--orion-*`, which used to stay at the dark
+  // defaults under any saved palette (gold labels and amber badges on a light surface, ~1.5:1). A palette now
+  // drives them in its own scope. For the built-in Precision palette these equal the defaults, so it looks the same.
+  const rgb = (hex: string): string => `${parseInt(hex.slice(1, 3), 16)} ${parseInt(hex.slice(3, 5), 16)} ${parseInt(hex.slice(5, 7), 16)}`;
+  const c = parsed.value.colors;
+  variables["--orion-accent"] = rgb(c.accent);
+  variables["--orion-accent-hover"] = rgb(c.accentHover);
+  variables["--orion-accent-foreground"] = rgb(c.accentForeground);
+  variables["--orion-success"] = rgb(c.success);
+  variables["--orion-warning"] = rgb(c.warning);
+  variables["--orion-danger"] = rgb(c.danger);
+  // Inline code in the markdown editor is a pale violet on dark; on a light surface it follows the secondary text.
+  if (parsed.value.baseMode === "light") variables["--orion-code-text"] = rgb(c.textSecondary);
+  variables["--orion-tone-scale"] = parsed.value.baseMode === "light" ? "0.3" : "1"; // calendar tone pills
+  variables["--orion-tag-l"] = parsed.value.baseMode === "light" ? "25%" : "78%"; // hue-coded project/tag labels
+  if (parsed.value.baseMode === "light") {
+    // The dark defaults lighten on hover, which would wash out on a light surface.
+    variables["--orion-success-hover"] = rgb(c.success);
+    variables["--orion-warning-hover"] = rgb(c.warning);
+    variables["--orion-danger-hover"] = rgb(c.danger);
+  }
   return variables;
 }
 

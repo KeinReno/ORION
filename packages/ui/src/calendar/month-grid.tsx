@@ -217,7 +217,7 @@ function WeekRow({
                 sameDay(day, today) ? "border-accent/40 bg-accent/[0.06]" : "border-white/5 hover:border-border",
                 // Days of the neighbouring months are set back by a darker cell and softer events, not by fading the
                 // whole cell: a faded date number stops being readable (contrast < 2:1).
-                !inMonth && "bg-black/30 [&>div:last-child]:opacity-75"
+                !inMonth && "bg-background [&>div:last-child]:opacity-75"
               )}
             >
               <div className="mb-0.5 flex items-center justify-between">

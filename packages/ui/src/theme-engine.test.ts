@@ -96,3 +96,24 @@ describe("built-in presets meet the contrast rules of 04_DESIGN_SYSTEM_THEMES", 
     });
   });
 });
+
+describe("palette drives the app's accent and status colours", () => {
+  it("emits the legacy --orion-* channels from the document", () => {
+    const light = themeDocumentVariables(ARCTIC_THEME);
+    expect(light["--orion-accent"]).toBe("48 92 140");
+    expect(light["--orion-accent-hover"]).toBe("36 71 110");
+    expect(light["--orion-accent-foreground"]).toBe("255 255 255");
+    expect(light["--orion-warning"]).toBe("146 91 16");
+    expect(light["--orion-warning-hover"]).toBe("146 91 16"); // no dark-theme lightening on a light surface
+    expect(light["--orion-tag-l"]).toBe("25%");
+    expect(light["--orion-tone-scale"]).toBe("0.3");
+    expect(themeDocumentVariables(PRECISION_THEME)["--orion-tag-l"]).toBe("78%");
+  });
+  it("leaves Precision exactly at the dark defaults", () => {
+    const dark = themeDocumentVariables(PRECISION_THEME);
+    expect(dark["--orion-accent"]).toBe("201 168 106");
+    expect(dark["--orion-accent-hover"]).toBe("222 192 139");
+    expect([dark["--orion-success"], dark["--orion-warning"], dark["--orion-danger"]]).toEqual(["16 185 129", "245 158 11", "244 63 94"]);
+    expect(dark["--orion-warning-hover"]).toBeUndefined(); // the dark hover defaults stay
+  });
+});

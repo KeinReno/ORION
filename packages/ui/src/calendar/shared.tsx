@@ -143,17 +143,18 @@ export function timeLabel(iso: string): string {
  * card background (the old code hashed a raw `hue` and often produced
  * unreadable low-contrast pills). Each entry is text / fill / border.
  */
+// Text lightness scales with the palette (`--orion-tone-scale`: 1 on dark surfaces, ~0.3 on light ones).
 const PALETTE: { fg: string; bg: string; border: string }[] = [
-  { fg: "hsl(213 96% 82%)", bg: "hsl(213 90% 60% / 0.16)", border: "hsl(213 90% 62% / 0.42)" },
-  { fg: "hsl(160 70% 76%)", bg: "hsl(160 70% 45% / 0.16)", border: "hsl(160 70% 50% / 0.42)" },
-  { fg: "hsl(280 85% 84%)", bg: "hsl(280 80% 65% / 0.16)", border: "hsl(280 80% 68% / 0.42)" },
-  { fg: "hsl(28 96% 76%)", bg: "hsl(28 92% 55% / 0.16)", border: "hsl(28 92% 58% / 0.42)" },
-  { fg: "hsl(342 92% 82%)", bg: "hsl(342 85% 62% / 0.16)", border: "hsl(342 85% 65% / 0.42)" },
-  { fg: "hsl(190 85% 78%)", bg: "hsl(190 82% 50% / 0.16)", border: "hsl(190 82% 55% / 0.42)" },
-  { fg: "hsl(52 90% 74%)", bg: "hsl(52 85% 52% / 0.16)", border: "hsl(52 85% 55% / 0.4)" },
-  { fg: "hsl(255 90% 84%)", bg: "hsl(255 85% 68% / 0.16)", border: "hsl(255 85% 70% / 0.42)" },
-  { fg: "hsl(130 65% 76%)", bg: "hsl(130 60% 45% / 0.16)", border: "hsl(130 60% 50% / 0.42)" },
-  { fg: "hsl(8 92% 78%)", bg: "hsl(8 88% 60% / 0.16)", border: "hsl(8 88% 63% / 0.42)" }
+  { fg: "hsl(213 96% calc(82% * var(--orion-tone-scale, 1)))", bg: "hsl(213 90% 60% / 0.16)", border: "hsl(213 90% 62% / 0.42)" },
+  { fg: "hsl(160 70% calc(76% * var(--orion-tone-scale, 1)))", bg: "hsl(160 70% 45% / 0.16)", border: "hsl(160 70% 50% / 0.42)" },
+  { fg: "hsl(280 85% calc(84% * var(--orion-tone-scale, 1)))", bg: "hsl(280 80% 65% / 0.16)", border: "hsl(280 80% 68% / 0.42)" },
+  { fg: "hsl(28 96% calc(76% * var(--orion-tone-scale, 1)))", bg: "hsl(28 92% 55% / 0.16)", border: "hsl(28 92% 58% / 0.42)" },
+  { fg: "hsl(342 92% calc(82% * var(--orion-tone-scale, 1)))", bg: "hsl(342 85% 62% / 0.16)", border: "hsl(342 85% 65% / 0.42)" },
+  { fg: "hsl(190 85% calc(78% * var(--orion-tone-scale, 1)))", bg: "hsl(190 82% 50% / 0.16)", border: "hsl(190 82% 55% / 0.42)" },
+  { fg: "hsl(52 90% calc(74% * var(--orion-tone-scale, 1)))", bg: "hsl(52 85% 52% / 0.16)", border: "hsl(52 85% 55% / 0.4)" },
+  { fg: "hsl(255 90% calc(84% * var(--orion-tone-scale, 1)))", bg: "hsl(255 85% 68% / 0.16)", border: "hsl(255 85% 70% / 0.42)" },
+  { fg: "hsl(130 65% calc(76% * var(--orion-tone-scale, 1)))", bg: "hsl(130 60% 45% / 0.16)", border: "hsl(130 60% 50% / 0.42)" },
+  { fg: "hsl(8 92% calc(78% * var(--orion-tone-scale, 1)))", bg: "hsl(8 88% 60% / 0.16)", border: "hsl(8 88% 63% / 0.42)" }
 ];
 
 /**
