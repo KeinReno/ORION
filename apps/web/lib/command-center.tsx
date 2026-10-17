@@ -22,10 +22,16 @@ import { useCaptureToList } from "./capture-to-list";
 import { openEntity, openList, openPanel } from "./panel-bus";
 import { selectPaletteResults, type PaletteEntry } from "./palette-results";
 import { panelRegistry } from "./panel-registry";
+import type { ViewRef } from "@orion/shared-types";
+import { ObjectOpenMenu } from "../components/object-open-menu";
 import { useActiveWorkspace } from "./use-active-workspace";
 import { useEnabledModules } from "./use-enabled-modules";
 
+/** The shell button and keyboard shortcut open the same command surface. */
+export function showCommandPalette(): void { window.dispatchEvent(new Event("orion:open-command-palette")); }
+
 interface Command extends PaletteEntry {
+  view?: ViewRef;
   hint?: string;
   icon: LucideIcon;
   run: () => void;
@@ -109,6 +115,11 @@ export function CommandCenter(): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(0);
   const [capture, setCapture] = useState("");
   const [capturePrefill, setCapturePrefill] = useState("");
+  useEffect(() => {
+    const open = (): void => setPaletteOpen(true);
+    window.addEventListener("orion:open-command-palette", open);
+    return () => window.removeEventListener("orion:open-command-palette", open);
+  }, []);
   const [gotoArmed, setGotoArmed] = useState(false);
   const gotoArmedRef = useRef(false);
 
@@ -267,7 +278,8 @@ export function CommandCenter(): React.ReactElement {
           hint: "задача",
           icon: ListTodo,
           entityKey: `task:${task.id}`,
-          run: () => openEntity("task", task.id, task.title)
+          run: () => openEntity("task", task.id, task.title),
+          view: { object: { workspaceId: workspace?.id ?? "", entityType: "task", entityId: task.id }, viewId: "detail" }
         });
       }
     }
@@ -279,7 +291,8 @@ export function CommandCenter(): React.ReactElement {
           hint: "заметка",
           icon: StickyNote,
           entityKey: `note:${note.id}`,
-          run: () => openEntity("note", note.id, note.title)
+          run: () => openEntity("note", note.id, note.title),
+          view: { object: { workspaceId: workspace?.id ?? "", entityType: "note", entityId: note.id }, viewId: "detail" }
         });
       }
     }
@@ -295,11 +308,12 @@ export function CommandCenter(): React.ReactElement {
         serverResult: true,
         entityKey: `${hit.type}:${hit.id}`,
         resultGroup: hit.type,
-        run: () => openEntity(hit.type, hit.id, hit.title)
+        run: () => openEntity(hit.type, hit.id, hit.title),
+        view: { object: { workspaceId: workspace?.id ?? "", entityType: hit.type, entityId: hit.id }, viewId: "detail" }
       });
     }
     return base;
-  }, [tasks, notes, searchHits, disabledModules, isEnabled]);
+  }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id]);
 
   const results = useMemo(() => {
     return selectPaletteResults(commands, query, debouncedQuery);
@@ -358,7 +372,7 @@ export function CommandCenter(): React.ReactElement {
 
   return (
     <>
-      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} size="md">
+      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="md">
         <div className="space-y-3">
           <Input
             autoFocus
@@ -391,12 +405,12 @@ export function CommandCenter(): React.ReactElement {
               results.map((cmd, i) => {
                 const Icon = cmd.icon;
                 return (
-                  <li key={cmd.id}>
+                  <li key={cmd.entityKey ?? cmd.id} className="flex items-center gap-1">
                     <button
                       type="button"
                       onMouseEnter={() => setActiveIndex(i)}
                       onClick={() => runCommand(cmd)}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+                      className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
                         i === activeIndex ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"
                       }`}
                     >
@@ -405,6 +419,7 @@ export function CommandCenter(): React.ReactElement {
                       {cmd.hint ? <span className="text-2xs text-subtle-foreground">{cmd.hint}</span> : null}
                       {i === activeIndex ? <CornerDownLeft className="h-3.5 w-3.5 text-subtle-foreground" /> : null}
                     </button>
+                    {cmd.view ? <ObjectOpenMenu view={cmd.view} title={cmd.label} beforeOpen={() => setPaletteOpen(false)} /> : null}
                   </li>
                 );
               })

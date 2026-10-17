@@ -93,6 +93,8 @@ export interface SidebarRenderApi {
 }
 
 export interface SidebarProps {
+  /** Keep every module icon reachable even when personal folders are collapsed. */
+  allIconsVisible?: boolean;
   /** Registry of modules: each module contributes one entry here. */
   links: SidebarLinkItem[];
   activeHref?: string;
@@ -166,6 +168,7 @@ export function Sidebar({
   onToggleFolder,
   onCreateFolder,
   onMoveLink,
+  allIconsVisible = false,
   position = "left"
 }: SidebarProps): React.ReactElement {
   const [pinned, setPinned] = useState(false);
@@ -609,7 +612,7 @@ export function Sidebar({
           {...dropProps("nav", null)}
         >
           {!grouped
-            ? hasSections
+            ? allIconsVisible ? links.map(renderLink) : hasSections
               ? renderRail()
               : links.map(renderLink)
             : [

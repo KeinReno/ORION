@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-16T08:25:22.529418+00:00",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseRevision": "e71a11f711dfd03305e80ed7a92837a2b541cacd",
+  "unit": {
+    "passed": 803,
+    "files": 103
+  },
+  "integration": {
+    "passed": 11,
+    "files": 3,
+    "suites": [
+      "note-cas",
+      "note-summary",
+      "notes-get-one"
+    ],
+    "database": "isolated 127.0.0.1:5547"
+  },
+  "browser": {
+    "passed": 57,
+    "failed": 0,
+    "productionWeb": "localhost:3110",
+    "api": "localhost:4100"
+  },
+  "typecheck": "passed",
+  "architecture": "passed",
+  "pluginContracts": "included in full unit suite",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": [
+      "CalendarPanel:357",
+      "DocumentsPanel:261"
+    ]
+  },
+  "desktopStaticExport": "passed before final web build",
+  "webProductionBuild": "passed after desktop export",
+  "nativeTauri": "not verified",
+  "physicalMultiMonitor": "not verified",
+  "newScenarios": [
+    "Markdown body/summary/tags preserved",
+    "503 draft retained on wide/narrow/wide resize",
+    "cancel discard prompt",
+    "inactive panel context isolation",
+    "retry and real revision conflict",
+    "empty title navigation guard",
+    "persistent inspector and project selection",
+    "compose remains explicit; exactly one note created",
+    "390px editor/inspector without horizontal overflow"
+  ],
+  "durableDraftStorage": "not added"
+}

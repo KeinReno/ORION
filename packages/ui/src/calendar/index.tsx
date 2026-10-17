@@ -14,11 +14,13 @@ import {
   startOfWeek,
   type CalendarItem,
   type CalendarView,
+  type ItemContextHandler,
   type ReschedulePayload,
   type SlotCreatePayload
 } from "./shared";
 
 export type {
+  ItemContextHandler,
   CalendarItem,
   CalendarView,
   ReschedulePayload,
@@ -31,6 +33,8 @@ export interface CalendarProps {
   view?: CalendarView;
   onViewChange?: (view: CalendarView) => void;
   onItemClick?: (id: string) => void;
+  /** Right click / Menu key / Shift+F10 on a grid item. The consumer owns the menu; Calendar knows no domain commands. */
+  onItemContextMenu?: ItemContextHandler;
   /** Move or resize — time-grid views send `end`, month/agenda send only `start`. */
   onItemReschedule?: (id: string, payload: ReschedulePayload) => void;
   /** Empty slot picked — a day (month) or a time range (week/day). */
@@ -46,6 +50,8 @@ export interface CalendarProps {
   headerExtra?: ReactNode;
   /** Keyboard-focused pill (↑/↓ in the panel). Distinct from the open Sheet. */
   focusedId?: string | null;
+  /** Optional sibling controls in the roomy agenda rows. Grids keep their compact interaction. */
+  renderAgendaItemActions?: (item: CalendarItem) => ReactNode;
 }
 
 const VIEW_OPTIONS = [
@@ -60,11 +66,13 @@ export function Calendar({
   view: controlledView,
   onViewChange,
   onItemClick,
+  onItemContextMenu,
   onItemReschedule,
   onSlotCreate,
   onRangeChange,
   headerExtra,
-  focusedId
+  focusedId,
+  renderAgendaItemActions
 }: CalendarProps): React.ReactElement {
   const [cursor, setCursor] = useState(() => new Date());
   const [uncontrolledView, setUncontrolledView] = useState<CalendarView>("month");
@@ -214,18 +222,20 @@ export function Calendar({
           today={today}
           items={items}
           onItemClick={onItemClick}
+          onItemContextMenu={onItemContextMenu}
           onItemReschedule={onItemReschedule}
           onSlotCreate={onSlotCreate}
           focusedId={focusedId}
         />
       ) : view === "agenda" ? (
-        <Agenda items={items} onItemClick={onItemClick} focusedId={focusedId} />
+        <Agenda items={items} onItemClick={onItemClick} focusedId={focusedId} renderItemActions={renderAgendaItemActions} />
       ) : (
         <TimeGrid
           days={days}
           today={today}
           items={items}
           onItemClick={onItemClick}
+          onItemContextMenu={onItemContextMenu}
           onItemReschedule={onItemReschedule}
           onSlotCreate={onSlotCreate}
           focusedId={focusedId}

@@ -15,10 +15,13 @@ export type AutosaveState = "saving" | "dirty" | "saved" | "error";
 export function AutosaveStatus({
   state,
   explicit = false,
+  errorText = "Не удалось сохранить — черновик сохранён локально",
   className
 }: {
   state: AutosaveState;
   explicit?: boolean;
+  /** Editors without durable local drafts must describe their actual recovery behavior. */
+  errorText?: string;
   className?: string;
 }): React.ReactElement {
   const text = explicit
@@ -26,7 +29,7 @@ export function AutosaveStatus({
     : state === "saving"
       ? "Сохраняю…"
       : state === "error"
-        ? "Не удалось сохранить — черновик сохранён локально"
+        ? errorText
         : state === "dirty"
           ? "Есть несохранённые изменения"
           : "Всё сохранено";

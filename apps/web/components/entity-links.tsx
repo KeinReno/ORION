@@ -26,6 +26,7 @@ import { computeLinkOptions, type EntityLinkOption } from "../lib/entity-link-op
 import { ENTITY_TYPE_ICON, ENTITY_TYPE_LABEL } from "../lib/entity-type-meta";
 import { describeError } from "../lib/error-message";
 import { openEntity } from "../lib/panel-bus";
+import { ObjectOpenMenu } from "./object-open-menu";
 
 const TYPE_ICON = ENTITY_TYPE_ICON;
 const TYPE_LABEL = ENTITY_TYPE_LABEL;
@@ -415,6 +416,7 @@ export function EntityLinksSection({
         <ul className="flex flex-wrap gap-1.5">
           {others.map((other) => {
             const Icon = TYPE_ICON[other.type];
+            const view = { object: { workspaceId: workspaceId ?? "", entityType: other.type, entityId: other.id }, viewId: "detail" };
             return (
               <li
                 key={other.link.id}
@@ -430,6 +432,7 @@ export function EntityLinksSection({
                   <span className="max-w-48 truncate">{other.title || "Без названия"}</span>
                   <span className="text-subtle-foreground">{TYPE_LABEL[other.type]}</span>
                 </button>
+                <ObjectOpenMenu view={view} title={other.title} />
                 <IconButton
                   label="Убрать связь"
                   size="sm"

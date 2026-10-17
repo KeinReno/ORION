@@ -66,6 +66,8 @@ model UserPreference {
   id                   String   @id @default(uuid())
   userId               String   @unique
   theme                String   @default("system")
+  customTheme          Json?
+  customThemeEnabled   Boolean  @default(false)
   accent               String   @default("violet")
   density              String   @default("comfortable")
   /// "none" | "aurora" | "grid" | "liquid-ether" | "light-pillar" | "dark-veil" | "shape-waves"

@@ -24,16 +24,33 @@ module.exports = {
        * same as the reference library.
        */
       colors: {
-        background: "#0a0a0c",
-        panel: "#0d0d11",
-        card: "#141419",
-        "card-hover": "#1a1a21",
-        border: "#2c2c35",
-        "border-strong": "#3c3c47",
-        foreground: "#f4f4f5",
-        "muted-foreground": "#a1a1aa",
+        // KAIDEN v1: additive bridge; existing utility names keep their legacy values.
+        "ui-button": "rgb(var(--kaiden-button-bg) / <alpha-value>)",
+        "ui-button-foreground": "rgb(var(--kaiden-button-fg) / <alpha-value>)",
+        "ui-accent-hover": "rgb(var(--kaiden-accent-hover) / <alpha-value>)",
+        "ui-focus": "rgb(var(--kaiden-focus-ring) / <alpha-value>)",
+        "ui-header": "rgb(var(--kaiden-panel-header-bg) / <alpha-value>)",
+        "ui-primary": "rgb(var(--kaiden-text-primary) / <alpha-value>)",
+        "ui-secondary": "rgb(var(--kaiden-text-secondary) / <alpha-value>)",
+        "ui-subtle": "rgb(var(--kaiden-text-subtle) / <alpha-value>)",
+        "ui-tint": "rgb(var(--kaiden-tint-base) / <alpha-value>)",
+        "ui-success": "rgb(var(--kaiden-status-success) / <alpha-value>)",
+        "ui-danger": "rgb(var(--kaiden-status-danger) / <alpha-value>)",
+        "ui-border": "rgb(var(--kaiden-border-default) / <alpha-value>)",
+        "ui-border-strong": "rgb(var(--kaiden-border-strong) / <alpha-value>)",
+        "ui-hover": "rgb(var(--kaiden-bg-hover) / <alpha-value>)",
+        "ui-overlay": "rgb(var(--kaiden-overlay-bg) / <alpha-value>)",
+        "ui-overlay-border": "rgb(var(--kaiden-overlay-border) / <alpha-value>)",
+        background: "rgb(var(--orion-color-canvas, 10 10 12) / <alpha-value>)",
+        panel: "rgb(var(--orion-color-surface, 13 13 17) / <alpha-value>)",
+        card: "rgb(var(--orion-color-elevated, 20 20 25) / <alpha-value>)",
+        "card-hover": "rgb(var(--orion-color-hover, 26 26 33) / <alpha-value>)",
+        border: "rgb(var(--orion-color-border, 44 44 53) / <alpha-value>)",
+        "border-strong": "rgb(var(--orion-color-border-strong, 60 60 71) / <alpha-value>)",
+        foreground: "rgb(var(--orion-color-text, 244 244 245) / <alpha-value>)",
+        "muted-foreground": "rgb(var(--orion-color-secondary, 161 161 170) / <alpha-value>)",
         // Was #71717a (4.0:1 on the panel — below the 4.5:1 AA floor for small text); 5.4:1 now.
-        "subtle-foreground": "#8a8a94",
+        "subtle-foreground": "rgb(var(--orion-color-subtle, 138 138 148) / <alpha-value>)",
         accent: "rgb(var(--orion-accent) / <alpha-value>)",
         "accent-hover": "rgb(var(--orion-accent-hover) / <alpha-value>)",
         // Text ON an accent fill (white, or near-black for the light green/amber accents).
@@ -57,8 +74,13 @@ module.exports = {
         micro: ["var(--font-micro)", { lineHeight: "1rem", letterSpacing: "0.06em", fontWeight: "500" }]
       },
       spacing: {
+        "ui-panel": "var(--kaiden-panel-padding)",
+        "ui-panel-gap": "var(--kaiden-panel-gap)",
         row: "var(--orion-row-py)",
         "card-row": "var(--orion-card-row-py)"
+      },
+      borderRadius: {
+        "ui-button": "var(--kaiden-button-radius)"
       },
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },

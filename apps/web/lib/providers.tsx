@@ -9,6 +9,7 @@ import { CrossWindowSync } from "./cross-window-sync-provider";
 import { NamespacedStorage, nodeStoragePrefix, readNodeMark } from "./node-mode";
 import { PreferencesEffect } from "./preferences-effect";
 import { createIdbReplicaStorage } from "./replica-idb";
+import { ApplicationTheme } from "./application-theme";
 
 export function Providers({ children }: { children: ReactNode }): React.ReactElement {
   // ТЗ-06: локальная копия гибридных пространств лежит в IndexedDB (если она доступна).
@@ -23,7 +24,7 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
           so the login screen never fires a doomed preferences request. */}
       <PreferencesEffect />
       <CrossWindowSync />
-      <ToastProvider>{children}</ToastProvider>
+      <ApplicationTheme><ToastProvider>{children}</ToastProvider></ApplicationTheme>
     </CoreProvider>
   );
 }

@@ -24,7 +24,7 @@ export { parseQuickEntry, type QuickEntryDraft } from "../finance-quick-entry";
 export { formatDayTitle, formatMoney, fromDatetimeLocal, fromKopecks, parseMoneyInput, projectColor, relativeTime, shortDate, shortDateTime, toDatetimeLocal, toKopecks } from "../format";
 export { buildHeatmapWeeks, buildWeek, entryDaysByHabit, habitSwatchColor, streakLabel, type WeekDay, WEEKDAY_SHORT, weekdayTitle } from "../habit-days";
 // `openEntity` is the one way to jump to a record; `focusTask` stays for existing callers.
-export { focusTask, openEntity, openPanel } from "../panel-bus";
+export { focusTask, openEntity, openObject, openPanel } from "../panel-bus";
 export { projectSwatchColor } from "../project-colors";
 export { dayOffset, planDates, type PlanGroup, planGroups, type PlanRow, timelineRange, weekTicks } from "../project-plan";
 export { daysUntil, type PlanStepState, planStrip, pluralDays } from "../project-status";

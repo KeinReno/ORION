@@ -25,6 +25,7 @@ export function WorkspaceSwitcher({
   groups,
   active,
   expanded,
+  alwaysList = false,
   onSelect,
   onOpenInNewWindow,
   onOpenSpaces
@@ -32,6 +33,8 @@ export function WorkspaceSwitcher({
   groups: SwitcherGroup[];
   active: Workspace | undefined;
   expanded: boolean;
+  /** The workspace context keeps its searchable list even with a single space. */
+  alwaysList?: boolean;
   onSelect: (workspaceId: string) => void;
   onOpenInNewWindow: (workspaceId: string) => void;
   /** Fallback with a single workspace: the full page to create or pick others. */
@@ -64,7 +67,7 @@ export function WorkspaceSwitcher({
           <button
             ref={ref}
             type="button"
-            onClick={order.length < 2 ? onOpenSpaces : toggle}
+            onClick={order.length < 2 && !alwaysList ? onOpenSpaces : toggle}
             aria-haspopup="listbox"
             aria-expanded={open}
             title={`Пространство: ${active?.name ?? "—"}. Сменить`}

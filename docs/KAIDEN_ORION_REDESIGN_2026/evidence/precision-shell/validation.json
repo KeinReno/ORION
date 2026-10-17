@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-16",
+  "branch": "redesign/kaiden-foundation-20261015",
+  "baseCommit": "da2bb44",
+  "unit": {
+    "passed": 800,
+    "files": 102
+  },
+  "targetedPostgresIntegration": {
+    "passed": 11,
+    "files": [
+      "spheres.integration.test.ts",
+      "user-hidden-modules.integration.test.ts",
+      "plugin-gates.integration.test.ts"
+    ],
+    "port": 5547
+  },
+  "productionBrowserSuite": {
+    "passed": 53,
+    "log": "tmp/redesign/precision-production-browser.log"
+  },
+  "finalMenuProductionRegression": {
+    "passed": 2,
+    "log": "tmp/redesign/precision-menu-production.log"
+  },
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 2
+  },
+  "architecture": "passed",
+  "pluginContracts": {
+    "passed": 10
+  },
+  "webBuild": "passed",
+  "desktopExport": "passed",
+  "nativeTauri": "not verified",
+  "fullBackendIntegrationSuite": "not completed",
+  "primaryCheckout": "untouched"
+}

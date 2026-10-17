@@ -1,11 +1,12 @@
 "use client";
 
 import { useCreateEvent, useDocuments, useNotes, useRenameOrMoveDocument, useUploadDocuments } from "@orion/core-react";
-import type { ProjectActivity, ProjectDetail } from "@orion/shared-types";
+import type { ProjectActivity, ProjectDetail, ViewRef } from "@orion/shared-types";
 import { Button, DropdownMenu, EmptyState, Input, Modal, PanelSection, SegmentedControl, Skeleton, cx, useToast } from "@orion/ui";
 import { CalendarDays, FileText, FolderOpen, Package, Plus, Receipt } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FilterChip } from "../../components/filter-chip";
+import { ObjectOpenMenu } from "../../components/object-open-menu";
 import { describeError } from "../../lib/error-message";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../../lib/format";
 import { openEntity, openPanel } from "../../lib/panel-bus";
@@ -26,6 +27,7 @@ const KIND_ICON: Record<Kind, React.ComponentType<{ className?: string }>> = {
 };
 
 interface Material {
+  view?: ViewRef;
   key: string;
   kind: Kind;
   title: string;
@@ -96,11 +98,11 @@ export function ProjectMaterials({
     const out: Material[] = [];
     for (const note of notes ?? []) {
       if (note.projectId !== project.id) continue;
-      out.push({ key: `note:${note.id}`, kind: "note", title: note.title || "Без заголовка", at: note.editedAt ?? note.updatedAt, open: () => openEntity("note", note.id) });
+      out.push({ key: `note:${note.id}`, kind: "note", title: note.title || "Без заголовка", at: note.editedAt ?? note.updatedAt, open: () => openEntity("note", note.id), view: { object: { workspaceId: workspaceId ?? "", entityType: "note", entityId: note.id }, viewId: "detail" } });
     }
     for (const doc of documents ?? []) {
       if (doc.projectId !== project.id || doc.kind !== "file" || doc.deletedAt) continue;
-      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id) });
+      out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id), view: { object: { workspaceId: workspaceId ?? "", entityType: "document", entityId: doc.id }, viewId: "detail" } });
     }
     for (const item of project.activity) {
       const kind = activityKind(item.type);
@@ -117,7 +119,7 @@ export function ProjectMaterials({
       });
     }
     return out.sort((a, b) => b.at.localeCompare(a.at));
-  }, [notes, documents, project.activity, project.id]);
+  }, [notes, documents, project.activity, project.id, workspaceId]);
 
   const counts = useMemo(() => {
     const c: Record<Kind, number> = { note: 0, file: 0, event: 0, operation: 0, stock: 0 };
@@ -262,11 +264,11 @@ function Column({ title, items, empty, showKind }: { title: string; items: Mater
 function MaterialRow({ item, showKind }: { item: Material; showKind?: boolean }): React.ReactElement {
   const Icon = KIND_ICON[item.kind];
   return (
-    <li>
+    <li className="flex items-center gap-1">
       <button
         type="button"
         onClick={item.open}
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-row text-left transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-row text-left transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
         <span className={cx("flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.05] text-muted-foreground")}>
           <Icon className="h-3.5 w-3.5" />
@@ -275,6 +277,7 @@ function MaterialRow({ item, showKind }: { item: Material; showKind?: boolean })
         {showKind ? <span className="shrink-0 text-micro text-subtle-foreground">{KIND_LABEL[item.kind]}</span> : null}
         <span className="shrink-0 text-micro text-subtle-foreground">{relativeTime(item.at)}</span>
       </button>
+      {item.view ? <ObjectOpenMenu view={item.view} title={item.title} /> : null}
     </li>
   );
 }

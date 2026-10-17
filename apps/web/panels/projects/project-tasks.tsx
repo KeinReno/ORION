@@ -5,6 +5,7 @@ import type { Milestone, Project, Task, TaskStatus, UpdateTaskInput } from "@ori
 import { Button, ConfirmDialog, EmptyState, PanelSection, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
 import { ListTodo, Milestone as MilestoneIcon, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useObjectNavigation } from "../../lib/use-object-navigation";
 import { groupTasksByMilestone } from "../../lib/project-focus";
 import { shortDate } from "../../lib/format";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
@@ -39,7 +40,7 @@ export function ProjectTasks({
   loading,
   timeOn,
   openTaskId,
-  onOpenTask,
+  onOpenTask: navigateToTask,
   onToggle,
   onAddTask,
   onChanged
@@ -61,6 +62,10 @@ export function ProjectTasks({
   onChanged: () => void;
 }): React.ReactElement {
   const { toast } = useToast();
+  const allowObjectNavigation = useObjectNavigation(workspaceId);
+  function onOpenTask(id: string | null): void {
+    if (allowObjectNavigation(id)) navigateToTask(id);
+  }
   const updateTask = useUpdateTask(workspaceId);
   const deleteTask = useDeleteTask(workspaceId);
   const { isEnabled: isPluginEnabled } = useEnabledPlugins();
@@ -93,9 +98,10 @@ export function ProjectTasks({
   const showDetail = opened !== null;
   const hideMain = showDetail && !split;
 
-  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<void> {
-    await updateTask.mutateAsync({ taskId, input: patch });
+  async function saveTaskPatch(taskId: string, patch: UpdateTaskInput): Promise<Task> {
+    const saved = await updateTask.mutateAsync({ taskId, input: patch });
     onChanged();
+    return saved;
   }
   function setStatus(task: Task, status: TaskStatus): void {
     if (task.status === status) return;
@@ -116,7 +122,7 @@ export function ProjectTasks({
     setPendingDelete(null);
     deleteTask.mutate(task.id, {
       onSuccess: () => {
-        if (openTaskId === task.id) onOpenTask(null);
+        if (openTaskId === task.id) navigateToTask(null);
         onChanged();
         toast({ title: "Задача удалена" });
       },

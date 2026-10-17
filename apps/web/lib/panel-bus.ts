@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { SearchableEntityType } from "@orion/shared-types";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { ObjectOpenMode, SearchableEntityType, ViewRef } from "@orion/shared-types";
 import { createIntentChannel, type IntentChannel } from "./intent-channel";
 import { getActiveWorkspaceId } from "./use-active-workspace";
 
@@ -20,17 +20,36 @@ import { getActiveWorkspaceId } from "./use-active-workspace";
 interface PanelBus {
   /** `title` names the dock tab when the panel is created (instanced panels, e.g. a project's name). */
   openPanel: (panelId: string, title?: string) => void;
+  openObject?: (view: ViewRef, mode: ObjectOpenMode, title?: string) => void;
 }
 
 let bus: PanelBus | null = null;
+const busListeners = new Set<() => void>();
+const subscribeBus = (listener: () => void) => { busListeners.add(listener); return () => { busListeners.delete(listener); }; };
 
-export function registerPanelBus(impl: PanelBus): void {
+export function registerPanelBus(impl: PanelBus): () => void {
   bus = impl;
+  for (const listener of busListeners) listener();
+  return () => {
+    if (bus !== impl) return;
+    bus = null;
+    for (const listener of busListeners) listener();
+  };
+}
+
+/** Detached single-panel windows have no dock host: don't offer commands they cannot execute. */
+export function useObjectOpeningAvailable(): boolean {
+  return useSyncExternalStore(subscribeBus, () => Boolean(bus?.openObject), () => false);
 }
 
 /** Open (or focus, if already open) a panel by id — e.g. from a sidebar click or a redirect stub. */
 export function openPanel(panelId: string, title?: string): void {
   bus?.openPanel(panelId, title);
+}
+
+/** Explicit standalone opening. Existing openEntity/focus behavior stays compatible. */
+export function openObject(view: ViewRef, mode: ObjectOpenMode = "tab", title?: string): void {
+  bus?.openObject?.(view, mode, title);
 }
 
 /**

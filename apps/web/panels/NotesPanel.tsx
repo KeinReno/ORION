@@ -24,7 +24,6 @@ import {
   PanelShell,
   SegmentedControl,
   Select,
-  Sheet,
   Skeleton,
   cx,
   isTypingTarget,
@@ -57,6 +56,8 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useViewState } from "../lib/use-view-state";
+import { notesViewStateSchema } from "@orion/shared-types";
 import { noteNumberLabel } from "@orion/shared-types";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
@@ -229,6 +230,29 @@ export function NotesPanel(): React.ReactElement {
   const composing = selectedId === NEW_NOTE;
   usePublishResourceContext(selected ? { type: "note", id: selected.id, title: selected.title } : null);
   const listHidden = twoPane && listCollapsed && (composing || selected !== null);
+  // Narrow panel: the open note replaces the list, so the list's own controls step aside until "К заметкам".
+  const editorOnly = !twoPane && !trash && (composing || selected !== null);
+  const toolbarHidden = listHidden || editorOnly;
+
+  // Filters, sort and the open note survive a restart (never the text or the search query). A restored
+  // id is only an address: if the note is gone or not visible to this user, say so and open nothing.
+  const restoredView = useViewState("notes", notesViewStateSchema, workspace?.id,
+    { view, sort, groupByProject, tagFilters, tagMode, projectFilter, pinnedOnly, selectedId: selectedId === NEW_NOTE ? null : selectedId },
+    (saved) => {
+      setView(saved.view); setSort(saved.sort); setGroupByProject(projectsOn && saved.groupByProject); setTagFilters(saved.tagFilters);
+      // The earlier "Projects is off" reset runs before this restore; normalize here so the saved filter cannot come back.
+      setTagMode(saved.tagMode); setProjectFilter(projectsOn ? saved.projectFilter : null); setPinnedOnly(saved.pinnedOnly);
+      if (saved.selectedId) { selectedIdRef.current = saved.selectedId; setSelectedId(saved.selectedId); }
+    });
+  const staleChecked = useRef(false);
+  useEffect(() => {
+    if (staleChecked.current || !restoredView || !notes || isLoading) return;
+    staleChecked.current = true;
+    if (restoredView.selectedId && !notes.some((n) => n.id === restoredView.selectedId)) {
+      selectedIdRef.current = null; setSelectedId(null);
+      toast({ title: "Прежняя заметка недоступна", description: "Она удалена, перемещена или у вас больше нет доступа." });
+    }
+  }, [restoredView, notes, isLoading, toast]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
@@ -346,7 +370,7 @@ export function NotesPanel(): React.ReactElement {
 
   const list = (
     <div className="orion-scroll flex-1 overflow-y-auto p-3">
-      {!trash && (activeView || allTags.length > 0 || (projectList ?? []).length > 0) ? (
+      {!trash && (activeView || (projectList ?? []).length > 0) ? (
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
           {activeView ? (
             <ExtensionSlot
@@ -383,32 +407,34 @@ export function NotesPanel(): React.ReactElement {
               </FilterChip>
             </>
           ) : null}
-          {allTags.length > 0 ? (
-            <>
-              <FilterChip active={tagFilters.length === 0} onClick={() => setTagFilters([])}>
-                Все
+        </div>
+      ) : null}
+      {!trash && allTags.length > 0 ? (
+        <div className="mb-2 flex items-center gap-1 px-1">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto py-0.5" role="group" aria-label="Фильтр по тегам">
+            <FilterChip active={tagFilters.length === 0} onClick={() => setTagFilters([])}>
+              Все
+            </FilterChip>
+            {allTags.map((tag) => (
+              <FilterChip key={tag} active={tagFilters.includes(tag)} onClick={() => toggleTagFilter(tag)} color={tag}>
+                {tag}
               </FilterChip>
-              {allTags.map((tag) => (
-                <FilterChip key={tag} active={tagFilters.includes(tag)} onClick={() => toggleTagFilter(tag)} color={tag}>
-                  {tag}
-                </FilterChip>
-              ))}
-              {tagFilters.length >= 2 ? (
-                <SegmentedControl<"any" | "all">
-                  value={tagMode}
-                  onChange={setTagMode}
-                  size="sm"
-                  options={[
-                    { value: "any", label: "ИЛИ" },
-                    { value: "all", label: "И" }
-                  ]}
-                />
-              ) : null}
-              <IconButton label="Управление тегами" size="sm" onClick={() => setTagManagerOpen(true)}>
-                <Tags className="h-4 w-4" />
-              </IconButton>
-            </>
+            ))}
+          </div>
+          {tagFilters.length >= 2 ? (
+            <SegmentedControl<"any" | "all">
+              value={tagMode}
+              onChange={setTagMode}
+              size="sm"
+              options={[
+                { value: "any", label: "ИЛИ" },
+                { value: "all", label: "И" }
+              ]}
+            />
           ) : null}
+          <IconButton label="Управление тегами" size="sm" onClick={() => setTagManagerOpen(true)}>
+            <Tags className="h-4 w-4" />
+          </IconButton>
         </div>
       ) : null}
       {filtersOn > 0 && !trash ? (
@@ -648,6 +674,7 @@ export function NotesPanel(): React.ReactElement {
       <NoteEditor
         key={`${selected?.id ?? NEW_NOTE}:${editorReloadKey}`}
         note={selected}
+        compact={!twoPane}
         workspaceId={workspace?.id}
         projects={isEnabled("projects") ? (projectList ?? []) : undefined}
         busy={createNote.isPending}
@@ -721,8 +748,8 @@ export function NotesPanel(): React.ReactElement {
             </IconButton>
           )
         ) : null}
-        {!listHidden ? (
-          <div className="relative flex-1 sm:max-w-xs">
+        {!toolbarHidden ? (
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input
               value={query}
@@ -735,7 +762,7 @@ export function NotesPanel(): React.ReactElement {
             />
           </div>
         ) : null}
-        {activeView && !listHidden ? (
+        {activeView && !toolbarHidden ? (
           <SegmentedControl<SortKey>
             value={sort}
             onChange={setSort}
@@ -747,7 +774,7 @@ export function NotesPanel(): React.ReactElement {
             ]}
           />
         ) : null}
-        {!listHidden ? (
+        {!toolbarHidden ? (
           <SegmentedControl<NoteView>
             value={view}
             onChange={(next) => {
@@ -768,26 +795,13 @@ export function NotesPanel(): React.ReactElement {
       <ReplicaBanner workspaceId={workspace?.id} />
 
       <div ref={wrapRef} className="flex min-h-0 flex-1">
-        {trash ? (
-          <div className="flex min-w-0 flex-1 flex-col">{list}</div>
-        ) : twoPane ? (
-          <>
-            <div className={cx("shrink-0 flex-col border-r border-border", listHidden ? "hidden" : "flex w-[20rem]")}>{list}</div>
-            <div className="min-w-0 flex-1">{editor}</div>
-          </>
-        ) : (
-          <>
-            <div className="flex min-w-0 flex-1 flex-col">{list}</div>
-            <Sheet
-              open={composing || Boolean(selected)}
-              onClose={() => selectNote(null)}
-              title={composing ? "Новая заметка" : "Заметка"}
-              bare
-            >
-              {editor}
-            </Sheet>
-          </>
-        )}
+        <div className={cx("min-w-0 flex-col", twoPane && !trash ? "w-[20rem] shrink-0 border-r border-border" : "flex-1",
+          listHidden || (!twoPane && !trash && (composing || selected)) ? "hidden" : "flex")}>
+          {list}
+        </div>
+        <div className={cx("min-h-0 min-w-0 flex-1", (trash || (!twoPane && !composing && !selected)) && "hidden")}>
+          {editor}
+        </div>
       </div>
 
       <ConfirmDialog
