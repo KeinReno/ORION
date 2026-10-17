@@ -33,8 +33,12 @@ html[data-orion-design="precision"] {
   --orion-success-hover: 52 211 153;
   --orion-warning: 245 158 11;
   --orion-warning-hover: 251 191 36;
-  --orion-danger: 244 63 94;
-  --orion-danger-hover: 251 113 133;
+  /* Red is two tokens: `--orion-danger` is for text and tints (`text-destructive`, `bg-destructive/10`) and is light
+     enough for 4.5:1 on the dark surfaces even over its own 15% tint; `--orion-danger-fill` is a solid fill that
+     carries white text (the unread badge), dark enough for 4.5:1 under white. One red could not do both. */
+  --orion-danger: 251 113 133;
+  --orion-danger-hover: 253 164 175;
+  --orion-danger-fill: 207 66 77;
 
   /* Type scale (docs/HISTORY.md). Compact overrides live on
      html[data-density="compact"] so density is not only html font-size. */

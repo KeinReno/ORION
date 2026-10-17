@@ -60,6 +60,8 @@ module.exports = {
         "accent-text": "rgb(var(--orion-accent-hover) / <alpha-value>)",
         destructive: "rgb(var(--orion-danger) / <alpha-value>)",
         "destructive-hover": "rgb(var(--orion-danger-hover) / <alpha-value>)",
+        // Solid red under white text — see --orion-danger-fill in globals.css.
+        "destructive-fill": "rgb(var(--orion-danger-fill) / <alpha-value>)",
         success: "rgb(var(--orion-success) / <alpha-value>)",
         "success-hover": "rgb(var(--orion-success-hover) / <alpha-value>)",
         warning: "rgb(var(--orion-warning) / <alpha-value>)",

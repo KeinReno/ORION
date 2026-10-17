@@ -116,6 +116,17 @@ export function allDayAnchor(iso: string): Date {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+/**
+ * The inverse of `allDayAnchor`: a LOCAL calendar day → the UTC-midnight ISO
+ * instant the all-day contract stores. Sending `startOfDay(day).toISOString()`
+ * (local midnight) instead is wrong for every viewer east of UTC — Moscow's
+ * midnight on the 27th is 21:00 UTC on the 26th, and the server's UTC-date
+ * snap then files the event a day early.
+ */
+export function allDayDateISO(day: Date): string {
+  return new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate())).toISOString();
+}
+
 export function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }

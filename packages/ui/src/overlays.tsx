@@ -73,6 +73,29 @@ function useTopmostOverlay(open: boolean): boolean {
   return open && idRef.current !== null && overlayStack[overlayStack.length - 1] === idRef.current;
 }
 
+/**
+ * The element that had focus when the overlay opened, captured DURING THE
+ * RENDER in which `shown` flips to true. Reading `document.activeElement`
+ * later, in the open effect, was too late: a child with `autoFocus` (the
+ * task/event/budget forms' first input) is focused during commit, so the
+ * "opener" recorded was that input — gone after close — and focus fell to
+ * <body> instead of returning to «Новая задача» (live U12 keyboard pass).
+ */
+function useOpenerCapture(shown: boolean): React.MutableRefObject<HTMLElement | null> {
+  const openerRef = useRef<HTMLElement | null>(null);
+  const wasShown = useRef(false);
+  if (shown && !wasShown.current && typeof document !== "undefined") {
+    openerRef.current = document.activeElement as HTMLElement | null;
+  }
+  wasShown.current = shown;
+  return openerRef;
+}
+
+/** Focus the container only if nothing inside it (an autoFocus field) already has focus. */
+function focusInto(container: HTMLElement | null): void {
+  if (container && !container.contains(document.activeElement)) container.focus();
+}
+
 function restoreOpener(el: HTMLElement | null): void {
   if (!el?.isConnected) return;
   // Hidden dockview tabs are display:none — focusing the opener there would
@@ -142,7 +165,8 @@ export function Modal({
   description,
   children,
   footer,
-  size = "md"
+  size = "md",
+  returnFocus = true
 }: {
   open: boolean;
   onClose: () => void;
@@ -151,15 +175,21 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   size?: ModalSize;
+  /**
+   * Put focus back on the opener when the dialog closes (the default). A launcher whose actions open something
+   * else (the command palette) turns it off: focus jumping back would re-activate the dock group the palette was
+   * called from, and the next «Открыть рядом» would land beside the wrong panel.
+   */
+  returnFocus?: boolean;
 }): React.ReactElement | null {
   const mounted = useMounted();
   const themeScope = useThemeScopeProps();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
   const labelId = useId();
   const fade = useMotionDuration(0.13);
   const pop = useMotionDuration(0.14);
   const shown = useOverlayOpen(open);
+  const openerRef = useOpenerCapture(shown);
   const isTop = useTopmostOverlay(shown);
 
   useEscapeKey(onClose, isTop);
@@ -167,16 +197,16 @@ export function Modal({
 
   useEffect(() => {
     if (!shown) return;
-    openerRef.current = document.activeElement as HTMLElement | null;
+    const opener = openerRef.current;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
-    const raf = requestAnimationFrame(() => dialogRef.current?.focus());
+    const raf = requestAnimationFrame(() => focusInto(dialogRef.current));
     return () => {
       document.body.style.overflow = overflow;
       cancelAnimationFrame(raf);
-      restoreOpener(openerRef.current);
+      if (returnFocus) restoreOpener(opener);
     };
-  }, [shown]);
+  }, [shown, openerRef, returnFocus]);
 
   if (!mounted) return null;
 
@@ -251,28 +281,28 @@ export function Sheet({
   const mounted = useMounted();
   const themeScope = useThemeScopeProps();
   const panelRef = useRef<HTMLDivElement>(null);
-  const openerRef = useRef<HTMLElement | null>(null);
   // Same as Modal: the title names the dialog for screen readers (and for getByRole(..., { name })).
   const labelId = useId();
   const fade = useMotionDuration(0.15);
   const slide = useMotionDuration(0.2);
   const shown = useOverlayOpen(open);
+  const openerRef = useOpenerCapture(shown);
   const isTop = useTopmostOverlay(shown);
   useEscapeKey(onClose, isTop);
   useFocusTrap(panelRef, isTop);
 
   useEffect(() => {
     if (!shown) return;
-    openerRef.current = document.activeElement as HTMLElement | null;
+    const opener = openerRef.current;
     const { overflow } = document.body.style;
     document.body.style.overflow = "hidden";
-    const raf = requestAnimationFrame(() => panelRef.current?.focus());
+    const raf = requestAnimationFrame(() => focusInto(panelRef.current));
     return () => {
       document.body.style.overflow = overflow;
       cancelAnimationFrame(raf);
-      restoreOpener(openerRef.current);
+      restoreOpener(opener);
     };
-  }, [shown]);
+  }, [shown, openerRef]);
 
   if (!mounted) return null;
 
