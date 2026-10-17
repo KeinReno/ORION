@@ -162,10 +162,10 @@ export function ThemePreview(): React.ReactElement {
           {EDITABLE_COLORS.map(({ key, label }) => <label key={key} className="block space-y-1" htmlFor={`${ids}-${key}`}>
             <span className="text-label">{label}</span>
             <span className="flex items-center gap-2">
-              <input id={`${ids}-${key}`} name={`theme-color-${key}`} type="color" value={theme.colors[key]}
+              <input id={`${ids}-${key}`} name={`theme-color-${key}`} type="color" aria-label={label} value={theme.colors[key]}
                 className="h-9 w-14 shrink-0 cursor-pointer rounded-lg border border-ui-border bg-transparent p-1"
                 onChange={event => { ++importSequence.current; setImporting(false); editColor(key, event.target.value); }} />
-              <span className="font-mono text-label text-muted-foreground">{theme.colors[key]}</span>
+              <span aria-hidden="true" className="font-mono text-label text-muted-foreground">{theme.colors[key]}</span>
             </span>
           </label>)}
         </div>
