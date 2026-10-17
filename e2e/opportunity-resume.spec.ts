@@ -125,7 +125,7 @@ test("a stale window cannot silently overwrite the selection; an unsaved form bl
 
   // the second window still has the old revision
   await other.getByRole("button", { name: "Выбрать активным резюме «Резюме v02»" }).click();
-  await expect(other.getByRole("alert")).toBeVisible();
+  await expect(other.getByRole("alert").filter({ hasText: "Профиль изменён в другом окне" })).toBeVisible();
   await other.getByRole("button", { name: "Обновить профиль" }).click();
   await expect(activeSection(other).getByText("Резюме v01", { exact: true })).toBeVisible();
   await second.close();

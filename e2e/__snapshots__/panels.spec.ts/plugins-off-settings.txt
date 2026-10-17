@@ -7,6 +7,7 @@ button: О приложении
 button: Плагины
 button: Пространство
 button: Профиль
+button: Сеть и устройства
 button: Сохранить
 button: Сферы
 button: Уведомления
