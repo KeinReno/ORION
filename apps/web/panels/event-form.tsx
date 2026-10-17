@@ -4,7 +4,7 @@ import type { Event, Project, RecurrenceSpec } from "@orion/shared-types";
 import { Button, Input, PALETTE_SWATCHES, Select, Textarea } from "@orion/ui";
 import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { fromDateInput, toDateInput } from "../lib/date-input";
+import { toDateInput } from "../lib/date-input";
 import { ExtensionSlot } from "../lib/extensions/slot";
 import { fromDatetimeLocal, toDatetimeLocal } from "../lib/format";
 
