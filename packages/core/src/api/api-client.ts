@@ -32,6 +32,10 @@ import {
   type LanPinAccount
 } from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
+import { policySchema, policyReportSchema, tickResultSchema, type CreatePolicyInput, type PolicyActionInput } from "@orion/shared-types";
+import { connectionSchema, createdConnectionSchema, attemptSchema, attemptPageSchema, type CreateConnectionInput, type ConnectionActionInput, type CreateAttemptInput, type ApproveAttemptInput, type CancelAttemptInput, type ReconcileAttemptInput } from "@orion/shared-types";
+import { assessmentSchema, assessmentPageSchema, assistantStatusSchema, draftSchema, draftPageSchema, dryRunSchema, type CreateAssessmentInput, type CreateDraftInput, type UpdateDraftInput, type ReviewDraftInput, type RejectDraftInput } from "@orion/shared-types";
+import { hhHistoryPageSchema, type HhHistoryQuery, type UpdateOpportunityFactInput, type ArchiveOpportunityItemInput, type UpdateOpportunityTrackInput } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
 import {
@@ -2202,6 +2206,39 @@ export class ApiClient {
   createOpportunityProfile(ws: string, input: CreateOpportunityProfileInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles`, input, opportunityProfileSchema); }
   getOpportunityProfile(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-profiles/${id}`, undefined, opportunityProfileDetailSchema); }
   updateOpportunityProfile(ws: string, id: string, input: UpdateOpportunityProfileInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}`, input, opportunityProfileSchema); }
+  listManagerPolicies(ws: string) { return this.request("GET", `/workspaces/${ws}/opportunity-manager/policies`, undefined, z.array(policySchema)); }
+  createManagerPolicy(ws: string, input: CreatePolicyInput) { return this.request("POST", `/workspaces/${ws}/opportunity-manager/policies`, input, policySchema); }
+  managerPolicyReport(ws: string, id: string, cursor?: string) { return this.request("GET", `/workspaces/${ws}/opportunity-manager/policies/${id}/report${buildQuery({ cursor })}`, undefined, policyReportSchema); }
+  runManagerPolicy(ws: string, id: string) { return this.request("POST", `/workspaces/${ws}/opportunity-manager/policies/${id}/run`, {}, tickResultSchema); }
+  pauseManagerPolicy(ws: string, id: string, input: PolicyActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-manager/policies/${id}/pause`, input, policySchema); }
+  resumeManagerPolicy(ws: string, id: string, input: PolicyActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-manager/policies/${id}/resume`, input, policySchema); }
+  stopManagerPolicy(ws: string, id: string, input: PolicyActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-manager/policies/${id}/stop`, input, policySchema); }
+  listExecutionConnections(ws: string) { return this.request("GET", `/workspaces/${ws}/opportunity-execution/connections`, undefined, z.array(connectionSchema)); }
+  createExecutionConnection(ws: string, input: CreateConnectionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/connections`, input, createdConnectionSchema); }
+  pauseConnection(ws: string, id: string, input: ConnectionActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/connections/${id}/pause`, input, connectionSchema); }
+  resumeConnection(ws: string, id: string, input: ConnectionActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/connections/${id}/resume`, input, connectionSchema); }
+  stopConnection(ws: string, id: string, input: ConnectionActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/connections/${id}/stop`, input, connectionSchema); }
+  revokeConnection(ws: string, id: string, input: ConnectionActionInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/connections/${id}/revoke`, input, connectionSchema); }
+  createAttempt(ws: string, input: CreateAttemptInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/attempts`, input, attemptSchema); }
+  listAttempts(ws: string, query: { cursor?: string; connectionId?: string; state?: string } = {}) { return this.request("GET", `/workspaces/${ws}/opportunity-execution/attempts${buildQuery({ ...query })}`, undefined, attemptPageSchema); }
+  approveAttempt(ws: string, id: string, input: ApproveAttemptInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/attempts/${id}/approve`, input, attemptSchema); }
+  cancelAttempt(ws: string, id: string, input: CancelAttemptInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/attempts/${id}/cancel`, input, attemptSchema); }
+  reconcileAttempt(ws: string, id: string, input: ReconcileAttemptInput) { return this.request("POST", `/workspaces/${ws}/opportunity-execution/attempts/${id}/reconcile`, input, attemptSchema); }
+  getAssistantStatus(ws: string) { return this.request("GET", `/workspaces/${ws}/opportunity-assistant/status`, undefined, assistantStatusSchema); }
+  assessOpportunity(ws: string, input: CreateAssessmentInput) { return this.request("POST", `/workspaces/${ws}/opportunity-assistant/assessments`, input, assessmentSchema); }
+  listAssessments(ws: string, query: { opportunityId?: string; profileId?: string; cursor?: string } = {}) { return this.request("GET", `/workspaces/${ws}/opportunity-assistant/assessments${buildQuery({ ...query })}`, undefined, assessmentPageSchema); }
+  createAssistantDraft(ws: string, input: CreateDraftInput) { return this.request("POST", `/workspaces/${ws}/opportunity-assistant/drafts`, input, draftSchema); }
+  listAssistantDrafts(ws: string, query: { opportunityId?: string; cursor?: string } = {}) { return this.request("GET", `/workspaces/${ws}/opportunity-assistant/drafts${buildQuery({ ...query })}`, undefined, draftPageSchema); }
+  getAssistantDraft(ws: string, id: string) { return this.request("GET", `/workspaces/${ws}/opportunity-assistant/drafts/${id}`, undefined, draftSchema); }
+  updateAssistantDraft(ws: string, id: string, input: UpdateDraftInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-assistant/drafts/${id}`, input, draftSchema); }
+  approveAssistantDraft(ws: string, id: string, input: ReviewDraftInput) { return this.request("POST", `/workspaces/${ws}/opportunity-assistant/drafts/${id}/approve`, input, draftSchema); }
+  rejectAssistantDraft(ws: string, id: string, input: RejectDraftInput) { return this.request("POST", `/workspaces/${ws}/opportunity-assistant/drafts/${id}/reject`, input, draftSchema); }
+  dryRunAssistantDraft(ws: string, id: string) { return this.request("POST", `/workspaces/${ws}/opportunity-assistant/drafts/${id}/dry-run`, {}, dryRunSchema); }
+  updateOpportunityFact(ws: string, id: string, factId: string, input: UpdateOpportunityFactInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}/facts/${factId}/content`, input, opportunityFactSchema); }
+  archiveOpportunityFact(ws: string, id: string, factId: string, input: ArchiveOpportunityItemInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/facts/${factId}/archive`, input, opportunityFactSchema); }
+  updateOpportunityTrack(ws: string, id: string, trackId: string, input: UpdateOpportunityTrackInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}/tracks/${trackId}`, input, opportunityTrackSchema); }
+  archiveOpportunityTrack(ws: string, id: string, trackId: string, input: ArchiveOpportunityItemInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/tracks/${trackId}/archive`, input, opportunityTrackSchema); }
+  listHhHistory(ws: string, query: HhHistoryQuery = {}) { return this.request("GET", `/workspaces/${ws}/opportunity-hh-import/history${buildQuery({ ...query })}`, undefined, hhHistoryPageSchema); }
   addOpportunityFact(ws: string, id: string, input: CreateOpportunityFactInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/facts`, input, opportunityFactSchema); }
   setOpportunityFactState(ws: string, id: string, factId: string, input: SetOpportunityFactStateInput) { return this.request("PATCH", `/workspaces/${ws}/opportunity-profiles/${id}/facts/${factId}`, input, opportunityFactSchema); }
   addOpportunityTrack(ws: string, id: string, input: CreateOpportunityTrackInput) { return this.request("POST", `/workspaces/${ws}/opportunity-profiles/${id}/tracks`, input, opportunityTrackSchema); }

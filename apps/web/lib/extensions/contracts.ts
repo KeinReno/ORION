@@ -388,7 +388,7 @@ export interface ResourcesSlotProps {
 }
 
 export interface OpportunitiesViewSlotProps { workspaceId: string; workspaceLabel: string; canManage: boolean; onDirtyChange: (dirty: boolean) => void }
-export interface OpportunitiesDetailsSlotProps { workspaceId: string; opportunity: import("@orion/shared-types").Opportunity; canManage: boolean }
+export interface OpportunitiesDetailsSlotProps { workspaceId: string; opportunity: import("@orion/shared-types").Opportunity; canManage: boolean; onDirtyChange?: (dirty: boolean) => void }
 export interface HomeObjectTabSlotProps { workspaceId: string | undefined; home: import("@orion/shared-types").Home; overview: import("@orion/shared-types").HomeOverview; financeAvailable: boolean; onOpenTab?: (tabId: string) => void }
 export interface SlotContracts {
   "shell.context.resources": ResourcesSlotProps;

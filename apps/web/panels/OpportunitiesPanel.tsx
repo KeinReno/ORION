@@ -41,26 +41,28 @@ function OpportunityBase({ workspaceId, onDirtyChange, canManage }: { workspaceI
   const [archive, setArchive] = useState(false);
   const [editor, setEditor] = useState<Opportunity | "new" | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [extensionDirty, setExtensionDirty] = useState(false);
+  const hasUnsaved = dirty || extensionDirty;
   const [pendingEditor, setPendingEditor] = useState<{ value: Opportunity | "new" | null } | null>(null);
   const [exporting, setExporting] = useState(false);
-  useUnsavedDraft(dirty);
+  useUnsavedDraft(hasUnsaved);
   useEffect(() => {
-    onDirtyChange(dirty);
+    onDirtyChange(hasUnsaved);
     return () => onDirtyChange(false);
-  }, [dirty, onDirtyChange]);
+  }, [hasUnsaved, onDirtyChange]);
   useEffect(() => {
-    if (!dirty) return;
+    if (!hasUnsaved) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", guard);
     return () => window.removeEventListener("beforeunload", guard);
-  }, [dirty]);
+  }, [hasUnsaved]);
   const list = useOpportunities(workspaceId, { query: query || undefined, kind: kind || undefined, status: status || undefined, includeArchived: archive ? "true" : "false" });
   const mutations = useOpportunityMutations(workspaceId);
   function open(value: Opportunity | "new" | null, discard = false) {
     if (value === editor || (value && editor && value !== "new" && editor !== "new" && value.id === editor.id)) return;
-    if (dirty && !discard) { setPendingEditor({ value }); return; }
+    if (hasUnsaved && !discard) { setPendingEditor({ value }); return; }
     setPendingEditor(null);
-    setDirty(false); setEditor(value);
+    setDirty(false); setExtensionDirty(false); setEditor(value);
   }
   async function exportData(format: "json" | "csv") {
     setExporting(true);
@@ -82,7 +84,7 @@ function OpportunityBase({ workspaceId, onDirtyChange, canManage }: { workspaceI
         <select className={selectClass} aria-label="Фильтр статуса" value={status} onChange={(e) => setStatus(e.target.value as OpportunityStatus | "")}><option value="">Все статусы</option>{opportunityStatusSchema.options.map((s) => <option key={s} value={s}>{OPPORTUNITY_STATUS_LABEL[s]}</option>)}</select>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={archive} onChange={(e) => setArchive(e.target.checked)} />Показать архив</label>
       </div>
-      {editor && <><OpportunityEditor key={editor === "new" ? "new" : editor.id} opportunity={editor === "new" ? null : editor} workspaceId={workspaceId} onDirty={setDirty} onClose={() => open(null)} onSaved={(row) => { setDirty(false); setEditor(null); toast({ title: `Возможность «${row.title}» сохранена`, tone: "success" }); }} />{editor !== "new" && <ExtensionSlot name="opportunities.details.sections" props={{ workspaceId, opportunity: editor, canManage }} />}</>}
+      {editor && <><OpportunityEditor key={editor === "new" ? "new" : editor.id} opportunity={editor === "new" ? null : editor} workspaceId={workspaceId} onDirty={setDirty} onClose={() => open(null)} onSaved={(row) => { setDirty(false); setEditor(extensionDirty ? row : null); toast({ title: `Возможность «${row.title}» сохранена`, tone: "success" }); }} />{editor !== "new" && <ExtensionSlot key={editor.id} name="opportunities.details.sections" props={{ workspaceId, opportunity: editor, canManage, onDirtyChange: setExtensionDirty }} />}</>}
       {list.isLoading ? <Skeleton className="h-24" /> : list.isError ? <div role="alert" className="space-y-2"><p>{describeError(list.error)}</p><Button variant="outline" onClick={() => void list.refetch()}>Повторить загрузку</Button></div> : <>
         {!list.data?.pages[0].items.length && <div className="py-8 text-center text-muted-foreground"><p>{query || kind || status ? "По выбранным фильтрам возможностей нет." : "Добавьте первую вакансию или заказ."}</p>{(query || kind || status) && <Button variant="outline" onClick={() => { setQuery(""); setKind(""); setStatus(""); }}>Сбросить фильтры</Button>}</div>}
         <ul className="divide-y divide-border">{list.data?.pages.flatMap((p) => p.items).map((row) => <li key={row.id} className="flex flex-wrap items-center gap-3 py-3">

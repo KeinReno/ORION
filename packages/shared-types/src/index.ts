@@ -67,3 +67,6 @@ export * from "./opportunity-profile";
 export * from "./opportunity-hh-import";
 
 export * from "./lan";
+export * from "./opportunity-assistant";
+export * from "./opportunity-execution";
+export * from "./opportunity-manager";

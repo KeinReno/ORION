@@ -11,6 +11,12 @@ const HhSources = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportu
 contribute("opportunities.views", { pluginId: "opportunities-profiles", component: ProfilesView, order: 10, meta: { tabId: "profiles", label: "Профили" } });
 contribute("opportunities.views", { pluginId: "opportunities-hh-import", component: HhImportView, order: 20, meta: { tabId: "hh-import", label: "Импорт HH", ownerOnly: true } });
 contribute("opportunities.details.sections", { pluginId: "opportunities-hh-import", component: HhSources });
+const AssistantSection = dynamic<OpportunitiesDetailsSlotProps>(() => import("./opportunities-assistant/AssistantSection").then((m) => m.AssistantSection), { ssr: false });
+contribute("opportunities.details.sections", { pluginId: "opportunities-assistant", component: AssistantSection, order: 20 });
+const ExecutionView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-execution/ExecutionView").then((m) => m.ExecutionView), { ssr: false });
+contribute("opportunities.views", { pluginId: "opportunities-execution", component: ExecutionView, order: 30, meta: { tabId: "execution", label: "Отправка", ownerOnly: true } });
+const ManagerView = dynamic<OpportunitiesViewSlotProps>(() => import("./opportunities-manager/ManagerView").then((m) => m.ManagerView), { ssr: false });
+contribute("opportunities.views", { pluginId: "opportunities-manager", component: ManagerView, order: 40, meta: { tabId: "manager", label: "Менеджер", ownerOnly: true } });
 const HomeUtilitiesTab = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesView), { ssr: false });
 contribute("home.object.tabs", { pluginId: "home-utilities", component: HomeUtilitiesTab, order: 10, meta: { tabId: "utilities", label: "Коммуналка" } });
 const HomeUtilitiesSummary = dynamic<HomeObjectTabSlotProps>(() => import("./home-utilities/UtilitiesView").then((m) => m.UtilitiesSummary), { ssr: false });

@@ -6,9 +6,10 @@ import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { randomUUID } from "node:crypto";
 import type { OpportunitiesImportPort } from "./import-contract";
+import type { OpportunitiesReadPort } from "./read-contract";
 
 @Injectable()
-export class OpportunitiesService implements OpportunitiesImportPort {
+export class OpportunitiesService implements OpportunitiesImportPort, OpportunitiesReadPort {
   constructor(private readonly prisma: PrismaService, private readonly modules: ModulesService, private readonly workspaces: WorkspacesService) {}
 
   async list(userId: string, workspaceId: string, query: OpportunityListQuery): Promise<OpportunityPage> {
@@ -88,15 +89,39 @@ export class OpportunitiesService implements OpportunitiesImportPort {
   }
 
   async captureOpportunityTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateOpportunityInput) {
+    return (await this.captureOpportunitiesTx(tx, userId, workspaceId, [input]))[0];
+  }
+
+  async captureOpportunitiesTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, inputs: CreateOpportunityInput[]) {
     await this.workspaces.assertMemberTx(tx, userId, workspaceId);
     await this.modules.assertEnabledTx(tx, userId, workspaceId, "opportunities");
-    if (!input.externalId) throw new BadRequestException("Для импортируемой записи нужен внешний ID");
-    const created = await tx.opportunity.createMany({ skipDuplicates: true, data: [{ ...input, id: randomUUID(), workspaceId,
+    if (inputs.length > 25 || inputs.some((input) => !input.externalId)) throw new BadRequestException("Нужны внешние ID и не более 25 записей за порцию");
+    if (!inputs.length) return [];
+    const data = inputs.map((input) => ({ ...input, id: randomUUID(), workspaceId,
       capturedAt: input.capturedAt ? new Date(input.capturedAt) : null, conditions: input.conditions as Prisma.InputJsonValue,
-      history: [{ at: new Date().toISOString(), actorId: userId, action: "created", fromStatus: null, toStatus: input.status }] }] });
-    const row = await tx.opportunity.findUniqueOrThrow({ where: { workspaceId_sourceType_externalId: { workspaceId, sourceType: input.sourceType, externalId: input.externalId } } });
-    return { id: row.id, created: created.count === 1 };
+      history: [{ at: new Date().toISOString(), actorId: userId, action: "created", fromStatus: null, toStatus: input.status }] }));
+    await tx.opportunity.createMany({ skipDuplicates: true, data });
+    const rows = await tx.opportunity.findMany({ where: { workspaceId, OR: inputs.map((input) => ({ sourceType: input.sourceType, externalId: input.externalId })) }, select: { id: true, sourceType: true, externalId: true } });
+    const keyed = new Map(rows.map((row) => [JSON.stringify([row.sourceType, row.externalId]), row]));
+    return data.map((input) => {
+      const row = keyed.get(JSON.stringify([input.sourceType, input.externalId]));
+      if (!row) throw new ConflictException("Импортированная запись недоступна");
+      return { id: row.id, created: row.id === input.id };
+    });
   }
+  async readTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, id: string): Promise<Opportunity> {
+    await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    await this.modules.assertEnabledTx(tx, userId, workspaceId, "opportunities");
+    return dto(await this.owned(tx, workspaceId, id));
+  }
+
+  async listCandidatesTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, filter: { sourceType: string; statuses: string[]; limit: number; afterId?: string }): Promise<Opportunity[]> {
+    await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    await this.modules.assertEnabledTx(tx, userId, workspaceId, "opportunities");
+    const rows = await tx.opportunity.findMany({ where: { workspaceId, archivedAt: null, sourceType: filter.sourceType, status: { in: filter.statuses }, ...(filter.afterId ? { id: { gt: filter.afterId } } : {}) }, orderBy: { id: "asc" }, take: Math.min(Math.max(filter.limit, 1), 200) });
+    return rows.map(dto);
+  }
+
   async assertOpportunityTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, id: string) {
     await this.workspaces.assertMemberTx(tx, userId, workspaceId);
     await this.modules.assertEnabledTx(tx, userId, workspaceId, "opportunities");

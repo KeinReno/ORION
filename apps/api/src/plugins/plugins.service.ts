@@ -12,13 +12,15 @@ import {
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { ModulesService } from "../modules/modules.service";
+import { CapabilityLifecycle } from "../common/capability-lifecycle";
 
 @Injectable()
 export class PluginsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly modules: ModulesService
+    private readonly modules: ModulesService,
+    private readonly lifecycle: CapabilityLifecycle
   ) {}
 
   catalog(): readonly PluginManifest[] {
@@ -52,11 +54,13 @@ export class PluginsService {
       // not a flat "disabled" list (a plugin can default off, unlike every
       // module). Requesting the default state removes the override instead
       // of always adding/removing the same way `disabledModules` does.
+      await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
       const current = new Set(await this.pluginOverridesTx(tx, workspaceId));
       if (enabled === manifest.defaultEnabled) current.delete(pluginId);
       else current.add(pluginId);
 
       await tx.workspace.update({ where: { id: workspaceId }, data: { pluginOverrides: [...current] } });
+      await this.lifecycle.changedTx(tx, { kind: "plugin", id: pluginId, enabled, workspaceId, actorId: userId });
       const enabledModules = await this.modules.enabledSetTx(tx, workspaceId);
       return pluginStates([...current], enabledModules);
     });

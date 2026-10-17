@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { classifyHhPath, createOpportunityInputSchema, normalizeHhPath, type CreateOpportunityInput, type HhImportPreviewInput } from "@orion/shared-types";
+import { HH_BINARY_DOCUMENT, HH_MATERIAL_FOLDER, classifyHhMaterialType, classifyHhPath, createOpportunityInputSchema, normalizeHhPath, type CreateOpportunityInput, type HhImportPreviewInput } from "@orion/shared-types";
 
 export function contentHash(text: string): string { return createHash("sha256").update(text).digest("hex"); }
-export interface ResumeImportRecord { candidateName: string; profileSourceKey: string; title: string; sourcePath: string; sourceKey: string; content: string; contentHash: string }
+export interface ResumeImportRecord { type?: "resume" | "proposal" | "portfolio"; parser?: string; candidateName: string; profileSourceKey: string; title: string; sourcePath: string; sourceKey: string; content: string; contentHash: string }
 export interface VacancyImportRecord { input: CreateOpportunityInput; sourcePath: string; fileHash: string; contentHash: string; snapshot: { title: string; company: string; description: string; url: string; conditions: CreateOpportunityInput["conditions"] } }
 export interface HistoryImportRecord { externalId: string | null; title: string; outcome: "already_exists" | "legacy_claimed_verified" | "failed" | "unconfirmed"; sourceTime: string | null; sourcePath: string; recordHash: string; originalStatus: string; reason: string }
 export type ImportOperation = { kind: "material"; data: ResumeImportRecord } | { kind: "opportunity"; data: VacancyImportRecord } | { kind: "history"; data: HistoryImportRecord };
-export interface HhPlan { version: 1; includeProfiles: boolean; historyProfileId: string | null; operations: ImportOperation[]; warnings: { path: string; reason: string }[] }
+export interface HhPlan { version: 1; includeProfiles: boolean; historyProfileId: string | null; operations: ImportOperation[]; warnings: { path: string; reason: string; code?: string }[] }
 type Obj = Record<string, unknown>;
 function object(value: unknown): value is Obj { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function str(value: unknown): string { return typeof value === "string" ? value : ""; }
@@ -22,7 +22,7 @@ function rawId(item: Obj): string | null { return vacancyId(item.alternate_url) 
 
 export function compileHhPlan(input: HhImportPreviewInput): HhPlan {
   const plan: HhPlan = { version: 1, includeProfiles: input.includeProfiles, historyProfileId: input.historyProfileId, operations: [], warnings: [] };
-  const warn = (path: string, reason: string) => plan.warnings.push({ path, reason });
+  const warn = (path: string, reason: string, code?: string) => plan.warnings.push(code ? { path, reason, code } : { path, reason });
   const paths = new Set<string>(); const vacancyHashes = new Set<string>(); const histories = new Set<string>();
   for (const file of input.files) {
     const path = normalizeHhPath(file.path); const kind = classifyHhPath(file.path);
@@ -31,16 +31,21 @@ export function compileHhPlan(input: HhImportPreviewInput): HhPlan {
     if (kind === "unsupported") { warn(path, "Формат или категория пока не поддерживается этим импортом"); continue; }
     if (kind === "resume") {
       if (!input.includeProfiles) { warn(path, "Импорт профилей не выбран"); continue; }
-      const parts = path.split("/"); const resumeIndex = parts.findIndex((p) => /^резюме$/i.test(p));
-      if (resumeIndex === 0) { warn(path, "Выберите папку кандидата целиком, а не только вложенную папку Резюме"); continue; }
+      const extraction = file.extraction;
+      if (HH_BINARY_DOCUMENT.test(path) && !extraction) { warn(path, "Текст PDF/DOC/RTF извлекается до загрузки, но для этого файла извлечение не выполнено — файл не импортирован", "extraction_missing"); continue; }
+      if (extraction && extraction.status !== "ok") { warn(path, `${extraction.reason || "Текст не извлечён"} — файл не импортирован`, extraction.status); continue; }
+      const parts = path.split("/"); const resumeIndex = parts.findIndex((p) => HH_MATERIAL_FOLDER.test(p));
+      if (resumeIndex === 0) { warn(path, "Выберите папку кандидата целиком, а не только вложенную папку с материалами", "no_owner"); continue; }
       const parent = resumeIndex > 0 ? parts.slice(0, resumeIndex) : parts.slice(0, -1);
-      if (!parent.length) { warn(path, "Для резюме выберите папку кандидата, чтобы сохранить его принадлежность"); continue; }
+      if (!parent.length) { warn(path, "Для резюме выберите папку кандидата, чтобы сохранить его принадлежность", "no_owner"); continue; }
       const content = file.text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
-      if (!content || content.length > 50000) { warn(path, "Резюме пустое или больше 50 000 символов"); continue; }
+      if (content.includes("\0")) { warn(path, "В тексте есть двоичные данные — файл повреждён или не является текстом", "corrupt"); continue; }
+      if (!content) { warn(path, "Документ не содержит текста (пустой или только изображения) — не импортирован", "empty"); continue; }
+      if (content.length > 50000) { warn(path, "Текст больше 50 000 символов — не импортирован", "too_large"); continue; }
       const candidateName = parent[parent.length - 1];
-      const title = parts[parts.length - 1].replace(/\.(md|txt)$/i, "");
+      const title = parts[parts.length - 1].replace(/\.(md|txt|pdf|docx?|rtf)$/i, "");
       if (candidateName.length > 200 || title.length > 200) { warn(path, "Слишком длинное имя профиля или трека"); continue; }
-      plan.operations.push({ kind: "material", data: { candidateName, profileSourceKey: `hh-folder:${parent.join("/")}`, title, sourcePath: path, sourceKey: path, content, contentHash: contentHash(content) } });
+      plan.operations.push({ kind: "material", data: { type: classifyHhMaterialType(path), parser: extraction?.parser ?? "text", candidateName, profileSourceKey: `hh-folder:${parent.join("/")}`, title, sourcePath: path, sourceKey: path, content, contentHash: contentHash(content) } });
       continue;
     }
     if (kind === "history" && !input.includeHistory) { warn(path, "Исторические отклики не выбраны"); continue; }
