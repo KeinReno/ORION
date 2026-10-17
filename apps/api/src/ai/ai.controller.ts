@@ -20,6 +20,7 @@ import {
   agentAuditQuerySchema,
   agentEventCreateSchema,
   agentNotePatchSchema,
+  agentProposalApproveInputSchema,
   agentProposalBulkInputSchema,
   agentTaskPatchSchema,
   decideAgentOperation,
@@ -39,6 +40,7 @@ import {
   type AgentAuditQuery,
   type AgentOperation,
   type AgentPermissionModule,
+  type AgentProposalApproveInput,
   type AgentProposalBulkInput,
   type AgentProposalBulkResult,
   type AgentProposedResult,
@@ -154,9 +156,20 @@ export class AgentTokensController {
   approve(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
+    @Param("proposalId") proposalId: string,
+    @Body(new ZodValidationPipe(agentProposalApproveInputSchema)) body: AgentProposalApproveInput
+  ): Promise<AgentProposal> {
+    return this.jobs.approve(user.userId, workspaceId, proposalId, body.force === true);
+  }
+
+  /** Re-check a stale request against the object as it is now: new preview, new basis, still pending. */
+  @Post("proposals/:proposalId/refresh")
+  refreshProposal(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
     @Param("proposalId") proposalId: string
   ): Promise<AgentProposal> {
-    return this.jobs.approve(user.userId, workspaceId, proposalId);
+    return this.jobs.refresh(user.userId, workspaceId, proposalId);
   }
 
   @Post("proposals/:proposalId/reject")

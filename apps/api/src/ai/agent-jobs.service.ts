@@ -11,6 +11,7 @@ import {
   type AgentJob,
   type AgentJobStatus,
   type AgentProposal,
+  type AgentProposalDiffEntry,
   type AgentProposalAction,
   type AgentProposalBulkResult,
   type CreateAgentJobInput,
@@ -125,7 +126,15 @@ export class AgentJobsService {
       if (existing && patch) {
         return tx.agentProposal.update({
           where: { id: existing.id },
-          data: { patch: patch as Prisma.InputJsonValue, diff: diff as unknown as Prisma.InputJsonValue, reason: input.reason, targetTitle: target.title, expiresAt },
+          data: {
+            patch: patch as Prisma.InputJsonValue,
+            diff: diff as unknown as Prisma.InputJsonValue,
+            reason: input.reason,
+            targetTitle: target.title,
+            baseRevision: target.revision,
+            baseUpdatedAt: target.updatedAt,
+            expiresAt
+          },
           include: { token: { select: { name: true } } }
         });
       }
@@ -139,6 +148,8 @@ export class AgentJobsService {
           reason: input.reason,
           patch: patch ? (patch as Prisma.InputJsonValue) : undefined,
           diff: patch ? (diff as unknown as Prisma.InputJsonValue) : undefined,
+          baseRevision: target.revision,
+          baseUpdatedAt: target.updatedAt,
           expiresAt
         },
         include: { token: { select: { name: true } } }
@@ -166,7 +177,7 @@ export class AgentJobsService {
    * Approve = the human does it: the change runs under THEIR rights, once. The claim is one atomic `updateMany`
    * (pending → approved, not lapsed), so two concurrent approvals cannot both run the change.
    */
-  async approve(userId: string, workspaceId: string, proposalId: string): Promise<AgentProposal> {
+  async approve(userId: string, workspaceId: string, proposalId: string, force = false): Promise<AgentProposal> {
     const claimed = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const result = await tx.agentProposal.updateMany({
@@ -178,20 +189,56 @@ export class AgentJobsService {
         if (!exists) throw new NotFoundException("Запрос не найден");
         throw new ConflictException(exists.status === "pending" ? "Срок запроса истёк" : "Запрос уже обработан");
       }
-      return tx.agentProposal.findUniqueOrThrow({ where: { id: proposalId }, include: { token: { select: { name: true } } } });
+      const row = await tx.agentProposal.findUniqueOrThrow({ where: { id: proposalId }, include: { token: { select: { name: true } } } });
+      // Inside the same transaction as the claim: a stale object throws and the claim rolls back, the request stays pending.
+      if (!force) {
+        const stale = await this.staleCheckTx(tx, workspaceId, row);
+        if (stale) throw staleError(proposalId, stale);
+      }
+      return row;
     });
     try {
-      await this.execute(userId, workspaceId, claimed);
+      await this.execute(userId, workspaceId, claimed, force);
     } catch (error) {
       // Already gone is fine; anything else puts the request back so the human can retry or reject.
       if (!(error instanceof NotFoundException)) {
         await this.prisma.withUser(userId, (tx) =>
           tx.agentProposal.updateMany({ where: { id: proposalId, status: "approved" }, data: { status: "pending", decidedAt: null } })
         );
+        // The object moved between the check and the write: the CAS in the service caught it. Report it as stale too.
+        if (!force && isRevisionConflict(error)) {
+          const stale = await this.prisma.withUser(userId, (tx) => this.staleCheckTx(tx, workspaceId, claimed));
+          if (stale) throw staleError(proposalId, stale);
+        }
         throw error;
       }
     }
     return proposalDto(claimed);
+  }
+
+  /**
+   * "Проверить заново": the human saw the stale warning and wants the request judged against the object as it is now.
+   * Recomputes the before/after preview and moves the basis to the current version; the request stays pending, so the
+   * next plain approval applies exactly what the refreshed preview shows.
+   */
+  async refresh(userId: string, workspaceId: string, proposalId: string): Promise<AgentProposal> {
+    const row = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const current = await tx.agentProposal.findFirst({
+        where: { id: proposalId, workspaceId, status: "pending", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
+      });
+      if (!current) throw new NotFoundException("Запрос не найден или уже обработан");
+      const action = agentProposalActionSchema.parse(current.action);
+      const target = await this.findTargetTx(tx, workspaceId, action, current.targetId);
+      if (!target) throw new ConflictException("Объект уже удалён — запрос можно только отклонить");
+      const diff = current.patch ? buildProposalDiff(diffKind(action), target.current, current.patch as Record<string, unknown>) : [];
+      return tx.agentProposal.update({
+        where: { id: proposalId },
+        data: { diff: diff as unknown as Prisma.InputJsonValue, targetTitle: target.title, baseRevision: target.revision, baseUpdatedAt: target.updatedAt },
+        include: { token: { select: { name: true } } }
+      });
+    });
+    return proposalDto(row);
   }
 
   /** Several at once; one failure does not stop the rest. */
@@ -211,7 +258,7 @@ export class AgentJobsService {
     return { results };
   }
 
-  private async execute(userId: string, workspaceId: string, row: ProposalRow): Promise<void> {
+  private async execute(userId: string, workspaceId: string, row: ProposalRow, force: boolean): Promise<void> {
     const action = agentProposalActionSchema.parse(row.action);
     const agentName = row.token.name;
     switch (action) {
@@ -220,10 +267,10 @@ export class AgentJobsService {
       case "note.delete":
         return this.notes.remove(userId, workspaceId, row.targetId);
       case "task.update":
-        await this.tasks.update(userId, workspaceId, row.targetId, agentTaskPatchSchema.parse(row.patch ?? {}), agentName);
+        await this.tasks.update(userId, workspaceId, row.targetId, agentTaskPatchSchema.parse({ ...((row.patch ?? {}) as object), ...casOf(row, force) }), agentName);
         return;
       case "note.update":
-        await this.notes.update(userId, workspaceId, row.targetId, agentNotePatchSchema.parse(row.patch ?? {}), agentName);
+        await this.notes.update(userId, workspaceId, row.targetId, agentNotePatchSchema.parse({ ...((row.patch ?? {}) as object), ...casOf(row, force) }), agentName);
         return;
       case "event.update":
         await this.events.update(userId, workspaceId, row.targetId, agentEventPatchSchema.parse(row.patch ?? {}), "all");
@@ -248,27 +295,69 @@ export class AgentJobsService {
   }
 
   /** The object a proposal is about: its title for the human, its stored fields for the before/after preview. */
-  private async loadTargetTx(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-    action: AgentProposalAction,
-    targetId: string
-  ): Promise<{ title: string; current: Record<string, unknown> }> {
+  private async loadTargetTx(tx: Prisma.TransactionClient, workspaceId: string, action: AgentProposalAction, targetId: string): Promise<TargetSnapshot> {
+    const found = await this.findTargetTx(tx, workspaceId, action, targetId);
+    if (!found) {
+      throw new NotFoundException(action.startsWith("task.") ? "Задача не найдена" : action.startsWith("note.") ? "Заметка не найдена" : "Событие не найдено");
+    }
+    if (found.readOnly) throw new BadRequestException("Внешнее событие доступно только для чтения");
+    return found;
+  }
+
+  /** Same lookup without throwing: `null` = the object is gone (deleted, in the trash, other workspace). */
+  private async findTargetTx(tx: Prisma.TransactionClient, workspaceId: string, action: AgentProposalAction, targetId: string): Promise<(TargetSnapshot & { readOnly: boolean }) | null> {
     if (action.startsWith("task.")) {
       const task = await tx.task.findUnique({ where: { id: targetId } });
-      if (!task || task.workspaceId !== workspaceId) throw new NotFoundException("Задача не найдена");
-      return { title: task.title, current: task as unknown as Record<string, unknown> };
+      if (!task || task.workspaceId !== workspaceId) return null;
+      return { title: task.title, current: task as unknown as Record<string, unknown>, revision: task.revision, updatedAt: task.updatedAt, readOnly: false };
     }
     if (action.startsWith("note.")) {
       const note = await tx.note.findUnique({ where: { id: targetId } });
-      if (!note || note.workspaceId !== workspaceId || note.deletedAt) throw new NotFoundException("Заметка не найдена");
-      return { title: note.title, current: note as unknown as Record<string, unknown> };
+      if (!note || note.workspaceId !== workspaceId || note.deletedAt) return null;
+      return { title: note.title, current: note as unknown as Record<string, unknown>, revision: note.revision, updatedAt: note.updatedAt, readOnly: false };
     }
     const event = await tx.event.findUnique({ where: { id: targetId } });
-    if (!event || event.workspaceId !== workspaceId) throw new NotFoundException("Событие не найдено");
-    if (event.readOnly) throw new BadRequestException("Внешнее событие доступно только для чтения");
-    return { title: event.title, current: event as unknown as Record<string, unknown> };
+    if (!event || event.workspaceId !== workspaceId) return null;
+    return { title: event.title, current: event as unknown as Record<string, unknown>, revision: null, updatedAt: event.updatedAt, readOnly: event.readOnly };
   }
+
+  /**
+   * "The object changed after the request": what the proposal was filed against (`baseRevision` for tasks/notes,
+   * `baseUpdatedAt` for events) versus the object now. Legacy rows without a basis are never stale. A vanished
+   * object is not stale either — executing reports it (404) as before.
+   */
+  private async staleCheckTx(tx: Prisma.TransactionClient, workspaceId: string, row: ProposalRow): Promise<StaleInfo | null> {
+    const action = agentProposalActionSchema.parse(row.action);
+    const target = await this.findTargetTx(tx, workspaceId, action, row.targetId);
+    if (!target) return null;
+    const changed =
+      row.baseRevision !== null
+        ? target.revision !== row.baseRevision
+        : row.baseUpdatedAt !== null && target.updatedAt.getTime() !== row.baseUpdatedAt.getTime();
+    if (!changed) return null;
+    const patch = action.endsWith(".update") ? ((row.patch ?? {}) as Record<string, unknown>) : null;
+    return { target, currentDiff: patch ? buildProposalDiff(diffKind(action), target.current, patch) : [] };
+  }
+}
+
+/** Unless the human chose to apply anyway, the write itself checks the basis (atomic CAS for tasks/notes). */
+function casOf(row: ProposalRow, force: boolean): { expectedRevision?: number } {
+  return !force && row.baseRevision !== null ? { expectedRevision: row.baseRevision } : {};
+}
+
+function isRevisionConflict(error: unknown): boolean {
+  if (!(error instanceof ConflictException)) return false;
+  const body = error.getResponse();
+  return typeof body === "object" && body !== null && ["task_revision_conflict", "note_revision_conflict"].includes((body as { code?: string }).code ?? "");
+}
+
+function staleError(proposalId: string, stale: StaleInfo): ConflictException {
+  return new ConflictException({
+    code: "agent_proposal_stale",
+    message: "Объект изменился после запроса агента. Проверьте изменение заново на текущей версии или подтвердите явно.",
+    proposalId,
+    currentDiff: stale.currentDiff
+  });
 }
 
 function diffKind(action: AgentProposalAction): DiffKind {
@@ -304,6 +393,18 @@ function jobDto(row: JobRow): AgentJob {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
+}
+
+interface TargetSnapshot {
+  title: string;
+  current: Record<string, unknown>;
+  /** Task/note CAS counter; events have none (`null`). */
+  revision: number | null;
+  updatedAt: Date;
+}
+interface StaleInfo {
+  target: TargetSnapshot;
+  currentDiff: AgentProposalDiffEntry[];
 }
 
 type ProposalRow = Prisma.AgentProposalGetPayload<{ include: { token: { select: { name: true } } } }>;

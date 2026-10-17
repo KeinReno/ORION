@@ -1028,8 +1028,15 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/proposals`, undefined, z.array(agentProposalSchema));
   }
 
-  decideAgentProposal(workspaceId: string, proposalId: string, decision: "approve" | "reject"): Promise<AgentProposal> {
-    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/${proposalId}/${decision}`, {}, agentProposalSchema);
+  /** `force` = apply over a newer state after the "object changed after the request" warning (409 `agent_proposal_stale`). */
+  decideAgentProposal(workspaceId: string, proposalId: string, decision: "approve" | "reject", force = false): Promise<AgentProposal> {
+    const body = decision === "approve" && force ? { force: true } : {};
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/${proposalId}/${decision}`, body, agentProposalSchema);
+  }
+
+  /** Re-check a stale request: new before/after against the current object, the request stays pending. */
+  refreshAgentProposal(workspaceId: string, proposalId: string): Promise<AgentProposal> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/${proposalId}/refresh`, {}, agentProposalSchema);
   }
 
   // ---- Module «Дом» -------------------------------------------------------
