@@ -33,7 +33,7 @@ import {
   useToast
 } from "@orion/ui";
 import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Square, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ResizablePane } from "../../components/resizable-pane";
 import { openPanel } from "../../lib/panel-bus";
@@ -298,18 +298,6 @@ export function TaskDetail({
             <ArrowLeft className="h-4 w-4" /> Задачи
           </Button>
         ) : null}
-        <Select
-          aria-label="Статус"
-          value={fields.status}
-          onChange={(event) => set("status", event.target.value as TaskStatus)}
-          className="min-w-0 flex-1 sm:flex-none sm:w-auto sm:!min-w-[10.5rem]"
-        >
-          {TASK_STATUS_ORDER.map((status) => (
-            <option key={status} value={status}>
-              {TASK_STATUS_LABEL[status]}
-            </option>
-          ))}
-        </Select>
         {timeOn ? <TaskTimer workspaceId={workspaceId} task={task} /> : null}
         <div className="ml-auto flex items-center gap-1">
           <DropdownMenu
@@ -358,49 +346,74 @@ export function TaskDetail({
           <AutosaveStatus errorText="Не удалось сохранить — оставьте задачу открытой и повторите" state={saveState} className="min-w-0 text-right" />
         </div>
 
-        <input
+        {/* Grows with the text: a one-line input cut a long title at the pane edge. A title is one line of
+            meaning, so Enter does not add a line break and pasted breaks become spaces. */}
+        <textarea
           value={fields.title}
-          onChange={(event) => set("title", event.target.value)}
+          onChange={(event) => set("title", event.target.value.replace(/\s*\n\s*/g, " "))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
+          }}
+          rows={1}
           aria-label="Название задачи"
           placeholder="Название"
-          className="w-full bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
+          className="block w-full resize-none overflow-hidden bg-transparent text-title text-foreground outline-none [field-sizing:content] placeholder:text-subtle-foreground"
         />
 
+        {/* Status leads the properties: in the header it shared a row with «Задачи», the timer and «⋯»
+            and was cut to «В р…» on a phone. */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3">
-          <Prop label="Срок">
-            <Input type="datetime-local" value={fields.dueAt} onChange={(event) => set("dueAt", event.target.value)} />
-          </Prop>
-          <Prop label="Приоритет">
-            <Select value={fields.priority} onChange={(event) => set("priority", event.target.value as TaskPriority)}>
-              {TASK_PRIORITY_ORDER.map((priority) => (
-                <option key={priority} value={priority}>
-                  {TASK_PRIORITY_LABEL[priority]}
-                </option>
-              ))}
-            </Select>
-          </Prop>
-          {members ? (
-            <Prop label="Исполнитель">
-              <Select value={fields.assigneeId} onChange={(event) => set("assigneeId", event.target.value)}>
-                <option value="">Не назначен</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
+          <Prop label="Статус">
+            {(id) => (
+              <Select id={id} aria-label="Статус" value={fields.status} onChange={(event) => set("status", event.target.value as TaskStatus)}>
+                {TASK_STATUS_ORDER.map((status) => (
+                  <option key={status} value={status}>
+                    {TASK_STATUS_LABEL[status]}
                   </option>
                 ))}
               </Select>
+            )}
+          </Prop>
+          <Prop label="Срок">
+            {(id) => <Input id={id} type="datetime-local" value={fields.dueAt} onChange={(event) => set("dueAt", event.target.value)} />}
+          </Prop>
+          <Prop label="Приоритет">
+            {(id) => (
+              <Select id={id} value={fields.priority} onChange={(event) => set("priority", event.target.value as TaskPriority)}>
+                {TASK_PRIORITY_ORDER.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {TASK_PRIORITY_LABEL[priority]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Prop>
+          {members ? (
+            <Prop label="Исполнитель">
+              {(id) => (
+                <Select id={id} value={fields.assigneeId} onChange={(event) => set("assigneeId", event.target.value)}>
+                  <option value="">Не назначен</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </Prop>
           ) : null}
           {projects ? (
             <Prop label="Проект" wide>
-              <Select value={fields.projectId} onChange={(event) => setProject(event.target.value)}>
-                <option value="">Без проекта</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </Select>
+              {(id) => (
+                <Select id={id} value={fields.projectId} onChange={(event) => setProject(event.target.value)}>
+                  <option value="">Без проекта</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </Prop>
           ) : null}
         </div>
@@ -409,6 +422,8 @@ export function TaskDetail({
           aria-label="Описание"
           placeholder="Описание — зачем это и что считать готовым"
           rows={5}
+          // Grows with the text up to most of the screen instead of scrolling inside five rows.
+          className="max-h-[60vh] min-h-[7.5rem] [field-sizing:content]"
           value={fields.description}
           onChange={(event) => set("description", event.target.value)}
         />
@@ -436,14 +451,16 @@ export function TaskDetail({
             ) : null}
             {milestoneOptions.length > 0 ? (
               <Prop label="Веха">
-                <Select value={fields.milestoneId} onChange={(event) => set("milestoneId", event.target.value)}>
-                  <option value="">Без вехи</option>
-                  {milestoneOptions.map((milestone) => (
-                    <option key={milestone.id} value={milestone.id}>
-                      {milestone.title}
-                    </option>
-                  ))}
-                </Select>
+                {(id) => (
+                  <Select id={id} value={fields.milestoneId} onChange={(event) => set("milestoneId", event.target.value)}>
+                    <option value="">Без вехи</option>
+                    {milestoneOptions.map((milestone) => (
+                      <option key={milestone.id} value={milestone.id}>
+                        {milestone.title}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </Prop>
             ) : null}
             {planning && showParent ? (
@@ -487,13 +504,18 @@ function Prop({
   label: string;
   /** Takes the whole row of the two-column grid — for values that read long (a project name). */
   wide?: boolean;
-  children: React.ReactNode;
+  /** Gets the control's id: a label tied by `for` names it exactly («Приоритет»), while a wrapping
+      label also read the selected option into the name («Приоритет Высокий»). */
+  children: (id: string) => React.ReactNode;
 }): React.ReactElement {
+  const id = useId();
   return (
-    <label className={cx("flex min-w-0 flex-col gap-1 text-label text-subtle-foreground", wide && "col-span-2")}>
-      {label}
-      {children}
-    </label>
+    <div className={cx("flex min-w-0 flex-col gap-1", wide && "col-span-full")}>
+      <label htmlFor={id} className="text-label text-subtle-foreground">
+        {label}
+      </label>
+      {children(id)}
+    </div>
   );
 }
 

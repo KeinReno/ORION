@@ -34,7 +34,8 @@ export function TaskCard({
   onMoveUp,
   onMoveDown,
   onDropTask,
-  assignee
+  assignee,
+  hideProject = false
 }: {
   task: Task;
   draggable: boolean;
@@ -55,6 +56,8 @@ export function TaskCard({
   onDropTask?: (draggedId: string) => void;
   /** Исполнитель — только когда плагин «Команда» включён и задача назначена (см. TasksPanel). */
   assignee?: TaskAssignee;
+  /** Внутри проекта чип проекта повторяет заголовок вкладки — не показываем. */
+  hideProject?: boolean;
 }): React.ReactElement {
   // The repeat mark belongs to the tasks-recurrence plugin.
   const recurrence = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
@@ -150,7 +153,7 @@ export function TaskCard({
          */}
         {task.status === "in_progress" ? <StatusMark status="running" label="в работе" /> : null}
         {canceled ? <StatusMark status="cancelled" label="отменена" /> : null}
-        {task.projectTag ? <span style={projectColor(task.projectTag)} title={task.projectTag} className="block max-w-full truncate rounded-full border px-2 py-0.5 text-micro font-medium sm:max-w-[16rem]">{task.projectTag}</span> : null}
+        {task.projectTag && !hideProject ? <span style={projectColor(task.projectTag)} title={task.projectTag} className="block max-w-full truncate rounded-full border px-2 py-0.5 text-micro font-medium sm:max-w-[16rem]">{task.projectTag}</span> : null}
         {task.dueAt ? (
           <span
             className={cx("inline-flex items-center gap-1 text-micro", overdue ? "text-destructive" : "text-subtle-foreground")}
