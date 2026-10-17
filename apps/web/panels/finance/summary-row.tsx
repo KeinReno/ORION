@@ -15,18 +15,10 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
  * this and sum raw balances across currencies into one misleading number
  * (fixed in S16, see docs/HISTORY.md).
  *
- * "Расход в этом месяце" (`monthly.expense`) is a *different*, still-open
- * instance of the same bug: `ReportsService.monthlySummary` sums
- * `TransactionLine.amount` across every account in the workspace regardless
- * of currency (see reports.service.ts `sumLines`) — for a single-currency
- * workspace (the common case) that's correct; for a genuinely multi-
- * currency one it silently mixes currencies into one number. Rather than
- * print a wrong figure with an implied ₽, this hides that one stat when the
- * workspace demonstrably holds more than one currency (see
- * `balancesByCurrency.length > 1` below) — an honest gap, not a fix of the
- * report/budget aggregation itself, which would need an API shape change
- * (`MonthlyFinanceSummary`/`CategoryBreakdownEntry`/`Budget.spent` all have
- * the same "no currency dimension" issue) — left TODO, see S16 entry.
+ * "Расход в этом месяце" is per currency too: `ReportsService.monthlySummary`
+ * returns one row per (month, account currency), so a RUB+USD workspace gets
+ * "Расход за месяц, RUB" and "Расход за месяц, USD" instead of one mixed
+ * number (it used to hide the card entirely in that case).
  */
 export function FinanceSummaryRow(): React.ReactElement | null {
   const { workspace } = useActiveWorkspace();
@@ -41,7 +33,14 @@ export function FinanceSummaryRow(): React.ReactElement | null {
 
   if (!accounts || accounts.length === 0) return null;
 
-  const currentMonth = monthly?.[0];
+  // `monthly` for one month = one row per currency (archived accounts'
+  // currencies included). Skip the ones with no spend so a dormant USD account
+  // doesn't add a "0 $" card; a workspace whose live accounts share one
+  // currency keeps its card even at zero, exactly as before.
+  const liveCurrencies = new Set(balancesByCurrency.map(([currency]) => currency));
+  const spendByCurrency = (monthly ?? []).filter(
+    (m) => m.expense > 0 || (liveCurrencies.size === 1 && liveCurrencies.has(m.currency))
+  );
 
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 15rem), 1fr))" }}>
@@ -52,12 +51,13 @@ export function FinanceSummaryRow(): React.ReactElement | null {
           value={formatMoney(total, currency)}
         />
       ))}
-      {currentMonth && balancesByCurrency.length <= 1 ? (
+      {spendByCurrency.map((row) => (
         <StatCard
-          label="Расход в этом месяце"
-          value={formatMoney(currentMonth.expense, balancesByCurrency[0]?.[0])}
+          key={`spend-${row.currency}`}
+          label={balancesByCurrency.length > 1 || spendByCurrency.length > 1 ? `Расход за месяц, ${row.currency}` : "Расход в этом месяце"}
+          value={formatMoney(row.expense, row.currency)}
         />
-      ) : null}
+      ))}
       <ExtensionSlot name="finance.summary" props={{ workspaceId }} />
     </div>
   );
