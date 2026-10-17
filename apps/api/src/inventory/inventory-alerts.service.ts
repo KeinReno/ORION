@@ -49,9 +49,9 @@ export class InventoryAlertsService {
 
     // Still below the threshold, but already alerted once since the last time it recovered.
     if (item.lowStockNotifiedAt !== null) return null;
-    const recipientId = await this.policy.resolveOwnerId(item.workspaceId);
+    const recipientId = await this.policy.resolveOwnerIdTx(tx, item.workspaceId);
     if (!recipientId) return null;
-    if (!(await this.policy.allowsForUser(recipientId, "inventory"))) return null;
+    if (!(await this.policy.allowsForUserTx(tx, recipientId, "inventory"))) return null;
 
     const title = `Низкий остаток: ${item.name}`;
     const body = `Осталось ${balance} ${item.unit} (порог ${item.minStock} ${item.unit})`;

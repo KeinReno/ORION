@@ -61,7 +61,8 @@ export class Hub {
 
   /** Профиль с подтверждёнными фактами и выбранным резюме; одна HH-вакансия; одобренный владельцем черновик. */
   async scenario(a: Account, opts: { externalId?: string; sourceType?: string; description?: string; organizationName?: string; profile?: { id: string; resumeId: string; factIds: string[] }; approve?: boolean; draft?: boolean; conditions?: Record<string, unknown> } = {}) {
-    const externalId = opts.externalId ?? String(1000000 + ++this.counter * 7 + Math.floor(Math.random() * 1000));
+    // The counter step must exceed the random spread, or two scenarios in one workspace can draw the same id (409).
+    const externalId = opts.externalId ?? String(1000000 + ++this.counter * 1000 + Math.floor(Math.random() * 1000));
     const opp = await this.req<Opportunity>(`/workspaces/${a.workspaceId}/opportunities`, a.token, "POST", {
       kind: "job", title: `Бизнес-аналитик ${externalId}`, organizationName: opts.organizationName ?? "Синтетик", description: opts.description ?? HH_DESCRIPTION, sourceType: opts.sourceType ?? "hh", externalId,
       canonicalUrl: `https://hh.ru/vacancy/${externalId}`, conditions: opts.conditions ?? { workFormat: "remote", amountMin: 150000, amountMax: 200000, paymentBasis: "monthly", taxBasis: "net" }

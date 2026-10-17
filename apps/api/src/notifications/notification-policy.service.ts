@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import { isWithinQuietHours } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 
@@ -13,6 +14,9 @@ import { PrismaService } from "../common/prisma.service";
  * hours apply, there is no separate toggle yet.
  */
 export type ReminderKind = "task" | "event" | "finance" | "inventory" | "entity" | "contact";
+
+/** Runs a system-role read: in its own `asSystem` transaction, or inside the caller's open one (see `allowsForUserTx`). */
+type SystemRead = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
 
 interface RecipientPreferences {
   taskReminders: boolean;
@@ -64,7 +68,27 @@ export class NotificationPolicyService {
 
   /** The real per-recipient check — reads exactly this user's UserPreference row. */
   async allowsForUser(userId: string, kind: ReminderKind, now = new Date()): Promise<boolean> {
-    const prefs = await this.preferencesForUser(userId);
+    return this.decide(await this.preferencesForUser(userId, this.ownTransaction), kind, now);
+  }
+
+  /**
+   * `allowsForUser` / `resolveOwnerId` for a producer that is already inside a
+   * transaction (low-stock alerts fire mid-purchase). Reading through the
+   * caller's `tx` instead of opening a second one matters under load: each
+   * concurrent request already holds a pooled connection, and with a small
+   * pool (3 on a 1-CPU CI runner) every one of them waited for a second
+   * connection that never freed up — "Unable to start a transaction in the
+   * given time", a 500 on a valid purchase.
+   */
+  async allowsForUserTx(tx: Prisma.TransactionClient, userId: string, kind: ReminderKind, now = new Date()): Promise<boolean> {
+    return this.decide(await this.preferencesForUser(userId, this.within(tx)), kind, now);
+  }
+
+  async resolveOwnerIdTx(tx: Prisma.TransactionClient, workspaceId: string): Promise<string | null> {
+    return this.ownerFor(workspaceId, this.within(tx));
+  }
+
+  private decide(prefs: RecipientPreferences | null, kind: ReminderKind, now: Date): boolean {
     if (!prefs) return true;
 
     if (kind === "task" && !prefs.taskReminders) return false;
@@ -82,11 +106,33 @@ export class NotificationPolicyService {
    * has no assignee).
    */
   async resolveOwnerId(workspaceId: string): Promise<string | null> {
+    return this.ownerFor(workspaceId, this.ownTransaction);
+  }
+
+  private readonly ownTransaction: SystemRead = (fn) => this.prisma.asSystem(fn);
+
+  /**
+   * The same orion_system switch `asSystem` makes, but scoped to a few reads
+   * inside the caller's transaction; `RESET ROLE` returns to the login role
+   * (orion_app), and `app.current_user_id` set by `withUser` is untouched.
+   */
+  private within(tx: Prisma.TransactionClient): SystemRead {
+    return async (fn) => {
+      await tx.$executeRawUnsafe("SET LOCAL ROLE orion_system");
+      // No `finally`: if `fn` fails the whole transaction is aborted and rolls the role back
+      // itself, and a RESET there would only replace the real error with "transaction is aborted".
+      const result = await fn(tx);
+      await tx.$executeRawUnsafe("RESET ROLE");
+      return result;
+    };
+  }
+
+  private async ownerFor(workspaceId: string, read: SystemRead): Promise<string | null> {
     const cached = this.ownerCache.get(workspaceId);
     if (cached && Date.now() - cached.at < NotificationPolicyService.CACHE_TTL_MS) {
       return cached.userId;
     }
-    const userId = await this.prisma.asSystem(async (tx) => {
+    const userId = await read(async (tx) => {
       const membership =
         (await tx.workspaceMember.findFirst({ where: { workspaceId, role: "owner" } })) ??
         (await tx.workspaceMember.findFirst({ where: { workspaceId } }));
@@ -112,13 +158,13 @@ export class NotificationPolicyService {
   }
 
   /** One user's preferences, cached for a minute (see the class comment). */
-  private async preferencesForUser(userId: string): Promise<RecipientPreferences | null> {
+  private async preferencesForUser(userId: string, read: SystemRead): Promise<RecipientPreferences | null> {
     const cached = this.prefsCache.get(userId);
     if (cached && Date.now() - cached.at < NotificationPolicyService.CACHE_TTL_MS) {
       return cached.prefs;
     }
 
-    const prefs = await this.prisma.asSystem(async (tx) => {
+    const prefs = await read(async (tx) => {
       // `asSystem`, not `withUser`: the crons run without a "current user".
       const row = await tx.userPreference.findUnique({ where: { userId } });
       if (!row) return null; // Preferences are created lazily on first save — absent row means "defaults".
