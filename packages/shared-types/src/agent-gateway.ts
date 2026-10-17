@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { agentScopeSchema } from "./agent";
+import { agentModeSchema, agentScopeSchema } from "./agent";
 import { relationKindSchema } from "./search";
 
 /**
@@ -164,7 +164,15 @@ export type AgentCapability = z.infer<typeof agentCapabilitySchema>;
 export const agentGatewayContextSchema = z.object({
   apiVersion: z.string(),
   workspace: z.object({ id: z.string(), name: z.string(), role: z.string() }),
-  token: z.object({ name: z.string(), scopes: z.array(agentScopeSchema), expiresAt: z.string().nullable() }),
+  token: z.object({
+    name: z.string(),
+    scopes: z.array(agentScopeSchema),
+    expiresAt: z.string().nullable(),
+    /** observer / assistant / manager — what a write does for THIS token (every tool description says it per mode). */
+    mode: agentModeSchema,
+    /** One sentence on what the mode means, in Russian. */
+    modeNote: z.string()
+  }),
   /** Enabled modules the token's scopes reach. Modules it cannot touch are not listed. */
   modules: z.array(z.object({ id: z.string(), label: z.string() })),
   /** Active projects (up to `limits.projects`); `null` when the token has no `projects:read`. */

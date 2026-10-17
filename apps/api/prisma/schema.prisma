@@ -2110,6 +2110,10 @@ model AgentProposal {
   /// The requested change of an "*.update" proposal, and the before/after preview computed when it was filed.
   patch       Json?
   diff        Json?
+  /// What the request was filed against, so approving can tell "the object changed after the request": the CAS counter
+  /// of a task/note, `updatedAt` of an event. Both null on requests filed before this column existed (never stale).
+  baseRevision  Int?
+  baseUpdatedAt DateTime?
   /// Lapses after this instant (null = never, the legacy deletion requests).
   expiresAt   DateTime?
   /// "pending" | "approved" | "rejected"

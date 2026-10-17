@@ -211,6 +211,12 @@ export class DocumentsService {
             }
           }
 
+          // Two moves to the same folder and name would otherwise both pass the name check, both rename onto the
+          // same path on disk (the second silently replaces the first's bytes), and the loser's compensation would
+          // then carry the winner's file back to its own old path — the winner's content 500s. Serialise on the
+          // destination (same case-insensitive key as the unique index): the second move waits for the first to
+          // commit, then sees its row and gets a 409 before it touches the disk.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`documents:${workspaceId}:${newParentId ?? ""}:${newName.toLowerCase()}`}, 0))`;
           await this.assertNameFreeTx(tx, workspaceId, newParentId, newName, id);
 
           const fromKey = node.deletedAt

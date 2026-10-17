@@ -1,11 +1,40 @@
 "use client";
 
-import { useAgentProposals, useDecideAgentProposal, useDecideAgentProposalsBulk } from "@orion/core-react";
-import { AGENT_PROPOSAL_ACTION_LABEL } from "@orion/shared-types";
+import { ApiError } from "@orion/core";
+import { useAgentProposals, useDecideAgentProposal, useDecideAgentProposalsBulk, useRefreshAgentProposal } from "@orion/core-react";
+import { AGENT_PROPOSAL_ACTION_LABEL, AGENT_PROPOSAL_STALE_CODE, type AgentProposalDiffEntry } from "@orion/shared-types";
 import { Badge, Button, useToast } from "@orion/ui";
 import { useState } from "react";
 import { describeError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
+
+/** The 409 "object changed after the request": the diff of the request against the object as it is now. */
+function staleDiff(error: unknown): AgentProposalDiffEntry[] | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const body = error.details as { code?: unknown; currentDiff?: unknown } | undefined;
+  if (body?.code !== AGENT_PROPOSAL_STALE_CODE) return null;
+  return Array.isArray(body.currentDiff) ? (body.currentDiff as AgentProposalDiffEntry[]) : [];
+}
+
+function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {
+  return Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
+}
+
+function DiffTable({ diff }: { diff: AgentProposalDiffEntry[] }): React.ReactElement {
+  return (
+    <table className="w-full table-fixed border-collapse rounded-lg border border-border bg-background text-2xs">
+      <tbody>
+        {diff.map((d) => (
+          <tr key={d.field} className="border-b border-border last:border-0 align-top">
+            <th scope="row" className="w-28 px-2 py-1 text-left font-medium text-muted-foreground">{d.label}</th>
+            <td className="break-words px-2 py-1 text-danger line-through decoration-danger/50">{d.before ?? "—"}</td>
+            <td className="break-words px-2 py-1 text-success">{d.after ?? "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 /**
  * Requests an agent may only PROPOSE (TZ-03): deletions and — in assistant mode — changes to existing objects, each with a
@@ -16,7 +45,10 @@ export function AgentProposals({ workspaceId }: { workspaceId: string | undefine
   const proposals = useAgentProposals(workspaceId);
   const decide = useDecideAgentProposal(workspaceId);
   const bulk = useDecideAgentProposalsBulk(workspaceId);
+  const refresh = useRefreshAgentProposal(workspaceId);
   const [picked, setPicked] = useState<string[]>([]);
+  // Requests whose object changed after they were filed: id → what the request would change NOW.
+  const [stale, setStale] = useState<Record<string, AgentProposalDiffEntry[]>>({});
 
   const pending = (proposals.data ?? []).filter((p) => p.status === "pending");
   const lapsed = (proposals.data ?? []).filter((p) => p.status === "expired");
@@ -24,6 +56,27 @@ export function AgentProposals({ workspaceId }: { workspaceId: string | undefine
 
   const toggle = (id: string): void => setPicked((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   const chosen = picked.filter((id) => pending.some((p) => p.id === id));
+
+  function approve(id: string, force: boolean): void {
+    decide.mutate(
+      { proposalId: id, decision: "approve", force },
+      {
+        onSuccess: () => setStale((cur) => withoutKey(cur, id)),
+        onError: (error) => {
+          const diff = staleDiff(error);
+          if (diff) setStale((cur) => ({ ...cur, [id]: diff }));
+          else toast({ title: "Не удалось выполнить", description: describeError(error), tone: "danger" });
+        }
+      }
+    );
+  }
+
+  function recheck(id: string): void {
+    refresh.mutate(id, {
+      onSuccess: () => setStale((cur) => withoutKey(cur, id)),
+      onError: (error) => toast({ title: "Не удалось перепроверить", description: describeError(error), tone: "danger" })
+    });
+  }
 
   function run(ids: string[], decision: "approve" | "reject"): void {
     bulk.mutate(
@@ -82,27 +135,31 @@ export function AgentProposals({ workspaceId }: { workspaceId: string | undefine
                 >
                   Отклонить
                 </Button>
-                <Button
-                  size="sm"
-                  disabled={decide.isPending}
-                  onClick={() => decide.mutate({ proposalId: p.id, decision: "approve" }, { onError: (error) => toast({ title: "Не удалось выполнить", description: describeError(error), tone: "danger" }) })}
-                >
+                <Button size="sm" disabled={decide.isPending || p.id in stale} onClick={() => approve(p.id, false)}>
                   Подтвердить
                 </Button>
               </span>
             </div>
-            {p.diff.length > 0 ? (
-              <table className="w-full table-fixed border-collapse rounded-lg border border-border bg-background text-2xs">
-                <tbody>
-                  {p.diff.map((d) => (
-                    <tr key={d.field} className="border-b border-border last:border-0 align-top">
-                      <th scope="row" className="w-28 px-2 py-1 text-left font-medium text-muted-foreground">{d.label}</th>
-                      <td className="break-words px-2 py-1 text-danger line-through decoration-danger/50">{d.before ?? "—"}</td>
-                      <td className="break-words px-2 py-1 text-success">{d.after ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {p.id in stale ? (
+              <div role="alert" className="space-y-2 rounded-lg border border-danger/40 bg-danger/10 p-2">
+                <p className="font-medium">Объект изменился после запроса агента.</p>
+                <p className="text-2xs text-muted-foreground">
+                  {(stale[p.id] ?? []).length > 0
+                    ? "Вот что запрос изменит в текущей версии. Проверьте заново (превью обновится) или примените всё равно."
+                    : "В текущей версии запрос уже ничего не меняет. Проверьте заново или отклоните."}
+                </p>
+                {(stale[p.id] ?? []).length > 0 ? <DiffTable diff={stale[p.id] ?? []} /> : null}
+                <span className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={refresh.isPending} onClick={() => recheck(p.id)}>
+                    Проверить заново
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => approve(p.id, true)}>
+                    Применить всё равно
+                  </Button>
+                </span>
+              </div>
+            ) : p.diff.length > 0 ? (
+              <DiffTable diff={p.diff} />
             ) : null}
           </li>
         ))}

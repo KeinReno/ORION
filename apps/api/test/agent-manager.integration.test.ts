@@ -345,6 +345,82 @@ describe("Agent Manager", () => {
     expect((await request("/ai/v1/notes", { method: "POST", token: assistant.secret, body: decision })).status).toBe(201);
   });
 
+  it("подтверждение запроса, пока объект изменился после него: 409 agent_proposal_stale, перепроверка или явное «всё равно»", async () => {
+    const alice = await register("stale");
+    const agent = await issue(alice, { scopes: WRITE_SCOPES });
+    const decideUrl = (id: string, verb: string): string => `${ws(alice)}/agent-tokens/proposals/${id}/${verb}`;
+    interface Stale { code: string; message: string; proposalId: string; currentDiff: Array<{ field: string; before: string | null; after: string | null }> }
+
+    // --- task: the human changes the status after the agent filed «done».
+    const task = await request<{ id: string }>(`${ws(alice)}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Исходная" } });
+    const proposed = await request<Proposed>(`/ai/v1/tasks/${task.data.id}`, { method: "PATCH", token: agent.secret, body: { status: "done" } });
+    expect(proposed.status).toBe(202);
+    const changed = await request(`${ws(alice)}/tasks/${task.data.id}`, { method: "PATCH", token: alice.accessToken, body: { status: "in_progress" } });
+    expect(changed.status).toBe(200);
+
+    const stale = await request<Stale>(decideUrl(proposed.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} });
+    expect(stale.status).toBe(409);
+    expect(stale.data.code).toBe("agent_proposal_stale");
+    expect(stale.data.message).toContain("изменился после запроса");
+    expect(stale.data.currentDiff).toEqual([expect.objectContaining({ field: "status", before: "in_progress", after: "done" })]);
+    // Nothing was applied and the request is still waiting.
+    const tasks = await request<Array<{ id: string; status: string }>>(`${ws(alice)}/tasks`, { method: "GET", token: alice.accessToken });
+    expect(tasks.data.find((t) => t.id === task.data.id)?.status).toBe("in_progress");
+    const pending = await request<Array<{ id: string; status: string; diff: Array<{ before: string | null }> }>>(`${ws(alice)}/agent-tokens/proposals`, { method: "GET", token: alice.accessToken });
+    expect(pending.data.find((p) => p.id === proposed.data.proposal.id)).toMatchObject({ status: "pending" });
+    expect(pending.data.find((p) => p.id === proposed.data.proposal.id)?.diff[0]?.before).toBe("todo");
+
+    // «Проверить заново»: the preview is recomputed against the current object, then a plain approval applies it.
+    const refreshed = await request<{ status: string; diff: Array<{ before: string | null; after: string | null }> }>(decideUrl(proposed.data.proposal.id, "refresh"), { method: "POST", token: alice.accessToken, body: {} });
+    expect(refreshed.status).toBe(201);
+    expect(refreshed.data).toMatchObject({ status: "pending", diff: [{ before: "in_progress", after: "done" }] });
+    expect((await request(decideUrl(proposed.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).status).toBe(201);
+    const done = await request<Array<{ id: string; status: string }>>(`${ws(alice)}/tasks`, { method: "GET", token: alice.accessToken });
+    expect(done.data.find((t) => t.id === task.data.id)?.status).toBe("done");
+
+    // --- note: «применить всё равно» writes over the newer text, explicitly.
+    const note = await request<{ id: string }>(`${ws(alice)}/notes`, { method: "POST", token: alice.accessToken, body: { title: "Заметка", body: "v1" } });
+    const notePatch = await request<Proposed>(`/ai/v1/notes/${note.data.id}`, { method: "PATCH", token: agent.secret, body: { body: "от агента" } });
+    expect(notePatch.status).toBe(202);
+    const noteNow = await request<{ revision: number }>(`${ws(alice)}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken });
+    expect((await request(`${ws(alice)}/notes/${note.data.id}`, { method: "PATCH", token: alice.accessToken, body: { body: "от человека", expectedRevision: noteNow.data.revision } })).status).toBe(200);
+    expect((await request(decideUrl(notePatch.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).status).toBe(409);
+    expect((await request<{ body: string }>(`${ws(alice)}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken })).data.body).toBe("от человека");
+    expect((await request(decideUrl(notePatch.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: { force: true } })).status).toBe(201);
+    expect((await request<{ body: string }>(`${ws(alice)}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken })).data.body).toBe("от агента");
+
+    // --- event (no revision: compared by updatedAt) and a deletion request are guarded the same way.
+    const event = await request<{ id: string }>("/ai/v1/events", {
+      method: "POST", token: agent.secret, body: { title: "Встреча", startAt: "2026-11-02T09:00:00.000Z", endAt: "2026-11-02T10:00:00.000Z" }
+    });
+    const eventPatch = await request<Proposed>(`/ai/v1/events/${event.data.id}`, { method: "PATCH", token: agent.secret, body: { location: "Zoom" } });
+    expect(eventPatch.status).toBe(202);
+    expect((await request(`${ws(alice)}/events/${event.data.id}`, { method: "PATCH", token: alice.accessToken, body: { title: "Встреча (перенос)" } })).status).toBe(200);
+    expect((await request<Stale>(decideUrl(eventPatch.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).data.code).toBe("agent_proposal_stale");
+
+    const victim = await request<{ id: string }>(`${ws(alice)}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Под удаление" } });
+    const del = await request<{ id: string }>("/ai/v1/proposals", { method: "POST", token: agent.secret, body: { action: "task.delete", targetId: victim.data.id } });
+    expect(del.status).toBe(201);
+    await request(`${ws(alice)}/tasks/${victim.data.id}`, { method: "PATCH", token: alice.accessToken, body: { priority: "high" } });
+    expect((await request(decideUrl(del.data.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).status).toBe(409);
+    expect((await request(decideUrl(del.data.id, "approve"), { method: "POST", token: alice.accessToken, body: { force: true } })).status).toBe(201);
+
+    // An untouched object still approves without any ceremony.
+    const calm = await request<{ id: string }>(`${ws(alice)}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Спокойная" } });
+    const calmPatch = await request<Proposed>(`/ai/v1/tasks/${calm.data.id}`, { method: "PATCH", token: agent.secret, body: { status: "done" } });
+    expect((await request(decideUrl(calmPatch.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).status).toBe(201);
+  });
+
+  it("токен узнаёт свой режим: /me и /context отдают mode", async () => {
+    const alice = await register("modeinfo");
+    const agent = await issue(alice, { scopes: ["tasks:read"], mode: "observer" });
+    const me = await request<{ mode: string }>("/ai/v1/me", { method: "GET", token: agent.secret });
+    expect(me.data.mode).toBe("observer");
+    const context = await request<{ token: { mode: string; modeNote: string } }>("/ai/v1/context", { method: "GET", token: agent.secret });
+    expect(context.data.token.mode).toBe("observer");
+    expect(context.data.token.modeNote).toContain("Только читает");
+  });
+
   async function register(name: string): Promise<Session> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {

@@ -6,6 +6,7 @@ import {
   AGENT_CAPTURE_HINTS,
   AGENT_CONFIRMATION_RULES,
   AGENT_LIMITS,
+  AGENT_MODE_HINT,
   MODULE_CATALOG,
   agentAccessibleTypes,
   buildOrionLink,
@@ -142,7 +143,7 @@ export class AgentGatewayService {
       return {
         apiVersion: AGENT_API_VERSION,
         workspace: { id: workspace.id, name: workspace.name, role: member?.role ?? "member" },
-        token: { name: agent.tokenName, scopes: agent.scopes, expiresAt: token?.expiresAt?.toISOString() ?? null },
+        token: { name: agent.tokenName, scopes: agent.scopes, expiresAt: token?.expiresAt?.toISOString() ?? null, mode: agent.mode, modeNote: AGENT_MODE_HINT[agent.mode] },
         modules: MODULE_CATALOG.filter((module) => reachable.has(module.id)).map((module) => ({ id: module.id, label: module.label })),
         projects: projectRows?.map((project) => ({ id: project.id, name: project.name, url: buildOrionLink({ type: "project", id: project.id, workspaceId: agent.workspaceId }) })) ?? null,
         capture: { inbox: canCapture, hints },

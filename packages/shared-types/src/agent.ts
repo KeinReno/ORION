@@ -338,6 +338,13 @@ export interface AgentProposedResult {
   proposal: AgentProposal;
 }
 
+/** `code` of the 409 an approval gets when the object changed after the request was filed (body also has `currentDiff`). */
+export const AGENT_PROPOSAL_STALE_CODE = "agent_proposal_stale";
+
+/** `force: true` = the human saw the stale warning and applies the request over the newer state anyway. */
+export const agentProposalApproveInputSchema = z.object({ force: z.boolean().optional() });
+export type AgentProposalApproveInput = z.infer<typeof agentProposalApproveInputSchema>;
+
 export const agentProposalBulkInputSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(100),
   decision: z.enum(["approve", "reject"])

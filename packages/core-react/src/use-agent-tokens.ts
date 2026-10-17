@@ -66,9 +66,19 @@ export function useDecideAgentProposal(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (v: { proposalId: string; decision: "approve" | "reject" }) => api.decideAgentProposal(workspaceId as string, v.proposalId, v.decision),
+    mutationFn: (v: { proposalId: string; decision: "approve" | "reject"; force?: boolean }) =>
+      api.decideAgentProposal(workspaceId as string, v.proposalId, v.decision, v.force === true),
     // An approved deletion changes tasks/notes too: the cross-window sync and these keys refresh them.
     onSuccess: () => queryClient.invalidateQueries()
+  });
+}
+
+export function useRefreshAgentProposal(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (proposalId: string) => api.refreshAgentProposal(workspaceId as string, proposalId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent-tokens", workspaceId, "proposals"] })
   });
 }
 
