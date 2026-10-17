@@ -113,7 +113,16 @@ describe("palette drives the app's accent and status colours", () => {
     const dark = themeDocumentVariables(PRECISION_THEME);
     expect(dark["--orion-accent"]).toBe("201 168 106");
     expect(dark["--orion-accent-hover"]).toBe("222 192 139");
-    expect([dark["--orion-success"], dark["--orion-warning"], dark["--orion-danger"]]).toEqual(["16 185 129", "245 158 11", "244 63 94"]);
+    expect([dark["--orion-success"], dark["--orion-warning"], dark["--orion-danger"]]).toEqual(["16 185 129", "245 158 11", "251 113 133"]);
     expect(dark["--orion-warning-hover"]).toBeUndefined(); // the dark hover defaults stay
+    expect(dark["--orion-danger-fill"]).toBe("207 66 77"); // = the globals.css default
+  });
+  it("keeps red text and the white-on-red badge readable in every preset", () => {
+    const hex = (channels: string) => "#" + channels.split(" ").map(n => Number(n).toString(16).padStart(2, "0")).join("");
+    for (const theme of THEME_PRESETS) {
+      const vars = themeDocumentVariables(theme);
+      expect(contrastRatio(hex(vars["--orion-danger"]), theme.colors.surface), theme.id).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio("#ffffff", hex(vars["--orion-danger-fill"])), theme.id).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

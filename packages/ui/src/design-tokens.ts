@@ -20,7 +20,7 @@ export const LEGACY_TOKENS = {
   "focus-ring": "var(--orion-accent, 91 94 232)",
   "status-success": "var(--orion-success, 16 185 129)",
   "status-warning": "var(--orion-warning, 245 158 11)",
-  "status-danger": "var(--orion-danger, 244 63 94)",
+  "status-danger": "var(--orion-danger, 251 113 133)",
   "status-info": "96 165 250",
   "interactive-selected": "var(--orion-accent, 91 94 232)"
 } as const;
