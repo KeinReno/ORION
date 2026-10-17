@@ -19,14 +19,20 @@ function shiftMonth(month: string, delta: number): string {
 /**
  * Plugin `finance-reports`, second half: the chosen month against the one before it, where the money went by what the
  * operation says, and the month as a spreadsheet. Numbers come from the same server aggregates as the charts above.
+ *
+ * Everything here is in the one `currency` the report above is switched to: the comparison takes only that
+ * currency's breakdown entries, and payees only the operations of accounts in that currency (archived ones included,
+ * their operations are still history) — a RUB+USD workspace never sees one mixed total.
  */
-export function ReportInsights({ workspaceId, month }: { workspaceId: string | undefined; month: string }): React.ReactElement {
+export function ReportInsights({ workspaceId, month, currency }: { workspaceId: string | undefined; month: string; currency: string }): React.ReactElement {
   const previousMonth = shiftMonth(month, -1);
   const { data: current, isLoading: currentLoading } = useCategoryBreakdown(workspaceId, { month });
   const { data: previous, isLoading: previousLoading } = useCategoryBreakdown(workspaceId, { month: previousMonth });
   const { data: operations } = useTransactions(workspaceId, { month, limit: PAYEE_SAMPLE });
-  const comparison = useMemo(() => compareBreakdowns(current ?? [], previous ?? []), [current, previous]);
-  const payees = useMemo(() => topPayees(operations ?? []), [operations]);
+  const { data: accounts } = useAccounts(workspaceId, true);
+  const comparison = useMemo(() => compareBreakdowns(current ?? [], previous ?? [], currency), [current, previous, currency]);
+  const accountIds = useMemo(() => new Set((accounts ?? []).filter((account) => account.currency === currency).map((account) => account.id)), [accounts, currency]);
+  const payees = useMemo(() => (accounts ? topPayees(operations ?? [], undefined, accountIds) : []), [operations, accounts, accountIds]);
   const maxPayee = Math.max(1, ...payees.map((payee) => payee.amount));
 
   return (
@@ -40,7 +46,7 @@ export function ReportInsights({ workspaceId, month }: { workspaceId: string | u
         ) : (
           <>
             <p className="mb-2 text-xs text-muted-foreground">
-              Расходы: {formatMoney(comparison.currentTotal)} против {formatMoney(comparison.previousTotal)}
+              Расходы: {formatMoney(comparison.currentTotal, currency)} против {formatMoney(comparison.previousTotal, currency)}
               {comparison.previousTotal > 0 ? ` (${signed(Math.round(((comparison.currentTotal - comparison.previousTotal) / comparison.previousTotal) * 100))}%)` : " (прошлый месяц — без расходов)"}
             </p>
             {comparison.categories.length === 0 ? (
@@ -52,7 +58,7 @@ export function ReportInsights({ workspaceId, month }: { workspaceId: string | u
                     <span className="truncate text-muted-foreground">{row.categoryName}</span>
                     <span className={`shrink-0 font-mono tabular-nums ${row.delta > 0 ? "text-destructive" : "text-success"}`}>
                       {row.delta > 0 ? "+" : "−"}
-                      {formatMoney(Math.abs(row.delta))}
+                      {formatMoney(Math.abs(row.delta), currency)}
                       <span className="ml-1.5 text-subtle-foreground">{row.ratio === null ? "новая" : row.previous > 0 && row.current === 0 ? "ушла" : `${signed(Math.round(row.ratio * 100))}%`}</span>
                     </span>
                   </li>
@@ -74,7 +80,7 @@ export function ReportInsights({ workspaceId, month }: { workspaceId: string | u
                     {payee.label}
                     {payee.count > 1 ? <span className="ml-1.5 text-subtle-foreground">× {payee.count}</span> : null}
                   </span>
-                  <span className="shrink-0 tabular-nums text-subtle-foreground">{formatMoney(payee.amount)}</span>
+                  <span className="shrink-0 tabular-nums text-subtle-foreground">{formatMoney(payee.amount, currency)}</span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                   <div className="h-full rounded-full bg-accent/60" style={{ width: `${(payee.amount / maxPayee) * 100}%` }} />

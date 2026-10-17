@@ -19,10 +19,21 @@ export interface PeriodComparison {
   categories: CategoryDelta[];
 }
 
-/** Expense by category, this period against the one before it. */
-export function compareBreakdowns(current: readonly CategoryBreakdownEntry[], previous: readonly CategoryBreakdownEntry[], limit = 6): PeriodComparison {
+/**
+ * Expense by category, this period against the one before it, in ONE currency: the server returns one entry per
+ * (category, currency), and entries of other currencies are left out rather than added in (kopecks of RUB plus cents
+ * of USD are not an amount of anything).
+ */
+export function compareBreakdowns(
+  currentAll: readonly CategoryBreakdownEntry[],
+  previousAll: readonly CategoryBreakdownEntry[],
+  currency: string,
+  limit = 6
+): PeriodComparison {
   const keyOf = (entry: CategoryBreakdownEntry): string => entry.categoryId ?? `name:${entry.categoryName}`;
   const rows = new Map<string, CategoryDelta>();
+  const current = currentAll.filter((entry) => entry.currency === currency);
+  const previous = previousAll.filter((entry) => entry.currency === currency);
   for (const entry of current) {
     rows.set(keyOf(entry), { categoryId: entry.categoryId, categoryName: entry.categoryName, current: entry.amount, previous: 0, delta: 0, ratio: null });
   }
@@ -53,11 +64,16 @@ export interface PayeeTotal {
 /**
  * Where the money goes: expenses grouped by what the note says (the same normalisation as the recurring-payment hint),
  * largest first. Transfers are not spending. An operation without a note is one group, «Без описания».
+ *
+ * An operation's currency is its account's: with `accountIds` (the accounts of the currency being shown) only those
+ * operations count, so a workspace with RUB and USD accounts never adds them into one payee total. Without it every
+ * expense counts — right only when the workspace has a single currency.
  */
-export function topPayees(transactions: readonly Transaction[], limit = 8): PayeeTotal[] {
+export function topPayees(transactions: readonly Transaction[], limit = 8, accountIds?: ReadonlySet<string>): PayeeTotal[] {
   const groups = new Map<string, PayeeTotal>();
   for (const transaction of transactions) {
     if (transaction.type !== "expense") continue;
+    if (accountIds && !accountIds.has(transaction.accountId)) continue;
     const normalized = normalizeNote(transaction.note);
     const key = normalized || "—";
     const existing = groups.get(key);

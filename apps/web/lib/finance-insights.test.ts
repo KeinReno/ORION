@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Transaction } from "@orion/shared-types";
 import { compareBreakdowns, topPayees, transactionsToCsv } from "./finance-insights";
 
-const entry = (categoryId: string | null, categoryName: string, amount: number) => ({ categoryId, categoryName, amount });
+const entry = (categoryId: string | null, categoryName: string, amount: number, currency = "RUB") => ({ categoryId, categoryName, currency, amount });
 const tx = (patch: Partial<Transaction>): Transaction => ({
   id: "t", workspaceId: "w", accountId: "a", toAccountId: null, type: "expense", note: "Пятёрочка", tags: [], projectId: null, reconciledAt: null,
   importedRef: null, occurredAt: "2026-10-03T10:00:00.000Z", lines: [{ id: "l", categoryId: "c", amount: 1250 }], totalAmount: 1250, createdAt: "", updatedAt: "", ...patch
@@ -12,7 +12,8 @@ describe("compareBreakdowns", () => {
   it("orders by the size of the change and keeps «new» and «gone» categories honest", () => {
     const result = compareBreakdowns(
       [entry("food", "Еда", 30000), entry("fun", "Досуг", 5000), entry("new", "Ремонт", 7000)],
-      [entry("food", "Еда", 20000), entry("fun", "Досуг", 5000), entry("old", "Такси", 4000)]
+      [entry("food", "Еда", 20000), entry("fun", "Досуг", 5000), entry("old", "Такси", 4000)],
+      "RUB"
     );
     expect(result.currentTotal).toBe(42000);
     expect(result.previousTotal).toBe(29000);
@@ -24,8 +25,18 @@ describe("compareBreakdowns", () => {
   });
   it("drops unchanged categories and caps the list", () => {
     const many = Array.from({ length: 9 }, (_, i) => entry(`c${i}`, `К${i}`, 100 * (i + 1)));
-    expect(compareBreakdowns(many, [], 3).categories).toHaveLength(3);
-    expect(compareBreakdowns([entry("a", "А", 1)], [entry("a", "А", 1)]).categories).toEqual([]);
+    expect(compareBreakdowns(many, [], "RUB", 3).categories).toHaveLength(3);
+    expect(compareBreakdowns([entry("a", "А", 1)], [entry("a", "А", 1)], "RUB").categories).toEqual([]);
+  });
+  it("compares one currency only and never adds another one in", () => {
+    const result = compareBreakdowns(
+      [entry("food", "Еда", 30000), entry("food", "Еда", 2000, "USD")],
+      [entry("food", "Еда", 20000), entry("food", "Еда", 9000, "USD")],
+      "USD"
+    );
+    expect(result.currentTotal).toBe(2000);
+    expect(result.previousTotal).toBe(9000);
+    expect(result.categories.map((c) => [c.categoryName, c.delta])).toEqual([["Еда", -7000]]);
   });
 });
 
@@ -39,6 +50,14 @@ describe("topPayees", () => {
       tx({ note: "Накопления", type: "transfer", totalAmount: 888888 })
     ]);
     expect(result.map((p) => [p.label, p.amount, p.count])).toEqual([["Пятёрочка", 3500, 2], ["Без описания", 400, 1]]);
+  });
+  it("counts only the operations of the given accounts (one currency)", () => {
+    const result = topPayees(
+      [tx({ note: "Отель", accountId: "rub", totalAmount: 30000 }), tx({ note: "Отель", accountId: "usd", totalAmount: 2000 })],
+      8,
+      new Set(["usd"])
+    );
+    expect(result.map((p) => [p.label, p.amount, p.count])).toEqual([["Отель", 2000, 1]]);
   });
 });
 

@@ -341,6 +341,35 @@ describe("snapshot coverage and restore preflight (S03)", () => {
     expect(restored.restrictedModules).toEqual(["documents"]);
   });
 
+  it("Budget.currency roundtrips, and a backup taken before the column existed takes the accounts' only currency", async () => {
+    const alice = await register("budget-currency");
+    const { workspaceId, userId } = alice;
+    const month = new Date(Date.UTC(2026, 9, 1));
+    await prisma.withUser(userId, async (tx) => {
+      await tx.account.create({ data: { workspaceId, name: "Card", currency: "USD" } });
+      const food = await tx.financeCategory.create({ data: { workspaceId, name: "Food", kind: "expense" } });
+      const fun = await tx.financeCategory.create({ data: { workspaceId, name: "Fun", kind: "expense" } });
+      await tx.budget.create({ data: { workspaceId, categoryId: food.id, month, limitAmount: 100, currency: "EUR" } });
+      await tx.budget.create({ data: { workspaceId, categoryId: fun.id, month, limitAmount: 200, currency: "USD" } });
+    });
+
+    const snapshot = await prisma.withUser(userId, (tx) => snapshots.serialize(tx, workspaceId));
+    const budgets = snapshot.tables.financeBudgets as Array<Record<string, unknown>>;
+    expect(budgets.map((b) => b.currency).sort()).toEqual(["EUR", "USD"]);
+    // Pretend the second budget was backed up before 20261017100000_budget_currency.
+    const legacy = budgets.find((b) => b.currency === "USD")!;
+    delete legacy.currency;
+
+    await prisma.withUser(userId, (tx) => snapshots.apply(tx, snapshot));
+    const restored = await prisma.withUser(userId, (tx) =>
+      tx.budget.findMany({ where: { workspaceId }, select: { limitAmount: true, currency: true }, orderBy: { limitAmount: "asc" } })
+    );
+    expect(restored).toEqual([
+      { limitAmount: 100, currency: "EUR" },
+      { limitAmount: 200, currency: "USD" }
+    ]);
+  });
+
   // --- helpers --------------------------------------------------------------
 
   async function register(name: string): Promise<{ workspaceId: string; userId: string; token: string }> {

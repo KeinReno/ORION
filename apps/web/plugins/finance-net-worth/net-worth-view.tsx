@@ -23,14 +23,14 @@ function useNetWorthData(workspaceId: string | undefined) {
 /**
  * Plugin `finance-net-worth`: what the workspace is worth right now, per currency — accounts minus debts plus
  * receivables — and how the account side moved over the last year. The trend is the accounts' running balance only:
- * the history of debts is not stored, so past months deliberately do not subtract them.
+ * the history of debts is not stored, so past months deliberately do not subtract them. The monthly summary comes one
+ * series per account currency, and each currency gets its own trend — never one line through mixed amounts.
  */
 export function NetWorthView({ workspaceId }: FinanceTabSlotProps): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const id = workspaceId ?? workspace?.id;
   const { accounts, worth, isLoading } = useNetWorthData(id);
   const { data: monthly } = useMonthlyFinanceSummary(id, MONTHS);
-  const singleCurrency = worth.currencies.length === 1 ? worth.currencies[0]!.currency : null;
   // Hand-entered rates (plugin «Курсы валют»); with the plugin off the list is empty and nothing is converted.
   const { data: rates } = useExchangeRates(worth.currencies.length > 1 ? id : undefined);
   const [target, setTarget] = useState("");
@@ -110,13 +110,19 @@ export function NetWorthView({ workspaceId }: FinanceTabSlotProps): React.ReactE
       ) : null}
       {worth.untracked > 0 ? <p className="text-2xs text-subtle-foreground">Ещё {worth.untracked} без общей суммы (подписки, коммунальные) — в капитал не входят.</p> : null}
 
-      {singleCurrency && monthly && monthly.length > 1 ? (
-        <Card className="space-y-2">
-          <p className="text-sm font-medium text-foreground">Динамика счетов за {monthly.length} мес.</p>
-          <Trend points={monthly.map((m) => m.netWorth)} currency={singleCurrency} first={monthly[0]!.month} last={monthly[monthly.length - 1]!.month} />
-          <p className="text-2xs text-subtle-foreground">Только остатки счетов: история долгов не хранится, поэтому прошлые месяцы их не вычитают.</p>
-        </Card>
-      ) : null}
+      {(converted ? [] : worth.currencies).map((entry) => {
+        const series = (monthly ?? []).filter((m) => m.currency === entry.currency);
+        if (series.length <= 1) return null;
+        return (
+          <Card key={`trend-${entry.currency}`} className="space-y-2">
+            <p className="text-sm font-medium text-foreground">
+              Динамика счетов{worth.currencies.length > 1 ? ` в ${entry.currency}` : ""} за {series.length} мес.
+            </p>
+            <Trend points={series.map((m) => m.netWorth)} currency={entry.currency} first={series[0]!.month} last={series[series.length - 1]!.month} />
+            <p className="text-2xs text-subtle-foreground">Только остатки счетов: история долгов не хранится, поэтому прошлые месяцы их не вычитают.</p>
+          </Card>
+        );
+      })}
     </div>
   );
 }
