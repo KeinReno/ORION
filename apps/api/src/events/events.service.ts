@@ -19,6 +19,8 @@ import { buildICal, type ICalEntry } from "./ical";
 type EventModel = Prisma.EventGetPayload<Record<string, never>>;
 type OverrideModel = Prisma.EventOverrideGetPayload<Record<string, never>>;
 
+const DAY_MS = 86_400_000;
+
 @Injectable()
 export class EventsService {
   constructor(
@@ -142,21 +144,29 @@ export class EventsService {
       if (input.projectId !== undefined) await assertProjectTx(tx, workspaceId, input.projectId);
 
       if (!master.recurrence || scope === "all") {
-        const data = buildUpdateData(input, master.allDay);
+        const data = buildUpdateData(input, master);
         const updated = await tx.event.update({ where: { id: master.id }, data });
         return toDto(updated);
       }
 
       if (!occurrenceStart) throw new BadRequestException("Для повтора нужен occurrenceStart");
 
+      const durationMs = master.endAt.getTime() - master.startAt.getTime();
+      const occurrence = {
+        startAt: occurrenceStart,
+        endAt: new Date(occurrenceStart.getTime() + durationMs),
+        allDay: master.allDay
+      };
+
       if (scope === "one") {
+        const range = resolveRange(input, occurrence);
         const patch = {
           title: input.title ?? null,
           description: input.description ?? null,
           location: input.location ?? null,
           url: input.url ?? null,
-          startAt: input.startAt ? new Date(input.startAt) : null,
-          endAt: input.endAt ? new Date(input.endAt) : null,
+          startAt: range ? range.startAt : null,
+          endAt: range ? range.endAt : null,
           colorTag: input.colorTag ?? null
         };
         await tx.eventOverride.upsert({
@@ -164,9 +174,8 @@ export class EventsService {
           create: { workspaceId, eventId: master.id, occurrenceStart, canceled: false, ...patch },
           update: { canceled: false, ...patch }
         });
-        const start = patch.startAt ?? occurrenceStart;
-        const durationMs = master.endAt.getTime() - master.startAt.getTime();
-        const end = patch.endAt ?? new Date(occurrenceStart.getTime() + durationMs);
+        const start = patch.startAt ?? occurrence.startAt;
+        const end = patch.endAt ?? occurrence.endAt;
         return occurrenceDto(master, occurrenceStart, start, end, {
           ...patch,
           id: "",
@@ -185,8 +194,7 @@ export class EventsService {
         where: { id: master.id },
         data: { recurrence: { ...spec, until: cappedUntil.toISOString(), count: null } as Prisma.InputJsonValue }
       });
-      const durationMs = master.endAt.getTime() - master.startAt.getTime();
-      const newStart = input.startAt ? new Date(input.startAt) : occurrenceStart;
+      const range = resolveRange(input, occurrence) ?? occurrence;
       const created = await tx.event.create({
         data: {
           workspaceId,
@@ -194,8 +202,8 @@ export class EventsService {
           description: input.description ?? master.description,
           location: input.location === undefined ? master.location : input.location,
           url: input.url === undefined ? master.url : input.url,
-          startAt: newStart,
-          endAt: input.endAt ? new Date(input.endAt) : new Date(newStart.getTime() + durationMs),
+          startAt: range.startAt,
+          endAt: range.endAt,
           allDay: input.allDay ?? master.allDay,
           tz: input.tz === undefined ? master.tz : input.tz,
           colorTag: input.colorTag === undefined ? master.colorTag : input.colorTag,
@@ -372,18 +380,54 @@ function parseId(id: string, explicitISO?: string): { masterId: string; occurren
 }
 
 /** All-day ranges snap to midnight-UTC day boundaries so tz never shifts them. */
-function normaliseRange(startISO: string, endISO: string, allDay: boolean): { startAt: Date; endAt: Date } {
+/**
+ * `allDay` ranges are date-only: UTC midnight of the first day, and an
+ * EXCLUSIVE end at UTC midnight after the last day (the `eventSchema`
+ * contract). The end used to be treated as the inclusive last day and pushed
+ * one more day forward, so every all-day event created through the API —
+ * whose clients send the exclusive end the contract describes — came out one
+ * day too long. An end with a time of day still counts that day in; an end
+ * at or before the start is one day.
+ */
+function normaliseRange(startISO: string | Date, endISO: string | Date, allDay: boolean): { startAt: Date; endAt: Date } {
   const start = new Date(startISO);
   const end = new Date(endISO);
   if (!allDay) return { startAt: start, endAt: end };
-  const dayStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  const dayEndBase = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
-  // Exclusive end: at least the day after dayStart.
-  const dayEnd = dayEndBase <= dayStart ? new Date(dayStart.getTime() + 86_400_000) : new Date(dayEndBase.getTime() + 86_400_000);
-  return { startAt: dayStart, endAt: dayEnd };
+  const dayStart = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  let dayEnd = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  if (end.getTime() > dayEnd) dayEnd += DAY_MS;
+  if (dayEnd <= dayStart) dayEnd = dayStart + DAY_MS;
+  return { startAt: new Date(dayStart), endAt: new Date(dayEnd) };
 }
 
-function buildUpdateData(input: UpdateEventInput, allDay: boolean): Prisma.EventUpdateInput {
+/**
+ * The stored range after a PATCH, or `null` when the PATCH doesn't touch it.
+ * A lone `startAt` moves the event keeping its length (a month-grid drop
+ * used to send only `startAt`, which left `endAt` behind — possibly before
+ * the new start); a lone `endAt` resizes. All-day ranges are re-snapped on
+ * every path, including a bare `allDay: true` toggle.
+ */
+function resolveRange(
+  input: UpdateEventInput,
+  current: { startAt: Date; endAt: Date; allDay: boolean }
+): { startAt: Date; endAt: Date } | null {
+  const allDay = input.allDay ?? current.allDay;
+  const touchesRange = input.startAt !== undefined || input.endAt !== undefined || allDay !== current.allDay;
+  if (!touchesRange) return null;
+  let start = input.startAt !== undefined ? new Date(input.startAt) : current.startAt;
+  // Date-only: a moved all-day start keeps its whole-day length only if it
+  // is on midnight before the length is added.
+  if (allDay) start = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  const end =
+    input.endAt !== undefined
+      ? new Date(input.endAt)
+      : input.startAt !== undefined
+        ? new Date(start.getTime() + (current.endAt.getTime() - current.startAt.getTime()))
+        : current.endAt;
+  return normaliseRange(start, end, allDay);
+}
+
+function buildUpdateData(input: UpdateEventInput, current: { startAt: Date; endAt: Date; allDay: boolean }): Prisma.EventUpdateInput {
   const data: Prisma.EventUpdateInput = {};
   if (input.title !== undefined) data.title = input.title;
   if (input.description !== undefined) data.description = input.description;
@@ -399,16 +443,10 @@ function buildUpdateData(input: UpdateEventInput, allDay: boolean): Prisma.Event
       ? (recurrenceSpecSchema.parse(input.recurrence) as Prisma.InputJsonValue)
       : Prisma.DbNull;
   }
-  if (input.startAt !== undefined || input.endAt !== undefined) {
-    const effectiveAllDay = input.allDay ?? allDay;
-    if (input.startAt !== undefined && input.endAt !== undefined) {
-      const { startAt, endAt } = normaliseRange(input.startAt, input.endAt, effectiveAllDay);
-      data.startAt = startAt;
-      data.endAt = endAt;
-    } else {
-      if (input.startAt !== undefined) data.startAt = new Date(input.startAt);
-      if (input.endAt !== undefined) data.endAt = new Date(input.endAt);
-    }
+  const range = resolveRange(input, current);
+  if (range) {
+    data.startAt = range.startAt;
+    data.endAt = range.endAt;
   }
   return data;
 }

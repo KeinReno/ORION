@@ -6,6 +6,7 @@ import { LiveDot } from "../live-dot";
 import {
   addDays,
   allDayAnchor,
+  allDayDateISO,
   calendarItemMode,
   dateKey,
   inAllDayBand,
@@ -280,14 +281,14 @@ export function TimeGrid({
               const id = e.dataTransfer.getData("text/plain");
               if (id)
                 onItemReschedule?.(id, {
-                  start: startOfDay(day).toISOString(),
-                  end: addDays(startOfDay(day), 1).toISOString(),
+                  start: allDayDateISO(day),
+                  end: allDayDateISO(addDays(day, 1)),
                   allDay: true,
                   originX: e.clientX,
                   originY: e.clientY
                 });
             }}
-            onClick={() => onSlotCreate?.({ start: startOfDay(day).toISOString(), end: addDays(startOfDay(day), 1).toISOString(), allDay: true })}
+            onClick={() => onSlotCreate?.({ start: allDayDateISO(day), end: allDayDateISO(addDays(day, 1)), allDay: true })}
             className="min-h-[22px] space-y-0.5 border-l border-white/5 p-0.5"
           >
             {allDayByDay[dayIndex].map((item) => (
