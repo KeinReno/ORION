@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { RequestMethod } from "@nestjs/common";
-import { AGENT_TOOLS } from "@orion/shared-types";
+import { AGENT_TOOLS, agentToolDescription, agentToolModeNote } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import { handleMcpMessage, loadSettings, redact } from "../mcp/orion-mcp";
 import { resolveAgentConnection } from "./agent-connection";
@@ -49,9 +49,33 @@ describe("MCP-адаптер", () => {
     expect(result.tools).toHaveLength(AGENT_TOOLS.length);
     expect(result.tools.map((t) => t.name)).toEqual(AGENT_TOOLS.map((t) => t.name));
     for (const [index, tool] of result.tools.entries()) {
-      expect(tool.description).toBe(AGENT_TOOLS[index]!.description);
+      expect(tool.description.startsWith(AGENT_TOOLS[index]!.description)).toBe(true);
+      expect(tool.description).toContain("Режимы токена:");
       expect(tool.inputSchema).toEqual(AGENT_TOOLS[index]!.input);
     }
+  });
+
+  it("описания инструментов называют режимы; изменение — запрос у помощника, отказ у наблюдателя", () => {
+    const update = AGENT_TOOLS.find((t) => t.name === "orion_update_task")!;
+    const note = agentToolModeNote(update);
+    expect(note).toContain("наблюдатель — отказ 403");
+    expect(note).toContain("помощник — изменение НЕ применяется");
+    expect(note).toContain("менеджер — выполняется сразу");
+    expect(agentToolModeNote(AGENT_TOOLS.find((t) => t.name === "orion_list_tasks")!)).toContain("любом");
+    expect(agentToolDescription(update)).toContain("Нужно разрешение: tasks:write");
+  });
+
+  it("tools/list с известным режимом токена добавляет, что будет именно с этим вызовом", async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ mode: "assistant" }), { status: 200 })) as unknown as typeof fetch;
+    const result = (await handleMcpMessage({ id: 1, method: "tools/list" }, settings, { fetchImpl })) as { tools: Array<{ name: string; description: string }> };
+    expect(result.tools.find((t) => t.name === "orion_update_note")!.description).toContain("Ваш режим «помощник»: изменение НЕ применяется");
+    expect(result.tools.find((t) => t.name === "orion_create_note")!.description).toContain("Ваш режим «помощник»: выполняется сразу");
+    const init = (await handleMcpMessage({ id: 2, method: "initialize" }, settings, { fetchImpl })) as { instructions: string };
+    expect(init.instructions).toContain("Режим ЭТОГО токена: «assistant»");
+    // Unreachable ORION: the generic text, no failure.
+    const down = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
+    const generic = (await handleMcpMessage({ id: 3, method: "tools/list" }, settings, { fetchImpl: down })) as { tools: Array<{ description: string }> };
+    expect(generic.tools[0]!.description).not.toContain("Ваш режим");
   });
 
   it("initialize подсказывает начать с orion_get_context", async () => {

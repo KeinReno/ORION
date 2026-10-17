@@ -1,6 +1,6 @@
 import { AGENT_SCOPE_LABEL } from "./agent";
 import { AGENT_API_VERSION, AGENT_CAPTURE_HINT_INFO, AGENT_CAPTURE_HINTS, AGENT_CONFIRMATION_RULES, AGENT_LIMITS } from "./agent-gateway";
-import { AGENT_TOOLS, type AgentToolDef, type AgentToolGroup } from "./agent-tools";
+import { AGENT_TOOLS, agentToolModeNote, type AgentToolDef, type AgentToolGroup } from "./agent-tools";
 
 const GROUP_TITLE: Record<AgentToolGroup, string> = {
   start: "С чего начать",
@@ -29,7 +29,7 @@ function paramTable(tool: AgentToolDef): string {
 
 function toolSection(tool: AgentToolDef): string {
   const scopes = tool.scopes === null ? "любой действующий токен" : tool.scopes.map((s) => `\`${s}\``).join(" или ");
-  const lines = [`#### \`${tool.name}\``, "", tool.description, "", `Нужно разрешение: ${scopes}. HTTP: \`${tool.http.method} ${tool.http.path}\`.`, "", paramTable(tool)];
+  const lines = [`#### \`${tool.name}\``, "", tool.description, "", `Нужно разрешение: ${scopes}. HTTP: \`${tool.http.method} ${tool.http.path}\`.`, "", agentToolModeNote(tool), "", paramTable(tool)];
   if (tool.example) lines.push("", "Пример аргументов:", "", "```json", JSON.stringify(tool.example, null, 2), "```");
   return lines.join("\n");
 }
@@ -55,6 +55,18 @@ export function renderAgentManual(tools: readonly AgentToolDef[] = AGENT_TOOLS):
     "## Что такое ORION для агента",
     "",
     "ORION — личное пространство человека (задачи, заметки, календарь, проекты). Вы подключены к **одному пространству** по токену, который выпустил человек. Вы действуете **от его имени и только в рамках отмеченных разрешений**; шире его прав не можете. Каждый ваш вызов попадает в журнал, который человек видит в «Настройки → ИИ-агенты». Токен можно отозвать в любой момент — после этого вызовы вернут 401.",
+    "",
+    "## Режимы токена: действует, становится запросом или отказ",
+    "",
+    "У каждого токена есть **режим**, его задаёт человек (режим только сужает разрешения, не расширяет). Свой режим вы видите в `orion_whoami` и `orion_get_context` (`token.mode`); в описании каждого инструмента сказано, что он делает в каждом режиме.",
+    "",
+    "| Режим | Чтение | Создание | Изменение существующего | Удаление |",
+    "| --- | --- | --- | --- | --- |",
+    "| наблюдатель | да | **403** | **403** | **403** |",
+    "| помощник | да | сразу | **не применяется**: ответ `202 { proposed: true, proposal }`, применит человек после подтверждения | только запрос `orion_propose_deletion` |",
+    "| менеджер | да | сразу, не чаще лимита записей в час (сверх — 429) | сразу (при праве «менять»; иначе, как у помощника, запрос) | только запрос `orion_propose_deletion` |",
+    "",
+    "Если запрос на изменение подан, а объект успели изменить до подтверждения, человек увидит предупреждение «объект изменился после запроса» и сам решит: перепроверить изменение на текущей версии или применить всё равно.",
     "",
     "## Быстрый старт (обычно 3–4 вызова)",
     "",

@@ -60,6 +60,7 @@ import {
   type AgentMessage,
   type AgentPeer,
   type SendAgentMessageInput,
+  type AgentMode,
   type AgentScope,
   type AgentToken,
   type CreateNoteInput,
@@ -224,9 +225,9 @@ export class AiController {
   ) {}
 
   @Get("me")
-  me(@Req() req: AgentRequest): { tokenName: string; workspaceId: string; scopes: AgentScope[] } {
+  me(@Req() req: AgentRequest): { tokenName: string; workspaceId: string; scopes: AgentScope[]; mode: AgentMode } {
     const agent = req.agent as AgentContext;
-    return { tokenName: agent.tokenName, workspaceId: agent.workspaceId, scopes: agent.scopes };
+    return { tokenName: agent.tokenName, workspaceId: agent.workspaceId, scopes: agent.scopes, mode: agent.mode };
   }
 
   @Get("tasks")

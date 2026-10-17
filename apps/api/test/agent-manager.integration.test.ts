@@ -411,6 +411,16 @@ describe("Agent Manager", () => {
     expect((await request(decideUrl(calmPatch.data.proposal.id, "approve"), { method: "POST", token: alice.accessToken, body: {} })).status).toBe(201);
   });
 
+  it("токен узнаёт свой режим: /me и /context отдают mode", async () => {
+    const alice = await register("modeinfo");
+    const agent = await issue(alice, { scopes: ["tasks:read"], mode: "observer" });
+    const me = await request<{ mode: string }>("/ai/v1/me", { method: "GET", token: agent.secret });
+    expect(me.data.mode).toBe("observer");
+    const context = await request<{ token: { mode: string; modeNote: string } }>("/ai/v1/context", { method: "GET", token: agent.secret });
+    expect(context.data.token.mode).toBe("observer");
+    expect(context.data.token.modeNote).toContain("Только читает");
+  });
+
   async function register(name: string): Promise<Session> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {
