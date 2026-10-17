@@ -1,7 +1,7 @@
 "use client";
 
-import { useBudgets, useCreateBudget, useDeleteBudget, useFinanceCategories, useUpdateBudget } from "@orion/core-react";
-import { budgetAvailable, type Budget } from "@orion/shared-types";
+import { useAccounts, useBudgets, useCreateBudget, useDeleteBudget, useFinanceCategories, useUpdateBudget } from "@orion/core-react";
+import { budgetAvailable, primaryAccountCurrency, type Budget } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, IconButton, Modal, useToast } from "@orion/ui";
 import { ChevronLeft, ChevronRight, Pencil, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -33,6 +33,7 @@ export function BudgetsView(): React.ReactElement {
   // includeArchived: true so an already-archived category referenced by an
   // existing budget doesn't vanish from the edit form — see withArchivedFallback.
   const { data: categories } = useFinanceCategories(workspace?.id, true);
+  const { data: accounts } = useAccounts(workspace?.id);
   const createBudget = useCreateBudget(workspace?.id);
   const updateBudget = useUpdateBudget(workspace?.id);
   const deleteBudget = useDeleteBudget(workspace?.id);
@@ -44,8 +45,21 @@ export function BudgetsView(): React.ReactElement {
 
   const expenseCategoriesAll = (categories ?? []).filter((c) => c.kind === "expense");
   const expenseCategories = expenseCategoriesAll.filter((c) => !c.archivedAt);
-  const budgetedCategoryIds = new Set((budgets ?? []).map((b) => b.categoryId));
-  const availableCategories = expenseCategories.filter((c) => !budgetedCategoryIds.has(c.id));
+  // Budgets are per currency (Budget.currency): with RUB and USD accounts a
+  // category can carry one limit in each, so it's "taken" only once every
+  // currency has a budget for it. The workspace's primary currency comes
+  // first, so it is what a new budget defaults to; a single-currency
+  // workspace sees no currency anywhere, as before.
+  const primary = primaryAccountCurrency(accounts ?? []);
+  const currencies = [primary, ...[...new Set((accounts ?? []).map((a) => a.currency))].filter((c) => c !== primary).sort()];
+  const takenByCategory = new Map<string, Set<string>>();
+  for (const budget of budgets ?? []) {
+    const taken = takenByCategory.get(budget.categoryId) ?? new Set<string>();
+    taken.add(budget.currency);
+    takenByCategory.set(budget.categoryId, taken);
+  }
+  const takenCurrencies = (categoryId: string): ReadonlySet<string> => takenByCategory.get(categoryId) ?? new Set<string>();
+  const availableCategories = expenseCategories.filter((c) => currencies.some((cur) => !takenCurrencies(c.id).has(cur)));
 
   async function create(values: BudgetFormValues): Promise<void> {
     try {
@@ -101,10 +115,13 @@ export function BudgetsView(): React.ReactElement {
             return (
               <li key={budget.id} className="rounded-xl border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-foreground">{category?.name ?? "Категория"}</span>
+                  <span className="text-sm font-medium text-foreground">
+                    {category?.name ?? "Категория"}
+                    {currencies.length > 1 ? <span className="ml-1.5 text-2xs text-subtle-foreground">{budget.currency}</span> : null}
+                  </span>
                   <div className="flex items-center gap-1">
                     <span className={`font-mono text-xs tabular-nums ${over ? "text-destructive" : "text-muted-foreground"}`}>
-                      {formatMoney(budget.spent)} из {formatMoney(available)}
+                      {formatMoney(budget.spent, budget.currency)} из {formatMoney(available, budget.currency)}
                     </span>
                     <IconButton label="Изменить лимит" size="sm" onClick={() => setEditing(budget)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -116,8 +133,10 @@ export function BudgetsView(): React.ReactElement {
                 </div>
                 {budget.rollover ? (
                   <p className="mt-1 text-2xs text-subtle-foreground">
-                    Лимит {formatMoney(budget.limitAmount)}
-                    {budget.carryOver > 0 ? ` + перенос ${formatMoney(budget.carryOver)} с прошлых месяцев` : " · перенос остатка включён, переносить пока нечего"}
+                    Лимит {formatMoney(budget.limitAmount, budget.currency)}
+                    {budget.carryOver > 0
+                      ? ` + перенос ${formatMoney(budget.carryOver, budget.currency)} с прошлых месяцев`
+                      : " · перенос остатка включён, переносить пока нечего"}
                   </p>
                 ) : null}
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
@@ -152,6 +171,8 @@ export function BudgetsView(): React.ReactElement {
       <Modal open={creating} onClose={() => setCreating(false)} title="Новый бюджет" size="sm">
         <BudgetForm
           expenseCategories={availableCategories}
+          currencies={currencies}
+          takenCurrencies={takenCurrencies}
           defaultMonth={month}
           busy={createBudget.isPending}
           submitLabel="Создать"
@@ -166,6 +187,7 @@ export function BudgetsView(): React.ReactElement {
             key={editing.id}
             initial={editing}
             expenseCategories={withArchivedFallback(expenseCategoriesAll, editing.categoryId)}
+            currencies={currencies}
             defaultMonth={month}
             busy={updateBudget.isPending}
             submitLabel="Сохранить"

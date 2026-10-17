@@ -9,6 +9,7 @@ export interface BudgetFormValues {
   categoryId: string;
   month: string;
   limitAmount: number;
+  currency: string;
   rollover: boolean;
 }
 
@@ -24,6 +25,8 @@ function isoToMonthInput(iso: string): string {
 export function BudgetForm({
   initial,
   expenseCategories,
+  currencies,
+  takenCurrencies,
   defaultMonth,
   busy,
   submitLabel,
@@ -32,6 +35,10 @@ export function BudgetForm({
 }: {
   initial?: Budget;
   expenseCategories: FinanceCategory[];
+  /** Currencies of the workspace's accounts, primary first — a budget caps spend in one of them. */
+  currencies: string[];
+  /** Currencies that already have a budget for this category in the shown month (only for a new budget). */
+  takenCurrencies?: (categoryId: string) => ReadonlySet<string>;
   defaultMonth: string;
   busy: boolean;
   submitLabel: string;
@@ -40,6 +47,12 @@ export function BudgetForm({
 }): React.ReactElement {
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? expenseCategories[0]?.id ?? "");
   const [month, setMonth] = useState(initial ? isoToMonthInput(initial.month) : defaultMonth);
+  const freeCurrencies = (forCategory: string): string[] => {
+    const taken = takenCurrencies?.(forCategory);
+    return taken ? currencies.filter((c) => !taken.has(c)) : currencies;
+  };
+  const [currency, setCurrency] = useState(initial?.currency ?? freeCurrencies(categoryId)[0] ?? currencies[0] ?? "RUB");
+  const currencyOptions = initial ? [initial.currency] : freeCurrencies(categoryId);
   const [limitAmount, setLimitAmount] = useState(fromKopecks(initial?.limitAmount));
   const [rollover, setRollover] = useState(initial?.rollover ?? false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +65,7 @@ export function BudgetForm({
       return;
     }
     if (!categoryId) return;
-    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks, rollover });
+    void onSubmit({ categoryId, month: monthInputToIso(month), limitAmount: kopecks, currency, rollover });
   }
 
   return (
@@ -60,12 +73,23 @@ export function BudgetForm({
       {initial ? (
         <p className="text-sm text-foreground">
           {expenseCategories.find((c) => c.id === initial.categoryId)?.name ?? "Категория"} · {month}
+          {currencies.length > 1 ? ` · ${initial.currency}` : null}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
             Категория
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
+            <Select
+              value={categoryId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCategoryId(next);
+                // The chosen currency may already be budgeted for the new category — move to a free one.
+                const free = freeCurrencies(next);
+                if (!free.includes(currency) && free[0]) setCurrency(free[0]);
+              }}
+              required
+            >
               {expenseCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -77,10 +101,23 @@ export function BudgetForm({
             Месяц
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} required />
           </label>
+          {currencies.length > 1 ? (
+            <label className="flex flex-col gap-1 text-2xs text-subtle-foreground sm:col-span-2">
+              Валюта
+              <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {currencyOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+              <span>Считаются только расходы со счетов в этой валюте.</span>
+            </label>
+          ) : null}
         </div>
       )}
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-        Лимит, ₽
+        Лимит, {currency === "RUB" ? "₽" : currency}
         <Input
           inputMode="decimal"
           placeholder="0"
