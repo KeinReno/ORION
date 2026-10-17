@@ -227,6 +227,9 @@ export function NotesPanel(): React.ReactElement {
   const selected = matchedSelected ?? (selectedSnapshotRef.current?.id === selectedId ? selectedSnapshotRef.current : null);
   const composing = selectedId === NEW_NOTE;
   const listHidden = twoPane && listCollapsed && (composing || selected !== null);
+  // Narrow panel: the open note replaces the list, so the list's own controls step aside until "К заметкам".
+  const editorOnly = !twoPane && !trash && (composing || selected !== null);
+  const toolbarHidden = listHidden || editorOnly;
 
   // Filters, sort and the open note survive a restart (never the text or the search query). A restored
   // id is only an address: if the note is gone or not visible to this user, say so and open nothing.
@@ -364,7 +367,7 @@ export function NotesPanel(): React.ReactElement {
 
   const list = (
     <div className="orion-scroll flex-1 overflow-y-auto p-3">
-      {!trash && (activeView || allTags.length > 0 || (projectList ?? []).length > 0) ? (
+      {!trash && (activeView || (projectList ?? []).length > 0) ? (
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
           {activeView ? (
             <ExtensionSlot
@@ -401,32 +404,34 @@ export function NotesPanel(): React.ReactElement {
               </FilterChip>
             </>
           ) : null}
-          {allTags.length > 0 ? (
-            <>
-              <FilterChip active={tagFilters.length === 0} onClick={() => setTagFilters([])}>
-                Все
+        </div>
+      ) : null}
+      {!trash && allTags.length > 0 ? (
+        <div className="mb-2 flex items-center gap-1 px-1">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto py-0.5" role="group" aria-label="Фильтр по тегам">
+            <FilterChip active={tagFilters.length === 0} onClick={() => setTagFilters([])}>
+              Все
+            </FilterChip>
+            {allTags.map((tag) => (
+              <FilterChip key={tag} active={tagFilters.includes(tag)} onClick={() => toggleTagFilter(tag)} color={tag}>
+                {tag}
               </FilterChip>
-              {allTags.map((tag) => (
-                <FilterChip key={tag} active={tagFilters.includes(tag)} onClick={() => toggleTagFilter(tag)} color={tag}>
-                  {tag}
-                </FilterChip>
-              ))}
-              {tagFilters.length >= 2 ? (
-                <SegmentedControl<"any" | "all">
-                  value={tagMode}
-                  onChange={setTagMode}
-                  size="sm"
-                  options={[
-                    { value: "any", label: "ИЛИ" },
-                    { value: "all", label: "И" }
-                  ]}
-                />
-              ) : null}
-              <IconButton label="Управление тегами" size="sm" onClick={() => setTagManagerOpen(true)}>
-                <Tags className="h-4 w-4" />
-              </IconButton>
-            </>
+            ))}
+          </div>
+          {tagFilters.length >= 2 ? (
+            <SegmentedControl<"any" | "all">
+              value={tagMode}
+              onChange={setTagMode}
+              size="sm"
+              options={[
+                { value: "any", label: "ИЛИ" },
+                { value: "all", label: "И" }
+              ]}
+            />
           ) : null}
+          <IconButton label="Управление тегами" size="sm" onClick={() => setTagManagerOpen(true)}>
+            <Tags className="h-4 w-4" />
+          </IconButton>
         </div>
       ) : null}
       {filtersOn > 0 && !trash ? (
@@ -740,8 +745,8 @@ export function NotesPanel(): React.ReactElement {
             </IconButton>
           )
         ) : null}
-        {!listHidden ? (
-          <div className="relative flex-1 sm:max-w-xs">
+        {!toolbarHidden ? (
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <Input
               value={query}
@@ -754,7 +759,7 @@ export function NotesPanel(): React.ReactElement {
             />
           </div>
         ) : null}
-        {activeView && !listHidden ? (
+        {activeView && !toolbarHidden ? (
           <SegmentedControl<SortKey>
             value={sort}
             onChange={setSort}
@@ -766,7 +771,7 @@ export function NotesPanel(): React.ReactElement {
             ]}
           />
         ) : null}
-        {!listHidden ? (
+        {!toolbarHidden ? (
           <SegmentedControl<NoteView>
             value={view}
             onChange={(next) => {
