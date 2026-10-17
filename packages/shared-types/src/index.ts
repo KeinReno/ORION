@@ -70,3 +70,6 @@ export * from "./lan";
 export * from "./theme-document";
 export * from "./object-navigation";
 export * from "./view-state";
+export * from "./opportunity-assistant";
+export * from "./opportunity-execution";
+export * from "./opportunity-manager";

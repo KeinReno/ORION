@@ -12,12 +12,14 @@ import {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { CapabilityLifecycle } from "../common/capability-lifecycle";
 
 @Injectable()
 export class ModulesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly lifecycle: CapabilityLifecycle
   ) {}
 
   catalog(): readonly ModuleManifest[] {
@@ -54,6 +56,7 @@ export class ModulesService {
         throw new ForbiddenException("Только владелец может менять состав модулей");
       }
 
+      await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
       const { disabled, restricted } = await this.overridesTx(tx, workspaceId);
       const current = new Set(disabled);
       if (enabled) current.delete(moduleId);
@@ -63,6 +66,7 @@ export class ModulesService {
         where: { id: workspaceId },
         data: { disabledModules: [...current] }
       });
+      await this.lifecycle.changedTx(tx, { kind: "module", id: moduleId, enabled, workspaceId, actorId: userId });
       return moduleStates([...current], restricted);
     });
   }

@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { OpportunityImport, Prisma } from "@prisma/client";
-import { hhImportRunSchema, hhImportReportSchema, type HhImportPreviewInput, type HhImportApplyInput, type HhImportReport } from "@orion/shared-types";
+import { hhImportRunSchema, hhImportReportSchema, hhHistoryPageSchema, type HhImportRun, type HhImportPreviewInput, type HhImportApplyInput, type HhImportReport, type HhHistoryQuery } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { PluginsService } from "../plugins/plugins.service";
@@ -9,9 +9,10 @@ import { PROFILE_IMPORT_PORT, type ProfileImportPort } from "../opportunities-pr
 import { compileHhPlan, contentHash, type HhPlan } from "./hh-parser";
 const emptyReport = (): HhImportReport => ({ opportunitiesCreated: 0, opportunitiesExisting: 0, capturesCreated: 0, profilesCreated: 0, materialsCreated: 0, materialsExisting: 0, historyCreated: 0, historyExisting: 0, possibleDuplicates: 0 });
 const json = (value: unknown) => value as Prisma.InputJsonValue;
-function dto(row: OpportunityImport) {
-  const plan = row.plan as unknown as HhPlan;
-  return hhImportRunSchema.parse({ id: row.id, workspaceId: row.workspaceId, manifestHash: row.manifestHash, revision: row.revision, status: row.status, checkpoint: row.checkpoint, total: plan.operations.length, expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString(), preview: row.preview, report: row.report });
+const runSelect = { id: true, workspaceId: true, manifestHash: true, revision: true, status: true, checkpoint: true, expiresAt: true, createdAt: true, preview: true, report: true } as const;
+function dto(row: Pick<OpportunityImport, keyof typeof runSelect>) {
+  const preview = row.preview as HhImportRun["preview"];
+  return hhImportRunSchema.parse({ id: row.id, workspaceId: row.workspaceId, manifestHash: row.manifestHash, revision: row.revision, status: row.status, checkpoint: row.checkpoint, total: preview.opportunities + preview.materials + preview.history, expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString(), preview: row.preview, report: row.report });
 }
 @Injectable()
 export class HhImportService {
@@ -38,7 +39,7 @@ export class HhImportService {
       return dto(await tx.opportunityImport.create({ data: { workspaceId: ws, createdById: user, manifestHash: contentHash(JSON.stringify(input)), plan: json(plan), preview: json(preview), report: emptyReport(), expiresAt: new Date(Date.now() + 86400000) } }));
     });
   }
-  async recent(user: string, ws: string) { return this.prisma.withUser(user, async (tx) => { await this.guard(tx, user, ws); return (await tx.opportunityImport.findMany({ where: { workspaceId: ws }, orderBy: { createdAt: "desc" }, take: 20 })).map(dto); }); }
+  async recent(user: string, ws: string) { return this.prisma.withUser(user, async (tx) => { await this.guard(tx, user, ws); return (await tx.opportunityImport.findMany({ where: { workspaceId: ws }, orderBy: { createdAt: "desc" }, take: 20, select: runSelect })).map(dto); }); }
   async get(user: string, ws: string, id: string) { return this.prisma.withUser(user, async (tx) => { await this.guard(tx, user, ws); return dto(await this.owned(tx, ws, id)); }); }
   async change(user: string, ws: string, id: string, input: HhImportApplyInput, cancel = false) {
     return this.prisma.withUser(user, async (tx) => {
@@ -50,7 +51,7 @@ export class HhImportService {
       if (row.status === "applied" && !cancel) return dto(row);
       if (row.status === "canceled" || row.status === "applied") throw new ConflictException("Импорт уже завершён или отменён");
       if (row.revision !== input.expectedRevision) throw new ConflictException("Импорт изменён в другом окне. Обновите его состояние.");
-      if (cancel) return dto(await tx.opportunityImport.update({ where: { id }, data: { status: "canceled", revision: { increment: 1 } } }));
+      if (cancel) return dto(await tx.opportunityImport.update({ where: { id }, data: { status: "canceled", revision: { increment: 1 } }, select: runSelect }));
       if (row.expiresAt <= new Date()) throw new ConflictException("Предпросмотр истёк. Создайте новый.");
       const plan = row.plan as unknown as HhPlan;
       if (plan.version !== 1) throw new ConflictException("Версия импорта не поддерживается");
@@ -58,7 +59,14 @@ export class HhImportService {
       if (plan.historyProfileId) await this.profiles.assertImportTargetTx(tx, user, ws, plan.historyProfileId);
       const report = hhImportReportSchema.parse(row.report);
       const end = Math.min(row.checkpoint + 25, plan.operations.length);
-      for (const operation of plan.operations.slice(row.checkpoint, end)) {
+      const batch = plan.operations.slice(row.checkpoint, end);
+      if (batch.every((operation) => operation.kind === "opportunity")) {
+        const results = await this.opportunities.captureOpportunitiesTx(tx, user, ws, batch.map((operation) => operation.data.input));
+        report.opportunitiesCreated += results.filter((result) => result.created).length;
+        report.opportunitiesExisting += results.filter((result) => !result.created).length;
+        const captures = await tx.opportunityCapture.createMany({ skipDuplicates: true, data: batch.map((operation, index) => ({ workspaceId: ws, opportunityId: results[index].id, importRunId: id, sourcePath: operation.data.sourcePath, fileHash: operation.data.fileHash, contentHash: operation.data.contentHash, snapshot: operation.data.snapshot, historical: true })) });
+        report.capturesCreated += captures.count;
+      } else for (const operation of batch) {
         if (operation.kind === "material") {
           const result = await this.profiles.importMaterialTx(tx, user, ws, operation.data);
           report.profilesCreated += Number(result.profileCreated);
@@ -77,7 +85,22 @@ export class HhImportService {
           report.historyCreated += count.count; report.historyExisting += Number(!count.count); report.possibleDuplicates += count.count ? Number(possibleDuplicate) : 0;
         }
       }
-      return dto(await tx.opportunityImport.update({ where: { id }, data: { checkpoint: end, status: end === plan.operations.length ? "applied" : "applying", report, revision: { increment: 1 } } }));
+      return dto(await tx.opportunityImport.update({ where: { id }, data: { checkpoint: end, status: end === plan.operations.length ? "applied" : "applying", report, revision: { increment: 1 } }, select: runSelect }));
+    });
+  }
+  async history(user: string, ws: string, q: HhHistoryQuery) {
+    return this.prisma.withUser(user, async (tx) => {
+      await this.guard(tx, user, ws);
+      const where: Prisma.OpportunityHistoryWhereInput = { workspaceId: ws, ...(q.outcome ? { outcome: q.outcome } : {}), ...(q.unlinked === "true" ? { opportunityId: null } : {}), ...(q.duplicates === "true" ? { possibleDuplicate: true } : {}) };
+      if (q.cursor && !await tx.opportunityHistory.findFirst({ where: { id: q.cursor, workspaceId: ws } })) throw new NotFoundException("Запись журнала не найдена");
+      const rows = await tx.opportunityHistory.findMany({ where, orderBy: { id: "asc" }, take: 101, ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}) });
+      const grouped = await tx.opportunityHistory.groupBy({ by: ["outcome"], where: { workspaceId: ws }, _count: { _all: true } });
+      const [unlinked, possibleDuplicates] = await Promise.all([tx.opportunityHistory.count({ where: { workspaceId: ws, opportunityId: null } }), tx.opportunityHistory.count({ where: { workspaceId: ws, possibleDuplicate: true } })]);
+      return hhHistoryPageSchema.parse({
+        items: rows.slice(0, 100).map((r) => ({ id: r.id, opportunityId: r.opportunityId, profileId: r.profileId, externalId: r.externalId, title: r.title, outcome: r.outcome, originalStatus: r.originalStatus, reason: r.reason, sourceTime: r.sourceTime, sourcePath: r.sourcePath, possibleDuplicate: r.possibleDuplicate, createdAt: r.createdAt.toISOString() })),
+        nextCursor: rows.length > 100 ? rows[99].id : null,
+        totals: { all: grouped.reduce((n, g) => n + g._count._all, 0), unlinked, possibleDuplicates, byOutcome: Object.fromEntries(grouped.map((g) => [g.outcome, g._count._all])) }
+      });
     });
   }
   async sources(user: string, ws: string, opportunityId: string) {

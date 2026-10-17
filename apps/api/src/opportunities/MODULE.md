@@ -14,3 +14,5 @@ API и сервис проверяют включение/restriction; серв�
 Модель: Prisma Opportunity; `conditions` — структурированный JSON, `history` — последовательность действий/статусов, не полный diff каждой версии. Не считать локальную правку/статус доказательством внешней отправки.
 
 Приёмка: `apps/api/test/opportunities.integration.test.ts`, boundary schemas, snapshot/RLS suites. UI smoke — отдельная синтетическая учётная запись. Инструкции/оставшиеся критерии: `docs/OPPORTUNITY_HUB_PROGRESS.md`, `docs/OPPORTUNITY_HUB_SPEC.md`.
+
+Уточнение публичных контрактов 16 октября: import-port поддерживает insert-only `captureOpportunitiesTx` для порций до 25 записей с упорядоченными результатами и точным счётом новых карточек при дублях; ручные данные не перезаписываются. Read-port поддерживает `afterId` для стабильного постраничного чтения. Details-slot принимает необязательный `onDirtyChange`: несохранённые правки расширения участвуют в защите перехода/закрытия Base-карточки.

@@ -234,6 +234,14 @@ model Workspace {
   opportunityImports OpportunityImport[]
   opportunityCaptures OpportunityCapture[]
   opportunityHistorys OpportunityHistory[]
+  opportunityAssessments OpportunityAssessment[]
+  opportunityDrafts OpportunityDraft[]
+  opportunityConnections OpportunityConnection[]
+  opportunityAttempts OpportunityAttempt[]
+  opportunityGrants OpportunityGrant[]
+  opportunityBudgets OpportunityBudget[]
+  opportunityPolicies OpportunityPolicy[]
+  opportunityManagerActions OpportunityManagerAction[]
 
   inventoryItems        InventoryItem[]
   inventoryMovements    InventoryMovement[]
@@ -2135,6 +2143,10 @@ model Opportunity {
   @@index([workspaceId, archivedAt, id])
   captures OpportunityCapture[]
   historyImports OpportunityHistory[]
+  assessments OpportunityAssessment[]
+  drafts OpportunityDraft[]
+  attempts OpportunityAttempt[]
+  managerActions OpportunityManagerAction[]
   @@unique([id, workspaceId], map: "opportunity_scope")
   @@map("opportunities")
 }
@@ -2155,6 +2167,10 @@ model OpportunityProfile {
   tracks OpportunityTrack[]
   materials OpportunityMaterial[]
   history OpportunityHistory[]
+  assessments OpportunityAssessment[]
+  drafts OpportunityDraft[]
+  connections OpportunityConnection[]
+  attempts OpportunityAttempt[]
   @@unique([id, workspaceId], map: "opportunity_profile_scope")
   @@unique([workspaceId, sourceKey], map: "opportunity_profile_source")
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2173,6 +2189,7 @@ model OpportunityFact {
   revision Int @default(0)
   confirmedBy String?
   confirmedAt DateTime?
+  archivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
@@ -2188,7 +2205,10 @@ model OpportunityTrack {
   name String
   factIds Json @default("[]")
   sourceKey String
+  revision Int @default(0)
+  archivedAt DateTime?
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   materials OpportunityMaterial[]
   @@unique([workspaceId, profileId, sourceKey], map: "opportunity_track_source")
@@ -2951,4 +2971,214 @@ model SyncDevice {
 
   @@index([userId])
   @@map("sync_devices")
+}
+
+model OpportunityAssessment {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  providerId String
+  providerVersion String
+  inputHash String
+  score Int?
+  confidence String
+  inputs Json
+  result Json
+  createdById String
+  createdAt DateTime @default(now())
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  drafts OpportunityDraft[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_assessment_scope")
+  @@index([workspaceId, opportunityId, profileId, createdAt])
+  @@map("opportunity_assessments")
+}
+
+model OpportunityDraft {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  assessmentId String?
+  kind String
+  question String?
+  sections Json
+  notes Json @default("[]")
+  materials Json @default("[]")
+  inputHash String
+  textHash String
+  reviewState String @default("draft")
+  approvedBy String?
+  approvedAt DateTime?
+  approvedTextHash String?
+  templateVersion String
+  revision Int @default(0)
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  assessment OpportunityAssessment? @relation(fields: [assessmentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  attempts OpportunityAttempt[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_draft_scope")
+  @@index([workspaceId, opportunityId, createdAt])
+  @@map("opportunity_drafts")
+}
+
+model OpportunityConnection {
+  id String @id @default(uuid())
+  workspaceId String
+  profileId String
+  ownerUserId String
+  provider String @default("hh")
+  accountLabel String
+  externalAccountId String?
+  accountDisplay String?
+  runnerId String?
+  runnerTokenHash String? @unique
+  pairingHash String? @unique
+  pairingExpiresAt DateTime?
+  state String @default("pending_link")
+  pausedReason String?
+  dailyLimit Int @default(5)
+  minIntervalSec Int @default(180)
+  timezone String @default("Europe/Moscow")
+  consecutiveFailures Int @default(0)
+  runnerSeenAt DateTime?
+  linkedAt DateTime?
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  attempts OpportunityAttempt[]
+  policies OpportunityPolicy[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_connection_scope")
+  @@index([workspaceId])
+  @@map("opportunity_connections")
+}
+
+model OpportunityAttempt {
+  id String @id @default(uuid())
+  workspaceId String
+  opportunityId String
+  profileId String
+  connectionId String
+  draftId String
+  actionType String @default("apply")
+  idempotencyKey String
+  payload Json
+  payloadHash String
+  state String @default("awaiting_approval")
+  reviewNotes Json @default("[]")
+  reviewAcknowledged Boolean @default(false)
+  cancelRequested Boolean @default(false)
+  submitReserved Boolean @default(false)
+  submitStartedAt DateTime?
+  initiatedBy String?
+  leaseHash String?
+  leaseRunnerId String?
+  leaseExpiresAt DateTime?
+  claimCount Int @default(0)
+  evidence Json @default("[]")
+  confirmationBasis String?
+  errorCode String?
+  message String?
+  timeline Json @default("[]")
+  revision Int @default(0)
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  profile OpportunityProfile @relation(fields: [profileId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  connection OpportunityConnection @relation(fields: [connectionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  draft OpportunityDraft @relation(fields: [draftId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  grants OpportunityGrant[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, idempotencyKey], map: "opportunity_attempt_idem")
+  @@unique([id, workspaceId], map: "opportunity_attempt_scope")
+  @@index([workspaceId, connectionId, state])
+  @@map("opportunity_attempts")
+}
+
+model OpportunityGrant {
+  id String @id @default(uuid())
+  workspaceId String
+  attemptId String
+  payloadHash String
+  grantedBy String
+  state String @default("active")
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  attempt OpportunityAttempt @relation(fields: [attemptId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, attemptId])
+  @@map("opportunity_grants")
+}
+
+model OpportunityBudget {
+  id String @id @default(uuid())
+  workspaceId String
+  accountKey String
+  actionType String
+  localDate String
+  used Int @default(0)
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, accountKey, actionType, localDate], map: "opportunity_budget_key")
+  @@map("opportunity_budgets")
+}
+
+model OpportunityPolicy {
+  id String @id @default(uuid())
+  workspaceId String
+  connectionId String
+  profileId String
+  ownerUserId String
+  state String @default("active")
+  pausedReason String?
+  minScore Int @default(70)
+  minConfidence String @default("medium")
+  requiredFactIds Json @default("[]")
+  dailyLimit Int
+  maxTotal Int
+  remaining Int
+  quietStart String?
+  quietEnd String?
+  timezone String @default("Europe/Moscow")
+  expiresAt DateTime
+  revision Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  connection OpportunityConnection @relation(fields: [connectionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  actions OpportunityManagerAction[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([id, workspaceId], map: "opportunity_policy_scope")
+  @@index([workspaceId, connectionId])
+  @@map("opportunity_policies")
+}
+
+model OpportunityManagerAction {
+  id String @id @default(uuid())
+  workspaceId String
+  policyId String
+  opportunityId String
+  kind String @default("apply")
+  state String
+  reason String @default("")
+  details Json @default("[]")
+  attemptId String?
+  policyRevision Int
+  createdAt DateTime @default(now())
+  policy OpportunityPolicy @relation(fields: [policyId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([policyId, opportunityId], map: "opportunity_manager_once")
+  @@index([workspaceId, policyId, createdAt])
+  @@map("opportunity_manager_actions")
 }
