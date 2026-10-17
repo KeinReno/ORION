@@ -17,7 +17,7 @@
 
 ## Проверено на этой ревизии (облачная среда, Linux)
 
-`pnpm typecheck` — чисто · `pnpm lint` — 0 ошибок, 15 предупреждений · `pnpm test` — 1124 теста, 137 файлов · `architecture-check` — OK · `plugin-contract-check` — 10 · `pnpm build` и `build:desktop-export` (48 страниц) — успешно · `pnpm test:integration` на чистой PostgreSQL 16 после всех миграций — 466 пройдено, 1 пропущен · `pnpm test:e2e:local` — выполняется.
+`pnpm typecheck` — чисто · `pnpm lint` — 0 ошибок, 15 предупреждений · `pnpm test` — 1124 теста, 137 файлов · `architecture-check` — OK · `plugin-contract-check` — 10 · `pnpm build` и `build:desktop-export` (48 страниц) — успешно · `pnpm test:integration` на чистой PostgreSQL 16 после всех миграций — 466 пройдено, 1 пропущен · `pnpm test:e2e:local` — 120 из 122 браузерных сценариев (два сценария импорта папки HH в Opportunity Hub не прошли: в облачной среде старый Chromium не передаёт выбранную папку, файлов 0; проверить на машине разработчика).
 
 **Не проверено:** Tauri-окно и установщик на Windows (в облаке нет Rust/WebView2), открепление окон, несколько мониторов и DPI, LAN между двумя реальными машинами, гибридная синхронизация между устройствами.
 
