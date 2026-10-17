@@ -3,6 +3,7 @@
 import { usePreferences, useSession } from "@orion/core-react";
 import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, themeDocumentVariables, type WebglBackgroundStyle } from "@orion/ui";
 import { effectiveApplicationTheme } from "./effective-application-theme";
+import { useActiveWorkspace } from "./use-active-workspace";
 import { useEffect, useState } from "react";
 
 const INTENSITY_OPACITY: Record<string, number> = { low: 0.5, medium: 0.85, high: 1 };
@@ -47,6 +48,10 @@ export function PreferencesEffect(): React.ReactElement | null {
 
 function AppearanceSync(): React.ReactElement | null {
   const { data } = usePreferences();
+  // The workspace palette is part of the effective theme: switching spaces swaps it in the same effect pass,
+  // so the previous space's colour never stays on the root (cleanup and re-apply run in one commit).
+  const { workspace } = useActiveWorkspace();
+  const workspaceTheme = workspace?.theme ?? null;
   const [accentRgb, setAccentRgb] = useState<[number, number, number]>([0.486, 0.231, 0.929]);
 
   useEffect(() => {
@@ -58,7 +63,7 @@ function AppearanceSync(): React.ReactElement | null {
     root.dataset.backgroundIntensity = data.backgroundIntensity;
     root.dataset.surface = data.surfaceStyle;
     root.dataset.orionDesign = data.theme === "kaiden-precision" ? "precision" : "legacy";
-    const effectiveTheme = effectiveApplicationTheme(data);
+    const effectiveTheme = effectiveApplicationTheme(data, { theme: workspaceTheme });
     const precisionVariables = effectiveTheme ? themeDocumentVariables(effectiveTheme) : {};
     if (effectiveTheme) {
       root.dataset.orionPalette = effectiveTheme.id;
@@ -83,7 +88,7 @@ function AppearanceSync(): React.ReactElement | null {
       root.style.removeProperty("color-scheme");
       for (const key of Object.keys(precisionVariables)) root.style.removeProperty(key);
     };
-  }, [data]);
+  }, [data, workspaceTheme]);
 
   if (!data) return null;
 

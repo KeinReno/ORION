@@ -370,9 +370,14 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   на `<html>`, значения живут CSS-переменными в `globals.css`. Добавляешь
   цвет, зависящий от настроек, — заводи переменную, а не hex в конфиге
   Tailwind.
-- `theme` — сохранённое, но не применённое поле: приложение однотёмное
-  (dockview `themeAbyss`), переключателя в панели поэтому нет. Не добавляй
-  контрол, который ничего не делает.
+- `theme` выбирает оболочку (`kaiden-precision` или прежнюю), палитру — библиотека
+  тем (ТЗ 01): `UserPreference.themeLibrary`/`activeThemeId`/`workspaceThemeMode`
+  и `Workspace.theme` (копия документа, меняет только владелец). Какая палитра
+  видна, решает только `resolveApplicationTheme`
+  (`apps/web/lib/effective-application-theme.ts`): тема пространства → своя →
+  Precision. Библиотеку пишут только `PUT/DELETE settings/themes/:id` под
+  блокировкой строки, не общий PATCH. Старые поля `customTheme`/
+  `customThemeEnabled` оставлены для старых клиентов: сервер зеркалит их в библиотеку.
 
 ### Встроенный браузер, интеграции, плагины (v0.21)
 

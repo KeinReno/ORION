@@ -193,3 +193,43 @@ export function withThemeColor(theme: ThemeDocument, key: ThemeColor, hex: strin
   }
   return { ...theme, colors };
 }
+
+export interface ThemeContrastCheck {
+  id: string;
+  label: string;
+  ratio: number;
+  /** WCAG 2 AA: 4.5 for normal text, 3 for large text and meaningful outlines. */
+  minimum: number;
+  /** Below the minimum on a blocking pair the theme cannot be saved: the app would become unreadable. */
+  blocking: boolean;
+  ok: boolean;
+}
+
+/**
+ * The pairs a palette must keep readable. Body text and the accent button are blocking; secondary text, status
+ * colours and outlines are reported, so a user can still save a deliberately muted theme and see what suffers.
+ */
+export function themeContrastChecks(theme: ThemeDocument): ThemeContrastCheck[] {
+  const c = theme.colors;
+  const pairs: Array<Omit<ThemeContrastCheck, "ratio" | "ok"> & { a: string; b: string }> = [
+    { id: "text-surface", label: "Основной текст на поверхности", a: c.textPrimary, b: c.surface, minimum: 4.5, blocking: true },
+    { id: "text-canvas", label: "Основной текст на холсте", a: c.textPrimary, b: c.canvas, minimum: 4.5, blocking: true },
+    { id: "accent-button", label: "Текст на кнопке акцента", a: c.accentForeground, b: c.accent, minimum: 4.5, blocking: true },
+    { id: "secondary-surface", label: "Второстепенный текст", a: c.textSecondary, b: c.surface, minimum: 4.5, blocking: false },
+    { id: "subtle-surface", label: "Приглушённый текст", a: c.textSubtle, b: c.surface, minimum: 4.5, blocking: false },
+    { id: "accent-surface", label: "Акцент как текст", a: c.accent, b: c.surface, minimum: 4.5, blocking: false },
+    { id: "danger-surface", label: "Текст ошибки", a: c.danger, b: c.surface, minimum: 4.5, blocking: false },
+    { id: "border-surface", label: "Заметная граница", a: c.borderStrong, b: c.surface, minimum: 3, blocking: false },
+    { id: "focus-surface", label: "Рамка фокуса", a: c.focus, b: c.surface, minimum: 3, blocking: false }
+  ];
+  return pairs.map(({ a, b, ...pair }) => {
+    const ratio = contrastRatio(a, b);
+    return { ...pair, ratio, ok: ratio >= pair.minimum };
+  });
+}
+
+/** Human-readable reason the theme can't be saved, or null when every blocking pair passes. */
+export function themeBlockingContrastIssue(theme: ThemeDocument): string | null {
+  const failed = themeContrastChecks(theme).find(check => check.blocking && !check.ok);
+  return failed ? `${failed.label}: ${failed.ratio.toFixed(1)}:1, нужно не меньше ${failed.minimum}:1.` : null;
+}
