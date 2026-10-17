@@ -33,7 +33,7 @@
 - `corepack pnpm test` — 1158 тестов, 140 файлов, все пройдены
 - `vitest --config vitest.integration.config.mts` для `theme-library` и `custom-theme` — 9/9 на PostgreSQL 16 после всех миграций (CRUD, конфликт, 6 параллельных сохранений, удаление применённой, приватность, зеркалирование старого клиента, права владельца/участника/постороннего, изоляция пространств)
 - миграция данных проверена вручную на строках со старой темой (в т. ч. с id `arctic`) внутри транзакции с откатом
-- e2e (Playwright, Chromium 141, production-сборки): см. итог в PR
+- полный e2e (`node scripts/e2e-local.mjs`, Playwright, Chromium 141, production-сборки) — 122 пройдено, 2 упали: `opportunity-import-documents.spec.ts` (импорт резюме из PDF/DOCX и пакет 450 файлов), известные падения из `docs/STATUS.md`, к темам не относятся; все сценарии тем (`theme-library`, `theme-preview`, `saved-custom-theme`, `precision-shell`, `theme-matrix`) зелёные
 Визуально проверено: Arctic, Precision, Obsidian/Midnight/Emerald/Crimson в образце; своя тёмная и светлая на 1440; 390 px — предпросмотр и тема пространства без горизонтальной прокрутки.
 Не проверено: Tauri-окно на Windows; 320 px отдельным сценарием; ручной просмотр всех модулей в своей светлой теме (покрыт только сценарием `theme-matrix`).
 
