@@ -10,7 +10,7 @@ import {
   useUpdateProfile,
   useUploadAvatar
 } from "@orion/core-react";
-import { AuroraBackground, Button, Input, SpotlightCard, useToast } from "@orion/ui";
+import { AuroraBackground, Button, Input, LoadingScreen, SpotlightCard, useToast } from "@orion/ui";
 import { motion } from "framer-motion";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -91,7 +91,7 @@ export default function AccountPage(): React.ReactElement {
 
   if (isLoading || !user) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Загрузка…</div>
+      <LoadingScreen />
     );
   }
 

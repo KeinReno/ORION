@@ -4,7 +4,7 @@ import { KaidenLogo } from "../../components/kaiden-logo";
 
 import { useAuthAccounts, useLogin, useOrionMode, useSession } from "@orion/core-react";
 import type { AccountPublic } from "@orion/shared-types";
-import { AuroraBackground, Button, Input, SpotlightCard } from "@orion/ui";
+import { AuroraBackground, Button, Input, Spinner, SpotlightCard } from "@orion/ui";
 import { motion } from "framer-motion";
 import { UserPlus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -125,7 +125,7 @@ function LoginContent(): React.ReactElement {
                   required
                 />
                 <Button type="submit" disabled={login.isPending}>
-                  {login.isPending ? "Входим…" : "Войти"}
+                  {login.isPending ? <><Spinner /> Входим…</> : "Войти"}
                 </Button>
               </form>
               {login.isError ? (
@@ -206,7 +206,7 @@ function LoginContent(): React.ReactElement {
                     required
                   />
                   <Button type="submit" disabled={login.isPending}>
-                    {login.isPending ? "Входим…" : "Войти"}
+                    {login.isPending ? <><Spinner /> Входим…</> : "Войти"}
                   </Button>
                 </form>
               )}
@@ -223,7 +223,7 @@ function LoginContent(): React.ReactElement {
                 Учётная запись — это вы. Пространства внутри неё — отдельные хранилища.
               </p>
               {accounts.isLoading ? (
-                <p className="text-sm text-muted-foreground">Загружаем учётные записи…</p>
+                <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Загружаем учётные записи…</p>
               ) : accounts.isError ? (
                 <>
                   <p className="text-sm text-muted-foreground">

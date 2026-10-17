@@ -4,7 +4,7 @@ import { KaidenLogo } from "../../components/kaiden-logo";
 
 import { useCreateWorkspace, useLogout, useSession, useWorkspaces } from "@orion/core-react";
 import type { WorkspaceRole } from "@orion/shared-types";
-import { AuroraBackground, Button, Input, Select, SpotlightCard } from "@orion/ui";
+import { AuroraBackground, Button, Input, LoadingScreen, Select, SpotlightCard } from "@orion/ui";
 import { motion } from "framer-motion";
 import { ChevronRight, FolderPlus, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -87,7 +87,7 @@ export default function SpacesPage(): React.ReactElement {
 
   if (sessionLoading || !user) {
     return (
-      <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Загрузка…</div>
+      <LoadingScreen />
     );
   }
 

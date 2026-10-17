@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@orion/core-react";
+import { LoadingScreen } from "@orion/ui";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -31,9 +32,5 @@ export default function IndexPage(): React.ReactElement {
     );
   }
 
-  return (
-    <div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
-      Загрузка…
-    </div>
-  );
+  return <LoadingScreen />;
 }
