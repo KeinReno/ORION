@@ -1,5 +1,10 @@
 # CLAUDE.md — историческая ориентация по существующему коду
 
+> **Направление развития и приоритеты** — [`docs/PLATFORM.md`](docs/PLATFORM.md)
+> (KAIDEN Orion Platform 1.0, утверждено владельцем 17.10.2026). Вся дальнейшая
+> работа строится по нему; текущий этап — «Этап 0: завершение редизайна и
+> стабилизация». Состояние кода — [`docs/STATUS.md`](docs/STATUS.md).
+>
 > Актуальные правила изменений: [`AGENTS.md`](AGENTS.md) →
 > [`ORION_CONSTITUTION.md`](ORION_CONSTITUTION.md) →
 > [`docs/AI_REFACTOR_MIGRATION_MAP.md`](docs/AI_REFACTOR_MIGRATION_MAP.md).
