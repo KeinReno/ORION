@@ -9,7 +9,7 @@
 
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|
-| Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md) |
+| Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md), [MODULE_REGISTRY.md](MODULE_REGISTRY.md) |
 | Plugin API | зафиксировано (UI-слоты; сервер — частично) | `packages/shared-types/src/plugins.ts` (`PLUGIN_CATALOG`), `apps/web/lib/extensions/contracts.ts` (`SlotContracts`), `host-api.ts`, `apps/api/src/plugins/` | [MANIFEST.md](MANIFEST.md), `docs/MODULES_AND_PLUGINS.md` |
 | Event API | спецификация (кода нет) | — (целевой `EventBus`; ADR-0019) | [EVENTS.md](EVENTS.md), [ADR-0019](../adr/ADR-0019-event-api-outbox.md) |
 | Storage API | зафиксировано для файлов; для данных компонента — нет | `apps/api/src/storage/storage-adapter.ts`, `apps/api/prisma/schema.prisma`, `apps/api/src/sync/snapshot-registry.ts` | [STORAGE.md](STORAGE.md) |

@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { registryViolations } from "./module-registry.mjs";
 import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir } from "./module-ownership.mjs";
 import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 
@@ -307,7 +308,7 @@ export function moduleBoundaryViolations(projectRoot = root, exceptions = MODULE
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...ownershipMapViolations(), ...moduleBoundaryViolations()];
+  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...ownershipMapViolations(), ...moduleBoundaryViolations(), ...registryViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;

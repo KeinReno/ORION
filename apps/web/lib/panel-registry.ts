@@ -29,6 +29,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { generatedPanelDefinitions } from "../modules-ext/panels.generated";
 import { createElement, type ComponentType, type FunctionComponent } from "react";
 import { derivePanelSurfaces } from "./panel-surfaces";
 
@@ -276,6 +277,8 @@ const panelEntries: PanelEntry[] = [
   { id: "document", label: "Документ", icon: FolderOpen, component: DocumentPanel, moduleId: "documents", hideFromNav: true, instanced: true, navParent: "documents" },
   { id: "sync", label: "Резервные копии", icon: RefreshCw, component: SyncPanel, group: "Файлы и система" },
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true },
+  // G5: панели модулей, подключённых манифестом (modules-ext/<id>/) — список генерирует scripts/module-registry.mjs.
+  ...generatedPanelDefinitions,
   // One tab of any section panel as a panel of its own (dock tab or OS window): `view:<base>~<view>[~<instance>]`.
   { id: "view", label: "Раздел", icon: PanelTop, component: SectionViewPanel, hideFromNav: true, instanced: true }
 ];
