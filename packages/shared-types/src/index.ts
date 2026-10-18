@@ -78,5 +78,6 @@ export * from "./permissions";
 export * from "./platform-contracts";
 export * from "./component-manifest";
 export * from "./component-data";
+export * from "./component-diagnostics";
 export * from "./component-dependencies";
 export * from "./modules-ext/registry.generated";
