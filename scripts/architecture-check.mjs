@@ -118,12 +118,111 @@ export function colorViolations(projectRoot = root) {
   return violations;
 }
 
+// G23: целостность PLUGIN_CATALOG <-> веб-регистрация (`contribute(...)` в apps/web/plugins) <-> сервер
+// (`@RequirePlugin` и родственные). Мёртвый плагин (есть в каталоге, нигде не используется) и
+// вклад в несуществующий слот (опечатка в динамическом коде) — ошибки.
+
+// Плагины каталога, у которых законно нет ни веб-вклада, ни серверной привязки. Список может только
+// сокращаться; добавляйте запись только с причиной.
+const PLUGIN_USAGE_ALLOWLIST = new Map([]);
+
+function parseTs(file) {
+  return ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+}
+
+function stringArrayConst(file, name) {
+  const found = [];
+  (function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name && node.initializer) {
+      let init = node.initializer;
+      if (ts.isAsExpression(init)) init = init.expression;
+      if (ts.isArrayLiteralExpression(init)) for (const el of init.elements) if (ts.isStringLiteral(el)) found.push(el.text);
+    }
+    ts.forEachChild(node, visit);
+  })(parseTs(file));
+  return found;
+}
+
+function interfaceKeys(file, name) {
+  const found = [];
+  (function visit(node) {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === name) {
+      for (const member of node.members) {
+        if (member.name && (ts.isStringLiteral(member.name) || ts.isIdentifier(member.name))) found.push(member.name.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  })(parseTs(file));
+  return found;
+}
+
+function propertyString(object, key) {
+  for (const prop of object.properties) {
+    if (ts.isPropertyAssignment(prop) && prop.name && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) &&
+      prop.name.text === key && ts.isStringLiteral(prop.initializer)) return prop.initializer.text;
+  }
+  return null;
+}
+
+export function pluginCatalogViolations(projectRoot = root) {
+  const violations = [];
+  const catalogFile = join(projectRoot, "packages", "shared-types", "src", "plugins.ts");
+  const contractsFile = join(projectRoot, "apps", "web", "lib", "extensions", "contracts.ts");
+  const plugins = join(projectRoot, "apps", "web", "plugins");
+  const catalog = new Set(stringArrayConst(catalogFile, "ORION_PLUGIN_IDS"));
+  const slots = new Set(interfaceKeys(contractsFile, "SlotContracts"));
+  if (!catalog.size) violations.push("packages/shared-types/src/plugins.ts: ORION_PLUGIN_IDS не найден или пуст");
+  if (!slots.size) violations.push("apps/web/lib/extensions/contracts.ts: SlotContracts не найден или пуст");
+
+  const webPlugins = new Set();
+  for (const file of sourceFiles(plugins)) {
+    if (/\.test\.tsx?$/.test(file)) continue;
+    const source = parseTs(file);
+    const where = (node) => `${relative(projectRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
+    (function visit(node) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "contribute" &&
+        node.arguments.length >= 2 && ts.isStringLiteral(node.arguments[0]) && ts.isObjectLiteralExpression(node.arguments[1])) {
+        const slot = node.arguments[0].text;
+        const pluginId = propertyString(node.arguments[1], "pluginId");
+        if (!slots.has(slot)) violations.push(`${where(node)} плагин вносит вклад в неизвестный слот "${slot}" (нет в SlotContracts)`);
+        if (pluginId) {
+          webPlugins.add(pluginId);
+          if (!catalog.has(pluginId)) violations.push(`${where(node)} плагин "${pluginId}" зарегистрирован в вебе, но отсутствует в PLUGIN_CATALOG`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    })(source);
+  }
+
+  const serverPlugins = new Set();
+  const SERVER_CALLS = new Set(["RequirePlugin", "pluginOffWhere", "isPluginEnabled"]);
+  for (const file of sourceFiles(join(projectRoot, "apps", "api", "src"))) {
+    if (/\.test\.tsx?$/.test(file)) continue;
+    (function visit(node) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && SERVER_CALLS.has(node.expression.text)) {
+        for (const arg of node.arguments) if (ts.isStringLiteral(arg) && catalog.has(arg.text)) serverPlugins.add(arg.text);
+      } else if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === "pluginId" &&
+        ts.isStringLiteral(node.initializer) && catalog.has(node.initializer.text)) {
+        serverPlugins.add(node.initializer.text);
+      }
+      ts.forEachChild(node, visit);
+    })(parseTs(file));
+  }
+
+  for (const id of catalog) {
+    if (!webPlugins.has(id) && !serverPlugins.has(id) && !PLUGIN_USAGE_ALLOWLIST.has(id)) {
+      violations.push(`плагин "${id}" есть в PLUGIN_CATALOG, но не вносит вклад в веб (contribute) и не используется на сервере (@RequirePlugin)`);
+    }
+  }
+  return violations;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = [...architectureViolations(), ...colorViolations()];
+  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins; no hard-coded colours in plugins)");
+    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins; no hard-coded colours in plugins; plugin catalog, slots and server usage consistent)");
   }
 }

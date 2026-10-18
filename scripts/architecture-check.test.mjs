@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
-import { architectureViolations, colorViolations } from "./architecture-check.mjs";
+import { architectureViolations, colorViolations, pluginCatalogViolations } from "./architecture-check.mjs";
 
 const fixtures = [];
 function fixture() {
@@ -102,5 +102,43 @@ describe("plugin theme-token check", () => {
       'export const ok = "text-destructive bg-card hover:bg-white/5 border-border/60";'
     ].join("\n"));
     expect(colorViolations(root)).toHaveLength(3);
+  });
+});
+
+describe("plugin catalog consistency (G23)", () => {
+  function catalogFixture() {
+    const root = fixture();
+    put(root, "packages/shared-types/src/plugins.ts", 'export const ORION_PLUGIN_IDS = ["alpha", "beta", "gamma"] as const;\n');
+    put(root, "apps/web/lib/extensions/contracts.ts", 'export interface SlotContracts {\n  "tasks.views": X;\n  "notes.filters": Y;\n}\n');
+    put(root, "apps/web/plugins/index.ts", 'contribute("tasks.views", { pluginId: "alpha", component: A });\n');
+    put(root, "apps/api/src/beta.controller.ts", '@RequirePlugin("beta")\nexport class C {}\n');
+    put(root, "apps/api/src/gamma.service.ts", 'const on = isPluginEnabled(overrides, "gamma");\n');
+    return root;
+  }
+
+  it("accepts a consistent catalog", () => {
+    expect(pluginCatalogViolations(catalogFixture())).toEqual([]);
+  });
+
+  it("rejects a contribution to an unknown slot", () => {
+    const root = catalogFixture();
+    put(root, "apps/web/plugins/index.ts", 'contribute("tasks.viewz", { pluginId: "alpha", component: A });\n');
+    expect(pluginCatalogViolations(root)).toEqual([expect.stringContaining('неизвестный слот "tasks.viewz"')]);
+  });
+
+  it("rejects a web plugin id missing from the catalog", () => {
+    const root = catalogFixture();
+    put(root, "apps/web/plugins/index.ts", 'contribute("tasks.views", { pluginId: "alpha", component: A });\ncontribute("notes.filters", { pluginId: "delta", component: D });\n');
+    expect(pluginCatalogViolations(root)).toEqual([expect.stringContaining('"delta" зарегистрирован в вебе, но отсутствует в PLUGIN_CATALOG')]);
+  });
+
+  it("rejects a catalog plugin with neither web contribution nor server usage", () => {
+    const root = catalogFixture();
+    put(root, "apps/api/src/gamma.service.ts", "export const nothing = 1;\n");
+    expect(pluginCatalogViolations(root)).toEqual([expect.stringContaining('плагин "gamma" есть в PLUGIN_CATALOG')]);
+  });
+
+  it("passes on the real repository", () => {
+    expect(pluginCatalogViolations()).toEqual([]);
   });
 });
