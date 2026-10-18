@@ -2,24 +2,9 @@
   "precision": {
     "projects-1600": {
       "checked": 80,
-      "belowTarget": 2,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "Задержка",
-          "ratio": 4.31,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(46 29 35)"
-        },
-        {
-          "text": "просрочен на 3 дня",
-          "ratio": 4.31,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(46 29 35)"
-        }
-      ]
+      "worst": []
     },
     "focus-projects": [
       {
@@ -73,38 +58,9 @@
     },
     "calendar-1600": {
       "checked": 122,
-      "belowTarget": 4,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "12:47",
-          "ratio": 3.88,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(61 34 43)"
-        },
-        {
-          "text": "Согласовать макеты главной",
-          "ratio": 3.88,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(61 34 43)"
-        },
-        {
-          "text": "12:47",
-          "ratio": 3.88,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(61 34 43)"
-        },
-        {
-          "text": "Вёрстка кабинета клиента",
-          "ratio": 3.88,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(61 34 43)"
-        }
-      ]
+      "worst": []
     },
     "projects-error-1600": {
       "checked": 50,
@@ -114,24 +70,9 @@
     },
     "projects-390": {
       "checked": 36,
-      "belowTarget": 2,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "Задержка",
-          "ratio": 4.31,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(46 29 35)"
-        },
-        {
-          "text": "просрочен на 3 дня",
-          "ratio": 4.31,
-          "size": 11,
-          "color": "rgb(244, 63, 94)",
-          "background": "rgb(46 29 35)"
-        }
-      ]
+      "worst": []
     },
     "tasks-390": {
       "checked": 33,
@@ -322,88 +263,40 @@
       "worst": []
     },
     "projects-error-1600": {
-      "checked": 51,
-      "belowTarget": 1,
+      "checked": 50,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 8,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     },
     "projects-390": {
-      "checked": 37,
-      "belowTarget": 1,
+      "checked": 36,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 9,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     },
     "tasks-390": {
       "checked": 34,
-      "belowTarget": 1,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 9,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     },
     "notes-390": {
       "checked": 27,
-      "belowTarget": 1,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 9,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     },
     "documents-390": {
       "checked": 17,
-      "belowTarget": 1,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 9,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     },
     "calendar-390": {
       "checked": 77,
-      "belowTarget": 1,
+      "belowTarget": 0,
       "below2": 0,
-      "worst": [
-        {
-          "text": "2",
-          "ratio": 2.69,
-          "size": 9,
-          "color": "rgb(255, 255, 255)",
-          "background": "rgb(251 113 133)"
-        }
-      ]
+      "worst": []
     }
   }
 }
