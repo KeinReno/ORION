@@ -39,7 +39,8 @@ export class RegisterRateLimitGuard implements CanActivate {
   private readonly perEmail = new Map<string, { count: number; resetAt: number }>();
 
   private readonly ipWindowMs = 5 * 60 * 1000;
-  private readonly ipMax = 60;
+  // The e2e suite (playwright.config.ts) raises it: one run registers more accounts from 127.0.0.1 than any real client.
+  private readonly ipMax = positiveInt(process.env.REGISTER_RATE_LIMIT_PER_IP) ?? 60;
 
   private readonly emailWindowMs = 15 * 60 * 1000;
   private readonly emailMax = 5;
@@ -107,4 +108,9 @@ function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().toLowerCase();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function positiveInt(raw: string | undefined): number | undefined {
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
 }

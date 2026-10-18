@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, UseGuards } from "@nestjs/common";
 import {
   createWorkspaceInputSchema,
+  setWorkspaceThemeInputSchema,
+  type SetWorkspaceThemeInput,
   updateWorkspaceInputSchema,
   type CreateWorkspaceInput,
   type UpdateWorkspaceInput,
@@ -38,6 +40,15 @@ export class WorkspacesController {
     @Body(new ZodValidationPipe(updateWorkspaceInputSchema)) body: UpdateWorkspaceInput
   ): Promise<Workspace> {
     return this.workspaces.updateName(user.userId, workspaceId, body.name);
+  }
+
+  @Put(":workspaceId/theme")
+  setTheme(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(setWorkspaceThemeInputSchema)) body: SetWorkspaceThemeInput
+  ): Promise<Workspace> {
+    return this.workspaces.setTheme(user.userId, workspaceId, body.theme);
   }
 
   @Delete(":workspaceId")

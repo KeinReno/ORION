@@ -17,6 +17,7 @@ import { openEntity, openPanel } from "../../lib/extensions/host-api";
 import { shortDateTime } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
+import { TODAY_HALF_W, coveredByToday } from "./today-badge";
 
 /**
  * Project Gantt (v0.27) — the plan tab of a project's detail Sheet. Two
@@ -348,9 +349,12 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
               </Button>
             </>
           ) : null}
-          <Button size="sm" variant="subtle" onClick={() => setCreatingMilestone(true)}>
-            <Plus className="h-4 w-4" /> Веха
-          </Button>
+          {/* An empty chart offers «Веха» in its empty state — one button, not two. */}
+          {!loading && rows.length > 0 ? (
+            <Button size="sm" variant="outline" onClick={() => setCreatingMilestone(true)}>
+              <Plus className="h-4 w-4" /> Веха
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -668,13 +672,13 @@ function GanttChart({
                 className="absolute top-0 h-full border-l border-white/5 pl-1 text-2xs leading-6 text-subtle-foreground"
                 style={{ left: tick.dayOffset * pxPerDay }}
               >
-                {tick.label}
+                {todayX !== null && coveredByToday(tick.dayOffset * pxPerDay, todayX) ? null : tick.label}
               </div>
             ))}
             {todayX !== null ? (
               <div
                 className="absolute top-0 z-10 h-full -translate-x-1/2 rounded-b bg-accent px-1 text-2xs font-medium leading-6 text-accent-foreground"
-                style={{ left: todayX }}
+                style={{ left: Math.max(todayX, TODAY_HALF_W) }}
               >
                 сегодня
               </div>

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { INCLUDED_SNAPSHOT_KEYS } from "./snapshot-registry";
 
@@ -374,6 +374,8 @@ export interface WorkspaceConfigSnapshot {
   disabledModules: string[];
   pluginOverrides: string[];
   restrictedModules: string[];
+  /** Workspace palette (ThemeDocument JSON). Absent in copies made before the theme library — then left as is. */
+  theme?: Prisma.JsonValue | null;
 }
 
 export interface WorkspaceSnapshot {
@@ -398,7 +400,7 @@ export class SnapshotService {
     }
     const workspace = await tx.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
-      select: { disabledModules: true, pluginOverrides: true, restrictedModules: true }
+      select: { disabledModules: true, pluginOverrides: true, restrictedModules: true, theme: true }
     });
     return {
       version: SNAPSHOT_VERSION,
@@ -408,7 +410,8 @@ export class SnapshotService {
       workspaceConfig: {
         disabledModules: workspace.disabledModules,
         pluginOverrides: workspace.pluginOverrides,
-        restrictedModules: workspace.restrictedModules
+        restrictedModules: workspace.restrictedModules,
+        theme: workspace.theme
       }
     };
   }
@@ -484,7 +487,10 @@ export class SnapshotService {
       data: {
         disabledModules: snapshot.workspaceConfig.disabledModules,
         pluginOverrides: snapshot.workspaceConfig.pluginOverrides,
-        restrictedModules: snapshot.workspaceConfig.restrictedModules
+        restrictedModules: snapshot.workspaceConfig.restrictedModules,
+        ...(snapshot.workspaceConfig.theme !== undefined
+          ? { theme: snapshot.workspaceConfig.theme === null ? Prisma.DbNull : (snapshot.workspaceConfig.theme as Prisma.InputJsonValue) }
+          : {})
       }
     });
   }

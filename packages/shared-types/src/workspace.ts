@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { themeDocumentSchema } from "./theme-document";
 
 export const workspaceRoleSchema = z.enum(["owner", "member", "lead"]);
 export type WorkspaceRole = z.infer<typeof workspaceRoleSchema>;
@@ -17,7 +18,9 @@ export const workspaceSchema = z.object({
   /** Module ids visible only to `owner`/`lead` — see `isModuleRestricted`/`effectiveDisabledModules`. */
   restrictedModules: z.array(z.string()),
   /** ТЗ-05: личное пространство, созданное при регистрации — его нельзя открыть другим (приглашения отклоняются). */
-  isPersonal: z.boolean()
+  isPersonal: z.boolean(),
+  /** Palette the owner set for everyone in this space (a copy, not a link to anyone's own theme); null = none. */
+  theme: themeDocumentSchema.nullable()
 });
 export type Workspace = z.infer<typeof workspaceSchema>;
 

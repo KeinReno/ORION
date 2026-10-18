@@ -16,7 +16,9 @@ const apiEnv: Record<string, string> = {
   WEB_ORIGIN: webOrigin,
   ORION_MODE: "local",
   STORAGE_DRIVER: "local",
-  STORAGE_DIR: "../../tmp/e2e-documents"
+  STORAGE_DIR: "../../tmp/e2e-documents",
+  // Every spec registers its own accounts from 127.0.0.1; the suite outgrew the 60-per-5-minutes production cap.
+  REGISTER_RATE_LIMIT_PER_IP: "10000"
 };
 if (process.env.E2E_DATABASE_URL) apiEnv.DATABASE_URL = process.env.E2E_DATABASE_URL;
 if (process.env.E2E_APP_DATABASE_URL) apiEnv.APP_DATABASE_URL = process.env.E2E_APP_DATABASE_URL;
