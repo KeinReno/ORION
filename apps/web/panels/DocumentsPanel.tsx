@@ -869,14 +869,15 @@ export function DocumentsPanel(): React.ReactElement {
             aria-label="Выбранные документы"
             className="sticky bottom-0 mt-2 flex items-center gap-0.5 rounded-xl border border-border bg-panel/95 p-1.5 text-xs backdrop-blur"
           >
-            <IconButton label="Снять выбор" size="sm" onClick={() => setChecked(new Set())}>
+            <IconButton label="Снять выбор" size="sm" className="shrink-0" onClick={() => setChecked(new Set())}>
               <X className="h-4 w-4" />
             </IconButton>
             <span className="mr-auto min-w-0 truncate pr-1 text-muted-foreground">Выбрано: {checkedList.length}</span>
-            <Button size="sm" variant="subtle" onClick={() => setMoveTargets(checkedList)}>
+            {/* The buttons keep their one-line labels; the count gives way first on a narrow list. */}
+            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => setMoveTargets(checkedList)}>
               Переместить…
             </Button>
-            <Button size="sm" variant="subtle" onClick={() => trashMany(checkedList)}>
+            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => trashMany(checkedList)}>
               В корзину
             </Button>
           </motion.div>
