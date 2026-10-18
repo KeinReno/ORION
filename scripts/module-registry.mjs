@@ -17,6 +17,7 @@
  *   apps/api/src/modules-ext/modules.generated.ts                 список Nest-модулей для app.module.ts
  *   apps/api/src/modules-ext/data.generated.ts                    политика снапшота и класс синхронизации моделей
  *   apps/web/modules-ext/panels.generated.ts                      определения панелей для panel-registry.ts
+ *   scripts/module-ownership.generated.mjs                        владельцы моделей для правила границ (G4)
  *   apps/api/prisma/schema.prisma                                 только области между маркерами <module-registry:…>
  *   apps/api/prisma/migrations/<name>/migration.sql               копия миграции модуля
  *
@@ -50,7 +51,8 @@ export const GENERATED_FILES = [
   `${PATHS.sharedExt}/registry.generated.ts`,
   `${PATHS.apiExt}/modules.generated.ts`,
   `${PATHS.apiExt}/data.generated.ts`,
-  `${PATHS.webExt}/panels.generated.ts`
+  `${PATHS.webExt}/panels.generated.ts`,
+  "scripts/module-ownership.generated.mjs"
 ];
 
 const ID_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -339,6 +341,15 @@ export function renderOutputs(modules, root = defaultRoot) {
         .join(",\n") +
       (panels.length > 0 ? "\n" : "") +
       `];\n`
+  );
+
+  // G4: владелец моделей — каталог apps/api/src/modules-ext (правило границ определяет модуль по первому
+  // сегменту пути под src/, поэтому подключаемые модули для него — один «модуль»; границы между ними не проверяются).
+  out.set(
+    "scripts/module-ownership.generated.mjs",
+    "// АВТОГЕНЕРИРУЕТСЯ scripts/module-registry.mjs — руками не править.\n" +
+      "/** Модели подключаемых модулей -> каталог-владелец (см. module-ownership.mjs). */\n" +
+      `export const GENERATED_MODEL_OWNERS = ${json(allModels.map((item) => [item.model, "modules-ext"]))};\n`
   );
 
   for (const m of modules) {

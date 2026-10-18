@@ -6,12 +6,13 @@ import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 import { TaskCommentsService } from "./task-comments.service";
 import { TaskActivityService } from "./task-activity.service";
+import { TasksProjectAggregates } from "./tasks-project-aggregates";
 import { TaskClosedNotifier } from "./task-closed-notifier";
 
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule],
   controllers: [TasksController],
-  providers: [TasksService, TaskCommentsService, TaskActivityService, TaskClosedNotifier],
+  providers: [TasksProjectAggregates, TasksService, TaskCommentsService, TaskActivityService, TaskClosedNotifier],
   exports: [TasksService]
 })
 export class TasksModule {}

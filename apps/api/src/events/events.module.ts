@@ -9,11 +9,12 @@ import { EventsService } from "./events.service";
 import { EventReminderService } from "./event-reminder.service";
 import { CalendarConnectionsController } from "./calendar-connections.controller";
 import { CalendarConnectionsService } from "./calendar-connections.service";
+import { EventsProjectAggregates } from "./events-project-aggregates";
 
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule],
   controllers: [EventsController, CalendarController, CalendarFeedController, CalendarConnectionsController],
-  providers: [EventsService, EventReminderService, CalendarConnectionsService],
+  providers: [EventsProjectAggregates, EventsService, EventReminderService, CalendarConnectionsService],
   exports: [EventsService]
 })
 export class EventsModule {}

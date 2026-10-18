@@ -24,6 +24,7 @@
 | `apps/api/src/modules-ext/modules.generated.ts` | `GENERATED_NEST_MODULES` | `app.module.ts` |
 | `apps/api/src/modules-ext/data.generated.ts` | `GENERATED_SNAPSHOT_REGISTRY`, `GENERATED_SNAPSHOT_SPECS`, `GENERATED_SYNC_CLASSIFICATION`, `GENERATED_MODULE_PROBES` | `snapshot-registry.ts`, `snapshot.service.ts`, `sync-classification.ts`, матричный тест модулей |
 | `apps/web/modules-ext/panels.generated.ts` | `generatedPanelDefinitions` | `panel-registry.ts` |
+| `scripts/module-ownership.generated.mjs` | `GENERATED_MODEL_OWNERS` (владелец `modules-ext`) | `module-ownership.mjs` (правило границ G4) |
 | `apps/api/prisma/schema.prisma` | только области между `// <module-registry:…>` (модели и обратные поля `Workspace`) | Prisma |
 | `apps/api/prisma/migrations/<name>/migration.sql` | байтовая копия миграции модуля | `prisma migrate` |
 
