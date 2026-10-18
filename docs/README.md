@@ -10,6 +10,9 @@
 | Контекстная панель ресурсов и межмодульные связи (MVP этапа A реализован; этапы B–C — нет) | [CONTEXTUAL_RESOURCES_PANEL.md](CONTEXTUAL_RESOURCES_PANEL.md), [ADR-0014](adr/ADR-0014-context-resources-panel.md) |
 | ТЗ для исполнителей: панель ресурсов, Agent Gateway/Manager, LAN, общие пространства, Hybrid Sync | [tz/README.md](tz/README.md) |
 | Гибридная синхронизация (локальные копии, очередь записи; списки → заметки и задачи) | [SYNC.md](SYNC.md), [ADR-0016](adr/ADR-0016-hybrid-sync-protocol.md), [tz/TZ-06-hybrid-sync.md](tz/TZ-06-hybrid-sync.md) |
+| Orion Link: LAN, WebDAV/S3, будущий собственный сервер (**спецификация, не готовый транспорт**) | [ORION_LINK_ARCHITECTURE.md](ORION_LINK_ARCHITECTURE.md) |
+| Orion Agent Hub: общие задачи и сообщения между подписочными агентами (**проект**) | [AGENT_HUB_ARCHITECTURE.md](AGENT_HUB_ARCHITECTURE.md) |
+| Orion Android: автономная работа OnePlus, темы, устройства и синхронизация (**план**) | [ANDROID_CLIENT_PLAN.md](ANDROID_CLIENT_PLAN.md) |
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Многопользовательская модель и WebDAV | [SYNC.md](SYNC.md) |
