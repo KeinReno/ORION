@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { agentAuditResultOf, createAgentTokenInputSchema } from "./agent";
 import {
   decideAgentOperation,
+  remoteTokenViolations,
   effectiveAgentPermissions,
   isDecisionNote,
   permissionsFromScopes,
@@ -96,5 +97,24 @@ describe("прочее", () => {
   });
   it("CSV экранирует кавычки и формулы", () => {
     expect(toCsv([["a", '=SUM(A1)'], ['x,"y"', null]])).toBe('a,\'=SUM(A1)\r\n"x,""y""",');
+  });
+});
+
+describe("remoteTokenViolations (ADR-0017)", () => {
+  it("токен на сервере: помощник со сроком ≤ 30 дней и запретом удаления допустим", () => {
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 30, forbidden: ["delete"] })).toEqual([]);
+    expect(remoteTokenViolations({ mode: "observer", expiresInDays: 1, forbidden: ["delete", "finance"] })).toEqual([]);
+  });
+
+  it("менеджер, бессрочный или долгий токен и снятый запрет удаления — нарушения", () => {
+    expect(remoteTokenViolations({ mode: "manager", expiresInDays: 7, forbidden: ["delete"] })).toHaveLength(1);
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: null, forbidden: ["delete"] })[0]).toContain("30 дней");
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 31, forbidden: ["delete"] })).toHaveLength(1);
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 7, forbidden: [] })[0]).toContain("запрет удаления");
+    expect(remoteTokenViolations({ mode: "manager", expiresInDays: null, forbidden: [] })).toHaveLength(3);
+  });
+
+  it("при обновлении срок не проверяется", () => {
+    expect(remoteTokenViolations({ mode: "assistant", forbidden: ["delete"] }, false)).toEqual([]);
   });
 });
