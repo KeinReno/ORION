@@ -10,6 +10,9 @@ import { TasksModule } from "../tasks/tasks.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { InboxModule } from "../inbox/inbox.module";
 import { SearchModule } from "../search/search.module";
+import { AssistantController } from "./assistant.controller";
+import { AssistantChatService } from "./assistant-chat.service";
+import { AssistantKeyService } from "./assistant-key.service";
 import { AgentConnectionController } from "./agent-connection.controller";
 import { AgentGatewayController } from "./agent-gateway.controller";
 import { AgentGatewayService } from "./agent-gateway.service";
@@ -22,7 +25,7 @@ import { AgentTokensController, AiController } from "./ai.controller";
 /** ORION AI Bridge (ADR-0007): scoped, audited, revocable access for external AI agents. */
 @Module({
   imports: [AuthModule, WorkspacesModule, ModulesModule, TasksModule, NotesModule, ProjectsModule, EventsModule, FinanceModule, NotificationsModule, InboxModule, SearchModule],
-  controllers: [AgentTokensController, AiController, AgentGatewayController, AgentConnectionController],
-  providers: [AgentTokensService, AgentJobsService, AgentUndoService, AgentGatewayService, AgentTokenGuard]
+  controllers: [AgentTokensController, AiController, AgentGatewayController, AgentConnectionController, AssistantController],
+  providers: [AgentTokensService, AgentJobsService, AgentUndoService, AgentGatewayService, AgentTokenGuard, AssistantKeyService, AssistantChatService]
 })
 export class AiModule {}

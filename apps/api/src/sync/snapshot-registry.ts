@@ -86,6 +86,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "Contact", snapshotKey: "contacts", policy: "included", reason: "Контакты: записная книжка пространства и контакты дома (УК, мастера)." },
   { model: "ContactInteraction", snapshotKey: "contactInteractions", policy: "included", reason: "Журнал общения с контактом — пользовательская история." },
   { model: "ContactRelation", snapshotKey: "contactRelations", policy: "included", reason: "Связи между контактами («жена», «коллега»)." },
+  { model: "AssistantKey", snapshotKey: null, policy: "secret-excluded", reason: "Ключ владельца к языковой модели (ADR-0017, вариант C): лежит зашифрованным на этом узле и в бэкап не попадает — новый узел просит ввести его заново." },
   { model: "AgentToken", snapshotKey: null, policy: "secret-excluded", reason: "Учётные данные ИИ-агентов (ADR-0007): хранится только хеш секрета; токены не переносятся между узлами — их выпускают заново." },
   { model: "AgentMessage", snapshotKey: null, policy: "ephemeral-excluded", reason: "Сообщения между агентами привязаны к токенам узла; токены в бэкап не входят, а значит и переписка." },
   { model: "AgentTask", snapshotKey: null, policy: "ephemeral-excluded", reason: "Задания между агентами привязаны к токенам узла, которые в бэкап не входят." },
