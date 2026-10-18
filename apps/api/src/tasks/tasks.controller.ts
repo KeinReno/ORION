@@ -20,6 +20,7 @@ import { CurrentUser } from "../common/current-user.decorator";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { RequireModule } from "../modules/require-module";
+import { RequirePermission } from "../common/require-permission";
 import { TasksService } from "./tasks.service";
 import { TaskCommentsService } from "./task-comments.service";
 import { RequirePlugin } from "../plugins/require-plugin";
@@ -35,6 +36,7 @@ export class TasksController {
   ) {}
 
   @Get()
+  @RequirePermission("tasks.task.read")
   list(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -45,6 +47,7 @@ export class TasksController {
   }
 
   @Post()
+  @RequirePermission("tasks.task.create")
   create(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -76,6 +79,7 @@ export class TasksController {
   }
 
   @Patch(":taskId")
+  @RequirePermission("tasks.task.update")
   update(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
@@ -86,6 +90,7 @@ export class TasksController {
   }
 
   @Delete(":taskId")
+  @RequirePermission("tasks.task.delete")
   remove(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
+import { isRegisteredPermission, permissionsOfModule } from "./permissions";
 
 /**
  * Единый машиночитаемый манифест компонента платформы (модуля или плагина) — PLATFORM_AUDIT G1.
@@ -33,8 +34,11 @@ export const componentManifestSchema = z.object({
     /** Мягкие: компонент живёт без них, но использует, если они включены. */
     optionalModules: z.array(z.string())
   }),
-  /** Например "tasks.read". Пока не используется рантаймом. */
-  permissions: z.array(z.string()),
+  /**
+   * Разрешения компонента из реестра (`permissions.ts`), вида `tasks.task.read`. Модуль перечисляет свои операции;
+   * плагин — те, что ему нужны от других (пока пусто: идентичности плагина в запросах нет). Только id из реестра.
+   */
+  permissions: z.array(z.string().refine(isRegisteredPermission, "разрешение не из реестра")),
   contributions: z.object({
     panels: z.array(z.string()).optional(),
     slots: z.array(z.string()).optional(),
@@ -82,7 +86,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     title: module.label,
     description: module.summary,
     requires: { platform: PLATFORM_RANGE, modules: [], optionalModules: [...module.optionalDependencies] },
-    permissions: [],
+    permissions: permissionsOfModule(module.id),
     contributions: { panels: [module.panelId] },
     events: { publishes: domainEventTypesPublishedBy(module.id), subscribes: domainEventTypesSubscribedBy(module.id) },
     migrations: []
