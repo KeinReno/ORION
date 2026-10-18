@@ -8,6 +8,7 @@
  *   apps/api/src/modules-ext/<id>/                       ← Nest-модуль, prisma/models.prisma, prisma/*.sql
  *   apps/web/modules-ext/<id>/                           ← панель
  *   packages/shared-types/src/modules-ext/<id>/index.ts  ← zod-контракты
+ *   apps/api/test/modules-ext/<id>/                      ← интеграционные тесты модуля
  *
  * Скрипт сканирует манифесты и (пере)записывает ГЕНЕРИРУЕМЫЕ файлы — единственное общее место, меняющееся
  * при подключении модуля:
@@ -39,6 +40,7 @@ const PATHS = {
   apiExt: "apps/api/src/modules-ext",
   webExt: "apps/web/modules-ext",
   sharedExt: "packages/shared-types/src/modules-ext",
+  apiTestExt: "apps/api/test/modules-ext",
   schema: "apps/api/prisma/schema.prisma",
   migrations: "apps/api/prisma/migrations",
   coreModules: "packages/shared-types/src/modules.ts"
@@ -143,6 +145,10 @@ export function collectModules(root = defaultRoot) {
     else {
       if (!existsSync(join(root, `${dir}/${apiModule.file}.ts`))) fail(`нет файла ${dir}/${apiModule.file}.ts`);
       if (seenExports.has(apiModule.export)) fail(`экспорт Nest-модуля ${apiModule.export} уже занят`);
+    }
+
+    if (typeof manifest.api?.probePath !== "string" || !manifest.api.probePath.startsWith("/")) {
+      fail('api.probePath — GET-маршрут внутри пространства (например "/pet-care/pets"), который отвечает 200 при включённом модуле и 409 при выключенном');
     }
 
     const panel = manifest.web?.panel;
@@ -294,6 +300,8 @@ export function renderOutputs(modules, root = defaultRoot) {
       `import type { Prisma } from "@prisma/client";\n` +
       `import type { ModelClassification } from "../sync/snapshot-registry";\n` +
       `import type { SyncClassification } from "../sync/sync-classification";\n\n` +
+      `/** GET-маршрут модуля внутри пространства (\`/workspaces/:id\` + путь): матричные тесты включения/выключения опрашивают его. */\n` +
+      `export const GENERATED_MODULE_PROBES: Record<string, string> = ${json(Object.fromEntries(modules.map((m) => [m.id, m.manifest.api.probePath])))};\n\n` +
       `/** Политика снапшота моделей подключаемых модулей (в \`SNAPSHOT_MODEL_REGISTRY\`). */\n` +
       `export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = ${json(registry)};\n\n` +
       `/** Делегаты для снапшота; порядок — «родитель раньше ребёнка» (в \`SNAPSHOT_MODELS\`). */\n` +
@@ -390,7 +398,7 @@ export function writeRegistry(root = defaultRoot) {
  * Документацию (`docs/`) допускаем: описание модуля — не код ядра.
  */
 export function allowedPathsForModules(modules) {
-  const dirs = modules.flatMap((m) => [`${m.dir}/`, `${PATHS.webExt}/${m.name}/`, `${PATHS.sharedExt}/${m.name}/`]);
+  const dirs = modules.flatMap((m) => [`${m.dir}/`, `${PATHS.webExt}/${m.name}/`, `${PATHS.sharedExt}/${m.name}/`, `${PATHS.apiTestExt}/${m.name}/`]);
   const migrations = modules.flatMap((m) => m.migrations.map((item) => `${PATHS.migrations}/${item.name}/`));
   return { prefixes: [...dirs, ...migrations, "docs/"], exact: [...GENERATED_FILES, PATHS.schema] };
 }

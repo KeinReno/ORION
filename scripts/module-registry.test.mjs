@@ -61,7 +61,7 @@ function manifest(overrides = {}) {
       defaultEnabled: true
     },
     permissions: { primaryResource: "thing" },
-    api: { module: { file: "fixture-mod.module", export: "FixtureModModule" } },
+    api: { module: { file: "fixture-mod.module", export: "FixtureModModule" }, probePath: "/fixture-mod/things" },
     web: { panel: { id: "fixture-mod", label: "Фикстура", icon: "Box", group: "Работа", file: "FixturePanel", export: "FixturePanel" } },
     prisma: {
       fragment: "prisma/models.prisma",
@@ -141,6 +141,7 @@ describe("module-registry: модуль-фикстура", () => {
     expect(text("packages/shared-types/src/modules-ext/registry.generated.ts")).toContain('export * from "./fixture-mod";');
     expect(text("apps/api/src/modules-ext/modules.generated.ts")).toContain('import { FixtureModModule } from "./fixture-mod/fixture-mod.module";');
     expect(text("apps/api/src/modules-ext/modules.generated.ts")).toContain("GENERATED_NEST_MODULES = [FixtureModModule]");
+    expect(text("apps/api/src/modules-ext/data.generated.ts")).toContain('"fixture-mod": "/fixture-mod/things"');
     expect(text("apps/api/src/modules-ext/data.generated.ts")).toContain("delegate: (tx) => tx.fixtureThing");
     expect(text("apps/api/src/modules-ext/data.generated.ts")).toContain('"syncClass": "lww-fields"');
     expect(text("apps/web/modules-ext/panels.generated.ts")).toContain('import { Box } from "lucide-react";');

@@ -4,6 +4,9 @@ import type { Prisma } from "@prisma/client";
 import type { ModelClassification } from "../sync/snapshot-registry";
 import type { SyncClassification } from "../sync/sync-classification";
 
+/** GET-маршрут модуля внутри пространства (`/workspaces/:id` + путь): матричные тесты включения/выключения опрашивают его. */
+export const GENERATED_MODULE_PROBES: Record<string, string> = {};
+
 /** Политика снапшота моделей подключаемых модулей (в `SNAPSHOT_MODEL_REGISTRY`). */
 export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [];
 
