@@ -4,6 +4,7 @@ import { Module } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PrismaModule } from "./common/prisma.module";
 import { BackgroundJobsModule } from "./common/background-jobs.module";
+import { ProjectAggregateModule } from "./common/project-aggregates";
 import { AuthModule } from "./auth/auth.module";
 import { WorkspacesModule } from "./workspaces/workspaces.module";
 import { NotesModule } from "./notes/notes.module";
@@ -47,6 +48,7 @@ import { UsersModule } from "./users/users.module";
     ScheduleModule.forRoot(),
     PrismaModule,
     BackgroundJobsModule,
+    ProjectAggregateModule,
     AuthModule,
     WorkspacesModule,
     ModulesModule,

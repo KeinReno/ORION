@@ -6,6 +6,7 @@ import { NoteAttachmentsService } from "./note-attachments.service";
 import { NotesController } from "./notes.controller";
 import { NotesService } from "./notes.service";
 import { NoteTrashPurgeService } from "./note-trash-purge.service";
+import { NotesProjectAggregates } from "./notes-project-aggregates";
 
 /**
  * Note attachments reuse the documents module's storage: `DocumentsModule`
@@ -15,7 +16,7 @@ import { NoteTrashPurgeService } from "./note-trash-purge.service";
 @Module({
   imports: [AuthModule, WorkspacesModule, DocumentsModule],
   controllers: [NotesController],
-  providers: [NotesService, NoteTrashPurgeService, NoteAttachmentsService],
+  providers: [NotesProjectAggregates, NotesService, NoteTrashPurgeService, NoteAttachmentsService],
   exports: [NotesService]
 })
 export class NotesModule {}

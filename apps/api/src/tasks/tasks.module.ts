@@ -6,11 +6,12 @@ import { TasksController } from "./tasks.controller";
 import { TasksService } from "./tasks.service";
 import { TaskCommentsService } from "./task-comments.service";
 import { TaskActivityService } from "./task-activity.service";
+import { TasksProjectAggregates } from "./tasks-project-aggregates";
 
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule],
   controllers: [TasksController],
-  providers: [TasksService, TaskCommentsService, TaskActivityService],
+  providers: [TasksProjectAggregates, TasksService, TaskCommentsService, TaskActivityService],
   exports: [TasksService]
 })
 export class TasksModule {}
