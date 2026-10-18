@@ -158,6 +158,15 @@ export class WebdavRemote {
     }
   }
 
+  /** Имена всех непосредственных детей папки (файлы и подпапки). Нет папки — пустой список. */
+  async listNames(rel: string): Promise<string[]> {
+    const path = this.at(rel);
+    if (!(await this.client.exists(path))) return [];
+    const raw = await this.client.getDirectoryContents(path, { deep: false });
+    const items = (Array.isArray(raw) ? raw : (raw as { data: FileStat[] }).data) as FileStat[];
+    return items.map((i) => i.basename).sort();
+  }
+
   /** Плоский листинг одной папки: `[{ name, size, lastmod }]`. */
   async listDir(rel: string): Promise<Array<{ name: string; size: number; lastmod: string }>> {
     const path = this.at(rel);

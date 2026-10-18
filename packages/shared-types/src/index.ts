@@ -51,6 +51,7 @@ export * from "./habit";
 export * from "./list";
 export * from "./hybrid-sync";
 export * from "./hybrid-sync-merge";
+export * from "./link";
 export * from "./opportunity";
 export * from "./inventory";
 export * from "./lists-inventory";

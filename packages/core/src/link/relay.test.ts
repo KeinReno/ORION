@@ -1,0 +1,232 @@
+import { describe, expect, it } from "vitest";
+import { MemoryHost } from "../sync/memory-host";
+import { ReplicaEngine } from "../sync/replica-engine";
+import { MemoryReplicaStorage } from "../sync/replica-types";
+import {
+  PacketError,
+  decryptPacket,
+  encryptPacket,
+  generateLinkKey,
+  readPacketHeader,
+  type LinkKey,
+  type PacketHeader
+} from "./packet-codec";
+import { MemoryPacketTransport } from "./packet-transport";
+import { RelayIngress, RelayNodeTransport } from "./relay";
+
+const WS = "ws";
+let counter = 0;
+const uuid = () => `00000000-0000-4000-8000-${String(++counter).padStart(12, "0")}`;
+
+const header = (over: Partial<PacketHeader> = {}): PacketHeader => ({
+  linkVersion: 1,
+  protocolVersion: 1,
+  workspaceId: WS,
+  epoch: 1,
+  sourceDeviceId: "d1",
+  kind: "request",
+  seq: 1,
+  keyId: "k1",
+  createdAt: "2026-10-19T00:00:00.000Z",
+  ...over
+});
+
+describe("packet-codec", () => {
+  const key = generateLinkKey("k1");
+  const ctx = (keys: LinkKey[] = [key]) => ({ workspaceId: WS, epoch: 1, keys });
+
+  it("круг шифрования; облако видит только заголовок", async () => {
+    const bytes = await encryptPacket(header(), { secret: "Молоко" }, key);
+    expect(new TextDecoder().decode(bytes)).not.toContain("Молоко");
+    const { body } = await decryptPacket(bytes, ctx());
+    expect(body).toEqual({ secret: "Молоко" });
+  });
+
+  it("отвергает подмену заголовка, чужой ключ, чужую эпоху, усечение и мусор", async () => {
+    const bytes = await encryptPacket(header(), { a: 1 }, key);
+    const { head } = readPacketHeader(bytes);
+    const forged = bytes.slice();
+    const text = new TextDecoder().decode(head).replace('"seq":1', '"seq":2');
+    expect(text.length).toBe(head.length);
+    forged.set(new TextEncoder().encode(text), 5 + 4);
+    await expect(decryptPacket(forged, ctx())).rejects.toMatchObject({ code: "corrupt" });
+    await expect(decryptPacket(bytes, ctx([generateLinkKey("k1")]))).rejects.toMatchObject({ code: "corrupt" });
+    await expect(decryptPacket(bytes, ctx([generateLinkKey("other")]))).rejects.toMatchObject({ code: "unknown_key" });
+    await expect(decryptPacket(bytes, { ...ctx(), epoch: 2 })).rejects.toMatchObject({ code: "wrong_context" });
+    await expect(decryptPacket(bytes.slice(0, 40), ctx())).rejects.toBeInstanceOf(PacketError);
+    await expect(decryptPacket(new Uint8Array(100), ctx())).rejects.toMatchObject({ code: "malformed" });
+  });
+
+  it("ротация: старый keyId читается, пока ключ в связке", async () => {
+    const old = generateLinkKey("k0");
+    const bytes = await encryptPacket(header({ keyId: "k0" }), { a: 1 }, old);
+    const next = generateLinkKey("k1");
+    await expect(decryptPacket(bytes, ctx([next, old]))).resolves.toBeTruthy();
+    await expect(decryptPacket(bytes, ctx([next]))).rejects.toMatchObject({ code: "unknown_key" });
+  });
+});
+
+function world() {
+  const host = new MemoryHost();
+  const box = new MemoryPacketTransport();
+  const keys = [generateLinkKey("k1")];
+  const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys, host });
+  const make = (linkDeviceId: string) => {
+    const transport = new RelayNodeTransport({
+      box,
+      workspaceId: WS,
+      epoch: 1,
+      keys,
+      deviceId: linkDeviceId,
+      maxPolls: 3,
+      wait: async () => void (await ingress.pollOnce())
+    });
+    const engine = new ReplicaEngine({
+      transport,
+      storage: new MemoryReplicaStorage(),
+      userId: "u1",
+      workspaceId: WS,
+      uuid,
+      now: () => host.nowMs
+    });
+    return { engine, transport };
+  };
+  return { host, box, ingress, make, keys };
+}
+
+describe("Orion Link: ReplicaEngine через ящик (прототип ADR-0020)", () => {
+  it("два устройства сходятся через зашифрованный ящик, а в ящике нет открытого текста", async () => {
+    const { host, box, make } = world();
+    const a = make("pc").engine;
+    const b = make("phone").engine;
+    await a.sync();
+    await b.sync();
+    const list = await a.enqueue({ entity: "list", kind: "create", fields: { name: "Секретный список" } });
+    await a.enqueue({ entity: "listItem", kind: "create", parentId: list.entityId, fields: { label: "Хлеб" } });
+    await a.sync();
+    await b.sync();
+    expect(b.lists().lists.map((l) => l.name)).toEqual(["Секретный список"]);
+    expect(b.lists().lists[0]!.items.map((i) => i.label)).toEqual(["Хлеб"]);
+    expect(host.rows.size).toBe(2);
+    for (const bytes of box.files.values()) expect(new TextDecoder().decode(bytes)).not.toMatch(/Хлеб|Секретный/);
+  });
+
+  it("узел офлайн: операции остаются в очереди и доходят позже без дублей", async () => {
+    const { host, box, ingress, keys } = world();
+    let nodeUp = false;
+    const transport = new RelayNodeTransport({
+      box,
+      workspaceId: WS,
+      epoch: 1,
+      keys,
+      deviceId: "pc",
+      maxPolls: 2,
+      wait: async () => {
+        if (nodeUp) await ingress.pollOnce();
+      }
+    });
+    const engine = new ReplicaEngine({
+      transport,
+      storage: new MemoryReplicaStorage(),
+      userId: "u1",
+      workspaceId: WS,
+      uuid,
+      now: () => host.nowMs
+    });
+    nodeUp = true;
+    await engine.sync();
+    await engine.enqueue({ entity: "list", kind: "create", fields: { name: "Дом" } });
+    nodeUp = false;
+    expect((await engine.sync()).phase).toBe("offline");
+    expect(engine.status().pending).toBe(1);
+    expect(host.rows.size).toBe(0);
+    nodeUp = true;
+    await engine.sync();
+    expect(engine.status().pending).toBe(0);
+    expect([...host.rows.keys()].filter((k) => k.startsWith("list:"))).toHaveLength(1);
+  });
+
+  it("ответ потерян (узел применил, клиент не дождался): повтор даёт duplicate, не второй список", async () => {
+    const { host, box, ingress, keys } = world();
+    let silent = true;
+    const transport = new RelayNodeTransport({
+      box,
+      workspaceId: WS,
+      epoch: 1,
+      keys,
+      deviceId: "pc",
+      maxPolls: 2,
+      // пока silent, узел применяет запрос, но ответ мы не читаем (стираем ответ из ящика)
+      wait: async () => {
+        await ingress.pollOnce();
+        if (silent) for (const path of [...box.files.keys()]) if (path.includes("/down/")) box.files.delete(path);
+      }
+    });
+    const engine = new ReplicaEngine({
+      transport,
+      storage: new MemoryReplicaStorage(),
+      userId: "u1",
+      workspaceId: WS,
+      uuid,
+      now: () => host.nowMs
+    });
+    silent = false;
+    await engine.sync();
+    await engine.enqueue({ entity: "list", kind: "create", fields: { name: "Один" } });
+    silent = true;
+    const report = await engine.sync();
+    expect(report.phase).toBe("offline");
+    silent = false;
+    await engine.sync();
+    expect([...host.rows.keys()].filter((k) => k.startsWith("list:"))).toHaveLength(1);
+    expect(engine.status().pending).toBe(0);
+  });
+
+  it("повреждённый и усечённый ответ не портят копию; следующая попытка проходит", async () => {
+    const { box, make } = world();
+    const a = make("pc");
+    await a.engine.sync();
+    await a.engine.enqueue({ entity: "list", kind: "create", fields: { name: "Целый" } });
+    box.corruptNextGets = 1;
+    box.truncateNextGets = 0;
+    await a.engine.sync();
+    await a.engine.sync();
+    expect(a.engine.lists().lists.map((l) => l.name)).toEqual(["Целый"]);
+    expect(a.engine.status().pending).toBe(0);
+  });
+
+  it("сбой самого ящика = офлайн, а не ошибка данных", async () => {
+    const { box, make } = world();
+    const a = make("pc");
+    box.failNext = 3;
+    const report = await a.engine.sync();
+    expect(report.phase).toBe("offline");
+  });
+
+  it("отзыв доступа на узле доезжает до клиента кодом 403", async () => {
+    const { host, make } = world();
+    const a = make("pc");
+    await a.engine.sync();
+    host.revoked = true;
+    const report = await a.engine.sync();
+    expect(report.phase).toBe("revoked");
+  });
+
+  it("пакеты чужой эпохи узел не исполняет", async () => {
+    const { host, box, keys } = world();
+    const stale = new RelayIngress({ box, workspaceId: WS, epoch: 2, keys, host });
+    const transport = new RelayNodeTransport({ box, workspaceId: WS, epoch: 1, keys, deviceId: "pc", maxPolls: 1, wait: async () => void (await stale.pollOnce()) });
+    await expect(transport.registerDevice({ deviceId: "x", name: "x" })).rejects.toBeInstanceOf(TypeError);
+    expect(host.devices.size).toBe(0);
+  });
+
+  it("неспаренное Link-устройство получает 403 и узел не вызывается", async () => {
+    const { host, box, keys } = world();
+    const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys, host: async (id) => (id === "pc" ? host : null) });
+    const mk = (deviceId: string) =>
+      new RelayNodeTransport({ box, workspaceId: WS, epoch: 1, keys, deviceId, maxPolls: 2, wait: async () => void (await ingress.pollOnce()) });
+    await mk("pc").registerDevice({ deviceId: "a", name: "a" });
+    await expect(mk("stranger").registerDevice({ deviceId: "b", name: "b" })).rejects.toMatchObject({ status: 403 });
+    expect([...host.devices]).toEqual(["a"]);
+  });
+});

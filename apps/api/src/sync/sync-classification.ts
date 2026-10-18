@@ -142,6 +142,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   SyncOp: never("Журнал исходов операций самой синхронизации."),
   SyncEntityStamp: never("Штампы слияния самой синхронизации."),
   SyncDevice: never("Реестр устройств самой синхронизации."),
+  LinkDevice: never("Спаренные устройства Orion Link — доступ узла."),
+  LinkKey: never("Секрет шифрования пакетов Orion Link."),
   SyncRestoreOperation: never("Служебная строка восстановления."),
   OpportunityImport: never("Состояние фонового импорта выполняет узел."),
   NoteLink: never("Производное от тела заметки; пересчитывает узел."),

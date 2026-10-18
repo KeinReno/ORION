@@ -103,6 +103,8 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "SyncOp", snapshotKey: null, policy: "ephemeral-excluded", reason: "ТЗ-06: журнал исходов операций (идемпотентность, откат устройства) — состояние узла." },
   { model: "SyncEntityStamp", snapshotKey: null, policy: "ephemeral-excluded", reason: "ТЗ-06: штампы HLC полей — служебное состояние слияния узла." },
   { model: "SyncDevice", snapshotKey: null, policy: "identity-excluded", reason: "ТЗ-06: зарегистрированные устройства пользователя — личность/доступ, не данные пространства." },
+  { model: "LinkDevice", snapshotKey: null, policy: "identity-excluded", reason: "ADR-0020: спаренные Link-устройства — доступ и личность, после восстановления спаривание выполняют заново." },
+  { model: "LinkKey", snapshotKey: null, policy: "secret-excluded", reason: "ADR-0020: ключ шифрования пакетов Link — секрет узла, в бэкап не попадает (после восстановления создаётся новый)." },
   { model: "SyncRestoreOperation", snapshotKey: null, policy: "ephemeral-excluded", reason: "R18-01: durable lock/progress-строка для текущего restore, не пользовательские данные; строка живёт только на время самой операции восстановления и не должна становиться частью того, что эта же операция восстанавливает." },
 
   // --- включённые предметные модели -----------------------------------------

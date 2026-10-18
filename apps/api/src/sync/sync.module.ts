@@ -5,6 +5,9 @@ import { TasksModule } from "../tasks/tasks.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { HybridSyncController, SyncDevicesController } from "./hybrid-sync.controller";
 import { HybridSyncService } from "./hybrid-sync.service";
+import { LinkController } from "./link.controller";
+import { LinkIngressService } from "./link-ingress.service";
+import { LinkService } from "./link.service";
 import { SyncMaintenanceService } from "./sync-maintenance.service";
 import { BlobBackupService } from "./blob-backup.service";
 import { SnapshotService } from "./snapshot.service";
@@ -21,7 +24,7 @@ import { WorkspaceTransferService } from "./workspace-transfer.service";
  */
 @Module({
   imports: [AuthModule, WorkspacesModule, NotesModule, TasksModule],
-  controllers: [SyncController, HybridSyncController, SyncDevicesController, WorkspaceTransferController],
-  providers: [HybridSyncService, SyncMaintenanceService, SyncService, SnapshotService, BlobBackupService, WorkspaceTransferService]
+  controllers: [SyncController, HybridSyncController, SyncDevicesController, LinkController, WorkspaceTransferController],
+  providers: [HybridSyncService, LinkService, LinkIngressService, SyncMaintenanceService, SyncService, SnapshotService, BlobBackupService, WorkspaceTransferService]
 })
 export class SyncModule {}

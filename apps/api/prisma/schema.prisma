@@ -10,6 +10,7 @@ datasource db {
 model User {
   id                String            @id @default(uuid())
   syncDevices       SyncDevice[]
+  linkDevices       LinkDevice[]
   /// Optional for local accounts — invite-by-email still needs it when used.
   email             String?           @unique
   passwordHash      String
@@ -190,6 +191,8 @@ model Workspace {
   /// theme, so deleting that theme or losing access to it cannot break the space). Owner-only, null = none.
   theme     Json?
   createdAt DateTime          @default(now())
+  linkDevices   LinkDevice[]
+  linkKeys      LinkKey[]
   syncChanges   SyncChange[]
   syncOps       SyncOp[]
   syncStamps    SyncEntityStamp[]
@@ -2999,6 +3002,45 @@ model SyncDevice {
 
   @@index([userId])
   @@map("sync_devices")
+}
+
+/// ADR-0020 (Orion Link): устройство, спаренное для обмена через облачный ящик. `id` — Link-идентификатор в путях ящика
+/// (не `sync_devices.id` движка Hybrid Sync). Узел применяет его пакеты от имени `userId`; отзыв = `revokedAt`.
+model LinkDevice {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  name        String
+  /// Ключ, которым устройство получило `K_ws` при спаривании.
+  keyId       String
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime?
+  revokedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("link_devices")
+}
+
+/// ADR-0020: ключ шифрования пакетов Link пространства (`K_ws`), завёрнутый `sealSecret` (SYNC_SECRET как KEK).
+/// `epoch` — эпоха ящика, в которой ключ действует; активный — последний неотозванный.
+model LinkKey {
+  id          String    @id @default(uuid())
+  workspaceId String
+  keyId       String
+  epoch       Int
+  keyEnc      String
+  createdAt   DateTime  @default(now())
+  retiredAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, keyId])
+  @@index([workspaceId])
+  @@map("link_keys")
 }
 
 model OpportunityAssessment {

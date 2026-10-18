@@ -443,6 +443,12 @@ export class SyncService {
     await this.prisma.withUser(userId, (tx) => deleteRestoreOperation(tx, workspaceId));
   }
 
+  /** Для фонового приёма Link (без пользователя): удалёнка пространства или `null`, если не настроена. */
+  async systemRemoteFor(workspaceId: string): Promise<WebdavRemote | null> {
+    const cfg = await this.prisma.asSystem((tx) => tx.syncRemote.findUnique({ where: { workspaceId } }));
+    return cfg ? this.remoteFor(cfg, workspaceId) : null;
+  }
+
   /** owner-only assertMemberRoleTx + распаковка конфига в готовый WebdavRemote. */
   private async openRemote(userId: string, workspaceId: string): Promise<WebdavRemote> {
     const cfg = await this.prisma.withUser(userId, async (tx) => {
