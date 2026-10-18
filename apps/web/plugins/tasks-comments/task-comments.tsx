@@ -13,6 +13,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { relativeTime } from "../../lib/extensions/host-api";
 import { describeError } from "../../lib/extensions/host-api";
 import { useUnsavedDraft } from "../../lib/extensions/host-api";
+import { usePersistedDraft } from "../../lib/draft-storage";
 
 /**
  * S17 «Комментарии задачи». Plain REST CRUD + react-query refetch — no
@@ -35,7 +36,7 @@ export function TaskCommentsSection({
   const remove = useDeleteTaskComment(workspaceId, taskId);
   const { toast } = useToast();
 
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = usePersistedDraft(taskId ? workspaceId : undefined, `comment:${taskId ?? ""}`);
   useUnsavedDraft(draft.trim() !== "");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");

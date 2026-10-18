@@ -67,6 +67,7 @@ import {
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { OnboardingCard } from "../components/onboarding-card";
 import { ExtensionSlot } from "../lib/extensions/slot";
+import { usePersistedDraft } from "../lib/draft-storage";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { describeError } from "../lib/error-message";
 import { daysUntilLabel, upcomingContactEvents } from "../lib/contacts";
@@ -163,7 +164,7 @@ function DashboardOverview(): React.ReactElement {
   const { toast } = useToast();
   const tick = useNowTick(Boolean(running));
 
-  const [capture, setCapture] = useState("");
+  const [capture, setCapture] = usePersistedDraft(wsId, "capture");
   useUnsavedDraft(capture.trim() !== "");
   const captureRef = useRef(capture);
   captureRef.current = capture;
