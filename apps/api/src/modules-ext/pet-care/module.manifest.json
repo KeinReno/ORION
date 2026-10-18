@@ -22,7 +22,7 @@
   "prisma": {
     "fragment": "prisma/models.prisma",
     "workspaceBackRelations": ["petCarePets    PetCarePet[]", "petCareEntries PetCareEntry[]"],
-    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql" }]
+    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql", "rls": "workspace-member" }]
   },
   "data": {
     "models": [
