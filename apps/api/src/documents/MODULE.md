@@ -17,7 +17,7 @@
 | Вид | базовый, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `notes`, `projects` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `documents.document.read`, `documents.document.create`, `documents.document.update`, `documents.document.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `documents` |
 | Слоты | — |

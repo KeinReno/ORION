@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/markets` (за `@RequireModule("markets")`); панель веба `markets`; код `apps/api/src/markets/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `markets.trade.read`, `markets.trade.create`, `markets.trade.update`, `markets.trade.delete`.
 - Модуль владеет: Список наблюдения, загруженные сделки (реальные, бумажные, исторические), позиции по реальным сделкам.
 - Соседи: жёсткие: —; мягкие: `finance`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: —.

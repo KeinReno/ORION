@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/lists`, `workspaces/:workspaceId/lists-finance`, `workspaces/:workspaceId/lists-inventory` (за `@RequireModule("lists")`); панель веба `lists`; код `apps/api/src/lists/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `lists.list.read`, `lists.list.create`, `lists.list.update`, `lists.list.delete`.
 - Модуль владеет: Списки, шаблоны и их пункты (количество, единица, группа, заметка, срок, цена, кто отметил).
 - Соседи: жёсткие: —; мягкие: —; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `lists-inventory`, `lists-finance`.

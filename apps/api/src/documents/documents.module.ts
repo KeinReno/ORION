@@ -4,6 +4,9 @@ import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { DocumentsController } from "./documents.controller";
 import { DocumentsService } from "./documents.service";
 import { DocumentTrashPurgeService } from "./document-trash-purge.service";
+import { SearchRegistryModule } from "../search/search-registry.module";
+import { DocumentsSearchProvider } from "./documents-search.provider";
+import { DocumentsProjectAggregates } from "./documents-project-aggregates";
 
 /**
  * ORION v0.12 "Документы" — mirrors NotesModule. The StorageAdapter comes
@@ -15,9 +18,9 @@ import { DocumentTrashPurgeService } from "./document-trash-purge.service";
  * The dependency is one-way — this module must not import NotesModule.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule],
+  imports: [AuthModule, WorkspacesModule, SearchRegistryModule],
   controllers: [DocumentsController],
-  providers: [DocumentsService, DocumentTrashPurgeService],
+  providers: [DocumentsProjectAggregates, DocumentsService, DocumentTrashPurgeService, DocumentsSearchProvider],
   exports: [DocumentsService]
 })
 export class DocumentsModule {}

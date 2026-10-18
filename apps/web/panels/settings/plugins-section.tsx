@@ -1,8 +1,8 @@
 "use client";
 
 import { useSetWorkspacePlugin, useWorkspacePlugins } from "@orion/core-react";
-import type { WorkspacePluginState } from "@orion/shared-types";
-import { MODULE_CATALOG } from "@orion/shared-types";
+import { ApiError } from "@orion/core";
+import { isComponentHasDependentsError, MODULE_CATALOG, type ComponentDependent, type WorkspacePluginState } from "@orion/shared-types";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
 import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
@@ -17,11 +17,14 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
   const setPlugin = useSetWorkspacePlugin(workspace?.id);
   const { toast } = useToast();
   const [pending, setPending] = useState<WorkspacePluginState | null>(null);
+  /** 409 component_has_dependents: ждём подтверждения владельца, затем повторяем с confirm. */
+  const [blocked, setBlocked] = useState<{ item: WorkspacePluginState; dependents: ComponentDependent[] } | null>(null);
   const [query, setQuery] = useState("");
   const isOwner = workspace?.role === "owner";
 
-  async function apply(item: WorkspacePluginState, enabled: boolean): Promise<void> {
+  async function apply(item: WorkspacePluginState, enabled: boolean, confirm = false): Promise<void> {
     setPending(null);
+    setBlocked(null);
     if (!enabled && hasUnsavedDrafts()) {
       toast({
         title: "Сначала сохраните открытые изменения",
@@ -31,13 +34,17 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
       return;
     }
     try {
-      await setPlugin.mutateAsync({ pluginId: item.id, enabled });
+      await setPlugin.mutateAsync({ pluginId: item.id, enabled, confirm });
       toast({
         title: enabled ? `Плагин «${item.label}» включён` : `Плагин «${item.label}» выключен`,
         description: enabled ? undefined : "Данные сохранены и вернутся при повторном включении.",
         tone: "success"
       });
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409 && isComponentHasDependentsError(error.details)) {
+        setBlocked({ item, dependents: error.details.dependents });
+        return;
+      }
       toast({ title: "Не удалось изменить плагин", description: describeAuthError(error), tone: "danger" });
     }
   }
@@ -148,6 +155,21 @@ export function PluginsSettings({ moduleId }: { moduleId?: string } = {}): React
           if (pending) void apply(pending, false);
         }}
         onCancel={() => setPending(null)}
+      />
+      <ConfirmDialog
+        open={blocked !== null}
+        title={blocked ? `Выключить «${blocked.item.label}» вместе с зависимыми?` : "Зависимые компоненты"}
+        description={
+          blocked
+            ? `Вместе с плагином перестанут работать: ${blocked.dependents.map((d) => `«${d.label}»`).join(", ")}. Данные сохранятся и вернутся при повторном включении.`
+            : undefined
+        }
+        confirmLabel="Выключить всё"
+        danger
+        onConfirm={() => {
+          if (blocked) void apply(blocked.item, false, true);
+        }}
+        onCancel={() => setBlocked(null)}
       />
     </div>
   );

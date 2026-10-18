@@ -1,13 +1,14 @@
 import { z } from "zod";
 import type { SearchableEntityType } from "./search";
 import type { WorkspaceRole } from "./workspace";
+import { GENERATED_MODULE_CATALOG, GENERATED_MODULE_IDS } from "./modules-ext/registry.generated";
 
 /**
  * Domain modules that a workspace can turn off. Shell surfaces (dashboard,
  * inbox, search, notifications, settings, sync) are not in this list: they
  * belong to the core and stay available. See docs/MODULES_AND_PLUGINS.md.
  */
-export const ORION_MODULE_IDS = [
+export const CORE_MODULE_IDS = [
   "tasks",
   "notes",
   "calendar",
@@ -24,6 +25,13 @@ export const ORION_MODULE_IDS = [
   "contacts",
   "health"
 ] as const;
+
+/**
+ * G5: идентификаторы модулей, подключённых каталогом с манифестом (`modules-ext/<id>/`), дописываются
+ * сюда из автогенерируемого `modules-ext/registry.generated.ts` (`scripts/module-registry.mjs`).
+ * Перечисление остаётся закрытым `z.enum`: произвольная строка не принимается.
+ */
+export const ORION_MODULE_IDS = [...CORE_MODULE_IDS, ...GENERATED_MODULE_IDS] as const;
 
 export const orionModuleIdSchema = z.enum(ORION_MODULE_IDS);
 export type OrionModuleId = z.infer<typeof orionModuleIdSchema>;
@@ -56,7 +64,9 @@ export const workspaceModuleStateSchema = moduleManifestSchema.extend({
 export type WorkspaceModuleState = z.infer<typeof workspaceModuleStateSchema>;
 
 export const setWorkspaceModuleInputSchema = z.object({
-  enabled: z.boolean()
+  enabled: z.boolean(),
+  /** Выключить, даже если от компонента зависят включённые (409 `component_has_dependents` без этого флага). */
+  confirm: z.boolean().optional()
 });
 export type SetWorkspaceModuleInput = z.infer<typeof setWorkspaceModuleInputSchema>;
 
@@ -145,6 +155,7 @@ export const INBOX_TARGET_MODULE: Record<"task" | "note" | "event", OrionModuleI
  * the panel, commands and API without a migration.
  */
 export const MODULE_CATALOG: readonly ModuleManifest[] = [
+  ...generatedModuleManifests(),
   { id: "opportunities", kind: "additional", required: false, label: "Возможности",
     summary: "Вакансии и заказы: условия, статусы и история работы.",
     owns: "Карточки возможностей, источник, условия и ручной жизненный цикл.",
@@ -349,3 +360,12 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     defaultEnabled: false
   }
 ];
+
+/** Записи каталога, объявленные манифестами подключаемых модулей (G5); порядок — по id модуля. */
+function generatedModuleManifests(): ModuleManifest[] {
+  return GENERATED_MODULE_CATALOG.map((item) => ({
+    ...item,
+    provides: [...item.provides],
+    optionalDependencies: [...item.optionalDependencies] as OrionModuleId[]
+  }));
+}

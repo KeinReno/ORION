@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию выключен |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `contacts` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `health.record.read`, `health.record.create`, `health.record.update`, `health.record.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `health` |
 | Слоты | — |

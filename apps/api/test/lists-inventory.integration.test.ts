@@ -154,7 +154,7 @@ describe("Lists ↔ Inventory bridge (lists-inventory plugin)", () => {
     expect(lists.data[0]!.items.find((item) => item.id === entryId)).toMatchObject({ inventoryItemId: stockId, stocked: true });
     expect((await call("PATCH", "/plugins/lists-inventory", { enabled: true })).status).toBe(200);
 
-    expect((await call("PATCH", "/modules/inventory", { enabled: false })).status).toBe(200);
+    expect((await call("PATCH", "/modules/inventory", { enabled: false, confirm: true })).status).toBe(200);
     expect((await call("POST", `/lists-inventory/inventory/${stockId}/to-list`, { listId })).status).toBe(409);
     expect((await call("PATCH", "/modules/inventory", { enabled: true })).status).toBe(200);
     expect(await balance()).toBe(1);

@@ -17,7 +17,7 @@
 | Вид | базовый, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `projects` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `calendar.event.read`, `calendar.event.create`, `calendar.event.update`, `calendar.event.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `calendar` |
 | Слоты | — |

@@ -2606,6 +2606,15 @@ export class ApiClient {
     return this.request("POST", "/lan/client/activate", {}, z.void());
   }
 
+  /**
+   * G5/G24: типизированный запрос для модулей, подключённых манифестом (`modules-ext/<id>/`): они ходят
+   * в собственные маршруты своей схемой ответа и не растят этот класс методом на каждый ресурс.
+   * Ретрай по 401 и разбор ошибок — те же, что у остальных методов.
+   */
+  extensionRequest<T>(method: string, path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+    return this.request(method, path, body, schema);
+  }
+
   private async request<T>(
     method: string,
     path: string,

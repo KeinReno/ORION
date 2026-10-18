@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/finance/accounts`, `workspaces/:workspaceId/finance/budgets`, `workspaces/:workspaceId/finance/categories`, `workspaces/:workspaceId/finance/category-rules`, `workspaces/:workspaceId/finance/drafts`, `workspaces/:workspaceId/finance/exchange-rates`, `workspaces/:workspaceId/finance/goals`, `workspaces/:workspaceId/finance/obligations`, `workspaces/:workspaceId/finance/projects/:projectId/costs`, `workspaces/:workspaceId/finance/recurring`, `workspaces/:workspaceId/finance/reports`, `workspaces/:workspaceId/finance/splits`, `workspaces/:workspaceId/finance/templates`, `workspaces/:workspaceId/finance/transactions`, `workspaces/:workspaceId/finance/transfer-match` (за `@RequireModule("finance")`); панель веба `finance`; код `apps/api/src/finance/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `finance.transaction.read`, `finance.transaction.create`, `finance.transaction.update`, `finance.transaction.delete`, `finance.draft.propose`.
 - Модуль владеет: Счета, категории, операции, бюджеты, цели, правила.
 - Соседи: жёсткие: —; мягкие: `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `finance-budgeting`, `finance-goals`, `finance-recurring`, `finance-reports`, `finance-quick-entry`, `finance-import`, `finance-obligations`, `finance-forecast`, `finance-project-costs`, `finance-net-worth`, `finance-transfer-match`, `finance-templates`, `finance-split`, `finance-exchange-rates`, `finance-ai-drafts`.

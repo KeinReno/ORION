@@ -202,6 +202,8 @@ model Workspace {
   events        Event[]
   projects      Project[]
   notifications Notification[]
+  domainEvents DomainEvent[]
+  domainEventDeliveries DomainEventDelivery[]
   inboxItems    InboxItem[]
   savedTaskViews SavedTaskView[]
   taskDependencies TaskDependency[]
@@ -291,6 +293,11 @@ model Workspace {
   healthMeasurements HealthMeasurement[]
   healthTargets      HealthTarget[]
   healthSymptoms     HealthSymptom[]
+
+  // <module-registry:workspace-relations>
+  petCarePets    PetCarePet[]
+  petCareEntries PetCareEntry[]
+  // </module-registry:workspace-relations>
 }
 
 model Project {
@@ -3203,3 +3210,90 @@ model OpportunityManagerAction {
   @@index([workspaceId, policyId, createdAt])
   @@map("opportunity_manager_actions")
 }
+
+/// Transactional outbox of domain events (ADR-0019, docs/platform-api/EVENTS.md). `DomainEventBus.publishTx` inserts a
+/// row inside the writer's own `withUser` transaction, so a rolled-back write publishes nothing. The dispatcher
+/// (`asSystem`, FOR UPDATE SKIP LOCKED) stamps `dispatchedAt` once it has fanned the event out into deliveries.
+model DomainEvent {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  /// `<module>.<entity>.<verb>` — see DOMAIN_EVENT_CATALOG in shared-types.
+  type         String
+  version      Int       @default(1)
+  payload      Json
+  /// Initiating user; null for cron/system publishers. Plain string (no FK): history must outlive the user row.
+  actorId      String?
+  createdAt    DateTime  @default(now())
+  dispatchedAt DateTime?
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries DomainEventDelivery[]
+
+  @@index([workspaceId])
+  @@index([dispatchedAt, createdAt])
+  @@map("domain_events")
+}
+
+/// One subscriber's delivery of one event. Unique (eventId, subscriberId) makes fan-out idempotent. status:
+/// pending | done | skipped_disabled | failed.
+model DomainEventDelivery {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  eventId       String
+  subscriberId  String
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastError     String?
+  nextAttemptAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  event     DomainEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, subscriberId])
+  @@index([workspaceId])
+  @@index([status, nextAttemptAt])
+  @@map("domain_event_deliveries")
+}
+
+// G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
+// генерирует scripts/module-registry.mjs — руками не править.
+// <module-registry:models>
+// module: pet-care
+model PetCarePet {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  species     String    @default("other")
+  /// Календарный день рождения (без времени).
+  birthday    DateTime? @db.Date
+  notes       String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries   PetCareEntry[]
+
+  @@index([workspaceId])
+  @@map("pet_care_pets")
+}
+
+model PetCareEntry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  petId       String
+  /// feeding | vet | medication | walk (см. PET_CARE_KINDS в контракте модуля).
+  kind        String
+  occurredAt  DateTime
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pet       PetCarePet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([petId, occurredAt])
+  @@map("pet_care_entries")
+}
+// </module-registry:models>

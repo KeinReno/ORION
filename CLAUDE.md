@@ -182,6 +182,9 @@ pub/sub, а не стейт-менеджер; смотри его, прежде 
    Контроллер домена несёт `@RequireModule("x")` (409, если выключен). На
    клиенте сосед не зовёт чужой API: `useX(isEnabled("x") ? workspaceId : undefined)`.
    Панель в реестре помечается `moduleId`. Страница модуля — Настройки → Модули.
+   Выключение модуля/плагина с включёнными жёсткими зависимыми — 409 `component_has_dependents`
+   (повтор с `confirm: true`), `required` — 409 `component_required`; хуки
+   `CapabilityLifecycle.registerComponent` идут в той же транзакции (G6/G7, `component-dependencies.ts`).
 
 ### Фоновые задачи (`@Cron`) — их пять, и все обходят RLS через `asSystem`
 
@@ -396,6 +399,15 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
   (`Workspace.disabledModules` по умолчанию `["markets"]`).
 
+### Разрешения: `@RequirePermission` (G12, первый срез)
+
+- Реестр id `<module>.<resource>.<action>` — `packages/shared-types/src/permissions.ts`; манифесты и агентские scope'ы
+  (`AGENT_SCOPE_PERMISSIONS`) ссылаются только на него. Новая операция модуля = id в реестре, не строка «на глаз».
+- На методе контроллера `@RequirePermission("tasks.task.update")` (`apps/api/src/common/require-permission.ts`) ставится
+  **рядом** с `@RequireModule`/`AgentTokenGuard`: человек проходит по роли (сегодня все роли — всё), агент — по scope'ам токена;
+  отказ — 403 `permission_denied`. Режимы и матрица агента по-прежнему решаются в `runOp`. Пилот — только задачи;
+  идентичности плагина в запросах нет (см. `docs/platform-api/PERMISSIONS.md`).
+
 ### Связи, подзадачи, вложения (v0.17)
 
 - Связи между сущностями — `apps/web/components/entity-links.tsx`
@@ -465,6 +477,24 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - Панель одного списка — экземпляр `list:<id>` (`openList` в `panel-bus`, `panels/ListPanel.tsx`), доска `ListsPanel` показывает карточки-превью. `list` — тип сущности для общих связей (`EntityLinksSection type="list"`, поиск, `openEntity`); «пункт → задача» — `useCreateAndLink` (задача и связь с списком одной транзакцией).
 - Быстрый ввод: `/купить молоко, 2 л` (`/список`, `/list`) кладёт текст в первый список вида «Покупки» (создаётся при первом использовании) — `resolveQuickCapture` + `lib/capture-to-list.ts`. Карточка «Списки» на дашборде отмечает пункты через те же `useListActions`, что и сам список, поэтому мост «Склад» срабатывает и там.
 - Плагины-мосты: «Покупки → Склад» (ADR-0009) и «Покупки → Финансы» (`lists-finance`, тот же ADR): слоты `lists.item`, `lists.actions`, `lists.item.mark`. В пункте нет ссылок на чужие модули — только колонки-ключи, которые ведёт плагин.
+
+### Шина доменных событий (G3, ADR-0019)
+
+Серверный transactional outbox: `apps/api/src/domain-events/` (`@Global` `DomainEventsModule`), каталог событий и объявленных
+подписок — `packages/shared-types/src/domain-events.ts` (из него выводятся `events.publishes/subscribes` манифестов).
+
+- **Публикация:** `DomainEventBus.publishTx(tx, { workspaceId, type, payload, actorId })` **внутри** `withUser`-транзакции записи
+  (пример — `TasksService.update`, `tasks.task.closed`). Откат транзакции откатывает событие. Новый тип = запись в
+  `DOMAIN_EVENT_CATALOG` (имя `<module>.<entity>.<verb>`, zod-схема payload: только id и минимум полей).
+- **Подписка:** объяви подписку в `DOMAIN_EVENT_SUBSCRIPTIONS` и зарегистрируй обработчик `bus.subscribe({ id, componentId, types, handle })`
+  в `onModuleInit` (пример — `tasks/task-closed-notifier.ts`); расхождение с объявлением валит старт. `componentId` — id модуля или
+  плагина; если он выключен в пространстве, доставка получает `skipped_disabled` и не воспроизводится при включении.
+- **Инварианты:** доставка at-least-once, задержка до ~10 с (cron диспетчера) — не используй шину там, где реакция должна быть
+  синхронной с ответом на запрос (остановка таймера остаётся прямым вызовом до G4). Обработчик идемпотентен (ключ — `event.id`,
+  например `eventKey` уведомления); он получает `asSystem`-транзакцию и выполняется в SAVEPOINT: исключение откатывает его записи и
+  планирует повтор (30 с ×2, потолок 1 ч, 5 попыток → `failed`). Права получателя обработчик проверяет сам (членство, `accessibleSetTx`,
+  `NotificationPolicyService.allowsForUserTx`). Публикация никогда не зависит от подписчиков. Таблицы `domain_events`/`domain_event_deliveries` —
+  RLS, `ephemeral-excluded`, `not-synced`; обработанные события чистятся через 7 дней.
 
 ### Release-hardening backlog (v0.20) — механизмы, которые надо знать
 

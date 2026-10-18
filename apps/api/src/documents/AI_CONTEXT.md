@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/documents` (за `@RequireModule("documents")`); панель веба `documents`; код `apps/api/src/documents/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `documents.document.read`, `documents.document.create`, `documents.document.update`, `documents.document.delete`.
 - Модуль владеет: Документы, версии, превью, хранилище файлов.
 - Соседи: жёсткие: —; мягкие: `notes`, `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `documents-history`, `documents-resources`, `documents-office`.

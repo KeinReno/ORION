@@ -19,8 +19,8 @@
 | Вид | базовый, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `projects`, `calendar`, `time` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
-| События | публикует: —; слушает: — |
+| Права (permissions) | `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete` |
+| События | публикует: `tasks.task.closed`; слушает: `tasks.task.closed` |
 | Панели веба | `tasks` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/tasks` |

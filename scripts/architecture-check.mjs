@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { registryViolations } from "./module-registry.mjs";
+import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir } from "./module-ownership.mjs";
+import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webRequire = createRequire(join(root, "apps", "web", "package.json"));
@@ -217,12 +220,99 @@ export function pluginCatalogViolations(projectRoot = root) {
   return violations;
 }
 
+// G4: сервис модуля A не берёт таблицы модуля B (`tx.<модель B>`) и не импортирует сервис B. Связь между
+// модулями идёт через контракт (провайдер агрегата / команда / событие), а не через чужие таблицы: иначе
+// отключение или замена модуля B молча ломает A. Владение — scripts/module-ownership.mjs; уже существующие
+// нарушения перечислены в scripts/module-boundary-exceptions.mjs (список только сокращается).
+// Ограничение: ловятся вызовы делегатов Prisma (tx.task.findMany…); сырой SQL по именам таблиц не разбирается.
+const PRISMA_METHODS = new Set(["findMany", "findFirst", "findUnique", "findFirstOrThrow", "findUniqueOrThrow", "create", "createMany",
+  "createManyAndReturn", "update", "updateMany", "upsert", "delete", "deleteMany", "count", "aggregate", "groupBy"]);
+const PRISMA_RECEIVERS = new Set(["tx", "trx", "db", "client", "prisma"]);
+const lowerFirst = (name) => name[0].toLowerCase() + name.slice(1);
+const DELEGATE_TO_MODEL = new Map([...MODEL_OWNERS.keys(), ...CORE_MODELS].map((model) => [lowerFirst(model), model]));
+
+function isPrismaReceiver(expr) {
+  if (ts.isIdentifier(expr)) return PRISMA_RECEIVERS.has(expr.text);
+  // this.prisma.<модель>
+  return ts.isPropertyAccessExpression(expr) && expr.expression.kind === ts.SyntaxKind.ThisKeyword && expr.name.text === "prisma";
+}
+
+/** file (относительно корня репозитория) -> { models: Set, services: Set } — все текущие пересечения границ модулей. */
+export function moduleBoundaryUsages(projectRoot = root) {
+  const apiSrc = join(projectRoot, "apps", "api", "src");
+  const usages = new Map();
+  if (!existsSync(apiSrc)) return usages;
+  for (const file of sourceFiles(apiSrc)) {
+    if (!/\.service\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
+    const dir = relative(apiSrc, file).split(sep)[0];
+    if (CORE_MODULE_DIRS.has(dir)) continue;
+    const self = moduleOfDir(dir);
+    const models = new Set();
+    const services = new Set();
+    (function visit(node) {
+      // tx.task.findMany(...) -> PropertyAccess(PropertyAccess(tx, task), findMany)
+      if (ts.isPropertyAccessExpression(node) && PRISMA_METHODS.has(node.name.text) && ts.isPropertyAccessExpression(node.expression) &&
+        isPrismaReceiver(node.expression.expression)) {
+        const model = DELEGATE_TO_MODEL.get(node.expression.name.text);
+        const owner = model && MODEL_OWNERS.get(model);
+        if (owner && moduleOfDir(owner) !== self) models.add(model);
+      }
+      ts.forEachChild(node, visit);
+    })(parseTs(file));
+    for (const specifier of importSpecifiers(file)) {
+      if (!specifier.value.startsWith(".") || !/\.service$/.test(specifier.value)) continue;
+      const target = relative(apiSrc, resolve(dirname(file), specifier.value)).split(sep);
+      if (target[0] === ".." || CORE_MODULE_DIRS.has(target[0]) || moduleOfDir(target[0]) === self) continue;
+      services.add(target.join("/"));
+    }
+    if (models.size || services.size) usages.set(relative(projectRoot, file).split(sep).join("/"), { models, services });
+  }
+  return usages;
+}
+
+/** Модели schema.prisma без владельца в module-ownership.mjs (карта обязана оставаться полной). */
+export function ownershipMapViolations(projectRoot = root) {
+  const schema = join(projectRoot, "apps", "api", "prisma", "schema.prisma");
+  if (!existsSync(schema)) return [];
+  const models = [...readFileSync(schema, "utf8").matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]);
+  return models
+    .filter((model) => !MODEL_OWNERS.has(model) && !CORE_MODELS.has(model))
+    .map((model) => `scripts/module-ownership.mjs: модель ${model} из schema.prisma без владельца (добавьте в MODEL_OWNERS или CORE_MODELS)`);
+}
+
+export function moduleBoundaryViolations(projectRoot = root, exceptions = MODULE_BOUNDARY_EXCEPTIONS) {
+  const violations = [];
+  const usages = moduleBoundaryUsages(projectRoot);
+  for (const [file, { models, services }] of usages) {
+    const allowed = exceptions[file] ?? {};
+    for (const model of [...models].sort()) {
+      if (!(allowed.models ?? []).includes(model)) {
+        violations.push(`${file} использует чужую модель ${model} (модуль ${MODEL_OWNERS.get(model)}): нужен провайдер агрегата/команда/событие, а не tx.${lowerFirst(model)}`);
+      }
+    }
+    for (const service of [...services].sort()) {
+      if (!(allowed.services ?? []).includes(service)) violations.push(`${file} импортирует сервис другого модуля ${service}`);
+    }
+  }
+  // Устаревшая запись — тоже ошибка: список исключений обязан отражать реальность и только сокращаться.
+  for (const [file, allowed] of Object.entries(exceptions)) {
+    const actual = usages.get(file);
+    for (const model of allowed.models ?? []) {
+      if (!actual?.models.has(model)) violations.push(`${file}: исключение для модели ${model} устарело, удалите его из module-boundary-exceptions.mjs`);
+    }
+    for (const service of allowed.services ?? []) {
+      if (!actual?.services.has(service)) violations.push(`${file}: исключение для сервиса ${service} устарело, удалите его из module-boundary-exceptions.mjs`);
+    }
+  }
+  return violations;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations()];
+  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...ownershipMapViolations(), ...moduleBoundaryViolations(), ...registryViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins; no hard-coded colours in plugins; plugin catalog, slots and server usage consistent)");
+    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins; no hard-coded colours in plugins; plugin catalog, slots and server usage consistent; API services stay within their module\u2019s tables and services apart from the exception list)");
   }
 }

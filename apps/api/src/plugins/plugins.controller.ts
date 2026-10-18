@@ -30,6 +30,6 @@ export class PluginsController {
     @Param("pluginId") pluginId: string,
     @Body(new ZodValidationPipe(setWorkspacePluginInputSchema)) body: SetWorkspacePluginInput
   ): Promise<WorkspacePluginState[]> {
-    return this.plugins.setEnabled(user.userId, workspaceId, pluginId, body.enabled);
+    return this.plugins.setEnabled(user.userId, workspaceId, pluginId, body.enabled, body.confirm === true);
   }
 }

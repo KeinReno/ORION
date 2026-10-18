@@ -3,11 +3,12 @@ import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { MilestonesController } from "./milestones.controller";
 import { MilestonesService } from "./milestones.service";
+import { MilestonesProjectAggregates } from "./milestones-project-aggregates";
 
 /** ORION v0.27 «План проекта» — вехи и их зависимости. */
 @Module({
   imports: [AuthModule, WorkspacesModule],
   controllers: [MilestonesController],
-  providers: [MilestonesService]
+  providers: [MilestonesProjectAggregates, MilestonesService]
 })
 export class MilestonesModule {}

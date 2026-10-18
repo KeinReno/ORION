@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `lists`, `inventory`, `finance` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `home.item.read`, `home.item.create`, `home.item.update`, `home.item.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `home` |
 | Слоты | — |

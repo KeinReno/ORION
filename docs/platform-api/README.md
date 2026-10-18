@@ -9,7 +9,7 @@
 
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|
-| Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md) |
+| Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md), [MODULE_REGISTRY.md](MODULE_REGISTRY.md) |
 | Plugin API | зафиксировано (UI-слоты; сервер — частично) | `packages/shared-types/src/plugins.ts` (`PLUGIN_CATALOG`), `apps/web/lib/extensions/contracts.ts` (`SlotContracts`), `host-api.ts`, `apps/api/src/plugins/` | [MANIFEST.md](MANIFEST.md), `docs/MODULES_AND_PLUGINS.md` |
 | Event API | спецификация (кода нет) | — (целевой `EventBus`; ADR-0019) | [EVENTS.md](EVENTS.md), [ADR-0019](../adr/ADR-0019-event-api-outbox.md) |
 | Storage API | зафиксировано для файлов; для данных компонента — нет | `apps/api/src/storage/storage-adapter.ts`, `apps/api/prisma/schema.prisma`, `apps/api/src/sync/snapshot-registry.ts` | [STORAGE.md](STORAGE.md) |
@@ -24,7 +24,7 @@
 
 ### Как сейчас (v1.0, зафиксировано)
 
-- Единая версия платформы: `PLATFORM_API_VERSION = "1.0.0"` в `packages/shared-types/src/component-manifest.ts`.
+- Единая версия платформы: `PLATFORM_API_VERSION = "1.1.0"` в `packages/shared-types/src/component-manifest.ts`.
   Компонент указывает `requires.platform` (`^1.0.0`; поддержаны точная версия, `^`, `~`, `>=` — `satisfiesVersionRange`).
   Тест `component-manifest.test.ts` проверяет, что все манифесты каталогов удовлетворяют текущей версии.
 - Версии отдельных контрактов уже существуют, но разрозненны и несвязаны с `PLATFORM_API_VERSION`:
@@ -57,3 +57,7 @@
 - CI-снимок публичных типов слотов/`host-api.ts` и требование bump (критерий G2).
 - Журнал изменений контрактов (changelog) и пометки `deprecated`.
 - Проверка `requires.platform` при старте API и в менеджере компонентов (рантайм манифесты не читает).
+
+## Зависимости и жизненный цикл компонентов
+
+Выключение с включёнными жёсткими зависимыми требует подтверждения (409 `component_has_dependents`, повтор с `confirm: true`), обязательный компонент не выключается (409 `component_required`); хуки `ComponentLifecycle.onEnable/onDisable` выполняются в транзакции переключения. Подробности — [`MANIFEST.md`](MANIFEST.md).

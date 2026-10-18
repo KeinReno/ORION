@@ -1,0 +1,56 @@
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+
+/**
+ * Text typed into a small field (the capture box, a task comment) and not saved yet is also kept in the browser's
+ * storage, per workspace, so a crash or a closed window does not lose it. It is dropped as soon as the field is empty
+ * again — sending or clearing the text is what clears it. A convenience: unavailable storage just means no restore.
+ * Long note bodies are not kept here: they autosave to the server.
+ */
+export const DRAFT_MAX_LENGTH = 20_000;
+const DRAFTS_PREFIX = "orion.draft.v1:";
+
+export function draftStorageKey(workspaceId: string, name: string): string {
+  return `${DRAFTS_PREFIX}${workspaceId}:${name}`;
+}
+
+export function readDraft(storage: Pick<Storage, "getItem">, key: string): string {
+  try {
+    const raw = JSON.parse(storage.getItem(key) ?? "null") as { text?: unknown } | null;
+    return raw && typeof raw.text === "string" ? raw.text.slice(0, DRAFT_MAX_LENGTH) : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Stores `text`, or removes the entry when it is blank. */
+export function writeDraft(storage: Pick<Storage, "setItem" | "removeItem">, key: string, text: string): void {
+  try {
+    if (text.trim() === "") storage.removeItem(key);
+    else storage.setItem(key, JSON.stringify({ text: text.slice(0, DRAFT_MAX_LENGTH), savedAt: Date.now() }));
+  } catch {
+    /* a convenience only */
+  }
+}
+
+/** Like `useState("")`, but the value is restored on mount and kept in storage while it is not blank. */
+export function usePersistedDraft(workspaceId: string | undefined, name: string): [string, Dispatch<SetStateAction<string>>] {
+  const [value, setValue] = useState("");
+  const key = workspaceId ? draftStorageKey(workspaceId, name) : null;
+  const skipWrite = useRef(true);
+  // Restore after mount (not in the initial state): the server render has no storage, and a different first render would not hydrate.
+  useEffect(() => {
+    skipWrite.current = true;
+    if (!key) return;
+    const stored = readDraft(window.localStorage, key);
+    if (stored) setValue(current => (current === "" ? stored : current));
+  }, [key]);
+  useEffect(() => {
+    // The run that follows a (re)load still sees the empty field and would delete what was just restored.
+    if (skipWrite.current) {
+      skipWrite.current = false;
+      return;
+    }
+    if (key) writeDraft(window.localStorage, key, value);
+  }, [key, value]);
+  return [value, setValue];
+}

@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
+import { GENERATED_SNAPSHOT_SPECS } from "../modules-ext/data.generated";
 import { INCLUDED_SNAPSHOT_KEYS } from "./snapshot-registry";
 
 /**
@@ -148,7 +149,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // an old backup should still see "I once shared X with Y"), but restore
   // must never reactivate external access that has since been revoked —
   // see specGrants() below for why every restored row is force-revoked.
-  specGrants("crossWorkspaceGrants", (tx) => tx.crossWorkspaceGrant)
+  specGrants("crossWorkspaceGrants", (tx) => tx.crossWorkspaceGrant),
+  // G10: таблицы подключаемых модулей (порядок «родитель раньше ребёнка» задаёт манифест).
+  ...GENERATED_SNAPSHOT_SPECS.map((item) => spec(item.key, item.delegate))
 ];
 
 // Fails at import time (not silently at runtime) if `snapshot-registry.ts`

@@ -1,6 +1,6 @@
 # Event API (G3) — спецификация
 
-Статус: **спецификация, кода нет.** Решение о механизме — [ADR-0019](../adr/ADR-0019-event-api-outbox.md) (предложено).
+Статус: **спецификация; первый срез реализован** (18.10.2026): outbox, `DomainEventBus`, диспетчер, событие `tasks.task.closed` и один подписчик. Решение о механизме — [ADR-0019](../adr/ADR-0019-event-api-outbox.md) (принято).
 
 ## Как сейчас (v1.0, зафиксировано)
 
@@ -97,9 +97,13 @@ zod в `packages/shared-types` (по правилу CLAUDE.md: контракт 
 
 Payload каждого — минимум: `{ id, projectId?, homeId?, status? }` и т. п.; точные схемы — при реализации, в `shared-types`.
 
+## Реализовано
+
+- Таблицы `domain_events` и `domain_event_deliveries` (RLS `FORCE`, `ephemeral-excluded`, `not-synced`); статусы доставки: `pending`, `done`, `skipped_disabled`, `failed`.
+- `DomainEventBus.publishTx(tx, { workspaceId, type, payload, actorId })` с валидацией payload по `DOMAIN_EVENT_CATALOG`; реестр подписчиков (`subscribe`) сверяется с `DOMAIN_EVENT_SUBSCRIPTIONS` при старте; `events.publishes/subscribes` манифестов выводятся из них.
+- Диспетчер: раскладка `FOR UPDATE SKIP LOCKED` + `createMany skipDuplicates`, доставка по одной в `asSystem`-транзакции с SAVEPOINT, повтор 30 с ×2 (потолок 1 ч), 5 попыток, чистка обработанных через 7 дней.
+- Событие `tasks.task.closed` (имя из таблицы выше; `version: 1`, payload `{ id, projectId, assigneeId, status }`) и подписчик `tasks.notify-assignee-on-close`.
+
 ## Не сделано
 
-Таблицы outbox/доставок и миграция; `EventBus`/диспетчер; схемы событий в `shared-types`; реестр подписчиков из манифестов;
-политика повторов и диагностика; интеграционный тест G3 (издатель A → подписчик-плагин B, выключенный B не ломает
-публикацию, повтор идемпотентен, RLS не обходится); перенос первого потребителя (рекомендуется: `tasks.task.closed` → `time`).
-Клиентская шина (`panel-bus.ts`) не затрагивается.
+События `tasks.task.created/updated/overdue`, `tasks.comment.created`, `calendar.event.reminder_due`, `notes.note.created`, `finance.obligation.due` и их издатели; перенос существующих прямых связей (остановка таймера → подписка модуля `time`; уведомления кронов) — G4; сверка `events.subscribes` с `permissions` манифеста (разрешения компонента пока пусты); подписчики-плагины и порядок внутри источника (`occurredAt, id` при раскладке соблюдается, при повторах — нет); диагностика исчерпанных доставок (G9); доставка вне процесса API. Клиентская шина (`panel-bus.ts`) не затрагивается.

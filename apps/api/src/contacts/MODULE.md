@@ -27,7 +27,7 @@ Tests: `packages/shared-types/src/contact.test.ts`, `apps/web/lib/contacts.test.
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `home` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `contacts.contact.read`, `contacts.contact.create`, `contacts.contact.update`, `contacts.contact.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `contacts` |
 | Слоты | — |

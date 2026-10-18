@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `projects` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `time.entry.read`, `time.entry.create`, `time.entry.update`, `time.entry.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `time` |
 | Слоты | — |

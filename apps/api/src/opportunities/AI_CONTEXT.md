@@ -18,7 +18,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/opportunities` (за `@RequireModule("opportunities")`); панель веба `opportunities`; код `apps/api/src/opportunities/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `opportunities.opportunity.read`, `opportunities.opportunity.create`, `opportunities.opportunity.update`, `opportunities.opportunity.delete`.
 - Модуль владеет: Карточки возможностей, источник, условия и ручной жизненный цикл.
 - Соседи: жёсткие: —; мягкие: —; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `opportunities-profiles`, `opportunities-hh-import`, `opportunities-assistant`, `opportunities-execution`, `opportunities-manager`.

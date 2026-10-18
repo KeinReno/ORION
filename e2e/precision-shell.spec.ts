@@ -60,6 +60,10 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await context.getByRole("button", { name: /Пространство:/ }).click();
   await page.getByRole("textbox", { name: "Найти пространство", exact: true }).fill("Другое");
   await page.getByRole("option", { name: /Другое пространство/ }).click();
+  // The capture draft typed before the reload is restored from storage, so leaving the workspace asks first.
+  const leave = page.getByRole("dialog", { name: "Есть несохранённый текст", exact: true });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Перейти", exact: true }).click();
   await expect(context.getByText("Проектов пока нет.", { exact: false })).toBeVisible();
   await expect(context.getByText("Проект первого пространства", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("complementary", { name: "Свойства проекта", exact: true })).toHaveCount(0);

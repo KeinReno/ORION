@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/habits` (за `@RequireModule("habits")`); панель веба `habits`; код `apps/api/src/habits/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `habits.habit.read`, `habits.habit.create`, `habits.habit.update`, `habits.habit.delete`.
 - Модуль владеет: Привычки и ежедневные отметки.
 - Соседи: жёсткие: —; мягкие: —; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `habits-insights`.

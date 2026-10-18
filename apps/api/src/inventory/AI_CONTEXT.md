@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/inventory` (за `@RequireModule("inventory")`); панель веба `inventory`; код `apps/api/src/inventory/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `inventory.item.read`, `inventory.item.create`, `inventory.item.update`, `inventory.item.delete`.
 - Модуль владеет: Позиции склада и леджер движений (приход/расход/корректировка).
 - Соседи: жёсткие: —; мягкие: `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `inventory-alerts`, `inventory-costing`.

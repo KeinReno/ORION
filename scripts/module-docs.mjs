@@ -46,7 +46,12 @@ function loadManifests() {
     });
     const mod = { exports: {} };
     cache.set(file, mod);
-    const req = (spec) => (spec.startsWith(".") ? load(join(dirname(file), spec + ".ts")) : sharedRequire(spec));
+    // Относительный импорт — файл `x.ts` или каталог `x/index.ts` (так подключаются modules-ext/<id>).
+    const resolveLocal = (spec) => {
+      const base = join(dirname(file), spec);
+      return existsSync(base + ".ts") ? base + ".ts" : join(base, "index.ts");
+    };
+    const req = (spec) => (spec.startsWith(".") ? load(resolveLocal(spec)) : sharedRequire(spec));
     new Function("exports", "require", "module", outputText)(mod.exports, req, mod);
     return mod.exports;
   }
@@ -85,7 +90,11 @@ function routesByModule(projectRoot) {
 
 // ---------- генерируемые блоки ----------
 const list = (items) => (items.length ? items.map((i) => `\`${i}\``).join(", ") : "—");
-const mdDir = (projectRoot, id) => join(projectRoot, "apps", "api", "src", DIR_OVERRIDES[id] ?? id);
+// Модуль, подключённый манифестом (G5), живёт в apps/api/src/modules-ext/<id>.
+const mdDir = (projectRoot, id) => {
+  const ext = join(projectRoot, "apps", "api", "src", "modules-ext", id);
+  return existsSync(ext) ? ext : join(projectRoot, "apps", "api", "src", DIR_OVERRIDES[id] ?? id);
+};
 
 function context(projectRoot) {
   const { components, catalog } = loadManifests();

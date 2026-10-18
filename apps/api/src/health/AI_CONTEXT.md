@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/health` (за `@RequireModule("health")`); панель веба `health`; код `apps/api/src/health/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `health.record.read`, `health.record.create`, `health.record.update`, `health.record.delete`.
 - Модуль владеет: Людей (вас и тех, кого вы ведёте), их допуски, визиты и профилактические осмотры/прививки. Врачи — обычные контакты.
 - Соседи: жёсткие: —; мягкие: `contacts`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: —.

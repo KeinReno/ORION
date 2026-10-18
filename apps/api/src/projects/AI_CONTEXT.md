@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/projects` (за `@RequireModule("projects")`); панель веба `projects`; код `apps/api/src/projects/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete`.
 - Модуль владеет: Проекты и их собственные поля (имя, статус, сроки, бюджет, ставка).
 - Соседи: жёсткие: —; мягкие: `tasks`, `notes`, `calendar`, `documents`, `time`, `finance`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `projects-planning`, `projects-ideas`, `projects-problems`, `projects-goals`.

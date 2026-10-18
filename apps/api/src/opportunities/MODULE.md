@@ -28,7 +28,7 @@ API и сервис проверяют включение/restriction; серв�
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | — |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `opportunities.opportunity.read`, `opportunities.opportunity.create`, `opportunities.opportunity.update`, `opportunities.opportunity.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `opportunities` |
 | Слоты | — |

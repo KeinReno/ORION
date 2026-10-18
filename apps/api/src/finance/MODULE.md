@@ -19,7 +19,7 @@
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `projects` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `finance.transaction.read`, `finance.transaction.create`, `finance.transaction.update`, `finance.transaction.delete`, `finance.draft.propose` |
 | События | публикует: —; слушает: — |
 | Панели веба | `finance` |
 | Слоты | — |

@@ -36,6 +36,9 @@ import { FinanceDraftsService } from "./drafts/finance-drafts.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
 import { FinanceExpenseReader } from "./public/expense-reader";
 import { FinanceExpenseWriter } from "./public/expense-writer";
+import { SearchRegistryModule } from "../search/search-registry.module";
+import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider } from "./finance-search.providers";
+import { FinanceProjectAggregates } from "./finance-project-aggregates";
 
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
@@ -46,7 +49,7 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
  * for no reason.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule],
   controllers: [
     AccountsController,
     CategoriesController,
@@ -65,6 +68,7 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
     FinanceDraftsController
   ],
   providers: [
+    FinanceProjectAggregates,
     AccountsService,
     CategoriesService,
     TransactionsService,
@@ -84,7 +88,7 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
     BudgetAlertsService,
     FinanceExpenseReader,
     FinanceExpenseWriter
-  ],
+  , TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider],
   exports: [FinanceExpenseReader, FinanceExpenseWriter, FinanceDraftsService]
 })
 export class FinanceModule {}

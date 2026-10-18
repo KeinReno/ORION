@@ -1,8 +1,7 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
   INBOX_TARGET_MODULE,
-  isPluginEnabled,
   type CaptureInboxInput,
   type InboxItem,
   type InboxList,
@@ -10,6 +9,7 @@ import {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
+import { InboxTargetRegistry } from "./inbox-target.registry";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 @Injectable()
@@ -17,7 +17,8 @@ export class InboxService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly modules: ModulesService
+    private readonly modules: ModulesService,
+    private readonly targets: InboxTargetRegistry
   ) {}
 
   /**
@@ -169,43 +170,10 @@ export class InboxService {
     projectId: string | null
   ): Promise<string> {
     await this.modules.assertEnabledTx(tx, userId, workspaceId, INBOX_TARGET_MODULE[kind]);
-    if (kind === "task") {
-      // Team workspace: the person triaging their inbox is the one who
-      // just decided "this is my task" — assign it to them, or it is missing
-      // from the Tasks panel's default «Только мои» view right away (found
-      // in the live U01 pass). Self-assignment is allowed for any member.
-      const assigneeId = await selfAssigneeTx(tx, userId, workspaceId);
-      const task = await tx.task.create({
-        data: {
-          workspaceId,
-          title: inbox.title,
-          description: inbox.body,
-          dueAt: dueAt ? new Date(dueAt) : null,
-          projectId,
-          assigneeId
-        }
-      });
-      return task.id;
-    }
-    if (kind === "note") {
-      const note = await tx.note.create({
-        data: { workspaceId, title: inbox.title, body: inbox.body, editedAt: new Date(), projectId }
-      });
-      return note.id;
-    }
-    const start = dueAt ? new Date(dueAt) : new Date();
-    const event = await tx.event.create({
-      data: {
-        workspaceId,
-        title: inbox.title,
-        description: inbox.body,
-        startAt: start,
-        endAt: new Date(start.getTime() + 30 * 60_000),
-        projectId,
-        tz: "UTC"
-      }
-    });
-    return event.id;
+    // Саму сущность создаёт цель, зарегистрированная модулем-владельцем (G19); инбокс чужих таблиц не трогает.
+    const target = this.targets.get(kind);
+    if (!target) throw new ConflictException("Цель входящих не зарегистрирована");
+    return target.createTx(tx, { userId, workspaceId, title: inbox.title, body: inbox.body, dueAt, projectId });
   }
 
   private async assertProjectTx(
@@ -234,15 +202,4 @@ function toDto(row: {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
-}
-
-/** The caller's own member id when the «Команда» plugin is on, else null. */
-async function selfAssigneeTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string): Promise<string | null> {
-  const workspace = await tx.workspace.findUnique({ where: { id: workspaceId }, select: { pluginOverrides: true } });
-  if (!isPluginEnabled(workspace?.pluginOverrides, "team")) return null;
-  const member = await tx.workspaceMember.findUnique({
-    where: { workspaceId_userId: { workspaceId, userId } },
-    select: { id: true }
-  });
-  return member?.id ?? null;
 }

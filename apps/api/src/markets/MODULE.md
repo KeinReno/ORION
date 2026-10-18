@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию выключен |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `finance` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `markets.trade.read`, `markets.trade.create`, `markets.trade.update`, `markets.trade.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `markets` |
 | Слоты | — |

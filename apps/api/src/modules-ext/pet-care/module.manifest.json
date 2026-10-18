@@ -1,0 +1,47 @@
+{
+  "id": "pet-care",
+  "version": "1.0.0",
+  "catalog": {
+    "kind": "additional",
+    "required": false,
+    "label": "Питомцы",
+    "summary": "Карточки питомцев и журнал ухода: кормление, ветеринар, лекарства, прогулки.",
+    "owns": "Питомцы пространства (имя, вид, день рождения, заметки) и записи ухода за ними.",
+    "livesWithout": "Полностью самостоятелен: не требует и не использует другие предметные модули.",
+    "provides": ["Панель «Питомцы»", "Журнал ухода по каждому питомцу"],
+    "optionalDependencies": [],
+    "disableBehavior": "Панель и API скрываются. Питомцы и записи ухода сохраняются и вернутся при включении.",
+    "panelId": "pet-care",
+    "defaultEnabled": true
+  },
+  "permissions": { "primaryResource": "pet" },
+  "api": { "module": { "file": "pet-care.module", "export": "PetCareModule" }, "probePath": "/pet-care/pets" },
+  "web": {
+    "panel": { "id": "pet-care", "label": "Питомцы", "icon": "PawPrint", "group": "Семья и дом", "file": "PetCarePanel", "export": "PetCarePanel" }
+  },
+  "prisma": {
+    "fragment": "prisma/models.prisma",
+    "workspaceBackRelations": ["petCarePets    PetCarePet[]", "petCareEntries PetCareEntry[]"],
+    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql" }]
+  },
+  "data": {
+    "models": [
+      {
+        "model": "PetCarePet",
+        "delegate": "petCarePet",
+        "snapshotKey": "petCarePets",
+        "snapshotPolicy": "included",
+        "reason": "Питомцы — пользовательский контент модуля; вставляются раньше записей ухода, которые на них ссылаются.",
+        "sync": { "syncClass": "lww-fields", "stage": "later", "note": "Поля питомца — LWW по полю; офлайн-запись не включена." }
+      },
+      {
+        "model": "PetCareEntry",
+        "delegate": "petCareEntry",
+        "snapshotKey": "petCareEntries",
+        "snapshotPolicy": "included",
+        "reason": "Журнал ухода — пользовательский контент; после питомцев (petId).",
+        "sync": { "syncClass": "append-only", "stage": "later", "note": "Запись ухода — факт: добавляется, не правится; дубли гасит естественный ключ клиента." }
+      }
+    ]
+  }
+}

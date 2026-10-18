@@ -84,6 +84,7 @@ import { ModulesService } from "../modules/modules.service";
 import { NotesService } from "../notes/notes.service";
 import { ProjectsService } from "../projects/projects.service";
 import { TasksService } from "../tasks/tasks.service";
+import { RequirePermission } from "../common/require-permission";
 import { AgentTokenGuard, type AgentRequest } from "./agent-token.guard";
 import { AgentJobsService } from "./agent-jobs.service";
 import { AgentTokensService, type AgentContext, type AuditMeta } from "./agent-tokens.service";
@@ -231,6 +232,7 @@ export class AiController {
   }
 
   @Get("tasks")
+  @RequirePermission("tasks.task.read")
   listTasks(@Req() req: AgentRequest, @Query("search") search?: string): Promise<Task[]> {
     return this.runOp(req, { perm: "tasks", op: "read", module: "tasks", action: "tasks.list" }, async (a: AgentContext) =>
       this.inFence(a, await this.tasks.list(a.userId, a.workspaceId, search))
@@ -238,6 +240,7 @@ export class AiController {
   }
 
   @Post("tasks")
+  @RequirePermission("tasks.task.create")
   createTask(
     @Req() req: AgentRequest,
     @Body(new ZodValidationPipe(createTaskInputSchema)) body: CreateTaskInput
@@ -251,6 +254,7 @@ export class AiController {
   }
 
   @Patch("tasks/:taskId")
+  @RequirePermission("tasks.task.update")
   async updateTask(
     @Req() req: AgentRequest,
     @Res({ passthrough: true }) res: ReplyStatus,

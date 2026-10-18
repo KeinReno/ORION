@@ -7,7 +7,8 @@ import {
   useUpdatePreferences,
   useWorkspaceModules
 } from "@orion/core-react";
-import type { ModuleKind, WorkspaceModuleState } from "@orion/shared-types";
+import { ApiError } from "@orion/core";
+import { isComponentHasDependentsError, type ComponentDependent, type ModuleKind, type WorkspaceModuleState } from "@orion/shared-types";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
 import { AlertCircle, Search } from "lucide-react";
 import { useState } from "react";
@@ -30,11 +31,14 @@ export function ModulesSettings(): React.ReactElement {
   const { toast } = useToast();
   const hiddenByMe = preferences.data?.hiddenModules ?? [];
   const [pending, setPending] = useState<WorkspaceModuleState | null>(null);
+  /** 409 component_has_dependents: ждём подтверждения владельца, затем повторяем с confirm. */
+  const [blocked, setBlocked] = useState<{ item: WorkspaceModuleState; dependents: ComponentDependent[] } | null>(null);
   const [query, setQuery] = useState("");
   const isOwner = workspace?.role === "owner";
 
-  async function apply(item: WorkspaceModuleState, enabled: boolean): Promise<void> {
+  async function apply(item: WorkspaceModuleState, enabled: boolean, confirm = false): Promise<void> {
     setPending(null);
+    setBlocked(null);
     if (!enabled && hasUnsavedDrafts()) {
       toast({
         title: "Сначала сохраните открытые изменения",
@@ -44,13 +48,17 @@ export function ModulesSettings(): React.ReactElement {
       return;
     }
     try {
-      await setModule.mutateAsync({ moduleId: item.id, enabled });
+      await setModule.mutateAsync({ moduleId: item.id, enabled, confirm });
       toast({
         title: enabled ? `Модуль «${item.label}» включён` : `Модуль «${item.label}» выключен`,
         description: enabled ? undefined : "Данные сохранены и вернутся при повторном включении.",
         tone: "success"
       });
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409 && isComponentHasDependentsError(error.details)) {
+        setBlocked({ item, dependents: error.details.dependents });
+        return;
+      }
       toast({ title: "Не удалось изменить модуль", description: describeAuthError(error), tone: "danger" });
     }
   }
@@ -252,6 +260,21 @@ export function ModulesSettings(): React.ReactElement {
           if (pending) void apply(pending, false);
         }}
         onCancel={() => setPending(null)}
+      />
+      <ConfirmDialog
+        open={blocked !== null}
+        title={blocked ? `Выключить «${blocked.item.label}» вместе с зависимыми?` : "Зависимые компоненты"}
+        description={
+          blocked
+            ? `Вместе с модулем перестанут работать: ${blocked.dependents.map((d) => `«${d.label}»`).join(", ")}. Данные сохранятся и вернутся при повторном включении.`
+            : undefined
+        }
+        confirmLabel="Выключить всё"
+        danger
+        onConfirm={() => {
+          if (blocked) void apply(blocked.item, false, true);
+        }}
+        onCancel={() => setBlocked(null)}
       />
     </div>
   );

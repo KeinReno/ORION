@@ -14,7 +14,7 @@ Do not add CRM fields (pipeline, deal value) here — that is a separate optiona
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/contacts` (за `@RequireModule("contacts")`); панель веба `contacts`; код `apps/api/src/contacts/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `contacts.contact.read`, `contacts.contact.create`, `contacts.contact.update`, `contacts.contact.delete`.
 - Модуль владеет: Контакты пространства (та же таблица, что у контактов «Дома»: контакт дома — это контакт с привязкой к дому).
 - Соседи: жёсткие: —; мягкие: `home`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: —.

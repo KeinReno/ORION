@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/notes` (за `@RequireModule("notes")`); панель веба `notes`; код `apps/api/src/notes/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `notes.note.read`, `notes.note.create`, `notes.note.update`, `notes.note.delete`.
 - Модуль владеет: Заметки, ревизии, wiki-ссылки, теги.
 - Соседи: жёсткие: —; мягкие: `documents`, `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `notes-history`, `notes-daily`, `notes-templates`.

@@ -10,7 +10,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/calendar`, `workspaces/:workspaceId/calendar-connections`, `workspaces/:workspaceId/events` (за `@RequireModule("calendar")`); панель веба `calendar`; код `apps/api/src/events/`.
-- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Права: `calendar.event.read`, `calendar.event.create`, `calendar.event.update`, `calendar.event.delete`.
 - Модуль владеет: События, подключения календарей, исходящий ICS-фид.
 - Соседи: жёсткие: —; мягкие: `tasks`, `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `calendar-external`, `calendar-widget`, `calendar-recurrence`, `calendar-reminders`.

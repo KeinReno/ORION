@@ -14,7 +14,7 @@
 | `requires.platform` | диапазон `PLATFORM_API_VERSION` (`^1.0.0`; поддержаны точная версия, `^`, `~`, `>=`) |
 | `requires.modules` | жёсткие зависимости (у плагина — модуль-хозяин `extendsModuleId`) |
 | `requires.optionalModules` | мягкие зависимости (`optionalDependencies` модуля) |
-| `permissions` | права вида `tasks.read` |
+| `permissions` | разрешения из реестра (`permissions.ts`), вида `tasks.task.read`; у модулей заполнены, у плагинов пусто |
 | `contributions` | `panels`, `slots`, `apiRoutes` |
 | `events` | `publishes` / `subscribes` |
 | `migrations` | идентификаторы миграций компонента |
@@ -27,7 +27,7 @@
 
 - Модуль: `optionalModules` = `optionalDependencies`, `contributions.panels` = `[panelId]`.
 - Плагин: `requires.modules` = `[extendsModuleId]`.
-- `permissions`, `events`, `migrations`, `apiRoutes` пока пусты.
+- `permissions` модуля = его разрешения из реестра; у плагинов, а также `events`, `migrations`, `apiRoutes` пока пусты.
 - `contributions.slots` у плагинов пусто: слоты известны только веб-реестру
   (`apps/web/plugins/index.ts`). Их сверка с `SlotContracts` — в `scripts/architecture-check.mjs`.
 
@@ -40,11 +40,22 @@
   зарегистрированный в вебе плагин есть в `PLUGIN_CATALOG`; у каждого плагина каталога есть веб-вклад
   или серверное использование (`@RequirePlugin`, `pluginOffWhere`, `isPluginEnabled`).
 
+## Зависимые и жизненный цикл (G6, G7)
+
+- «Кто зависит от X» — `dependentsOf` / `enabledHardDependents` (`shared-types/src/component-dependencies.ts`): жёсткие
+  (`requires.modules`, плагин → модуль-хозяин) и мягкие (`optionalModules`, только справочно). Модуль или плагин с
+  включёнными жёсткими зависимыми сервер выключает лишь с `confirm: true` в теле `PATCH`; иначе 409
+  `{ code: "component_has_dependents", dependents: [...] }`. Каскадов нет: зависимые плагины становятся неактивными
+  (`pluginStates`), их данные и переключатели не меняются.
+- `required` (`MODULE_CATALOG`) → 409 `component_required`, даже с `confirm`. Оболочка (дашборд, инбокс, поиск, настройки, sync)
+  не компонент и выключаться не может.
+- `ComponentLifecycle` (`onEnable/onDisable`) регистрируется по `componentId` через
+  `CapabilityLifecycle.registerComponent`; хуки идут в транзакции переключения, исключение откатывает его (500).
+
 ## Что пока НЕ применяется в рантайме
 
 Рантайм манифесты не читает. Не реализованы: проверка совместимости версий при старте, учёт
-`requires.modules` при включении/выключении (работает только `extendsModuleId` плагина через
-каталог), проверка `permissions`, шина событий, учёт миграций компонента, установка и обновление
+`requires.modules` при ВКЛЮЧЕНИИ (при выключении зависимые учитываются, см. выше), проверка `permissions`, шина событий, учёт миграций компонента, установка и обновление
 пакетов, внешние манифесты-файлы. Поля `permissions`/`events`/`migrations` — заготовка контракта.
 
 ## Версионирование

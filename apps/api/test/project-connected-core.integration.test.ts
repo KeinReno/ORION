@@ -136,7 +136,7 @@ describe("Project connected core (U07)", () => {
     const disable = await request(`/workspaces/${alice.workspaceId}/modules/finance`, {
       method: "PATCH",
       token: alice.accessToken,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disable.status).toBe(200);
 

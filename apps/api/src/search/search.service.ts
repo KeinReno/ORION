@@ -17,6 +17,8 @@ import { NotesService } from "../notes/notes.service";
 import { TasksService } from "../tasks/tasks.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { ENTITY_REGISTRY } from "./entity-registry";
+import { SEARCH_PROVIDER_LIMIT } from "./search-provider";
+import { SearchProviderRegistry } from "./search-provider.registry";
 
 /** `listLinks()` pagination knobs — same cursor shape as `TaskCommentPageOptions` (S17)/`TimePageOptions` (S15). */
 export interface EntityLinkPageOptions {
@@ -34,7 +36,8 @@ export class SearchService {
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
     private readonly tasks: TasksService,
-    private readonly notes: NotesService
+    private readonly notes: NotesService,
+    private readonly providers: SearchProviderRegistry
   ) {}
 
   /**
@@ -54,59 +57,10 @@ export class SearchService {
       // Check both the module and the exact type: one module can expose several types
       // (projects + goals, finance + accounts). Agent token scopes must not bleed between them.
       const canSearch = (type: SearchableEntityType): boolean => accessible.has(type) && (!allowedTypes || allowedTypes.includes(type));
-      const [projects, tasks, notes, events, documents, transactions, contacts, lists, goals, accounts, savingsGoals] = await Promise.all([
-        canSearch("project")
-          ? tx.project.findMany({ where: { workspaceId, archivedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("task")
-          ? tx.task.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("note")
-          ? tx.note.findMany({ where: { workspaceId, deletedAt: null, isTemplate: false, OR: [{ title: { contains: term, mode: "insensitive" } }, { summary: { contains: term, mode: "insensitive" } }, { body: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("event")
-          ? tx.event.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }, { location: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("document")
-          ? tx.document.findMany({ where: { workspaceId, deletedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { extractedText: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("transaction")
-          ? tx.transaction.findMany({ where: { workspaceId, OR: [{ note: { contains: term, mode: "insensitive" } }, { tags: { has: term } }] }, include: { lines: true }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("contact")
-          ? tx.contact.findMany({ where: { workspaceId, OR: [{ name: { contains: term, mode: "insensitive" } }, { role: { contains: term, mode: "insensitive" } }, { phone: { contains: term } }, { email: { contains: term, mode: "insensitive" } }, { organization: { contains: term, mode: "insensitive" } }, { address: { contains: term, mode: "insensitive" } }, { tags: { has: term } }, { note: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("list")
-          ? tx.list.findMany({
-              where: { workspaceId, archivedAt: null, OR: [{ name: { contains: term, mode: "insensitive" } }, { items: { some: { label: { contains: term, mode: "insensitive" } } } }] },
-              include: { items: { where: { label: { contains: term, mode: "insensitive" } }, select: { label: true }, take: 3 } },
-              take: 8,
-              orderBy: { updatedAt: "desc" }
-            })
-          : [],
-        canSearch("goal")
-          ? tx.goal.findMany({ where: { workspaceId, OR: [{ title: { contains: term, mode: "insensitive" } }, { description: { contains: term, mode: "insensitive" } }] }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("account")
-          ? tx.account.findMany({ where: { workspaceId, archivedAt: null, name: { contains: term, mode: "insensitive" } }, take: 8, orderBy: { updatedAt: "desc" } })
-          : [],
-        canSearch("savings_goal")
-          ? tx.savingsGoal.findMany({ where: { workspaceId, archivedAt: null, name: { contains: term, mode: "insensitive" } }, take: 8, orderBy: { createdAt: "desc" } })
-          : []
-      ]);
-      const results: GlobalSearchResult[] = [
-        ...projects.map((item) => result("project", item.id, item.name, statusLabel(item.status), item.description, item.id, item.updatedAt)),
-        ...tasks.map((item) => result("task", item.id, item.title, statusLabel(item.status), item.description, item.projectId, item.updatedAt)),
-        ...notes.map((item) => result("note", item.id, item.title, item.tags.join(" · "), item.body, item.projectId, item.updatedAt)),
-        ...events.map((item) => result("event", item.id, item.title, item.location ?? "Событие", item.description, item.projectId, item.updatedAt)),
-        ...documents.map((item) => result("document", item.id, item.name, item.mimeType ?? "Папка", item.extractedText, item.projectId, item.updatedAt)),
-        ...transactions.map((item) => result("transaction", item.id, item.note || "Финансовая операция", `${item.type} · ${item.lines.reduce((sum, line) => sum + line.amount, 0)}`, item.tags.join(" · "), item.projectId, item.updatedAt)),
-        ...contacts.map((item) => result("contact", item.id, item.name, [item.role, item.organization].filter(Boolean).join(" · ") || "Контакт", [item.phone, item.email, item.note].filter(Boolean).join(" · "), null, item.updatedAt)),
-        ...lists.map((item) => result("list", item.id, item.name, item.isTemplate ? "Шаблон списка" : "Список", item.items.map((entry) => entry.label).join(" · "), null, item.updatedAt)),
-        ...goals.map((item) => result("goal", item.id, item.title, "Цель", item.description, null, item.updatedAt)),
-        ...accounts.map((item) => result("account", item.id, item.name, item.currency, "", null, item.updatedAt)),
-        ...savingsGoals.map((item) => result("savings_goal", item.id, item.name, "Цель накопления", "", null, item.createdAt))
-      ];
+      // Каждый провайдер ищет в своём домене; выключенный модуль/плагин не опрашивается вовсе.
+      const providers = this.providers.list().filter((provider) => canSearch(provider.entityType));
+      const batches = await Promise.all(providers.map((provider) => provider.search(tx, workspaceId, term, SEARCH_PROVIDER_LIMIT)));
+      const results: GlobalSearchResult[] = batches.flat();
       const lower = term.toLocaleLowerCase("ru");
       return results
         .sort((a, b) => rank(b, lower) - rank(a, lower) || b.updatedAt.localeCompare(a.updatedAt))
@@ -370,15 +324,7 @@ export class SearchService {
   }
 }
 
-function result(type: GlobalSearchResult["type"], id: string, title: string, subtitle: string, matchedText: string, projectId: string | null, updatedAt: Date): GlobalSearchResult {
-  return { id, type, title, subtitle, matchedText: matchedText.slice(0, 240), projectId, updatedAt: updatedAt.toISOString() };
-}
-
 function rank(item: GlobalSearchResult, lower: string): number {
   const title = item.title.toLocaleLowerCase("ru");
   return title === lower ? 100 : title.startsWith(lower) ? 50 : title.includes(lower) ? 25 : 0;
-}
-
-function statusLabel(status: string): string {
-  return ({ active: "Активный проект", on_hold: "На паузе", completed: "Завершён", backlog: "Бэклог", todo: "К выполнению", in_progress: "В работе", done: "Готово", canceled: "Отменено" } as Record<string, string>)[status] ?? status;
 }

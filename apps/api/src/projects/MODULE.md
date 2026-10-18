@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `notes`, `calendar`, `documents`, `time`, `finance` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `projects` |
 | Слоты | — |

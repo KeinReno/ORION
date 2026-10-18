@@ -17,7 +17,7 @@
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `projects` |
-| Права (permissions) | — (в манифесте пока не объявлены) |
+| Права (permissions) | `inventory.item.read`, `inventory.item.create`, `inventory.item.update`, `inventory.item.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `inventory` |
 | Слоты | — |
