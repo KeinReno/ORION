@@ -6,7 +6,7 @@
 //                                         или в документах упомянут несуществующий пакет @orion/<name>
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -200,7 +200,7 @@ export function packageMentionProblems(projectRoot = root) {
     readFileSync(file, "utf8").split(/\r?\n/).forEach((line, i) => {
       if (/планируется|planned/i.test(line)) return;
       for (const m of line.matchAll(/@orion\/([a-z0-9][a-z0-9-]*)/g)) {
-        if (!real.has(`@orion/${m[1]}`)) problems.push(`${relative(projectRoot, file)}:${i + 1} упоминает несуществующий пакет @orion/${m[1]} (нужна пометка «планируется (G24)»)`);
+        if (!real.has(`@orion/${m[1]}`)) problems.push(`${relative(projectRoot, file).split(sep).join("/")}:${i + 1} упоминает несуществующий пакет @orion/${m[1]} (нужна пометка «планируется (G24)»)`);
       }
     });
   }
