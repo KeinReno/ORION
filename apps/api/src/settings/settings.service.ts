@@ -1,6 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  THEME_LIBRARY_MAX,
+  THEME_PRESET_IDS,
   themeDocumentSchema,
+  themeLibraryEntrySchema,
+  workspaceThemeModeSchema,
+  type SaveThemeInput,
+  type ThemeLibraryEntry,
   DEFAULT_BACKGROUND_EFFECT_SETTINGS,
   sidebarFoldersSchema,
   sidebarOrderSchema,
@@ -51,6 +57,14 @@ export class SettingsService {
   }
 
   async update(userId: string, input: UpdateUserPreferenceInput): Promise<UserPreference> {
+    if (input.activeThemeId) {
+      // The choice must name something that exists: a preset, or a theme already in this account's library.
+      // Otherwise every device would silently fall back and the setting would look broken.
+      const current = await this.preferenceRow(userId);
+      if (!isPresetId(input.activeThemeId) && !parseLibrary(current.themeLibrary).some(e => e.document.id === input.activeThemeId)) {
+        throw new BadRequestException("Такой темы нет в библиотеке");
+      }
+    }
     // Prisma's JSON columns want `Prisma.InputJsonValue`, not the plain typed
     // object the zod schema gives us — everything else passes through as-is.
     const { customTheme, ...fields } = input;
@@ -62,12 +76,105 @@ export class SettingsService {
       ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {}),
       ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {})
     };
-    const preference = await this.preferenceRow(userId, data);
+    const legacyWrite = customTheme !== undefined || input.customThemeEnabled !== undefined;
+    const before = legacyWrite ? await this.preferenceRow(userId) : null;
+    let preference = await this.preferenceRow(userId, data);
+    if (before) preference = await this.mirrorLegacyTheme(userId, before, preference);
     // Reminder delivery reads a cached copy of these preferences (the crons
     // evaluate them per row) — a save must take effect on the next tick, not
     // "some time in the next minute".
     this.notificationPolicy.invalidateAll();
     return toDto(preference);
+  }
+
+  /**
+   * Create or replace one own theme. The library is a single JSON value, so the read-modify-write runs under a
+   * row lock: two devices saving different themes at once both land, instead of the later write dropping the
+   * earlier one. Editing the same theme on two devices is caught by `expectedUpdatedAt` (409, nothing written).
+   */
+  async saveTheme(userId: string, themeId: string, input: SaveThemeInput): Promise<UserPreference> {
+    if (input.document.id !== themeId) throw new BadRequestException("Идентификатор темы не совпадает с адресом");
+    return this.mutateLibrary(userId, (library) => {
+      const index = library.findIndex(e => e.document.id === themeId);
+      const existing = index >= 0 ? library[index] : null;
+      if (!existing && isPresetId(themeId)) throw new BadRequestException("Этот идентификатор занят встроенной темой");
+      if (input.expectedUpdatedAt !== undefined && (existing?.updatedAt ?? null) !== input.expectedUpdatedAt) {
+        throw new ConflictException({
+          code: "theme_revision_conflict",
+          message: existing ? "Тему уже изменили на другом устройстве" : "Тема была удалена на другом устройстве",
+          current: existing
+        });
+      }
+      const entry: ThemeLibraryEntry = { document: input.document, updatedAt: nextRevision(existing?.updatedAt) };
+      if (existing) return library.map((e, i) => (i === index ? entry : e));
+      if (library.length >= THEME_LIBRARY_MAX) throw new BadRequestException(`В библиотеке не больше ${THEME_LIBRARY_MAX} своих тем`);
+      return [...library, entry];
+    });
+  }
+
+  /** Deleting the active theme moves the account to the default palette in the same write, never to a dangling id. */
+  async deleteTheme(userId: string, themeId: string): Promise<UserPreference> {
+    return this.mutateLibrary(userId, (library) => {
+      if (!library.some(e => e.document.id === themeId)) throw new NotFoundException("Тема не найдена");
+      return library.filter(e => e.document.id !== themeId);
+    }, themeId);
+  }
+
+  /**
+   * An older client on the network still writes the single legacy slot (customTheme/customThemeEnabled). Mirror
+   * it into the library so its user sees the same palette on a current client: the document is kept as an own
+   * theme (a preset id gets the "custom-" prefix, as in the migration), and enabling or disabling it moves the
+   * active choice. Clearing the slot keeps the library copy — a theme is removed only by an explicit delete.
+   */
+  private async mirrorLegacyTheme(
+    userId: string,
+    before: Awaited<ReturnType<SettingsService["preferenceRow"]>>,
+    preference: Awaited<ReturnType<SettingsService["preferenceRow"]>>
+  ) {
+    const legacy = themeDocumentSchema.safeParse(preference.customTheme);
+    const previous = themeDocumentSchema.safeParse(before.customTheme);
+    const libraryId = (id: string): string => (isPresetId(id) ? `custom-${id}` : id);
+    if (!legacy.success) {
+      // The slot was cleared: if its theme was the active one, the old client now expects the default palette.
+      if (!previous.success || preference.activeThemeId !== libraryId(previous.data.id)) return preference;
+      return this.prisma.userPreference.update({ where: { userId }, data: { activeThemeId: null } });
+    }
+    const doc = { ...legacy.data, id: libraryId(legacy.data.id) };
+    return this.prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<Array<{ themeLibrary: Prisma.JsonValue; activeThemeId: string | null }>>`
+        SELECT "themeLibrary", "activeThemeId" FROM "user_preferences" WHERE "userId" = ${userId} FOR UPDATE`;
+      const library = parseLibrary(row?.themeLibrary ?? []);
+      const index = library.findIndex(e => e.document.id === doc.id);
+      const unchanged = index >= 0 && JSON.stringify(library[index].document) === JSON.stringify(doc);
+      const entry: ThemeLibraryEntry = unchanged ? library[index] : { document: doc, updatedAt: nextRevision(library[index]?.updatedAt) };
+      const next = index >= 0 ? library.map((e, i) => (i === index ? entry : e)) : library.length < THEME_LIBRARY_MAX ? [...library, entry] : library;
+      const activeThemeId = preference.customThemeEnabled ? doc.id : row?.activeThemeId === doc.id ? null : row?.activeThemeId ?? null;
+      return tx.userPreference.update({
+        where: { userId },
+        data: { themeLibrary: next as unknown as Prisma.InputJsonValue, activeThemeId }
+      });
+    });
+  }
+
+  private async mutateLibrary(
+    userId: string,
+    mutate: (library: ThemeLibraryEntry[]) => ThemeLibraryEntry[],
+    deletedId?: string
+  ): Promise<UserPreference> {
+    await this.preferenceRow(userId);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<Array<{ themeLibrary: Prisma.JsonValue; activeThemeId: string | null }>>`
+        SELECT "themeLibrary", "activeThemeId" FROM "user_preferences" WHERE "userId" = ${userId} FOR UPDATE`;
+      const next = mutate(parseLibrary(row?.themeLibrary ?? []));
+      return tx.userPreference.update({
+        where: { userId },
+        data: {
+          themeLibrary: next as unknown as Prisma.InputJsonValue,
+          ...(deletedId && row?.activeThemeId === deletedId ? { activeThemeId: null } : {})
+        }
+      });
+    });
+    return toDto(updated);
   }
 
   /**
@@ -168,6 +275,31 @@ export class SettingsService {
   }
 }
 
+function isPresetId(id: string): boolean {
+  return (THEME_PRESET_IDS as readonly string[]).includes(id);
+}
+
+/** A damaged entry is skipped, not fatal: one broken theme must not hide the rest of the library. */
+function parseLibrary(raw: Prisma.JsonValue): ThemeLibraryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: ThemeLibraryEntry[] = [];
+  for (const item of raw) {
+    const parsed = themeLibraryEntrySchema.safeParse(item);
+    if (!parsed.success || seen.has(parsed.data.document.id)) continue;
+    seen.add(parsed.data.document.id);
+    out.push(parsed.data);
+  }
+  return out;
+}
+
+/** Strictly increasing even when two saves land in the same millisecond, so a revision check can't be fooled. */
+function nextRevision(previous: string | undefined): string {
+  const now = Date.now();
+  const last = previous ? Date.parse(previous) : 0;
+  return new Date(Math.max(now, last + 1)).toISOString();
+}
+
 /** Defensive JSON parse — an empty/malformed column reads back as "no spheres yet", never a crash. */
 function parseSpheres(raw: Prisma.JsonValue): WorkspaceSphere[] {
   if (!Array.isArray(raw)) return [];
@@ -197,6 +329,9 @@ function toDto(preference: {
   theme: string;
   customTheme?: Prisma.JsonValue;
   customThemeEnabled?: boolean;
+  themeLibrary?: Prisma.JsonValue;
+  activeThemeId?: string | null;
+  workspaceThemeMode?: string;
   accent: string;
   density: string;
   backgroundStyle: string;
@@ -230,6 +365,9 @@ function toDto(preference: {
     ...preference,
     customTheme: parsedTheme.success ? parsedTheme.data : null,
     customThemeEnabled: parsedTheme.success && preference.customThemeEnabled === true,
+    themeLibrary: parseLibrary(preference.themeLibrary ?? []),
+    activeThemeId: preference.activeThemeId ?? null,
+    workspaceThemeMode: workspaceThemeModeSchema.safeParse(preference.workspaceThemeMode).success ? (preference.workspaceThemeMode as UserPreference["workspaceThemeMode"]) : "follow",
     backgroundEffectSettings: mergeBackgroundEffectSettings(preference.backgroundEffectSettings),
     // A damaged value must not break the settings screen: read it defensively, fall back to no folders.
     sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],

@@ -1,24 +1,36 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { apiUrl, disableAllPlugins, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
+
+/** Every settings write a theme preview could make: preferences, the library and the workspace palette. */
+function recordThemeWrites(page: Page): string[] {
+  const writes: string[] = [];
+  page.on("request", req => {
+    const url = req.url();
+    if ((url.includes("/settings/") || url.endsWith("/theme")) && ["PATCH", "POST", "PUT", "DELETE"].includes(req.method())) writes.push(`${req.method()} ${url}`);
+  });
+  return writes;
+}
+
+async function openAppearance(page: Page, workspaceId: string, width: number): Promise<void> {
+  await page.goto(`/panel/settings?workspaceId=${workspaceId}`);
+  if (width < 640) await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("appearance");
+  else await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+}
 
 for (const width of [1280, 390]) {
   test(`light preview, portal cancel and draft preservation at ${width}px never write preferences`, async ({ page, request }, testInfo) => {
     const account = await register(request, `theme-preview-${width}`);
     await signIn(page, account);
     await page.setViewportSize({ width, height: 800 });
-    await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-    if (width < 640) await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("appearance");
-    else await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-    await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
-    const region = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
+    await openAppearance(page, account.workspaceId, width);
     const headers = { Authorization: `Bearer ${account.accessToken}` };
     const before = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
-    const writes: string[] = [];
-    page.on("request", req => { if (req.url().endsWith("/settings/preferences") && ["PATCH", "POST", "PUT", "DELETE"].includes(req.method())) writes.push(req.method()); });
+    const writes = recordThemeWrites(page);
     const accentBefore = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--orion-accent"));
-    await region.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("arctic");
+    await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «Arctic» в редакторе", exact: true }).click();
+    const region = page.getByRole("region", { name: "Редактор темы", exact: true });
     await expect(region.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
     const sample = region.locator('[data-kaiden-theme="arctic"]').first();
     const name = sample.getByLabel("Название образца", { exact: true });
@@ -54,16 +66,20 @@ test("copy editing, JSON export/import and invalid import work with plugins disa
   const account = await register(request, "theme-files");
   await disableAllPlugins(request, account);
   await signIn(page, account);
-  await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
-  const region = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
-  await region.getByRole("button", { name: "Создать копию", exact: true }).click();
+  await openAppearance(page, account.workspaceId, 1280);
+  const writes = recordThemeWrites(page);
+  await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «KAIDEN Precision» в редакторе", exact: true }).click();
+  const region = page.getByRole("region", { name: "Редактор темы", exact: true });
+  await expect(region).toContainText("Встроенная тема");
+  await expect(region.getByRole("button", { name: "Сохранить", exact: true })).toBeDisabled();
   await region.getByLabel("Акцент", { exact: true }).evaluate((node: HTMLInputElement) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(node, "#147866");
     node.dispatchEvent(new Event("input", { bubbles: true }));
     node.dispatchEvent(new Event("change", { bubbles: true }));
   });
+  // The first edit of a built-in palette turns it into a new copy; the preset itself never changes.
+  await expect(region).toContainText("Новая тема");
+  await expect(region.getByLabel("Название темы", { exact: true })).toHaveValue("KAIDEN Precision — копия");
   const pendingDownload = page.waitForEvent("download");
   await region.getByRole("button", { name: "Экспортировать тему", exact: true }).click();
   const download = await pendingDownload;
@@ -72,51 +88,49 @@ test("copy editing, JSON export/import and invalid import work with plugins disa
   let json = ""; for await (const chunk of stream) json += chunk.toString();
   const exported = JSON.parse(json);
   expect(exported.schemaVersion).toBe(1);
+  expect(exported.id).toMatch(/^custom-/);
   expect(exported.colors.accent).toBe("#147866");
   expect(exported.colors.focus).toBe(exported.colors.accentHover);
-  await region.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("arctic");
-  await expect(region.getByRole("button", { name: "Заменить копию", exact: true })).toBeVisible();
-  await region.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("custom");
-  await expect(region.getByLabel("Акцент", { exact: true })).toHaveValue("#147866");
   const file = region.getByLabel("Импортировать файл темы (.json)", { exact: true });
   await file.setInputFiles({ name: "unsafe.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ ...exported, colors: { accent: "url(https://example.test)" } })) });
-  await expect(region.getByRole("alert")).toContainText("Предыдущая палитра сохранена");
+  await expect(region.getByRole("alert")).toContainText("Применённая тема не изменилась");
   await expect(region.getByLabel("Акцент", { exact: true })).toHaveValue("#147866");
   await file.setInputFiles({ name: "good.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify({ schemaVersion: 1, id: "my-import", name: "Мой образец", baseMode: "light", colors: { accent: "#136b60" } })) });
   await expect(region.getByRole("alert")).toHaveCount(0);
-  await expect(region.getByRole("combobox", { name: "Палитра образца", exact: true })).toHaveValue("custom");
+  await expect(region.getByLabel("Название темы", { exact: true })).toHaveValue("Мой образец");
   await expect(region.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
   await expect(region.locator('[data-kaiden-theme="my-import"]').first()).toHaveCSS("color-scheme", "light");
-  await region.getByRole("button", { name: "Сбросить образец", exact: true }).click();
-  await expect(region.getByRole("combobox", { name: "Палитра образца", exact: true })).toHaveValue("precision");
-  await expect(region.getByRole("button", { name: "Включить предпросмотр", exact: true })).toBeVisible();
+  // Closing over unsaved edits asks first.
+  await region.getByRole("button", { name: "Закрыть редактор", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Отбросить изменения темы?", exact: true });
+  await confirm.getByRole("button", { name: "Отмена", exact: true }).click();
+  await expect(region).toBeVisible();
+  await region.getByRole("button", { name: "Закрыть редактор", exact: true }).click();
+  await confirm.getByRole("button", { name: "Отбросить", exact: true }).click();
+  await expect(region).toHaveCount(0);
+  expect(writes).toEqual([]);
 });
 
-
 const PRESET_TEXT: Record<string, string> = {
-  obsidian: "rgb(236, 236, 238)", midnight: "rgb(234, 240, 250)", emerald: "rgb(238, 243, 240)", crimson: "rgb(244, 238, 239)"
+  Obsidian: "rgb(236, 236, 238)", Midnight: "rgb(234, 240, 250)", Emerald: "rgb(238, 243, 240)", Crimson: "rgb(244, 238, 239)"
 };
+const PRESET_IDS: Record<string, string> = { Obsidian: "obsidian", Midnight: "midnight", Emerald: "emerald", Crimson: "crimson" };
 test("every built-in preset previews its own palette without writing preferences", async ({ page, request }) => {
   test.setTimeout(90_000);
   const account = await register(request, "theme-presets");
   await signIn(page, account);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
-  const region = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
+  await openAppearance(page, account.workspaceId, 1280);
   const headers = { Authorization: `Bearer ${account.accessToken}` };
   const before = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
-  const writes: string[] = [];
-  page.on("request", req => { if (req.url().endsWith("/settings/preferences") && ["PATCH", "POST", "PUT", "DELETE"].includes(req.method())) writes.push(req.method()); });
-  const select = region.getByRole("combobox", { name: "Палитра образца", exact: true });
-  await expect(select.locator("option")).toHaveText(["KAIDEN Precision", "Obsidian", "Midnight", "Emerald", "Crimson", "Arctic (светлая)"]);
-  await region.getByRole("button", { name: "Включить предпросмотр", exact: true }).click();
-  for (const [id, text] of Object.entries(PRESET_TEXT)) {
-    await select.selectOption(id);
-    const sample = region.locator(`[data-kaiden-theme="${id}"]`).first();
+  const writes = recordThemeWrites(page);
+  const library = page.getByRole("region", { name: "Библиотека тем", exact: true });
+  await expect(library.locator("li p.truncate")).toHaveText(["KAIDEN Precision", "Obsidian", "Midnight", "Emerald", "Crimson", "Arctic"]);
+  for (const [name, text] of Object.entries(PRESET_TEXT)) {
+    await library.getByRole("button", { name: `Открыть тему «${name}» в редакторе`, exact: true }).click();
+    const sample = page.getByRole("region", { name: "Редактор темы", exact: true }).locator(`[data-kaiden-theme="${PRESET_IDS[name]}"]`).first();
     await expect(sample.getByLabel("Название образца", { exact: true })).toHaveCSS("color", text);
-    await page.screenshot({ path: `tmp/redesign/theme-preset-${id}.png` });
+    await page.screenshot({ path: `tmp/redesign/theme-preset-${PRESET_IDS[name]}.png` });
   }
   expect(writes).toEqual([]);
   expect(await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json()).toEqual(before);

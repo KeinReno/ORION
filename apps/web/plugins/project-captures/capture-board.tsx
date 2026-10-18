@@ -246,10 +246,13 @@ export function ProjectCaptureBoard({
             { value: "dismissed", label: `Закрытые${count(list, "dismissed")}` }
           ]}
         />
-        <Button size="sm" onClick={() => void add()} disabled={create.isPending}>
-          <Plus className="h-4 w-4" />
-          {copy.newButton}
-        </Button>
+        {/* Secondary next to the project's own «Задача»; an empty board offers it in its empty state instead. */}
+        {list.length > 0 ? (
+          <Button size="sm" variant="outline" onClick={() => void add()} disabled={create.isPending}>
+            <Plus className="h-4 w-4" />
+            {copy.newButton}
+          </Button>
+        ) : null}
       </div>
 
       {list.length === 0 ? (

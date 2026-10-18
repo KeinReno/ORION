@@ -5,6 +5,8 @@ import {
   setWorkspaceFavoriteInputSchema,
   updateSphereInputSchema,
   updateUserPreferenceInputSchema,
+  saveThemeInputSchema,
+  type SaveThemeInput,
   type AssignWorkspaceSphereInput,
   type CreateSphereInput,
   type SetWorkspaceFavoriteInput,
@@ -35,6 +37,21 @@ export class SettingsController {
     @Body(new ZodValidationPipe(updateUserPreferenceInputSchema)) body: UpdateUserPreferenceInput
   ): Promise<UserPreference> {
     return this.settings.update(user.userId, body);
+  }
+
+  /** Own theme library — one theme per request, see SettingsService.saveTheme. */
+  @Put("themes/:themeId")
+  saveTheme(
+    @CurrentUser() user: RequestUser,
+    @Param("themeId") themeId: string,
+    @Body(new ZodValidationPipe(saveThemeInputSchema)) body: SaveThemeInput
+  ): Promise<UserPreference> {
+    return this.settings.saveTheme(user.userId, themeId, body);
+  }
+
+  @Delete("themes/:themeId")
+  deleteTheme(@CurrentUser() user: RequestUser, @Param("themeId") themeId: string): Promise<UserPreference> {
+    return this.settings.deleteTheme(user.userId, themeId);
   }
 
   // U05 (24-CONNECTED-CORE-BACKLOG.md) — personal spheres + favorites. Not a

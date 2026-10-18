@@ -22,9 +22,8 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
   await page.getByRole("combobox", { name: "Оформление Orion", exact: true }).selectOption("kaiden-precision");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
-  await page.locator("summary").filter({ hasText: "Предпросмотр тем" }).click();
-  const themePreview = page.getByRole("region", { name: "Предпросмотр тем", exact: true });
-  await themePreview.getByRole("combobox", { name: "Палитра образца", exact: true }).selectOption("arctic");
+  await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «Arctic» в редакторе", exact: true }).click();
+  const themePreview = page.getByRole("region", { name: "Редактор темы", exact: true });
   await expect(themePreview.getByRole("button", { name: "Отменить предпросмотр", exact: true })).toBeVisible();
   await expect(themePreview.getByRole("textbox", { name: "Название образца", exact: true })).toHaveCSS("color", "rgb(23, 33, 43)");
   await themePreview.getByRole("button", { name: "Отменить предпросмотр", exact: true }).click();

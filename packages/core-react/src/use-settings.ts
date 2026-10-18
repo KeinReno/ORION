@@ -3,6 +3,7 @@
 import type {
   AppInfo,
   ChangePasswordInput,
+  SaveThemeInput,
   SessionInfo,
   SessionUser,
   UpdateProfileInput,
@@ -41,6 +42,28 @@ export function useUpdatePreferences() {
   return useMutation<UserPreference, Error, UpdateUserPreferenceInput>({
     mutationFn: (input) => api.updatePreferences(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["preferences"] })
+  });
+}
+
+/**
+ * Own theme library. Both write the preference cache from the response directly, so the active palette and
+ * the list change together, without a second request in between that could flash the previous palette.
+ */
+export function useSaveTheme() {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<UserPreference, Error, SaveThemeInput>({
+    mutationFn: (input) => api.saveTheme(input),
+    onSuccess: (preference) => queryClient.setQueryData(["preferences"], preference)
+  });
+}
+
+export function useDeleteTheme() {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<UserPreference, Error, string>({
+    mutationFn: (themeId) => api.deleteTheme(themeId),
+    onSuccess: (preference) => queryClient.setQueryData(["preferences"], preference)
   });
 }
 
