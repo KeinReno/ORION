@@ -173,7 +173,8 @@ export class ProjectsService {
         enabled.has("finance")
           ? tx.transactionLine.findMany({
               where: { transaction: { projectId: { in: ids }, type: "expense" } },
-              select: { amount: true, transaction: { select: { projectId: true } } }
+              // An expense's currency is its source account's (as in budgetSpentTx).
+              select: { amount: true, transaction: { select: { projectId: true, account: { select: { currency: true } } } } }
             })
           : [],
         enabled.has("time")
@@ -219,11 +220,23 @@ export class ProjectsService {
     const eventsByProject = countMap(eventGroups);
     const documentsByProject = countMap(documentGroups);
     const inventoryByProject = countMap(inventoryGroups);
+    // Kopecks of different currencies are never added together: per project,
+    // `spentAmount` counts only the project's own currency, the rest is
+    // reported per currency in `spentOther`.
+    const projectCurrency = new Map(rows.map((row) => [row.id, row.currency]));
     const spentByProject = new Map<string, number>();
+    const spentOtherByProject = new Map<string, Map<string, number>>();
     for (const line of expenseLines) {
       const projectId = line.transaction.projectId;
       if (!projectId) continue;
-      spentByProject.set(projectId, (spentByProject.get(projectId) ?? 0) + line.amount);
+      const currency = line.transaction.account.currency;
+      if (currency === projectCurrency.get(projectId)) {
+        spentByProject.set(projectId, (spentByProject.get(projectId) ?? 0) + line.amount);
+      } else {
+        const other = spentOtherByProject.get(projectId) ?? new Map<string, number>();
+        other.set(currency, (other.get(currency) ?? 0) + line.amount);
+        spentOtherByProject.set(projectId, other);
+      }
     }
     const minutesByProject = new Map<string, number>();
     for (const entry of timeRows) {
@@ -274,6 +287,10 @@ export class ProjectsService {
           inventory: inventoryByProject.get(row.id) ?? 0
         },
         spentAmount: spentByProject.get(row.id) ?? 0,
+        spentOther: [...(spentOtherByProject.get(row.id) ?? [])]
+          .filter(([, amount]) => amount > 0)
+          .map(([currency, amount]) => ({ currency, amount }))
+          .sort((a, b) => a.currency.localeCompare(b.currency)),
         trackedMinutes: time.trackedMinutes,
         timeCost: time.timeCost,
         unratedMinutes: time.unratedMinutes,

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import type { Prisma } from "@prisma/client";
 import { expandRecurrence, recurrenceSpecSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
@@ -29,6 +30,7 @@ export class EventReminderService {
   private static readonly LATE_GRACE_MS = 60 * 60 * 1000;
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly notifications: NotificationCenterService,
@@ -37,7 +39,7 @@ export class EventReminderService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCron(): Promise<void> {
-    await this.runCheck();
+    await this.jobs.runJob("calendar", "event-reminders", () => this.runCheck());
   }
 
   async runCheck(): Promise<{ notified: number; skipped: number }> {

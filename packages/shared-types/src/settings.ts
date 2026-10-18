@@ -291,3 +291,23 @@ export type AppInfo = z.infer<typeof appInfoSchema>;
  */
 export const orionModeInfoSchema = z.object({ mode: z.enum(["local", "server"]) });
 export type OrionModeInfo = z.infer<typeof orionModeInfoSchema>;
+
+/**
+ * G9 — состояние фоновой (@Cron) задачи в памяти процесса API для
+ * `GET system/jobs`. Только имена, счётчики, время и текст последней ошибки:
+ * никаких данных пространств. Без `.default(...)` — это схема ответа.
+ */
+export const backgroundJobStatusSchema = z.object({
+  componentId: z.string(),
+  jobName: z.string(),
+  running: z.boolean(),
+  runs: z.number().int(),
+  failures: z.number().int(),
+  skipped: z.number().int(),
+  lastStartedAt: z.string().nullable(),
+  lastFinishedAt: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
+  lastError: z.string().nullable()
+});
+export type BackgroundJobStatus = z.infer<typeof backgroundJobStatusSchema>;
+export const backgroundJobListSchema = z.array(backgroundJobStatusSchema);

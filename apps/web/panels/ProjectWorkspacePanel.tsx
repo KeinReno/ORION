@@ -68,7 +68,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import { EntityLinksSection } from "../components/entity-links";
 import { describeError } from "../lib/error-message";
-import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
+import { formatMoney, formatSpentOther, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
 import { usePublishResourceContext } from "../lib/resource-context-store";
 import { detachPanelToWindow } from "../lib/panel-window";
@@ -473,12 +473,15 @@ function ProjectWorkspace({
               </span>
             ) : null}
             {/* One line of the numbers that matter, shown only where there is something to show. */}
-            {financeOn && (project.budgetAmount !== null || project.spentAmount > 0) ? (
+            {financeOn && (project.budgetAmount !== null || project.spentAmount > 0 || project.spentOther.length > 0) ? (
               <span title="Потрачено по проекту">
                 <Badge tone={project.budgetAmount !== null && project.spentAmount > project.budgetAmount ? "danger" : "neutral"}>
                   {formatMoney(project.spentAmount, project.currency)}
                   {project.budgetAmount !== null ? ` из ${formatMoney(project.budgetAmount, project.currency)}` : ""}
                 </Badge>
+                {project.spentOther.length > 0 ? (
+                  <span className="ml-1.5 text-micro text-subtle-foreground">{formatSpentOther(project.spentOther)}</span>
+                ) : null}
               </span>
             ) : null}
             {timeOn && project.trackedMinutes > 0 ? (
@@ -936,10 +939,16 @@ function MoneyTimeCard({
                 {formatMoney(project.spentAmount, project.currency)} из {formatMoney(budget, project.currency)}
                 {overspent ? " · перерасход" : ""}
               </p>
+              {project.spentOther.length > 0 ? (
+                <p className="text-micro text-subtle-foreground">{formatSpentOther(project.spentOther)}</p>
+              ) : null}
             </>
           ) : (
             <p className="text-label text-foreground">
               <span className="font-mono tabular-nums">{formatMoney(project.spentAmount, project.currency)}</span> потрачено{" "}
+              {project.spentOther.length > 0 ? (
+                <span className="text-micro text-subtle-foreground">{formatSpentOther(project.spentOther)} </span>
+              ) : null}
               <button type="button" onClick={onEdit} className="text-accent-text hover:underline">
                 Задать бюджет
               </button>

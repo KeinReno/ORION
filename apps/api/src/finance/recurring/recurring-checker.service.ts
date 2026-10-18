@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../../common/background-jobs.service";
 import { Prisma, type RecurrenceInterval, type TransactionType } from "@prisma/client";
 import { pluginOffWhere } from "../../plugins/require-plugin";
 import { PrismaService } from "../../common/prisma.service";
@@ -52,11 +53,14 @@ export const RECURRING_CHECK_BATCH_LIMIT = 200;
 export class RecurringCheckerService {
   private readonly logger = new Logger(RecurringCheckerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly jobs: BackgroundJobsService,
+    private readonly prisma: PrismaService
+  ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleCron(): Promise<void> {
-    await this.runCheck();
+    await this.jobs.runJob("finance", "recurring-transactions", () => this.runCheck());
   }
 
   async runCheck(): Promise<{ created: number; skipped: number }> {

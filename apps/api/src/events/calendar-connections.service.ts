@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import type { Prisma } from "@prisma/client";
 import type { CalendarConnection, CalendarConnectionInput } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
@@ -24,6 +25,7 @@ export class CalendarConnectionsService {
   private readonly logger = new Logger(CalendarConnectionsService.name);
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -99,6 +101,10 @@ export class CalendarConnectionsService {
    */
   @Cron(CronExpression.EVERY_30_MINUTES)
   async handleCron(): Promise<void> {
+    await this.jobs.runJob("calendar", "calendar-feeds-sync", () => this.syncAllEnabled());
+  }
+
+  private async syncAllEnabled(): Promise<void> {
     const connections = await this.prisma.asSystem((tx) =>
       tx.calendarConnection.findMany({
         where: { enabled: true, workspace: { NOT: [{ disabledModules: { has: "calendar" } }, pluginOffWhere("calendar-external")] } },

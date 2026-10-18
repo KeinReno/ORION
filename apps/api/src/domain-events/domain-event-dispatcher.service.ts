@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import type { Prisma } from "@prisma/client";
 import type { DomainEventEnvelope, DomainEventType } from "@orion/shared-types";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import { PrismaService } from "../common/prisma.service";
 import { DomainEventBus, restoreSystemRole } from "./domain-event-bus";
 import { isComponentEnabled, nextAttemptAt, statusAfterFailure } from "./delivery-policy";
@@ -27,33 +28,22 @@ interface ClaimedDelivery {
 @Injectable()
 export class DomainEventDispatcherService {
   private readonly logger = new Logger(DomainEventDispatcherService.name);
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly bus: DomainEventBus
+    private readonly bus: DomainEventBus,
+    private readonly jobs: BackgroundJobsService
   ) {}
 
+  /** G9: the wrapper logs, counts and guards against overlap, so a slow pass never runs twice at once. */
   @Cron("*/10 * * * * *")
   async handleCron(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
-    try {
-      await this.runOnce();
-    } catch (err) {
-      this.logger.error(`Диспетчер доменных событий упал: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      this.running = false;
-    }
+    await this.jobs.runJob("core", "domain-events-dispatch", () => this.runOnce());
   }
 
   @Cron("0 4 * * *")
   async handlePurgeCron(): Promise<void> {
-    try {
-      await this.purgeOld();
-    } catch (err) {
-      this.logger.error(`Чистка outbox упала: ${err instanceof Error ? err.message : String(err)}`);
-    }
+    await this.jobs.runJob("core", "domain-events-purge", () => this.purgeOld());
   }
 
   /** Один проход: раскладка + доставка. Публичен для тестов и ручного запуска. */

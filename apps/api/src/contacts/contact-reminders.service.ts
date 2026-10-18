@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import { contactFollowUp, isoToLocalDayKey, nextBirthday } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { NotificationCenterService } from "../notifications/notification-center.service";
@@ -44,6 +45,7 @@ export class ContactRemindersService {
   private readonly logger = new Logger(ContactRemindersService.name);
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationCenterService,
     private readonly policy: NotificationPolicyService,
@@ -52,7 +54,7 @@ export class ContactRemindersService {
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleCron(): Promise<void> {
-    await this.runCheck();
+    await this.jobs.runJob("contacts", "contact-reminders", () => this.runCheck());
   }
 
   async runCheck(now: Date = new Date()): Promise<{ birthdays: number; followUps: number }> {
