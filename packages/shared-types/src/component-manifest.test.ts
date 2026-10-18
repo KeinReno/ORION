@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPONENT_MANIFESTS,
   PLATFORM_API_VERSION,
+  SURFACE_IDS,
   buildComponentManifests,
   componentManifestSchema,
   satisfiesVersionRange
@@ -73,5 +74,19 @@ describe("satisfiesVersionRange", () => {
     expect(satisfiesVersionRange("1.0.0", "1.0.0")).toBe(true);
     expect(satisfiesVersionRange("1.0.0", "1.0.1")).toBe(false);
     expect(satisfiesVersionRange("latest", "1.0.0")).toBe(false);
+  });
+});
+
+describe("component manifest surfaces (G17)", () => {
+  it("lists only known surfaces and gives every module the dock, floating and window surfaces", () => {
+    for (const m of manifests) for (const s of m.surfaces) expect(SURFACE_IDS).toContain(s);
+    for (const m of manifests.filter((x) => x.kind === "module")) {
+      expect(m.surfaces, m.id).toEqual(expect.arrayContaining(["dock", "floating", "window"]));
+    }
+  });
+
+  it("gives a widget surface to dashboard modules only", () => {
+    expect(manifests.find((m) => m.id === "tasks")!.surfaces).toContain("widget");
+    expect(manifests.find((m) => m.id === "inventory")!.surfaces).not.toContain("widget");
   });
 });

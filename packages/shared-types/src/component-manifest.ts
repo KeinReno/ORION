@@ -20,6 +20,41 @@ const SEMVER_RANGE = /^(?:\^|~|>=)?\d+\.\d+\.\d+$/;
 export const componentKindSchema = z.enum(["module", "plugin"]);
 export type ComponentKind = z.infer<typeof componentKindSchema>;
 
+/**
+ * Поверхности (PLATFORM.md §3, docs/platform-api/SURFACES.md): где компонент может быть показан.
+ * Закрытый набор. «Основная область» и «вкладка» в ORION — одно и то же (панель Workbench-дока), поэтому `dock`.
+ */
+export const SURFACE_IDS = ["dock", "side", "widget", "floating", "window"] as const;
+export const surfaceSchema = z.enum(SURFACE_IDS);
+export type Surface = z.infer<typeof surfaceSchema>;
+
+/** Модули с карточкой на дашборде (`DashboardPanel`, `panels/dashboard/*`). */
+const DASHBOARD_WIDGET_MODULES: ReadonlySet<string> = new Set([
+  "tasks",
+  "notes",
+  "finance",
+  "calendar",
+  "habits",
+  "contacts",
+  "lists",
+  "time",
+  "projects"
+]);
+
+/** Поверхности панели, у которой нет модуля-владельца (оболочка: дашборд, инбокс, браузер, настройки…). */
+export const SHELL_SURFACES: readonly Surface[] = ["dock", "floating", "window"];
+
+/**
+ * Плагины, чьи поверхности отличаются от «ничего»: две панели (цели, план проекта) и два вклада в слоты оболочки
+ * (`shell.sidebar.widgets`, `shell.context.resources`). Остальные плагины расширяют экраны модуля и своей поверхности не имеют.
+ */
+const PLUGIN_SURFACES: Readonly<Record<string, readonly Surface[]>> = {
+  "projects-goals": ["dock", "floating", "window"],
+  "projects-planning": ["dock", "floating", "window"],
+  "calendar-widget": ["widget"],
+  "documents-resources": ["side"]
+};
+
 export const componentManifestSchema = z.object({
   id: z.string().min(1),
   kind: componentKindSchema,
@@ -39,6 +74,11 @@ export const componentManifestSchema = z.object({
    * плагин — те, что ему нужны от других (пока пусто: идентичности плагина в запросах нет). Только id из реестра.
    */
   permissions: z.array(z.string().refine(isRegisteredPermission, "разрешение не из реестра")),
+  /**
+   * Поддерживаемые поверхности (G17). Панель компонента предлагается только там, где поверхность перечислена
+   * (`PanelDefinition.surfaces` в веб-реестре выводится отсюда); панель-экземпляр не бывает `widget`.
+   */
+  surfaces: z.array(surfaceSchema),
   contributions: z.object({
     panels: z.array(z.string()).optional(),
     slots: z.array(z.string()).optional(),
@@ -87,6 +127,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     description: module.summary,
     requires: { platform: PLATFORM_RANGE, modules: [], optionalModules: [...module.optionalDependencies] },
     permissions: permissionsOfModule(module.id),
+    surfaces: [...SHELL_SURFACES, ...(DASHBOARD_WIDGET_MODULES.has(module.id) ? (["widget"] as const) : [])],
     contributions: { panels: [module.panelId] },
     events: { publishes: domainEventTypesPublishedBy(module.id), subscribes: domainEventTypesSubscribedBy(module.id) },
     migrations: []
@@ -99,6 +140,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     description: plugin.summary,
     requires: { platform: PLATFORM_RANGE, modules: [plugin.extendsModuleId], optionalModules: [] },
     permissions: [],
+    surfaces: [...(PLUGIN_SURFACES[plugin.id] ?? [])],
     // Слоты, в которые вносит вклад плагин, известны только веб-реестру (apps/web/plugins/index.ts);
     // их сверка с каталогом — в scripts/architecture-check.mjs.
     contributions: {},

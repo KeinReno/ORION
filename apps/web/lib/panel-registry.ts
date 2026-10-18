@@ -1,4 +1,4 @@
-import { isModuleEnabled, isPluginEnabled, type OrionModuleId, type OrionPluginId } from "@orion/shared-types";
+import { isModuleEnabled, isPluginEnabled, type OrionModuleId, type OrionPluginId, type Surface } from "@orion/shared-types";
 import {
   Boxes,
   BriefcaseBusiness,
@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { createElement, type ComponentType, type FunctionComponent } from "react";
+import { derivePanelSurfaces } from "./panel-surfaces";
 
 /**
  * What a panel component may receive. Dockview passes its own
@@ -63,7 +64,11 @@ export interface PanelDefinition {
   instanced?: boolean;
   /** Sidebar item to highlight while this panel is active (an instanced panel belongs to its module's list). */
   navParent?: string;
+  /** Поверхности, где панель можно показать; выводятся из манифеста владельца (`derivePanelSurfaces`), в записи реестра не задаются. */
+  surfaces: readonly Surface[];
 }
+
+type PanelEntry = Omit<PanelDefinition, "surfaces">;
 
 const LazyDashboardPanel = dynamic(() => import("../panels/DashboardPanel").then((module) => module.DashboardPanel), { ssr: false });
 const LazyTaskDetailPanel = dynamic(() => import("../panels/TaskDetailPanel").then((module) => module.TaskDetailPanel), { ssr: false });
@@ -147,7 +152,7 @@ const SettingsPanel: FunctionComponent<PanelComponentProps> = (props) => createE
  * panel and its editor/preview dependencies. Adding a module only changes
  * this registry; Sidebar and Workbench remain generic.
  */
-export const panelRegistry: PanelDefinition[] = [
+const panelEntries: PanelEntry[] = [
   { id: "dashboard", label: "Дашборд", icon: LayoutDashboard, component: DashboardPanel },
   { id: "inbox", label: "Инбокс", icon: Inbox, component: InboxPanel },
   // U08 — cross-workspace, not gated by any single workspace's module state
@@ -274,6 +279,13 @@ export const panelRegistry: PanelDefinition[] = [
   // One tab of any section panel as a panel of its own (dock tab or OS window): `view:<base>~<view>[~<instance>]`.
   { id: "view", label: "Раздел", icon: PanelTop, component: SectionViewPanel, hideFromNav: true, instanced: true }
 ];
+
+export const panelRegistry: PanelDefinition[] = panelEntries.map((entry) => ({ ...entry, surfaces: derivePanelSurfaces(entry) }));
+
+/** Предлагается ли панель (`project:abc` или обычный id) на этой поверхности; неизвестная панель — нет. */
+export function panelSupportsSurface(panelId: string, surface: Surface): boolean {
+  return getPanelDefinition(panelId)?.surfaces.includes(surface) ?? false;
+}
 
 /**
  * Sidebar entries. `disabledModules` is the workspace-level switch (also gates
