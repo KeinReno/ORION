@@ -328,6 +328,7 @@ function ProjectBoard({
                     onToggleDone={() => onToggle(task)}
                     onMove={(next) => onStatus(task, next)}
                     onDelete={() => onDelete(task)}
+                    hideProject
                   />
                 ))
               )}
