@@ -4,6 +4,7 @@ import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { TasksModule } from "../tasks/tasks.module";
 import { NotesModule } from "../notes/notes.module";
+import { SearchRegistryModule } from "./search-registry.module";
 import { SearchController } from "./search.controller";
 import { SearchService } from "./search.service";
 import { RemindersController } from "./reminders.controller";
@@ -19,7 +20,7 @@ import { ReminderCheckerService } from "./reminder-checker.service";
 // (U03 Часть 1) can call their `createTx` inside its own transaction — a
 // one-way dependency (search -> tasks/notes), no cycle.
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, NotesModule],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, NotesModule, SearchRegistryModule],
   controllers: [SearchController, RemindersController],
   providers: [SearchService, RemindersService, ReminderCheckerService],
   exports: [SearchService]

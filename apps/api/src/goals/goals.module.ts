@@ -4,10 +4,12 @@ import { ProjectsModule } from "../projects/projects.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { GoalsController } from "./goals.controller";
 import { GoalsService } from "./goals.service";
+import { SearchRegistryModule } from "../search/search-registry.module";
+import { GoalsSearchProvider } from "./goals-search.provider";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, ProjectsModule],
+  imports: [AuthModule, WorkspacesModule, ProjectsModule, SearchRegistryModule],
   controllers: [GoalsController],
-  providers: [GoalsService]
+  providers: [GoalsService, GoalsSearchProvider]
 })
 export class GoalsModule {}

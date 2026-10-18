@@ -9,11 +9,15 @@ import { EventsService } from "./events.service";
 import { EventReminderService } from "./event-reminder.service";
 import { CalendarConnectionsController } from "./calendar-connections.controller";
 import { CalendarConnectionsService } from "./calendar-connections.service";
+import { SearchRegistryModule } from "../search/search-registry.module";
+import { InboxRegistryModule } from "../inbox/inbox-registry.module";
+import { EventsSearchProvider } from "./events-search.provider";
+import { EventInboxTarget } from "./events-inbox.target";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [EventsController, CalendarController, CalendarFeedController, CalendarConnectionsController],
-  providers: [EventsService, EventReminderService, CalendarConnectionsService],
+  providers: [EventsService, EventReminderService, CalendarConnectionsService, EventsSearchProvider, EventInboxTarget],
   exports: [EventsService]
 })
 export class EventsModule {}
