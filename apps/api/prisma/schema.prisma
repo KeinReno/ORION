@@ -68,6 +68,14 @@ model UserPreference {
   theme                String   @default("system")
   customTheme          Json?
   customThemeEnabled   Boolean  @default(false)
+  /// Theme library: [{ document: ThemeDocument, updatedAt: ISO }]. Supersedes customTheme/customThemeEnabled
+  /// (kept for older clients; the 20261017200000 migration copied them here). Written only by
+  /// SettingsService.saveTheme/deleteTheme under a row lock, so two devices never drop each other's themes.
+  themeLibrary         Json     @default("[]")
+  /// Built-in preset id or a themeLibrary document id; null = default Precision palette.
+  activeThemeId        String?
+  /// "follow" | "personal" — whether a workspace theme overrides this user's own choice.
+  workspaceThemeMode   String   @default("follow")
   accent               String   @default("violet")
   density              String   @default("comfortable")
   /// "none" | "aurora" | "grid" | "liquid-ether" | "light-pillar" | "dark-veil" | "shape-waves"
@@ -178,6 +186,9 @@ model Workspace {
   /// TZ-06 / ADR-0015: "local" | "shared" | "hybrid". Only "hybrid" lets devices keep a local copy and
   /// queue writes; node config, deliberately NOT restored from a snapshot (see snapshot-registry).
   syncMode  String            @default("shared")
+  /// Palette for every member of this space (ThemeDocument JSON, a copy — never a reference to someone's own
+  /// theme, so deleting that theme or losing access to it cannot break the space). Owner-only, null = none.
+  theme     Json?
   createdAt DateTime          @default(now())
   syncChanges   SyncChange[]
   syncOps       SyncOp[]

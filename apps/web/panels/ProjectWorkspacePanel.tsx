@@ -36,9 +36,11 @@ import {
   PanelHeader,
   PanelSection,
   PanelShell,
+  Select,
   Skeleton,
   Textarea,
   cx,
+  useResizeWidth,
   useToast
 } from "@orion/ui";
 import {
@@ -65,7 +67,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import { EntityLinksSection } from "../components/entity-links";
-import { ShareGrantSection } from "../components/share-grant-section";
 import { describeError } from "../lib/error-message";
 import { formatMoney, relativeTime, shortDate, shortDateTime } from "../lib/format";
 import { openEntity, openPanel } from "../lib/panel-bus";
@@ -79,6 +80,7 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { ProjectForm, projectSwatchColor, type ProjectFormValues } from "./project-form";
 import { Meter, ReportedHealthBadge, taskProgressLabel } from "../components/project-bits";
 import { ProjectMaterials } from "./projects/materials";
+import { ProjectAccessSection } from "./projects/project-access";
 import { ProjectTasks } from "./projects/project-tasks";
 import { TaskRow } from "./projects/task-row";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
@@ -90,6 +92,9 @@ import { TASK_STATUS_LABEL, TaskForm, type TaskFormValues } from "./task-form";
 
 /** "overview", "tasks", "materials", "access" are the module's own; any other id (the plan) is a tab a plugin adds via `projects.tabs`. */
 type ProjectTab = string;
+
+/** Header width under which eight tabs would wrap to three rows: the strip becomes one «Раздел» picker. */
+const NARROW_TABS_MAX = 560;
 
 /** Per-viewer, per-project: which view of the project this person last used. */
 const projectTabKey = (projectId: string): string => `orion.project-tab.${projectId}`;
@@ -267,6 +272,9 @@ function ProjectWorkspace({
   ];
   const section = useSectionView(params, api, project.name, tabs);
   const locked = section.locked;
+  const [headerRef, headerWidth] = useResizeWidth<HTMLDivElement>();
+  // 0 = not measured yet: keep the strip until the width is known, so wide panels never flash a picker.
+  const narrowTabs = headerWidth > 0 && headerWidth < NARROW_TABS_MAX;
 
   // A remembered tab can name a module that is off now — fall back to the overview
   // instead of rendering a view whose data this project can't show.
@@ -389,9 +397,10 @@ function ProjectWorkspace({
       <PanelHeader
         icon={FolderKanban}
         title={
-          <span className="inline-flex items-center gap-2">
+          // Block-level flex so a long name ends in «…» instead of being cut at the panel edge.
+          <span className="flex min-w-0 items-center gap-2" title={project.name}>
             {swatch ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: swatch }} aria-hidden /> : null}
-            {project.name}
+            <span className="truncate">{project.name}</span>
           </span>
         }
         subtitle={locked ? sectionTabTitle(tabs.find((item) => item.value === tab)) : project.description || undefined}
@@ -440,7 +449,7 @@ function ProjectWorkspace({
           </>
         }
       >
-        <div className="flex w-full flex-col gap-3">
+        <div ref={headerRef} className="flex w-full min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             {project.archivedAt ? <Badge>В архиве</Badge> : null}
             <ReportedHealthBadge project={project} />
@@ -478,7 +487,28 @@ function ProjectWorkspace({
               </span>
             ) : null}
           </div>
-          <SectionTabs baseId="project" instance={project.id} tabs={tabs} value={tab} onChange={setTab} locked={locked} size="sm" />
+          {narrowTabs && !locked ? (
+            // Narrow panel or phone: the tab strip would take three rows above the work. Panel / window
+            // variants of each tab stay in «⋯», so nothing is lost; the picker is a native select (keyboard, screen readers).
+            <label className="flex min-w-0 items-center gap-2 text-label text-muted-foreground">
+              Раздел
+              <Select
+                aria-label="Раздел проекта"
+                value={tab}
+                onChange={(event) => setTab(event.target.value)}
+                className="min-w-0 flex-1"
+              >
+                {tabs.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {sectionTabTitle(item)}
+                    {item.value === "tasks" && focus.open > 0 ? ` · ${focus.open}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : (
+            <SectionTabs baseId="project" instance={project.id} tabs={tabs} value={tab} onChange={setTab} locked={locked} size="sm" />
+          )}
         </div>
       </PanelHeader>
 
@@ -539,20 +569,20 @@ function ProjectWorkspace({
         ) : null}
 
         {!section.missing && tab === "access" ? (
-          <div className="flex max-w-3xl flex-col gap-6">
-            <ShareGrantSection workspaceId={workspaceId} type="project" id={project.id} />
+          <div className="flex flex-col gap-6">
+            <ProjectAccessSection workspaceId={workspaceId} projectId={project.id} />
             <PanelSection title="Архив">
-              <p className="text-label text-muted-foreground">
+              <p className="max-w-2xl text-label text-muted-foreground">
                 {project.archivedAt
                   ? `В архиве с ${shortDateTime(project.archivedAt)}. Задачи, заметки и связи сохранены.`
                   : "Архивированный проект уходит из списка, но задачи, заметки и связи сохраняются."}
               </p>
               {project.archivedAt ? (
-                <Button size="sm" variant="outline" onClick={restore} disabled={updateProject.isPending}>
+                <Button size="sm" variant="outline" className="self-start" onClick={restore} disabled={updateProject.isPending}>
                   <ArchiveRestore className="h-4 w-4" /> Восстановить
                 </Button>
               ) : (
-                <Button size="sm" variant="subtle" onClick={() => setConfirmArchive(true)}>
+                <Button size="sm" variant="outline" className="self-start" onClick={() => setConfirmArchive(true)}>
                   <Archive className="h-4 w-4" /> В архив
                 </Button>
               )}

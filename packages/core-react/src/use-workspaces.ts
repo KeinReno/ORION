@@ -5,6 +5,7 @@ import type {
   CreateWorkspaceInviteInput,
   InviteLookup,
   UpdateWorkspaceInput,
+  SetWorkspaceThemeInput,
   UpdateWorkspaceMemberRoleInput,
   Workspace,
   WorkspaceInvite,
@@ -64,6 +65,16 @@ export function useUpdateWorkspace(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateWorkspaceInput) => api.updateWorkspace(workspaceId as string, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] })
+  });
+}
+
+/** PUT workspaces/:id/theme — owner only; every member's `["workspaces"]` read then carries the palette. */
+export function useSetWorkspaceTheme(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetWorkspaceThemeInput) => api.setWorkspaceTheme(workspaceId as string, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspaces"] })
   });
 }

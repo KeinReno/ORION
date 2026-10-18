@@ -167,12 +167,12 @@ export function ProjectMaterials({
     ...(documentsOn ? [{ label: "Файл…", icon: FolderOpen, onSelect: () => fileInput.current?.click() }] : []),
     ...(eventsOn ? [{ label: "Событие…", icon: CalendarDays, onSelect: () => setEventOpen(true) }] : [])
   ];
-  const addMenu =
+  const addMenu = (variant: "primary" | "outline"): React.ReactElement | null =>
     addItems.length > 0 ? (
       <DropdownMenu
         align="end"
         trigger={({ toggle }) => (
-          <Button size="sm" onClick={toggle}>
+          <Button size="sm" variant={variant} onClick={toggle}>
             <Plus className="h-4 w-4" /> Добавить
           </Button>
         )}
@@ -195,7 +195,8 @@ export function ProjectMaterials({
             { value: "columns", label: "Колонки" }
           ]}
         />
-        {addMenu}
+        {/* Secondary next to the project's own «Задача»; an empty tab offers it in its empty state instead. */}
+        {!loading && items.length > 0 ? addMenu("outline") : null}
       </div>
 
       {loading ? (
@@ -205,10 +206,11 @@ export function ProjectMaterials({
           icon={FolderOpen}
           title="Материалов пока нет"
           description="Заметки, файлы и события, привязанные к проекту, соберутся здесь."
-          action={addMenu ?? undefined}
+          action={addMenu("primary") ?? undefined}
         />
       ) : layout === "feed" ? (
-        <div className="space-y-3">
+        // A reading width, like the task list: on a wide panel the type and date drifted a screen away from the title.
+        <div className="max-w-4xl space-y-3">
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Тип материала">
             <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>
               Все · {items.length}
@@ -274,7 +276,8 @@ function MaterialRow({ item, showKind }: { item: Material; showKind?: boolean })
           <Icon className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-0 flex-1 truncate text-label text-foreground">{item.title}</span>
-        {showKind ? <span className="shrink-0 text-micro text-subtle-foreground">{KIND_LABEL[item.kind]}</span> : null}
+        {/* The icon already says the type; on a phone the word gives its room to the title. */}
+        {showKind ? <span className="shrink-0 text-micro text-subtle-foreground max-sm:hidden">{KIND_LABEL[item.kind]}</span> : null}
         <span className="shrink-0 text-micro text-subtle-foreground">{relativeTime(item.at)}</span>
       </button>
       {item.view ? <ObjectOpenMenu view={item.view} title={item.title} /> : null}

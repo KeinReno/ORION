@@ -23,6 +23,7 @@ import { dayOffset, planDates, planGroups, timelineRange, weekTicks, type PlanGr
 import { daysUntil, planStrip, pluralDays, type PlanStepState } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
 import { ProjectGantt } from "./gantt";
+import { TODAY_HALF_W, coveredByToday } from "./today-badge";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
 import { Meter } from "../../lib/extensions/host-api";
 
@@ -111,9 +112,9 @@ export function ProjectPlan({ projectId }: { projectId: string }): React.ReactEl
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedControl<PlanView> aria-label="Вид плана" size="sm" value={view} onChange={choose} options={VIEW_OPTIONS} />
-        {/* The Gantt carries its own «Веха» button next to its scale controls. */}
-        {view !== "gantt" ? (
-          <Button size="sm" variant="subtle" onClick={() => setCreating(true)}>
+        {/* The Gantt carries its own «Веха» button next to its scale controls; an empty plan offers it in its empty state. */}
+        {view !== "gantt" && !(loading || (milestones.length === 0 && tasks.length === 0)) ? (
+          <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" /> Веха
           </Button>
         ) : null}
@@ -190,8 +191,10 @@ function TimelineView({
   const range = useMemo(() => timelineRange(planDates(groups), now), [groups]); // eslint-disable-line react-hooks/exhaustive-deps
   const ticks = weekTicks(range);
   const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
+  // Same rule as the Gantt: on a phone a fixed 208px label column left the chart a sliver.
+  const labelWidth = frameWidth > 0 ? Math.min(LABEL_W, Math.max(112, Math.round(frameWidth * 0.45))) : LABEL_W;
   // Fill the panel when the plan is short; scroll when it is long.
-  const pxPerDay = Math.max(PX_PER_DAY, frameWidth > LABEL_W ? Math.floor((frameWidth - LABEL_W) / range.days) : 0);
+  const pxPerDay = Math.max(PX_PER_DAY, frameWidth > labelWidth ? Math.floor((frameWidth - labelWidth) / range.days) : 0);
   const chartWidth = range.days * pxPerDay;
   const todayX = (dayOffset(now, range.start) + 0.5) * pxPerDay;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -207,7 +210,7 @@ function TimelineView({
   return (
     <div ref={frameRef} className="overflow-hidden rounded-xl border border-border">
       <div className="flex">
-        <div style={{ width: LABEL_W }} className="shrink-0 border-r border-border">
+        <div style={{ width: labelWidth }} className="shrink-0 border-r border-border">
           <div className="h-7 border-b border-border" />
           {groups.map((group) => (
             <GroupLabels key={group.milestone?.id ?? "none"} group={group} onOpen={onOpen} />
@@ -223,12 +226,12 @@ function TimelineView({
                   className="absolute top-0 h-full border-l border-white/5 pl-1 text-2xs leading-7 text-subtle-foreground"
                   style={{ left: tick.offset * pxPerDay }}
                 >
-                  {tick.label}
+                  {coveredByToday(tick.offset * pxPerDay, todayX) ? null : tick.label}
                 </span>
               ))}
               <span
                 className="absolute top-0 z-10 h-full -translate-x-1/2 rounded-b bg-accent px-1 text-2xs font-medium leading-7 text-accent-foreground"
-                style={{ left: todayX }}
+                style={{ left: Math.max(todayX, TODAY_HALF_W) }}
               >
                 сегодня
               </span>
@@ -265,8 +268,8 @@ function GroupLabels({ group, onOpen }: { group: PlanGroup; onOpen: (task: Task)
         <span className="min-w-0 flex-1 truncate text-label font-medium text-foreground" title={group.milestone?.title ?? "Без вехи"}>
           {group.milestone?.title ?? "Без вехи"}
         </span>
-        <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
-          {group.closed}/{group.open + group.closed}
+        <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground" title={group.open + group.closed === 0 ? "Задач у вехи нет" : undefined}>
+          {group.open + group.closed === 0 ? "—" : `${group.closed}/${group.open + group.closed}`}
         </span>
       </div>
       {group.dated.map((row) => (

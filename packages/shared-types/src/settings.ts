@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { themeDocumentSchema } from "./theme-document";
+import { themeDocumentSchema, themeLibraryEntrySchema, workspaceThemeModeSchema } from "./theme-document";
 
 // Existing values keep their original appearance; Precision is an explicit redesign opt-in.
 export const themePreferenceSchema = z.enum(["system", "dark", "light", "kaiden-precision"]);
@@ -100,8 +100,17 @@ export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
+  /**
+   * Legacy single saved palette (before the theme library). Still accepted and returned for older clients on the
+   * network; the current client reads `themeLibrary`/`activeThemeId`, and the migration copied it into the library.
+   */
   customTheme: themeDocumentSchema.nullable().optional(),
   customThemeEnabled: z.boolean().optional(),
+  /** The account's own themes. Changed only through PUT/DELETE settings/themes/:id, never through this PATCH. */
+  themeLibrary: z.array(themeLibraryEntrySchema),
+  /** Chosen palette: a built-in preset id or an id from `themeLibrary`; null = the default Precision palette. */
+  activeThemeId: z.string().max(64).nullable(),
+  workspaceThemeMode: workspaceThemeModeSchema,
   accent: z.enum(["violet", "blue", "green", "amber", "rose"]),
   density: densityPreferenceSchema,
   backgroundStyle: backgroundStylePreferenceSchema,
@@ -141,7 +150,7 @@ export const userPreferenceSchema = z.object({
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;
 
-export const updateUserPreferenceInputSchema = userPreferenceSchema.partial().superRefine((input, ctx) => {
+export const updateUserPreferenceInputSchema = userPreferenceSchema.omit({ themeLibrary: true }).partial().superRefine((input, ctx) => {
   // Enabling must carry the document atomically; a racing clear can never leave a dangling active theme.
   if (input.customThemeEnabled === true && !input.customTheme) {
     ctx.addIssue({ code: "custom", path: ["customTheme"], message: "Для применения передайте сохранённую палитру." });

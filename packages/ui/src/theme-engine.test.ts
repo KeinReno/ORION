@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PRECISION_TOKENS } from "./design-tokens";
-import { ARCTIC_THEME, MAX_THEME_JSON_LENGTH, PRECISION_THEME, exportThemeDocument, parseThemeDocument, resolveThemeDocument, themeDocumentVariables, themeTextContrast, withThemeColor } from "./theme-engine";
+import { ARCTIC_THEME, MAX_THEME_JSON_LENGTH, PRECISION_THEME, exportThemeDocument, parseThemeDocument, resolveThemeDocument, themeBlockingContrastIssue, themeContrastChecks, themeDocumentVariables, themeTextContrast, withThemeColor } from "./theme-engine";
 
 describe("data-only theme engine v1", () => {
   it.each([PRECISION_THEME, ARCTIC_THEME])("roundtrips $name without changing colors", theme => {
@@ -124,5 +124,21 @@ describe("palette drives the app's accent and status colours", () => {
       expect(contrastRatio(hex(vars["--orion-danger"]), theme.colors.surface), theme.id).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio("#ffffff", hex(vars["--orion-danger-fill"])), theme.id).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe("theme contrast checks", () => {
+  it.each(THEME_PRESETS.map(theme => [theme.name, theme] as const))("every blocking pair of %s passes", (_name, theme) => {
+    expect(themeBlockingContrastIssue(theme)).toBeNull();
+    expect(themeContrastChecks(theme).filter(check => check.blocking).every(check => check.ok)).toBe(true);
+  });
+  it("blocks unreadable body text and an unreadable accent button, but only warns on muted pairs", () => {
+    const grey = withThemeColor(PRECISION_THEME, "textPrimary", "#3a3b40");
+    expect(themeBlockingContrastIssue(grey)).toMatch(/^Основной текст на поверхности/);
+    const button = { ...PRECISION_THEME, colors: { ...PRECISION_THEME.colors, accentForeground: "#c0a060" } };
+    expect(themeBlockingContrastIssue(button)).toMatch(/^Текст на кнопке акцента/);
+    const muted = { ...PRECISION_THEME, colors: { ...PRECISION_THEME.colors, textSubtle: "#3a3b40" } };
+    expect(themeBlockingContrastIssue(muted)).toBeNull();
+    expect(themeContrastChecks(muted).find(check => check.id === "subtle-surface")).toMatchObject({ ok: false, blocking: false });
   });
 });
