@@ -17,9 +17,9 @@ const signed = (minor: number) => `${minor > 0 ? "+" : ""}${formatMoney(minor)}`
 const SERIES_STYLES = [
   { fill: "fill-accent", bg: "bg-accent", stroke: "stroke-accent" },
   { fill: "fill-cyan-400", bg: "bg-cyan-400", stroke: "stroke-cyan-400" },
-  { fill: "fill-emerald-400", bg: "bg-emerald-400", stroke: "stroke-emerald-400" },
-  { fill: "fill-amber-400", bg: "bg-amber-400", stroke: "stroke-amber-400" },
-  { fill: "fill-rose-400", bg: "bg-rose-400", stroke: "stroke-rose-400" },
+  { fill: "fill-success", bg: "bg-success", stroke: "stroke-success" },
+  { fill: "fill-warning", bg: "bg-warning", stroke: "stroke-warning" },
+  { fill: "fill-destructive", bg: "bg-destructive", stroke: "stroke-destructive" },
   { fill: "fill-violet-400", bg: "bg-violet-400", stroke: "stroke-violet-400" }
 ] as const;
 const MAX_SERIES = SERIES_STYLES.length;
@@ -270,7 +270,7 @@ function Reconciliation({ months }: { months: UtilityMonth[] }): React.ReactElem
       <h5 id="util-reconcile" className="mb-1 text-label font-semibold">Сверка с исходной таблицей</h5>
       {rows.length === 0 ? <p className="text-2xs text-muted-foreground">Расхождений между импортированными итогами и суммой строк компаний нет.</p> : (
         <>
-          <p className="mb-2 text-2xs text-amber-300">Найдено месяцев с расхождением: {rows.length}. Разница = итог в исходной таблице минус сумма строк (с квартплатой). Положительная — в таблице больше, чем в строках.</p>
+          <p className="mb-2 text-2xs text-warning">Найдено месяцев с расхождением: {rows.length}. Разница = итог в исходной таблице минус сумма строк (с квартплатой). Положительная — в таблице больше, чем в строках.</p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-max text-2xs">
               <thead className="text-muted-foreground"><tr><th className={th}>Месяц</th><th className={th}>Сумма строк</th><th className={th}>«Итоговая» в таблице</th><th className={th}>Разница итога</th><th className={th}>Разница «Итого»</th></tr></thead>
@@ -279,8 +279,8 @@ function Reconciliation({ months }: { months: UtilityMonth[] }): React.ReactElem
                   <td className={td}>{shortMonth(r.period)}</td>
                   <td className={`${td} text-right`}>{formatMoney(r.grandTotalMinor)}</td>
                   <td className={`${td} text-right`}>{r.importedGrandTotalMinor === null ? "—" : formatMoney(r.importedGrandTotalMinor)}</td>
-                  <td className={`${td} text-right ${r.grandDifferenceMinor ? "font-semibold text-amber-300" : ""}`}>{r.grandDifferenceMinor === null ? "—" : r.grandDifferenceMinor === 0 ? "совпадает" : signed(r.grandDifferenceMinor)}</td>
-                  <td className={`${td} text-right ${r.utilityDifferenceMinor ? "font-semibold text-amber-300" : ""}`}>{r.utilityDifferenceMinor === null ? "—" : r.utilityDifferenceMinor === 0 ? "совпадает" : signed(r.utilityDifferenceMinor)}</td>
+                  <td className={`${td} text-right ${r.grandDifferenceMinor ? "font-semibold text-warning" : ""}`}>{r.grandDifferenceMinor === null ? "—" : r.grandDifferenceMinor === 0 ? "совпадает" : signed(r.grandDifferenceMinor)}</td>
+                  <td className={`${td} text-right ${r.utilityDifferenceMinor ? "font-semibold text-warning" : ""}`}>{r.utilityDifferenceMinor === null ? "—" : r.utilityDifferenceMinor === 0 ? "совпадает" : signed(r.utilityDifferenceMinor)}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -314,7 +314,7 @@ export function UtilitiesAnalytics({ months }: { months: UtilityMonth[] }): Reac
       </div>
       <div className="grid gap-2 [@container(min-width:650px)]:grid-cols-3">
         <div className="rounded-lg border border-border/70 p-3"><span className="text-2xs text-muted-foreground">В среднем за месяц</span><strong className="mt-1 block text-lg tabular-nums">{formatMoney(average)}</strong></div>
-        <div className="rounded-lg border border-border/70 p-3"><span className="text-2xs text-muted-foreground">Изменение с {shortMonth(first.period)}</span><strong className={`mt-1 block text-lg tabular-nums ${change > 0 ? "text-amber-400" : "text-emerald-400"}`}>{signed(change)}</strong></div>
+        <div className="rounded-lg border border-border/70 p-3"><span className="text-2xs text-muted-foreground">Изменение с {shortMonth(first.period)}</span><strong className={`mt-1 block text-lg tabular-nums ${change > 0 ? "text-warning" : "text-success"}`}>{signed(change)}</strong></div>
         <div className="rounded-lg border border-border/70 p-3"><span className="text-2xs text-muted-foreground">Максимум · {shortMonth(highest.period)}</span><strong className="mt-1 block text-lg tabular-nums">{formatMoney(highest.month!.grandTotalMinor)}</strong></div>
       </div>
       <CompanyChart axis={axis} />
