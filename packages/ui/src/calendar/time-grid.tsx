@@ -25,7 +25,11 @@ import {
 } from "./shared";
 
 const HOUR_PX = 36;
-const GUTTER_PX = 40;
+const GUTTER_PX = 44;
+/** Narrowest readable week column. Below it the grid scrolls sideways inside itself, never the page. */
+const MIN_WEEK_COL_PX = 84;
+/** One line of `text-micro`. */
+const LINE_PX = 14;
 const SNAP_MIN = 15;
 const MIN_EVENT_MIN = 15;
 const DAY_MIN = 24 * 60;
@@ -44,10 +48,22 @@ interface TimeGridProps {
 
 interface Positioned {
   item: CalendarItem;
+  /** This day's part of the item: a timed event crossing midnight shows on every day it covers. */
   startMin: number;
   endMin: number;
+  /** Began on an earlier day — this is its continuation, which neither moves nor resizes. */
+  continued: boolean;
+  /** Ends on a later day — resizing here would cut it to this day. */
+  continues: boolean;
   lane: number;
   lanes: number;
+}
+
+interface AllDayBar {
+  item: CalendarItem;
+  from: number;
+  to: number;
+  lane: number;
 }
 
 type DragState =
@@ -82,27 +98,85 @@ function minutesFromMidnight(iso: string): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-/** Greedy lane packing for the timed items of one day. */
-function layoutDay(dayItems: CalendarItem[]): Positioned[] {
-  const sorted = [...dayItems].sort((a, b) => a.start.localeCompare(b.start));
+/** The item's real length — across midnight too, unlike the wall-clock minutes of its end. */
+function durationMinutes(item: CalendarItem): number {
+  if (!item.end) return MIN_EVENT_MIN;
+  return Math.max(MIN_EVENT_MIN, Math.round((new Date(item.end).getTime() - new Date(item.start).getTime()) / 60_000));
+}
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Greedy lane packing for the timed items of one day. Each item is clipped to the day: an event from 22:00 to
+ * 02:00 is 22:00–24:00 here and 00:00–02:00 on the next day, instead of a 15-minute stub on the first day only.
+ */
+export function layoutDay(day: Date, items: CalendarItem[]): Positioned[] {
+  const dayStart = startOfDay(day);
+  const dayEnd = addDays(dayStart, 1);
+  const parts: Omit<Positioned, "lane" | "lanes">[] = [];
+  for (const item of items) {
+    if (inAllDayBand(item)) continue;
+    const start = new Date(item.start);
+    const end = item.end ? new Date(item.end) : null;
+    if (start >= dayEnd) continue;
+    if (end ? end <= dayStart : start < dayStart) continue;
+    const continued = start < dayStart;
+    const continues = end !== null && end > dayEnd;
+    const startMin = continued ? 0 : minutesFromMidnight(item.start);
+    const endMin = !end ? startMin + MIN_EVENT_MIN : end >= dayEnd ? DAY_MIN : Math.max(startMin + MIN_EVENT_MIN, minutesFromMidnight(item.end!));
+    parts.push({ item, startMin, endMin: Math.max(startMin + MIN_EVENT_MIN, endMin), continued, continues });
+  }
+  const sorted = parts.sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
   const active: Positioned[] = [];
   const out: Positioned[] = [];
-  for (const item of sorted) {
-    const startMin = minutesFromMidnight(item.start);
-    const endMin = item.end
-      ? Math.max(startMin + MIN_EVENT_MIN, minutesFromMidnight(item.end) || DAY_MIN)
-      : startMin + MIN_EVENT_MIN;
+  for (const part of sorted) {
+    const { startMin } = part;
     for (let i = active.length - 1; i >= 0; i--) if (active[i].endMin <= startMin) active.splice(i, 1);
     const usedLanes = new Set(active.map((p) => p.lane));
     let lane = 0;
     while (usedLanes.has(lane)) lane++;
-    const positioned: Positioned = { item, startMin, endMin, lane, lanes: lane + 1 };
+    const positioned: Positioned = { ...part, lane, lanes: lane + 1 };
     active.push(positioned);
     out.push(positioned);
     const lanes = Math.max(...active.map((p) => p.lane)) + 1;
     for (const p of active) p.lanes = Math.max(p.lanes, lanes);
   }
   return out;
+}
+
+/**
+ * All-day row: one bar per item across the days it covers (a three-day leave is one bar, not three pills),
+ * stacked in lanes like the month grid.
+ */
+export function layoutAllDay(days: Date[], items: CalendarItem[]): { bars: AllDayBar[]; lanes: number } {
+  const firstMs = startOfDay(days[0]).getTime();
+  const bars: AllDayBar[] = [];
+  for (const item of items) {
+    if (!inAllDayBand(item)) continue;
+    // Real all-day items are date-only (UTC-midnight boundaries) — anchor to local midnight before comparing,
+    // same as MonthGrid. The other occupants of this band (midnight/end-of-day task and note due dates) are
+    // real instants and compare as-is.
+    const start = item.allDay ? allDayAnchor(item.start) : new Date(item.start);
+    const rawEnd = item.end ? (item.allDay ? allDayAnchor(item.end) : new Date(item.end)) : start;
+    const startMs = startOfDay(start).getTime();
+    // The end is exclusive: a leave ending on Thursday 00:00 covers Monday to Wednesday.
+    const lastMs = rawEnd > start ? startOfDay(new Date(rawEnd.getTime() - 1)).getTime() : startMs;
+    const from = Math.round((startMs - firstMs) / 86_400_000);
+    const to = Math.round((lastMs - firstMs) / 86_400_000);
+    if (to < 0 || from > days.length - 1) continue;
+    bars.push({ item, from: Math.max(0, from), to: Math.min(days.length - 1, to), lane: 0 });
+  }
+  bars.sort((a, b) => a.from - b.from || b.to - a.to);
+  const laneEnds: number[] = [];
+  for (const bar of bars) {
+    let lane = laneEnds.findIndex((end) => end < bar.from);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = bar.to;
+    bar.lane = lane;
+  }
+  return { bars, lanes: Math.max(1, laneEnds.length) };
 }
 
 export function TimeGrid({
@@ -137,28 +211,9 @@ export function TimeGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const timedByDay = useMemo(() => {
-    return days.map((day) =>
-      layoutDay(items.filter((it) => !inAllDayBand(it) && sameDay(new Date(it.start), day)))
-    );
-  }, [days, items]);
+  const timedByDay = useMemo(() => days.map((day) => layoutDay(day, items)), [days, items]);
 
-  const allDayByDay = useMemo(
-    () =>
-      days.map((day) =>
-        items.filter((it) => {
-          if (!inAllDayBand(it)) return false;
-          // Real all-day items are date-only (UTC-midnight boundaries) —
-          // anchor to local midnight before comparing, same as MonthGrid.
-          // The other occupants of this band (midnight/end-of-day task and
-          // note due dates) are real instants and compare as-is.
-          const start = it.allDay ? allDayAnchor(it.start) : new Date(it.start);
-          const end = it.end ? (it.allDay ? allDayAnchor(it.end) : new Date(it.end)) : start;
-          return start < addDays(startOfDay(day), 1) && end >= startOfDay(day);
-        })
-      ),
-    [days, items]
-  );
+  const allDay = useMemo(() => layoutAllDay(days, items), [days, items]);
 
   function pointerMinutes(clientY: number): number {
     const body = bodyRef.current;
@@ -246,10 +301,28 @@ export function TimeGrid({
     }
   }
 
+  const columns = `${GUTTER_PX}px repeat(${days.length}, minmax(0, 1fr))`;
+  const minWidth = days.length > 1 ? GUTTER_PX + days.length * MIN_WEEK_COL_PX : undefined;
+
+  function dropAllDay(e: React.DragEvent, day: Date): void {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (id)
+      onItemReschedule?.(id, {
+        start: allDayDateISO(day),
+        end: allDayDateISO(addDays(day, 1)),
+        allDay: true,
+        originX: e.clientX,
+        originY: e.clientY
+      });
+  }
+
   return (
-    <div className="overflow-hidden rounded-xl border border-white/5">
+    // The week scrolls sideways inside this frame on a narrow screen: seven readable columns beat seven slivers.
+    <div className="orion-scroll overflow-x-auto overflow-y-hidden rounded-xl border border-border">
+      <div style={{ minWidth }}>
       {/* header */}
-      <div className="grid border-b border-white/5 bg-white/[0.02]" style={{ gridTemplateColumns: `${GUTTER_PX}px repeat(${days.length}, 1fr)` }}>
+      <div className="grid border-b border-border bg-card/40" style={{ gridTemplateColumns: columns }}>
         <div />
         {days.map((day) => (
           <div key={dateKey(day)} className="px-2 py-1 text-center">
@@ -266,42 +339,42 @@ export function TimeGrid({
         ))}
       </div>
 
-      {/* all-day row */}
+      {/* all-day row: day cells underneath take clicks and drops, bars span the days they cover */}
       <div
-        className="grid border-b border-white/5"
-        style={{ gridTemplateColumns: `${GUTTER_PX}px repeat(${days.length}, 1fr)` }}
+        className="grid border-b border-border"
+        style={{ gridTemplateColumns: columns, gridTemplateRows: `repeat(${allDay.lanes}, minmax(22px, auto))` }}
       >
-        <div className="px-1 py-1 text-right text-2xs text-subtle-foreground">весь&nbsp;день</div>
+        <div className="px-1 py-1 text-right text-2xs leading-tight text-subtle-foreground" style={{ gridColumn: 1, gridRow: `1 / span ${allDay.lanes}` }}>
+          весь
+          <br />
+          день
+        </div>
         {days.map((day, dayIndex) => (
           <div
             key={dateKey(day)}
             onDragOver={(e) => onItemReschedule && e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const id = e.dataTransfer.getData("text/plain");
-              if (id)
-                onItemReschedule?.(id, {
-                  start: allDayDateISO(day),
-                  end: allDayDateISO(addDays(day, 1)),
-                  allDay: true,
-                  originX: e.clientX,
-                  originY: e.clientY
-                });
-            }}
+            onDrop={(e) => dropAllDay(e, day)}
             onClick={() => onSlotCreate?.({ start: allDayDateISO(day), end: allDayDateISO(addDays(day, 1)), allDay: true })}
-            className="min-h-[22px] space-y-0.5 border-l border-white/5 p-0.5"
+            className={clsx("border-l border-border", sameDay(day, today) && "bg-accent/[0.04]")}
+            style={{ gridColumn: dayIndex + 2, gridRow: `1 / span ${allDay.lanes}` }}
+          />
+        ))}
+        {allDay.bars.map((bar) => (
+          <div
+            key={bar.item.id}
+            className="min-w-0 p-0.5"
+            style={{ gridColumn: `${bar.from + 2} / ${bar.to + 3}`, gridRow: bar.lane + 1 }}
+            onDragOver={(e) => onItemReschedule && e.preventDefault()}
+            onDrop={(e) => dropAllDay(e, days[bar.from])}
           >
-            {allDayByDay[dayIndex].map((item) => (
-              <Pill
-                key={item.id}
-                item={item}
-                onClick={onItemClick}
-                onContextMenu={onItemContextMenu}
-                focused={item.id === focusedId}
-                draggable={Boolean(onItemReschedule) && calendarItemMode(item) !== "none"}
-                onDragStart={(e) => e.dataTransfer.setData("text/plain", item.id)}
-              />
-            ))}
+            <Pill
+              item={bar.item}
+              onClick={onItemClick}
+              onContextMenu={onItemContextMenu}
+              focused={bar.item.id === focusedId}
+              draggable={Boolean(onItemReschedule) && calendarItemMode(bar.item) !== "none"}
+              onDragStart={(e) => e.dataTransfer.setData("text/plain", bar.item.id)}
+            />
           </div>
         ))}
       </div>
@@ -310,7 +383,7 @@ export function TimeGrid({
       <div ref={bodyRef} className="relative max-h-[60vh] overflow-y-auto">
         <div
           className="grid"
-          style={{ gridTemplateColumns: `${GUTTER_PX}px repeat(${days.length}, 1fr)`, height: HOUR_PX * 24 }}
+          style={{ gridTemplateColumns: columns, height: HOUR_PX * 24 }}
         >
           {/* hour gutter */}
           <div className="relative">
@@ -347,11 +420,8 @@ export function TimeGrid({
                   id: item.id,
                   item,
                   grabMin,
-                  durationMin: Math.max(
-                    MIN_EVENT_MIN,
-                    (item.end ? minutesFromMidnight(item.end) || DAY_MIN : minutesFromMidnight(item.start) + MIN_EVENT_MIN) -
-                      minutesFromMidnight(item.start)
-                  ),
+                  // The real length: a move keeps an overnight event overnight.
+                  durationMin: durationMinutes(item),
                   dayIndex,
                   originX,
                   originY
@@ -373,6 +443,7 @@ export function TimeGrid({
             />
           ))}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -425,7 +496,7 @@ function DayColumn({
   return (
     <div
       ref={colRef}
-      className={clsx("relative border-l border-white/5", isToday && "bg-accent/[0.04]")}
+      className={clsx("relative border-l border-border", isToday && "bg-accent/[0.04]")}
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return; // empty space only
         e.preventDefault();
@@ -433,24 +504,33 @@ function DayColumn({
       }}
     >
       {Array.from({ length: 23 }, (_, h) => (
-        <div key={h} className="absolute left-0 right-0 border-t border-white/5" style={{ top: (h + 1) * HOUR_PX }} />
+        <div key={h} className="absolute left-0 right-0 border-t border-border/60" style={{ top: (h + 1) * HOUR_PX }} />
       ))}
 
       {positioned.map((p) => {
         const mode = calendarItemMode(p.item);
         const locked = mode === "none";
+        // A continuation (the 00:00–02:00 part of an overnight event) opens on click but is moved from its first day.
+        const movable = draggableItems && !locked && !p.continued;
+        const resizable = draggableItems && mode === "move-resize" && !p.continued && !p.continues;
         const point = isPointItem(p.item);
         const beingDragged = drag && "id" in drag && drag.id === p.item.id;
         let top = (p.startMin / 60) * HOUR_PX;
         let height = ((p.endMin - p.startMin) / 60) * HOUR_PX;
         if (beingDragged && drag.kind === "resize") height = ((drag.endMin - p.startMin) / 60) * HOUR_PX;
-        if (beingDragged && drag.kind === "move") top = ((drag.grabMin - (p.endMin - p.startMin) / 2) / 60) * HOUR_PX;
+        if (beingDragged && drag.kind === "move") top = ((drag.grabMin - drag.durationMin / 2) / 60) * HOUR_PX;
         const width = 100 / p.lanes;
+        const shown = Math.max(height, point ? 18 : 16);
+        const time = point ? timeLabel(p.item.start) : `${timeLabel(p.item.start)}–${timeLabel(p.item.end ?? p.item.start)}`;
+        // Room for the title above the time: a long title wraps instead of ending at the block's edge.
+        const twoRows = !point && shown >= 2 * LINE_PX + 4;
+        const titleLines = twoRows ? Math.max(1, Math.floor((shown - 4) / LINE_PX) - 1) : 1;
         return (
           <div
             key={p.item.id}
             role="button"
             tabIndex={0}
+            title={`${p.item.label} · ${time}`}
             onClick={() => onItemClick?.(p.item.id)}
             onContextMenu={(e) => {
               if (!onItemContextMenu) return;
@@ -462,39 +542,46 @@ function DayColumn({
               if (e.key === "Enter" || e.key === " ") onItemClick?.(p.item.id);
             }}
             onPointerDown={(e) => {
-              if (!draggableItems || locked || e.button !== 0) return; // a right click opens the context menu, never a drag
+              if (!movable || e.button !== 0) return; // a right click opens the context menu, never a drag
               e.stopPropagation();
               e.preventDefault();
-              startMove(p.item, (p.startMin + p.endMin) / 2, e.clientX, e.clientY);
+              startMove(p.item, p.startMin + durationMinutes(p.item) / 2, e.clientX, e.clientY);
             }}
             style={{
               top,
-              height: Math.max(height, point ? 18 : 16),
+              height: shown,
               left: `${p.lane * width}%`,
               width: `calc(${width}% - 3px)`,
               ...toneStyle(p.item.tone ?? "__event__")
             }}
             className={clsx(
-              "absolute z-[1] overflow-hidden rounded border px-1 py-0.5 text-micro",
-              draggableItems && mode !== "none" && "cursor-grab active:cursor-grabbing",
+              "absolute z-[1] overflow-hidden rounded border px-1 py-0.5 text-micro outline-none focus-visible:z-[4] focus-visible:ring-2 focus-visible:ring-accent/60",
+              movable && "cursor-grab active:cursor-grabbing",
               locked && "cursor-not-allowed",
               p.item.done && "opacity-50 line-through",
               beingDragged && mode !== "none" && "opacity-80 ring-1 ring-accent",
               p.item.id === focusedId && "ring-2 ring-accent",
+              p.continued && "rounded-t-none border-t-0",
+              p.continues && "rounded-b-none border-b-0",
               point && "flex items-center rounded-full"
             )}
           >
-            <div className="flex min-w-0 items-center gap-1 truncate font-medium">
+            <div className={clsx("flex min-w-0 gap-1 font-medium", twoRows ? "items-start" : "items-center")}>
               {point ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" /> : null}
-              {p.item.recurring ? <span className="opacity-60">↻</span> : null}
-              <span className="truncate">{p.item.label}</span>
+              {p.item.recurring ? <span aria-hidden className="shrink-0 opacity-60">↻</span> : null}
+              <span
+                data-event-title
+                lang="ru"
+                // Whole words (hyphenated where the browser can): a narrow lane must not split «Планёрка» into «План / ёрка».
+                className={clsx("min-w-0", titleLines > 1 ? "hyphens-auto break-normal" : "truncate")}
+                style={titleLines > 1 ? { display: "-webkit-box", WebkitLineClamp: titleLines, WebkitBoxOrient: "vertical", overflow: "hidden" } : undefined}
+              >
+                {p.item.label}
+              </span>
+              {!twoRows && !point ? <span className="ml-auto shrink-0 tabular-nums opacity-70">{timeLabel(p.item.start)}</span> : null}
             </div>
-            {point ? null : (
-              <div className="tabular-nums opacity-70">
-                {new Date(p.item.start).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-              </div>
-            )}
-            {draggableItems && mode === "move-resize" ? (
+            {twoRows ? <div className="truncate tabular-nums opacity-70">{time}</div> : null}
+            {resizable ? (
               <div
                 onPointerDown={(e) => {
                   e.stopPropagation();
