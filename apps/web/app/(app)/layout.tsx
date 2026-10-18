@@ -79,7 +79,7 @@ import { resourceContextActions, setSectionResolver } from "../../lib/resource-c
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
 import { canStep, EMPTY_NAV_HISTORY, readNavHistory, recordVisit, saveNavHistory, stepHistory, type NavHistory } from "../../lib/nav-history";
-import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
+import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, panelSupportsSurface, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
@@ -171,7 +171,7 @@ function NextLink({ href, className, children }: { href: string; className?: str
  */
 function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
   const { toast } = useToast();
-  if (!isTauri() || !activePanel) return null;
+  if (!isTauri() || !activePanel || !panelSupportsSurface(activePanel.id, "window")) return null;
 
   async function detach(): Promise<void> {
     const panel = activePanel;
@@ -210,7 +210,7 @@ function FloatHeaderAction({ containerApi, api, activePanel }: IDockviewHeaderAc
     const subscription = api.onDidLocationChange(() => setFloating(api.location.type === "floating"));
     return () => subscription.dispose();
   }, [api]);
-  if (!activePanel) return null;
+  if (!activePanel || (!floating && !panelSupportsSurface(activePanel.id, "floating"))) return null;
   function toggle(): void {
     try {
       if (floating) {
@@ -680,7 +680,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           navigationToast.current({ title: "Представление недоступно", description: "Проверьте текущее пространство и включённые модули." });
           return;
         }
-        if (mode === "window") {
+        if (mode === "window" && panelSupportsSurface(panelId, "window")) {
           void detachPanelToWindow(panelId, title ?? definition.label).catch(() => navigationToast.current({ title: "Не удалось открыть окно" }));
         } else {
           const referenceGroup = apiRef.current?.activeGroup;
@@ -854,7 +854,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const openContextProject = (panelId: string, title: string, mode: ProjectOpenMode): void => {
     const definition = getPanelDefinition(panelId);
     if (!definition || !isPanelAvailable(definition, disabledModules, pluginOverrides)) return;
-    if (mode === "window") {
+    if (mode === "window" && panelSupportsSurface(panelId, "window")) {
       void detachPanelToWindow(panelId, title).catch(() => toast({ title: "Не удалось открыть окно", tone: "danger" }));
     } else if (mode === "beside" && !compact) {
       const referenceGroup = apiRef.current?.activeGroup;
@@ -1019,7 +1019,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           menuItems: [
             { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
             { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
-            { label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) },
+            ...(panelSupportsSurface(panel.id, "window")
+              ? [{ label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) }]
+              : []),
             "separator",
             // Folders: the same list a user sees, reachable without dragging anything.
             ...sidebarFolders

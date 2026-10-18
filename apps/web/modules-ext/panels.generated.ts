@@ -8,7 +8,7 @@ import type { PanelComponentProps, PanelDefinition } from "../lib/panel-registry
 const LazyGeneratedPetCarePanel = dynamic(() => import("./pet-care/PetCarePanel").then((module) => module.PetCarePanel), { ssr: false });
 const GeneratedPetCarePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyGeneratedPetCarePanel as ComponentType<PanelComponentProps>, props);
 
-/** Панели подключаемых модулей; panel-registry.ts добавляет их к встроенным. */
-export const generatedPanelDefinitions: PanelDefinition[] = [
+/** Панели подключаемых модулей; panel-registry.ts добавляет их к встроенным, поверхности (G17) выводит из манифеста сам. */
+export const generatedPanelDefinitions: Omit<PanelDefinition, "surfaces">[] = [
   { id: "pet-care", label: "Питомцы", icon: PawPrint, component: GeneratedPetCarePanel, moduleId: "pet-care", group: "Семья и дом" }
 ];

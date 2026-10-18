@@ -85,6 +85,14 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
     );
   }
 
+  if (!definition.surfaces.includes("window")) {
+    return (
+      <div className="flex h-screen items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        Панель «{definition.label}» нельзя открыть в отдельном окне.
+      </div>
+    );
+  }
+
   if ((definition.moduleId && !isEnabled(definition.moduleId)) || (definition.pluginId && !isPluginEnabled(workspace?.pluginOverrides ?? [], definition.pluginId))) {
     return (
       <div className="flex h-screen items-center justify-center px-6 text-center text-sm text-muted-foreground">

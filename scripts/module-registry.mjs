@@ -331,8 +331,8 @@ export function renderOutputs(modules, root = defaultRoot) {
             .join("") +
           "\n"
         : `import type { PanelDefinition } from "../lib/panel-registry";\n\n`) +
-      `/** Панели подключаемых модулей; panel-registry.ts добавляет их к встроенным. */\n` +
-      `export const generatedPanelDefinitions: PanelDefinition[] = [\n` +
+      `/** Панели подключаемых модулей; panel-registry.ts добавляет их к встроенным, поверхности (G17) выводит из манифеста сам. */\n` +
+      `export const generatedPanelDefinitions: Omit<PanelDefinition, "surfaces">[] = [\n` +
       panels
         .map(
           (p) =>
