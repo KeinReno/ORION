@@ -339,6 +339,8 @@ import {
   type UpdateProjectInput,
   type ReorderProjectsInput,
   type UpdateUserPreferenceInput,
+  type SaveThemeInput,
+  type SetWorkspaceThemeInput,
   type UpdateProfileInput,
   type UserPreference,
   type WorkspaceOrganization,
@@ -550,6 +552,10 @@ export class ApiClient {
    */
   resolveUserByEmail(email: string): Promise<ResolveUserByEmailResult> {
     return this.request("GET", `/users/resolve-by-email${buildQuery({ email })}`, undefined, resolveUserByEmailResultSchema);
+  }
+
+  setWorkspaceTheme(workspaceId: string, input: SetWorkspaceThemeInput): Promise<Workspace> {
+    return this.request("PUT", `/workspaces/${workspaceId}/theme`, input, workspaceSchema);
   }
 
   updateWorkspace(workspaceId: string, input: UpdateWorkspaceInput): Promise<Workspace> {
@@ -1996,6 +2002,15 @@ export class ApiClient {
 
   updatePreferences(input: UpdateUserPreferenceInput): Promise<UserPreference> {
     return this.request("PATCH", "/settings/preferences", input, userPreferenceSchema);
+  }
+
+  /** One own theme in the library; a 409 carries `themeRevisionConflictSchema` in `ApiError.details`. */
+  saveTheme(input: SaveThemeInput): Promise<UserPreference> {
+    return this.request("PUT", `/settings/themes/${encodeURIComponent(input.document.id)}`, input, userPreferenceSchema);
+  }
+
+  deleteTheme(themeId: string): Promise<UserPreference> {
+    return this.request("DELETE", `/settings/themes/${encodeURIComponent(themeId)}`, undefined, userPreferenceSchema);
   }
 
   // --- Workspace organization: spheres + favorites (U05, user-scoped) ----

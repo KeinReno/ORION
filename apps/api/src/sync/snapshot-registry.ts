@@ -59,7 +59,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
     policy: "derived",
     reason:
       "Сама модель пространства не копируется как строка (id/name/icsToken — " +
-      "identity узла); disabledModules/pluginOverrides/restrictedModules " +
+      "identity узла); disabledModules/pluginOverrides/restrictedModules/theme " +
       "восстанавливаются отдельно как WorkspaceSnapshot.workspaceConfig."
   },
 

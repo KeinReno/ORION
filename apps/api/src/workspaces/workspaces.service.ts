@@ -1,7 +1,7 @@
 import { ForbiddenException, Inject, Injectable, Logger } from "@nestjs/common";
-import type { Prisma, WorkspaceMember, WorkspaceRole } from "@prisma/client";
+import { Prisma, type WorkspaceMember, type WorkspaceRole } from "@prisma/client";
 import { randomBytes } from "node:crypto";
-import type { Workspace, WorkspaceMemberSearchResult, WorkspaceTemplate } from "@orion/shared-types";
+import { themeDocumentSchema, type ThemeDocument, type Workspace, type WorkspaceMemberSearchResult, type WorkspaceTemplate } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { STORAGE_ADAPTER, type StorageAdapter } from "../storage/storage-adapter";
 import { seedSoloDeveloperWorkspace } from "./workspace-seed";
@@ -58,6 +58,21 @@ export class WorkspacesService {
     return this.prisma.withUser(userId, async (tx) => {
       const membership = await this.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
       const workspace = await tx.workspace.update({ where: { id: workspaceId }, data: { name } });
+      return toWorkspaceDto(workspace, membership.role);
+    });
+  }
+
+  /**
+   * The palette every member sees in this space. Owner-only, like rename and the module toggles: it changes how
+   * the space looks for everyone. Stored as a copy of the document, so it never depends on the owner's library.
+   */
+  async setTheme(userId: string, workspaceId: string, theme: ThemeDocument | null): Promise<Workspace> {
+    return this.prisma.withUser(userId, async (tx) => {
+      const membership = await this.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
+      const workspace = await tx.workspace.update({
+        where: { id: workspaceId },
+        data: { theme: theme === null ? Prisma.DbNull : (theme as unknown as Prisma.InputJsonValue) }
+      });
       return toWorkspaceDto(workspace, membership.role);
     });
   }
@@ -193,9 +208,12 @@ function toWorkspaceDto(
     pluginOverrides: string[];
     restrictedModules: string[];
     isPersonal: boolean;
+    theme?: Prisma.JsonValue;
   },
   role: Workspace["role"]
 ): Workspace {
+  // A damaged or older-format document reads back as "no workspace theme" — members keep their own palette.
+  const theme = themeDocumentSchema.safeParse(workspace.theme);
   return {
     id: workspace.id,
     name: workspace.name,
@@ -203,6 +221,7 @@ function toWorkspaceDto(
     disabledModules: workspace.disabledModules,
     pluginOverrides: workspace.pluginOverrides,
     restrictedModules: workspace.restrictedModules,
-    isPersonal: workspace.isPersonal
+    isPersonal: workspace.isPersonal,
+    theme: theme.success ? theme.data : null
   };
 }
