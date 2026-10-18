@@ -15,3 +15,25 @@ Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `
 **Backup.** `Contact`, `ContactInteraction`, `ContactRelation` are `included` in the snapshot registry (parents before children). RLS (ENABLE + FORCE + workspace policy) on all three tables.
 
 Tests: `packages/shared-types/src/contact.test.ts`, `apps/web/lib/contacts.test.ts`, `apps/web/lib/calendar-sources.test.ts`, `apps/api/test/contacts.integration.test.ts`, `e2e/contacts.spec.ts`. Not done: Google/phone sync (only file import), CRM funnel/deals (a separate optional extension per PRODUCT_DIRECTION), a per-user toggle for contact reminders.
+
+<!-- generated:manifest:start -->
+## Манифест (генерируется)
+
+Блок собирается `pnpm module-docs` из `packages/shared-types/src/{modules,component-manifest}.ts` и контроллеров; руками не править, проверка — `pnpm module-docs:check`.
+
+| Поле | Значение |
+|---|---|
+| id / версия | `contacts` / 1.0.0 (платформа ^1.0.0) |
+| Вид | дополнительный, по умолчанию включён |
+| Жёсткие зависимости | — |
+| Мягкие зависимости | `home` |
+| Права (permissions) | — (в манифесте пока не объявлены) |
+| События | публикует: —; слушает: — |
+| Панели веба | `contacts` |
+| Слоты | — |
+| Маршруты API | `workspaces/:workspaceId/contacts` |
+| Плагины, расширяющие модуль | — |
+| Миграции в манифесте | — |
+| Код на сервере | `apps/api/src/contacts/` |
+| При выключении | Панель и API скрываются. Контакты сохраняются, а контакты домов по-прежнему видны и редактируются на странице дома. |
+<!-- generated:manifest:end -->

@@ -1,0 +1,29 @@
+# Документы (`documents`)
+
+Файлы и папки пространства: дерево по `parentId`, версии, превью, загрузка и потоковая отдача с `Range`.
+
+Байты лежат за `StorageAdapter` (`apps/api/src/storage/`), база авторитетна по структуре. Корзина файлов чистится ночным кроном `document-trash-purge.service.ts`.
+
+Работает без заметок и задач.
+
+<!-- generated:manifest:start -->
+## Манифест (генерируется)
+
+Блок собирается `pnpm module-docs` из `packages/shared-types/src/{modules,component-manifest}.ts` и контроллеров; руками не править, проверка — `pnpm module-docs:check`.
+
+| Поле | Значение |
+|---|---|
+| id / версия | `documents` / 1.0.0 (платформа ^1.0.0) |
+| Вид | базовый, по умолчанию включён |
+| Жёсткие зависимости | — |
+| Мягкие зависимости | `notes`, `projects` |
+| Права (permissions) | — (в манифесте пока не объявлены) |
+| События | публикует: —; слушает: — |
+| Панели веба | `documents` |
+| Слоты | — |
+| Маршруты API | `workspaces/:workspaceId/documents` |
+| Плагины, расширяющие модуль | `documents-history`, `documents-resources`, `documents-office` |
+| Миграции в манифесте | — |
+| Код на сервере | `apps/api/src/documents/` |
+| При выключении | Панель и загрузка файлов останавливаются. Файлы на диске и в базе сохраняются. |
+<!-- generated:manifest:end -->

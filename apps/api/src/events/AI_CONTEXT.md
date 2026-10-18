@@ -1,0 +1,18 @@
+# Контекст агента: модуль calendar
+
+Сначала прочитайте `MODULE.md` рядом. Календарь: события пространства, напоминания о них, входящие внешние ICS-фиды и исходящий ICS-фид по токену.
+
+Каждый метод сервиса начинается с проверки членства и идёт через `PrismaService.withUser`; ссылки на другие записи проверяются на принадлежность тому же пространству; ответы собираются `toDto`, а входы валидируются zod-схемами из `shared-types`.
+
+<!-- generated:manifest:start -->
+## Для агента (генерируется)
+
+Блок собирается `pnpm module-docs`; руками не править.
+
+- Точки входа: API `workspaces/:workspaceId/calendar`, `workspaces/:workspaceId/calendar-connections`, `workspaces/:workspaceId/events` (за `@RequireModule("calendar")`); панель веба `calendar`; код `apps/api/src/events/`.
+- Права: в манифесте не объявлены — действуют роли пространства (assertMember) и RLS.
+- Модуль владеет: События, подключения календарей, исходящий ICS-фид.
+- Соседи: жёсткие: —; мягкие: `tasks`, `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
+- Расширения: плагины: `calendar-external`, `calendar-widget`, `calendar-recurrence`, `calendar-reminders`.
+- Выключение модуля не удаляет данные; новые таблицы — только с ENABLE + FORCE RLS и записью в реестре снапшота.
+<!-- generated:manifest:end -->

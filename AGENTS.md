@@ -81,11 +81,11 @@ Forbidden pattern:
 import SomethingInternal from "../../modules/.../internal/...";
 ```
 
-Preferred pattern:
+Preferred pattern (the `*-sdk` packages are планируется, G24; today plugins reach the host through `apps/web/lib/extensions` contracts/host-api and `@orion/ui`):
 
 ```ts
 import { ... } from "@orion/<module>-sdk";
-import { ... } from "@orion/plugin-sdk";
+import { ... } from "@orion/plugin-sdk"; // планируется (G24)
 import { ... } from "@orion/ui";
 ```
 

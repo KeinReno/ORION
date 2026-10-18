@@ -47,6 +47,7 @@ pnpm test:e2e:local   # Playwright: каждая панель в default-full и
                       # (порты 4100/3110; --skip-build, --update-snapshots). В CI — pnpm test:e2e после build
 pnpm build            # сборка всех пакетов
 pnpm quality          # typecheck + lint + unit tests + build
+pnpm module-docs      # перегенерировать блок манифеста в MODULE.md/AI_CONTEXT.md модулей (module-docs:check — проверка; ручной текст вне маркеров сохраняется)
 pnpm clean            # удалить регенерируемые артефакты (target/.next/out/dist); --dry-run, --deps
 ```
 
