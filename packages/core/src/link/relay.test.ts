@@ -229,4 +229,76 @@ describe("Orion Link: ReplicaEngine через ящик (прототип ADR-00
     await expect(mk("stranger").registerDevice({ deviceId: "b", name: "b" })).rejects.toMatchObject({ status: 403 });
     expect([...host.devices]).toEqual(["a"]);
   });
+
+  it("заметки и задачи идут через ящик: конфликт заметки по revision виден проигравшему, задача сходится", async () => {
+    const { make } = world();
+    const a = make("pc").engine;
+    const b = make("phone").engine;
+    await a.sync();
+    const note = await a.enqueue({ entity: "note", kind: "create", fields: { title: "Общая", body: "исходный" } });
+    const task = await a.enqueue({ entity: "task", kind: "create", fields: { title: "Купить хлеб" } });
+    await a.sync();
+    await b.sync();
+    expect(b.notes()[0]?.body).toBe("исходный");
+    expect(b.tasks()[0]?.title).toBe("Купить хлеб");
+
+    await a.enqueue({ entity: "note", kind: "patch", entityId: note.entityId, fields: { body: "от A" } });
+    await b.enqueue({ entity: "note", kind: "patch", entityId: note.entityId, fields: { body: "от B" } });
+    await b.enqueue({ entity: "task", kind: "patch", entityId: task.entityId, fields: { title: "Купить батон" } });
+    await a.sync();
+    await b.sync();
+    expect(b.conflicts()[0]).toMatchObject({ outcome: "conflict", reason: "revision" });
+    expect(b.conflicts()[0]?.op.fields).toEqual({ body: "от B" });
+    await a.sync();
+    expect(a.tasks()[0]?.title).toBe("Купить батон");
+  });
+
+  it("большой снимок режется на части и собирается; порча одной части не ломает копию", async () => {
+    const world1 = world();
+    const { host, box, keys } = world1;
+    for (let i = 0; i < 40; i += 1) host.restWrite("list", `00000000-0000-4000-8000-${String(900 + i).padStart(12, "0")}`, { name: `Список ${i} ${"я".repeat(200)}` });
+    const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys, host, chunkBytes: 2048 });
+    const transport = new RelayNodeTransport({
+      box,
+      workspaceId: WS,
+      epoch: 1,
+      keys,
+      deviceId: "pc",
+      maxPolls: 4,
+      wait: async () => void (await ingress.pollOnce())
+    });
+    const engine = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "u1", workspaceId: WS, uuid, now: () => host.nowMs });
+    // Провайдер один раз отдаёт часть №1 с испорченным битом: клиент ждёт и забирает целую со следующего опроса.
+    let spoiled = false;
+    const realGet = box.get.bind(box);
+    box.get = async (path: string) => {
+      const bytes = await realGet(path);
+      if (bytes && !spoiled && path.endsWith(".c0001.pkt")) {
+        spoiled = true;
+        const copy = bytes.slice();
+        copy[copy.length - 1] = copy[copy.length - 1]! ^ 1;
+        return copy;
+      }
+      return bytes;
+    };
+    await engine.sync();
+    expect(spoiled).toBe(true);
+    expect(transport.rejected.some((e) => e.code === "corrupt")).toBe(true);
+    expect(engine.lists().lists).toHaveLength(40);
+    expect([...box.files.keys()].some((k) => /\.c\d{4}\.pkt$/.test(k))).toBe(true);
+  });
+
+  it("клиент убирает старые ответы, оставляя хвост, и номера запросов не откатываются", async () => {
+    const { box, make } = world();
+    const a = make("pc");
+    await a.engine.sync();
+    for (let i = 0; i < 30; i += 1) await a.engine.enqueue({ entity: "list", kind: "create", fields: { name: `L${i}` } }).then(() => a.engine.sync());
+    await new Promise((r) => setTimeout(r, 0));
+    const downs = [...box.files.keys()].filter((k) => k.includes("/down/pc/")).map((k) => Number.parseInt(k.split("/").pop()!, 10));
+    expect(downs.length).toBeLessThanOrEqual(22);
+    expect(Math.max(...downs)).toBeGreaterThan(30);
+    const fresh = make("pc");
+    await fresh.engine.sync();
+    expect(Math.min(...[...box.files.keys()].filter((k) => k.includes("/down/pc/")).map((k) => Number.parseInt(k.split("/").pop()!, 10)))).toBeGreaterThan(1);
+  });
 });
