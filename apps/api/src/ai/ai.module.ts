@@ -14,6 +14,7 @@ import { AgentConnectionController } from "./agent-connection.controller";
 import { AgentGatewayController } from "./agent-gateway.controller";
 import { AgentGatewayService } from "./agent-gateway.service";
 import { AgentTokenGuard } from "./agent-token.guard";
+import { AgentModuleToolsService } from "./agent-module-tools.service";
 import { AgentJobsService } from "./agent-jobs.service";
 import { AgentTokensService } from "./agent-tokens.service";
 import { AgentUndoService } from "./agent-undo.service";
@@ -23,6 +24,8 @@ import { AgentTokensController, AiController } from "./ai.controller";
 @Module({
   imports: [AuthModule, WorkspacesModule, ModulesModule, TasksModule, NotesModule, ProjectsModule, EventsModule, FinanceModule, NotificationsModule, InboxModule, SearchModule],
   controllers: [AgentTokensController, AiController, AgentGatewayController, AgentConnectionController],
-  providers: [AgentTokensService, AgentJobsService, AgentUndoService, AgentGatewayService, AgentTokenGuard]
+  providers: [AgentTokensService, AgentJobsService, AgentUndoService, AgentGatewayService, AgentTokenGuard, AgentModuleToolsService],
+  // Подключаемые модули (G13) строят свои `ai/v1/<модуль>/*` маршруты поверх этих трёх.
+  exports: [AgentTokensService, AgentTokenGuard, AgentModuleToolsService]
 })
 export class AiModule {}

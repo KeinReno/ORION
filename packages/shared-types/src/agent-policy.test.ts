@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { agentAuditResultOf, createAgentTokenInputSchema } from "./agent";
 import {
+  decideAgentModuleOperation,
   decideAgentOperation,
   effectiveAgentPermissions,
   isDecisionNote,
@@ -96,5 +97,24 @@ describe("прочее", () => {
   });
   it("CSV экранирует кавычки и формулы", () => {
     expect(toCsv([["a", '=SUM(A1)'], ['x,"y"', null]])).toBe('a,\'=SUM(A1)\r\n"x,""y""",');
+  });
+});
+
+describe("decideAgentModuleOperation (G13)", () => {
+  const read = "pet-care.pet.read";
+  const create = "pet-care.pet.create";
+
+  it("без выданного разрешения — отказ, даже читать", () => {
+    expect(decideAgentModuleOperation(subject({ modulePermissions: [] }), read, "read")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({}), create, "create")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({ modulePermissions: [read] }), create, "create")).toMatchObject({ kind: "deny" });
+  });
+
+  it("наблюдатель читает, но не пишет; помощник и менеджер создают сразу", () => {
+    const granted = [read, create];
+    expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), read, "read")).toEqual({ kind: "allow" });
+    expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), create, "create")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({ mode: "assistant", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
+    expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
   });
 });

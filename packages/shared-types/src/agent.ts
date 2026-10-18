@@ -123,6 +123,8 @@ export const agentTokenSchema = z.object({
   /** First characters of the secret — enough to recognise the token, useless as a credential. */
   prefix: z.string(),
   scopes: z.array(agentScopeSchema),
+  /** Разрешения реестра для инструментов подключаемых модулей (G13), например `pet-care.pet.create`. */
+  modulePermissions: z.array(z.string()),
   mode: agentModeSchema,
   /** `null` = the matrix is derived from `scopes` alone (a token issued before the matrix existed). */
   permissions: agentPermissionsSchema.nullable(),
@@ -160,12 +162,14 @@ export const createAgentTokenInputSchema = z
     name: z.string().trim().min(1, "Название обязательно").max(80),
     scopes: z.array(agentScopeSchema).max(AGENT_SCOPES.length).default([]),
     permissions: agentPermissionsSchema.optional(),
+    /** Разрешения реестра для инструментов подключаемых модулей; сервер принимает только те, что объявлены манифестами. */
+    modulePermissions: z.array(z.string().min(1)).max(100).default([]),
     mode: agentModeSchema.default("assistant"),
     ...agentRestrictionFields,
     /** `null` = no expiry (the settings screen warns about it). */
     expiresInDays: z.number().int().min(1).max(365).nullable().default(30)
   })
-  .refine((v) => v.scopes.length > 0 || Object.values(v.permissions ?? {}).some((ops) => (ops?.length ?? 0) > 0), {
+  .refine((v) => v.scopes.length > 0 || v.modulePermissions.length > 0 || Object.values(v.permissions ?? {}).some((ops) => (ops?.length ?? 0) > 0), {
     message: "Выберите хотя бы одно разрешение",
     path: ["scopes"]
   });
