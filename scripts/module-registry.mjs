@@ -34,6 +34,24 @@ import { fileURLToPath } from "node:url";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * G10: шаблон изоляции по пространству — единственный вид RLS, который модуль получает без ручного SQL.
+ * Текст обязан совпадать с политиками ядра (`workspace_members` по `app.current_user_id`): структурный тест api-rls это проверяет.
+ */
+export function workspaceMemberRlsBlock(table) {
+  return [
+    `ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`,
+    `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;`,
+    `CREATE POLICY ${table}_isolation ON "${table}"`,
+    `  USING (EXISTS (`,
+    `    SELECT 1 FROM "workspace_members" wm`,
+    `    WHERE wm."workspaceId" = "${table}"."workspaceId"`,
+    `      AND wm."userId" = current_setting('app.current_user_id', true)`,
+    `  ));`,
+    ""
+  ].join("\n");
+}
+
 export const MANIFEST_FILE = "module.manifest.json";
 const HEADER = "// АВТОГЕНЕРИРУЕТСЯ scripts/module-registry.mjs из modules-ext/*/module.manifest.json — руками не править.\n// Обновить: pnpm module-registry; сверить: pnpm module-registry --check.\n";
 
@@ -205,7 +223,19 @@ export function collectModules(root = defaultRoot) {
       else if (seenMigrations.has(item.name)) fail(`миграция ${item.name} уже объявлена`);
       const sqlPath = `${dir}/${item.file}`;
       if (!existsSync(join(root, sqlPath))) fail(`нет файла миграции ${sqlPath}`);
-      else migrations.push({ name: item.name, sql: read(root, sqlPath) });
+      else {
+        let sql = read(root, sqlPath);
+        if (item.rls === "workspace-member") {
+          // RLS выводится из шаблона для каждой созданной здесь таблицы модуля с workspaceId; руками его в файле не пишут.
+          if (/ENABLE ROW LEVEL SECURITY/.test(sql)) fail(`миграция ${item.name}: rls задан шаблоном — уберите ручной ENABLE ROW LEVEL SECURITY из ${sqlPath}`);
+          const created = [...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((m) => m[1]);
+          const own = parsedModels.filter((parsed) => parsed.table && parsed.hasWorkspaceId && created.includes(parsed.table)).map((parsed) => parsed.table);
+          const ordered = created.filter((table) => own.includes(table));
+          if (ordered.length === 0) fail(`миграция ${item.name}: rls задан, но она не создаёт таблиц модуля с workspaceId`);
+          else sql = `${sql.trimEnd()}\n\n-- Row Level Security\n${ordered.map(workspaceMemberRlsBlock).join("\n")}`;
+        } else if (item.rls !== undefined) fail(`миграция ${item.name}: rls ∈ "workspace-member"`);
+        migrations.push({ name: item.name, sql });
+      }
     }
     if (parsedModels.length > 0) {
       const sql = migrations.map((item) => item.sql).join("\n");

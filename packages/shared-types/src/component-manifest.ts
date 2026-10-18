@@ -4,6 +4,7 @@ import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
 import { GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
 import { isRegisteredPermission, permissionsOfModule } from "./permissions";
+import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
 
 /**
  * Единый машиночитаемый манифест компонента платформы (модуля или плагина) — PLATFORM_AUDIT G1.
@@ -68,7 +69,14 @@ export const componentManifestSchema = z.object({
     /** Жёсткие зависимости: без них компонент не работает. */
     modules: z.array(z.string()),
     /** Мягкие: компонент живёт без них, но использует, если они включены. */
-    optionalModules: z.array(z.string())
+    optionalModules: z.array(z.string()),
+    /** Уточнение по контрактам платформы: `{ event: "^1.0.0" }`. Необязательно; ключи — только `CONTRACT_IDS`. */
+    contracts: z
+      .record(
+        z.string().refine(isContractId, "неизвестный контракт платформы"),
+        z.string().regex(SEMVER_RANGE, "ожидается диапазон вида ^1.0.0")
+      )
+      .optional()
   }),
   /**
    * Разрешения компонента из реестра (`permissions.ts`), вида `tasks.task.read`. Модуль перечисляет свои операции;
@@ -113,6 +121,16 @@ export function satisfiesVersionRange(range: string, version: string): boolean {
     return base[0] > 0 ? actual[0] === base[0] : actual[0] === 0 && actual[1] === base[1];
   }
   return compareVersions(actual, base) === 0;
+}
+
+/** Контракты, версия которых не удовлетворяет `requires.contracts` манифеста (пусто — всё совместимо). */
+export function unsatisfiedContracts(manifest: Pick<ComponentManifest, "requires">): string[] {
+  const bad: string[] = [];
+  for (const [id, range] of Object.entries(manifest.requires.contracts ?? {})) {
+    const actual = isContractId(id) ? PLATFORM_CONTRACT_VERSIONS[id] : undefined;
+    if (!actual || !satisfiesVersionRange(range, actual)) bad.push(id);
+  }
+  return bad;
 }
 
 const COMPONENT_VERSION = "1.0.0";

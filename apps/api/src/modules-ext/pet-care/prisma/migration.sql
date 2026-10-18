@@ -46,22 +46,3 @@ ALTER TABLE "pet_care_entries" ADD CONSTRAINT "pet_care_entries_workspaceId_fkey
 
 -- AddForeignKey
 ALTER TABLE "pet_care_entries" ADD CONSTRAINT "pet_care_entries_petId_fkey" FOREIGN KEY ("petId") REFERENCES "pet_care_pets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- Row Level Security
-ALTER TABLE "pet_care_pets" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "pet_care_pets" FORCE ROW LEVEL SECURITY;
-CREATE POLICY pet_care_pets_isolation ON "pet_care_pets"
-  USING (EXISTS (
-    SELECT 1 FROM "workspace_members" wm
-    WHERE wm."workspaceId" = "pet_care_pets"."workspaceId"
-      AND wm."userId" = current_setting('app.current_user_id', true)
-  ));
-
-ALTER TABLE "pet_care_entries" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "pet_care_entries" FORCE ROW LEVEL SECURITY;
-CREATE POLICY pet_care_entries_isolation ON "pet_care_entries"
-  USING (EXISTS (
-    SELECT 1 FROM "workspace_members" wm
-    WHERE wm."workspaceId" = "pet_care_entries"."workspaceId"
-      AND wm."userId" = current_setting('app.current_user_id', true)
-  ));
