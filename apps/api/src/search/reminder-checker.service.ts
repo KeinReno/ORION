@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import type { SearchableEntityType } from "@orion/shared-types";
 import { SEARCH_TYPE_MODULE } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
@@ -34,6 +35,7 @@ export class ReminderCheckerService {
   private readonly logger = new Logger(ReminderCheckerService.name);
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationCenterService,
     private readonly policy: NotificationPolicyService,
@@ -42,7 +44,7 @@ export class ReminderCheckerService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCron(): Promise<void> {
-    await this.runCheck();
+    await this.jobs.runJob("core", "entity-reminders", () => this.runCheck());
   }
 
   async runCheck(): Promise<{ delivered: number; skipped: number; cancelled: number }> {

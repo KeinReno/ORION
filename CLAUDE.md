@@ -192,6 +192,8 @@ pub/sub, а не стейт-менеджер; смотри его, прежде 
 | `CalendarConnectionsService` | каждые 30 минут | тянет включённые внешние ICS-фиды |
 | `NoteTrashPurgeService` / `DocumentTrashPurgeService` | в 3:00 | чистка корзины заметок (и ревизий) и файлов старше 30 дней |
 
+Каждая `@Cron`-точка входа идёт через `BackgroundJobsService.runJob(componentId, jobName, fn)` (G9): исключение логируется и учитывается по компоненту, а не роняет остальные службы; наложение запусков пропускается; состояние — `GET system/jobs` (нужен вход). Новый `@Cron` без обёртки не добавлять.
+
 Владельца пространства для политики ищет `NotificationPolicyService`
 (роль `owner`, иначе любой участник) — напоминания в ORION
 workspace-scoped, а не per-user; историческое обоснование — `docs/HISTORY.md` (v0.16).
