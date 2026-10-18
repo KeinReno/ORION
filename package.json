@@ -25,6 +25,7 @@
     "module-docs": "node scripts/module-docs.mjs",
     "module-docs:check": "node scripts/module-docs.mjs --check",
     "module-registry": "node scripts/module-registry.mjs",
+    "create:module": "node scripts/create-module.mjs",
     "plugin-contract-check": "vitest run apps/web/lib/extensions/registry.test.ts",
     "quality": "corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
     "db:up": "node scripts/postgres.mjs up",
