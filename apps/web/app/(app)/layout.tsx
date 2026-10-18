@@ -78,7 +78,7 @@ import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
-import { canStep, clearHistory, EMPTY_NAV_HISTORY, recordVisit, stepHistory, type NavHistory } from "../../lib/nav-history";
+import { canStep, EMPTY_NAV_HISTORY, readNavHistory, recordVisit, saveNavHistory, stepHistory, type NavHistory } from "../../lib/nav-history";
 import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, visiblePanels } from "../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -86,6 +86,7 @@ import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-w
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
+import { PanelScrollMemory } from "../../lib/scroll-memory";
 import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
@@ -133,7 +134,7 @@ const panelComponents: Record<string, (props: IDockviewPanelProps) => React.Reac
           fallback: (error, reset) => createElement(PanelCrash, { error, onRetry: reset }),
           onError: (error) => console.error(`[panels] panel "${panel.id}" crashed`, error)
         },
-        createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api })))
+        createElement(PanelScrollMemory, { panelId: props.api.id }, createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))))
       )
   ])
 );
@@ -500,13 +501,30 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const layoutKeyRef = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activePanelId, setActivePanelId] = useState<string | null>(null);
-  // Back/forward over the panels (objects and views) this window has shown; in memory, per window and workspace.
+  // Back/forward over the panels (objects and views) this window has shown; per workspace, kept in localStorage so a reload keeps it.
   const [navHistory, setNavHistory] = useState<NavHistory>(EMPTY_NAV_HISTORY);
   const navHistoryRef = useRef(navHistory);
   navHistoryRef.current = navHistory;
   useEffect(() => {
     if (activePanelId) setNavHistory(history => recordVisit(history, activePanelId));
   }, [activePanelId]);
+  // The workspace the history in state belongs to: loaded on first sight of a workspace (also replaces the old one on a
+  // switch), and only then written back, so one workspace's list is never saved under another's key.
+  const navWorkspaceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!workspace?.id || navWorkspaceRef.current === workspace.id) return;
+    navWorkspaceRef.current = workspace.id;
+    setNavHistory(readNavHistory(window.localStorage, workspace.id, id => Boolean(getPanelDefinition(id))));
+  }, [workspace?.id]);
+  const navPersistReadyRef = useRef(false);
+  useEffect(() => {
+    // The mount run still sees the empty initial state and would wipe what is stored.
+    if (!navPersistReadyRef.current) {
+      navPersistReadyRef.current = true;
+      return;
+    }
+    if (navWorkspaceRef.current) saveNavHistory(window.localStorage, navWorkspaceRef.current, navHistory);
+  }, [navHistory]);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
   const objectContext = useObjectContext(workspace?.id, activePanelId);
@@ -797,7 +815,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     } catch {
       // best-effort — see the identical catch in onReady's save timer
     }
-    setNavHistory(clearHistory());
     for (const panel of [...api.panels]) panel.api.close();
     layoutKeyRef.current = nextKey;
     loadLayoutForKey(api, nextKey, namedLayoutsKey(user.id, workspace.id));
