@@ -316,7 +316,7 @@ describe("Lists (full module + lists-finance plugin)", () => {
       expect((await f.call("POST", path, { ...input, itemIds: [f.milk.id] })).status).toBe(409);
       expect((await f.call("PATCH", "/plugins/lists-finance", { enabled: true })).status).toBe(200);
 
-      expect((await f.call("PATCH", "/modules/finance", { enabled: false })).status).toBe(200);
+      expect((await f.call("PATCH", "/modules/finance", { enabled: false, confirm: true })).status).toBe(200);
       expect((await f.call("POST", path, { ...input, itemIds: [f.milk.id] })).status).toBe(409);
       expect((await f.call("PATCH", "/modules/finance", { enabled: true })).status).toBe(200);
 

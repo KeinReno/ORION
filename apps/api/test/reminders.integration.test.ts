@@ -150,7 +150,7 @@ describe("EntityReminder personal one-shot reminders (U03)", () => {
     const disable = await request(`/workspaces/${alice.workspaceId}/modules/notes`, {
       method: "PATCH",
       token: alice.accessToken,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disable.status).toBe(200);
 

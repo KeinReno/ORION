@@ -82,7 +82,9 @@ export const workspacePluginStateSchema = pluginManifestSchema.extend({
 export type WorkspacePluginState = z.infer<typeof workspacePluginStateSchema>;
 
 export const setWorkspacePluginInputSchema = z.object({
-  enabled: z.boolean()
+  enabled: z.boolean(),
+  /** Выключить, даже если от компонента зависят включённые (409 `component_has_dependents` без этого флага). */
+  confirm: z.boolean().optional()
 });
 export type SetWorkspacePluginInput = z.infer<typeof setWorkspacePluginInputSchema>;
 

@@ -74,3 +74,4 @@ export * from "./opportunity-assistant";
 export * from "./opportunity-execution";
 export * from "./opportunity-manager";
 export * from "./component-manifest";
+export * from "./component-dependencies";

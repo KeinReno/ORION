@@ -1197,7 +1197,7 @@ describe("API workspace isolation", () => {
     const disabled = await request<Array<{ id: string; enabled: boolean }>>(`/workspaces/${ws}/modules/habits`, {
       method: "PATCH",
       token,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disabled.status).toBe(200);
     expect(disabled.data.find((item) => item.id === "habits")?.enabled).toBe(false);
@@ -1245,7 +1245,7 @@ describe("API workspace isolation", () => {
       const patched = await request(`/workspaces/${ws}/modules/${moduleId}`, {
         method: "PATCH",
         token,
-        body: { enabled: false }
+        body: { enabled: false, confirm: true }
       });
       expect(patched.status).toBe(200);
     }
@@ -1715,7 +1715,7 @@ describe("API workspace isolation", () => {
     const disabled = await request(`/workspaces/${ws}/modules/finance`, {
       method: "PATCH",
       token: alice.accessToken,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disabled.status).toBe(200);
 
@@ -1765,7 +1765,7 @@ describe("API workspace isolation", () => {
     const disabled = await request(`/workspaces/${alice.workspaceId}/modules/documents`, {
       method: "PATCH",
       token: alice.accessToken,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disabled.status).toBe(200);
 

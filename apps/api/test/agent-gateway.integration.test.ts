@@ -191,7 +191,7 @@ describe("Agent Gateway", () => {
   it("выключенный модуль → 409; остальные работают; в context он не назван", async () => {
     const alice = await register("modules");
     const agent = await issue(alice, ["notes:read", "notes:write", "tasks:write"]);
-    const off = await request(`/workspaces/${alice.workspaceId}/modules/notes`, { method: "PATCH", token: alice.accessToken, body: { enabled: false } });
+    const off = await request(`/workspaces/${alice.workspaceId}/modules/notes`, { method: "PATCH", token: alice.accessToken, body: { enabled: false, confirm: true } });
     expect(off.status).toBeLessThan(300);
 
     const note = await request("/ai/v1/capture", { method: "POST", token: agent.secret, body: { text: "x", hint: "note" } });
