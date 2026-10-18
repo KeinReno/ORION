@@ -305,6 +305,8 @@ export function renderOutputs(modules, root = defaultRoot) {
       `export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = ${json(catalog)};\n\n` +
       `/** Основной ресурс модуля для реестра разрешений (\`<module>.<resource>.<action>\`). */\n` +
       `export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = ${json(resources)};\n` +
+      `\n/** Имена миграций модуля в порядке применения (G11): манифест компонента и \`GET system/components\` сверяют их с базой. */\n` +
+      `export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = ${json(Object.fromEntries(modules.map((m) => [m.id, m.migrations.map((item) => item.name)])))};\n` +
       modules.map((m) => `\nexport * from "./${m.name}";`).join("") +
       (modules.length > 0 ? "\n" : "")
   );

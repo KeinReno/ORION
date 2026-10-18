@@ -48,4 +48,11 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
   "pet-care": "pet"
 };
 
+/** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
+export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
+  "pet-care": [
+    "20261018120000_pet_care"
+  ]
+};
+
 export * from "./pet-care";
