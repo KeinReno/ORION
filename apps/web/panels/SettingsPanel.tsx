@@ -39,7 +39,7 @@ import { describeAuthError } from "../lib/error-message";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
 import { BackgroundEffectSettingsForm } from "./settings/background-effect-form";
-import { ThemePreview } from "./settings/theme-preview";
+import { ThemeSettings } from "./settings/theme-library";
 import { ModulesSettings } from "./settings/modules-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
@@ -535,7 +535,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     <option value="kaiden-precision">KAIDEN Precision — новая оболочка</option>
                   </Select>
                 </Field>
-                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Precision задаёт структуру оболочки. Свою палитру можно сохранить и применить ниже. Плотность и положение меню настраиваются независимо.</p> : null}
+                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Precision задаёт структуру оболочки. Тему можно выбрать, создать и настроить ниже, в разделе «Темы». Плотность и положение меню настраиваются независимо.</p> : null}
                 {form.theme !== "kaiden-precision" ? <>
                 <Field label="Акцент">
                   <SegmentedControl<UserPreference["accent"]>
@@ -733,7 +733,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     {form.onboardingCompletedAt ? "Показать подсказку снова" : "Скрыть подсказку"}
                   </Button>
                 </div>
-                <ThemePreview />
+                <ThemeSettings />
               </Card>
             )}
           </PanelSection>
