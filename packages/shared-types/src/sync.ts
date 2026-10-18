@@ -93,7 +93,9 @@ export const backupResultSchema = z.object({
   name: z.string(),
   sizeBytes: z.number().int(),
   /** Сколько строк вошло в снапшот, по модулям — для строки-подтверждения. */
-  counts: z.record(z.string(), z.number().int())
+  counts: z.record(z.string(), z.number().int()),
+  /** Вошли ли в копию данные Compass (G22): их нет, если Compass на этом узле не использовался. */
+  compassIncluded: z.boolean()
 });
 export type BackupResult = z.infer<typeof backupResultSchema>;
 
