@@ -3,7 +3,7 @@
 import { isTaskClosed, type Milestone, type Task } from "@orion/shared-types";
 import { CheckToggle, DropdownMenu, IconButton, cx, useResizeWidth } from "@orion/ui";
 import { MoreHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { shortDate } from "../../lib/format";
 import {
   NO_MILESTONE_KEY,
@@ -213,6 +213,7 @@ function MatrixCard({
   onOpen: () => void;
   onMove: (milestoneId: string | null) => void;
 }): React.ReactElement {
+  const cardId = useId();
   const closed = isTaskClosed(task.status);
   return (
     <div
@@ -237,14 +238,18 @@ function MatrixCard({
           size="sm"
         />
       </div>
+      {/* Named by the title alone, the meta line is its description: the stacked layout adds the milestone there,
+          and the task must keep the same name in both layouts. */}
       <button
         type="button"
         onClick={onOpen}
         title="Открыть задачу"
+        aria-labelledby={`${cardId}-title`}
+        aria-describedby={`${cardId}-meta`}
         className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <span className={cx("block text-label", closed ? "text-subtle-foreground line-through" : "text-foreground")}>{task.title}</span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-micro text-subtle-foreground">
+        <span id={`${cardId}-title`} className={cx("block text-label", closed ? "text-subtle-foreground line-through" : "text-foreground")}>{task.title}</span>
+        <span id={`${cardId}-meta`} className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-micro text-subtle-foreground">
           {milestoneTitle ? <span className="min-w-0 truncate">{milestoneTitle}</span> : null}
           {task.dueAt ? <span className={cx("font-mono tabular-nums", row === "overdue" && "text-destructive")}>{shortDate(task.dueAt)}</span> : null}
           {!closed && task.priority === "high" ? <span className="text-warning">высокий</span> : null}
