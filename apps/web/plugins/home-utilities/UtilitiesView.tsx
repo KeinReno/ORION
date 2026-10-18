@@ -117,7 +117,7 @@ function MonthEditor({ month, busy, onSave, onDirtyChange }: { month: UtilityMon
       <Metric label="Квартирная плата" value={parsedRent !== null ? money(parsedRent) : "—"} />
       <Metric label="Общий итог · черновик + счета" value={preview ? money(preview.grandTotalMinor) : "—"} strong />
     </div>
-    {month.importedUtilityMinor !== null || month.importedGrandTotalMinor !== null ? <p className="rounded-lg border border-border/70 p-3 text-2xs text-muted-foreground">В исходной таблице: коммуналка {month.importedUtilityMinor === null ? "—" : money(month.importedUtilityMinor)}, итог {month.importedGrandTotalMinor === null ? "—" : money(month.importedGrandTotalMinor)}.{month.importedUtilityMinor !== null && preview && month.importedUtilityMinor !== preview.utilityMinor || month.importedGrandTotalMinor !== null && preview && month.importedGrandTotalMinor !== preview.grandTotalMinor ? <span className="ml-1 text-amber-400">Есть расхождение с текущими строками — проверьте суммы.</span> : null}</p> : null}
+    {month.importedUtilityMinor !== null || month.importedGrandTotalMinor !== null ? <p className="rounded-lg border border-border/70 p-3 text-2xs text-muted-foreground">В исходной таблице: коммуналка {month.importedUtilityMinor === null ? "—" : money(month.importedUtilityMinor)}, итог {month.importedGrandTotalMinor === null ? "—" : money(month.importedGrandTotalMinor)}.{month.importedUtilityMinor !== null && preview && month.importedUtilityMinor !== preview.utilityMinor || month.importedGrandTotalMinor !== null && preview && month.importedGrandTotalMinor !== preview.grandTotalMinor ? <span className="ml-1 text-warning">Есть расхождение с текущими строками — проверьте суммы.</span> : null}</p> : null}
     <Card className="space-y-3 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-title">Счета компаний</h4><span className="text-2xs text-muted-foreground">Подтверждено: {preview ? money(preview.confirmedUtilityMinor) : "—"}</span></div>
       {charges.length === 0 ? <p className="text-label text-subtle-foreground">Добавьте компанию и сумму из её счёта.</p> : null}
       <div className="space-y-2">{charges.map((charge) => <div key={charge.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 p-2">
@@ -196,11 +196,11 @@ function QuickElectricityCalculator(): React.ReactElement {
           ) : null}
         </div>
       ) : nothingTyped ? null : (
-        <p className="text-2xs text-amber-400">Введите показания числами; на конец периода показание не меньше, чем на начало.</p>
+        <p className="text-2xs text-warning">Введите показания числами; на конец периода показание не меньше, чем на начало.</p>
       )}
-      {consumed !== null && rateInput.kind !== "ok" && amountMinor === null && amount.trim() ? <p className="text-2xs text-amber-400">Сумма — число рублей, например 687,50.</p> : null}
-      {rateInput.kind === "invalid" ? <p className="text-2xs text-amber-400">Тариф — положительное число рублей за кВт·ч, например 6,25. Пока он неверный, расчёт по нему не делается.</p> : null}
-      {(daysElapsed.trim() || daysTotal.trim()) && consumed !== null && !forecast ? <p className="text-2xs text-amber-400">Для прогноза укажите целые дни: прошло — от 1, в периоде — не меньше прошедших.</p> : null}
+      {consumed !== null && rateInput.kind !== "ok" && amountMinor === null && amount.trim() ? <p className="text-2xs text-warning">Сумма — число рублей, например 687,50.</p> : null}
+      {rateInput.kind === "invalid" ? <p className="text-2xs text-warning">Тариф — положительное число рублей за кВт·ч, например 6,25. Пока он неверный, расчёт по нему не делается.</p> : null}
+      {(daysElapsed.trim() || daysTotal.trim()) && consumed !== null && !forecast ? <p className="text-2xs text-warning">Для прогноза укажите целые дни: прошло — от 1, в периоде — не меньше прошедших.</p> : null}
     </div>
   );
 }
@@ -234,7 +234,7 @@ function ElectricityMeter({ workspaceId, homeId, meter }: { workspaceId: string 
     {isError ? <Button size="sm" variant="outline" onClick={() => void refetch()}>Повторить загрузку тарифа</Button> : null}
     <div className="grid gap-2 [@container(min-width:650px)]:grid-cols-[1fr_1fr_auto]"><label className="text-2xs text-muted-foreground">Предыдущее показание<Input value={meter.lastValue === null ? "Нет" : String(meter.lastValue)} readOnly className="mt-1" /></label><label className="text-2xs text-muted-foreground">Новое показание<Input value={newReading} inputMode="decimal" onChange={(e) => setNewReading(e.target.value)} placeholder="кВт·ч" className="mt-1" /></label><div className="self-end"><Button size="sm" onClick={() => void saveReading()} disabled={!readingOk || addReading.isPending}>Записать</Button></div></div>
     {meter.lastValue === null ? <p className="text-2xs text-muted-foreground">Сначала запишите начальное показание на вкладке «Счётчики».</p> : consumption !== null ? <div className="flex flex-wrap items-baseline gap-3 rounded-lg bg-accent/10 p-3"><span className="text-label">Расход: <b>{consumption} кВт·ч</b></span>{estimate ? <span className="text-label">Оценка: <b>{money(estimate.amountMinor)}</b></span> : <span className="text-2xs text-muted-foreground">Задайте тариф, чтобы увидеть оценку суммы.</span>}</div> : <p className="text-2xs text-muted-foreground">Введите новое показание. Если оно меньше предыдущего, проверьте замену прибора.</p>}
-    {changedDuringPeriod ? <p className="text-2xs text-amber-400">Тариф изменился после прошлого показания. Без показания на дату изменения это только приблизительная оценка.</p> : null}
+    {changedDuringPeriod ? <p className="text-2xs text-warning">Тариф изменился после прошлого показания. Без показания на дату изменения это только приблизительная оценка.</p> : null}
     <form onSubmit={(e) => void saveTariff(e)} className="flex flex-wrap items-end gap-2 border-t border-border/70 pt-3"><label className="min-w-36 flex-1 text-2xs text-muted-foreground">Тариф, ₽/кВт·ч<Input className="mt-1" value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" placeholder="Например, 6,25" /></label><label className="text-2xs text-muted-foreground">Действует с<Input className="mt-1" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><Button type="submit" size="sm" variant="outline" disabled={!rate.trim() || addTariff.isPending}><Check className="h-4 w-4" /> Сохранить тариф</Button></form>
     <p className="text-2xs text-subtle-foreground">Оценка по расходу не равна сумме квитанции: в ней могут быть дополнительные начисления и корректировки.</p>
   </div>;

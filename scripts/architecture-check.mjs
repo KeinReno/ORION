@@ -79,12 +79,51 @@ export function architectureViolations(projectRoot = root) {
   return violations;
 }
 
+// G18: plugin code must take its colours from theme tokens (text-destructive, bg-card,
+// text-muted-foreground …) so a workspace/user theme restyles plugins too. Hard-coded
+// colours silently ignore the active theme. Scans string/template literals only, so
+// comments and identifiers like `#anchor` in prose are not flagged.
+const PALETTE = "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
+const COLOR_UTILITY = "text|bg|border|ring|fill|stroke|from|via|to|divide|outline|decoration|accent|caret|shadow|placeholder";
+const PALETTE_CLASS = new RegExp(`(?<![\\w-])(?:${COLOR_UTILITY})-(?:(?:${PALETTE})-\\d{2,3})(?:/\\d+)?(?![\\w-])`);
+const HEX_LITERAL = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/;
+const COLOR_FUNCTION = /\b(?:rgba?|hsla?)\(/;
+
+// Explicit, commented allowlist of `file:reason` entries (paths relative to apps/web/plugins).
+// It may only shrink: add nothing here — map the colour to a theme token instead.
+const COLOR_ALLOWLIST = new Map([
+  ["documents-office/docx-editor.tsx", "DOCX page is rendered as white paper with dark text regardless of theme (WYSIWYG of the exported file)"],
+  ["home-utilities/UtilitiesAnalytics.tsx", "chart series palette: cyan/violet have no theme token and categorical series need distinct hues; accent/success/warning/destructive are already tokens"],
+  ["time-insights/time-charts.tsx", "SVG data-viz: fixed categorical hex palette for project series, no per-hue theme tokens"]
+]);
+
+export function colorViolations(projectRoot = root) {
+  const plugins = join(projectRoot, "apps", "web", "plugins");
+  const violations = [];
+  for (const file of sourceFiles(plugins)) {
+    const rel = relative(plugins, file).split(sep).join("/");
+    if (COLOR_ALLOWLIST.has(rel) || /\.test\.tsx?$/.test(rel)) continue;
+    const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    function visit(node) {
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
+        const text = node.text;
+        const kind = PALETTE_CLASS.test(text) ? "palette class" : HEX_LITERAL.test(text) ? "hex colour" : COLOR_FUNCTION.test(text) ? "rgb/hsl colour" : null;
+        // Import specifiers and the like never contain these shapes, so no extra filtering is needed.
+        if (kind) violations.push(`${relative(projectRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1} hard-coded ${kind} in plugin (use a theme token): ${text.trim().slice(0, 80)}`);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+  }
+  return violations;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = architectureViolations();
+  const violations = [...architectureViolations(), ...colorViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;
   } else {
-    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins)");
+    console.log("Architecture import boundaries: OK (core/base ↛ concrete plugins; plugins ↛ host panels, host internals or other plugins; no hard-coded colours in plugins)");
   }
 }
