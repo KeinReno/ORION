@@ -30,6 +30,7 @@ export { dayOffset, planDates, type PlanGroup, planGroups, type PlanRow, timelin
 export { daysUntil, type PlanStepState, planStrip, pluralDays } from "../project-status";
 export { TASK_PRIORITY_LABEL, TASK_RECURRENCE_LABEL, TASK_STATUS_LABEL } from "../task-labels";
 export { dailyTotals, localDayKey, periodStats, projectShares } from "../time-stats";
+export { usePersistedDraft } from "../draft-storage";
 export { useUnsavedDraft } from "../unsaved-drafts";
 export { useActiveWorkspace } from "../use-active-workspace";
 export { useEnabledModules } from "../use-enabled-modules";

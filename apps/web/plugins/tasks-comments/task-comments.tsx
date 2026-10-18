@@ -13,7 +13,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { relativeTime } from "../../lib/extensions/host-api";
 import { describeError } from "../../lib/extensions/host-api";
 import { useUnsavedDraft } from "../../lib/extensions/host-api";
-import { usePersistedDraft } from "../../lib/draft-storage";
+import { usePersistedDraft } from "../../lib/extensions/host-api";
 
 /**
  * S17 «Комментарии задачи». Plain REST CRUD + react-query refetch — no

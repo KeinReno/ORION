@@ -10,6 +10,7 @@ import { SearchRegistryModule } from "../search/search-registry.module";
 import { InboxRegistryModule } from "../inbox/inbox-registry.module";
 import { NotesSearchProvider } from "./notes-search.provider";
 import { NoteInboxTarget } from "./notes-inbox.target";
+import { NotesProjectAggregates } from "./notes-project-aggregates";
 
 /**
  * Note attachments reuse the documents module's storage: `DocumentsModule`
@@ -19,7 +20,7 @@ import { NoteInboxTarget } from "./notes-inbox.target";
 @Module({
   imports: [AuthModule, WorkspacesModule, DocumentsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [NotesController],
-  providers: [NotesService, NoteTrashPurgeService, NoteAttachmentsService, NotesSearchProvider, NoteInboxTarget],
+  providers: [NotesProjectAggregates, NotesService, NoteTrashPurgeService, NoteAttachmentsService, NotesSearchProvider, NoteInboxTarget],
   exports: [NotesService]
 })
 export class NotesModule {}

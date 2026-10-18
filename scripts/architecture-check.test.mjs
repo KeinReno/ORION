@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
-import { architectureViolations, colorViolations, pluginCatalogViolations } from "./architecture-check.mjs";
+import { architectureViolations, colorViolations, moduleBoundaryViolations, ownershipMapViolations, pluginCatalogViolations } from "./architecture-check.mjs";
+import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
+import { CORE_MODELS, MODEL_OWNERS } from "./module-ownership.mjs";
 
 const fixtures = [];
 function fixture() {
@@ -140,5 +142,88 @@ describe("plugin catalog consistency (G23)", () => {
 
   it("passes on the real repository", () => {
     expect(pluginCatalogViolations()).toEqual([]);
+  });
+});
+
+// G4: сервис модуля не берёт чужие таблицы и не импортирует чужой сервис; долг — только из списка исключений.
+describe("module boundary rule", () => {
+  const NOTES = "apps/api/src/notes/notes.service.ts";
+  const tasksUse = 'export class S { run(tx) { return tx.task.findMany({}); } }\n';
+
+  it("allows a service to use its own models and core models", () => {
+    const root = fixture();
+    put(root, NOTES, "export class S { run(tx) { tx.note.create({}); tx.workspaceMember.findFirst({}); tx.entityLink.deleteMany({}); } }\n");
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+  });
+
+  it("rejects another module's model, via tx and this.prisma", () => {
+    const root = fixture();
+    put(root, NOTES, "export class S { a(tx) { return tx.task.findMany({}); } b() { return this.prisma.transaction.count({}); } }\n");
+    expect(moduleBoundaryViolations(root, {})).toEqual([
+      expect.stringContaining("чужую модель Task"),
+      expect.stringContaining("чужую модель Transaction")
+    ]);
+  });
+
+  it("ignores same-named properties that are not Prisma delegates", () => {
+    const root = fixture();
+    put(root, NOTES, "export class S { a() { return this.tasks.findMany({}) && foo.task.findMany() && tx.task.someHelper(); } }\n");
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+  });
+
+  it("rejects importing another domain module's service but not a core one or its own module's", () => {
+    const root = fixture();
+    put(root, NOTES, 'import { TasksService } from "../tasks/tasks.service";\nimport { WorkspacesService } from "../workspaces/workspaces.service";\nimport { X } from "./note-attachments.service";\n');
+    expect(moduleBoundaryViolations(root, {})).toEqual([expect.stringContaining("импортирует сервис другого модуля tasks/tasks.service")]);
+  });
+
+  it("treats the opportunities directories as one module", () => {
+    const root = fixture();
+    put(root, "apps/api/src/opportunities-manager/m.service.ts", "export class S { a(tx) { return tx.opportunity.findMany({}); } }\n");
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+  });
+
+  it("does not police core directories or tests", () => {
+    const root = fixture();
+    put(root, "apps/api/src/sync/snapshot.service.ts", tasksUse);
+    put(root, "apps/api/src/notes/notes.service.test.ts", tasksUse);
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+  });
+
+  it("accepts a violation listed as an exception, but only that model", () => {
+    const root = fixture();
+    put(root, NOTES, 'export class S { a(tx) { return tx.task.findMany({}) && tx.event.count({}); } }\n');
+    expect(moduleBoundaryViolations(root, { [NOTES]: { models: ["Task"] } })).toEqual([expect.stringContaining("чужую модель Event")]);
+  });
+
+  it("fails on a stale exception (model or service no longer used)", () => {
+    const root = fixture();
+    put(root, NOTES, tasksUse);
+    const violations = moduleBoundaryViolations(root, { [NOTES]: { models: ["Task", "Event"], services: ["tasks/tasks.service"] } });
+    expect(violations).toEqual([
+      expect.stringContaining("исключение для модели Event устарело"),
+      expect.stringContaining("исключение для сервиса tasks/tasks.service устарело")
+    ]);
+  });
+
+  it("fails on a stale exception for a file that no longer violates anything", () => {
+    const root = fixture();
+    expect(moduleBoundaryViolations(root, { [NOTES]: { models: ["Task"] } })).toEqual([expect.stringContaining("исключение для модели Task устарело")]);
+  });
+
+  it("requires every schema model to have an owner", () => {
+    const root = fixture();
+    put(root, "apps/api/prisma/schema.prisma", "model Task {\n  id String\n}\nmodel Mystery {\n  id String\n}\n");
+    expect(ownershipMapViolations(root)).toEqual([expect.stringContaining("модель Mystery")]);
+  });
+
+  it("passes on the real repository: every schema model is owned and the exception list is exact", () => {
+    expect(ownershipMapViolations()).toEqual([]);
+    expect(moduleBoundaryViolations()).toEqual([]);
+    expect([...MODEL_OWNERS.keys()].filter((model) => CORE_MODELS.has(model))).toEqual([]);
+  });
+
+  it("keeps the projects module off other modules' tables (provider pattern)", () => {
+    expect(Object.keys(MODULE_BOUNDARY_EXCEPTIONS)).not.toContain("apps/api/src/projects/projects.service.ts");
   });
 });

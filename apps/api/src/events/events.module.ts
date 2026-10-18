@@ -13,11 +13,12 @@ import { SearchRegistryModule } from "../search/search-registry.module";
 import { InboxRegistryModule } from "../inbox/inbox-registry.module";
 import { EventsSearchProvider } from "./events-search.provider";
 import { EventInboxTarget } from "./events-inbox.target";
+import { EventsProjectAggregates } from "./events-project-aggregates";
 
 @Module({
   imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [EventsController, CalendarController, CalendarFeedController, CalendarConnectionsController],
-  providers: [EventsService, EventReminderService, CalendarConnectionsService, EventsSearchProvider, EventInboxTarget],
+  providers: [EventsProjectAggregates, EventsService, EventReminderService, CalendarConnectionsService, EventsSearchProvider, EventInboxTarget],
   exports: [EventsService]
 })
 export class EventsModule {}

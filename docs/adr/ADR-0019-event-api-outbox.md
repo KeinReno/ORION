@@ -1,6 +1,6 @@
 # ADR-0019 — Event API: transactional outbox в Postgres
 
-Статус: **Предложено** (18.10.2026). Кода нет. Спецификация — [platform-api/EVENTS.md](../platform-api/EVENTS.md); пробел — G3 в [PLATFORM_AUDIT.md](../PLATFORM_AUDIT.md).
+Статус: **Принято (18.10.2026)**. Первый срез реализован (см. «Реализовано»). Спецификация — [platform-api/EVENTS.md](../platform-api/EVENTS.md); пробел — G3 в [PLATFORM_AUDIT.md](../PLATFORM_AUDIT.md).
 
 ## Задача
 Модулям и плагинам нужен способ реагировать на изменения в других модулях без прямых обращений к чужим таблицам и сервисам.
@@ -32,6 +32,12 @@
 - Требуется: миграция с RLS-политиками (структурный тест `api-rls.integration.test.ts` проверит), схемы событий в
   `packages/shared-types`, поле `events` манифеста станет рабочим, обновление `PLATFORM_API_VERSION` (MINOR).
 
+## Реализовано (первый срез G3)
+Таблицы `domain_events` / `domain_event_deliveries` с RLS; `DomainEventBus.publishTx` и подписчики (`apps/api/src/domain-events/`);
+диспетчер (cron раз в 10 с, `asSystem`, `FOR UPDATE SKIP LOCKED`, повторы с паузой 30 с ×2, до 5 попыток, чистка через 7 дней);
+каталог событий и объявленных подписок в `packages/shared-types/src/domain-events.ts` (из него выводятся `events.publishes/subscribes`
+манифестов); издатель `tasks.task.closed` (`TasksService.update`) и первый подписчик — уведомление исполнителю задачи, закрытой
+другим участником (`tasks/task-closed-notifier.ts`). `PLATFORM_API_VERSION` 1.1.0. Тест: `apps/api/test/domain-events.integration.test.ts`.
+
 ## Не сделано
-Всё из раздела «Не сделано» в [EVENTS.md](../platform-api/EVENTS.md). Решение требует утверждения владельца; до принятия
-реализация не начинается.
+Остальное из «Не сделано» в [EVENTS.md](../platform-api/EVENTS.md). Перенос существующих прямых связей (в т. ч. остановки таймера) — G4.

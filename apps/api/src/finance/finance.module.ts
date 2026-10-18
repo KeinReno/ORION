@@ -38,6 +38,7 @@ import { FinanceExpenseReader } from "./public/expense-reader";
 import { FinanceExpenseWriter } from "./public/expense-writer";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider } from "./finance-search.providers";
+import { FinanceProjectAggregates } from "./finance-project-aggregates";
 
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
@@ -67,6 +68,7 @@ import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchP
     FinanceDraftsController
   ],
   providers: [
+    FinanceProjectAggregates,
     AccountsService,
     CategoriesService,
     TransactionsService,

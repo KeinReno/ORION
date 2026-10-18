@@ -6,6 +6,7 @@ import { DocumentsService } from "./documents.service";
 import { DocumentTrashPurgeService } from "./document-trash-purge.service";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { DocumentsSearchProvider } from "./documents-search.provider";
+import { DocumentsProjectAggregates } from "./documents-project-aggregates";
 
 /**
  * ORION v0.12 "Документы" — mirrors NotesModule. The StorageAdapter comes
@@ -19,7 +20,7 @@ import { DocumentsSearchProvider } from "./documents-search.provider";
 @Module({
   imports: [AuthModule, WorkspacesModule, SearchRegistryModule],
   controllers: [DocumentsController],
-  providers: [DocumentsService, DocumentTrashPurgeService, DocumentsSearchProvider],
+  providers: [DocumentsProjectAggregates, DocumentsService, DocumentTrashPurgeService, DocumentsSearchProvider],
   exports: [DocumentsService]
 })
 export class DocumentsModule {}
