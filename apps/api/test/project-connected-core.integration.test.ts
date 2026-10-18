@@ -147,6 +147,19 @@ describe("Project connected core (U07)", () => {
     expect(after.counts.tasks).toBe(1);
   });
 
+  it("spentAmount counts only the project's currency; other currencies go to spentOther", async () => {
+    const alice = await register("currencies");
+    const project = await createProject(alice, "Две валюты");
+    const rub = await createAccount(alice, "Рубли");
+    const usd = await createAccount(alice, "Доллары", "USD");
+    await createTransaction(alice, rub.id, project.id, "В рублях");
+    await createTransaction(alice, usd.id, project.id, "В долларах");
+
+    const detail = await getProject(alice, project.id);
+    expect(detail.spentAmount).toBe(500);
+    expect(detail.spentOther).toEqual([{ currency: "USD", amount: 500 }]);
+  });
+
   it("projectId stays optional everywhere: tasks/notes/events/documents/transactions/time entries/inventory items can exist with no project at all", async () => {
     const alice = await register("optional");
     const task = await createTask(alice, "Без проекта", null);
@@ -227,12 +240,14 @@ describe("Project connected core (U07)", () => {
     counts: { tasks: number; closed: number; notes: number; events: number; documents: number; inventory: number };
     trackedMinutes: number;
     spentAmount: number;
+    spentOther: Array<{ currency: string; amount: number }>;
     activity: Array<{ type: string; title: string; id: string }>;
   }> {
     const res = await request<{
       counts: { tasks: number; closed: number; notes: number; events: number; documents: number; inventory: number };
       trackedMinutes: number;
       spentAmount: number;
+      spentOther: Array<{ currency: string; amount: number }>;
       activity: Array<{ type: string; title: string; id: string }>;
     }>(`/workspaces/${session.workspaceId}/projects/${projectId}`, { method: "GET", token: session.accessToken });
     expect(res.status).toBe(200);
@@ -291,11 +306,11 @@ describe("Project connected core (U07)", () => {
     return created.data;
   }
 
-  async function createAccount(session: RegisteredSession, name: string): Promise<{ id: string }> {
+  async function createAccount(session: RegisteredSession, name: string, currency = "RUB"): Promise<{ id: string }> {
     const res = await request<{ id: string }>(`/workspaces/${session.workspaceId}/finance/accounts`, {
       method: "POST",
       token: session.accessToken,
-      body: { name, kind: "cash", currency: "RUB" }
+      body: { name, kind: "cash", currency }
     });
     expect(res.status).toBe(201);
     return res.data;

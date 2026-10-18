@@ -131,6 +131,11 @@ export function formatMoney(kopecks: number, currency = "RUB"): string {
   return `${money.format(kopecks / 100)} ${CURRENCY_SYMBOL[currency] ?? currency}`;
 }
 
+/** «ещё $120 · ещё 50 €» — расходы проекта в чужих валютах; пусто, если их нет. */
+export function formatSpentOther(other: ReadonlyArray<{ currency: string; amount: number }>): string {
+  return other.map((item) => `ещё ${formatMoney(item.amount, item.currency)}`).join(" · ");
+}
+
 /**
  * Sums `amount` per distinct `currency` instead of into one combined number
  * — the only correct way to total money across a set of items that may not
