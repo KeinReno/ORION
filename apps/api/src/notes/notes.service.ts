@@ -155,7 +155,7 @@ export class NotesService {
       for (const note of affected) {
         const next = note.tags.filter((t) => t !== from);
         if (!next.includes(to)) next.push(to);
-        await tx.note.update({ where: { id: note.id }, data: { tags: next } });
+        await tx.note.update({ where: { id: note.id }, data: { tags: next, revision: { increment: 1 } } });
       }
       return { updated: affected.length };
     });
@@ -174,7 +174,7 @@ export class NotesService {
       for (const note of affected) {
         await tx.note.update({
           where: { id: note.id },
-          data: { tags: note.tags.filter((t) => t !== target) }
+          data: { tags: note.tags.filter((t) => t !== target), revision: { increment: 1 } }
         });
       }
       return { updated: affected.length };
@@ -328,7 +328,7 @@ export class NotesService {
   /** Мягкое удаление (корзина) внутри чужой транзакции — см. `updateTx`. */
   async removeTx(tx: Prisma.TransactionClient, workspaceId: string, noteId: string): Promise<void> {
     await this.assertOwnedTx(tx, workspaceId, noteId);
-    await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date() } });
+    await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date(), revision: { increment: 1 } } });
     await tx.noteLink.deleteMany({ where: { sourceNoteId: noteId } });
     await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null } });
   }
@@ -338,7 +338,7 @@ export class NotesService {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, noteId);
-      await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date() } });
+      await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date(), revision: { increment: 1 } } });
       // A trashed note is neither a link source nor a backlink target.
       await tx.noteLink.deleteMany({ where: { sourceNoteId: noteId } });
       await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null } });
@@ -349,7 +349,7 @@ export class NotesService {
     const note = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, noteId);
-      const restored = await tx.note.update({ where: { id: noteId }, data: { deletedAt: null } });
+      const restored = await tx.note.update({ where: { id: noteId }, data: { deletedAt: null, revision: { increment: 1 } } });
       await this.syncOutgoingLinks(tx, restored);
       await this.reresolveIncomingLinks(tx, restored);
       return restored;
@@ -382,7 +382,7 @@ export class NotesService {
       if (existing) {
         const revived = await tx.note.update({
           where: { id: existing.id },
-          data: { deletedAt: null, editedAt: new Date() }
+          data: { deletedAt: null, editedAt: new Date(), revision: { increment: 1 } }
         });
         await this.syncOutgoingLinks(tx, revived);
         await this.reresolveIncomingLinks(tx, revived);

@@ -9,6 +9,7 @@ import {
   agentPermissionsSchema,
   agentScopeSchema,
   isExtensionAgentPermission,
+  remoteTokenViolations,
   scopesFromPermissions,
   type AgentAuditEntry,
   type AgentAuditQuery,
@@ -95,6 +96,12 @@ export class AgentTokensService {
       : [...new Set(input.scopes)];
     const unknownPermission = input.modulePermissions.find((permission) => !isExtensionAgentPermission(permission));
     if (unknownPermission) throw new BadRequestException(`Разрешение «${unknownPermission}» не объявлено ни одним модулем`);
+    // ADR-0017: на сервере токен живёт ограниченно и без удаления. Запрет удаления добавляем сами, остальное — отказ.
+    const forbidden = isServerMode() ? [...new Set([...input.forbidden, "delete" as const])] : [...new Set(input.forbidden)];
+    if (isServerMode()) {
+      const problems = remoteTokenViolations({ mode: input.mode, expiresInDays: input.expiresInDays, forbidden });
+      if (problems.length > 0) throw new BadRequestException(problems.join(". "));
+    }
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertProjectsTx(tx, workspaceId, [...input.allowedProjectIds, ...input.autoCommitProjectIds]);
@@ -109,7 +116,7 @@ export class AgentTokensService {
           mode: input.mode,
           permissions: input.permissions ?? undefined,
           allowedProjectIds: [...new Set(input.allowedProjectIds)],
-          forbidden: [...new Set(input.forbidden)],
+          forbidden,
           writeLimitPerHour: input.writeLimitPerHour,
           autoCommitProjectIds: [...new Set(input.autoCommitProjectIds)],
           expiresAt: input.expiresInDays === null ? null : new Date(Date.now() + input.expiresInDays * DAY_MS)
@@ -121,6 +128,11 @@ export class AgentTokensService {
 
   /** Mode and restrictions of a live token. The matrix is intersected with the scopes, so this can only narrow rights. */
   async update(userId: string, workspaceId: string, tokenId: string, input: UpdateAgentTokenInput): Promise<AgentToken> {
+    if (isServerMode()) {
+      // Срок при обновлении не меняется, поэтому проверяем только режим и запрет удаления (он не снимается).
+      const problems = remoteTokenViolations({ mode: input.mode ?? "assistant", forbidden: input.forbidden ?? ["delete"] }, false);
+      if (problems.length > 0) throw new BadRequestException(problems.join(". "));
+    }
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertProjectsTx(tx, workspaceId, [...(input.allowedProjectIds ?? []), ...(input.autoCommitProjectIds ?? [])]);

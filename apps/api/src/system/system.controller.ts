@@ -1,15 +1,17 @@
 import { Controller, Get, UseGuards } from "@nestjs/common";
-import type { AppInfo, BackgroundJobStatus, OrionModeInfo } from "@orion/shared-types";
+import type { AppInfo, BackgroundJobStatus, ComponentDataStatus, OrionModeInfo } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { BackgroundJobsService } from "../common/background-jobs.service";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { resolveMode } from "../common/orion-mode";
+import { ComponentDataService } from "./component-data.service";
 
 @Controller("system")
 export class SystemController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jobs: BackgroundJobsService
+    private readonly jobs: BackgroundJobsService,
+    private readonly componentData: ComponentDataService
   ) {}
 
   /**
@@ -45,6 +47,16 @@ export class SystemController {
   @UseGuards(JwtAuthGuard)
   listJobs(): BackgroundJobStatus[] {
     return this.jobs.list();
+  }
+
+  /**
+   * G11 — применены ли миграции компонентов, подключённых манифестом. Нужен вход, но не членство:
+   * в ответе только имена компонентов и миграций.
+   */
+  @Get("components")
+  @UseGuards(JwtAuthGuard)
+  listComponentData(): Promise<ComponentDataStatus[]> {
+    return this.componentData.list();
   }
 
   @Get("health")

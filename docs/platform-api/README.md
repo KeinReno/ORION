@@ -51,10 +51,19 @@
    это сегодняшний минимум, а не целевое поведение).
 5. **Проверка в CI** (G2, критерий): снимок публичных типов слотов и `host-api.ts`, который падает при изменении без bump.
 
+### Сделано (G2)
+
+- Per-contract версии: `PLATFORM_CONTRACT_VERSIONS` в `packages/shared-types/src/platform-contracts.ts` (десять контрактов, все `1.0.0`).
+  MAJOR `PLATFORM_API_VERSION` не ниже MAJOR любого контракта (тест).
+- `requires.contracts` в манифесте (необязательно, ключи — только id контрактов) и `unsatisfiedContracts()`.
+- CI-снимок `docs/platform-api/contracts.snapshot.json`: слоты и экспорты `host-api.ts` (контракт `plugin`), типы событий, разрешения,
+  токены темы, поверхности, id модулей. Тест `apps/web/lib/extensions/contract-snapshot.test.ts` падает при расхождении;
+  обновление — `ORION_UPDATE_CONTRACT_SNAPSHOT=1 pnpm vitest run apps/web/lib/extensions/contract-snapshot.test.ts`,
+  и оно отказывается писать снимок, если поверхность изменилась, а версия контракта нет.
+
 ### Не сделано
 
-- Per-contract версии, кроме перечисленных выше; `requires.contracts` в манифесте.
-- CI-снимок публичных типов слотов/`host-api.ts` и требование bump (критерий G2).
+- Журнал изменений контрактов (changelog) и пометки `deprecated`; окно депрекации пока только политика.
 - Журнал изменений контрактов (changelog) и пометки `deprecated`.
 - Проверка `requires.platform` при старте API и в менеджере компонентов (рантайм манифесты не читает).
 

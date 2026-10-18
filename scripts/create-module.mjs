@@ -366,6 +366,7 @@ export const @@C@@NoContentSchema = z.void();
 
 const HOOKS_TS = `"use client";
 
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
 import { useCore } from "@orion/core-react";
 import {
   @@C@@ItemSchema,
@@ -377,16 +378,17 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
- * Хуки модуля «@@LABEL@@». Ходят через \`ApiClient.extensionRequest\` (G5/G24), поэтому модуль не правит
+ * Хуки модуля «@@LABEL@@». Ходят через \`createModuleClient\` поверх \`ApiClient.extensionRequest\` (G5/G24), поэтому модуль не правит
  * \`@orion/core\` / \`@orion/core-react\`. Ключи кэша — \`["@@ID@@", ...]\`.
  */
-const base = (workspaceId: string) => \`/workspaces/\${workspaceId}/@@ID@@\`;
+const client = (api: Parameters<typeof createModuleClient>[0], workspaceId: string | undefined) =>
+  createModuleClient(api, workspaceModuleBase(workspaceId as string, "@@ID@@"));
 
 export function use@@P@@Items(workspaceId: string | undefined) {
   const { api } = useCore();
   return useQuery<@@P@@Item[]>({
     queryKey: ["@@ID@@", workspaceId, "items"],
-    queryFn: () => api.extensionRequest("GET", \`\${base(workspaceId as string)}/items\`, undefined, @@C@@ItemSchema.array()),
+    queryFn: () => client(api, workspaceId).get("/items", @@C@@ItemSchema.array()),
     enabled: Boolean(workspaceId)
   });
 }
@@ -395,7 +397,7 @@ export function useCreate@@P@@Item(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: Create@@P@@ItemInput) => api.extensionRequest("POST", \`\${base(workspaceId as string)}/items\`, input, @@C@@ItemSchema),
+    mutationFn: (input: Create@@P@@ItemInput) => client(api, workspaceId).post("/items", input, @@C@@ItemSchema),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["@@ID@@", workspaceId, "items"] })
   });
 }
@@ -405,7 +407,7 @@ export function useUpdate@@P@@Item(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ itemId, input }: { itemId: string; input: Update@@P@@ItemInput }) =>
-      api.extensionRequest("PATCH", \`\${base(workspaceId as string)}/items/\${itemId}\`, input, @@C@@ItemSchema),
+      client(api, workspaceId).patch(\`/items/\${itemId}\`, input, @@C@@ItemSchema),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["@@ID@@", workspaceId, "items"] })
   });
 }
@@ -415,7 +417,7 @@ export function useDelete@@P@@Item(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) =>
-      api.extensionRequest("DELETE", \`\${base(workspaceId as string)}/items/\${itemId}\`, undefined, @@C@@NoContentSchema),
+      client(api, workspaceId).delete(\`/items/\${itemId}\`, @@C@@NoContentSchema),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["@@ID@@", workspaceId, "items"] })
   });
 }

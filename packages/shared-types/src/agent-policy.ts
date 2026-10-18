@@ -112,6 +112,22 @@ export function decideAgentModuleOperation(subject: AgentPolicySubject, permissi
   if (op === "read") return { kind: "allow" };
   if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
   return { kind: "allow" };
+/** Предельный срок токена агента на сервере, доступном извне (ADR-0017). */
+export const REMOTE_TOKEN_MAX_DAYS = 30;
+
+/**
+ * ADR-0017, «что запрещено при любом варианте»: токен, который может использоваться удалённо (режим `server`), живёт
+ * не дольше `REMOTE_TOKEN_MAX_DAYS`, не бывает `manager` и всегда несёт запрет удаления. Чистая функция: сервер отказывает
+ * ею, экран настроек может показать те же причины. Пустой список — токен допустим.
+ */
+export function remoteTokenViolations(token: { mode: AgentMode; expiresInDays?: number | null; forbidden: readonly AgentForbidden[] }, checkExpiry = true): string[] {
+  const problems: string[] = [];
+  if (token.mode === "manager") problems.push("Режим «менеджер» недоступен для токенов на сервере: выберите «помощник» или «наблюдатель»");
+  if (checkExpiry && (token.expiresInDays === null || token.expiresInDays === undefined || token.expiresInDays > REMOTE_TOKEN_MAX_DAYS)) {
+    problems.push(`На сервере токен выпускается со сроком не больше ${REMOTE_TOKEN_MAX_DAYS} дней`);
+  }
+  if (!token.forbidden.includes("delete")) problems.push("На сервере у токена всегда включён запрет удаления");
+  return problems;
 }
 
 /** Short Russian sentence for a matrix cell set, used in the settings list. */

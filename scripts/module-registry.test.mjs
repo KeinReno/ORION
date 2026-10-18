@@ -252,5 +252,34 @@ describe("module-registry: инструменты агента (G13)", () => {
   it("op: update пока не поддержан", () => {
     withTools([tool({ op: "update" })]);
     expect(problems()).toContain("op ∈ read | create");
+describe("module-registry: шаблон RLS (G10)", () => {
+  const MIGRATION = { name: "20261018120000_fixture_mod", file: "prisma/migration.sql", rls: "workspace-member" };
+  const prismaWith = (migration) => ({
+    fragment: "prisma/models.prisma",
+    workspaceBackRelations: ["fixtureThings FixtureThing[]"],
+    migrations: [migration]
+  });
+  const ddlOnly = SQL.slice(0, SQL.indexOf("ENABLE ROW LEVEL SECURITY")).replace(/\n[^\n]*$/, "");
+
+  it("дописывает ENABLE + FORCE RLS и политику для каждой созданной таблицы модуля", () => {
+    addFixtureModule(manifest({ prisma: prismaWith(MIGRATION) }));
+    put("apps/api/src/modules-ext/fixture-mod/prisma/migration.sql", 'CREATE TABLE "fixture_things" ("id" TEXT NOT NULL, "workspaceId" TEXT NOT NULL);\n');
+    expect(collectModules(root).errors).toEqual([]);
+    writeRegistry(root);
+    const sql = readFileSync(join(root, "apps/api/prisma/migrations/20261018120000_fixture_mod/migration.sql"), "utf8");
+    expect(sql).toContain('ALTER TABLE "fixture_things" ENABLE ROW LEVEL SECURITY;');
+    expect(sql).toContain('ALTER TABLE "fixture_things" FORCE ROW LEVEL SECURITY;');
+    expect(sql).toContain('CREATE POLICY fixture_things_isolation ON "fixture_things"');
+    expect(sql).toContain("current_setting('app.current_user_id', true)");
+    expect(registryViolations(root)).toEqual([]);
+  });
+
+  it("не принимает ручной RLS рядом с шаблоном и неизвестный шаблон", () => {
+    addFixtureModule(manifest({ prisma: prismaWith(MIGRATION) }));
+    expect(collectModules(root).errors.join("\n")).toContain("уберите ручной ENABLE ROW LEVEL SECURITY");
+    rmSync(join(root, "apps/api/src/modules-ext/fixture-mod"), { recursive: true, force: true });
+    addFixtureModule(manifest({ prisma: prismaWith({ ...MIGRATION, rls: "everyone" }) }));
+    put("apps/api/src/modules-ext/fixture-mod/prisma/migration.sql", ddlOnly);
+    expect(collectModules(root).errors.join("\n")).toContain('rls ∈ "workspace-member"');
   });
 });
