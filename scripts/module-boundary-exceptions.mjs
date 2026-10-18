@@ -18,7 +18,7 @@ export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/health/health.service.ts": { models: ["Contact"] },
   "apps/api/src/home-utilities/home-utilities.service.ts": { models: ["Home","Meter"] },
   "apps/api/src/home/home.service.ts": { models: ["Contact","FinanceObligation","InventoryItem","List","Task","TaskActivity","TaskComment"] },
-  "apps/api/src/inbox/inbox.service.ts": { models: ["Event","Note","Project","Task"] },
+  "apps/api/src/inbox/inbox.service.ts": { models: ["Project"] },
   "apps/api/src/inventory/inventory.service.ts": { models: ["Project"] },
   "apps/api/src/lists-finance/lists-finance.service.ts": { models: ["List","ListItem"], services: ["lists/lists.service"] },
   "apps/api/src/lists-inventory/lists-inventory.service.ts": { models: ["InventoryItem","InventoryMovement","List","ListItem"], services: ["inventory/inventory.service","lists/lists.service"] },
@@ -29,7 +29,7 @@ export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/notes/notes.service.ts": { models: ["Project"] },
   "apps/api/src/overview/overview.service.ts": { models: ["Account","Task"] },
   "apps/api/src/projects/project-captures.service.ts": { services: ["captures/captures.service"] },
-  "apps/api/src/search/search.service.ts": { models: ["Account","Contact","Document","Event","Goal","List","Note","Project","SavingsGoal","Task","Transaction"], services: ["notes/notes.service","tasks/tasks.service"] },
+  "apps/api/src/search/search.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
   "apps/api/src/tasks/tasks.service.ts": { models: ["Milestone","Project","TimeEntry"] },
   "apps/api/src/time/time.service.ts": { models: ["Project","Task"] }
 };

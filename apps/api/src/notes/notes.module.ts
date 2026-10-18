@@ -6,6 +6,10 @@ import { NoteAttachmentsService } from "./note-attachments.service";
 import { NotesController } from "./notes.controller";
 import { NotesService } from "./notes.service";
 import { NoteTrashPurgeService } from "./note-trash-purge.service";
+import { SearchRegistryModule } from "../search/search-registry.module";
+import { InboxRegistryModule } from "../inbox/inbox-registry.module";
+import { NotesSearchProvider } from "./notes-search.provider";
+import { NoteInboxTarget } from "./notes-inbox.target";
 import { NotesProjectAggregates } from "./notes-project-aggregates";
 
 /**
@@ -14,9 +18,9 @@ import { NotesProjectAggregates } from "./notes-project-aggregates";
  * keys. One-way dependency (documents never imports notes), so no cycle.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, DocumentsModule],
+  imports: [AuthModule, WorkspacesModule, DocumentsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [NotesController],
-  providers: [NotesProjectAggregates, NotesService, NoteTrashPurgeService, NoteAttachmentsService],
+  providers: [NotesProjectAggregates, NotesService, NoteTrashPurgeService, NoteAttachmentsService, NotesSearchProvider, NoteInboxTarget],
   exports: [NotesService]
 })
 export class NotesModule {}

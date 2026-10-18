@@ -27,7 +27,7 @@ describe("Execution: limits, rights, pairing, restore", () => {
       const job = (await claim(runner)).job!;
       expect(job.attemptId).toBe(first.id);
       const path = component === "module" ? `/workspaces/${a.workspaceId}/modules/opportunities` : `/workspaces/${a.workspaceId}/plugins/${component}`;
-      expect((await hub.req(path, a.token, "PATCH", { enabled: false })).status).toBe(200);
+      expect((await hub.req(path, a.token, "PATCH", { enabled: false, confirm: true })).status).toBe(200);
       expect((await hub.req(path, a.token, "PATCH", { enabled: true })).status).toBe(200);
       expect((await hub.attempt(a, second.id)).data).toMatchObject({ state: "canceled", grant: { state: "revoked" } });
       expect((await hub.attempt(a, first.id)).data).toMatchObject({ state: "running", cancelRequested: true, grant: { state: "revoked" } });
@@ -234,7 +234,7 @@ describe("Execution: limits, rights, pairing, restore", () => {
   it("switching the plugin off blocks the human API and the runner but keeps every record; switching it on restores access, not execution", async () => {
     const { a, s, conn, runner } = await setup("switch");
     const att = await hub.queued(a, conn.id, s.draft.id);
-    expect((await hub.req(`/workspaces/${a.workspaceId}/plugins/opportunities-execution`, a.token, "PATCH", { enabled: false })).status).toBe(200);
+    expect((await hub.req(`/workspaces/${a.workspaceId}/plugins/opportunities-execution`, a.token, "PATCH", { enabled: false, confirm: true })).status).toBe(200);
     expect((await hub.req(`${hub.execPath(a)}/connections`, a.token)).status).toBe(409);
     expect((await runner.claim()).status).toBe(409);
     await hub.enable(a, "opportunities-execution");
