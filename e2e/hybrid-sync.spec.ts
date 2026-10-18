@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { apiUrl, register, signIn, type Account } from "./support";
 
 /**
@@ -21,6 +21,14 @@ async function hybridList(request: Parameters<typeof register>[0], label: string
   return { account, headers, ws, list, items };
 }
 
+/**
+ * The engine may drain the queue by itself as soon as the network is back; the banner and its
+ * button then disappear, so the manual sync is a nudge, not a step the test can wait on.
+ */
+async function syncNudge(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Синхронизировать" }).click({ timeout: 5_000 }).catch(() => undefined);
+}
+
 test("hybrid: a list is read and edited without a connection, and the change reaches the node when it is back", async ({ page, context, request }) => {
   const { account, list, items } = await hybridList(request, "hybrid-offline");
   await signIn(page, account);
@@ -41,7 +49,7 @@ test("hybrid: a list is read and edited without a connection, and the change rea
 
   // Back online: the queue drains and the node has both changes.
   await context.setOffline(false);
-  await page.getByRole("button", { name: "Синхронизировать" }).click();
+  await syncNudge(page);
   await expect.poll(async () => (await items()).map((item) => item.label), { timeout: 30_000 }).toContain("Сыр");
   await expect.poll(async () => (await items()).find((item) => item.label === "Хлеб")?.checked, { timeout: 30_000 }).toBe(true);
   await expect(page.getByRole("status")).toHaveCount(0, { timeout: 30_000 });
@@ -62,7 +70,7 @@ test("hybrid: an edit of an entry deleted on the node meanwhile comes back as a 
   expect(removed.ok()).toBe(true);
 
   await context.setOffline(false);
-  await page.getByRole("button", { name: "Синхронизировать" }).click();
+  await syncNudge(page);
   await expect(page.getByText(/Изменение не применено: запись уже удалена на узле/)).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Понятно" }).click();
   await expect(page.getByText(/Изменение не применено/)).toHaveCount(0);
@@ -117,7 +125,7 @@ test("hybrid: a note edited on two devices shows an explicit conflict and «Со
   expect(other.ok(), await other.text()).toBe(true);
 
   await context.setOffline(false);
-  await page.getByRole("button", { name: "Синхронизировать" }).click();
+  await syncNudge(page);
   await expect(page.getByText(/Заметку изменили на узле, пока вы были без связи/)).toBeVisible({ timeout: 30_000 });
   // No silent merge: the node still has the other device's text and the old title.
   expect(await server()).toMatchObject({ title: "Заметка E2E", body: "правка с другого ПК" });
