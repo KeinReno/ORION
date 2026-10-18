@@ -27,7 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewState } from "../lib/use-view-state";
 import { projectsViewStateSchema } from "@orion/shared-types";
 import { describeError } from "../lib/error-message";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatSpentOther } from "../lib/format";
 import { openProject } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
@@ -446,12 +446,12 @@ function ProjectCard({
   // One mono line, only the modules that are actually on — not five equal chips.
   const meta: string[] = [];
   if (timeOn && project.trackedMinutes > 0) meta.push(formatDuration(project.trackedMinutes));
-  if (financeOn && (project.budgetAmount !== null || project.spentAmount > 0)) {
-    meta.push(
+  if (financeOn && (project.budgetAmount !== null || project.spentAmount > 0 || project.spentOther.length > 0)) {
+    const spent =
       project.budgetAmount !== null
         ? `${formatMoney(project.spentAmount, project.currency)} / ${formatMoney(project.budgetAmount, project.currency)}`
-        : formatMoney(project.spentAmount, project.currency)
-    );
+        : formatMoney(project.spentAmount, project.currency);
+    meta.push(project.spentOther.length > 0 ? `${spent} (${formatSpentOther(project.spentOther)})` : spent);
   }
 
   return (

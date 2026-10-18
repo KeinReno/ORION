@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sumByCurrency } from "./format";
+import { formatMoney, formatSpentOther, sumByCurrency } from "./format";
 
 /**
  * S16 (Finance): accounts are not all the same currency (Account.currency,
@@ -44,5 +44,17 @@ describe("sumByCurrency", () => {
 
   it("handles an empty list", () => {
     expect(sumByCurrency([] as { currency: string; balance: number }[], (a) => a.currency, (a) => a.balance)).toEqual([]);
+  });
+});
+
+describe("formatSpentOther", () => {
+  it("joins other currencies with a middle dot", () => {
+    expect(formatSpentOther([{ currency: "USD", amount: 12000 }, { currency: "EUR", amount: 5000 }])).toBe(
+      `ещё ${formatMoney(12000, "USD")} · ещё ${formatMoney(5000, "EUR")}`
+    );
+  });
+
+  it("is empty when there is nothing in other currencies", () => {
+    expect(formatSpentOther([])).toBe("");
   });
 });

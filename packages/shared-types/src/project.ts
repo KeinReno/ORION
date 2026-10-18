@@ -130,7 +130,10 @@ export const projectSchema = z.object({
     /** Non-archived InventoryItem rows pointed at this project (v0.26+, U07 adapter). */
     inventory: z.number().int()
   }),
+  /** Expenses in the project's own `currency` only, kopecks. */
   spentAmount: z.number().int(),
+  /** Expenses in other currencies, per currency (sorted, amounts > 0); never added to `spentAmount`. */
+  spentOther: z.array(z.object({ currency: z.string(), amount: z.number().int() })),
   /** Minutes from TimeEntry rows on this project (running timer counted up to "now"). */
   trackedMinutes: z.number().int().nonnegative(),
   /**
