@@ -142,4 +142,35 @@ describe("Notes CAS (expectedRevision)", () => {
     expect(pin.data.pinnedAt).not.toBeNull();
     expect(pin.data.revision).toBe(2);
   });
+  it("tag rename/delete, trash and restore also bump the revision, so a stale editor gets a conflict instead of overwriting them", async () => {
+    const alice = await register("direct");
+    const ws = alice.workspaceId;
+    const note = await request<{ id: string }>(`/workspaces/${ws}/notes`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { title: "N", body: "x", tags: ["a", "b"] }
+    });
+    const revisionOf = async () => {
+      const list = await request<Array<{ id: string; revision: number }>>(`/workspaces/${ws}/notes`, { method: "GET", token: alice.accessToken });
+      return list.data.find((n) => n.id === note.data.id)?.revision;
+    };
+    expect(await revisionOf()).toBe(1);
+
+    await request(`/workspaces/${ws}/notes/tags/rename`, { method: "POST", token: alice.accessToken, body: { from: "a", to: "c" } });
+    expect(await revisionOf()).toBe(2);
+    await request(`/workspaces/${ws}/notes/tags/${encodeURIComponent("b")}`, { method: "DELETE", token: alice.accessToken });
+    expect(await revisionOf()).toBe(3);
+
+    // Редактор, открытый на ревизии 1, больше не может молча затереть теги.
+    const stale = await request<{ code: string }>(`/workspaces/${ws}/notes/${note.data.id}`, {
+      method: "PATCH",
+      token: alice.accessToken,
+      body: { body: "stale", expectedRevision: 1 }
+    });
+    expect(stale.status).toBe(409);
+
+    await request(`/workspaces/${ws}/notes/${note.data.id}`, { method: "DELETE", token: alice.accessToken });
+    await request(`/workspaces/${ws}/notes/${note.data.id}/restore`, { method: "POST", token: alice.accessToken });
+    expect(await revisionOf()).toBe(5);
+  });
 });
