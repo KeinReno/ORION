@@ -542,10 +542,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   журнал переживает сам swap, `recover()` умеет продолжить прерванный своп.
   **Порядок важен**: блобы восстанавливаются **до** применения снапшота БД
   (`SyncService.restore()`), иначе `GET .../content` может отдать усечённое
-  тело с Content-Length от новой строки БД. Известный пробел: нет проверки
-  «протухшего» dry-run превью (manifest-hash между preview и apply) — S04
-  подшаг 4 не сделан; WebDAV-бэкенд не покрыт fault-injection тестами (только
-  `LocalDiskStorage`).
+  тело с Content-Length от новой строки БД. Протухший dry-run
+  отвергается: `expectedManifestHash` (preview → apply, `SyncService.restore`).
+  WebDAV-драйвер покрыт fault-injection тестами против WebDAV-сервера в памяти
+  (`webdav.storage.test.ts`); они нашли зависание чтения при обрыве соединения
+  посреди тела (`webdav` соединяет потоки через `pipe()`, ошибки не передаются) —
+  теперь `getStream` падает по таймауту простоя `WEBDAV_IDLE_TIMEOUT_MS` (30 с).
 - **Notification recipientId/eventKey (адресные уведомления).**
   `Notification.recipientId` (nullable FK на `User`) — уведомление видно
   только адресату; RLS-политика `notifications_isolation` проверяет это на
