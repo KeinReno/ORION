@@ -10,7 +10,7 @@ describe("Capability lifecycle transactional contract", () => {
       if (change.workspaceId === a.workspaceId && !change.enabled) throw new Error("Synthetic lifecycle failure");
     });
     for (const [kind, id] of [["modules", "opportunities"], ["plugins", "opportunities-hh-import"]]) {
-      expect((await hub.req(`/workspaces/${a.workspaceId}/${kind}/${id}`, a.token, "PATCH", { enabled: false })).status).toBe(500);
+      expect((await hub.req(`/workspaces/${a.workspaceId}/${kind}/${id}`, a.token, "PATCH", { enabled: false, confirm: true })).status).toBe(500);
       const list = await hub.req<{ id: string; enabled: boolean }[]>(`/workspaces/${a.workspaceId}/${kind}`, a.token);
       expect(list.data.find((item) => item.id === id)?.enabled).toBe(true);
     }
