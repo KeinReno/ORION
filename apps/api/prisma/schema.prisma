@@ -295,6 +295,8 @@ model Workspace {
   healthSymptoms     HealthSymptom[]
 
   // <module-registry:workspace-relations>
+  petCarePets    PetCarePet[]
+  petCareEntries PetCareEntry[]
   // </module-registry:workspace-relations>
 }
 
@@ -3258,4 +3260,40 @@ model DomainEventDelivery {
 // G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
 // генерирует scripts/module-registry.mjs — руками не править.
 // <module-registry:models>
+// module: pet-care
+model PetCarePet {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  species     String    @default("other")
+  /// Календарный день рождения (без времени).
+  birthday    DateTime? @db.Date
+  notes       String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entries   PetCareEntry[]
+
+  @@index([workspaceId])
+  @@map("pet_care_pets")
+}
+
+model PetCareEntry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  petId       String
+  /// feeding | vet | medication | walk (см. PET_CARE_KINDS в контракте модуля).
+  kind        String
+  occurredAt  DateTime
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pet       PetCarePet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([petId, occurredAt])
+  @@map("pet_care_entries")
+}
 // </module-registry:models>
