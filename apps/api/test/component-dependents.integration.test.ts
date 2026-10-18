@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MODULE_CATALOG, PLUGIN_CATALOG, enabledHardDependents } from "@orion/shared-types";
 import { AppModule } from "../src/app.module";
+import { GENERATED_MODULE_PROBES } from "../src/modules-ext/data.generated";
 import { CapabilityLifecycle } from "../src/common/capability-lifecycle";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
@@ -191,7 +192,9 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
       opportunities: "/opportunities",
       home: "/homes",
       contacts: "/contacts",
-      health: "/health/subjects"
+      health: "/health/subjects",
+      // G5: маршруты подключаемых модулей берутся из их манифестов (api.probePath).
+      ...GENERATED_MODULE_PROBES
     };
     expect(Object.keys(probes).sort()).toEqual(MODULE_CATALOG.map((item) => item.id).sort());
     const initial = await get("/modules");

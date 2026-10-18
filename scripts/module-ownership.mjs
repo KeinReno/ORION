@@ -3,6 +3,8 @@
 // MODULE_CATALOG знает только пользовательские модули и не знает, какие таблицы им принадлежат.
 // Новая модель в schema.prisma без записи здесь валит architecture-check (см. ownershipMapViolations).
 
+import { GENERATED_MODEL_OWNERS } from "./module-ownership.generated.mjs";
+
 /** Каталоги, которые считаются одним доменным модулем (семейство Opportunities живёт в нескольких папках). */
 export const MODULE_GROUPS = new Map([
   ["opportunities-assistant", "opportunities"],
@@ -38,6 +40,8 @@ function owned(owner, models) {
 
 /** model -> каталог модуля-владельца (группы приводятся через MODULE_GROUPS). Модели ядра — в CORE_MODELS. */
 export const MODEL_OWNERS = new Map([
+  // G5/G10: модели модулей, подключённых манифестом, вносит генератор (scripts/module-registry.mjs).
+  ...GENERATED_MODEL_OWNERS,
   ...owned("projects", "Project ProjectStatusUpdate"),
   ...owned("milestones", "Milestone MilestoneDependency"),
   ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),
