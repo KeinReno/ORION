@@ -38,3 +38,42 @@ export function canStep(history: NavHistory, direction: -1 | 1, canShow: (panelI
 export function clearHistory(): NavHistory {
   return EMPTY_NAV_HISTORY;
 }
+
+/**
+ * The history survives a reload or a crash: the same plain ids, one list per workspace, in the browser's storage.
+ * A convenience — if storage is unavailable or holds junk, the window simply starts with an empty history.
+ */
+export function navHistoryStorageKey(workspaceId: string): string {
+  return `orion.nav.history.v1:${workspaceId}`;
+}
+
+/** Reads a stored history; `exists` drops panels that are no longer in the registry, the index follows the entry it pointed at. */
+export function readNavHistory(storage: Pick<Storage, "getItem">, workspaceId: string, exists: (panelId: string) => boolean = () => true): NavHistory {
+  try {
+    const raw = JSON.parse(storage.getItem(navHistoryStorageKey(workspaceId)) ?? "null") as { entries?: unknown; index?: unknown } | null;
+    if (!raw || !Array.isArray(raw.entries)) return EMPTY_NAV_HISTORY;
+    const current = typeof raw.index === "number" ? raw.entries[raw.index] : undefined;
+    const seen = new Set<string>();
+    const entries: string[] = [];
+    for (const id of raw.entries) {
+      if (typeof id !== "string" || id === "" || seen.has(id) || !exists(id)) continue;
+      seen.add(id);
+      entries.push(id);
+    }
+    const capped = entries.slice(-NAV_HISTORY_LIMIT);
+    if (capped.length === 0) return EMPTY_NAV_HISTORY;
+    const at = typeof current === "string" ? capped.indexOf(current) : -1;
+    return { entries: capped, index: at >= 0 ? at : capped.length - 1 };
+  } catch {
+    return EMPTY_NAV_HISTORY;
+  }
+}
+
+export function saveNavHistory(storage: Pick<Storage, "setItem" | "removeItem">, workspaceId: string, history: NavHistory): void {
+  try {
+    if (history.entries.length === 0) storage.removeItem(navHistoryStorageKey(workspaceId));
+    else storage.setItem(navHistoryStorageKey(workspaceId), JSON.stringify({ entries: history.entries.slice(-NAV_HISTORY_LIMIT), index: history.index }));
+  } catch {
+    /* a convenience only */
+  }
+}

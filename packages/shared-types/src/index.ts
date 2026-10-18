@@ -76,3 +76,4 @@ export * from "./opportunity-manager";
 export * from "./domain-events";
 export * from "./permissions";
 export * from "./component-manifest";
+export * from "./component-dependencies";

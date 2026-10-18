@@ -162,7 +162,7 @@ describe("Contacts module", () => {
     const { call } = await setup("gate");
     const home = await call<{ id: string }>("POST", "/homes", { name: "Дача" });
     const contact = await call<Card>("POST", "/contacts", { name: "Сторож", homeId: home.data.id });
-    expect((await call("PATCH", "/modules/contacts", { enabled: false })).status).toBe(200);
+    expect((await call("PATCH", "/modules/contacts", { enabled: false, confirm: true })).status).toBe(200);
     expect((await call("GET", "/contacts")).status).toBe(409);
     const overview = await call<{ contacts: Array<{ id: string }> }>("GET", `/homes/${home.data.id}/overview`);
     expect(overview.data.contacts.map((c) => c.id)).toEqual([contact.data.id]);

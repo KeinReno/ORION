@@ -102,8 +102,8 @@ export function useSetWorkspaceModule(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ moduleId, enabled }: { moduleId: string; enabled: boolean }) =>
-      api.setWorkspaceModule(workspaceId as string, moduleId, { enabled }),
+    mutationFn: ({ moduleId, enabled, confirm }: { moduleId: string; enabled: boolean; confirm?: boolean }) =>
+      api.setWorkspaceModule(workspaceId as string, moduleId, confirm ? { enabled, confirm } : { enabled }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       void queryClient.invalidateQueries({ queryKey: ["workspace-modules", workspaceId] });

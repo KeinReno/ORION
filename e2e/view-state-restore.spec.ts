@@ -140,7 +140,7 @@ test("a saved project filter is not restored while Projects is off; records and 
   await expect(page.getByText(taskLoose.title, { exact: true })).toHaveCount(0);
   await page.waitForTimeout(700);
 
-  const off = await request.patch(`${base}/modules/projects`, { headers, data: { enabled: false } });
+  const off = await request.patch(`${base}/modules/projects`, { headers, data: { enabled: false, confirm: true } });
   expect(off.ok(), await off.text()).toBe(true);
   await page.reload();
   await page.getByRole("button", { name: "Заметки", exact: true }).click();

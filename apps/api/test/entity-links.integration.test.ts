@@ -207,7 +207,7 @@ describe("EntityLink typed registry (U01)", () => {
     const disable = await request(`/workspaces/${alice.workspaceId}/modules/notes`, {
       method: "PATCH",
       token: alice.accessToken,
-      body: { enabled: false }
+      body: { enabled: false, confirm: true }
     });
     expect(disable.status).toBe(200);
 
