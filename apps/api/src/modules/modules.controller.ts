@@ -32,7 +32,7 @@ export class ModulesController {
     @Param("moduleId") moduleId: string,
     @Body(new ZodValidationPipe(setWorkspaceModuleInputSchema)) body: SetWorkspaceModuleInput
   ): Promise<WorkspaceModuleState[]> {
-    return this.modules.setEnabled(user.userId, workspaceId, moduleId, body.enabled);
+    return this.modules.setEnabled(user.userId, workspaceId, moduleId, body.enabled, body.confirm === true);
   }
 
   /** Visibility, not availability — see ModulesService.setRestricted. */

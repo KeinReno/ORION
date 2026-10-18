@@ -56,7 +56,9 @@ export const workspaceModuleStateSchema = moduleManifestSchema.extend({
 export type WorkspaceModuleState = z.infer<typeof workspaceModuleStateSchema>;
 
 export const setWorkspaceModuleInputSchema = z.object({
-  enabled: z.boolean()
+  enabled: z.boolean(),
+  /** Выключить, даже если от компонента зависят включённые (409 `component_has_dependents` без этого флага). */
+  confirm: z.boolean().optional()
 });
 export type SetWorkspaceModuleInput = z.infer<typeof setWorkspaceModuleInputSchema>;
 

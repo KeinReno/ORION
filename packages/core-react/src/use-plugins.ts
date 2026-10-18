@@ -17,8 +17,8 @@ export function useSetWorkspacePlugin(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ pluginId, enabled }: { pluginId: string; enabled: boolean }) =>
-      api.setWorkspacePlugin(workspaceId as string, pluginId, { enabled }),
+    mutationFn: ({ pluginId, enabled, confirm }: { pluginId: string; enabled: boolean; confirm?: boolean }) =>
+      api.setWorkspacePlugin(workspaceId as string, pluginId, confirm ? { enabled, confirm } : { enabled }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       void queryClient.invalidateQueries({ queryKey: ["workspace-plugins", workspaceId] });

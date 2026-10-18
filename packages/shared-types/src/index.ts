@@ -75,3 +75,4 @@ export * from "./opportunity-execution";
 export * from "./opportunity-manager";
 export * from "./permissions";
 export * from "./component-manifest";
+export * from "./component-dependencies";

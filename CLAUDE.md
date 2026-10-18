@@ -181,6 +181,9 @@ pub/sub, а не стейт-менеджер; смотри его, прежде 
    Контроллер домена несёт `@RequireModule("x")` (409, если выключен). На
    клиенте сосед не зовёт чужой API: `useX(isEnabled("x") ? workspaceId : undefined)`.
    Панель в реестре помечается `moduleId`. Страница модуля — Настройки → Модули.
+   Выключение модуля/плагина с включёнными жёсткими зависимыми — 409 `component_has_dependents`
+   (повтор с `confirm: true`), `required` — 409 `component_required`; хуки
+   `CapabilityLifecycle.registerComponent` идут в той же транзакции (G6/G7, `component-dependencies.ts`).
 
 ### Фоновые задачи (`@Cron`) — их пять, и все обходят RLS через `asSystem`
 

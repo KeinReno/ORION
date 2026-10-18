@@ -1,11 +1,14 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  enabledHardDependents,
+  isComponentRequired,
   isModuleEnabled,
   isModuleRestricted,
   isOrionModuleId,
   MODULE_CATALOG,
   moduleStates,
+  type ComponentHasDependentsError,
   type ModuleManifest,
   type OrionModuleId,
   type WorkspaceModuleState
@@ -38,13 +41,17 @@ export class ModulesService {
     userId: string,
     workspaceId: string,
     moduleId: string,
-    enabled: boolean
+    enabled: boolean,
+    confirm = false
   ): Promise<WorkspaceModuleState[]> {
     if (!isOrionModuleId(moduleId)) throw new NotFoundException("Модуль не найден");
     const manifest = MODULE_CATALOG.find((item) => item.id === moduleId);
     if (!manifest) throw new NotFoundException("Модуль не найден");
-    if (manifest.required && !enabled) {
-      throw new BadRequestException(`Модуль «${manifest.label}» нельзя выключить`);
+    if (!enabled && isComponentRequired("module", moduleId)) {
+      throw new ConflictException({
+        code: "component_required",
+        message: `Модуль «${manifest.label}» обязателен — его нельзя выключить`
+      });
     }
 
     return this.prisma.withUser(userId, async (tx) => {
@@ -57,7 +64,19 @@ export class ModulesService {
       }
 
       await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
-      const { disabled, restricted } = await this.overridesTx(tx, workspaceId);
+      const { disabled, restricted, pluginOverrides } = await this.overridesTx(tx, workspaceId);
+      if (!enabled && !confirm && isModuleEnabled(disabled, moduleId)) {
+        // Данные зависимых не трогаются: плагины просто неактивны, пока хозяин выключен.
+        const dependents = enabledHardDependents(moduleId, { disabledModules: disabled, pluginOverrides });
+        if (dependents.length > 0) {
+          const body: ComponentHasDependentsError = {
+            code: "component_has_dependents",
+            message: `Вместе с модулем «${manifest.label}» перестанут работать: ${dependents.map((item) => `«${item.label}»`).join(", ")}`,
+            dependents
+          };
+          throw new ConflictException(body);
+        }
+      }
       const current = new Set(disabled);
       if (enabled) current.delete(moduleId);
       else current.add(moduleId);
@@ -178,11 +197,15 @@ export class ModulesService {
   private async overridesTx(
     tx: Prisma.TransactionClient,
     workspaceId: string
-  ): Promise<{ disabled: string[]; restricted: string[] }> {
+  ): Promise<{ disabled: string[]; restricted: string[]; pluginOverrides: string[] }> {
     const workspace = await tx.workspace.findUnique({
       where: { id: workspaceId },
-      select: { disabledModules: true, restrictedModules: true }
+      select: { disabledModules: true, restrictedModules: true, pluginOverrides: true }
     });
-    return { disabled: workspace?.disabledModules ?? [], restricted: workspace?.restrictedModules ?? [] };
+    return {
+      disabled: workspace?.disabledModules ?? [],
+      restricted: workspace?.restrictedModules ?? [],
+      pluginOverrides: workspace?.pluginOverrides ?? []
+    };
   }
 }

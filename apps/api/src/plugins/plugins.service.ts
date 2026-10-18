@@ -1,10 +1,14 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  enabledHardDependents,
+  isComponentRequired,
   isOrionPluginId,
   isPluginEnabled,
+  MODULE_CATALOG,
   PLUGIN_CATALOG,
   pluginStates,
+  type ComponentHasDependentsError,
   type OrionPluginId,
   type PluginManifest,
   type WorkspacePluginState
@@ -36,10 +40,13 @@ export class PluginsService {
     });
   }
 
-  async setEnabled(userId: string, workspaceId: string, pluginId: string, enabled: boolean): Promise<WorkspacePluginState[]> {
+  async setEnabled(userId: string, workspaceId: string, pluginId: string, enabled: boolean, confirm = false): Promise<WorkspacePluginState[]> {
     if (!isOrionPluginId(pluginId)) throw new NotFoundException("Плагин не найден");
     const manifest = PLUGIN_CATALOG.find((item) => item.id === pluginId);
     if (!manifest) throw new NotFoundException("Плагин не найден");
+    if (!enabled && isComponentRequired("plugin", pluginId)) {
+      throw new ConflictException({ code: "component_required", message: `Плагин «${manifest.label}» обязателен — его нельзя выключить` });
+    }
 
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -55,7 +62,22 @@ export class PluginsService {
       // module). Requesting the default state removes the override instead
       // of always adding/removing the same way `disabledModules` does.
       await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
+      const enabledModulesNow = await this.modules.enabledSetTx(tx, workspaceId);
       const current = new Set(await this.pluginOverridesTx(tx, workspaceId));
+      if (!enabled && !confirm) {
+        const disabledModules = [...new Set(MODULE_CATALOG.map((item) => item.id))].filter(
+          (id) => !enabledModulesNow.has(id)
+        );
+        const dependents = enabledHardDependents(pluginId, { disabledModules, pluginOverrides: [...current] });
+        if (dependents.length > 0) {
+          const body: ComponentHasDependentsError = {
+            code: "component_has_dependents",
+            message: `Вместе с плагином «${manifest.label}» перестанут работать: ${dependents.map((item) => `«${item.label}»`).join(", ")}`,
+            dependents
+          };
+          throw new ConflictException(body);
+        }
+      }
       if (enabled === manifest.defaultEnabled) current.delete(pluginId);
       else current.add(pluginId);
 
