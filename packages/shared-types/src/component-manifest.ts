@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
+import { GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
 import { isRegisteredPermission, permissionsOfModule } from "./permissions";
 
 /**
@@ -130,7 +131,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     surfaces: [...SHELL_SURFACES, ...(DASHBOARD_WIDGET_MODULES.has(module.id) ? (["widget"] as const) : [])],
     contributions: { panels: [module.panelId] },
     events: { publishes: domainEventTypesPublishedBy(module.id), subscribes: domainEventTypesSubscribedBy(module.id) },
-    migrations: []
+    migrations: [...((GENERATED_MODULE_MIGRATIONS as Record<string, readonly string[]>)[module.id] ?? [])]
   }));
   const plugins: ComponentManifest[] = PLUGIN_CATALOG.map((plugin) => ({
     id: plugin.id,

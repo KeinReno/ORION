@@ -17,7 +17,7 @@
 | `permissions` | разрешения из реестра (`permissions.ts`), вида `tasks.task.read`; у модулей заполнены, у плагинов пусто |
 | `contributions` | `panels`, `slots`, `apiRoutes` |
 | `events` | `publishes` / `subscribes` |
-| `migrations` | идентификаторы миграций компонента |
+| `migrations` | имена миграций модуля (у подключённых манифестом — из `GENERATED_MODULE_MIGRATIONS`; у остальных пусто) |
 
 ## Как выводится сегодня
 
