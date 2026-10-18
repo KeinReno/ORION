@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import "../../plugins";
 import { useEnabledPlugins } from "../use-enabled-plugins";
 import type { SlotContracts, SlotName } from "./contracts";
 import { extensionRegistry, type Contribution } from "./registry";
+import { renderContributions } from "./slot-boundary";
 
 /** The contributions of `slot` that are on in the active workspace (host module on, plugin on). */
 export function useSlotContributions<S extends SlotName>(slot: S): Contribution<S>[] {
@@ -30,10 +31,7 @@ export function ExtensionSlot<S extends SlotName>({
 }): ReactNode {
   const contributions = useSlotContributions(name);
   if (contributions.length === 0) return null;
-  const body = contributions.map(({ pluginId, component: Component }) => (
-    <Fragment key={pluginId}>
-      <Component {...props} />
-    </Fragment>
-  ));
+  // Each contribution gets its own error boundary (see slot-boundary.tsx).
+  const body = renderContributions(name, contributions, props);
   return wrapperClassName ? <div className={wrapperClassName}>{body}</div> : <>{body}</>;
 }

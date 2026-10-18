@@ -24,7 +24,9 @@ import {
   type DockviewWillShowOverlayLocationEvent,
   type IDockviewHeaderActionsProps,
   type IDockviewPanelProps,
+  Button,
   ConfirmDialog,
+  ErrorBoundary,
   LoadingScreen,
   cx,
   type MenuItem,
@@ -122,9 +124,31 @@ function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[
 const panelComponents: Record<string, (props: IDockviewPanelProps) => React.ReactElement> = Object.fromEntries(
   panelRegistry.map((panel) => [
     panel.id,
-    (props: IDockviewPanelProps) => createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api })))
+    // The boundary sits outside the scopes so a crashed panel is reset cleanly, and inside the dock
+    // so one broken panel never unmounts the shell or its neighbours.
+    (props: IDockviewPanelProps) =>
+      createElement(
+        ErrorBoundary,
+        {
+          fallback: (error, reset) => createElement(PanelCrash, { error, onRetry: reset }),
+          onError: (error) => console.error(`[panels] panel "${panel.id}" crashed`, error)
+        },
+        createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api })))
+      )
   ])
 );
+
+function PanelCrash({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
+  return (
+    <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-sm text-foreground">Панель не открылась из-за ошибки</p>
+      <p className="max-w-md break-words font-mono text-2xs text-muted-foreground">{error.message}</p>
+      <Button size="sm" variant="outline" onClick={onRetry}>
+        Повторить
+      </Button>
+    </div>
+  );
+}
 
 function NextLink({ href, className, children }: { href: string; className?: string; children: ReactNode }): React.ReactElement {
   return (

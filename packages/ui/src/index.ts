@@ -23,6 +23,7 @@ export * from "./status-mark";
 export * from "./swipe-row";
 export * from "./calendar";
 export * from "./workbench";
+export * from "./error-boundary";
 export * from "./markdown";
 export * from "./markdown-editor";
 export * from "./markdown-format";

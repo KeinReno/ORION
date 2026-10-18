@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
-import { architectureViolations } from "./architecture-check.mjs";
+import { architectureViolations, colorViolations } from "./architecture-check.mjs";
 
 const fixtures = [];
 function fixture() {
@@ -89,5 +89,18 @@ describe("architecture import boundary", () => {
     put(root, "apps/web/lib/extensions/slot.tsx", 'import "../../plugins";\n');
     put(root, "packages/core/src/example.ts", '// import "../../../../apps/web/plugins/sample/view";\n');
     expect(architectureViolations(root)).toEqual([]);
+  });
+});
+
+describe("plugin theme-token check", () => {
+  it("flags hex, rgb() and palette-shade classes but not tokens or white/black overlays", () => {
+    const root = fixture();
+    put(root, "apps/web/plugins/sample/view.tsx", [
+      'export const a = "text-red-500";',
+      'export const b = { color: "#abc" };',
+      'export const c = `rgba(0, 0, 0, .5)`;',
+      'export const ok = "text-destructive bg-card hover:bg-white/5 border-border/60";'
+    ].join("\n"));
+    expect(colorViolations(root)).toHaveLength(3);
   });
 });
