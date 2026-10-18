@@ -130,7 +130,9 @@ import {
   type AccountPublic,
   type AppInfo,
   type BackgroundJobStatus,
+  type ComponentDataStatus,
   backgroundJobListSchema,
+  componentDataStatusSchema,
   type OrionModeInfo,
   type AuthResponse,
   type BackupRef,
@@ -2490,6 +2492,11 @@ export class ApiClient {
   /** G9 — состояние фоновых задач сервера (требует входа); без данных пространств. */
   listBackgroundJobs(): Promise<BackgroundJobStatus[]> {
     return this.request("GET", "/system/jobs", undefined, backgroundJobListSchema);
+  }
+
+  /** G11 — применены ли миграции компонентов, подключённых манифестом (требует входа). */
+  listComponentData(): Promise<ComponentDataStatus[]> {
+    return this.request("GET", "/system/components", undefined, componentDataStatusSchema.array());
   }
 
   getHealth(): Promise<{ status: string; database: string; timestamp: string }> {
