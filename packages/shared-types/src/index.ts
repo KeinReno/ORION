@@ -73,4 +73,5 @@ export * from "./view-state";
 export * from "./opportunity-assistant";
 export * from "./opportunity-execution";
 export * from "./opportunity-manager";
+export * from "./permissions";
 export * from "./component-manifest";

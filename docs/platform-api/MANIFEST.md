@@ -14,7 +14,7 @@
 | `requires.platform` | диапазон `PLATFORM_API_VERSION` (`^1.0.0`; поддержаны точная версия, `^`, `~`, `>=`) |
 | `requires.modules` | жёсткие зависимости (у плагина — модуль-хозяин `extendsModuleId`) |
 | `requires.optionalModules` | мягкие зависимости (`optionalDependencies` модуля) |
-| `permissions` | права вида `tasks.read` |
+| `permissions` | разрешения из реестра (`permissions.ts`), вида `tasks.task.read`; у модулей заполнены, у плагинов пусто |
 | `contributions` | `panels`, `slots`, `apiRoutes` |
 | `events` | `publishes` / `subscribes` |
 | `migrations` | идентификаторы миграций компонента |
@@ -27,7 +27,7 @@
 
 - Модуль: `optionalModules` = `optionalDependencies`, `contributions.panels` = `[panelId]`.
 - Плагин: `requires.modules` = `[extendsModuleId]`.
-- `permissions`, `events`, `migrations`, `apiRoutes` пока пусты.
+- `permissions` модуля = его разрешения из реестра; у плагинов, а также `events`, `migrations`, `apiRoutes` пока пусты.
 - `contributions.slots` у плагинов пусто: слоты известны только веб-реестру
   (`apps/web/plugins/index.ts`). Их сверка с `SlotContracts` — в `scripts/architecture-check.mjs`.
 

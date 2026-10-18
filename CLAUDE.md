@@ -393,6 +393,15 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
   (`Workspace.disabledModules` по умолчанию `["markets"]`).
 
+### Разрешения: `@RequirePermission` (G12, первый срез)
+
+- Реестр id `<module>.<resource>.<action>` — `packages/shared-types/src/permissions.ts`; манифесты и агентские scope'ы
+  (`AGENT_SCOPE_PERMISSIONS`) ссылаются только на него. Новая операция модуля = id в реестре, не строка «на глаз».
+- На методе контроллера `@RequirePermission("tasks.task.update")` (`apps/api/src/common/require-permission.ts`) ставится
+  **рядом** с `@RequireModule`/`AgentTokenGuard`: человек проходит по роли (сегодня все роли — всё), агент — по scope'ам токена;
+  отказ — 403 `permission_denied`. Режимы и матрица агента по-прежнему решаются в `runOp`. Пилот — только задачи;
+  идентичности плагина в запросах нет (см. `docs/platform-api/PERMISSIONS.md`).
+
 ### Связи, подзадачи, вложения (v0.17)
 
 - Связи между сущностями — `apps/web/components/entity-links.tsx`
