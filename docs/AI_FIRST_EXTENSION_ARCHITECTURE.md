@@ -279,11 +279,11 @@ interface TaskBadgeContribution {
 
 ## 9. Plugin не должен импортировать internals модуля
 
-Разрешено:
+Разрешено (целевая схема; SDK-пакеты планируется выделить в G24, сегодня плагины работают через контракты `apps/web/lib/extensions`):
 
 ```ts
-import { useTasksApi } from "@orion/tasks-sdk";
-import { registerView } from "@orion/plugin-sdk";
+import { useTasksApi } from "@orion/tasks-sdk"; // планируется (G24), пакета пока нет
+import { registerView } from "@orion/plugin-sdk"; // планируется (G24), пакета пока нет
 import { Button, Panel } from "@orion/ui";
 ```
 
