@@ -21,14 +21,15 @@ export const MODULE_GROUPS = new Map([
  */
 export const CORE_MODULE_DIRS = new Set([
   "common", "workspaces", "auth", "users", "sync", "system", "storage", "notifications",
-  "modules", "plugins", "settings", "shared", "ops", "lan", "mcp"
+  "modules", "plugins", "settings", "shared", "ops", "lan", "mcp", "domain-events"
 ]);
 
-/** Модели ядра: любой модуль вправе читать/писать их (членство, пользователи, общие связи/напоминания, синхронизация). */
+/** Модели ядра: любой модуль вправе читать/писать их (членство, пользователи, общие связи/напоминания, синхронизация, outbox доменных событий). */
 export const CORE_MODELS = new Set([
   "User", "RefreshToken", "UserPreference", "Workspace", "WorkspaceMember", "WorkspaceInvite", "CrossWorkspaceGrant",
   "Notification", "EntityLink", "EntityReminder",
-  "SyncRemote", "SyncRestoreOperation", "SyncChange", "SyncOp", "SyncEntityStamp", "SyncDevice"
+  "SyncRemote", "SyncRestoreOperation", "SyncChange", "SyncOp", "SyncEntityStamp", "SyncDevice",
+  "DomainEvent", "DomainEventDelivery"
 ]);
 
 function owned(owner, models) {

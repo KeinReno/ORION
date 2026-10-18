@@ -202,6 +202,8 @@ model Workspace {
   events        Event[]
   projects      Project[]
   notifications Notification[]
+  domainEvents DomainEvent[]
+  domainEventDeliveries DomainEventDelivery[]
   inboxItems    InboxItem[]
   savedTaskViews SavedTaskView[]
   taskDependencies TaskDependency[]
@@ -3202,4 +3204,50 @@ model OpportunityManagerAction {
   @@unique([policyId, opportunityId], map: "opportunity_manager_once")
   @@index([workspaceId, policyId, createdAt])
   @@map("opportunity_manager_actions")
+}
+
+/// Transactional outbox of domain events (ADR-0019, docs/platform-api/EVENTS.md). `DomainEventBus.publishTx` inserts a
+/// row inside the writer's own `withUser` transaction, so a rolled-back write publishes nothing. The dispatcher
+/// (`asSystem`, FOR UPDATE SKIP LOCKED) stamps `dispatchedAt` once it has fanned the event out into deliveries.
+model DomainEvent {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  /// `<module>.<entity>.<verb>` — see DOMAIN_EVENT_CATALOG in shared-types.
+  type         String
+  version      Int       @default(1)
+  payload      Json
+  /// Initiating user; null for cron/system publishers. Plain string (no FK): history must outlive the user row.
+  actorId      String?
+  createdAt    DateTime  @default(now())
+  dispatchedAt DateTime?
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries DomainEventDelivery[]
+
+  @@index([workspaceId])
+  @@index([dispatchedAt, createdAt])
+  @@map("domain_events")
+}
+
+/// One subscriber's delivery of one event. Unique (eventId, subscriberId) makes fan-out idempotent. status:
+/// pending | done | skipped_disabled | failed.
+model DomainEventDelivery {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  eventId       String
+  subscriberId  String
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastError     String?
+  nextAttemptAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  event     DomainEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, subscriberId])
+  @@index([workspaceId])
+  @@index([status, nextAttemptAt])
+  @@map("domain_event_deliveries")
 }

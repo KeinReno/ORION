@@ -132,6 +132,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   AgentAuditEntry: never("Журнал аудита агентов остаётся на узле."),
   Notification: never("Лента уведомлений — состояние узла."),
   SentReminder: never("Дедуп-журнал крона."),
+  DomainEvent: never("Outbox доменных событий — служебный транспорт узла (ADR-0019)."),
+  DomainEventDelivery: never("Учёт доставок outbox — состояние диспетчера узла (ADR-0019)."),
   SyncChange: never("Лента изменений самой синхронизации."),
   SyncOp: never("Журнал исходов операций самой синхронизации."),
   SyncEntityStamp: never("Штампы слияния самой синхронизации."),

@@ -16,6 +16,7 @@ import type {
 } from "@orion/shared-types";
 import { isModuleEnabled, isPluginEnabled, isTaskClosed } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { assertAssigneeInWorkspace } from "./task-refs.util";
 
@@ -28,7 +29,8 @@ type TaskModel = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly events: DomainEventBus
   ) {}
 
   async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean): Promise<Task[]> {
@@ -246,6 +248,22 @@ export class TasksService {
             await tx.timeEntry.update({ where: { id: running.id }, data: { endedAt: safeEnd } });
           }
         }
+      }
+
+      // Event API (ADR-0019): the outbox row is written in this very transaction, so a rolled-back update (revision
+      // conflict, failed validation below) publishes nothing. Subscribers react later, via the dispatcher.
+      if (closedNow) {
+        await this.events.publishTx(tx, {
+          workspaceId,
+          type: "tasks.task.closed",
+          actorId: userId,
+          payload: {
+            id: taskId,
+            projectId: data.projectId !== undefined ? (data.projectId as string | null) : current.projectId,
+            assigneeId: data.assigneeId !== undefined ? (data.assigneeId as string | null) : current.assigneeId,
+            status: input.status!
+          }
+        });
       }
 
       if (input.dependencyIds !== undefined) {
