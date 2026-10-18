@@ -32,6 +32,8 @@ export const noteSchema = z.object({
   /// True = a reusable template, kept out of the normal list and offered by
   /// "Новая из шаблона".
   isTemplate: z.boolean(),
+  /// G21 (ADR-0021): личная заметка внутри общего пространства — её видит только автор. Ответ сервера всегда содержит поле.
+  isPrivate: z.boolean().optional(),
   /// Optimistic-concurrency counter (CAS), S11 — bumped by exactly 1 on
   /// every successful content write. The client echoes it back as
   /// `expectedRevision` on the next `update`; a mismatch is a 409
@@ -140,7 +142,9 @@ export const createNoteInputSchema = z.object({
   tags: z.array(noteTagSchema).max(20).default([]),
   eventAt: z.string().datetime().nullable().optional(),
   isTemplate: z.boolean().optional(),
-  projectId: z.string().nullable().optional()
+  projectId: z.string().nullable().optional(),
+  /** Личная заметка: видна только автору (ADR-0021). */
+  isPrivate: z.boolean().optional()
 });
 export type CreateNoteInput = z.infer<typeof createNoteInputSchema>;
 
@@ -154,6 +158,8 @@ export const updateNoteInputSchema = z.object({
   archivedAt: z.string().datetime().nullable().optional(),
   isTemplate: z.boolean().optional(),
   projectId: z.string().nullable().optional(),
+  /** Сделать заметку личной (`true`) или снова общей (`false`); меняет только автор — чужую личную заметку не видно вовсе. */
+  isPrivate: z.boolean().optional(),
   /// CAS token (S11) — the `revision` this edit was based on. Content-touching
   /// autosave/manual-save calls should always send it; omitted only by
   /// non-content PATCHes (pin/archive toggles) that don't participate in the

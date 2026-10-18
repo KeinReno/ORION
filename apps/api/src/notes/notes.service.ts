@@ -244,6 +244,7 @@ export class NotesService {
         eventAt: input.eventAt ?? null,
         isTemplate: input.isTemplate ?? false,
         projectId: input.projectId ?? null,
+        privateToUserId: input.isPrivate ? userId : null,
         editedAt: new Date(),
         createdByAgent: agentName ?? null
       }
@@ -263,18 +264,26 @@ export class NotesService {
   async update(userId: string, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string): Promise<Note> {
     const note = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      return this.updateTx(tx, workspaceId, noteId, input, agentName);
+      return this.updateTx(tx, workspaceId, noteId, input, agentName, userId);
     });
     return toDto(note);
   }
 
   /** Тело `update()` без обёртки `withUser` — им пользуется гибридная синхронизация (ADR-0016); членство проверил вызывающий. */
-  async updateTx(tx: Prisma.TransactionClient, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string): Promise<DbNote> {
-    const { expectedRevision, ...patch } = input;
+  async updateTx(tx: Prisma.TransactionClient, workspaceId: string, noteId: string, input: UpdateNoteInput, agentName?: string, actorId?: string): Promise<DbNote> {
+    const { expectedRevision, isPrivate, ...patch } = input;
+    let privacy: { privateToUserId: string | null } | Record<string, never> = {};
     const touchesContent =
       patch.title !== undefined || patch.summary !== undefined || patch.body !== undefined || patch.tags !== undefined;
     {
       const before = await this.assertOwnedTx(tx, workspaceId, noteId);
+      // ADR-0021: личной заметку делает только человек (actorId известен); синхронизация и агенты флаг не трогают.
+      // Общую заметку личной не сделать: иначе участник мог бы спрятать чужую запись (в заметке нет поля «автор»).
+      // Личную можно опубликовать; нужна копия — создайте новую личную.
+      if (isPrivate !== undefined && actorId) {
+        if (isPrivate && before.privateToUserId === null) throw new ConflictException("Общую заметку нельзя сделать личной — создайте новую личную заметку");
+        privacy = { privateToUserId: isPrivate ? actorId : null };
+      }
       if (patch.projectId !== undefined) await this.assertProjectTx(tx, workspaceId, patch.projectId);
       if (touchesContent) await this.maybeSnapshot(tx, before);
       // CAS (S11): the revision check lives in the UPDATE's WHERE clause, not
@@ -299,8 +308,8 @@ export class NotesService {
         where: { id: noteId, ...(effectiveExpectedRevision !== undefined ? { revision: effectiveExpectedRevision } : {}) },
         data: touchesContent
           ? // `editedByAgent` is rewritten on every content edit: a human edit after an agent's clears the mark.
-            { ...patch, editedAt: new Date(), editedByAgent: agentName ?? null, revision: { increment: 1 } }
-          : { ...patch, revision: { increment: 1 } }
+            { ...patch, ...privacy, editedAt: new Date(), editedByAgent: agentName ?? null, revision: { increment: 1 } }
+          : { ...patch, ...privacy, revision: { increment: 1 } }
       });
       if (result.count === 0) {
         // `before` already proved the note exists and is owned by this
@@ -596,6 +605,7 @@ type NoteRow = {
   archivedAt: Date | null;
   dailyOn: Date | null;
   isTemplate: boolean;
+  privateToUserId: string | null;
   revision: number;
   createdByAgent: string | null;
   editedByAgent: string | null;
@@ -672,6 +682,7 @@ function toDto(note: NoteRow): Note {
     archivedAt: note.archivedAt ? note.archivedAt.toISOString() : null,
     dailyOn: note.dailyOn ? note.dailyOn.toISOString().slice(0, 10) : null,
     isTemplate: note.isTemplate,
+    isPrivate: note.privateToUserId !== null,
     revision: note.revision,
     createdByAgent: note.createdByAgent,
     editedByAgent: note.editedByAgent,
