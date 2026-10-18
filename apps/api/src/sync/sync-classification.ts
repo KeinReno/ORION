@@ -1,3 +1,5 @@
+import { GENERATED_SYNC_CLASSIFICATION } from "../modules-ext/data.generated";
+
 /**
  * ТЗ-06 / ADR-0016 §1 — классификация КАЖДОЙ модели реестра снапшота по политике
  * гибридной синхронизации. `sync-classification.test.ts` сверяет этот список с
@@ -35,6 +37,8 @@ const strict = (note: string): SyncClassification => ({ syncClass: "strict", sta
 const never = (note: string): SyncClassification => ({ syncClass: "not-synced", stage: "never", note });
 
 export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
+  // G10: классы синхронизации моделей подключаемых модулей объявлены их манифестами (scripts/module-registry.mjs).
+  ...GENERATED_SYNC_CLASSIFICATION,
   // --- этап 2: прототип на списках ---------------------------------------------
   List: lww("stage2", "Название/вид/архив — LWW по полю; удаление — tombstone (удалить можно только архивный список или шаблон)."),
   ListItem: lww("stage2", "Поля пункта — LWW по полю; отметка — булево поле; удаление — tombstone, побеждает конкурирующую правку; порядок — поле sortOrder."),

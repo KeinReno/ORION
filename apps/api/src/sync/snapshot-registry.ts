@@ -30,6 +30,8 @@
  *                   пропуск.
  */
 
+import { GENERATED_SNAPSHOT_REGISTRY } from "../modules-ext/data.generated";
+
 export type SnapshotPolicy =
   | "included"
   | "derived"
@@ -51,6 +53,8 @@ export interface ModelClassification {
 }
 
 export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
+  // G10: политики моделей подключаемых модулей объявлены их манифестами (scripts/module-registry.mjs).
+  ...GENERATED_SNAPSHOT_REGISTRY,
   { model: "Opportunity", snapshotKey: "opportunities", policy: "included", reason: "Вакансии/заказы и история Base; внешних разрешений здесь нет." },
   // --- workspace config (derived, не построчный список) -------------------
   {

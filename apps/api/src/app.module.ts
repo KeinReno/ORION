@@ -42,6 +42,7 @@ import { OverviewModule } from "./overview/overview.module";
 import { SharedGrantModule } from "./shared/shared.module";
 import { UsersModule } from "./users/users.module";
 import { DomainEventsModule } from "./domain-events/domain-events.module";
+import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
 
 @Module({
   imports: [
@@ -87,7 +88,9 @@ import { DomainEventsModule } from "./domain-events/domain-events.module";
     MilestonesModule,
     OverviewModule,
     SharedGrantModule,
-    UsersModule
+    UsersModule,
+    // G5: модули, подключённые манифестом (modules-ext/<id>/), — список генерирует scripts/module-registry.mjs.
+    ...GENERATED_NEST_MODULES
   ]
 })
 export class AppModule {}

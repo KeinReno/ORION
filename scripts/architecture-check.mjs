@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { registryViolations } from "./module-registry.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webRequire = createRequire(join(root, "apps", "web", "package.json"));
@@ -218,7 +219,7 @@ export function pluginCatalogViolations(projectRoot = root) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations()];
+  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...registryViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;

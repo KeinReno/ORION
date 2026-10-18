@@ -1,4 +1,5 @@
-import { ORION_MODULE_IDS, type OrionModuleId } from "./modules";
+import { CORE_MODULE_IDS, ORION_MODULE_IDS, type OrionModuleId } from "./modules";
+import { GENERATED_PRIMARY_RESOURCES } from "./modules-ext/registry.generated";
 import type { AgentScope } from "./agent";
 import { workspaceRoleSchema } from "./workspace";
 
@@ -15,7 +16,7 @@ export const PERMISSION_ACTIONS = ["read", "create", "update", "delete", "propos
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 /** Основной ресурс каждого модуля. Модуль получает CRUD по нему; дополнительные операции — в `EXTRA_PERMISSIONS`. */
-export const MODULE_PRIMARY_RESOURCE: Record<OrionModuleId, string> = {
+const CORE_PRIMARY_RESOURCE: Record<(typeof CORE_MODULE_IDS)[number], string> = {
   tasks: "task",
   notes: "note",
   calendar: "event",
@@ -32,6 +33,9 @@ export const MODULE_PRIMARY_RESOURCE: Record<OrionModuleId, string> = {
   contacts: "contact",
   health: "record"
 };
+
+/** Основной ресурс каждого модуля; у подключаемых (G5) берётся из манифеста через автогенерируемый реестр. */
+export const MODULE_PRIMARY_RESOURCE: Record<OrionModuleId, string> = { ...CORE_PRIMARY_RESOURCE, ...GENERATED_PRIMARY_RESOURCES };
 
 const CRUD_ACTIONS = ["read", "create", "update", "delete"] as const;
 

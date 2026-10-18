@@ -293,6 +293,9 @@ model Workspace {
   healthMeasurements HealthMeasurement[]
   healthTargets      HealthTarget[]
   healthSymptoms     HealthSymptom[]
+
+  // <module-registry:workspace-relations>
+  // </module-registry:workspace-relations>
 }
 
 model Project {
@@ -3251,3 +3254,8 @@ model DomainEventDelivery {
   @@index([status, nextAttemptAt])
   @@map("domain_event_deliveries")
 }
+
+// G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
+// генерирует scripts/module-registry.mjs — руками не править.
+// <module-registry:models>
+// </module-registry:models>
