@@ -463,6 +463,24 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - Быстрый ввод: `/купить молоко, 2 л` (`/список`, `/list`) кладёт текст в первый список вида «Покупки» (создаётся при первом использовании) — `resolveQuickCapture` + `lib/capture-to-list.ts`. Карточка «Списки» на дашборде отмечает пункты через те же `useListActions`, что и сам список, поэтому мост «Склад» срабатывает и там.
 - Плагины-мосты: «Покупки → Склад» (ADR-0009) и «Покупки → Финансы» (`lists-finance`, тот же ADR): слоты `lists.item`, `lists.actions`, `lists.item.mark`. В пункте нет ссылок на чужие модули — только колонки-ключи, которые ведёт плагин.
 
+### Шина доменных событий (G3, ADR-0019)
+
+Серверный transactional outbox: `apps/api/src/domain-events/` (`@Global` `DomainEventsModule`), каталог событий и объявленных
+подписок — `packages/shared-types/src/domain-events.ts` (из него выводятся `events.publishes/subscribes` манифестов).
+
+- **Публикация:** `DomainEventBus.publishTx(tx, { workspaceId, type, payload, actorId })` **внутри** `withUser`-транзакции записи
+  (пример — `TasksService.update`, `tasks.task.closed`). Откат транзакции откатывает событие. Новый тип = запись в
+  `DOMAIN_EVENT_CATALOG` (имя `<module>.<entity>.<verb>`, zod-схема payload: только id и минимум полей).
+- **Подписка:** объяви подписку в `DOMAIN_EVENT_SUBSCRIPTIONS` и зарегистрируй обработчик `bus.subscribe({ id, componentId, types, handle })`
+  в `onModuleInit` (пример — `tasks/task-closed-notifier.ts`); расхождение с объявлением валит старт. `componentId` — id модуля или
+  плагина; если он выключен в пространстве, доставка получает `skipped_disabled` и не воспроизводится при включении.
+- **Инварианты:** доставка at-least-once, задержка до ~10 с (cron диспетчера) — не используй шину там, где реакция должна быть
+  синхронной с ответом на запрос (остановка таймера остаётся прямым вызовом до G4). Обработчик идемпотентен (ключ — `event.id`,
+  например `eventKey` уведомления); он получает `asSystem`-транзакцию и выполняется в SAVEPOINT: исключение откатывает его записи и
+  планирует повтор (30 с ×2, потолок 1 ч, 5 попыток → `failed`). Права получателя обработчик проверяет сам (членство, `accessibleSetTx`,
+  `NotificationPolicyService.allowsForUserTx`). Публикация никогда не зависит от подписчиков. Таблицы `domain_events`/`domain_event_deliveries` —
+  RLS, `ephemeral-excluded`, `not-synced`; обработанные события чистятся через 7 дней.
+
 ### Release-hardening backlog (v0.20) — механизмы, которые надо знать
 
 Актуальные релизные ворота — `docs/DEPLOYMENT_READINESS.md`; исторические

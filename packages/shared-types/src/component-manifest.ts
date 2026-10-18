@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
+import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
 
 /**
  * Единый машиночитаемый манифест компонента платформы (модуля или плагина) — PLATFORM_AUDIT G1.
@@ -9,7 +10,7 @@ import { PLUGIN_CATALOG } from "./plugins";
  */
 
 /** Версия публичного контракта платформы. Смена мажорной части = несовместимое изменение. */
-export const PLATFORM_API_VERSION = "1.0.0";
+export const PLATFORM_API_VERSION = "1.1.0";
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
 /** Поддерживаемые диапазоны: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`. */
@@ -83,7 +84,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     requires: { platform: PLATFORM_RANGE, modules: [], optionalModules: [...module.optionalDependencies] },
     permissions: [],
     contributions: { panels: [module.panelId] },
-    events: { publishes: [], subscribes: [] },
+    events: { publishes: domainEventTypesPublishedBy(module.id), subscribes: domainEventTypesSubscribedBy(module.id) },
     migrations: []
   }));
   const plugins: ComponentManifest[] = PLUGIN_CATALOG.map((plugin) => ({
@@ -97,7 +98,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     // Слоты, в которые вносит вклад плагин, известны только веб-реестру (apps/web/plugins/index.ts);
     // их сверка с каталогом — в scripts/architecture-check.mjs.
     contributions: {},
-    events: { publishes: [], subscribes: [] },
+    events: { publishes: [], subscribes: domainEventTypesSubscribedBy(plugin.id) },
     migrations: []
   }));
   return [...modules, ...plugins];

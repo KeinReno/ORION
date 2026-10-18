@@ -24,7 +24,7 @@
 
 ### Как сейчас (v1.0, зафиксировано)
 
-- Единая версия платформы: `PLATFORM_API_VERSION = "1.0.0"` в `packages/shared-types/src/component-manifest.ts`.
+- Единая версия платформы: `PLATFORM_API_VERSION = "1.1.0"` в `packages/shared-types/src/component-manifest.ts`.
   Компонент указывает `requires.platform` (`^1.0.0`; поддержаны точная версия, `^`, `~`, `>=` — `satisfiesVersionRange`).
   Тест `component-manifest.test.ts` проверяет, что все манифесты каталогов удовлетворяют текущей версии.
 - Версии отдельных контрактов уже существуют, но разрозненны и несвязаны с `PLATFORM_API_VERSION`:
