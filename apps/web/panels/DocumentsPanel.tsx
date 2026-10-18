@@ -51,7 +51,8 @@ import {
   RotateCcw,
   Search,
   Trash2,
-  Upload
+  Upload,
+  X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
@@ -566,6 +567,13 @@ export function DocumentsPanel(): React.ReactElement {
         ];
   }
 
+  /** One open action for the row, its name button and the grid card. A folder in the trash does not open. */
+  function openRow(doc: DocumentItem): void {
+    if (doc.kind === "folder") {
+      if (!trash) openFolder(doc.id);
+    } else selectFile(doc.id);
+  }
+
   const checkedList = [...checked];
 
   const list = (
@@ -696,7 +704,7 @@ export function DocumentsPanel(): React.ReactElement {
                 onDragStart={() => rowDragStart(doc.id)}
                 onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                 onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
-                onClick={() => (isFolder ? !trash && openFolder(doc.id) : selectFile(doc.id))}
+                onClick={() => openRow(doc)}
                 className={cx(
                   "group relative flex flex-col gap-1.5 rounded-xl border p-2",
                   trash ? "border-transparent" : "cursor-pointer",
@@ -734,9 +742,9 @@ export function DocumentsPanel(): React.ReactElement {
                 <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-white/[0.03]">
                   <DocThumbnail doc={doc} isImage={!isFolder && documentGroup(doc) === "image"} />
                 </div>
-                <p className="truncate text-xs font-medium text-foreground" title={doc.name}>
-                  {doc.name}
-                </p>
+                <OpenControl doc={doc} trash={trash} onOpen={() => openRow(doc)} className="block min-w-0 rounded text-left">
+                  <DocName name={doc.name} className="text-xs font-medium text-foreground" />
+                </OpenControl>
                 <p className="truncate text-2xs text-subtle-foreground">
                   {isFolder ? "" : formatBytes(doc.sizeBytes)}
                   {!isFolder && doc.sizeBytes != null ? " · " : ""}
@@ -778,14 +786,14 @@ export function DocumentsPanel(): React.ReactElement {
                     onDragStart={() => rowDragStart(doc.id)}
                     onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                     onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
-                    onClick={() => (isFolder ? !trash && openFolder(doc.id) : selectFile(doc.id))}
+                    onClick={() => openRow(doc)}
                     className={cx(
                       "group grid items-center gap-2 px-2.5 py-2 transition-colors",
                       compactList
                         ? "grid-cols-[1.75rem_minmax(0,1fr)_2rem]"
                         : "grid-cols-[1.75rem_minmax(0,1fr)_5rem_7rem_2rem]",
                       trash ? "" : "cursor-pointer",
-                      active ? "bg-accent/[0.07]" : "hover:bg-card-hover"
+                      active ? "bg-accent/[0.07]" : checked.has(doc.id) ? "bg-accent/[0.04]" : "hover:bg-card-hover"
                     )}
                   >
                     {!trash ? (
@@ -800,12 +808,12 @@ export function DocumentsPanel(): React.ReactElement {
                     ) : (
                       <span />
                     )}
-                    <span className="flex min-w-0 items-start gap-2">
-                      <Icon className={cx("h-4 w-4 shrink-0", isFolder ? "text-accent-text" : "text-muted-foreground")} />
+                    {/* The name is the row's real control: Tab reaches it and Enter opens the folder or file,
+                        which the clickable row alone never allowed. */}
+                    <OpenControl doc={doc} trash={trash} onOpen={() => openRow(doc)} className="flex min-w-0 items-start gap-2 rounded text-left">
+                      <Icon className={cx("mt-0.5 h-4 w-4 shrink-0", isFolder ? "text-accent-text" : "text-muted-foreground")} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm text-foreground" title={doc.name}>
-                          {doc.name}
-                        </span>
+                        <DocName name={doc.name} className="text-sm text-foreground" />
                         {compactList ? (
                           <span className="block truncate text-2xs text-subtle-foreground">
                             {!isFolder && doc.sizeBytes != null ? `${formatBytes(doc.sizeBytes)} · ` : ""}
@@ -813,7 +821,7 @@ export function DocumentsPanel(): React.ReactElement {
                           </span>
                         ) : null}
                       </span>
-                    </span>
+                    </OpenControl>
                     {!compactList ? (
                       <>
                         <span className="shrink-0 text-right text-2xs tabular-nums text-subtle-foreground">
@@ -857,17 +865,20 @@ export function DocumentsPanel(): React.ReactElement {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="sticky bottom-0 mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel/95 p-2 text-xs backdrop-blur"
+            role="toolbar"
+            aria-label="Выбранные документы"
+            className="sticky bottom-0 mt-2 flex items-center gap-0.5 rounded-xl border border-border bg-panel/95 p-1.5 text-xs backdrop-blur"
           >
-            <span className="px-1 text-muted-foreground">Выбрано: {checkedList.length}</span>
-            <Button size="sm" variant="subtle" onClick={() => setMoveTargets(checkedList)}>
+            <IconButton label="Снять выбор" size="sm" className="shrink-0" onClick={() => setChecked(new Set())}>
+              <X className="h-4 w-4" />
+            </IconButton>
+            <span className="mr-auto min-w-0 truncate pr-1 text-muted-foreground">Выбрано: {checkedList.length}</span>
+            {/* The buttons keep their one-line labels; the count gives way first on a narrow list. */}
+            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => setMoveTargets(checkedList)}>
               Переместить…
             </Button>
-            <Button size="sm" variant="subtle" onClick={() => trashMany(checkedList)}>
+            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => trashMany(checkedList)}>
               В корзину
-            </Button>
-            <Button size="sm" variant="subtle" onClick={() => setChecked(new Set())}>
-              Снять выбор
             </Button>
           </motion.div>
         ) : null}
@@ -981,10 +992,11 @@ export function DocumentsPanel(): React.ReactElement {
           <>
             <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" className="pl-8" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени" aria-label="Поиск по имени" className="pl-8" />
             </div>
             {!trash ? (
               <SegmentedControl<SortKey>
+                aria-label="Сортировка"
                 value={sort}
                 onChange={setSort}
                 size="sm"
@@ -1237,5 +1249,53 @@ function MoveDialog({
         {renderLevel(null, 1)}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The keyboard and screen-reader way into a row: a button around the name. Its click does not bubble to the
+ * row, which opens the same thing for a mouse click anywhere else on it.
+ */
+function OpenControl({
+  doc,
+  trash,
+  onOpen,
+  className,
+  children
+}: {
+  doc: DocumentItem;
+  trash: boolean;
+  onOpen: () => void;
+  className?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  if (trash && doc.kind === "folder") return <span className={className}>{children}</span>;
+  return (
+    <button
+      type="button"
+      aria-label={doc.kind === "folder" ? `Открыть папку ${doc.name}` : `Открыть ${doc.name}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen();
+      }}
+      className={cx(className, "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60")}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * One line with the extension kept: «Чек 01 — строительный ма….txt» still says what kind of file it is, and
+ * names that differ only by type stay apart. The full name is in the tooltip and the preview.
+ */
+function DocName({ name, className }: { name: string; className?: string }): React.ReactElement {
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : "";
+  return (
+    <span className={cx("flex min-w-0", className)} title={name}>
+      <span className="truncate">{ext ? name.slice(0, dot) : name}</span>
+      {ext ? <span className="shrink-0">{ext}</span> : null}
+    </span>
   );
 }

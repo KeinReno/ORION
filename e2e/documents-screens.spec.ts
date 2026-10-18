@@ -44,6 +44,10 @@ test("documents screens: list, preview, narrow", async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await shot(page, "preview-390");
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
+  // The reload restores the open file; on a phone its preview sheet covers the menu, so close it first.
+  const restored = page.getByRole("dialog").filter({ hasText: "День 2: Валаам" });
+  await restored.waitFor({ state: "visible", timeout: 3000 }).then(() => page.keyboard.press("Escape"), () => undefined);
+  await expect(restored).toBeHidden();
   await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
   await page.getByRole("navigation", { name: "Разделы" }).getByRole("button", { name: "Документы", exact: true }).click();
   await page.waitForTimeout(1500);

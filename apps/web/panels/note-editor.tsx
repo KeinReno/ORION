@@ -147,6 +147,8 @@ export function NoteEditor({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [editorRef, editorWidth] = useResizeWidth<HTMLFormElement>();
   const wideInspector = editorWidth >= 1000;
+  // A phone-width editor has no room for the word count beside the mode switch and the tools.
+  const narrow = editorWidth > 0 && editorWidth < 420;
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
   // "compare current fields to what was last saved" dirty check. An
@@ -405,14 +407,20 @@ export function NoteEditor({
       <div className="orion-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:px-8">
         <div className="mx-auto w-full max-w-[65ch] space-y-3">
           <div className="flex flex-wrap items-start gap-3">
-            <input
+            {/* Grows with the text: a one-line input cut a long title at the pane edge. A title is one line of
+                meaning, so Enter does not add a line break and pasted breaks become spaces. */}
+            <textarea
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value.replace(/\s*\n\s*/g, " "))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.preventDefault();
+              }}
+              rows={1}
               placeholder="Заголовок"
               aria-label="Название заметки"
               aria-invalid={note !== null && !title.trim()}
               required
-              className="min-w-[min(100%,14rem)] flex-1 bg-transparent text-title text-foreground outline-none placeholder:text-subtle-foreground"
+              className="block min-w-[min(100%,14rem)] flex-1 resize-none overflow-hidden bg-transparent text-title text-foreground outline-none [field-sizing:content] placeholder:text-subtle-foreground"
             />
             <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
               {autosaveState === "conflict" ? <span role="status" className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте заметку открытой" state={visibleSaveState === "conflict" ? "error" : visibleSaveState} explicit={composing} />}
@@ -503,18 +511,21 @@ export function NoteEditor({
           ) : null}
 
           <div className="flex items-center justify-between gap-2 border-y border-border py-1.5">
-            <SegmentedControl<EditorMode>
-              value={mode}
-              onChange={setMode}
-              size="sm"
-              options={[
-                { value: "edit", label: "Правка" },
-                { value: "preview", label: "Просмотр" }
-              ]}
-            />
-            <div className="flex items-center gap-1.5">
-              {words > 0 ? (
-                <span className="text-micro text-subtle-foreground">
+            {/* Kept on one line: on a phone the switch used to wrap «Просмотр» under «Правка». */}
+            <div className="shrink-0">
+              <SegmentedControl<EditorMode>
+                value={mode}
+                onChange={setMode}
+                size="sm"
+                options={[
+                  { value: "edit", label: "Правка" },
+                  { value: "preview", label: "Просмотр" }
+                ]}
+              />
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5">
+              {words > 0 && !narrow ? (
+                <span className="whitespace-nowrap text-micro text-subtle-foreground">
                   {words} сл · ~{readMin} мин
                 </span>
               ) : null}
