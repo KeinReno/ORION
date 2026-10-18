@@ -92,6 +92,8 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
 
   // --- продуктовая политика уведомлений (09-RELIABILITY.md) ---------------
   { model: "Notification", snapshotKey: null, policy: "ephemeral-excluded", reason: "Лента уведомлений — архивная политика продукта, не источник истины пространства (09-RELIABILITY.md)." },
+  { model: "DomainEvent", snapshotKey: null, policy: "ephemeral-excluded", reason: "Outbox доменных событий (ADR-0019) — транспорт между модулями, не данные пространства; события не воспроизводятся при восстановлении." },
+  { model: "DomainEventDelivery", snapshotKey: null, policy: "ephemeral-excluded", reason: "Учёт доставок outbox (ADR-0019) — служебное состояние диспетчера." },
   { model: "SentReminder", snapshotKey: null, policy: "ephemeral-excluded", reason: "Дедуп-журнал уже отправленных напоминаний — служебное состояние крона, не пользовательские данные." },
   { model: "SyncChange", snapshotKey: null, policy: "ephemeral-excluded", reason: "ТЗ-06: лента изменений узла — состояние узла (ссылается на строки, не хранит данные); у восстановленного пространства лента начинается заново, устройства перезагружают снимок." },
   { model: "SyncOp", snapshotKey: null, policy: "ephemeral-excluded", reason: "ТЗ-06: журнал исходов операций (идемпотентность, откат устройства) — состояние узла." },
