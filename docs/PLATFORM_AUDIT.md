@@ -1,0 +1,233 @@
+# Этап 1 — аудит архитектуры KAIDEN Orion Platform 1.0
+
+Дата аудита: 18.10.2026. Ревизия: `master` после слияния `integrate/orion-20261017` (см. `docs/STATUS.md`). Режим: только чтение; сборки и тесты не запускались.
+Источники: `docs/PLATFORM.md` (разделы 2–9), `docs/STATUS.md`, `AGENTS.md`, `ORION_CONSTITUTION.md`, `docs/MODULES_AND_PLUGINS.md`, `docs/AI_FIRST_EXTENSION_ARCHITECTURE.md`, `docs/AI_REFACTOR_MIGRATION_MAP.md`, `docs/PLUGIN_EXTRACTION_LOG.md`, `docs/adr/ADR-0015..0018`, `docs/extensions/CAPABILITY_LIFECYCLE.md`, а также код `apps/api/src`, `apps/web/{lib,plugins,panels}`, `packages/*`, `scripts/architecture-check.mjs`.
+
+Условные обозначения: **[факт]** — проверено в коде/доках, дан путь; **[вывод]** — моё заключение из фактов; «реализовано / частично / нет» — относительно PLATFORM.md, а не относительно «работает ли в продукте».
+
+---
+
+## 1. Краткий итог
+
+- **Модульность сегодня — это «флаги в одной компилируемой сборке», а не платформа.** Модули и плагины — статические каталоги в `packages/shared-types` (`MODULE_CATALOG`, `PLUGIN_CATALOG`), подключённые вручную в `apps/api/src/app.module.ts`, `apps/web/lib/panel-registry.ts`, `apps/web/plugins/index.ts`. Это сознательное решение (`docs/HISTORY.md`, `plugins.ts:3-10`: «не среда для чужого кода»), но оно прямо противоречит критериям 1, 2, 11, 13 раздела 9 PLATFORM.md.
+- **Сильные стороны, на которые можно опереться без переписывания:** (а) выключение модуля/плагина реально работает на сервере и клиенте (`@RequireModule`, `@RequirePlugin`, `ModuleEnabledGuard`, `PluginEnabledGuard`, `ExtensionSlot`), данные не удаляются; (б) типизированные слоты расширений — 31 слот в `SlotContracts`, 48 плагинов, обратная зависимость «база → плагин» запрещена механически (`scripts/architecture-check.mjs`); (в) RLS + `assertMember` + структурный тест «у каждой таблицы с `workspaceId` есть политика»; (г) реестр снапшотов сверяется со `schema.prisma` на старте; (д) гибридная синхронизация имеет явную классификацию каждой модели (`sync-classification.ts`); (е) Agent Gateway с токенами, scope'ами, режимами, аудитом и MCP уже есть (ADR-0018).
+- **Главный пробел — отсутствие единого манифеста и контрактов версий.** `moduleManifestSchema`/`pluginManifestSchema` не содержат `version`, `requires`, `permissions`, `contributions` (`modules.ts:36-50`, `plugins.ts:67-75`); «манифест» из `AI_FIRST_EXTENSION_ARCHITECTURE.md` §12 (`id/version/requires/permissions/contributions`) в коде не реализован. Зависимости между модулями (`optionalDependencies`) — только справочные данные, ничего не проверяют.
+- **Межмодульные связи — через прямые обращения к чужим таблицам и сервисам.** Шины событий в API нет (grep по `EventEmitter|@OnEvent|event-bus` пуст). `ProjectsService` агрегирует `tx.task/note/event/document/inventoryItem/transaction/timeEntry` (`projects.service.ts:159-189`), `HomeService` пишет в `task/list/inventoryItem/financeObligation` (`home.service.ts:318-323`), `EventsService` читает `tx.task` (`events.service.ts:279`). Единый Prisma-схема (3205 строк, 104 модели) — общая для всех модулей; границ владения данными нет.
+- **Ядро содержит предметные знания.** Поиск, оверлей «обзор», входящие, активность, снапшот, sync-классификация, `AGENT_TOOLS`, `SEARCH_TYPE_MODULE` и `api-client.ts` (2749 строк) перечисляют конкретные домены поимённо. Добавить модуль без правок ядра сегодня нельзя: нужно менять минимум 8–10 общих файлов (раздел 3).
+- **Права — на уровне пространства и ролей `owner|lead|member`**, плюс `restrictedModules` и агентские scope'ы. Нет модели «разрешения компонента» (что модуль/плагин вправе читать/писать у других) и нет проверки прав по фактическим операциям для плагинов (критерий 10).
+- **Отказоустойчивость компонентов не обеспечена:** нет `ErrorBoundary` вокруг слотов/панелей (поиск `ErrorBoundary|componentDidCatch|error.tsx` в `apps/web`, `packages` пуст), серверные модули — один процесс NestJS, ошибка крон-сервиса не изолируется (вывод).
+- **Менеджера модулей нет**; есть экран «Настройки → Модули/Плагины» (вкл/выкл). Установка, обновление, совместимость, диагностика, удаление-с-экспортом — отсутствуют. Комплект разработчика — документы + чек-лист (`CLAUDE.md`, `docs/PLUGIN_EXTRACTION_LOG.md`), без генераторов шаблонов и валидатора манифеста.
+
+---
+
+## 2. Что реализовано / частично / отсутствует
+
+### 2.1 Регистрация и жизненный цикл модулей
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | Каталог `MODULE_CATALOG` (`packages/shared-types/src/modules.ts:147`), 15 id в `ORION_MODULE_IDS` (`:10`); сервер: `ModulesService.setEnabled/assertEnabledTx` (`apps/api/src/modules/modules.service.ts:37,111`), `ModuleEnabledGuard` (`module-enabled.guard.ts`); хук транзакционного отзыва прав `CapabilityLifecycle` (`apps/api/src/common/capability-lifecycle.ts`, `docs/extensions/CAPABILITY_LIFECYCLE.md`) — вызывается из `modules.service.ts` и `plugins.service.ts`. | Регистрация статическая: `app.module.ts` (список `imports` из ~40 модулей вручную), `panel-registry.ts` (334 строки), `ORION_MODULE_IDS` (закрытый `z.enum`). Нет фаз жизненного цикла (install → migrate → enable → disable → uninstall), нет хуков `onEnable/onDisable` у модуля (есть только общий `CapabilityLifecycle`, которым пользуется лишь Opportunity Hub: `opportunities-manager/manager.service.ts`, `opportunities-execution/execution.service.ts`). Зависимости `optionalDependencies` не проверяются при выключении. `required: false` у всех модулей — понятия «обязательный» нет на практике. |
+
+### 2.2 Каталог модулей и включение/выключение
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **реализовано** (для встроенных) | `Workspace.disabledModules` (`schema.prisma:169`, по умолчанию `["markets","health"]`), `restrictedModules` (`:181`), `moduleStates()` (`modules.ts`), `effectiveDisabledModules`, панель помечается `moduleId` (`panel-registry.ts:51`); 40 контроллеров несут `@RequireModule`; интеграционные тесты `user-hidden-modules`, `api-rls`. Данные не удаляются. | Контроллеры без `@RequireModule` (проверено перечислением): `activity`, `inbox`, `overview`, `search`, `settings`, `sync/*`, `notifications/*`, `shared`, `events/calendar-feed` (токен-фид), `lan`, `ai/*`, `opportunities-execution/runner.controller.ts` — часть из них ядро по замыслу, но `calendar-feed.controller.ts` (домен «календарь») и `runner.controller.ts` (домен возможностей) — **[вывод]** кандидаты на проверку. Механической проверки «каждый workspace-контроллер объявляет модуль» нет. |
+
+### 2.3 Плагины и слоты расширения
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **реализовано** для UI, **частично** для сервера | `PLUGIN_CATALOG` (`plugins.ts:123`, 48 id), `extendsModuleId` (ровно один модуль); `SlotContracts` (31 слот, `apps/web/lib/extensions/contracts.ts:393`), `SlotMeta`, чистый реестр `registry.ts` + тест `registry.test.ts`, `ExtensionSlot`/`useSlotContributions` (`slot.tsx`), 58 вызовов `contribute(...)` в `apps/web/plugins/index.ts`; публичная поверхность плагина — `host-api.ts` (36 строк реэкспортов); `scripts/architecture-check.mjs` запрещает: база → конкретный плагин, плагин → панель хозяина, плагин → внутренности хозяина (кроме `contracts`/`host-api`), плагин → другой плагин; сервер: `@RequirePlugin` (29 использований вне `plugins/`), `pluginOffWhere` для кронов. | (1) Нет серверных слотов: серверные плагины — это обычные Nest-модули, импортируемые статически (`lists-inventory`, `lists-finance`, `home-utilities`, `opportunities-*`, `opportunity-extensions` в `app.module.ts`), без контракта «точка расширения сервера». (2) Один плагин → один модуль (`extendsModuleId`); мосты между двумя модулями (`lists-finance`, `lists-inventory`) вынуждены формально «расширять» один из них. (3) Проверка слота при регистрации: неизвестный слот ловится TS-типом, но нет проверки во время выполнения/CI «каждый плагин каталога имеет вклад» (`plugin-contract-check` = только `registry.test.ts`, `package.json:25`). (4) Вклады не изолированы от сбоев (см. 2.14). (5) Каталожные id плагинов — закрытый `z.enum`: новый плагин требует правки `shared-types`. |
+
+### 2.4 Межмодульные мосты
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | Универсальные связи: `EntityLink` + `EntityLinksSection`, реестр адаптеров `ENTITY_REGISTRY` (`apps/api/src/search/entity-registry.ts:23`) с проверкой пространства; мосты-плагины «Покупки → Склад»/«Покупки → Финансы» (ADR-0009, `apps/web/plugins/lists-inventory`, `lists-finance`, серверные `lists-inventory/`, `lists-finance/`); `CapabilityLifecycle`; capture-контракт (`captures/`, `shared-types/src/capture.ts`). | Мост = плагин с прямыми обращениями к таблицам обоих модулей; формализованного «bridge-контракта» (владелец данных, разрешённые операции, версия) нет. Закрытый тип `SearchableEntityType` (`search.ts`) и `SEARCH_TYPE_MODULE` (`modules.ts:122`) — новый тип сущности требует правки shared-types и ядра. |
+
+### 2.5 События (Event API)
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **нет** (серверной шины), **частично** (клиент) | Сервер: единственная «реакция на изменение» — триггеры БД `sync_changes` для 4 таблиц (ADR-0016) и 5+ cron-служб (`@Cron` в `notifications/due-task-checker.service.ts`, `events/event-reminder.service.ts`, `events/calendar-connections.service.ts`, `finance/recurring/recurring-checker.service.ts`, `contacts/contact-reminders.service.ts`, `search/reminder-checker.service.ts`, `notes/note-trash-purge.service.ts`, `documents/document-trash-purge.service.ts`, `sync/sync-maintenance.service.ts`). Журнал `agent_audit_entries`/`TaskActivity` — это аудит, не шина. Клиент: `apps/web/lib/panel-bus.ts` (pub/sub панелей), `cross-window-sync.ts`. | Нет доменных событий (`task.created`, `event.reminder_due`, …), нет подписок плагинов/модулей, нет контракта доставки/идемпотентности/разрешений на события. Тестовая интеграция PLATFORM.md §8/Этап 7 («задача из события другого модуля») сегодня реализуется только прямым вызовом сервиса. Уведомления: единая точка `NotificationPolicyService`/`NotificationCenterService.createTx` есть, но продюсеры вызывают её напрямую. |
+
+### 2.6 Хранилище и изоляция данных (RLS)
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **реализовано** (изоляция по пространству), **нет** (по модулю) | RLS на всех workspace-таблицах + структурный тест (`apps/api/test/api-rls.integration.test.ts`); `PrismaService.withUser/asSystem` (`common/prisma.service.ts`); роли БД `orion_app/orion_system` (`infra/postgres/init/01-app-roles.sql`); `StorageAdapter` (local/webdav) для файлов; единый `schema.prisma` (3205 строк, 104 модели, 129 миграций); реестр снапшотов `SNAPSHOT_MODEL_REGISTRY` (`sync/snapshot-registry.ts:53`) с проверкой через `Prisma.dmmf`. | Границы владения данными задаются соглашением, а не механикой: любая служба может `tx.<чужая таблица>` (см. раздел 4). Нет Storage API для модулей («выдели мне коллекцию/таблицу»): новый модуль обязан править общую `schema.prisma`, делать raw-SQL RLS-миграцию, добавлять себя в `SNAPSHOT_MODEL_REGISTRY` и `SYNC_CLASSIFICATION` вручную. Нет понятия миграций, принадлежащих компоненту (одна линейная цепочка Prisma). Нет per-component квот/пространства имён. |
+
+### 2.7 Рабочие пространства
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **реализовано** | `Workspace.isPersonal`, роли `owner|lead|member` (`workspace.ts:4`), приглашения (`workspaces/invites.controller.ts`), `syncMode` (`schema.prisma:188`), тема пространства (`Workspace.theme`), `restrictedModules`; кросс-пространственные грантлы только на чтение (`shared/`, `shared-grant.ts`: note/document/project/transaction). `ADR-0015`: LAN host/client; ТЗ-05 личное/общее. | Нет контракта «Workspace API» для компонентов (как модуль узнаёт состав/роль/настройки пространства — через `WorkspacesService` напрямую). Смешанные пространства и рабочие сессии не начаты (`STATUS.md`). Грантлы покрывают 4 типа, расширение требует правки enum + DTO + RLS (комментарий `shared-grant.ts:1-12`). |
+
+### 2.8 Темы
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **реализовано**, проверка на плагинах **частично** | `themeDocumentSchema` v1 (18 hex-токенов, `shared-types/src/theme-document.ts`), `THEME_PRESET_IDS` (6 палитр), библиотека своих тем `THEME_LIBRARY_MAX=24`, `Workspace.theme`, `packages/ui/src/theme-engine.ts`, `theme-provider.tsx`, `design-tokens.ts`, `apps/web/lib/theme-library.ts`, `effective-application-theme.ts`, тесты `theme-*.test.ts`, `custom-theme.integration.test.ts`. | Не переведены на токены часть экранов и плагины (`STATUS.md`: «проверить вид остальных модулей и плагинов при смене темы, волна 2.4»). Нет автоматической проверки «в плагине нет жёстких hex-цветов» (**[вывод]**: в `architecture-check.mjs` её нет). Theme API для плагинов (какие токены гарантированы) не зафиксирован как версия. |
+
+### 2.9 Окна / поверхности (dockview panels)
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | `packages/ui/src/workbench.tsx` (dockview), `PanelDefinition` (`panel-registry.ts:44`: `moduleId`, `pluginId`, `instanced`, `hideFromNav`, `group`), панели-экземпляры `project:<id>`, `task`, `note`, `browsertab`; открепление в окно ОС (`lib/panel-window.ts`, `DetachHeaderAction` в `app/(app)/layout.tsx`), именованные раскладки (`named-layouts.ts`), санитайзер раскладки (`dock-layout-sanitize.ts`), панель контекста `shell.context.resources`. | Реестр панелей — статический массив в ядре; «Основная область/вкладка/боковая панель/виджет/плавающее/окно ОС» (PLATFORM.md §3) не выражены единым `Surface API`: виджеты — отдельные слоты (`calendar-widget`, `sidebar.widget`), плавающие окна — возможность dockview без контракта. Открепление в Tauri и несколько мониторов не проверены (`STATUS.md`). |
+
+### 2.10 Права доступа
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | Серверные: `JwtAuthGuard` + `assertMember` + RLS; роли на уровне пространства; `restrictedModules` (`ModulesService.assertEnabledTx`, дублирует правила в коде, RLS остаётся членством — `schema.prisma:175-181`); владелец-только переключатели плагинов (`plugins.service.ts:49`); health — отдельная модель приватности (`HealthGrant`, ADR-0012); приватные счета финансов (`finance-private-accounts.integration.test.ts`); агенты — `AGENT_SCOPES` (11), матрица `permissions`, режимы, лимиты записи (`shared-types/src/agent.ts:10`, `agent-policy.ts`). | Нет единого Permission API: человеческие роли, `restrictedModules`, health grants, finance private accounts, shared grants и агентские scope'ы — пять независимых механизмов. Для плагина нет декларации «какие операции мне нужны» и проверки на уровне операции (критерий 10 PLATFORM.md). Права по модулям не привязаны к роли (только «ограничен для member»). |
+
+### 2.11 Интеграции
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | ICS-входящие (`events/calendar-connections.service.ts`) и исходящий фид (`calendar-feed.controller.ts`); WebDAV-хранилище; Telegram; SSRF-заслон `common/remote-url-guard.ts`; Compass-движок (`markets/`, `apps/compass-engine`); HH-импорт и исполнение (`opportunities-hh-import`, `opportunities-execution`, `scripts/hh-runner`); LAN (`lan/`). | Нет Integration API: каждая интеграция — отдельный сервис в соответствующем модуле со своим хранением секретов. Общая часть есть только для секретов синхронизации (`sync/sync-crypto.ts`) и SSRF. Нет реестра интеграций, учёта их разрешений и статуса. |
+
+### 2.12 Синхронизация, офлайн, конфликты
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** (прототип на 3 сущностях) | ADR-0016, `apps/api/src/sync/hybrid-sync.service.ts`, `sync-classification.ts` (класс и этап для каждой модели, тест сверки с реестром — `sync-classification.test.ts`), HLC-часы (`shared-types/src/hybrid-sync.ts:65`), `ReplicaEngine` (`packages/core/src/sync/replica-engine.ts`), fuzz-тест сходимости (`convergence.fuzz.test.ts`), CAS по `revision` для заметок и задач, конфликт — явное состояние; интеграционный `hybrid-sync.integration.test.ts`. Синхронизируются: `List`, `ListItem` (этап 2), `Note`, `Task` (этап 3). | Остальные ~всё — `stage: "later"/"never"` (проекты, события, привычки, контакты…). Нет проверки между двумя реальными установками (`STATUS.md`: «гибридная синхронизация между устройствами» не проверена; LAN на двух ПК не проверен). Новая сущность модуля сама синхронизироваться не может: нужны класс, поля в `hybrid-sync.ts`, адаптер в `HybridSyncService` и триггер миграции (`CLAUDE.md`, «Гибридная синхронизация») — то есть правки ядра. Известный пробел CAS: прямые Prisma-записи мимо `NotesService.update()` не увеличивают `revision` (`CLAUDE.md`). |
+
+### 2.13 Резервное копирование и миграции
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | `.orion`-архив `{ blobs, snapshot }` (`sync/snapshot.service.ts`, `blob-backup.service.ts`), `SNAPSHOT_VERSION = 2`, восстановление staging+journal+swap, `restore-lock.util.ts`, `ops/node-backup.ts`, `scripts/restore-rehearsal.mjs`, `workspace-transfer.service.ts`; интеграционные тесты `snapshot`, `blob-backup`. Выключение не удаляет данные (Конституция п.14). | Нет «безопасного удаления с экспортом данных компонента» и экспорта по модулю; нет версий данных компонента и миграций, принадлежащих компоненту (единая цепочка Prisma). Пробел из `CLAUDE.md`: нет проверки протухшего dry-run-превью (S04 подшаг 4); WebDAV-бэкенд без fault-injection. |
+
+### 2.14 Agent Gateway / ИИ-агенты
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично**: сценарий А (ИИ использует Orion) в основном есть; сценарий Б — нет | Gateway: `apps/api/src/ai/agent-gateway.controller.ts`, `agent-gateway.service.ts`, `agent-token.guard.ts`, `agent-tokens.service.ts` (режимы, матрица, лимиты), `agent-jobs`, `agent-undo`, rate-limit, аудит; `GET /ai/v1/context` («только достижимые для токена включённые модули», capabilities — `agent-gateway.service.ts:130-139`), `GET /ai/v1/manual`; единый каталог инструментов `AGENT_TOOLS` (28, `shared-types/src/agent-tools.ts:60`) с тестами «инструмент ↔ маршрут» в обе стороны; MCP stdio (`apps/api/src/mcp/orion-mcp.ts`, `scripts/orion-mcp.mjs`), мастер подключения; `docs/AGENT_MANUAL.md` генерируется. ADR-0017 (удалённый доступ) — только предложение, кода нет. | `AGENT_TOOLS`, `AGENT_SCOPES` и `capabilities` — закрытые перечни в ядре (задачи, заметки, события, проекты, финансовые черновики): модуль/плагин не может зарегистрировать свой инструмент и scope (Pet Care из Этапа 7 агентам недоступен без правки `shared-types` и `agent-gateway.service.ts`). Gateway не отдаёт машиночитаемый список «операций по модулям с версиями» (только `capabilities` строками). Новые эндпоинты Gateway обходят режимы ТЗ-03 частично (`ADR-0018` «Не сделано»). Удалённый доступ — нет. Нет «конфигурации ИИ-разработчика» (сценарий Б). |
+
+### 2.15 Менеджер модулей и манифесты
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** (вкл/выкл), **нет** (остальное) | UI «Настройки → Модули/Плагины» (`ModulesService`, `PluginsService`), `GET workspaces/:id/modules|plugins`; манифест-схемы `moduleManifestSchema`/`pluginManifestSchema` (содержат `id, kind, label, summary, owns, livesWithout, provides, optionalDependencies, disableBehavior, panelId, defaultEnabled` / `extendsModuleId, provides, disableBehavior, defaultEnabled`). `MODULE.md` + `AI_CONTEXT.md` существуют только в `contacts/` и 4 каталогах `opportunities*`. | Отсутствуют в манифесте: `version`, `requires` (версия платформы/модулей), `permissions`, `contributions` (слоты), `events`, `migrations`, `api` (маршруты/инструменты). Нет источника манифеста как файла (`manifest.json`), только TypeScript-константа. Нет проверок совместимости, доверенных источников, целостности, установки/обновления пакета. Безопасная модель для стороннего кода сознательно отсутствует (`plugins.ts:3-10`). |
+
+### 2.16 Инструменты разработчика, шаблоны, проверки
+
+| Статус | Доказательства | Пробел |
+|---|---|---|
+| **частично** | `scripts/architecture-check.mjs` + тест; `plugin-contract-check` (`package.json:25`); `pnpm quality`; чек-листы в `CLAUDE.md` («Добавить модуль X» — 10 шагов) и `PLUGIN_EXTRACTION_LOG.md` (чек-лист выноса); `docs/AGENT_MANUAL.md`; структурные тесты: RLS, реестр снапшота, классификация синхронизации, каталог агентских инструментов. | Нет генераторов (`create-module`, `create-plugin`); нет валидатора манифестов (Конституция п.10 требует «invalid manifests, circular mandatory dependencies, unknown extension points» — реализовано только «forbidden imports»); `architecture-check` не покрывает `apps/api/src` на импорты «модуль → модуль» (в `paths` файлы API сканируются, но правила касаются только `plugins` в `apps/web`); нет проверки «каждый workspace-контроллер имеет `@RequireModule`»; нет проверки целостности `PLUGIN_CATALOG` ↔ `contribute(...)` ↔ `@RequirePlugin`. Чек-лист «добавить модуль» требует правки 10+ общих файлов — это сам по себе индикатор из PLATFORM.md §7. |
+
+---
+
+## 3. Жёсткие зависимости и функции, ошибочно размещённые в ядре
+
+Критерий «ошибочно в ядре» взят из PLATFORM.md §2 (ядро не содержит предметной логики) и Конституции п.1. **Классификация владения не пересматривается** (AGENTS.md, «Migration ownership is already decided»); ниже — места, где *механизм* ядра знает конкретные домены.
+
+| # | Где | Что именно | Почему это проблема |
+|---|---|---|---|
+| 3.1 | `packages/shared-types/src/modules.ts:10-26,122-145` | Закрытый `ORION_MODULE_IDS` (15), `SEARCH_TYPE_MODULE`, `INBOX_TARGET_MODULE` | Новый модуль = правка shared-types (контракт ядра). |
+| 3.2 | `packages/shared-types/src/plugins.ts:13-61` | Закрытый `ORION_PLUGIN_IDS` (48) | То же для плагинов. |
+| 3.3 | `apps/api/src/app.module.ts` | Ручной список ~40 модулей | Нет динамической регистрации; отключённый «на этапе сборки» модуль невозможен. |
+| 3.4 | `apps/api/src/search/search.service.ts:59-91` | Поиск ядра перечисляет `tx.project/task/note/event/document/transaction/contact/list/goal/account` | Поисковый индекс не расширяем провайдерами; новый модуль не попадает в поиск без правки ядра. `entity-registry.ts` — частичная абстракция (только `summary`). |
+| 3.5 | `apps/api/src/inbox/inbox.service.ts:178-197` | Входящие создают `task`/`note`/`event` напрямую (`tx.task.create`, `tx.note.create`, `tx.event.create`) | Ядро (Inbox — оболочка) пишет в таблицы доменов в обход их сервисов. |
+| 3.6 | `apps/api/src/overview/overview.service.ts:75` | `tx.task.findMany` для обзора | Предметное чтение в «оболочечном» сервисе; обход `TasksService`. |
+| 3.7 | `apps/api/src/activity/activity.service.ts` | Русские подписи действий агентов (`AGENT_ACTION_RU`), статусы задач | Журнал активности знает домены. |
+| 3.8 | `packages/shared-types/src/agent-tools.ts:60`, `agent.ts:10`, `apps/api/src/ai/agent-gateway.service.ts:130-139` | Закрытые `AGENT_TOOLS`/`AGENT_SCOPES`/`capabilities` | См. 2.14. |
+| 3.9 | `apps/api/src/sync/snapshot-registry.ts`, `sync-classification.ts`, `hybrid-sync.service.ts` | Реестры знают все 104 модели; гибридные адаптеры — задача/заметка/список | Корректно как защита (падает при рассинхроне), но регистрация — центральная, а не от модуля. |
+| 3.10 | `packages/core/src/api/api-client.ts` (2749 строк), `packages/core-react/src` (61 файл) | Один клиент и один набор хуков на все домены | Нет «клиентского SDK модуля»; модуль без правки `core` не добавить (`CLAUDE.md` чек-лист п.6–7). |
+| 3.11 | `apps/api/prisma/schema.prisma` (3205 строк) | Одна схема для ядра и всех модулей | Нет изолированных миграций компонента; удаление/обновление модуля затрагивает общую цепочку. |
+| 3.12 | `Task.homeId`, `Task.projectId` (`schema.prisma:548,552`, FK `onDelete: SetNull`) | Таблица задач имеет внешние ключи на «Дом» и «Проекты» | Домен «Задачи» структурно зависит от «Дом»/«Проекты»; `tasks.service.ts:1` импортирует `../home/home-refs.util`. |
+| 3.13 | `apps/web/lib/extensions/contracts.ts` (461 строка) | Все типы слотов — в одном файле ядра | Новый слот модуля — правка общего файла (по Конституции это Extension Proposal; но плагины сторонних модулей не смогут объявлять свои слоты). |
+| 3.14 | `calendar` → `tasks/notes/projects` на клиенте (`apps/web/panels/CalendarPanel.tsx:9-13,174-178`) | Панель календаря использует `useTasks/useNotes/useProjects` (с гейтингом `isEnabled`) | Мягкая связь без контракта «источник событий для календаря». |
+
+Что **корректно** размещено (не трогать): `WorkspacesService.assertMember`, `PrismaService.withUser/asSystem`, `NotificationPolicyService`, `CapabilityLifecycle` (контракт без знания доменов, `capability-lifecycle.ts:4`), реестр слотов и `ExtensionSlot`, `StorageAdapter`, `ThemeDocument`.
+
+---
+
+## 4. Изоляция существующих модулей
+
+Метод: подсчёт обращений `tx.<модель>` и импортов `../<другой модуль>/` в `apps/api/src/<модуль>` без тестов; FK по `schema.prisma`. Это **[факт]** про текущее использование, **[вывод]** про степень связности.
+
+| Модуль | Владеет данными | Чужие таблицы / импорты | Права и выключение | Оценка изоляции |
+|---|---|---|---|---|
+| **tasks** | `Task, TaskDependency, TaskComment, TaskActivity, SavedTaskView` | `tx.project`, `tx.timeEntry`, `tx.milestone`; импорт `../home/home-refs.util`; FK `Task→Project/Home`; уведомления (`../notifications`) | `@RequireModule("tasks")`; плагины `tasks-comments/-planning/-recurrence/-saved-views/-kanban` | Средняя. Читает/пишет `time_entries` при смене статуса (`tasks.service.ts:237,246`) — связь «задачи ↔ время» без контракта. |
+| **notes** | `Note, NoteLink, NoteAttachment, NoteRevision` | Импорт `DocumentsService/DocumentsModule` (`note-attachments.service.ts:6`, `notes.module.ts:3`), `tx.project`, `tx.document` | CAS по `revision`; плагины `notes-history/-daily/-templates` | Средняя: жёсткая зависимость от `documents` на уровне Nest-модуля (вложения), хотя в каталоге она «optional». Выключение `documents` сломает вложения в `notes` на сервере (**[вывод]**; проверено лишь наличие импорта). |
+| **projects** | `Project, ProjectStatusUpdate` (+ `Milestone` в `milestones/`) | Агрегирует `task, note, event, document, inventoryItem, transaction, timeEntry` (`projects.service.ts:159-189,301-304`); импорт `captures`, `tasks.module` | `@RequireModule("projects")`; `projects-*` плагины | **Слабая**: «проект» — хаб, читающий таблицы 7 модулей напрямую. Все остальные модули имеют `projectId`. |
+| **calendar/events** | `Event, EventOverride, CalendarConnection, SentReminder` | `tx.task` (`events.service.ts:279`), `tx.project`; импорт `../sync/sync-crypto` | Cron-напоминания спрашивают политику и `pluginOffWhere` | Средняя. Клиент — панель читает tasks/notes/projects. |
+| **documents** | `Document, DocumentVersion`, блобы в `StorageAdapter` | `tx.project`; `../sync/restore-lock.util` | Версии включены в бэкап; плагины `documents-*` | Хорошая; зависимость от `sync` — инфраструктурная (допустимо). |
+| **finance** | `Transaction*, Account, FinanceCategory, Budget, SavingsGoal, FinanceObligation, FinanceDraft, …` | `tx.project`, `tx.notification`, `tx.user`; `../transactions/…`; `markets` импортирует `finance-refs.util` | 17+ плагинов; private accounts; `finance:draft` для агентов | Хорошая внутри; внешние связи — `projectId`, `Notification`. Не выделены «обязательства → цели» как контракт (пример из PLATFORM.md §2). |
+| **lists** | `List, ListItem` | Импорт `../home/home-refs.util`; `tx.transaction`, `tx.inventoryItem`, `tx.inventoryMovement` (`lists.service` — мосты) | Гибридная синхронизация (stage2) | Средняя: мосты «покупки → склад/финансы» вынесены как плагины, но серверные обращения остались в сервисе `lists`. |
+| **habits** | `Habit, HabitEntry` | Нет внешних обращений | `habits-insights` | **Хорошая** — эталон изоляции. |
+| **time** | `TimeEntry` | `tx.task`, `tx.project` (денормализация `projectId`, `time.service.ts:332`) | Плагины `time-insights/-billing`; actor ownership (`TimeEntry.userId`) | Хорошая; зависимость от `tasks` — оптимальная и документированная. |
+| **inventory** | `InventoryItem, InventoryMovement` | `tx.project`, импорт `home-refs.util`, уведомления | `inventory-alerts/-costing` | Хорошая. |
+| **home** | `Home, Meter, MeterReading` | **Пишет** в `task`, `list`, `inventoryItem`, `financeObligation`, читает `contact` (`home.service.ts:318-323`) | Модуль-хаб: `optionalDependencies` = tasks, lists, inventory, finance | **Слабая**: единая точка записи в 4 чужих модуля, минуя их сервисы. |
+| **contacts** | `Contact, ContactRelation, ContactInteraction` | Импорт `home-refs.util`, `tx.entityLink`, `tx.capture` | Единственный базовый модуль с `MODULE.md` + `AI_CONTEXT.md` | Хорошая. |
+| **health** | `Health*` (8+ моделей) | `tx.contact` (1), `tx.workspaceMember` | Собственная модель приватности (`HealthGrant`, ADR-0012); отключён по умолчанию | Хорошая — лучшая по правам. |
+| **goals / milestones** | `Goal, GoalPlan` / `Milestone` | `goals` → `ProjectsService` (импорт сервиса), `tx.task` | `projects-goals` плагин | Средняя. |
+| **markets** | SQLite Compass + `MarketTrade` | `finance-refs.util` (счета/категории) | `ORION_MODE=local` только для движка | Хорошая по данным; движок — вне Postgres/RLS/бэкапа (`CLAUDE.md`, v0.22) — «Журнал/счета остаются в SQLite». |
+| **opportunities (+ 5 плагинов)** | Отдельные модели | Через `CapabilityLifecycle`, свои `MODULE.md` | Самая «платформенная» часть: capability-lifecycle, grants | Хорошая; использует единственный реальный пример `NEW_EXTENSION_POINT_REQUIRED`. |
+
+Общие наблюдения: (1) RLS изолирует по пространству, не по модулю — любая служба в транзакции `withUser` видит все таблицы пространства. (2) Гейтинг «сосед не зовёт чужой API, если выключен» реализован на клиенте (`useX(isEnabled("x") ? id : undefined)`, `CLAUDE.md` инвариант 9) и в `ModuleEnabledGuard`; но серверные модульные импорты (notes→documents, projects→tasks, goals→projects) не проходят через эту проверку. (3) Нет теста «каждый модуль работает при выключенных соседях» на серверном уровне как матрицы (**[вывод]**: есть `user-hidden-modules.integration.test.ts` и точечные проверки плагинов, матрицы нет).
+
+---
+
+## 5. Карта пробелов
+
+Приоритеты: **P0** — блокирует критерии 1–3 и 10 раздела 9 и стоимость растёт с каждым новым модулем; **P1** — необходимо для Platform 1.0; **P2** — нужно для полноты/удобства; **P3** — после 1.0. «Этап» — этап PLATFORM.md §8.
+
+| № | Пробел | Приор. | Зависит от | Этап | Критерий устранения (проверяемый) |
+|---|---|---|---|---|---|
+| G1 | Нет единого машиночитаемого манифеста компонента (`id, version, kind, requires{platform,modules}, permissions, contributions, events, migrations`); сегодня два разных урезанных `*ManifestSchema` | P0 | — | 2 | Zod-схема `ComponentManifest` в `shared-types`; все 15 модулей и 48 плагинов описаны ею (генерируются из существующих каталогов без изменения поведения); тест падает на неизвестном слоте/модуле-зависимости/циклической обязательной зависимости; `MODULE_CATALOG`/`PLUGIN_CATALOG` выводятся из манифестов. |
+| G2 | Нет версионирования контрактов платформы (Module/Plugin/Event/Storage/Workspace/Theme/Surface/Permission/Integration/Agent Gateway API) и политики совместимости | P0 | G1 | 2 | `docs/platform-api/*.md` + константа `PLATFORM_API_VERSION` и per-contract версии (`SlotContracts` версия слота); манифест указывает `requires.platform`; CI-тест сравнивает снимок публичных типов слотов/`host-api.ts` и требует bump при изменении. |
+| G3 | Нет серверной шины доменных событий (Event API): нет `task.*`, `event.*`, подписок, доставки с идемпотентностью и проверкой разрешений | P0 | G1, G2 | 2→3 | `EventBus` в ядре API: публикация внутри транзакции (outbox), подписчик объявляется в манифесте; интеграционный тест: модуль A публикует, модуль B (плагин) реагирует, при выключенном B публикация не падает; повторная доставка идемпотентна; события не обходят RLS. |
+| G4 | Межмодульные прямые обращения к чужим таблицам (`projects`→7 таблиц, `home`→4, `inbox`/`overview`/`search`→домены, `events`→`task`, `tasks`→`timeEntry`) | P0 | G2, G3 | 3 | Для каждой пары определён контракт (запрос/команда/событие/«провайдер агрегата»); `architecture-check` расширен правилом «сервис модуля A не использует `tx.<модель модуля B>` и не импортирует сервис B», с явным списком временных исключений, который только уменьшается; итоговый список исключений пуст или обоснован ADR. |
+| G5 | Статическая регистрация: закрытые `z.enum` id модулей/плагинов, ручной `app.module.ts`, `panel-registry.ts`, `plugins/index.ts` | P1 | G1 | 3 | Модуль-образец (Pet Care) подключается добавлением каталога `modules/pet-care/` с манифестом без правки Core-файлов; единственный разрешённый общий файл — автогенерируемый реестр; тест «добавление образца меняет 0 файлов ядра» (git-diff-проверка в CI). |
+| G6 | Нет стандартного жизненного цикла компонента (install / migrate / enable / disable / uninstall / export) и хуков `onEnable/onDisable`; `CapabilityLifecycle` применяется только Hub | P1 | G1, G5 | 3 | Интерфейс `ComponentLifecycle` в API; `ModulesService`/`PluginsService` вызывают хуки в одной транзакции; тест: сбой хука откатывает переключение; `uninstall` сохраняет данные, `export` отдаёт архив данных компонента. |
+| G7 | Не проверяются зависимости при выключении (`optionalDependencies` — справочник); нет понятия «обязательный» | P1 | G1 | 3 | При выключении модуля сервер возвращает список зависимых включённых плагинов/модулей и требует подтверждения либо блокирует (`required`); интеграционный тест на каждый из 15 модулей: выключение любого необязательного не ломает API остальных (матрица). |
+| G8 | Нет изоляции ошибок компонентов на клиенте: нет `ErrorBoundary` вокруг `ExtensionSlot`/панелей | P0 | — | 3 | `ExtensionSlot` оборачивает каждый вклад в границу ошибок с диагностикой (`pluginId`, слот); unit-тест «бросающий плагин не роняет хозяина, ошибка попадает в журнал»; e2e: панель остаётся рабочей. |
+| G9 | Нет изоляции ошибок на сервере: все крон-службы и модули в одном процессе без защиты/метрик по компоненту | P1 | G6 | 3 | Обёртка выполнения фоновых задач с try/catch + учётом ошибок по `componentId`; диагностический эндпоинт состояния; тест: исключение в cron-службе компонента не останавливает остальные. |
+| G10 | Storage API: компонент не может объявить свои коллекции/таблицы, RLS и бэкап декларативно; новый модуль правит `schema.prisma`, RLS-SQL, `SNAPSHOT_MODEL_REGISTRY`, `SYNC_CLASSIFICATION` | P1 | G1, G5 | 2→3 | Декларация данных компонента в манифесте (модели, владелец, политика бэкапа/синка, RLS-шаблон) + генератор миграции; структурные тесты (RLS, снапшот, sync) продолжают работать; для образца Pet Care данные изолированы и попадают в бэкап без ручной правки реестров ядра. |
+| G11 | Миграции данных компонента: единая цепочка Prisma, нет версий данных компонента и проверки совместимости при обновлении | P1 | G1, G10 | 3 | В манифесте `migrations` с версиями; обновление компонента сначала проверяет совместимость, делает снимок (`SnapshotService`), применяет миграции; тест отката при сбое. |
+| G12 | Permission API: пять независимых механизмов прав; плагины не декларируют и не проверяются по операциям | P0 | G1, G2 | 2→3 | Единый реестр разрешений (`tasks.read`, …) в манифестах; серверный guard/декоратор `@RequirePermission` на фактической операции; агентские scope'ы выводятся из тех же разрешений; тест: плагин без разрешения получает 403 на операцию (критерий 10). |
+| G13 | Agent Gateway: `AGENT_TOOLS`, `AGENT_SCOPES`, `capabilities` — закрытые списки; модуль не может зарегистрировать инструмент | P1 | G1, G12 | 5 | Компонент объявляет инструменты в манифесте; `/ai/v1/context` формируется из реестра включённых компонентов (с версиями схем входа/выхода); тест «обнаружения»: для образца Pet Care агент видит инструмент и scope без правки `agent-tools.ts`. Сохраняются тесты «инструмент ↔ маршрут». |
+| G14 | Удалённый доступ агентов (ADR-0017), покрытие Gateway режимами ТЗ-03 для capture/links | P2 | G13 | 5 | ADR принят; реализован выбранный вариант; все эндпоинты Gateway проходят единую обёртку (scope → режим → лимит → аудит) — тест перечисляет маршруты `/ai/v1/*`. |
+| G15 | Нет комплекта разработчика для сценария Б: шаблоны модуля/плагина, генераторы, валидатор манифеста, критерии приёмки | P1 | G1, G2, G5 | 6 | `pnpm create:module` / `create:plugin` создают скелет, проходящий `architecture-check`, валидацию манифеста и тесты; в репозитории есть `docs/DEV_KIT.md` с примерами; воспроизводимый эксперимент: агент по этой документации создаёт образец, CI зелёный. |
+| G16 | Менеджер компонентов: нет установки/обновления/совместимости/зависимостей/диагностики/экспорта-при-удалении/доверенных источников | P2 | G1, G6, G7, G11, G12 | 6 | Экран менеджера: список с версиями и статусом совместимости, граф зависимостей, диагностика ошибок (из G8/G9), установка локального пакета с проверкой подписи/хэша из доверенного источника; удаление с экспортом. Публичный каталог не требуется. |
+| G17 | Единые поверхности (Surface API): нет контракта «основная область / вкладка / боковая панель / виджет / плавающее / окно ОС»; реестр панелей статичен | P1 | G1 | 2→3 | Манифест компонента объявляет поддерживаемые поверхности; `PanelDefinition` выводится из него; тест: образец открывается в 3 поверхностях, фактическое открепление в Tauri проверено вручную (этап 0). |
+| G18 | Theme API: жёсткие цвета в плагинах не проверяются; перечень гарантированных токенов не версионирован | P1 | G2 | 0→2 | Lint-правило/тест «в `apps/web/plugins` нет hex/rgb и не-токенных Tailwind-цветов»; список токенов в контракте; визуальный прогон по 6 палитрам и пользовательской теме для каждого плагина (волна 2.4). |
+| G19 | Search / Inbox / Overview / Activity знают домены поимённо | P1 | G3, G4 | 3 | Провайдеры: модуль/плагин регистрирует `SearchProvider`, `InboxTarget`, `OverviewCard`, `ActivityFormatter`; ядро их агрегирует; `search.service.ts` и `inbox.service.ts` не содержат `tx.task/note/…`; существующие тесты поиска/входящих зелёные (parity). |
+| G20 | Синхронизация: покрытие лишь List/ListItem/Note/Task; нет регистрации синхронизируемой сущности из компонента; нет проверки на двух реальных установках | P1 | G10 | 4 | Манифест декларирует класс синхронизации; фаза тестов на двух независимых установках (LAN) пройдена и задокументирована; сценарий «конфликт не теряет правку» воспроизводим; для остальных моделей `later/never` явно обоснованы. |
+| G21 | Многопользовательское разграничение личного/общего: смешанные пространства и рабочие сессии не начаты; грантлы — 4 типа | P2 | G12 | 4 | Спецификация и тест на двух пользователях/профилях: личные данные недоступны, общие синхронизируются; расширение грантлов — через реестр, не `z.enum`. |
+| G22 | Compass/Markets: данные вне Postgres (SQLite), вне RLS/бэкапа | P2 | G10 | 4 | Либо журнал/счета перенесены, либо бэкап/восстановление Compass включены в `.orion`-архив и покрыты тестом. |
+| G23 | Проверки `architecture-check` не соответствуют Конституции п.10 (невалидные манифесты, неизвестные точки расширения, циклы, контрактные нарушения) | P0 | G1 | 2 | Скрипт/тест проверяет: каждый workspace-контроллер объявляет модуль; каждый плагин каталога имеет вклад и/или `@RequirePlugin`; нет неизвестных слотов; нет циклов обязательных зависимостей; запуск в `pnpm quality`. |
+| G24 | Клиентский SDK: `api-client.ts` (2749 строк) и `core-react` — монолит | P2 | G5 | 3 | Модуль подключает собственный клиент/хуки по манифесту без правки `@orion/core`; публичные функции `ApiClient.request`/`ApiClient` расширяемы регистрацией; существующий публичный API не меняется. |
+| G25 | Документация расходится с реализацией: `AI_FIRST_EXTENSION_ARCHITECTURE.md` описывает `@orion/<module>-sdk`, `@orion/plugin-sdk` и манифест, которых в коде нет (`packages/`: только `core, core-react, shared-types, ui`); `MODULE.md`/`AI_CONTEXT.md` — только у 5 каталогов | P2 | G1 | 6 | Для каждого модуля есть `MODULE.md` + `AI_CONTEXT.md`, сгенерированные/проверяемые по манифесту; в документах нет упоминаний несуществующих пакетов (проверка ссылок). |
+| G26 | Известные хвосты стабильности: «Потрачено» проекта в разных валютах (`ProjectsService.spentAmount`), прямые Prisma-записи без `revision`, WebDAV без fault-injection, протухший dry-run | P2 | — | 0/4 | Закрываются в этапе 0/4 отдельными задачами; критерии — в `STATUS.md`/`CLAUDE.md`. |
+
+---
+
+## 6. Рекомендуемый порядок работ (этапы 2–3)
+
+Принципы: не переписывать работающее (Конституция п.12, AGENTS.md «parity rule»); сначала формализовать то, что уже есть в коде, затем сужать связи под защитой тестов.
+
+**Перед этапами 2–3 (этап 0 всё ещё критический).** Не начинать масштабный переписывание, пока не закрыты регрессии редизайна и проверка Tauri-установщика (`STATUS.md`). Две работы безопасны и полезны уже сейчас, потому что не меняют поведение: G8 (границы ошибок вокруг слотов) и G18 (проверка hard-coded цветов).
+
+**Этап 2 — формализация (сначала бумага + схемы + снимки, затем код).**
+1. **G1 + G23 (манифест и валидатор)**: вывести манифесты из существующих `MODULE_CATALOG`/`PLUGIN_CATALOG`/`SlotContracts`/`@RequirePlugin`; ничего не менять в поведении. Это основа остальных.
+2. **G2 (версии контрактов)**: зафиксировать как есть: `SlotContracts` (31), `host-api.ts`, `ThemeDocument v1`, `AGENT_TOOLS`, `hybrid-sync` — как первую версию; ввести правило bump.
+3. **G12 (Permission API) — спецификация**: свести пять механизмов к словарю разрешений; реализацию отложить до этапа 3.
+4. **G3 (Event API) — спецификация + ADR**: выбрать outbox в той же транзакции Postgres; определить 5–8 первых событий, уже реально нужных (`task.created/updated/closed`, `event.reminder_due`, `note.created`, `finance.obligation_due`).
+5. Написать документы Storage/Workspace/Surface/Integration API на основании кода (раздел 2 этого документа), не придумывая нового.
+
+**Этап 3 — реализация, по убыванию риска/пользы.**
+1. **G8 → G9**: изоляция ошибок (не меняет модель данных, сразу повышает надёжность).
+2. **G3 (EventBus) + первый потребитель**: перенести один существующий мост как референс (например, «срок задачи → напоминание»/`CapabilityLifecycle` как событие), не трогая остальные.
+3. **G4 поэтапно**, начиная с самых связанных: `home` (запись в 4 модуля) и `projects` (чтение 7 таблиц) → провайдеры агрегатов; остальные — позже. Использовать список временных исключений в `architecture-check`, чтобы запретить новые нарушения немедленно, не переписывая старые.
+4. **G19 (провайдеры Search/Inbox/Overview)** — после G3/G4.
+5. **G5 + G6 + G7 + G10 + G11** — динамическая регистрация, жизненный цикл, зависимости, данные компонента: делать **на образце** (Pet Care из этапа 7) вне существующих модулей, чтобы доказать контракт, а не переносить 15 модулей разом.
+6. **G12 (реализация разрешений)** — после G1, на агентских scope'ах (там уже есть матрица `permissions` — переиспользовать).
+
+**Что не переписывать:** RLS/`PrismaService`, `assertMember`, `CapabilityLifecycle`, реестр слотов и `ExtensionSlot` (только добавить границу ошибок), 48 плагинов и их слоты, `SNAPSHOT_MODEL_REGISTRY` и `SYNC_CLASSIFICATION` (только сделать декларативными позже), `Theme Engine`, Agent Gateway и MCP (расширять через G13), `habits`, `contacts`, `health`, `documents`, `time` (уже хорошо изолированы). Не объединять извлечение с редизайном схем данных (Конституция п.15).
+
+**Риски и оговорки аудита.** (а) Подсчёты `tx.<модель>` — по текстовому поиску, без анализа графа вызовов; граф `graft` (упомянут в `CLAUDE.md`) не использовался. (б) Рабочее дерево используется e2e-прогоном, тесты и сборка не запускались; состояние тестов взято из `docs/STATUS.md` (17.10.2026). (в) Оценки изоляции в разделе 4 — экспертные, на основе импортов и обращений; поведение при выключенных соседях на сервере для пар `notes→documents`, `goals→projects`, `projects→tasks` не проверялось выполнением.
