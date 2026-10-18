@@ -129,7 +129,13 @@ import {
   type Account,
   type AccountPublic,
   type AppInfo,
+  type AssistantChatInput,
+  type AssistantChatResult,
+  type AssistantKeyStatus,
   type BackgroundJobStatus,
+  type SetAssistantKeyInput,
+  assistantChatResultSchema,
+  assistantKeyStatusSchema,
   backgroundJobListSchema,
   type OrionModeInfo,
   type AuthResponse,
@@ -2490,6 +2496,23 @@ export class ApiClient {
   /** G9 — состояние фоновых задач сервера (требует входа); без данных пространств. */
   listBackgroundJobs(): Promise<BackgroundJobStatus[]> {
     return this.request("GET", "/system/jobs", undefined, backgroundJobListSchema);
+  }
+
+  /** ADR-0017, вариант C: ключ к языковой модели и чат внутри ORION. Ключ наружу не возвращается. */
+  getAssistantKeyStatus(): Promise<AssistantKeyStatus> {
+    return this.request("GET", "/assistant/key", undefined, assistantKeyStatusSchema);
+  }
+
+  saveAssistantKey(input: SetAssistantKeyInput): Promise<AssistantKeyStatus> {
+    return this.request("PUT", "/assistant/key", input, assistantKeyStatusSchema);
+  }
+
+  clearAssistantKey(): Promise<void> {
+    return this.request("DELETE", "/assistant/key", undefined, z.void());
+  }
+
+  assistantChat(workspaceId: string, input: AssistantChatInput): Promise<AssistantChatResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/assistant/chat`, input, assistantChatResultSchema);
   }
 
   getHealth(): Promise<{ status: string; database: string; timestamp: string }> {
