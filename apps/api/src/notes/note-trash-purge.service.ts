@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import { PrismaService } from "../common/prisma.service";
 
 /**
@@ -23,12 +24,16 @@ const REVISIONS_KEPT_PER_NOTE = 50;
 export class NoteTrashPurgeService {
   private readonly logger = new Logger(NoteTrashPurgeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly jobs: BackgroundJobsService,
+    private readonly prisma: PrismaService
+  ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleCron(): Promise<void> {
-    await this.runPurge();
-    await this.pruneRevisions();
+    // Две независимые задачи: сбой чистки корзины не должен отменять прореживание ревизий.
+    await this.jobs.runJob("notes", "trash-purge", () => this.runPurge());
+    await this.jobs.runJob("notes", "revision-prune", () => this.pruneRevisions());
   }
 
   async runPurge(): Promise<{ purged: number }> {

@@ -1,11 +1,16 @@
-import { Controller, Get } from "@nestjs/common";
-import type { AppInfo, OrionModeInfo } from "@orion/shared-types";
+import { Controller, Get, UseGuards } from "@nestjs/common";
+import type { AppInfo, BackgroundJobStatus, OrionModeInfo } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { BackgroundJobsService } from "../common/background-jobs.service";
+import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { resolveMode } from "../common/orion-mode";
 
 @Controller("system")
 export class SystemController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jobs: BackgroundJobsService
+  ) {}
 
   /**
    * S05 — public, unauthenticated: the login/register pages need this
@@ -29,6 +34,17 @@ export class SystemController {
       environment: process.env.NODE_ENV ?? "development",
       updateManifestUrl: process.env.DESKTOP_UPDATE_MANIFEST_URL ?? null
     };
+  }
+
+  /**
+   * G9 — состояние фоновых задач по компонентам. Нужен вход, но не членство в
+   * пространстве: ответ содержит только имена задач, счётчики и текст последней
+   * ошибки процесса, данных пространств в нём нет.
+   */
+  @Get("jobs")
+  @UseGuards(JwtAuthGuard)
+  listJobs(): BackgroundJobStatus[] {
+    return this.jobs.list();
   }
 
   @Get("health")

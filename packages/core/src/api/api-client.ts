@@ -129,6 +129,8 @@ import {
   type Account,
   type AccountPublic,
   type AppInfo,
+  type BackgroundJobStatus,
+  backgroundJobListSchema,
   type OrionModeInfo,
   type AuthResponse,
   type BackupRef,
@@ -2483,6 +2485,11 @@ export class ApiClient {
   /** S05 — public, unauthenticated; used by login/register to gate account-picker/PIN UI. */
   getOrionMode(): Promise<OrionModeInfo> {
     return this.request("GET", "/system/mode", undefined, orionModeInfoSchema);
+  }
+
+  /** G9 — состояние фоновых задач сервера (требует входа); без данных пространств. */
+  listBackgroundJobs(): Promise<BackgroundJobStatus[]> {
+    return this.request("GET", "/system/jobs", undefined, backgroundJobListSchema);
   }
 
   getHealth(): Promise<{ status: string; database: string; timestamp: string }> {

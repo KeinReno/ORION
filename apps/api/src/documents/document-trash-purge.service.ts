@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import { PrismaService } from "../common/prisma.service";
 import { STORAGE_ADAPTER, storageKey, type StorageAdapter } from "../storage/storage-adapter";
 
@@ -17,13 +18,14 @@ export class DocumentTrashPurgeService {
   private readonly logger = new Logger(DocumentTrashPurgeService.name);
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleCron(): Promise<void> {
-    await this.runPurge();
+    await this.jobs.runJob("documents", "trash-purge", () => this.runPurge());
   }
 
   async runPurge(): Promise<{ purged: number }> {

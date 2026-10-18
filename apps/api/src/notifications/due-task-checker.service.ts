@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
+import { BackgroundJobsService } from "../common/background-jobs.service";
 import type { Prisma } from "@prisma/client";
 import { TASK_CLOSED_STATUSES } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
@@ -22,6 +23,7 @@ export class DueTaskCheckerService {
   private readonly logger = new Logger(DueTaskCheckerService.name);
 
   constructor(
+    private readonly jobs: BackgroundJobsService,
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly notifications: NotificationCenterService,
@@ -30,7 +32,7 @@ export class DueTaskCheckerService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleCron(): Promise<void> {
-    await this.runCheck();
+    await this.jobs.runJob("tasks", "due-tasks", () => this.runCheck());
   }
 
   /**
