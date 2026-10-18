@@ -16,3 +16,25 @@ API и сервис проверяют включение/restriction; серв�
 Приёмка: `apps/api/test/opportunities.integration.test.ts`, boundary schemas, snapshot/RLS suites. UI smoke — отдельная синтетическая учётная запись. Инструкции/оставшиеся критерии: `docs/OPPORTUNITY_HUB_PROGRESS.md`, `docs/OPPORTUNITY_HUB_SPEC.md`.
 
 Уточнение публичных контрактов 16 октября: import-port поддерживает insert-only `captureOpportunitiesTx` для порций до 25 записей с упорядоченными результатами и точным счётом новых карточек при дублях; ручные данные не перезаписываются. Read-port поддерживает `afterId` для стабильного постраничного чтения. Details-slot принимает необязательный `onDirtyChange`: несохранённые правки расширения участвуют в защите перехода/закрытия Base-карточки.
+
+<!-- generated:manifest:start -->
+## Манифест (генерируется)
+
+Блок собирается `pnpm module-docs` из `packages/shared-types/src/{modules,component-manifest}.ts` и контроллеров; руками не править, проверка — `pnpm module-docs:check`.
+
+| Поле | Значение |
+|---|---|
+| id / версия | `opportunities` / 1.0.0 (платформа ^1.0.0) |
+| Вид | дополнительный, по умолчанию включён |
+| Жёсткие зависимости | — |
+| Мягкие зависимости | — |
+| Права (permissions) | `opportunities.opportunity.read`, `opportunities.opportunity.create`, `opportunities.opportunity.update`, `opportunities.opportunity.delete` |
+| События | публикует: —; слушает: — |
+| Панели веба | `opportunities` |
+| Слоты | — |
+| Маршруты API | `workspaces/:workspaceId/opportunities` |
+| Плагины, расширяющие модуль | `opportunities-profiles`, `opportunities-hh-import`, `opportunities-assistant`, `opportunities-execution`, `opportunities-manager` |
+| Миграции в манифесте | — |
+| Код на сервере | `apps/api/src/opportunities/` |
+| При выключении | Панель и API недоступны; карточки сохраняются. |
+<!-- generated:manifest:end -->
