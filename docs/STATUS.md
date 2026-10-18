@@ -22,7 +22,7 @@
 
 ## Проверено на этой ревизии (облачная среда, Linux)
 
-CI на каждом PR зелёный: typecheck, lint, architecture-check, plugin-contract-check, unit-тесты, `test:integration` на чистой PostgreSQL после всех миграций, build, полный e2e и `build:desktop-export`. Локально: `pnpm test` — 1173 теста; `pnpm test:e2e:local` — 122 из 124 (два сценария импорта папки HH в Opportunity Hub не проходят только в облачном Chromium — он не передаёт выбранную папку; в CI проходят).
+CI на каждом PR зелёный: typecheck, lint, architecture-check, plugin-contract-check, unit-тесты, `test:integration` на чистой PostgreSQL после всех миграций, build, полный e2e и `build:desktop-export`. Локально: `pnpm test` — 1182 теста; `pnpm test:e2e:local` — 122 из 124 (два сценария импорта папки HH в Opportunity Hub не проходят только в облачном Chromium — он не передаёт выбранную папку; в CI проходят).
 
 **Не проверено:** Tauri-окно и установщик на Windows (в облаке нет Rust/WebView2), открепление окон, несколько мониторов и DPI, LAN между двумя реальными машинами, гибридная синхронизация между устройствами.
 
