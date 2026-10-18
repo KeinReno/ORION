@@ -36,6 +36,7 @@ import { FinanceDraftsService } from "./drafts/finance-drafts.service";
 import { BudgetAlertsService } from "./budget-alerts.service";
 import { FinanceExpenseReader } from "./public/expense-reader";
 import { FinanceExpenseWriter } from "./public/expense-writer";
+import { FinanceProjectAggregates } from "./finance-project-aggregates";
 
 /**
  * One module for the whole "Финансы" domain (accounts/categories/
@@ -65,6 +66,7 @@ import { FinanceExpenseWriter } from "./public/expense-writer";
     FinanceDraftsController
   ],
   providers: [
+    FinanceProjectAggregates,
     AccountsService,
     CategoriesService,
     TransactionsService,
