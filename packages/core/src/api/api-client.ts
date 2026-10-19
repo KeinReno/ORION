@@ -136,7 +136,9 @@ import {
   type SetAssistantKeyInput,
   assistantChatResultSchema,
   assistantKeyStatusSchema,
+  type ComponentDataStatus,
   backgroundJobListSchema,
+  componentDataStatusSchema,
   type OrionModeInfo,
   type AuthResponse,
   type BackupRef,
@@ -2513,6 +2515,11 @@ export class ApiClient {
 
   assistantChat(workspaceId: string, input: AssistantChatInput): Promise<AssistantChatResult> {
     return this.request("POST", `/workspaces/${workspaceId}/assistant/chat`, input, assistantChatResultSchema);
+  }
+
+  /** G11 — применены ли миграции компонентов, подключённых манифестом (требует входа). */
+  listComponentData(): Promise<ComponentDataStatus[]> {
+    return this.request("GET", "/system/components", undefined, componentDataStatusSchema.array());
   }
 
   getHealth(): Promise<{ status: string; database: string; timestamp: string }> {

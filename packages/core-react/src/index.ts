@@ -56,3 +56,4 @@ export * from "./use-lan";
 export * from "./use-replica";
 export * from "./object-context";
 export * from "./use-assistant";
+export * from "./use-system-components";
