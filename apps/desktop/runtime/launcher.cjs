@@ -6,6 +6,7 @@ const { randomBytes } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { effectiveDataDir, effectivePgDir, ensurePrivateDir, mirrorPgDir } = require('./ascii-path.cjs');
 
 // Tauri's Windows resource_dir can use the \\?\ extended path prefix.
 // PostgreSQL initdb looks for postgres.exe beside itself and fails when that
@@ -15,8 +16,13 @@ const ordinaryWindowsPath = value => process.platform === 'win32'
   : value;
 const runtime = ordinaryWindowsPath(path.resolve(__dirname, '..', 'runtime'));
 const api = path.join(runtime, 'api');
-const pgBin = path.join(runtime, 'postgres', 'bin');
-const data = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ORION'));
+// Кириллица в пути ломает initdb (см. ascii-path.cjs): журналы остаются там, где их ждёт оболочка, а база и бинарники
+// PostgreSQL при не-ASCII пути переезжают в `%ProgramData%\ORION`.
+const requestedData = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ORION'));
+const data = effectiveDataDir(requestedData);
+const appVersion = (() => { try { return require(path.join(api, 'package.json')).version; } catch { return 'dev'; } })();
+const pgPlan = effectivePgDir(path.join(runtime, 'postgres'), appVersion);
+const pgBin = path.join(pgPlan.dir, 'bin');
 const cluster = path.join(data, 'postgres');
 const configPath = path.join(data, 'local-runtime.json');
 const pgPort = Number(process.env.ORION_DESKTOP_PG_PORT || 55432);
@@ -24,8 +30,8 @@ const apiPort = Number(process.env.ORION_DESKTOP_API_PORT || 4000);
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
-  fs.mkdirSync(data, { recursive: true });
-  fs.appendFileSync(path.join(data, 'runtime.log'), line);
+  fs.mkdirSync(requestedData, { recursive: true });
+  fs.appendFileSync(path.join(requestedData, 'runtime.log'), line);
   process.stdout.write(line);
 }
 
@@ -107,6 +113,14 @@ async function migrate(config) {
 }
 
 async function main() {
+  if (data !== requestedData) {
+    log(`Путь данных содержит не-ASCII символы (${requestedData}); данные и PostgreSQL хранятся в ${data}`);
+    ensurePrivateDir(data);
+  }
+  if (pgPlan.copy) {
+    log(`Каталог PostgreSQL содержит не-ASCII символы; копия бинарников: ${pgPlan.dir}`);
+    mirrorPgDir(path.join(runtime, 'postgres'), pgPlan.dir, appVersion);
+  }
   for (const file of [process.execPath, executable('initdb'), executable('pg_ctl'), path.join(api, 'dist', 'main.js')]) {
     if (!fs.existsSync(file)) throw new Error(`Installer is incomplete: ${file}`);
   }
