@@ -23,6 +23,7 @@ export * from "./use-finance-goals";
 export * from "./use-finance-obligations";
 export * from "./use-markets";
 export * from "./use-sync";
+export * from "./use-link";
 export * from "./use-settings";
 export * from "./use-workspace-organization";
 export * from "./use-projects";

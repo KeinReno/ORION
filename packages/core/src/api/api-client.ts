@@ -4,12 +4,20 @@ import {
   replicaPullSchema,
   replicaSnapshotSchema,
   syncDeviceSchema,
+  linkDeviceSchema,
+  linkKeyInfoSchema,
+  linkPairingSchema,
   syncModeStateSchema,
   type PushSyncOpsInput,
   type PushSyncOpsResult,
   type RegisterSyncDeviceInput,
   type ReplicaPull,
   type ReplicaSnapshot,
+  type LinkDevice,
+  type LinkKeyInfo,
+  type LinkPairing,
+  type PairLinkDeviceInput,
+  type RotateLinkKeyInput,
   type SyncDevice,
   type SyncMode,
   type SyncModeState
@@ -2583,6 +2591,22 @@ export class ApiClient {
 
   revokeSyncDevice(deviceId: string): Promise<SyncDevice> {
     return this.request("DELETE", `/sync/devices/${deviceId}`, undefined, syncDeviceSchema);
+  }
+
+  listLinkDevices(workspaceId: string): Promise<LinkDevice[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/link/devices`, undefined, z.array(linkDeviceSchema));
+  }
+
+  pairLinkDevice(workspaceId: string, input: PairLinkDeviceInput): Promise<LinkPairing> {
+    return this.request("POST", `/workspaces/${workspaceId}/link/devices`, input, linkPairingSchema);
+  }
+
+  revokeLinkDevice(workspaceId: string, linkDeviceId: string): Promise<LinkDevice> {
+    return this.request("DELETE", `/workspaces/${workspaceId}/link/devices/${linkDeviceId}`, undefined, linkDeviceSchema);
+  }
+
+  rotateLinkKey(workspaceId: string, input: RotateLinkKeyInput): Promise<LinkKeyInfo> {
+    return this.request("POST", `/workspaces/${workspaceId}/link/rotate-key`, input, linkKeyInfoSchema);
   }
 
   getReplicaSnapshot(workspaceId: string): Promise<ReplicaSnapshot> {
