@@ -18,10 +18,10 @@ import {
   useSetLanLoginPolicy,
   useStartLanPairing
 } from "@orion/core-react";
-import type { LanClientStatus, LanDiscoveredNode, LanLoginPolicy } from "@orion/shared-types";
+import type { LanClientStatus, LanLoginPolicy } from "@orion/shared-types";
 import { LAN_DEFAULT_PORT } from "@orion/shared-types";
 import { Badge, Button, Card, Input, useToast } from "@orion/ui";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
 import { deactivateClient, fetchClientStatus, forgetNodeBinding } from "../../lib/lan-local";
@@ -111,11 +111,11 @@ function LocalOrHost({ status, onChanged }: { status: LanClientStatus; onChanged
           <Badge>{hostOn ? "Хост LAN" : "Локальный"}</Badge>
         </div>
         <p className="text-label text-muted-foreground">
-          «Локальный» — данные только на этом компьютере, сеть закрыта. «Хост LAN» — другие устройства вашей сети подключаются к этому узлу. «Клиент LAN» — это окно работает с узлом другого компьютера.
+          Сейчас вы работаете с данными этого компьютера. Можно подключиться к другому компьютеру в своей сети или разрешить подключения к этому.
         </p>
       </Card>
-      <HostSection />
       {hostOn ? null : <ClientConnect status={status} onChanged={onChanged} />}
+      <HostSection />
     </div>
   );
 }
@@ -166,9 +166,10 @@ function HostSection(): React.ReactElement {
   if (!hostOn) {
     return (
       <div className="space-y-3">
-        <h3 className="text-label font-medium">Хост LAN</h3>
+        <h3 className="text-label font-medium">Приём подключений на этом компьютере</h3>
+        <p className="text-label text-muted-foreground">Включите, чтобы другой компьютер в вашей сети мог подключиться к ORION. Каждое новое устройство нужно подтвердить кодом.</p>
         {!confirming ? (
-          <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>Сделать этот компьютер хостом…</Button>
+          <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>Разрешить подключения…</Button>
         ) : (
           <form onSubmit={(event) => void onEnable(event)} className="space-y-3">
             <Card className="space-y-2 border-warning/40 bg-warning/10 p-4 text-label">
@@ -402,7 +403,6 @@ function Devices(): React.ReactElement {
 }
 
 function ClientConnect({ status, onChanged }: { status: LanClientStatus; onChanged: () => void }): React.ReactElement {
-  const discover = useDiscoverLanNodes();
   const start = useStartLanPairing();
   const activate = useActivateLanClient();
   const { toast } = useToast();
@@ -410,25 +410,33 @@ function ClientConnect({ status, onChanged }: { status: LanClientStatus; onChang
   const [port, setPort] = useState(String(LAN_DEFAULT_PORT));
   const [deviceName, setDeviceName] = useState("");
   const [pairingId, setPairingId] = useState<string | null>(null);
+  const discover = useDiscoverLanNodes(pairingId === null);
   const pairing = usePollLanPairing(pairingId);
   const current = pairing.data ?? start.data ?? null;
+  const resultRef = useRef<HTMLDivElement>(null);
+  const busy = start.isPending || activate.isPending || current?.status === "pending";
+
+  async function switchToNode(node: { nodeId: string; name: string }): Promise<void> {
+    try {
+      await activate.mutateAsync();
+      writeNodeMark({ mode: "client", nodeId: node.nodeId, name: node.name });
+      window.location.assign("/");
+    } catch (error) {
+      toast({ title: "Не удалось открыть компьютер", description: describeError(error), tone: "danger" });
+      onChanged();
+    }
+  }
 
   useEffect(() => {
-    if (current?.status !== "approved") return;
-    void (async () => {
-      try {
-        await activate.mutateAsync();
-        writeNodeMark({ mode: "client", nodeId: current.node.nodeId, name: current.node.name });
-        window.location.assign("/");
-      } catch (error) {
-        toast({ title: "Не удалось переключиться на узел", description: describeError(error), tone: "danger" });
-        onChanged();
-      }
-    })();
+    if (current?.status === "approved") void switchToNode(current.node);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.status]);
 
+  useEffect(() => { if (pairingId) resultRef.current?.focus(); }, [pairingId]);
+
   async function connect(target: { address: string; port: number }): Promise<void> {
+    setPairingId(null);
+    start.reset();
     try {
       const result = await start.mutateAsync({ address: target.address, port: target.port, deviceName: deviceName.trim() || "Этот компьютер" });
       setPairingId(result.pairingId);
@@ -437,72 +445,80 @@ function ClientConnect({ status, onChanged }: { status: LanClientStatus; onChang
     }
   }
 
-  function pick(node: LanDiscoveredNode): void {
-    setAddress(node.address);
-    setPort(String(node.port));
+  function retry(): void {
+    setPairingId(null);
+    start.reset();
   }
 
   return (
     <div className="space-y-3">
-      <h3 className="text-label font-medium">Подключиться к другому узлу (Клиент LAN)</h3>
+      <h3 className="text-body font-medium">Другой компьютер в вашей сети</h3>
+      <p className="text-label text-muted-foreground">Выберите компьютер с ORION. Подтвердите подключение кодом на нём, затем войдите в свой профиль — откроются доступные вам пространства.</p>
       {status.paired ? (
         <Card className="flex flex-wrap items-center justify-between gap-2 p-3">
-          <span className="text-label">Ранее подключён: {status.paired.name} ({status.paired.address}:{status.paired.port})</span>
+          <span className="min-w-0 break-words text-label">Ранее подключён: {status.paired.name}</span>
           <Button
             size="sm"
             variant="outline"
-            onClick={() =>
-              void activate.mutateAsync().then(() => {
-                writeNodeMark({ mode: "client", nodeId: status.paired!.nodeId, name: status.paired!.name });
-                window.location.assign("/");
-              })
-            }
+            disabled={busy}
+            onClick={() => void switchToNode(status.paired!)}
           >
-            Переключиться
+            Открыть компьютер
           </Button>
         </Card>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" disabled={discover.isPending} onClick={() => void discover.mutateAsync()}>
-          {discover.isPending ? "Ищу…" : "Найти узлы в сети"}
-        </Button>
+        <Button size="sm" variant="outline" disabled={discover.isFetching || busy} onClick={() => void discover.refetch()}>Обновить поиск</Button>
+        <span className="self-center text-label text-muted-foreground" role="status">{discover.isFetching ? "Ищу компьютеры с ORION…" : ""}</span>
       </div>
-      {discover.data ? (
+      {discover.isError ? <p className="text-label text-danger" role="alert">Поиск не удался. Обновите поиск или подключитесь по адресу ниже.</p> : null}
+      {!discover.isFetching && !discover.isError && discover.data ? (
         discover.data.length === 0 ? (
-          <p className="text-label text-muted-foreground">Узлы не найдены. Некоторые роутеры не пропускают mDNS — введите адрес вручную.</p>
+          <p className="text-label text-muted-foreground">Компьютеры пока не найдены. На другом компьютере откройте «Сеть и устройства» и включите приём подключений. Оба устройства должны быть в одной сети. Если поиск всё равно пуст, используйте адрес ниже.</p>
         ) : (
           discover.data.map((node) => (
             <Card key={node.nodeId} className="flex flex-wrap items-center justify-between gap-2 p-3">
-              <div>
-                <p className="text-body">{node.name}</p>
-                <p className="text-2xs text-subtle-foreground">Найден · требуется подключение · {node.address}:{node.port}</p>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-body">{node.name}</p>
+                <p className="break-all text-2xs text-subtle-foreground">{node.address}:{node.port}</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => pick(node)}>Выбрать</Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void connect(node)}>Подключиться</Button>
             </Card>
           ))
         )
       ) : null}
-      <form
+      <details className="text-label">
+        <summary className="cursor-pointer text-muted-foreground">Подключиться по адресу</summary>
+        <p className="mt-2 text-muted-foreground">Адрес показан на другом компьютере в «Сеть и устройства», когда включён приём подключений.</p>
+        <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          void connect({ address: address.trim(), port: Number(port) || LAN_DEFAULT_PORT });
+          void connect({ address: address.trim(), port: Number(port) });
         }}
       >
-        <Input className="w-48" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Адрес, например 192.168.1.20" aria-label="Адрес узла" required />
-        <Input className="w-24" value={port} onChange={(event) => setPort(event.target.value.replace(/\D/g, ""))} aria-label="Порт" />
-        <Input className="w-48" value={deviceName} onChange={(event) => setDeviceName(event.target.value)} placeholder="Имя этого устройства" aria-label="Имя этого устройства" maxLength={80} />
-        <Button type="submit" size="sm" disabled={start.isPending || !address.trim()}>Подключиться</Button>
-      </form>
-      {current && current.status !== "approved" ? (
-        <Card className="space-y-2 p-4">
-          <p className="text-label text-muted-foreground">Узел «{current.node.name}». Сообщите владельцу этот код — он введёт его на своём компьютере:</p>
-          <p className="font-mono text-3xl tracking-[0.3em]">{current.code}</p>
-          <p className="text-label">
-            {current.status === "pending" ? "Жду подтверждения владельца…" : current.status === "denied" ? "Владелец отклонил подключение." : "Время заявки истекло — начните заново."}
-          </p>
-          <p className="break-all font-mono text-2xs text-subtle-foreground">Отпечаток сертификата: {current.node.fingerprint}</p>
-        </Card>
+        <label className="min-w-0 flex-1 space-y-1">Адрес компьютера<Input name="address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="192.168.1.20" required /></label>
+        <label className="w-24 space-y-1">Порт<Input name="port" type="number" min={1} max={65535} step={1} required value={port} onChange={(event) => setPort(event.target.value)} /></label>
+        <Button type="submit" size="sm" disabled={busy || !address.trim()}>Подключиться по адресу</Button>
+        </form>
+      </details>
+      <details className="text-label">
+        <summary className="cursor-pointer text-muted-foreground">Имя этого устройства</summary>
+        <Input className="mt-2 max-w-xs" name="deviceName" value={deviceName} onChange={(event) => setDeviceName(event.target.value)} placeholder="Этот компьютер" aria-label="Имя этого устройства" maxLength={80} disabled={busy} />
+      </details>
+      {current ? (
+        <div ref={resultRef} tabIndex={-1} className="space-y-2 rounded-lg border border-border p-4 focus:outline-none" aria-label="Подключение компьютера">
+          <p className="break-words text-body font-medium">{current.node.name}</p>
+          {current.status === "pending" ? <>
+            <p className="text-label text-muted-foreground">На компьютере «{current.node.name}» откройте «Сеть и устройства» и в запросе на подключение введите этот код:</p>
+            <p className="font-mono text-3xl tracking-widest" aria-label={`Код подключения: ${current.code.split("").join(" ")}`}>{current.code}</p>
+          </> : null}
+          <p className="text-label" role="status">{current.status === "pending" ? "Ожидаю подтверждения…" : current.status === "approved" ? "Подключение подтверждено. Открываю компьютер…" : current.status === "denied" ? "Подключение отклонено на другом компьютере." : current.status === "expired" ? "Время заявки истекло." : "Связь прервалась. Проверьте, что другой компьютер включён и ORION запущен."}</p>
+          {pairing.isError ? <p className="text-label text-danger" role="alert">Не удалось проверить подтверждение. Повторяю проверку…</p> : null}
+          {current.status === "approved" && activate.isError ? <Button size="sm" variant="outline" disabled={activate.isPending} onClick={() => void switchToNode(current.node)}>Повторить открытие</Button> : null}
+          {current.status !== "pending" && current.status !== "approved" ? <Button size="sm" variant="outline" onClick={retry}>Выбрать компьютер заново</Button> : null}
+          <details className="text-2xs text-subtle-foreground"><summary className="cursor-pointer">Данные подключения</summary><p className="mt-1 break-all font-mono">Сертификат: {current.node.fingerprint}</p></details>
+        </div>
       ) : null}
     </div>
   );

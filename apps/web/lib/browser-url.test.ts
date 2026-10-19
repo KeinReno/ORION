@@ -15,7 +15,7 @@ describe("resolveBrowserInput", () => {
   it("turns anything else into a search, encoded", () => {
     const result = resolveBrowserInput("как сварить борщ");
     expect(result.kind).toBe("search");
-    expect(result.kind === "search" && result.url).toBe(`https://www.google.com/search?igu=1&q=${encodeURIComponent("как сварить борщ")}`);
+    expect(result.kind === "search" && result.url).toBe(`https://www.google.com/search?q=${encodeURIComponent("как сварить борщ")}`);
     expect(resolveBrowserInput("react").kind).toBe("search");
   });
   it("refuses every scheme that is not http(s)", () => {

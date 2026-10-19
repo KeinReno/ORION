@@ -118,9 +118,17 @@ export function useDenyLanPair() {
   });
 }
 
-export function useDiscoverLanNodes() {
+/** Search when the connection section opens; returning to it starts a fresh search. */
+export function useDiscoverLanNodes(enabled = true) {
   const { api } = useCore();
-  return useMutation<LanDiscoveredNode[], Error, void>({ mutationFn: () => api.discoverLanNodes() });
+  return useQuery<LanDiscoveredNode[]>({
+    queryKey: ["lan", "discovery"],
+    queryFn: () => api.discoverLanNodes(),
+    enabled,
+    staleTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false
+  });
 }
 
 export function useStartLanPairing() {

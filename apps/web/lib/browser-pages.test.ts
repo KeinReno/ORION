@@ -48,7 +48,7 @@ describe("search engine", () => {
 
   it("searches in the chosen engine, query encoded", () => {
     const google = resolveBrowserInput("как сварить борщ", "google");
-    expect(google.kind === "search" && google.url).toBe(`https://www.google.com/search?igu=1&q=${encodeURIComponent("как сварить борщ")}`);
+    expect(google.kind === "search" && google.url).toBe(`https://www.google.com/search?q=${encodeURIComponent("как сварить борщ")}`);
     const yandex = resolveBrowserInput("борщ", "yandex");
     expect(yandex.kind === "search" && yandex.url).toBe(`https://yandex.ru/search/?text=${encodeURIComponent("борщ")}`);
   });

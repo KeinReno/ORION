@@ -10,6 +10,8 @@ import { defineConfig } from "vitest/config";
 // NestJS service / DB-integration tests are a separate future setup — the
 // manual "Проверка" checklists in docs/HISTORY.md still cover those paths for now.
 export default defineConfig({
+  // Component lifecycle tests must transform Next's `jsx: preserve` sources for the test runtime.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "apps/web/plugins/**/*.test.ts", "apps/api/src/**/*.test.ts", "scripts/**/*.test.mjs"],
     environment: "node"
