@@ -1,7 +1,7 @@
 "use client";
 
 import { useAttachToHome, useClearCheckedItems, useCreateList, useCreateListItem, useLists, useRefreshHome, useUpdateListItem } from "@orion/core-react";
-import { Button, CheckToggle, cx, useToast } from "@orion/ui";
+import { Button, CheckToggle, cx, StrikeText, useToast } from "@orion/ui";
 import { ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import { describeError } from "../../lib/error-message";
@@ -64,7 +64,7 @@ export function HomeShopping({ workspaceId, home, overview }: HomeSectionProps):
                       label={item.checked ? "Вернуть в список" : "Куплено"}
                       size="sm"
                     />
-                    <span className={cx("min-w-0 flex-1 truncate text-label", item.checked && "text-subtle-foreground line-through")}>{item.label}</span>
+                    <span className={cx("min-w-0 flex-1 truncate text-label", item.checked && "text-subtle-foreground")}><StrikeText done={item.checked}>{item.label}</StrikeText></span>
                   </li>
                 ))}
               </ul>

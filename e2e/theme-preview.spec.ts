@@ -13,10 +13,10 @@ function recordThemeWrites(page: Page): string[] {
   return writes;
 }
 
-async function openAppearance(page: Page, workspaceId: string, width: number): Promise<void> {
+async function openThemes(page: Page, workspaceId: string, width: number): Promise<void> {
   await page.goto(`/panel/settings?workspaceId=${workspaceId}`);
-  if (width < 640) await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("appearance");
-  else await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+  if (width < 640) await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
+  else await page.getByRole("button", { name: "Темы", exact: true }).click();
 }
 
 for (const width of [1280, 390]) {
@@ -24,7 +24,7 @@ for (const width of [1280, 390]) {
     const account = await register(request, `theme-preview-${width}`);
     await signIn(page, account);
     await page.setViewportSize({ width, height: 800 });
-    await openAppearance(page, account.workspaceId, width);
+    await openThemes(page, account.workspaceId, width);
     const headers = { Authorization: `Bearer ${account.accessToken}` };
     const before = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
     const writes = recordThemeWrites(page);
@@ -66,7 +66,7 @@ test("copy editing, JSON export/import and invalid import work with plugins disa
   const account = await register(request, "theme-files");
   await disableAllPlugins(request, account);
   await signIn(page, account);
-  await openAppearance(page, account.workspaceId, 1280);
+  await openThemes(page, account.workspaceId, 1280);
   const writes = recordThemeWrites(page);
   await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «KAIDEN Precision» в редакторе", exact: true }).click();
   const region = page.getByRole("region", { name: "Редактор темы", exact: true });
@@ -120,7 +120,7 @@ test("every built-in preset previews its own palette without writing preferences
   const account = await register(request, "theme-presets");
   await signIn(page, account);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await openAppearance(page, account.workspaceId, 1280);
+  await openThemes(page, account.workspaceId, 1280);
   const headers = { Authorization: `Bearer ${account.accessToken}` };
   const before = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
   const writes = recordThemeWrites(page);

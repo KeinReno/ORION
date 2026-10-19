@@ -129,6 +129,7 @@ model UserPreference {
   sidebarOrder         Json      @default("[]")
   sidebarPosition      String    @default("left")
   openTabsMode         String    @default("accumulate")
+  motionLevel          String    @default("calm")
   /// When set, the first-run card on Today stays hidden. Null = not dismissed.
   onboardingCompletedAt DateTime?
   /// U05 (24-CONNECTED-CORE-BACKLOG.md) — personal grouping of the user's own

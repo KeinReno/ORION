@@ -12,7 +12,7 @@ test("own themes: duplicate, rename, delete the active one, conflict from anothe
   await request.patch(`${apiUrl()}/settings/preferences`, { headers, data: { theme: "kaiden-precision" } });
   await signIn(page, account); await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+  await page.getByRole("button", { name: "Темы", exact: true }).click();
   const library = page.getByRole("region", { name: "Библиотека тем", exact: true });
 
   await library.getByRole("button", { name: "Дублировать тему «Midnight»", exact: true }).click();
@@ -58,7 +58,7 @@ test("workspace theme applies only in its workspace, and «always mine» keeps t
   const second = await (await request.post(`${apiUrl()}/workspaces`, { headers, data: { name: "Второе пространство" } })).json();
   await signIn(page, account); await page.setViewportSize({ width: 390, height: 860 });
   await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("appearance");
+  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "emerald");
   const section = page.getByRole("region", { name: "Тема пространства", exact: true });
   await section.getByRole("combobox", { name: "Тема для всех участников", exact: true }).selectOption({ label: "Arctic" });
@@ -78,7 +78,7 @@ test("workspace theme applies only in its workspace, and «always mine» keeps t
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "arctic");
 
   await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("appearance");
+  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
   await page.getByRole("tab", { name: "Всегда мою тему", exact: true }).click();
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "emerald");
   const prefs = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();

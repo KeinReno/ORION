@@ -355,6 +355,43 @@ body {
     scroll-behavior: auto !important;
   }
 }
+/* StrikeText (@orion/ui): a done item's title is crossed out by a line that draws left → right.
+   A background line rather than text-decoration, because text-decoration can't be animated in;
+   box-decoration-break keeps it on every line of a wrapped title. */
+.orion-strike {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 55%;
+  background-size: 0% 1px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-size 0.26s ease-out, color 0.2s ease-out;
+}
+.orion-strike[data-done="true"] {
+  background-size: 100% 1px;
+}
+html[data-motion="expressive"] .orion-strike {
+  transition-timing-function: cubic-bezier(0.34, 1.4, 0.64, 1), ease-out;
+}
+@media print {
+  .orion-strike[data-done="true"] {
+    text-decoration: line-through;
+    background: none;
+  }
+}
+
+/* Settings → Внешний вид → «Анимации: выключены» — the same rule as the system switch above, for this account. */
+html[data-motion="off"]:focus-within {
+  scroll-behavior: auto;
+}
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
 
 /* Scoped redesign chrome: no ambient effects or glass, regardless of retained legacy choices. */
 html[data-orion-design="precision"] body { background-color: rgb(var(--orion-color-canvas)); color: rgb(var(--orion-color-text)); }

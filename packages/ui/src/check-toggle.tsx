@@ -1,10 +1,9 @@
 "use client";
 
 import clsx from "clsx";
-import { motion, useReducedMotion } from "framer-motion";
-import { Check } from "lucide-react";
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { SPRING_SNAP } from "./motion";
+import { useMotionLevel, useMotionSpring } from "./motion-level";
 
 export interface CheckToggleProps {
   checked: boolean;
@@ -33,7 +32,8 @@ export function CheckToggle({
   tone = "accent",
   className
 }: CheckToggleProps): React.ReactElement {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionLevel() === "off";
+  const snap = useMotionSpring("snap");
 
   // A one-shot radiating ring on the *transition into* checked (never on
   // uncheck, never on mount) — the checkmark's own spring pop already reads
@@ -76,26 +76,52 @@ export function CheckToggle({
         onClick={onClick}
         whileTap={reduceMotion ? undefined : { scale: 0.82 }}
         className={clsx(
-          "flex h-full w-full shrink-0 items-center justify-center border outline-none transition-colors",
+          "relative flex h-full w-full shrink-0 items-center justify-center overflow-hidden border outline-none transition-colors",
           "focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50",
           shapeClass,
           checked
             ? tone === "success"
-              ? "border-success bg-success/20 text-success"
-              : "border-accent bg-accent text-accent-foreground"
+              ? "border-success text-success"
+              : "border-accent text-accent-foreground"
             : "border-border-strong text-transparent hover:border-accent",
           className
         )}
       >
+        {/* The fill grows out of the centre, then the check draws itself over it (Spring Check). */}
         <motion.span
+          aria-hidden
           initial={false}
-          animate={checked ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0 }}
-          transition={reduceMotion ? { duration: 0 } : SPRING_SNAP}
-          className="flex items-center justify-center"
-        >
-          <Check className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
-        </motion.span>
+          animate={checked ? { scale: 1, opacity: 1 } : { scale: 0.2, opacity: 0 }}
+          transition={snap}
+          className={clsx("absolute inset-0", shapeClass, tone === "success" ? "bg-success/20" : "bg-accent")}
+        />
+        <svg viewBox="0 0 16 16" aria-hidden className={clsx("relative", size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5")}>
+          <motion.path
+            d="M3.5 8.5l3 3 6-7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial={false}
+            animate={checked ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
+            transition={reduceMotion ? { duration: 0 } : { pathLength: { duration: 0.22, ease: "easeOut", delay: 0.04 }, opacity: { duration: 0.05 } }}
+          />
+        </svg>
       </motion.button>
+    </span>
+  );
+}
+
+/**
+ * A title that gets crossed out when its item is done: the line draws from left to right instead
+ * of appearing at once (spring-eased at the expressive level, instant with animations off — see
+ * `.orion-strike` in the app's globals.css). Keep it inline inside the row's own (truncating) text box.
+ */
+export function StrikeText({ done, children, className }: { done: boolean; children: React.ReactNode; className?: string }): React.ReactElement {
+  return (
+    <span className={clsx("orion-strike", className)} data-done={done ? "true" : undefined}>
+      {children}
     </span>
   );
 }

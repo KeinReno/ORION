@@ -1,10 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { motion, useReducedMotion, type Transition } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
 import { AlertCircle, Check, TriangleAlert, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { SPRING_SNAP } from "./motion";
+import { useEffect, useId, useRef, useState } from "react";
+import { useMotionSpring } from "./motion-level";
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
@@ -29,7 +29,7 @@ type ButtonStatus = "idle" | "pending" | "success" | "error";
  * success/error, rather than trusting the caller to ever pass `"idle"` back.
  */
 function useStatusFlash(status: ButtonStatus): { flash: "success" | "error" | null; transition: Transition } {
-  const reduceMotion = useReducedMotion();
+  const snap = useMotionSpring("snap");
   const [flash, setFlash] = useState<"success" | "error" | null>(null);
   const prevStatus = useRef<ButtonStatus>(status);
   useEffect(() => {
@@ -42,7 +42,7 @@ function useStatusFlash(status: ButtonStatus): { flash: "success" | "error" | nu
     prevStatus.current = status;
     if (status !== "success" && status !== "error") setFlash(null);
   }, [status]);
-  return { flash, transition: reduceMotion ? { duration: 0 } : SPRING_SNAP };
+  return { flash, transition: snap };
 }
 
 function StatusFlashIcon({ flash, transition }: { flash: "success" | "error"; transition: Transition }): React.ReactElement {
@@ -358,6 +358,10 @@ export function SegmentedControl<T extends string>({
   /** Names the group for assistive tech ("Вид списка"). */
   "aria-label"?: string;
 }): React.ReactElement {
+  // The selected pill is one shared element that travels between options (layoutId per control
+  // instance), so switching День → Месяц reads as one motion rather than two instant swaps.
+  const pillId = useId();
+  const snap = useMotionSpring("snap");
   return (
     <div
       role="tablist"
@@ -377,12 +381,15 @@ export function SegmentedControl<T extends string>({
             {...option.dataAttrs}
             onClick={() => onChange(option.value)}
             className={clsx(
-              "rounded-md font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+              "relative rounded-md font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
               size === "sm" ? "px-2 py-1 text-2xs" : "px-2.5 py-1 text-label",
-              active ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+              active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {option.label}
+            {active ? (
+              <motion.span aria-hidden layoutId={pillId} transition={snap} className="absolute inset-0 rounded-md bg-white/10" />
+            ) : null}
+            <span className="relative">{option.label}</span>
           </button>
         );
       })}

@@ -174,7 +174,7 @@ function WorkspaceThemeSection(): React.ReactElement | null {
   }
 
   return (
-    <section role="region" aria-label="Тема пространства" className="min-w-0 space-y-3 border-t border-border pt-4">
+    <section data-setting="workspace-theme" role="region" aria-label="Тема пространства" className="min-w-0 space-y-3 border-t border-border pt-4">
       <p className="text-title">Тема пространства «<span className="break-words">{workspace.name}</span>»</p>
       {owner ? (
         <label className="block min-w-0 space-y-1" htmlFor={`${ids}-workspace`}>

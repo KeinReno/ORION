@@ -2,11 +2,12 @@
 
 import { useActivity, useAgentAuditLog, useProjectGoals, useProjects } from "@orion/core-react";
 import type { Task } from "@orion/shared-types";
-import { PanelBody, PanelHeader, PanelShell, cx } from "@orion/ui";
+import { PanelBody, PanelHeader, PanelShell, SloshGauge, StarBorder, cx } from "@orion/ui";
 import { BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../../components/section-tabs";
-import { dailyFlow, flowTotals, workload, type DayFlow } from "../../lib/dashboard-stats";
+import { shortDate } from "../../lib/format";
+import { dailyFlow, featuredGoal, flowTotals, workload, type DayFlow } from "../../lib/dashboard-stats";
 import { openEntity, openPanel, openProject } from "../../lib/panel-bus";
 import type { PanelComponentProps } from "../../lib/panel-registry";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
@@ -196,6 +197,8 @@ export function DashboardAnalytics({
         (goals ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">Целей пока нет — они создаются в панели «Цели».</p>
         ) : (
+          <div className="space-y-3">
+          <FeaturedGoal goal={featuredGoal(goals ?? [])} />
           <ul className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]">
             {(goals ?? []).map((goal) => (
               <li key={goal.id}>
@@ -212,6 +215,7 @@ export function DashboardAnalytics({
               </li>
             ))}
           </ul>
+          </div>
         )
       ) : null}
 
@@ -291,5 +295,34 @@ export function DashboardAnalyticsView({ params, api, tasks, now, workspaceId, t
         )}
       </PanelBody>
     </PanelShell>
+  );
+}
+
+/**
+ * The goal closest to done, large: the liquid gauge carries the mood, the printed percentage the
+ * fact. A reached goal gets the travelling light for the moment it is shown — the event, not a
+ * permanent decoration.
+ */
+function FeaturedGoal({ goal }: { goal: { id: string; title: string; progress: number | null; dueAt: string | null; plans: readonly unknown[] } | null }): React.ReactElement | null {
+  if (!goal) return null;
+  const reached = goal.progress === 100;
+  return (
+    <StarBorder active={reached} className="rounded-xl">
+      <button
+        type="button"
+        onClick={() => openPanel("goals")}
+        className="flex w-full items-center gap-4 rounded-xl border border-border px-4 py-3 text-left hover:bg-white/5"
+      >
+        <SloshGauge value={goal.progress} size={76} label={`Прогресс цели «${goal.title}»`} />
+        <span className="min-w-0 space-y-0.5">
+          <span className="block text-2xs uppercase tracking-wide text-subtle-foreground">{reached ? "Цель достигнута" : "Ближе всего к цели"}</span>
+          <span className="block truncate text-sm font-medium text-foreground">{goal.title}</span>
+          <span className="block text-2xs text-subtle-foreground">
+            планов {goal.plans.length}
+            {goal.dueAt ? ` · до ${shortDate(goal.dueAt)}` : ""}
+          </span>
+        </span>
+      </button>
+    </StarBorder>
   );
 }

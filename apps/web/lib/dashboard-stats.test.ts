@@ -1,6 +1,6 @@
 import type { Task } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { dailyFlow, flowTotals, workload } from "./dashboard-stats";
+import { dailyFlow, featuredGoal, flowTotals, workload } from "./dashboard-stats";
 
 const NOW = new Date(2026, 9, 13, 15, 0); // 13 Oct 2026, local
 const at = (day: number, hour = 12): string => new Date(2026, 9, day, hour).toISOString();
@@ -72,5 +72,19 @@ describe("workload", () => {
       NOW
     );
     expect(result).toEqual({ open: 5, inProgress: 1, blocked: 1, overdue: 1, dueToday: 1, dueWeek: 1 });
+  });
+});
+
+describe("featuredGoal", () => {
+  const goal = (id: string, progress: number | null, dueAt: string | null = null) => ({ id, progress, dueAt });
+
+  it("features the open goal closest to done, the nearer deadline first on a tie", () => {
+    expect(featuredGoal([goal("a", 40), goal("b", 80, "2026-12-01"), goal("c", 80, "2026-11-01")])?.id).toBe("c");
+  });
+
+  it("never features unknown progress and falls back to a finished goal", () => {
+    expect(featuredGoal([goal("x", null), goal("done", 100, "2026-10-01")])?.id).toBe("done");
+    expect(featuredGoal([goal("x", null)])).toBeNull();
+    expect(featuredGoal([])).toBeNull();
   });
 });

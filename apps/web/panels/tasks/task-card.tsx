@@ -1,6 +1,6 @@
 import type { Task, TaskPriority, TaskStatus } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
-import { CheckToggle, DropdownMenu, IconButton, StatusMark, Tooltip, cx, type MenuItem } from "@orion/ui";
+import { CheckToggle, cx, DropdownMenu, IconButton, type MenuItem, Tooltip, StatusMark, StrikeText } from "@orion/ui";
 import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { useSlotContributions } from "../../lib/extensions/slot";
@@ -139,7 +139,7 @@ export function TaskCard({
           />
         </div>
         {PRIORITY_DOT[task.priority] ? <span className={cx("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_DOT[task.priority])} title={`Приоритет: ${TASK_PRIORITY_LABEL[task.priority]}`} /> : null}
-        <span className={cx("flex-1 text-body font-medium", (done || canceled) && "line-through")}>{task.title}</span>
+        <span className="flex-1 text-body font-medium"><StrikeText done={done || canceled}>{task.title}</StrikeText></span>
         <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100" onClick={(event) => event.stopPropagation()} role="presentation"><DropdownMenu trigger={({ toggle }) => <IconButton label="Действия" size="sm" onClick={toggle}><MoreHorizontal className="h-4 w-4" /></IconButton>} items={items} /></div>
       </div>
       {task.description ? <p className="line-clamp-2 text-label text-muted-foreground">{task.description}</p> : null}

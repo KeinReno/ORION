@@ -12,6 +12,7 @@ import {
   sidebarOrderSchema,
   sidebarPositionSchema,
   openTabsModeSchema,
+  motionLevelSchema,
   type BackgroundEffectSettings,
   type UpdateUserPreferenceInput,
   type UserPreference,
@@ -358,6 +359,7 @@ function toDto(preference: {
   sidebarOrder: Prisma.JsonValue;
   sidebarPosition: string;
   openTabsMode: string;
+  motionLevel: string;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   const parsedTheme = themeDocumentSchema.safeParse(preference.customTheme);
@@ -374,6 +376,7 @@ function toDto(preference: {
     sidebarOrder: sidebarOrderSchema.safeParse(preference.sidebarOrder).success ? (preference.sidebarOrder as string[]) : [],
     sidebarPosition: sidebarPositionSchema.safeParse(preference.sidebarPosition).success ? (preference.sidebarPosition as UserPreference["sidebarPosition"]) : "left",
     openTabsMode: openTabsModeSchema.safeParse(preference.openTabsMode).success ? (preference.openTabsMode as UserPreference["openTabsMode"]) : "accumulate",
+    motionLevel: motionLevelSchema.safeParse(preference.motionLevel).success ? (preference.motionLevel as UserPreference["motionLevel"]) : "calm",
     onboardingCompletedAt: preference.onboardingCompletedAt?.toISOString() ?? null
   } as UserPreference;
 }

@@ -96,6 +96,13 @@ export type SidebarPosition = z.infer<typeof sidebarPositionSchema>;
 /** What a click on a menu section does to the tab strip: add a tab (they pile up) or replace the current one. */
 export const openTabsModeSchema = z.enum(["accumulate", "replace"]);
 export type OpenTabsMode = z.infer<typeof openTabsModeSchema>;
+/**
+ * How much the interface moves: `off` — no animation at all; `calm` — short transitions without
+ * overshoot (the default); `expressive` — springs with a little bounce and the decorative extras.
+ * The system "reduce motion" setting always wins over `calm`/`expressive` on that device.
+ */
+export const motionLevelSchema = z.enum(["off", "calm", "expressive"]);
+export type MotionLevel = z.infer<typeof motionLevelSchema>;
 export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 
 export const userPreferenceSchema = z.object({
@@ -146,6 +153,7 @@ export const userPreferenceSchema = z.object({
   sidebarPosition: sidebarPositionSchema,
   /** Whether opening sections keeps adding tabs on top, or reuses the current tab. Personal. */
   openTabsMode: openTabsModeSchema,
+  motionLevel: motionLevelSchema,
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

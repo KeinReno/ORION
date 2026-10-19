@@ -1,7 +1,7 @@
 "use client";
 
 import { isTaskClosed, type Milestone, type Task } from "@orion/shared-types";
-import { CheckToggle, DropdownMenu, IconButton, cx, useResizeWidth } from "@orion/ui";
+import { CheckToggle, cx, DropdownMenu, IconButton, StrikeText, useResizeWidth } from "@orion/ui";
 import { MoreHorizontal } from "lucide-react";
 import { useId, useState } from "react";
 import { shortDate } from "../../lib/format";
@@ -248,7 +248,7 @@ function MatrixCard({
         aria-describedby={`${cardId}-meta`}
         className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
       >
-        <span id={`${cardId}-title`} className={cx("block text-label", closed ? "text-subtle-foreground line-through" : "text-foreground")}>{task.title}</span>
+        <span id={`${cardId}-title`} className={cx("block text-label", closed ? "text-subtle-foreground" : "text-foreground")}><StrikeText done={closed}>{task.title}</StrikeText></span>
         <span id={`${cardId}-meta`} className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-micro text-subtle-foreground">
           {milestoneTitle ? <span className="min-w-0 truncate">{milestoneTitle}</span> : null}
           {task.dueAt ? <span className={cx("font-mono tabular-nums", row === "overdue" && "text-destructive")}>{shortDate(task.dueAt)}</span> : null}

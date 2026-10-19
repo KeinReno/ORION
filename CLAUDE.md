@@ -376,6 +376,18 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   на `<html>`, значения живут CSS-переменными в `globals.css`. Добавляешь
   цвет, зависящий от настроек, — заводи переменную, а не hex в конфиге
   Tailwind.
+- **Панель настроек строится из каталога** `apps/web/lib/settings-catalog.ts`: вкладки сгруппированы по
+  тому, кого затрагивает изменение (учётная запись / пространство «…» / этот компьютер / справка), над
+  вкладкой — строка области действия, поиск по параметрам (в настройках и в Ctrl+K) ведёт к полю по
+  `data-setting`. Новый параметр = запись в `SETTINGS_FIELDS` + `data-setting` у поля; значение вкладки
+  не переименовывать (на нём держатся вынесенные виды `view:settings~<tab>`). Перейти к полю из кода —
+  `openSettings(tab, anchor)` из `panel-bus`. Строки форм — `SettingGroup`/`SettingRow`, формы с кнопкой
+  «Сохранить» — `SaveBar` (`panels/settings/setting-row.tsx`). «Настройки модуля» (шестерёнка в доке)
+  показывают только параметры и плагины этого модуля, общий вид там не дублируется.
+- **Анимации — `UserPreference.motionLevel`** (`off | calm | expressive`, по умолчанию `calm`). Пружины
+  берутся из `useMotionSpring("snap" | "smooth")`, уровень — `useMotionLevel()` (`@orion/ui`); системное
+  «уменьшить движение» всегда даёт `off`. CSS-анимации гасятся по `html[data-motion="off"]`. Не заводить
+  локальные stiffness/damping и не читать `useReducedMotion()` из framer-motion напрямую.
 - `theme` выбирает оболочку (`kaiden-precision` или прежнюю), палитру — библиотека
   тем (ТЗ 01): `UserPreference.themeLibrary`/`activeThemeId`/`workspaceThemeMode`
   и `Workspace.theme` (копия документа, меняет только владелец). Какая палитра

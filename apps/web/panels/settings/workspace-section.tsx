@@ -5,6 +5,7 @@ import { Button, Card, ConfirmDialog, Input, useToast } from "@orion/ui";
 import { useEffect, useState, type FormEvent } from "react";
 import { describeAuthError } from "../../lib/error-message";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { SaveBar, SettingGroup, SettingRow } from "./setting-row";
 
 export function WorkspaceSettings(): React.ReactElement {
   const { workspace, workspaces } = useActiveWorkspace();
@@ -50,49 +51,64 @@ export function WorkspaceSettings(): React.ReactElement {
 
   if (!workspace) return <Card className="text-sm text-muted-foreground">Загрузка…</Card>;
 
+  const nameChanged = isOwner && name.trim() !== workspace.name;
+
   return (
     <div className="space-y-6">
-      <Card className="space-y-4">
-        <form className="flex flex-wrap items-end gap-3" onSubmit={saveName}>
-          <label className="min-w-[240px] flex-1 space-y-1">
-            <span className="text-xs text-muted-foreground">Название пространства</span>
-            <Input required maxLength={80} value={name} disabled={!isOwner} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <Button type="submit" disabled={!isOwner || updateWorkspace.isPending || name.trim() === workspace.name}>
-            Сохранить
-          </Button>
-        </form>
-        {!isOwner ? (
-          <p className="text-2xs text-subtle-foreground">Переименовать пространство может только владелец.</p>
-        ) : null}
-      </Card>
+      <form id="settings-workspace-form" onSubmit={saveName}>
+        <SettingGroup title="Основное" description={isOwner ? undefined : "Менять может только владелец пространства."}>
+          <SettingRow anchor="rename" label="Название" description="Видно всем участникам в списке пространств и в меню." changed={nameChanged}>
+            <Input
+              aria-label="Название пространства"
+              required
+              maxLength={80}
+              className="w-64 max-w-full"
+              value={name}
+              disabled={!isOwner}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </SettingRow>
+          <SettingRow label="Ваша роль">
+            <span className="text-label text-muted-foreground">{isOwner ? "Владелец" : workspace.role === "lead" ? "Тимлид" : "Участник"}</span>
+          </SettingRow>
+        </SettingGroup>
+        <SaveBar
+          form="settings-workspace-form"
+          changedCount={nameChanged ? 1 : 0}
+          pending={updateWorkspace.isPending}
+          onReset={() => setName(workspace.name)}
+        />
+      </form>
 
-      <Card className="space-y-3 border-destructive/30">
-        <div>
-          <p className="text-sm font-medium text-foreground">Удалить пространство</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Безвозвратно удаляет «{workspace.name}» вместе со всеми задачами, заметками, событиями, документами,
-            финансами и остальными данными — включая файлы на диске. Отменить нельзя.
-          </p>
-        </div>
-        {!isOwner ? (
-          <p className="text-2xs text-subtle-foreground">Удалить пространство может только владелец.</p>
-        ) : isOnlyWorkspace ? (
-          <p className="text-2xs text-subtle-foreground">
-            Это единственное ваше пространство — сначала создайте другое, потом можно будет удалить это.
-          </p>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="border-destructive/50 text-destructive hover:bg-destructive/10"
-            disabled={deleteWorkspace.isPending}
-            onClick={() => setConfirmOpen(true)}
-          >
-            Удалить пространство
-          </Button>
-        )}
-      </Card>
+      <SettingGroup title="Опасная зона">
+        <SettingRow
+          anchor="delete"
+          label="Удалить пространство"
+          description={
+            <>
+              Безвозвратно удаляет «{workspace.name}» со всеми задачами, заметками, событиями, документами, финансами и файлами на
+              диске.{" "}
+              {!isOwner
+                ? "Удалить может только владелец."
+                : isOnlyWorkspace
+                  ? "Это единственное ваше пространство — сначала создайте другое."
+                  : null}
+            </>
+          }
+        >
+          {isOwner && !isOnlyWorkspace ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              disabled={deleteWorkspace.isPending}
+              onClick={() => setConfirmOpen(true)}
+            >
+              Удалить…
+            </Button>
+          ) : null}
+        </SettingRow>
+      </SettingGroup>
 
       <ConfirmDialog
         open={confirmOpen}

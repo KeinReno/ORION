@@ -1,12 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
 import { ChevronDown, Folder, FolderOpen, FolderPlus, MoreHorizontal, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
-import { SPRING_SMOOTH } from "./motion";
+import { useMotionLevel, useMotionSpring } from "./motion-level";
 import { DropdownMenu, Popover, type MenuItem } from "./overlays";
 
 export interface SidebarLinkItem {
@@ -175,7 +175,8 @@ export function Sidebar({
   const isDrawer = variant === "drawer";
   const horizontal = !isDrawer && (position === "top" || position === "bottom");
   const open = isDrawer || (pinned && !horizontal);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionLevel() === "off";
+  const smooth = useMotionSpring("smooth");
   const duration = reduceMotion ? 0 : 0.2;
   const mounted = useMounted();
 
@@ -301,7 +302,7 @@ export function Sidebar({
           <motion.span
             layoutId={isDrawer ? "orion-sidebar-pill-drawer" : "orion-sidebar-pill"}
             className="absolute inset-0 rounded-lg bg-accent/12"
-            transition={reduceMotion ? { duration: 0 } : SPRING_SMOOTH}
+            transition={smooth}
             aria-hidden
           />
         ) : null}
@@ -309,14 +310,14 @@ export function Sidebar({
           <motion.span
             layoutId={isDrawer ? "orion-sidebar-bar-drawer" : "orion-sidebar-bar"}
             className={clsx("absolute rounded-full bg-accent", horizontal ? "inset-x-2 bottom-0 h-0.5" : "inset-y-1.5 left-0 w-0.5")}
-            transition={reduceMotion ? { duration: 0 } : SPRING_SMOOTH}
+            transition={smooth}
             aria-hidden
           />
         ) : null}
         <motion.span
           className="relative shrink-0"
           whileHover={{ scale: reduceMotion ? 1 : 1.12 }}
-          transition={reduceMotion ? { duration: 0 } : SPRING_SMOOTH}
+          transition={smooth}
         >
           <Icon className="h-5 w-5" aria-hidden />
           {!open && link.badge ? (

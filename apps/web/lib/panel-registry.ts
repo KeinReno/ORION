@@ -314,12 +314,15 @@ export function isPanelAvailable(
 
 export function visiblePanels(
   disabledModules: readonly string[] | undefined,
-  personallyHidden: readonly string[] = []
+  personallyHidden: readonly string[] = [],
+  pluginOverrides: readonly string[] = []
 ): PanelDefinition[] {
+  // A panel whose plugin is off can't be opened (`isPanelAvailable` in the shell), so it must not be listed either.
   return panelRegistry.filter(
     (panel) =>
       !panel.hideFromNav &&
-      (!panel.moduleId || (isModuleEnabled(disabledModules, panel.moduleId) && !personallyHidden.includes(panel.moduleId)))
+      isPanelAvailable(panel, disabledModules, pluginOverrides) &&
+      (!panel.moduleId || !personallyHidden.includes(panel.moduleId))
   );
 }
 

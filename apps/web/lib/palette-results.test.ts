@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectPaletteResults, type PaletteEntry } from "./palette-results";
+import { groupPaletteResults, selectPaletteResults, type PaletteEntry } from "./palette-results";
 
 const command = (id: string, label: string, patch: Partial<PaletteEntry> = {}): PaletteEntry => ({ id, label, ...patch });
 
@@ -30,5 +30,17 @@ describe("selectPaletteResults", () => {
     ];
     expect(selectPaletteResults(entries, "новая", "старый").map((entry) => entry.id)).toEqual(["t:1"]);
     expect(selectPaletteResults(entries, "", "старый").map((entry) => entry.id)).toEqual(["t:1"]);
+  });
+});
+
+describe("groupPaletteResults", () => {
+  it("groups by first appearance and numbers entries in displayed order", () => {
+    const entries = [command("a:1", "Новая задача"), command("t:1", "Задача"), command("a:2", "В инбокс"), command("n:1", "Заметка")];
+    const groupOf = (entry: PaletteEntry): string => (entry.id.startsWith("a:") ? "Действия" : entry.id.startsWith("t:") ? "Задачи" : "Заметки");
+    const { groups, ordered } = groupPaletteResults(entries, groupOf);
+    expect(groups.map((group) => group.group)).toEqual(["Действия", "Задачи", "Заметки"]);
+    expect(ordered.map((entry) => entry.id)).toEqual(["a:1", "a:2", "t:1", "n:1"]);
+    expect(groups[0]?.items.map((item) => item.index)).toEqual([0, 1]);
+    expect(groups[2]?.items[0]?.index).toBe(3);
   });
 });

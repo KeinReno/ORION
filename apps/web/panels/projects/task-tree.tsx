@@ -1,7 +1,7 @@
 "use client";
 
 import { isTaskClosed, type Task } from "@orion/shared-types";
-import { Badge, CheckToggle, cx } from "@orion/ui";
+import { Badge, CheckToggle, cx, StrikeText } from "@orion/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { shortDate } from "../../lib/format";
@@ -82,10 +82,10 @@ export function TaskTree({
               onClick={() => onOpen(task)}
               className={cx(
                 "min-w-0 flex-1 truncate text-left text-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
-                closed ? "text-subtle-foreground line-through" : "text-foreground hover:underline"
+                closed ? "text-subtle-foreground" : "text-foreground hover:underline"
               )}
             >
-              {task.title}
+              <StrikeText done={closed}>{task.title}</StrikeText>
             </button>
             {childTotal > 0 ? (
               <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">

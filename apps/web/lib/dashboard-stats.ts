@@ -86,3 +86,18 @@ export function flowTotals(flow: readonly DayFlow[]): { created: number; complet
   const completed = flow.reduce((sum, day) => sum + day.completed, 0);
   return { created, completed, net: created - completed };
 }
+
+/**
+ * The one goal the dashboard shows large: the open goal closest to done (ties: the nearer due
+ * date first, then no due date). A goal with unknown progress is never featured — the gauge would
+ * have nothing true to show. When every known goal is done, the most recently due finished one.
+ */
+export function featuredGoal<G extends { progress: number | null; dueAt: string | null }>(goals: readonly G[]): G | null {
+  const known = goals.filter((goal) => goal.progress !== null);
+  const due = (goal: G): number => (goal.dueAt ? Date.parse(goal.dueAt) : Number.POSITIVE_INFINITY);
+  const open = known.filter((goal) => (goal.progress ?? 0) < 100);
+  if (open.length > 0) {
+    return [...open].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0) || due(a) - due(b))[0] ?? null;
+  }
+  return [...known].sort((a, b) => due(b) - due(a))[0] ?? null;
+}

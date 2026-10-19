@@ -2,7 +2,7 @@
 
 import { useReplicaEntityState } from "@orion/core-react";
 import { formatListQuantity, type ListItem } from "@orion/shared-types";
-import { CheckToggle, IconButton, SwipeRow, cx } from "@orion/ui";
+import { CheckToggle, cx, IconButton, StrikeText, SwipeRow } from "@orion/ui";
 import { CalendarClock, GripVertical, StickyNote, X } from "lucide-react";
 import type { DragEvent } from "react";
 import { SyncStateMark } from "../../components/replica-banner";
@@ -60,7 +60,7 @@ export function ListItemRow({
   const amount = formatListQuantity(item);
   const overdue = isItemOverdue(item);
   const syncState = useReplicaEntityState(workspaceId, "listItem", item.id);
-  const labelClass = cx("min-w-0 flex-1 truncate text-left text-body text-foreground", item.checked && "text-muted-foreground line-through");
+  const labelClass = cx("min-w-0 flex-1 truncate text-left text-body text-foreground", item.checked && "text-muted-foreground");
 
   return (
     <SwipeRow actions={[{ label: "Удалить", icon: X, tone: "danger", onSelect: onDelete }]}>
@@ -78,10 +78,10 @@ export function ListItemRow({
         <CheckToggle checked={item.checked} onClick={onToggle} label={item.label} size="sm" />
         {onOpen && !compact ? (
           <button type="button" onClick={onOpen} className={labelClass} title="Изменить пункт">
-            {item.label}
+            <StrikeText done={item.checked}>{item.label}</StrikeText>
           </button>
         ) : (
-          <span className={labelClass}>{item.label}</span>
+          <span className={labelClass}><StrikeText done={item.checked}>{item.label}</StrikeText></span>
         )}
 
         {amount && !(itemBridge && item.inventoryItemId) ? <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-0.5 text-micro text-muted-foreground">{amount}</span> : null}
