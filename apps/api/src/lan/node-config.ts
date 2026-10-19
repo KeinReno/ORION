@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { LAN_DEFAULT_PORT, type LanMode } from "@orion/shared-types";
+import { LAN_DEFAULT_PORT, type LanLoginPolicy, type LanMode } from "@orion/shared-types";
 
 /**
  * ТЗ-04: настройки узла живут в файлах рядом с данными установки, а не в БД. Режим решает,
@@ -20,6 +20,8 @@ export interface LanNodeConfig {
   mode: LanMode;
   port: number;
   ownerUserId: string | null;
+  /** Политика входа хоста; нет в файле (старые узлы) — домашняя. */
+  loginPolicy: LanLoginPolicy;
 }
 
 export interface LanClientBinding {
@@ -66,7 +68,8 @@ export function loadNodeConfig(dir = nodeDir()): LanNodeConfig {
     name: stored?.name?.trim() || defaultNodeName(),
     mode: stored?.mode === "host" || stored?.mode === "client" ? stored.mode : "local",
     port: Number.isInteger(stored?.port) ? (stored!.port as number) : LAN_DEFAULT_PORT,
-    ownerUserId: stored?.ownerUserId ?? null
+    ownerUserId: stored?.ownerUserId ?? null,
+    loginPolicy: stored?.loginPolicy === "strict" ? "strict" : "home"
   };
   if (!stored?.nodeId) writeJsonAtomic(file, config);
   return config;

@@ -13,6 +13,7 @@ import {
   type LanDevice,
   type LanDiscoveredNode,
   type LanEnableHostInput,
+  type LanSetLoginPolicyInput,
   type LanHostStatus,
   type LanNodeCard,
   type LanPairRequestCreated,
@@ -136,7 +137,8 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       ownerUserId: this.config.ownerUserId,
       supervised: process.env.ORION_SUPERVISED === "1",
       mdns: this.mdns.active,
-      firewall: await firewallState()
+      firewall: await firewallState(),
+      loginPolicy: this.config.loginPolicy
     };
   }
 
@@ -149,7 +151,8 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   async enableHost(userId: string, input: LanEnableHostInput): Promise<{ restarting: boolean; status: LanHostStatus }> {
     if (this.config.mode === "client") throw new ConflictException("Устройство подключено к чужому узлу. Сначала вернитесь в режим «Локальный».");
     if (!this.isOwner(userId)) throw new ConflictException("Режимом узла управляет его владелец.");
-    const pending = await this.pinAccounts();
+    // Домашняя политика оставляет PIN рабочим, поэтому пароли аккаунтам с PIN нужны только при строгой.
+    const pending = input.loginPolicy === "strict" ? await this.pinAccounts() : [];
     const missing = pending.filter((account) => !input.passwords[account.userId]);
     if (missing.length > 0) {
       throw new ConflictException({
@@ -174,10 +177,45 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       // Старые сессии аккаунта, у которого сменили способ входа, закрываем: пароль теперь известен администратору хоста.
       await this.prisma.refreshToken.updateMany({ where: { userId: account.userId, revokedAt: null }, data: { revokedAt: new Date() } });
     }
-    this.config = { ...this.config, name: input.name?.trim() || this.config.name, mode: "host", ownerUserId: this.config.ownerUserId ?? userId };
+    this.config = { ...this.config, name: input.name?.trim() || this.config.name, mode: "host", ownerUserId: this.config.ownerUserId ?? userId, loginPolicy: input.loginPolicy };
     saveNodeConfig(this.config, this.dir);
     this.ensureCertificate();
     return { restarting: this.restart(), status: await this.hostStatus() };
+  }
+
+  /**
+   * Смена политики входа без перезапуска (политика читается на каждый запрос). Переход на строгую отключает PIN, поэтому
+   * аккаунтам с PIN нужны пароли — как при включении хоста со строгой политикой.
+   */
+  async setLoginPolicy(userId: string, input: LanSetLoginPolicyInput): Promise<LanHostStatus> {
+    if (!this.isOwner(userId)) throw new ConflictException("Режимом узла управляет его владелец.");
+    if (this.config.mode !== "host") throw new ConflictException("Политика входа настраивается у хоста LAN.");
+    if (input.loginPolicy === "strict") {
+      const pending = await this.pinAccounts();
+      const missing = pending.filter((account) => !input.passwords[account.userId]);
+      if (missing.length > 0) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: "accounts_need_password",
+          message: "У части аккаунтов вход по PIN. При строгой политике PIN отключён — задайте им пароли.",
+          accounts: missing
+        });
+      }
+      for (const account of pending) {
+        const password = input.passwords[account.userId]!;
+        if (passwordScore(password) < 2) {
+          throw new BadRequestException(`Пароль для «${account.name}» слишком простой: не менее 12 символов или сочетание регистра, цифр и символов`);
+        }
+        await this.prisma.user.update({
+          where: { id: account.userId },
+          data: { passwordHash: await argon2.hash(password), unlockKind: "password", passwordStrength: passwordScore(password), passwordChangedAt: new Date() }
+        });
+        await this.prisma.refreshToken.updateMany({ where: { userId: account.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      }
+    }
+    this.config = { ...this.config, loginPolicy: input.loginPolicy };
+    saveNodeConfig(this.config, this.dir);
+    return this.hostStatus();
   }
 
   async disableHost(userId: string): Promise<{ restarting: boolean; status: LanHostStatus }> {

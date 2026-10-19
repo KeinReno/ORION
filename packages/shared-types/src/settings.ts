@@ -289,7 +289,8 @@ export type AppInfo = z.infer<typeof appInfoSchema>;
  * Not a secret and not itself an access-control boundary — hiding UI is a
  * usability nicety, the actual gate stays server-side.
  */
-export const orionModeInfoSchema = z.object({ mode: z.enum(["local", "server"]) });
+/** `loginPolicy`: `local` — PIN и список аккаунтов как обычно; `home` — то же на хосте LAN (для сопряжённых устройств); `strict` — только email и пароль. */
+export const orionModeInfoSchema = z.object({ mode: z.enum(["local", "server"]), loginPolicy: z.enum(["local", "home", "strict"]) });
 export type OrionModeInfo = z.infer<typeof orionModeInfoSchema>;
 
 /**

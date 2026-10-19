@@ -40,7 +40,7 @@ import { CurrentUser } from "../common/current-user.decorator";
 import { MAX_UPLOAD_BYTES } from "../common/multipart";
 import type { RequestUser } from "./jwt.strategy";
 import { AuthService } from "./auth.service";
-import { isServerMode } from "../common/orion-mode";
+import { policyAllowsAccountList, resolveLoginPolicy } from "./login-policy";
 import { LoginRateLimitGuard } from "./login-rate-limit.guard";
 import { RegisterRateLimitGuard } from "./register-rate-limit.guard";
 import { clientIp } from "../common/client-ip";
@@ -61,7 +61,7 @@ export class AuthController {
    */
   @Get("accounts")
   listAccounts(): Promise<AccountPublic[]> {
-    if (isServerMode()) {
+    if (!policyAllowsAccountList(resolveLoginPolicy())) {
       throw new ForbiddenException("Список локальных аккаунтов недоступен в серверном режиме");
     }
     return this.auth.listAccounts();
@@ -69,7 +69,7 @@ export class AuthController {
 
   @Get("accounts/:userId/avatar")
   async avatar(@Param("userId") userId: string, @Res() res: Response): Promise<void> {
-    if (isServerMode()) {
+    if (!policyAllowsAccountList(resolveLoginPolicy())) {
       throw new ForbiddenException("Недоступно в серверном режиме");
     }
     const { stream, mime } = await this.auth.openAvatar(userId);

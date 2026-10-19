@@ -24,7 +24,7 @@ function RegisterContent(): React.ReactElement {
   // as the login picker. Defaults to allowing PIN (fail-open toward local
   // mode, the common case) while the mode request is in flight/unknown.
   const orionMode = useOrionMode();
-  const isServerMode = orionMode.data?.mode === "server";
+  const isServerMode = orionMode.data?.loginPolicy === "strict";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [unlock, setUnlock] = useState<"password" | "pin">("password");

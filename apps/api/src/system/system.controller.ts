@@ -4,6 +4,7 @@ import { PrismaService } from "../common/prisma.service";
 import { BackgroundJobsService } from "../common/background-jobs.service";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { resolveMode } from "../common/orion-mode";
+import { resolveLoginPolicy } from "../auth/login-policy";
 import { ComponentDataService } from "./component-data.service";
 
 @Controller("system")
@@ -24,7 +25,7 @@ export class SystemController {
    */
   @Get("mode")
   mode(): OrionModeInfo {
-    return { mode: resolveMode() };
+    return { mode: resolveMode(), loginPolicy: resolveLoginPolicy() };
   }
 
   @Get("info")

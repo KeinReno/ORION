@@ -71,6 +71,10 @@ export const lanDeviceSchema = z.object({
 });
 export type LanDevice = z.infer<typeof lanDeviceSchema>;
 
+/** Политика входа узла (ADR-0015): `home` — PIN, список аккаунтов и пароли от 8 символов для сопряжённых устройств; `strict` — как у сервера. */
+export const lanLoginPolicySchema = z.enum(["home", "strict"]);
+export type LanLoginPolicy = z.infer<typeof lanLoginPolicySchema>;
+
 export const lanHostStatusSchema = z.object({
   mode: lanModeSchema,
   nodeId: z.string(),
@@ -84,7 +88,8 @@ export const lanHostStatusSchema = z.object({
   /** Процесс запущен лаунчером и сам перезапустится при смене режима. */
   supervised: z.boolean(),
   mdns: z.boolean(),
-  firewall: z.enum(["unsupported", "missing", "present"])
+  firewall: z.enum(["unsupported", "missing", "present"]),
+  loginPolicy: lanLoginPolicySchema
 });
 export type LanHostStatus = z.infer<typeof lanHostStatusSchema>;
 
@@ -93,7 +98,9 @@ export const lanEnableHostInputSchema = z.object({
   /** Начальные пароли для аккаунтов, которые входили по PIN: в LAN-режиме PIN отключён. userId → пароль. */
   passwords: z.record(z.string().min(1)).default({}),
   /** Владелец подтвердил, что понимает последствия (предупреждение показано). */
-  acknowledged: z.literal(true)
+  acknowledged: z.literal(true),
+  /** Политика входа; по умолчанию домашняя. При `strict` аккаунтам с PIN нужны пароли (`passwords`). */
+  loginPolicy: lanLoginPolicySchema.default("home")
 });
 export type LanEnableHostInput = z.infer<typeof lanEnableHostInputSchema>;
 
@@ -133,3 +140,10 @@ export const LAN_REMOTE_PREFIX = "/_remote";
 export function lanPairingCodeInput(clientNonce: string, serverNonce: string, fingerprint: string): string {
   return `orion-pair/v1|${clientNonce}|${serverNonce}|${fingerprint.replace(/:/g, "").toLowerCase()}`;
 }
+
+export const lanSetLoginPolicyInputSchema = z.object({
+  loginPolicy: lanLoginPolicySchema,
+  /** При переходе на `strict`: пароли для аккаунтов с PIN (userId → пароль). */
+  passwords: z.record(z.string().min(1)).default({})
+});
+export type LanSetLoginPolicyInput = z.infer<typeof lanSetLoginPolicyInputSchema>;

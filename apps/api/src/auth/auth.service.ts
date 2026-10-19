@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
@@ -22,7 +24,8 @@ import type {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { STORAGE_ADAPTER, storageKey, type StorageAdapter } from "../storage/storage-adapter";
-import { isServerMode } from "../common/orion-mode";
+import { LoginLockout } from "./login-lockout";
+import { minPasswordScore, policyAllowsPin, resolveLoginPolicy } from "./login-policy";
 
 const REFRESH_TOKEN_TTL_DAYS = Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? "30");
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
@@ -52,6 +55,8 @@ export interface UploadedAvatar {
 
 @Injectable()
 export class AuthService {
+  private readonly lockout = new LoginLockout();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -100,11 +105,12 @@ export class AuthService {
     // picker. Пароль в серверном режиме дополнительно обязан быть не совсем
     // тривиальным — passwordScore ниже 2 означает "короткий и однообразный"
     // (см. passwordScore: только длина, без разных регистров/цифр+символов).
-    if (isServerMode()) {
-      if (input.pin) {
-        throw new BadRequestException("PIN-вход отключён в серверном режиме — используйте пароль");
-      }
-      if (passwordScore(secret) < 2) {
+    const policy = resolveLoginPolicy();
+    if (!policyAllowsPin(policy) && input.pin) {
+      throw new BadRequestException("PIN-вход отключён в серверном режиме — используйте пароль");
+    }
+    if (policy !== "local" && !input.pin) {
+      if (passwordScore(secret) < minPasswordScore(policy)) {
         throw new BadRequestException(
           "В серверном режиме пароль должен быть длиннее и сложнее: используйте не менее 12 символов или сочетайте регистр/цифры/символы"
         );
@@ -137,7 +143,8 @@ export class AuthService {
   }
 
   async login(input: LoginInput, metadata: SessionMetadata = {}): Promise<AuthResponse> {
-    if (isServerMode() && input.pin) {
+    const policy = resolveLoginPolicy();
+    if (!policyAllowsPin(policy) && input.pin) {
       throw new BadRequestException("PIN-вход отключён в серверном режиме — используйте пароль");
     }
     const user = await this.findLoginUser(input);
@@ -145,10 +152,18 @@ export class AuthService {
     if (!user || !secret) {
       throw new UnauthorizedException("Неверное имя, пароль или PIN");
     }
+    // Вне «Локального» режима аккаунт блокируется после серии неверных попыток (перебор PIN и паролей с разных устройств).
+    const lockKey = `user:${user.id}`;
+    const lockedFor = policy === "local" ? 0 : this.lockout.lockedMinutes(lockKey);
+    if (lockedFor > 0) {
+      throw new HttpException(`Слишком много неверных попыток входа. Подождите ${lockedFor} мин или войдите с другого аккаунта.`, HttpStatus.TOO_MANY_REQUESTS);
+    }
     const valid = await argon2.verify(user.passwordHash, secret);
     if (!valid) {
+      if (policy !== "local") this.lockout.fail(lockKey);
       throw new UnauthorizedException("Неверное имя, пароль или PIN");
     }
+    if (policy !== "local") this.lockout.success(lockKey);
     const strength = passwordScore(secret);
     const current =
       strength === user.passwordStrength

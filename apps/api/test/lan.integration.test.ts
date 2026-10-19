@@ -87,7 +87,7 @@ describe("LAN host/client — inactive node and enable guard", () => {
     const accounts = await request<Array<{ userId: string }>>("/lan/host/pin-accounts", { token });
     expect(accounts.data.map((item) => item.userId)).toContain(registered.data.user.id);
 
-    const refused = await request<{ code: string; accounts: Array<{ userId: string }> }>("/lan/host/enable", { method: "POST", token, body: { acknowledged: true } });
+    const refused = await request<{ code: string; accounts: Array<{ userId: string }> }>("/lan/host/enable", { method: "POST", token, body: { acknowledged: true, loginPolicy: "strict" } });
     expect(refused.status).toBe(409);
     expect(refused.data.code).toBe("accounts_need_password");
     expect(refused.data.accounts.map((item) => item.userId)).toContain(registered.data.user.id);
@@ -99,5 +99,36 @@ describe("LAN host/client — inactive node and enable guard", () => {
     expect(host.data).toMatchObject({ mode: "local", active: false });
     const stillPin = await prisma.user.findUniqueOrThrow({ where: { id: registered.data.user.id } });
     expect(stillPin.unlockKind).toBe("pin");
+  });
+
+  it("host with the default home policy keeps PIN accounts; switching to strict asks for passwords and converts them", async () => {
+    const registered = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {
+      method: "POST",
+      body: { email: `${emailPrefix}-home@example.test`, pin: "7391", name: "Home pin user" }
+    });
+    const token = registered.data.accessToken;
+    const id = registered.data.user.id;
+
+    const enabled = await request<{ status: { mode: string; loginPolicy: string } }>("/lan/host/enable", { method: "POST", token, body: { acknowledged: true } });
+    expect(enabled.status).toBe(201);
+    expect(enabled.data.status).toMatchObject({ mode: "host", loginPolicy: "home" });
+    expect((await prisma.user.findUniqueOrThrow({ where: { id } })).unlockKind).toBe("pin");
+
+    const refused = await request<{ code: string }>("/lan/host/login-policy", { method: "PATCH", token, body: { loginPolicy: "strict" } });
+    expect(refused.status).toBe(409);
+    expect(refused.data.code).toBe("accounts_need_password");
+    // PIN-аккаунты в базе общие для всего файла тестов: пароли нужны всем, не только этому пользователю.
+    const pinAccounts = await request<Array<{ userId: string }>>("/lan/host/pin-accounts", { token });
+    const strong = Object.fromEntries(pinAccounts.data.map((account) => [account.userId, "Chisto-Sekretnyj-Parol-77"]));
+    const weak = await request("/lan/host/login-policy", { method: "PATCH", token, body: { loginPolicy: "strict", passwords: { ...strong, [id]: "short" } } });
+    expect(weak.status).toBe(400);
+
+    const strict = await request<{ loginPolicy: string }>("/lan/host/login-policy", { method: "PATCH", token, body: { loginPolicy: "strict", passwords: strong } });
+    expect(strict.status).toBe(200);
+    expect(strict.data.loginPolicy).toBe("strict");
+    expect((await prisma.user.findUniqueOrThrow({ where: { id } })).unlockKind).toBe("password");
+
+    const home = await request<{ loginPolicy: string }>("/lan/host/login-policy", { method: "PATCH", token, body: { loginPolicy: "home" } });
+    expect(home.data.loginPolicy).toBe("home");
   });
 });
