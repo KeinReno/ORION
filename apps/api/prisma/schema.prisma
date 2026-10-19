@@ -28,6 +28,7 @@ model User {
   checkedListItems  ListItem[]        @relation("ListItemCheckedBy")
   agentTokens       AgentToken[]
   assistantKey      AssistantKey?
+  privateNotes      Note[]            @relation("NotePrivate")
   refreshTokens     RefreshToken[]
   preference        UserPreference?
   sentInvites       WorkspaceInvite[]
@@ -445,6 +446,10 @@ model Note {
   /// never auto-purged, still editable. Same "timestamp as flag" idiom as
   /// pinnedAt/deletedAt (the value is "archived since").
   archivedAt  DateTime?
+  /// G21 (ADR-0021): not null = a private note of this user inside a shared workspace. Nobody else sees it — enforced by the
+  /// RESTRICTIVE policy `notes_private_owner`, not by application code, so search, links, agents and sync respect it too.
+  privateToUserId String?
+  privateTo       User?   @relation("NotePrivate", fields: [privateToUserId], references: [id], onDelete: Cascade)
   /// Set = this note IS the "daily note" for that calendar date (one per
   /// workspace). Plain DATE — the time part is meaningless. NULL for every
   /// ordinary note; Postgres treats NULLs as distinct so the unique below
@@ -484,6 +489,7 @@ model Note {
   @@index([projectId])
   @@index([eventAt])
   @@index([deletedAt])
+  @@index([privateToUserId])
   @@map("notes")
 }
 

@@ -295,6 +295,13 @@ export function NotesPanel(): React.ReactElement {
     );
   }
 
+  function handlePublish(note: Note): void {
+    updateNote.mutate(
+      { noteId: note.id, input: { isPrivate: false } },
+      { onSuccess: () => toast({ title: "Заметка стала общей", description: "Теперь её видят все участники пространства.", tone: "success" }) }
+    );
+  }
+
   function handleToggleArchive(note: Note): void {
     updateNote.mutate(
       { noteId: note.id, input: { archivedAt: note.archivedAt ? null : new Date().toISOString() } },
@@ -686,6 +693,7 @@ export function NotesPanel(): React.ReactElement {
         onTogglePin={handleTogglePin}
         onToggleArchive={(note) => requestLeave(() => handleToggleArchive(note))}
         onDuplicate={(note) => requestLeave(() => void handleDuplicate(note))}
+        onPublish={(note) => requestLeave(() => handlePublish(note))}
         onToggleTemplate={templatesApi ? (note) => requestLeave(() => handleToggleTemplate(note)) : undefined}
         onDelete={(note) => requestLeave(() => setPendingDelete(note))}
       />
