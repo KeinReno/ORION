@@ -262,7 +262,10 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     });
     // BOM — чтобы PowerShell 5.1 прочитал кириллицу в путях как UTF-8.
     fs.writeFileSync(scriptPath, String.fromCharCode(0xfeff) + script, "utf8");
-    const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", scriptPath], {
+    // Запуск через `cmd /c start /B`: PowerShell, запущенный напрямую с `detached`, тихо завершается, не выполнив скрипт, а
+    // запущенный без `detached` умирает вместе с родителем (проверено на установленной программе). Через `start` скрипт
+    // становится независимым процессом и переживает остановку API.
+    const child = spawn("cmd.exe", ["/c", "start", "", "/B", "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
       detached: true,
       stdio: "ignore",
       windowsHide: true
