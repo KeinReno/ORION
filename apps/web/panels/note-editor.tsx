@@ -26,6 +26,8 @@ import {
   Copy,
   Download,
   FileStack,
+  Lock,
+  Unlock,
   Hash,
   History,
   Link2,
@@ -72,6 +74,8 @@ export interface NoteEditorInput {
   eventAt: string | null;
   /** Real project (v0.14), same field the tasks module already uses. */
   projectId: string | null;
+  /** Только при создании: личная заметка, видна лишь автору (ADR-0021). */
+  isPrivate?: boolean;
 }
 
 /**
@@ -95,6 +99,7 @@ export function NoteEditor({
   onToggleArchive,
   onDuplicate,
   onToggleTemplate,
+  onPublish,
   onDelete
 }: {
   note: Note | null;
@@ -121,6 +126,8 @@ export function NoteEditor({
   onToggleArchive?: (note: Note) => void;
   onDuplicate?: (note: Note) => void;
   onToggleTemplate?: (note: Note) => void;
+  /** Личная заметка становится общей (обратно нельзя — ADR-0021). */
+  onPublish?: (note: Note) => void;
   onDelete?: (note: Note) => void;
 }): React.ReactElement {
   const { toast } = useToast();
@@ -138,6 +145,7 @@ export function NoteEditor({
   const [tagDraft, setTagDraft] = useState("");
   const [eventAt, setEventAt] = useState(toDatetimeLocal(note?.eventAt ?? null));
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
+  const [createPrivate, setCreatePrivate] = useState(false);
   const [mode, setMode] = useState<EditorMode>("edit");
   const [historyOpen, setHistoryOpen] = useState(false);
   // The history button exists only while a plugin fills `notes.history`.
@@ -343,7 +351,7 @@ export function NoteEditor({
     if (note) {
       runSave();
     } else {
-      await onCreate({ title, summary, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null });
+      await onCreate({ title, summary, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null, ...(createPrivate ? { isPrivate: true } : {}) });
     }
   }
 
@@ -388,6 +396,9 @@ export function NoteEditor({
           )
       }
     );
+    if (note.isPrivate && onPublish) {
+      menuItems.push({ label: "Сделать общей", icon: Unlock, onSelect: () => onPublish(note) });
+    }
     if (onToggleTemplate) {
       menuItems.push({
         label: note.isTemplate ? "Убрать из шаблонов" : "Сделать шаблоном",
@@ -656,6 +667,16 @@ export function NoteEditor({
                 </button>
               ) : null}
             </label>
+          ) : null}
+          {note === null ? (
+            <label className="flex items-center gap-2 text-label text-subtle-foreground">
+              <input type="checkbox" checked={createPrivate} onChange={(e) => setCreatePrivate(e.target.checked)} />
+              Личная — видна только вам
+            </label>
+          ) : note.isPrivate ? (
+            <p className="flex items-center gap-1.5 text-label text-subtle-foreground">
+              <Lock className="h-3.5 w-3.5" aria-hidden /> Личная заметка: её видите только вы
+            </p>
           ) : null}
           {projects ? (
             <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">

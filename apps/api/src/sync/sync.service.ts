@@ -13,6 +13,7 @@ import type {
 import { PrismaService } from "../common/prisma.service";
 import { STORAGE_ADAPTER, type StorageAdapter } from "../storage/storage-adapter";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { CompassBackupService, type CompassBackupEntry } from "../markets/compass-backup.service";
 import { BlobBackupService, type BlobEntry } from "./blob-backup.service";
 import { SnapshotService, type WorkspaceSnapshot } from "./snapshot.service";
 import {
@@ -46,6 +47,8 @@ import {
 interface BackupPayload {
   blobs: BlobEntry[];
   snapshot: WorkspaceSnapshot;
+  /** Данные Compass (G22). Нет поля — в копии их нет, и восстановление не трогает Compass на этом узле. */
+  compass?: CompassBackupEntry;
 }
 
 function isBackupPayload(v: unknown): v is BackupPayload {
@@ -98,6 +101,7 @@ export class SyncService {
     private readonly workspaces: WorkspacesService,
     private readonly snapshots: SnapshotService,
     private readonly blobs: BlobBackupService,
+    private readonly compass: CompassBackupService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter
   ) {}
 
@@ -187,7 +191,9 @@ export class SyncService {
     // holding a Postgres transaction open.
     const remote = await this.remoteFor(cfg, workspaceId);
 
-    const payload: BackupPayload = { blobs: blobDocs, snapshot };
+    // SQLite Compass лежит вне Postgres и RLS: читаем после проверки роли владельца (выше, в транзакции).
+    const compassData = await this.compass.collect(workspaceId);
+    const payload: BackupPayload = { blobs: blobDocs, snapshot, ...(compassData ? { compass: compassData } : {}) };
     const plain = Buffer.from(JSON.stringify(payload), "utf8");
     const sealed = encryptSnapshot(plain);
     const name = `${snapshot.generatedAt.replace(/[:.]/g, "-")}.orion`;
@@ -210,7 +216,8 @@ export class SyncService {
     return {
       name,
       sizeBytes: sealed.length,
-      counts: SnapshotService.tableCounts(snapshot)
+      counts: SnapshotService.tableCounts(snapshot),
+      compassIncluded: compassData !== null
     };
   }
 
@@ -267,7 +274,7 @@ export class SyncService {
       );
     }
 
-    const incoming = { ...SnapshotService.tableCounts(snapshot), documentBlobs: blobEntries.length };
+    const incoming = { ...SnapshotService.tableCounts(snapshot), documentBlobs: blobEntries.length, ...(parsed.compass ? { compassData: 1 } : {}) };
     // sha256 самих зашифрованных байт, скачанных ВЫШЕ, в этом же вызове —
     // preview и apply читают удалёнку одинаково (по `key`), поэтому если
     // содержимое `key` изменится между двумя раздельными HTTP-запросами
@@ -368,9 +375,13 @@ export class SyncService {
       throw err;
     }
 
+    let compassStaged: string | null = null;
     try {
       await this.blobs.stage(this.storage, workspaceId, batchId, blobEntries);
+      if (parsed.compass) compassStaged = await this.compass.stage(workspaceId, parsed.compass);
     } catch (err) {
+      await this.blobs.discardStaging(this.storage, workspaceId, batchId).catch(() => undefined);
+      if (compassStaged) await this.compass.discard(compassStaged).catch(() => undefined);
       await this.prisma.withUser(userId, (tx) => deleteRestoreOperation(tx, workspaceId)).catch(() => undefined);
       throw err;
     }
@@ -387,6 +398,7 @@ export class SyncService {
       // touched either (we haven't published yet) — safe to just discard
       // the staged batch and release the lock.
       await this.blobs.discardStaging(this.storage, workspaceId, batchId).catch(() => undefined);
+      if (compassStaged) await this.compass.discard(compassStaged).catch(() => undefined);
       await this.prisma.withUser(userId, (tx) => deleteRestoreOperation(tx, workspaceId)).catch(() => undefined);
       throw err;
     }
@@ -394,6 +406,12 @@ export class SyncService {
     // DB durably committed — from here on only forward progress is safe.
     await this.blobs.publish(this.storage, workspaceId, batchId);
     await this.prisma.withUser(userId, (tx) => deleteRestoreOperation(tx, workspaceId));
+    // Compass — после снятия блокировки: подмена файла безвозвратна только для движка, а прежняя база остаётся рядом.
+    if (compassStaged) {
+      await this.compass.publish(workspaceId, compassStaged).catch((error) => {
+        this.logger.error(`Данные Compass не подменены (подготовленный файл ${compassStaged}): ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
 
     const current = before;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_SCOPES } from "./agent";
+import { AGENT_SCOPES, createAgentTokenInputSchema } from "./agent";
 import {
   AGENT_CAPTURE_HINTS,
   AGENT_CAPTURE_HINT_INFO,
@@ -8,7 +8,8 @@ import {
   buildOrionLink,
   parseOrionLink
 } from "./agent-gateway";
-import { AGENT_TOOLS, agentToolByName, buildAgentToolRequest } from "./agent-tools";
+import { AGENT_TOOLS, agentToolByName, agentToolDescription, buildAgentToolRequest, isExtensionAgentPermission } from "./agent-tools";
+import { isRegisteredPermission } from "./permissions";
 
 describe("каталог инструментов агента", () => {
   it("имена уникальны и начинаются с orion_", () => {
@@ -86,5 +87,31 @@ describe("agentAccessibleTypes", () => {
   it("тип открыт чтением или записью; без scope — не виден", () => {
     expect(agentAccessibleTypes(["notes:write", "projects:read"])).toEqual(["project", "note"]);
     expect(agentAccessibleTypes(["agents:message", "finance:draft"])).toEqual([]);
+  });
+});
+
+describe("инструменты подключаемых модулей (G13)", () => {
+  const moduleTools = AGENT_TOOLS.filter((tool) => tool.moduleId);
+
+  it("есть образец Pet Care, и каждому инструменту нужно разрешение из реестра, а не scope", () => {
+    expect(moduleTools.map((tool) => tool.name)).toEqual(expect.arrayContaining(["orion_pet_care_list_pets", "orion_pet_care_add_entry"]));
+    for (const tool of moduleTools) {
+      expect(tool.scopes, tool.name).toBeNull();
+      expect(tool.group, tool.name).toBe("modules");
+      expect(isRegisteredPermission(tool.permission ?? ""), tool.name).toBe(true);
+      expect(isExtensionAgentPermission(tool.permission ?? ""), tool.name).toBe(true);
+      expect(agentToolDescription(tool)).toContain(tool.permission);
+    }
+  });
+
+  it("разрешения ядра не выдаются как разрешения модулей", () => {
+    expect(isExtensionAgentPermission("tasks.task.create")).toBe(false);
+    expect(isExtensionAgentPermission("pet-care.pet.delete")).toBe(false);
+  });
+
+  it("токен можно выпустить только с разрешениями модуля", () => {
+    const parsed = createAgentTokenInputSchema.parse({ name: "Кормёжка", modulePermissions: ["pet-care.pet.read"] });
+    expect(parsed.scopes).toEqual([]);
+    expect(createAgentTokenInputSchema.safeParse({ name: "Пусто" }).success).toBe(false);
   });
 });

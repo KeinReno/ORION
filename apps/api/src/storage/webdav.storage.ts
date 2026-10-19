@@ -1,4 +1,4 @@
-import type { Readable } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import { Injectable, Logger } from "@nestjs/common";
 // webdav v4 ships a CommonJS build, so a plain require-style import works
 // under ts-node-dev without ESM interop headaches.
@@ -64,8 +64,26 @@ export class WebdavStorage implements StorageAdapter {
   }
 
   async getStream(key: string, range?: { start: number; end: number }): Promise<Readable> {
-    const stream = this.client.createReadStream(this.full(key), range ? { range } : undefined);
-    return stream as unknown as Readable;
+    const source = this.client.createReadStream(this.full(key), range ? { range } : undefined) as unknown as Readable;
+    // `webdav` соединяет внутренний поток с выходным через `pipe()`, а он ошибки не передаёт: оборвалось соединение
+    // посреди тела — выходной поток не завершается и не падает, скачивание и бэкап висят вечно (fault-injection, G26).
+    // Поэтому сторожим простой: нет данных дольше `WEBDAV_IDLE_TIMEOUT_MS` (по умолчанию 30 с) — поток падает с ошибкой.
+    const idleMs = Number(process.env.WEBDAV_IDLE_TIMEOUT_MS) > 0 ? Number(process.env.WEBDAV_IDLE_TIMEOUT_MS) : 30_000;
+    const out = new PassThrough();
+    let timer: NodeJS.Timeout | undefined;
+    const arm = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => out.destroy(new Error(`WebDAV: нет данных ${idleMs} мс — соединение оборвано (${key})`)), idleMs);
+    };
+    arm();
+    source.on("data", arm);
+    source.on("error", (error) => out.destroy(error));
+    out.on("close", () => {
+      clearTimeout(timer);
+      source.destroy();
+    });
+    source.pipe(out);
+    return out;
   }
 
   async remove(key: string): Promise<void> {

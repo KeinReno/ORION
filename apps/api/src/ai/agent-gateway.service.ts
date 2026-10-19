@@ -7,6 +7,7 @@ import {
   AGENT_CONFIRMATION_RULES,
   AGENT_LIMITS,
   AGENT_MODE_HINT,
+  AGENT_TOOLS,
   MODULE_CATALOG,
   agentAccessibleTypes,
   buildOrionLink,
@@ -120,6 +121,12 @@ export class AgentGatewayService {
           })
         : null;
 
+      const moduleTools = AGENT_TOOLS.filter(
+        (tool): tool is typeof tool & { permission: string; moduleId: string } =>
+          !!tool.permission && !!tool.moduleId && agent.modulePermissions.includes(tool.permission) && accessible.has(tool.moduleId as OrionModuleId)
+      ).map((tool) => ({ name: tool.name, moduleId: tool.moduleId, permission: tool.permission }));
+      for (const moduleId of new Set(moduleTools.map((tool) => tool.moduleId))) reachable.add(moduleId as OrionModuleId);
+
       const hints = AGENT_CAPTURE_HINTS.map((hint) => {
         const info = AGENT_CAPTURE_HINT_INFO[hint];
         const available = agent.scopes.includes(info.scope) && accessible.has(CAPTURE_MODULE[info.creates]);
@@ -145,6 +152,7 @@ export class AgentGatewayService {
         workspace: { id: workspace.id, name: workspace.name, role: member?.role ?? "member" },
         token: { name: agent.tokenName, scopes: agent.scopes, expiresAt: token?.expiresAt?.toISOString() ?? null, mode: agent.mode, modeNote: AGENT_MODE_HINT[agent.mode] },
         modules: MODULE_CATALOG.filter((module) => reachable.has(module.id)).map((module) => ({ id: module.id, label: module.label })),
+        moduleTools,
         projects: projectRows?.map((project) => ({ id: project.id, name: project.name, url: buildOrionLink({ type: "project", id: project.id, workspaceId: agent.workspaceId }) })) ?? null,
         capture: { inbox: canCapture, hints },
         links: { types: canLink ? types : [], kinds: ["related_to", "supports"] },

@@ -5,8 +5,10 @@ import {
   SURFACE_IDS,
   buildComponentManifests,
   componentManifestSchema,
-  satisfiesVersionRange
+  satisfiesVersionRange,
+  unsatisfiedContracts
 } from "./component-manifest";
+import { CONTRACT_IDS, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 
@@ -88,5 +90,27 @@ describe("component manifest surfaces (G17)", () => {
   it("gives a widget surface to dashboard modules only", () => {
     expect(manifests.find((m) => m.id === "tasks")!.surfaces).toContain("widget");
     expect(manifests.find((m) => m.id === "inventory")!.surfaces).not.toContain("widget");
+  });
+});
+
+describe("contract versions (G2)", () => {
+  it("has a semver for every contract id and a platform major not below any of them", () => {
+    expect(Object.keys(PLATFORM_CONTRACT_VERSIONS).sort()).toEqual([...CONTRACT_IDS].sort());
+    const platformMajor = Number(PLATFORM_API_VERSION.split(".")[0]);
+    for (const id of CONTRACT_IDS) {
+      expect(PLATFORM_CONTRACT_VERSIONS[id], id).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(Number(PLATFORM_CONTRACT_VERSIONS[id].split(".")[0]), id).toBeLessThanOrEqual(platformMajor);
+    }
+  });
+
+  it("accepts requires.contracts only for known contracts and checks the ranges", () => {
+    const base = manifests[0]!;
+    const withContracts = (contracts: Record<string, string>) => ({ ...base, requires: { ...base.requires, contracts } });
+    expect(componentManifestSchema.safeParse(withContracts({ event: "^1.0.0" })).success).toBe(true);
+    expect(componentManifestSchema.safeParse(withContracts({ bogus: "^1.0.0" })).success).toBe(false);
+    expect(componentManifestSchema.safeParse(withContracts({ event: "latest" })).success).toBe(false);
+    expect(unsatisfiedContracts(withContracts({ event: "^1.0.0", plugin: "^1.0.0" }))).toEqual([]);
+    expect(unsatisfiedContracts(withContracts({ event: "^2.0.0" }))).toEqual(["event"]);
+    expect(unsatisfiedContracts(base)).toEqual([]);
   });
 });

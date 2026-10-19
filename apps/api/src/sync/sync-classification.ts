@@ -127,6 +127,7 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   WorkspaceMember: never("Членство проверяется на авторитетном узле; отзыв — решение узла."),
   WorkspaceInvite: never("Одноразовые токены."),
   SyncRemote: never("Секрет назначения бэкапа."),
+  AssistantKey: never("Секрет владельца привязан к узлу."),
   AgentToken: never("Токены агентов привязаны к узлу."),
   AgentMessage: never("Переписка агентов привязана к токенам узла."),
   AgentTask: never("Задания агентов привязаны к токенам узла."),

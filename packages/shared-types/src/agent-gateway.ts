@@ -175,6 +175,11 @@ export const agentGatewayContextSchema = z.object({
   }),
   /** Enabled modules the token's scopes reach. Modules it cannot touch are not listed. */
   modules: z.array(z.object({ id: z.string(), label: z.string() })),
+  /**
+   * Инструменты подключаемых модулей (G13), доступные этому токену прямо сейчас: разрешение выдано и модуль включён.
+   * Остальные инструменты каталога вызвать нельзя (403/409).
+   */
+  moduleTools: z.array(z.object({ name: z.string(), moduleId: z.string(), permission: z.string() })),
   /** Active projects (up to `limits.projects`); `null` when the token has no `projects:read`. */
   projects: z.array(z.object({ id: z.string(), name: z.string(), url: z.string() })).nullable(),
   capture: z.object({

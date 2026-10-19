@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { MarketsModule } from "../markets/markets.module";
 import { NotesModule } from "../notes/notes.module";
 import { TasksModule } from "../tasks/tasks.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -23,7 +24,7 @@ import { WorkspaceTransferService } from "./workspace-transfer.service";
  * `STORAGE_ADAPTER` не импортируется явно — `StorageModule` `@Global`.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotesModule, TasksModule],
+  imports: [AuthModule, WorkspacesModule, NotesModule, TasksModule, MarketsModule],
   controllers: [SyncController, HybridSyncController, SyncDevicesController, LinkController, WorkspaceTransferController],
   providers: [HybridSyncService, LinkService, LinkIngressService, SyncMaintenanceService, SyncService, SnapshotService, BlobBackupService, WorkspaceTransferService]
 })

@@ -102,7 +102,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("module-registry: без модулей", () => {
   it("пишет пустые, но валидные реестры и остаётся актуальным", () => {
-    expect(writeRegistry(root)).toHaveLength(5);
+    expect(writeRegistry(root)).toHaveLength(6);
     expect(registryViolations(root)).toEqual([]);
     expect(readFileSync(join(root, "apps/api/src/modules-ext/modules.generated.ts"), "utf8")).toContain("GENERATED_NEST_MODULES = [];");
     expect(readFileSync(join(root, "packages/shared-types/src/modules-ext/registry.generated.ts"), "utf8")).toContain("GENERATED_MODULE_IDS = [] as const");
@@ -125,6 +125,7 @@ describe("module-registry: модуль-фикстура", () => {
         "apps/api/src/modules-ext/data.generated.ts",
         "apps/api/src/modules-ext/modules.generated.ts",
         "apps/web/modules-ext/panels.generated.ts",
+        "packages/shared-types/src/modules-ext/agent-tools.generated.ts",
         "packages/shared-types/src/modules-ext/registry.generated.ts",
         "scripts/module-ownership.generated.mjs"
       ].sort()
@@ -205,5 +206,83 @@ describe("spliceRegion", () => {
 describe("module-registry: настоящий репозиторий", () => {
   it("манифесты валидны, генерируемые файлы актуальны", () => {
     expect(registryViolations()).toEqual([]);
+  });
+});
+
+describe("module-registry: инструменты агента (G13)", () => {
+  const tool = (over = {}) => ({
+    name: "orion_fixture_mod_list_things",
+    op: "read",
+    description: "Список вещей.",
+    http: { method: "GET", path: "/ai/v1/fixture-mod/things" },
+    input: { type: "object", properties: {}, required: [], additionalProperties: false },
+    ...over
+  });
+  const CONTROLLER = { file: "fixture-mod.agent.controller", export: "FixtureModAgentController" };
+  const withTools = (tools, controller = CONTROLLER) => {
+    addFixtureModule(manifest({ agent: { controller, tools } }));
+    put("apps/api/src/modules-ext/fixture-mod/fixture-mod.agent.controller.ts", "export class FixtureModAgentController {}\n");
+  };
+  const problems = () => collectModules(root).errors.join("\n");
+
+  it("выводит разрешение из реестра, группу «modules» и контроллер маршрутов", () => {
+    withTools([tool()]);
+    writeRegistry(root);
+    const tools = readFileSync(join(root, "packages/shared-types/src/modules-ext/agent-tools.generated.ts"), "utf8");
+    expect(tools).toContain('"permission": "fixture-mod.thing.read"');
+    expect(tools).toContain('"group": "modules"');
+    expect(tools).toContain('"scopes": null');
+    const modules = readFileSync(join(root, "apps/api/src/modules-ext/modules.generated.ts"), "utf8");
+    expect(modules).toContain("GENERATED_AGENT_CONTROLLERS = [FixtureModAgentController]");
+  });
+
+  it("отвергает чужое имя, путь вне /ai/v1/<модуль>/ и неверную пару op и метода", () => {
+    withTools([tool({ name: "orion_other_list" }), tool({ http: { method: "GET", path: "/ai/v1/other/things" } }), tool({ op: "create" })]);
+    const text = problems();
+    expect(text).toContain("имя вида orion_fixture_mod_");
+    expect(text).toContain("путь начинается с /ai/v1/fixture-mod/");
+    expect(text).toContain("read ↔ GET, create ↔ POST");
+  });
+
+  it("требует контроллер маршрутов, если объявлены инструменты", () => {
+    addFixtureModule(manifest({ agent: { tools: [tool()] } }));
+    expect(problems()).toContain("agent.controller");
+  });
+
+  it("op: update пока не поддержан", () => {
+    withTools([tool({ op: "update" })]);
+    expect(problems()).toContain("op ∈ read | create");
+  });
+});
+
+describe("module-registry: шаблон RLS (G10)", () => {
+  const MIGRATION = { name: "20261018120000_fixture_mod", file: "prisma/migration.sql", rls: "workspace-member" };
+  const prismaWith = (migration) => ({
+    fragment: "prisma/models.prisma",
+    workspaceBackRelations: ["fixtureThings FixtureThing[]"],
+    migrations: [migration]
+  });
+  const ddlOnly = SQL.slice(0, SQL.indexOf("ENABLE ROW LEVEL SECURITY")).replace(/\n[^\n]*$/, "");
+
+  it("дописывает ENABLE + FORCE RLS и политику для каждой созданной таблицы модуля", () => {
+    addFixtureModule(manifest({ prisma: prismaWith(MIGRATION) }));
+    put("apps/api/src/modules-ext/fixture-mod/prisma/migration.sql", 'CREATE TABLE "fixture_things" ("id" TEXT NOT NULL, "workspaceId" TEXT NOT NULL);\n');
+    expect(collectModules(root).errors).toEqual([]);
+    writeRegistry(root);
+    const sql = readFileSync(join(root, "apps/api/prisma/migrations/20261018120000_fixture_mod/migration.sql"), "utf8");
+    expect(sql).toContain('ALTER TABLE "fixture_things" ENABLE ROW LEVEL SECURITY;');
+    expect(sql).toContain('ALTER TABLE "fixture_things" FORCE ROW LEVEL SECURITY;');
+    expect(sql).toContain('CREATE POLICY fixture_things_isolation ON "fixture_things"');
+    expect(sql).toContain("current_setting('app.current_user_id', true)");
+    expect(registryViolations(root)).toEqual([]);
+  });
+
+  it("не принимает ручной RLS рядом с шаблоном и неизвестный шаблон", () => {
+    addFixtureModule(manifest({ prisma: prismaWith(MIGRATION) }));
+    expect(collectModules(root).errors.join("\n")).toContain("уберите ручной ENABLE ROW LEVEL SECURITY");
+    rmSync(join(root, "apps/api/src/modules-ext/fixture-mod"), { recursive: true, force: true });
+    addFixtureModule(manifest({ prisma: prismaWith({ ...MIGRATION, rls: "everyone" }) }));
+    put("apps/api/src/modules-ext/fixture-mod/prisma/migration.sql", ddlOnly);
+    expect(collectModules(root).errors.join("\n")).toContain('rls ∈ "workspace-member"');
   });
 });

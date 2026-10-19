@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { agentAuditResultOf, createAgentTokenInputSchema } from "./agent";
 import {
+  decideAgentModuleOperation,
   decideAgentOperation,
+  remoteTokenViolations,
   effectiveAgentPermissions,
   isDecisionNote,
   permissionsFromScopes,
@@ -96,5 +98,43 @@ describe("прочее", () => {
   });
   it("CSV экранирует кавычки и формулы", () => {
     expect(toCsv([["a", '=SUM(A1)'], ['x,"y"', null]])).toBe('a,\'=SUM(A1)\r\n"x,""y""",');
+  });
+});
+
+describe("decideAgentModuleOperation (G13)", () => {
+  const read = "pet-care.pet.read";
+  const create = "pet-care.pet.create";
+
+  it("без выданного разрешения — отказ, даже читать", () => {
+    expect(decideAgentModuleOperation(subject({ modulePermissions: [] }), read, "read")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({}), create, "create")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({ modulePermissions: [read] }), create, "create")).toMatchObject({ kind: "deny" });
+  });
+
+  it("наблюдатель читает, но не пишет; помощник и менеджер создают сразу", () => {
+    const granted = [read, create];
+    expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), read, "read")).toEqual({ kind: "allow" });
+    expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), create, "create")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({ mode: "assistant", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
+    expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
+  });
+});
+
+describe("remoteTokenViolations (ADR-0017)", () => {
+  it("токен на сервере: помощник со сроком ≤ 30 дней и запретом удаления допустим", () => {
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 30, forbidden: ["delete"] })).toEqual([]);
+    expect(remoteTokenViolations({ mode: "observer", expiresInDays: 1, forbidden: ["delete", "finance"] })).toEqual([]);
+  });
+
+  it("менеджер, бессрочный или долгий токен и снятый запрет удаления — нарушения", () => {
+    expect(remoteTokenViolations({ mode: "manager", expiresInDays: 7, forbidden: ["delete"] })).toHaveLength(1);
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: null, forbidden: ["delete"] })[0]).toContain("30 дней");
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 31, forbidden: ["delete"] })).toHaveLength(1);
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 7, forbidden: [] })[0]).toContain("запрет удаления");
+    expect(remoteTokenViolations({ mode: "manager", expiresInDays: null, forbidden: [] })).toHaveLength(3);
+  });
+
+  it("при обновлении срок не проверяется", () => {
+    expect(remoteTokenViolations({ mode: "assistant", forbidden: ["delete"] }, false)).toEqual([]);
   });
 });

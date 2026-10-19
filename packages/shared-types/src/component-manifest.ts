@@ -2,7 +2,9 @@ import { z } from "zod";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
+import { GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
 import { isRegisteredPermission, permissionsOfModule } from "./permissions";
+import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
 
 /**
  * Единый машиночитаемый манифест компонента платформы (модуля или плагина) — PLATFORM_AUDIT G1.
@@ -67,7 +69,14 @@ export const componentManifestSchema = z.object({
     /** Жёсткие зависимости: без них компонент не работает. */
     modules: z.array(z.string()),
     /** Мягкие: компонент живёт без них, но использует, если они включены. */
-    optionalModules: z.array(z.string())
+    optionalModules: z.array(z.string()),
+    /** Уточнение по контрактам платформы: `{ event: "^1.0.0" }`. Необязательно; ключи — только `CONTRACT_IDS`. */
+    contracts: z
+      .record(
+        z.string().refine(isContractId, "неизвестный контракт платформы"),
+        z.string().regex(SEMVER_RANGE, "ожидается диапазон вида ^1.0.0")
+      )
+      .optional()
   }),
   /**
    * Разрешения компонента из реестра (`permissions.ts`), вида `tasks.task.read`. Модуль перечисляет свои операции;
@@ -114,6 +123,16 @@ export function satisfiesVersionRange(range: string, version: string): boolean {
   return compareVersions(actual, base) === 0;
 }
 
+/** Контракты, версия которых не удовлетворяет `requires.contracts` манифеста (пусто — всё совместимо). */
+export function unsatisfiedContracts(manifest: Pick<ComponentManifest, "requires">): string[] {
+  const bad: string[] = [];
+  for (const [id, range] of Object.entries(manifest.requires.contracts ?? {})) {
+    const actual = isContractId(id) ? PLATFORM_CONTRACT_VERSIONS[id] : undefined;
+    if (!actual || !satisfiesVersionRange(range, actual)) bad.push(id);
+  }
+  return bad;
+}
+
 const COMPONENT_VERSION = "1.0.0";
 const PLATFORM_RANGE = "^1.0.0";
 
@@ -130,7 +149,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     surfaces: [...SHELL_SURFACES, ...(DASHBOARD_WIDGET_MODULES.has(module.id) ? (["widget"] as const) : [])],
     contributions: { panels: [module.panelId] },
     events: { publishes: domainEventTypesPublishedBy(module.id), subscribes: domainEventTypesSubscribedBy(module.id) },
-    migrations: []
+    migrations: [...((GENERATED_MODULE_MIGRATIONS as Record<string, readonly string[]>)[module.id] ?? [])]
   }));
   const plugins: ComponentManifest[] = PLUGIN_CATALOG.map((plugin) => ({
     id: plugin.id,
