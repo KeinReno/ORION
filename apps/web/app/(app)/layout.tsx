@@ -84,6 +84,7 @@ import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
+import { useUpdateNotifier } from "../../lib/use-update-notifier";
 import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
 import { PanelScrollMemory } from "../../lib/scroll-memory";
@@ -361,6 +362,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
   useDesktopDueReminders(tasks);
+  useUpdateNotifier();
 
   const apiRef = useRef<DockviewApi | null>(null);
   // Named layouts ("Разработка", "Финансы"): a saved set of open panels, per user and workspace.

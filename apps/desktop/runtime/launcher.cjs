@@ -112,6 +112,11 @@ async function migrate(config) {
   log(result.trim().slice(-800));
 }
 
+// Метка сборки (`v0.1.0-windows-beta.3`) кладёт в runtime/build.json скрипт сборки установщика; без неё версия неизвестна.
+function buildTag() {
+  try { return JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8')).tag || ''; } catch { return ''; }
+}
+
 async function main() {
   if (data !== requestedData) {
     log(`Путь данных содержит не-ASCII символы (${requestedData}); данные и PostgreSQL хранятся в ${data}`);
@@ -138,6 +143,9 @@ async function main() {
     STORAGE_DRIVER: 'local', STORAGE_DIR: path.join(data, 'documents'),
     // ТЗ-04: настройки узла (режим, устройства, сертификат) лежат рядом с данными; API сам перезапускается лаунчером.
     ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
+    // Обновления программы (apps/api/src/updates): метка сборки, каталог установки и способ штатно остановить PostgreSQL.
+    ORION_BUILD_TAG: buildTag(), ORION_INSTALL_DIR: path.resolve(runtime, '..'),
+    ORION_PG_CTL: executable('pg_ctl'), ORION_PG_CLUSTER: cluster,
   };
   superviseApi(baseEnv);
 }

@@ -18,6 +18,7 @@ import { SyncModule } from "./sync/sync.module";
 import { SettingsModule } from "./settings/settings.module";
 import { SystemModule } from "./system/system.module";
 import { LanModule } from "./lan/lan.module";
+import { UpdatesModule } from "./updates/updates.module";
 import { CapturesModule } from "./captures/captures.module";
 import { ProjectsModule } from "./projects/projects.module";
 import { SearchModule } from "./search/search.module";
@@ -73,6 +74,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     SettingsModule,
     SystemModule,
     LanModule,
+    UpdatesModule,
     ProjectsModule,
     CapturesModule,
     InboxModule,
