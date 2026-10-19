@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, createElement, useContext, useEffect, useId, useSyncExternalStore, type ReactNode } from "react";
-import { setActiveWorkspaceId } from "./use-active-workspace";
+import { hasStoredDraft } from "./draft-storage";
+import { getActiveWorkspaceId, setActiveWorkspaceId } from "./use-active-workspace";
 
 /**
  * Text a person has typed but nothing has saved yet (a thought in the capture box, a new note not
@@ -55,8 +56,19 @@ export function hasUnsavedDrafts(panelId?: string): boolean {
 }
 
 /** Switches workspace now when nothing is unsaved; otherwise parks the request for the confirm dialog. */
+/** A persisted draft of the workspace being left counts too: its panel may not have mounted yet after a reload. */
+function leavingHasStoredDraft(): boolean {
+  const current = getActiveWorkspaceId();
+  if (!current) return false;
+  try {
+    return hasStoredDraft(window.localStorage, current);
+  } catch {
+    return false;
+  }
+}
+
 export function requestWorkspaceSwitch(workspaceId: string): void {
-  if (!hasUnsavedDrafts()) {
+  if (!hasUnsavedDrafts() && !leavingHasStoredDraft()) {
     setActiveWorkspaceId(workspaceId);
     return;
   }

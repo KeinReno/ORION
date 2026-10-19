@@ -45,3 +45,30 @@ export function selectPaletteResults<T extends PaletteEntry>(
 
   return [...quickActions.slice(0, 4), ...server, ...localRecords].slice(0, limit);
 }
+
+export interface PaletteGroup<T> {
+  group: string;
+  items: { entry: T; index: number }[];
+}
+
+/**
+ * Splits ranked results into labelled groups (Действия, Разделы, Задачи…) without losing the
+ * ranking: groups come in the order their best result appears, entries keep their order inside a
+ * group. `ordered` is the same entries in displayed order — the keyboard walks this list, so ↓
+ * never jumps between groups out of the order the eye reads them in.
+ */
+export function groupPaletteResults<T extends PaletteEntry>(results: readonly T[], groupOf: (entry: T) => string): { groups: PaletteGroup<T>[]; ordered: T[] } {
+  const byName = new Map<string, T[]>();
+  for (const entry of results) {
+    const name = groupOf(entry);
+    const list = byName.get(name) ?? [];
+    list.push(entry);
+    byName.set(name, list);
+  }
+  const groups: PaletteGroup<T>[] = [];
+  const ordered: T[] = [];
+  for (const [group, entries] of byName) {
+    groups.push({ group, items: entries.map((entry) => ({ entry, index: ordered.push(entry) - 1 })) });
+  }
+  return { groups, ordered };
+}

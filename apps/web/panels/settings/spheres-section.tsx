@@ -93,7 +93,7 @@ export function SpheresSettings(): React.ReactElement {
 
   return (
     <div className="space-y-6">
-      <Card className="space-y-4">
+      <Card data-setting="spheres" className="space-y-4">
         <div>
           <p className="text-sm font-medium text-foreground">Сферы</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -151,7 +151,7 @@ export function SpheresSettings(): React.ReactElement {
         )}
       </Card>
 
-      <Card className="space-y-3">
+      <Card data-setting="favorites" className="space-y-3">
         <div>
           <p className="text-sm font-medium text-foreground">Пространства</p>
           <p className="mt-1 text-xs text-muted-foreground">

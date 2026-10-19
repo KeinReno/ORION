@@ -1,7 +1,7 @@
 "use client";
 
 import type { InboxItem, OrionModuleId } from "@orion/shared-types";
-import { SPRING_SMOOTH, isTypingTarget, usePanelVisible } from "@orion/ui";
+import { isTypingTarget, useMotionSpring, usePanelVisible } from "@orion/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { groupInboxItems, type InboxGroupBy } from "./group";
@@ -74,6 +74,7 @@ export function InboxQueue({
     onDelete
   };
 
+  const smooth = useMotionSpring("smooth");
   return (
     <div className="mx-auto w-full max-w-xl">
       <AnimatePresence mode="wait" initial={false}>
@@ -82,7 +83,7 @@ export function InboxQueue({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
-          transition={SPRING_SMOOTH}
+          transition={smooth}
         >
           <InboxFocus item={focus} index={position} total={items.length} {...handlers} />
         </motion.div>

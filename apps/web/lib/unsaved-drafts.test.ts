@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const setActive = vi.fn();
-vi.mock("./use-active-workspace", () => ({ setActiveWorkspaceId: (id: string) => setActive(id) }));
+let activeId: string | null = null;
+vi.mock("./use-active-workspace", () => ({ setActiveWorkspaceId: (id: string) => setActive(id), getActiveWorkspaceId: () => activeId }));
 
 import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, registerDraft, requestWorkspaceSwitch } from "./unsaved-drafts";
 
 afterEach(() => {
   cancelPendingSwitch();
   setActive.mockReset();
+  activeId = null;
+  delete (globalThis as { window?: unknown }).window;
 });
 
 describe("unsaved drafts guard", () => {
@@ -53,5 +56,19 @@ describe("unsaved drafts guard", () => {
     expect(setActive).not.toHaveBeenCalled();
     cancelPendingSwitch();
     release();
+  });
+
+  it("asks before leaving a workspace whose persisted draft has not been mounted yet (fast switch after a reload)", () => {
+    activeId = "ws-1";
+    const entries: Record<string, string> = { "orion.draft.v1:ws-1:capture": JSON.stringify({ text: "Черновик" }) };
+    const keys = Object.keys(entries);
+    (globalThis as { window?: unknown }).window = {
+      localStorage: { length: keys.length, key: (index: number) => keys[index] ?? null, getItem: (key: string) => entries[key] ?? null }
+    };
+    expect(hasUnsavedDrafts()).toBe(false);
+    requestWorkspaceSwitch("ws-2");
+    expect(setActive).not.toHaveBeenCalled();
+    confirmPendingSwitch();
+    expect(setActive).toHaveBeenCalledWith("ws-2");
   });
 });

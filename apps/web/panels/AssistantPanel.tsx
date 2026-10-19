@@ -2,7 +2,7 @@
 
 import { useAssistantChat, useAssistantKey, useClearAssistantKey, useSaveAssistantKey } from "@orion/core-react";
 import { ASSISTANT_DEFAULT_MODEL, type AssistantAction, type AssistantMessage } from "@orion/shared-types";
-import { Badge, Button, Card, EmptyState, Input, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, Textarea, useToast } from "@orion/ui";
+import { Button, CallChip, Card, EmptyState, Input, LatticeLoader, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, StarBorder, Textarea, useToast } from "@orion/ui";
 import { Bot, KeyRound, Send, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describeAuthError } from "../lib/error-message";
@@ -80,10 +80,11 @@ export function AssistantPanel(): React.ReactElement {
               ) : (
                 lines.map((line, index) => <Line key={index} line={line} />)
               )}
-              {chat.isPending ? <p className="text-xs text-muted-foreground">Ассистент думает…</p> : null}
+              {chat.isPending ? <LatticeLoader label="Ассистент думает" /> : null}
               <div ref={endRef} />
             </div>
-            <form onSubmit={(event) => void send(event)} className="flex items-end gap-2">
+            <StarBorder active={chat.isPending} className="rounded-xl">
+            <form onSubmit={(event) => void send(event)} className="flex items-end gap-2 rounded-xl">
               <Textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -100,6 +101,7 @@ export function AssistantPanel(): React.ReactElement {
                 <Send className="h-4 w-4" aria-hidden />
               </Button>
             </form>
+            </StarBorder>
             <div className="flex justify-between">
               <Button size="sm" variant="ghost" disabled={lines.length === 0 || chat.isPending} onClick={() => setLines([])}>
                 Новая беседа
@@ -120,11 +122,15 @@ function Line({ line }: { line: ChatLine }): React.ReactElement {
       <p className="text-label text-subtle-foreground">{mine ? "Вы" : "Ассистент"}</p>
       <p className="whitespace-pre-wrap text-sm text-foreground">{line.content}</p>
       {line.actions && line.actions.length > 0 ? (
-        <div className="flex flex-wrap gap-1 pt-1">
+        <div className="grid gap-1.5 pt-1">
           {line.actions.map((action, index) => (
-            <Badge key={index} tone={action.ok ? "success" : "neutral"}>
-              {action.tool.replace(/^orion_/, "")}: {action.summary}
-            </Badge>
+            <CallChip
+              key={index}
+              className="shadow-none"
+              status={action.ok ? "done" : "error"}
+              label={action.tool.replace(/^orion_/, "")}
+              sublabel={action.summary}
+            />
           ))}
         </div>
       ) : null}

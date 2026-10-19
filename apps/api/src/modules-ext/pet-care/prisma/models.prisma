@@ -6,11 +6,18 @@ model PetCarePet {
   /// Календарный день рождения (без времени).
   birthday    DateTime? @db.Date
   notes       String    @default("")
+  /// Профиль для ветеринара (дневник самочувствия).
+  breed       String    @default("")
+  vetContact  String    @default("")
+  chronic     String    @default("")
+  allergies   String    @default("")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   entries   PetCareEntry[]
+  days      PetCareDay[]
+  events    PetCareEvent[]
 
   @@index([workspaceId])
   @@map("pet_care_pets")
@@ -32,4 +39,56 @@ model PetCareEntry {
   @@index([workspaceId])
   @@index([petId, occurredAt])
   @@map("pet_care_entries")
+}
+
+/// Дневник самочувствия: одна запись на питомца и календарный день (идемпотентная перезапись по (petId, day)).
+model PetCareDay {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  petId         String
+  /// Календарный день без времени и пояса.
+  day           DateTime @db.Date
+  /// Итоговый статус дня; при statusAuto пересчитывается сервером при каждой записи и чтении.
+  status        String   @default("normal")
+  statusAuto    Boolean  @default(true)
+  appetite      String   @default("")
+  activity      String   @default("")
+  stool         String   @default("")
+  water         String   @default("")
+  vomitingCount Int      @default(0)
+  /// null = «не измеряли», а не 0.
+  weightKg      Float?
+  temperature   Float?
+  meds          String   @default("")
+  note          String   @default("")
+  /// [{ id, severity, count, time, note }] — справочник симптомов живёт в контракте модуля.
+  symptoms      Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pet       PetCarePet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@unique([petId, day])
+  @@index([workspaceId])
+  @@map("pet_care_days")
+}
+
+/// События, которые могут объяснять самочувствие: смена корма, лекарство, визит, стресс.
+model PetCareEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  petId       String
+  day         DateTime @db.Date
+  type        String   @default("note")
+  title       String   @default("")
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pet       PetCarePet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([petId, day])
+  @@map("pet_care_events")
 }

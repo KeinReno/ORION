@@ -16,12 +16,16 @@ export interface ToastOptions {
   tone?: ToastTone;
   /** Optional single action button (e.g. "Отменить"). */
   action?: { label: string; onClick: () => void };
-  /** ms before auto-dismiss; 0 keeps it until dismissed. Default 4000. */
+  /** ms before auto-dismiss; 0 keeps it until dismissed. Default 4000, 8000 with an action, and 0 for `danger`: an error stays until it is read and closed. */
   duration?: number;
 }
 
 interface ToastRecord extends ToastOptions {
   id: number;
+  /** Resolved auto-dismiss time (the countdown bar uses the same number as the timer). */
+  duration: number;
+  /** Where a swiped-away toast flies off to: the direction of the swipe, not back to the edge. */
+  exitX?: number;
   themeScope?: ReturnType<typeof useThemeScopeProps>;
 }
 
@@ -58,8 +62,8 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
   const toast = useCallback(
     (options: ToastOptions, themeScope?: ReturnType<typeof useThemeScopeProps>): number => {
       const id = ++seq.current;
-      setToasts((list) => [...list, { ...options, id, themeScope }]);
-      const duration = options.duration ?? (options.action ? 8000 : 4000);
+      const duration = options.duration ?? (options.tone === "danger" ? 0 : options.action ? 8000 : 4000);
+      setToasts((list) => [...list, { ...options, id, duration, themeScope }]);
       if (duration > 0) {
         timers.current.set(
           id,
@@ -89,11 +93,16 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                     dragConstraints={{ left: 0, right: 0 }}
                     dragElastic={0.7}
                     onDragEnd={(_event, info) => {
-                      if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 500) dismiss(t.id);
+                      if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 500) {
+                        const exitX = (info.offset.x || info.velocity.x) < 0 ? -360 : 360;
+                        setToasts((list) => list.map((item) => (item.id === t.id ? { ...item, exitX } : item)));
+                        // Next frame: the exit animation reads the direction stored above.
+                        requestAnimationFrame(() => dismiss(t.id));
+                      }
                     }}
                     initial={{ opacity: 0, x: 24, scale: 0.98 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 24, scale: 0.98 }}
+                    exit={{ opacity: 0, x: t.exitX ?? 24, scale: 0.98 }}
                     transition={{ duration: 0.16, ease: "easeOut" }}
                     className={clsx(
                       "pointer-events-auto relative touch-pan-y overflow-hidden rounded-xl border bg-ui-overlay/90 p-3 shadow-xl shadow-black/40 backdrop-blur-md",
@@ -144,7 +153,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                      * that stays until dismissed shouldn't imply a countdown
                      * that never ends.
                      */}
-                    {(t.duration ?? 4000) > 0 ? (
+                    {t.duration > 0 ? (
                       <motion.span
                         aria-hidden
                         className={clsx(
@@ -153,7 +162,7 @@ export function ToastProvider({ children }: { children: ReactNode }): React.Reac
                         )}
                         initial={{ scaleX: 1 }}
                         animate={{ scaleX: 0 }}
-                        transition={{ duration: (t.duration ?? 4000) / 1000, ease: "linear" }}
+                        transition={{ duration: t.duration / 1000, ease: "linear" }}
                       />
                     ) : null}
                   </motion.div>

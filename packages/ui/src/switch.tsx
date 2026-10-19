@@ -1,8 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { motion, useReducedMotion } from "framer-motion";
-import { SPRING_SNAP } from "./motion";
+import { motion } from "framer-motion";
+import { useMotionLevel, useMotionSpring } from "./motion-level";
 
 export interface SwitchProps {
   checked: boolean;
@@ -20,7 +20,8 @@ export interface SwitchProps {
  * native checkboxes, that's the correct affordance there.
  */
 export function Switch({ checked, onChange, label, disabled, className }: SwitchProps): React.ReactElement {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionLevel() === "off";
+  const snap = useMotionSpring("snap");
   return (
     <button
       type="button"
@@ -40,7 +41,7 @@ export function Switch({ checked, onChange, label, disabled, className }: Switch
         aria-hidden
         initial={false}
         animate={{ x: checked ? 16 : 0 }}
-        transition={reduceMotion ? { duration: 0 } : SPRING_SNAP}
+        transition={snap}
         className="absolute left-[3px] h-3.5 w-3.5"
       >
         {/*

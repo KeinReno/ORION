@@ -5,13 +5,16 @@ import { Button, DropdownMenu, IconButton, Input, cx, useToast, type SidebarFold
 import { ChevronRight, FolderKanban, MoreHorizontal, Pin, PinOff, Search, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { parseProjectPins, projectPinsKey } from "../lib/shell-context";
+import { NotesContext, TasksContext } from "./context-sections";
 
 export type ProjectOpenMode = "open" | "beside" | "window";
 export type ProjectView = { id: string; label: string };
 
 /** Real workspace data through public hooks; never imports a domain panel's internals. */
-export function WorkspaceContext({ userId, workspaceId, switcher, projectsEnabled, activeProjectId, views, folders, links, onOpen, onClose }: {
+export function WorkspaceContext({ userId, workspaceId, switcher, projectsEnabled, activeProjectId, activeKind, views, folders, links, onOpen, onClose }: {
   userId: string; workspaceId: string; switcher: ReactNode; projectsEnabled: boolean;
+  /** Sidebar item of the open panel (`notes`, `tasks`, …): what is inside that module is shown above the projects, which stay in place. */
+  activeKind?: string;
   activeProjectId?: string; views: ProjectView[]; folders: SidebarFolderView[]; links: SidebarLinkItem[];
   onOpen: (panelId: string, title: string, mode: ProjectOpenMode) => void; onClose: () => void;
 }): React.ReactElement {
@@ -38,12 +41,14 @@ export function WorkspaceContext({ userId, workspaceId, switcher, projectsEnable
   const shown = available.filter(project => project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const pinned = available.filter(project => pins.includes(project.id));
   const rowClass = "flex min-h-11 sm:min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-base sm:text-label text-muted-foreground hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  const moduleSection = activeKind === "notes" ? <NotesContext workspaceId={workspaceId} /> : activeKind === "tasks" ? <TasksContext workspaceId={workspaceId} /> : null;
   return <aside id="orion-workspace-context" aria-label="Контекст пространства" className="flex h-full min-h-0 w-full flex-col bg-background text-foreground">
     <div className="flex min-h-16 items-center gap-1 border-b border-border px-3">
       {switcher}
       <IconButton label="Скрыть контекст пространства" onClick={onClose}><X className="h-4 w-4" /></IconButton>
     </div>
     <div className="orion-scroll min-h-0 min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-3">
+      {moduleSection}
       {projectsEnabled ? <>
         <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-subtle-foreground" aria-hidden />
           <Input aria-label="Найти проект в пространстве" placeholder="Найти проект" value={query} onChange={event => setQuery(event.target.value)} className="pl-9" /></div>

@@ -245,3 +245,21 @@ export function showTasksForProject(projectId: string): void {
 }
 
 export const useTasksProjectSignal = tasksProjectChannel.useIntent;
+
+/**
+ * "Open settings on this tab, at this parameter" — from the avatar, a module's settings sheet or the
+ * command palette. `tab`/`anchor` are `settings-catalog` values; the panel ignores a tab it does not know.
+ */
+export interface SettingsRequest {
+  tab: string;
+  anchor: string | null;
+  at: number;
+}
+
+const settingsChannel = makeIntentChannel<SettingsRequest>("settings");
+
+export function openSettings(tab: string, anchor: string | null = null): void {
+  settingsChannel.emit({ tab, anchor, at: Date.now() });
+}
+
+export const useSettingsRequest = settingsChannel.useIntent;

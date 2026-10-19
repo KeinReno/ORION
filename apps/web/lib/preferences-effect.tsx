@@ -62,6 +62,8 @@ function AppearanceSync(): React.ReactElement | null {
     root.dataset.background = data.backgroundStyle;
     root.dataset.backgroundIntensity = data.backgroundIntensity;
     root.dataset.surface = data.surfaceStyle;
+    // CSS transitions/keyframes read this (globals.css); framer-motion reads MotionLevelProvider.
+    root.dataset.motion = data.motionLevel;
     root.dataset.orionDesign = data.theme === "kaiden-precision" ? "precision" : "legacy";
     const effectiveTheme = effectiveApplicationTheme(data, { theme: workspaceTheme });
     const precisionVariables = effectiveTheme ? themeDocumentVariables(effectiveTheme) : {};

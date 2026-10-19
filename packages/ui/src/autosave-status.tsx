@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { SaveGlyph } from "./save-glyph";
 
 export type AutosaveState = "saving" | "dirty" | "saved" | "error";
 
@@ -39,12 +40,13 @@ export function AutosaveStatus({
       role="status"
       aria-live="polite"
       className={clsx(
-        "text-label text-subtle-foreground",
+        "inline-flex items-center gap-1.5 text-label text-subtle-foreground",
         state === "dirty" && !explicit && "text-warning",
         state === "error" && "text-destructive",
         className
       )}
     >
+      {!explicit && state !== "dirty" ? <SaveGlyph state={state} /> : null}
       {text}
     </span>
   );

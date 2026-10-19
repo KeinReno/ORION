@@ -12,7 +12,7 @@ for (const mode of ["dark", "light"] as const) {
     await signIn(page, account); await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
     await page.getByRole("button", { name: "Настройки", exact: true }).click();
-    await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+    await page.getByRole("button", { name: "Темы", exact: true }).click();
     const library = page.getByRole("region", { name: "Библиотека тем", exact: true });
     await library.getByRole("button", { name: `Открыть тему «${mode === "light" ? "Arctic" : "KAIDEN Precision"}» в редакторе`, exact: true }).click();
     const region = page.getByRole("region", { name: "Редактор темы", exact: true });
@@ -57,7 +57,7 @@ for (const mode of ["dark", "light"] as const) {
     await expect(fresh.locator("html")).toHaveAttribute("data-orion-palette", entry.document.id);
     await freshContext.close();
     await page.reload();
-    await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
+    await page.getByRole("button", { name: "Темы", exact: true }).click();
     await library.getByRole("button", { name: `Открыть тему «Моя тема ${mode}» в редакторе`, exact: true }).click();
     await expect(region.getByLabel("Название темы", { exact: true })).toHaveValue(`Моя тема ${mode}`);
     await expect(region.getByLabel("Акцент", { exact: true })).toHaveValue("#357ab5");

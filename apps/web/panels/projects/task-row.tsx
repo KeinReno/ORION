@@ -1,7 +1,7 @@
 "use client";
 
 import { isTaskClosed, type Task } from "@orion/shared-types";
-import { Badge, CheckToggle, cx } from "@orion/ui";
+import { Badge, CheckToggle, cx, StrikeText } from "@orion/ui";
 import { shortDate } from "../../lib/format";
 import { isTaskOverdue } from "../../lib/project-focus";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "../task-form";
@@ -39,10 +39,10 @@ export function TaskRow({
         title="Открыть задачу"
         className={cx(
           "min-w-0 flex-1 truncate text-left text-label focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
-          closed ? "text-subtle-foreground line-through" : "text-foreground hover:underline"
+          closed ? "text-subtle-foreground" : "text-foreground hover:underline"
         )}
       >
-        {task.title}
+        <StrikeText done={closed}>{task.title}</StrikeText>
       </button>
       {task.status === "in_progress" || task.status === "backlog" || task.status === "canceled" ? (
         <Badge tone={task.status === "in_progress" ? "accent" : "neutral"}>{TASK_STATUS_LABEL[task.status]}</Badge>

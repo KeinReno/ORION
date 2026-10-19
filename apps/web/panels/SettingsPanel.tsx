@@ -26,24 +26,21 @@ import {
   PanelHeader,
   PanelSection,
   PanelShell,
-  SegmentedControl,
-  Select,
+  SaveGlyph,
   Skeleton,
   Switch,
   cx,
   useToast
 } from "@orion/ui";
 import { AlertCircle, LogOut, Settings } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { describeAuthError } from "../lib/error-message";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
-import { BackgroundEffectSettingsForm } from "./settings/background-effect-form";
 import { ThemeSettings } from "./settings/theme-library";
 import { ComponentsDiagnostics } from "./settings/components-section";
 import { ModulesSettings } from "./settings/modules-section";
 import { UpdatesSettings } from "./settings/updates-section";
-import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
@@ -51,40 +48,16 @@ import { NetworkSettings } from "./settings/network-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
 import { SettingsNav } from "./settings/settings-nav";
+import { RegionSettings } from "./settings/region-section";
+import { AppearanceSettings, NotificationSettings } from "./settings/preference-sections";
+import { SaveBar, SettingGroup, SettingRow } from "./settings/setting-row";
 import { sectionTabTitle, useSectionView } from "../components/section-tabs";
 import type { PanelComponentProps } from "../lib/panel-registry";
+import { useSettingsRequest } from "../lib/panel-bus";
+import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { SETTINGS_TABS, isSettingsTab, settingsScopeText, settingsTabInfo, type SettingsSearchHit, type SettingsTab } from "../lib/settings-catalog";
 
-type Tab =
-  | "profile"
-  | "agents"
-  | "security"
-  | "notifications"
-  | "appearance"
-  | "modules"
-  | "plugins"
-  | "workspace"
-  | "spheres"
-  | "members"
-  | "network"
-  | "updates"
-  | "about";
 type PreferenceKey = keyof UserPreference;
-
-const TABS: { value: Tab; label: string }[] = [
-  { value: "profile", label: "Профиль" },
-  { value: "security", label: "Безопасность" },
-  { value: "notifications", label: "Уведомления" },
-  { value: "appearance", label: "Внешний вид" },
-  { value: "modules", label: "Модули" },
-  { value: "plugins", label: "Плагины" },
-  { value: "workspace", label: "Пространство" },
-  { value: "spheres", label: "Сферы" },
-  { value: "members", label: "Участники" },
-  { value: "agents", label: "ИИ-агенты" },
-  { value: "network", label: "Сеть и устройства" },
-  { value: "updates", label: "Обновления" },
-  { value: "about", label: "О приложении" }
-];
 
 /** Which preference fields each tab owns — a save sends only these, never the whole object. */
 const NOTIFICATION_KEYS: readonly PreferenceKey[] = [
@@ -111,16 +84,13 @@ const APPEARANCE_KEYS: readonly PreferenceKey[] = [
   "panelOpacity",
   "panelBlur",
   "panelAccent",
-  "timeZone",
-  "weekStartsOn"
+  "motionLevel"
 ];
-
-const WEBGL_BACKGROUND_STYLES = new Set<UserPreference["backgroundStyle"]>([
-  "liquid-ether",
-  "light-pillar",
-  "dark-veil",
-  "shape-waves"
-]);
+const REGION_KEYS: readonly PreferenceKey[] = ["timeZone", "weekStartsOn"];
+/** Tabs whose fields come from the preferences form: a jump to one of their parameters waits for it. */
+const FORM_TABS = new Set<string>(["notifications", "appearance", "region"]);
+/** The brief ring around a parameter reached from search. */
+const FLASH_CLASSES = ["rounded-lg", "ring-2", "ring-accent/60", "ring-offset-4", "ring-offset-background"];
 
 /**
  * Partial patch built from just `keys`. The endpoint takes
@@ -141,11 +111,28 @@ function diffPreferences(
   return patch;
 }
 
-/** Replaces the Save button on tabs that apply changes at once. */
-function LiveSaveHint({ pending }: { pending: boolean }): React.ReactElement {
+/**
+ * Replaces the Save button on tabs that apply changes at once: «Применяется сразу» at rest, a
+ * turning ring while a change is being written, a drawn check for a moment once it landed, and an
+ * explicit failure that stays until the next successful write.
+ */
+function LiveSaveHint({ pending, failed }: { pending: boolean; failed: boolean }): React.ReactElement {
+  const [justSaved, setJustSaved] = useState(false);
+  const wasPending = useRef(pending);
+  useEffect(() => {
+    if (wasPending.current && !pending && !failed) {
+      setJustSaved(true);
+      const timer = setTimeout(() => setJustSaved(false), 1800);
+      wasPending.current = pending;
+      return () => clearTimeout(timer);
+    }
+    wasPending.current = pending;
+  }, [pending, failed]);
+  const state = pending ? "saving" : failed ? "error" : justSaved ? "saved" : null;
   return (
-    <span className="text-2xs text-subtle-foreground" aria-live="polite">
-      {pending ? "Применяю…" : "Применяется сразу"}
+    <span className={cx("inline-flex items-center gap-1.5 text-2xs", failed && !pending ? "text-destructive" : "text-subtle-foreground")} aria-live="polite">
+      {state ? <SaveGlyph state={state} /> : null}
+      {pending ? "Сохраняю…" : failed ? "Не сохранено" : justSaved ? "Сохранено" : "Применяется сразу"}
     </span>
   );
 }
@@ -165,10 +152,30 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
   const appInfo = useAppInfo();
   const { toast } = useToast();
 
-  const [tabState, setTab] = useState<Tab>("profile");
-  const section = useSectionView(params, panelApi, "Настройки", TABS);
+  const { workspace } = useActiveWorkspace();
+
+  const [tabState, setTab] = useState<SettingsTab>("profile");
+  const section = useSectionView(params, panelApi, "Настройки", SETTINGS_TABS);
   // Locked to a tab that no longer exists: "" matches no branch below, only the explanation is shown.
-  const tab: Tab | "" = section.locked ? (section.view ?? "") : tabState;
+  const tab: SettingsTab | "" = section.locked ? (section.view ?? "") : tabState;
+  const tabInfo = settingsTabInfo(tab);
+  const scopeText = tabInfo ? settingsScopeText(tabInfo.scope, workspace?.name) : null;
+
+  // «Open settings at this parameter» (avatar, module sheet, palette, the search here): switch the
+  // tab, then bring the parameter into view once it is rendered. A view locked to one tab ignores it.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [jump, setJump] = useState<{ anchor: string | null; at: number } | null>(null);
+  const request = useSettingsRequest();
+  useEffect(() => {
+    if (!request || section.locked || !isSettingsTab(request.tab)) return;
+    setTab(request.tab);
+    setJump({ anchor: request.anchor, at: request.at });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
+  function pickSearchHit(hit: SettingsSearchHit): void {
+    setTab(hit.tab);
+    setJump({ anchor: hit.anchor, at: Date.now() });
+  }
   const [form, setForm] = useState<UserPreference | null>(null);
   const [profile, setProfile] = useState({ name: "", email: "" });
   const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", newPin: "", revokeOtherSessions: true });
@@ -205,7 +212,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
   // (no toast per click); only a failure is reported.
   useEffect(() => {
     if (!form || !preferences.data) return;
-    const patch = diffPreferences(form, preferences.data, [...APPEARANCE_KEYS, ...NOTIFICATION_KEYS]);
+    const patch = diffPreferences(form, preferences.data, [...APPEARANCE_KEYS, ...NOTIFICATION_KEYS, ...REGION_KEYS]);
     if (Object.keys(patch).length === 0) return;
     const timer = setTimeout(() => {
       updatePreferences.mutate(patch, {
@@ -215,12 +222,40 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, preferences.data]);
+
+  // The jump lands once the target is rendered: tabs fed by the preferences form wait for it; a
+  // parameter without its own anchor (or one this tab no longer has) lands on the top of the tab.
+  const formReady = form !== null;
+  useEffect(() => {
+    if (!jump || (FORM_TABS.has(tab) && !formReady)) return;
+    const frame = requestAnimationFrame(() => {
+      const root = contentRef.current;
+      if (!root) return;
+      const target = jump.anchor ? root.querySelector<HTMLElement>(`[data-setting="${jump.anchor}"]`) : null;
+      if (!target) {
+        root.scrollIntoView({ block: "start" });
+      } else {
+        target.scrollIntoView({ block: "center" });
+        target.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea, button")?.focus({ preventScroll: true });
+        target.classList.add(...FLASH_CLASSES);
+        window.setTimeout(() => target.classList.remove(...FLASH_CLASSES), 1600);
+      }
+      setJump(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [jump, tab, formReady]);
+
   useEffect(() => {
     if (user) {
       setProfile({ name: user.name, email: user.email ?? "" });
       setUnlock(user.unlockKind);
     }
   }, [user]);
+
+  const profileChanges = {
+    name: Boolean(user) && profile.name.trim() !== user?.name,
+    email: Boolean(user) && profile.email.trim() !== (user?.email ?? "")
+  };
 
   async function saveProfile(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -310,109 +345,137 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
       <PanelHeader
         icon={Settings}
         title="Настройки"
-        subtitle={section.locked ? sectionTabTitle(TABS.find((item) => item.value === tab)) : "Профиль, модули, безопасность и внешний вид"}
+        subtitle={section.locked ? sectionTabTitle(tabInfo) : "Учётная запись, пространство и этот компьютер"}
       />
 
       <PanelBody measure="settings" className="[container-type:inline-size]">
         <div className={cx("flex flex-col gap-6", !section.locked && "[@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start")}>
-          {!section.locked ? <SettingsNav tabs={TABS} value={tab as Tab} onChange={setTab} /> : null}
-          <div className="min-w-0 flex-1">
+          {!section.locked ? (
+            <SettingsNav value={tab as SettingsTab} workspaceName={workspace?.name} onChange={setTab} onPick={pickSearchHit} />
+          ) : null}
+          <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
         {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет. Данные сохранены.</p> : null}
+        {scopeText ? <ScopeNote>{scopeText}</ScopeNote> : null}
         {tab === "profile" ? (
           <PanelSection title="Профиль">
-            <Card className="space-y-4">
-              {user ? (
-                <div className="flex items-center gap-3">
-                  <AccountAvatar userId={user.id} name={profile.name || user.name} hasAvatar={user.hasAvatar} size={56} bust={avatarBust} />
-                  <div className="flex flex-col gap-1">
-                    <label className="cursor-pointer text-xs text-accent-text hover:underline">
-                      Загрузить фото
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        className="hidden"
-                        onChange={(e) => void onAvatar(e.target.files?.[0])}
-                      />
-                    </label>
-                    {user.hasAvatar ? (
-                      <button
-                        type="button"
-                        className="text-left text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() =>
-                          void deleteAvatar.mutateAsync().then(
-                            () => {
-                              setAvatarBust(Date.now());
-                              toast({ title: "Аватар убран", tone: "default" });
-                            },
-                            (error: unknown) =>
-                              toast({ title: "Не удалось убрать аватар", description: describeAuthError(error), tone: "danger" })
-                          )
-                        }
-                      >
-                        Убрать
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-              <p className="text-xs text-muted-foreground">
-                Сейчас: <span className="text-foreground">{user?.name ?? "—"}</span>
-                {user?.email ? (
-                  <>
-                    {" "}
-                    · <span className="text-foreground">{user.email}</span>
-                  </>
-                ) : (
-                  <> · без email</>
-                )}
-              </p>
-              <form className="grid gap-4 [@container(min-width:576px)]:grid-cols-2" onSubmit={saveProfile}>
-                <Field label="Имя"><Input required value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
-                <Field label="Email (необязательно)"><Input type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></Field>
-                <div className="[@container(min-width:576px)]:col-span-2">
-                  <Button
-                    type="submit"
-                    status={updateProfile.isPending ? "pending" : updateProfile.isSuccess ? "success" : updateProfile.isError ? "error" : "idle"}
-                  >
-                    Сохранить
-                  </Button>
-                </div>
-              </form>
-            </Card>
+            <form id="settings-profile-form" onSubmit={saveProfile}>
+              <SettingGroup title="Личные данные" description="Общие для всех ваших пространств.">
+                {user ? (
+                  <SettingRow anchor="avatar" label="Фото" description="JPEG, PNG, WebP или GIF — видно участникам ваших пространств.">
+                    <div className="flex items-center gap-3">
+                      <AccountAvatar userId={user.id} name={profile.name || user.name} hasAvatar={user.hasAvatar} size={48} bust={avatarBust} />
+                      <div className="flex flex-col gap-1">
+                        <label className="cursor-pointer text-xs text-accent-text hover:underline">
+                          Загрузить фото
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(e) => void onAvatar(e.target.files?.[0])}
+                          />
+                        </label>
+                        {user.hasAvatar ? (
+                          <button
+                            type="button"
+                            className="text-left text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() =>
+                              void deleteAvatar.mutateAsync().then(
+                                () => {
+                                  setAvatarBust(Date.now());
+                                  toast({ title: "Аватар убран", tone: "default" });
+                                },
+                                (error: unknown) =>
+                                  toast({ title: "Не удалось убрать аватар", description: describeAuthError(error), tone: "danger" })
+                              )
+                            }
+                          >
+                            Убрать
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </SettingRow>
+                ) : null}
+                <SettingRow anchor="name" label="Имя" changed={profileChanges.name}>
+                  <Input aria-label="Имя" required className="w-64 max-w-full" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+                </SettingRow>
+                <SettingRow
+                  anchor="email"
+                  label="Email"
+                  description="Необязательно. По нему принимаются приглашения в общие пространства."
+                  changed={profileChanges.email}
+                >
+                  <Input aria-label="Email" type="email" className="w-64 max-w-full" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+                </SettingRow>
+              </SettingGroup>
+              <SaveBar
+                form="settings-profile-form"
+                changedCount={Number(profileChanges.name) + Number(profileChanges.email)}
+                pending={updateProfile.isPending}
+                onReset={() => setProfile({ name: user?.name ?? "", email: user?.email ?? "" })}
+              />
+            </form>
           </PanelSection>
         ) : null}
 
         {tab === "security" ? (
-          <>
-            <PanelSection title="Смена пароля или PIN">
-              <Card>
-                <form className="grid gap-4 [@container(min-width:576px)]:grid-cols-2" onSubmit={savePassword}>
-                  <div className="flex gap-2 [@container(min-width:576px)]:col-span-2">
-                    <Button type="button" size="sm" variant={unlock === "password" ? "primary" : "outline"} onClick={() => setUnlock("password")}>
-                      Пароль
-                    </Button>
-                    <Button type="button" size="sm" variant={unlock === "pin" ? "primary" : "outline"} onClick={() => setUnlock("pin")}>
-                      PIN
-                    </Button>
-                  </div>
-                  <Field label="Текущий пароль или PIN"><Input type="password" required autoComplete="current-password" value={passwords.currentPassword} onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })} /></Field>
-                  {unlock === "pin" ? (
-                    <Field label="Новый PIN (4 цифры)">
+          <PanelSection title="Безопасность">
+            <div className="space-y-5">
+              <form data-setting="password" onSubmit={savePassword}>
+                <SettingGroup title="Вход" description="Чем вы входите в ORION на этом и других устройствах.">
+                  <SettingRow label="Способ входа" description={unlock === "pin" ? "PIN из 4 цифр — для домашнего компьютера." : "Пароль не короче 8 символов."}>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant={unlock === "password" ? "primary" : "outline"} onClick={() => setUnlock("password")}>
+                        Пароль
+                      </Button>
+                      <Button type="button" size="sm" variant={unlock === "pin" ? "primary" : "outline"} onClick={() => setUnlock("pin")}>
+                        PIN
+                      </Button>
+                    </div>
+                  </SettingRow>
+                  <SettingRow label="Текущий пароль или PIN">
+                    <Input
+                      aria-label="Текущий пароль или PIN"
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      className="w-56 max-w-full"
+                      value={passwords.currentPassword}
+                      onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
+                    />
+                  </SettingRow>
+                  <SettingRow label={unlock === "pin" ? "Новый PIN" : "Новый пароль"}>
+                    {unlock === "pin" ? (
                       <Input
+                        aria-label="Новый PIN (4 цифры)"
                         inputMode="numeric"
                         required
                         maxLength={4}
+                        className="w-56 max-w-full"
                         value={passwords.newPin}
                         onChange={(e) => setPasswords({ ...passwords, newPin: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                       />
-                    </Field>
-                  ) : (
-                    <Field label="Новый пароль"><Input type="password" required minLength={8} autoComplete="new-password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} /></Field>
-                  )}
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground [@container(min-width:576px)]:col-span-2">
-                    <input type="checkbox" checked={passwords.revokeOtherSessions} onChange={(e) => setPasswords({ ...passwords, revokeOtherSessions: e.target.checked })} /> Завершить другие сессии
-                  </label>
-                  <div className="[@container(min-width:576px)]:col-span-2">
+                    ) : (
+                      <Input
+                        aria-label="Новый пароль"
+                        type="password"
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                        className="w-56 max-w-full"
+                        value={passwords.newPassword}
+                        onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                      />
+                    )}
+                  </SettingRow>
+                  <SettingRow label="Выйти на других устройствах" description="После смены там потребуется войти заново.">
+                    <Switch
+                      label="Выйти на других устройствах"
+                      checked={passwords.revokeOtherSessions}
+                      onChange={(revokeOtherSessions) => setPasswords({ ...passwords, revokeOtherSessions })}
+                    />
+                  </SettingRow>
+                  <div className="flex justify-end px-4 py-3">
                     <Button
                       type="submit"
                       status={changePassword.isPending ? "pending" : changePassword.isSuccess ? "success" : changePassword.isError ? "error" : "idle"}
@@ -420,83 +483,76 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                       Сохранить вход
                     </Button>
                   </div>
-                </form>
-              </Card>
-            </PanelSection>
+                </SettingGroup>
+              </form>
 
-            <PanelSection
-              title="Устройства и сессии"
-              actions={<Button size="sm" variant="outline" disabled={logoutAll.isPending} onClick={() => setConfirmLogoutAll(true)}><LogOut className="h-4 w-4" /> Выйти на всех устройствах</Button>}
-            >
-              {sessions.isLoading ? (
-                <Skeleton className="h-24" />
-              ) : sessions.data?.length ? (
-                <div className="space-y-2">
-                  {sessions.data.map((session) => (
-                    <Card key={session.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                          <span className="truncate">{session.deviceName ?? session.userAgent ?? "Устройство"}</span>
-                          {session.current ? <Badge tone="accent">текущее устройство</Badge> : null}
-                        </p>
-                        <p className="mt-0.5 text-2xs text-muted-foreground">
-                          {session.ipAddress ?? "IP неизвестен"} · вход {shortDateTime(session.createdAt)} · активность {relativeTime(session.lastUsedAt)} · истекает {shortDateTime(session.expiresAt)}
-                        </p>
-                        {session.deviceName && session.userAgent ? <p className="mt-0.5 truncate text-2xs text-subtle-foreground" title={session.userAgent}>{session.userAgent}</p> : null}
-                      </div>
-                      {session.current ? null : (
-                        <Button size="sm" variant="outline" disabled={revokeSession.isPending} onClick={() => setPendingSession(session)}>Завершить</Button>
-                      )}
-                    </Card>
-                  ))}
+              <div data-setting="sessions" className="space-y-2">
+                <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground">Устройства и сессии</h3>
+                    <p className="text-2xs text-subtle-foreground">Где сейчас выполнен вход в вашу учётную запись.</p>
+                  </div>
+                  <Button size="sm" variant="outline" disabled={logoutAll.isPending} onClick={() => setConfirmLogoutAll(true)}>
+                    <LogOut className="h-4 w-4" /> Выйти на всех устройствах
+                  </Button>
                 </div>
-              ) : <Message>Активных сессий нет.</Message>}
-            </PanelSection>
-          </>
+                {sessions.isLoading ? (
+                  <Skeleton className="h-24" />
+                ) : sessions.data?.length ? (
+                  <div className="divide-y divide-border rounded-2xl border border-border bg-card">
+                    {sessions.data.map((session) => (
+                      <div key={session.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                            <span className="truncate">{session.deviceName ?? session.userAgent ?? "Устройство"}</span>
+                            {session.current ? <Badge tone="accent">это устройство</Badge> : null}
+                          </p>
+                          <p className="mt-0.5 text-2xs text-muted-foreground">
+                            {session.ipAddress ?? "IP неизвестен"} · вход {shortDateTime(session.createdAt)} · активность {relativeTime(session.lastUsedAt)} · истекает{" "}
+                            {shortDateTime(session.expiresAt)}
+                          </p>
+                          {session.deviceName && session.userAgent ? (
+                            <p className="mt-0.5 truncate text-2xs text-subtle-foreground" title={session.userAgent}>
+                              {session.userAgent}
+                            </p>
+                          ) : null}
+                        </div>
+                        {session.current ? null : (
+                          <Button size="sm" variant="outline" disabled={revokeSession.isPending} onClick={() => setPendingSession(session)}>
+                            Завершить
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Message>Активных сессий нет.</Message>
+                )}
+              </div>
+            </div>
+          </PanelSection>
         ) : null}
 
         {tab === "notifications" ? (
-          <PanelSection title="Уведомления" actions={<LiveSaveHint pending={updatePreferences.isPending} />}>
-            {preferences.isError ? preferencesError : !form ? (
-              <Skeleton className="h-40" />
-            ) : (
-              <Card className="space-y-3">
-                <Toggle label="Уведомления на рабочем столе" checked={form.desktopNotifications} onChange={(desktopNotifications) => setForm({ ...form, desktopNotifications })} />
-                <Toggle label="Напоминания о задачах" checked={form.taskReminders} onChange={(taskReminders) => setForm({ ...form, taskReminders })} />
-                <Toggle label="Напоминания о событиях" checked={form.eventReminders} onChange={(eventReminders) => setForm({ ...form, eventReminders })} />
-                <Toggle label="Предупреждения о финансах" checked={form.financeAlerts} onChange={(financeAlerts) => setForm({ ...form, financeAlerts })} />
-                <Toggle label="Низкий остаток на складе" checked={form.inventoryAlerts} onChange={(inventoryAlerts) => setForm({ ...form, inventoryAlerts })} />
-                <div className="grid gap-4 border-t border-border pt-3 [@container(min-width:576px)]:grid-cols-2">
-                  <Field label="Тихие часы — начало"><Input type="time" value={form.quietHoursStart ?? ""} onChange={(e) => setForm({ ...form, quietHoursStart: e.target.value || null })} /></Field>
-                  <Field label="Тихие часы — конец"><Input type="time" value={form.quietHoursEnd ?? ""} onChange={(e) => setForm({ ...form, quietHoursEnd: e.target.value || null })} /></Field>
-                </div>
-                <p className="text-2xs text-subtle-foreground">
-                  Что делают переключатели: «Напоминания о задачах» и «о событиях» гасят серверные напоминания
-                  (Telegram и ленту уведомлений) и нативные тосты в десктопе; «Предупреждения о финансах» — алерты о
-                  превышении бюджета. Тихие часы действуют на всё, кроме ручной проверки «Напомнить сейчас».
-                  Учитывается часовой пояс из поля «Часовой пояс» ниже; пустое поле — часовой пояс сервера.
-                </p>
-              </Card>
-            )}
+          <PanelSection title="Уведомления" actions={<LiveSaveHint pending={updatePreferences.isPending} failed={updatePreferences.isError} />}>
+            {preferences.isError ? preferencesError : !form ? <Skeleton className="h-40" /> : <NotificationSettings form={form} setForm={setForm} />}
           </PanelSection>
         ) : null}
 
         {tab === "modules" ? (
-          <PanelSection title="Модули пространства">
-            <ModulesSettings />
-          </PanelSection>
-        ) : null}
-
-        {tab === "modules" ? (
-          <PanelSection title="Диагностика компонентов">
-            <ComponentsDiagnostics />
-          </PanelSection>
+          <Anchored anchor="modules">
+            <PanelSection title="Модули пространства">
+              <ModulesSettings />
+            </PanelSection>
+          </Anchored>
         ) : null}
 
         {tab === "plugins" ? (
-          <PanelSection title="Плагины">
-            <PluginsSettings />
-          </PanelSection>
+          <Anchored anchor="plugins">
+            <PanelSection title="Плагины">
+              <PluginsSettings />
+            </PanelSection>
+          </Anchored>
         ) : null}
 
         {tab === "workspace" ? (
@@ -536,221 +592,27 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         ) : null}
 
         {tab === "appearance" ? (
-          <PanelSection title="Внешний вид" actions={<LiveSaveHint pending={updatePreferences.isPending} />}>
-            {preferences.isError ? preferencesError : !form ? (
-              <Skeleton className="h-56" />
-            ) : (
-              <Card className="space-y-4">
-                <p className="text-2xs text-subtle-foreground">
-                  Оформление сохраняется в вашей учётной записи. KAIDEN Precision включает новую навигацию и спокойную графитовую палитру. Прежние настройки акцента и фона сохраняются для возврата.
-                </p>
-                <Field label="Оформление Orion">
-                  <Select aria-label="Оформление Orion" value={form.theme}
-                    onChange={(event) => setForm({ ...form, theme: event.target.value as UserPreference["theme"] })}>
-                    <option value={form.theme === "kaiden-precision" ? "dark" : form.theme}>Прежний интерфейс</option>
-                    <option value="kaiden-precision">KAIDEN Precision — новая оболочка</option>
-                  </Select>
-                </Field>
-                {form.theme === "kaiden-precision" ? <p className="text-label text-muted-foreground">Precision задаёт структуру оболочки. Тему можно выбрать, создать и настроить ниже, в разделе «Темы». Плотность и положение меню настраиваются независимо.</p> : null}
-                {form.theme !== "kaiden-precision" ? <>
-                <Field label="Акцент">
-                  <SegmentedControl<UserPreference["accent"]>
-                    value={form.accent}
-                    onChange={(accent) => setForm({ ...form, accent })}
-                    options={ACCENT_OPTIONS}
-                  />
-                </Field>
-                </> : null}
-                <Field label="Плотность">
-                  <SegmentedControl<UserPreference["density"]> value={form.density} onChange={(density) => setForm({ ...form, density })} options={[{ value: "compact", label: "Компактная" }, { value: "comfortable", label: "Свободная" }]} />
-                </Field>
-                <Field label="Положение меню">
-                  <SegmentedControl<UserPreference["sidebarPosition"]>
-                    value={form.sidebarPosition}
-                    onChange={(sidebarPosition) => setForm({ ...form, sidebarPosition })}
-                    options={[
-                      { value: "left", label: "Слева" },
-                      { value: "right", label: "Справа" },
-                      { value: "top", label: "Сверху" },
-                      { value: "bottom", label: "Снизу" }
-                    ]}
-                  />
-                </Field>
-                <Field label="Вкладки сверху">
-                  <SegmentedControl<UserPreference["openTabsMode"]>
-                    value={form.openTabsMode}
-                    onChange={(openTabsMode) => setForm({ ...form, openTabsMode })}
-                    options={[
-                      { value: "accumulate", label: "Копить открытые" },
-                      { value: "replace", label: "Заменять текущую" }
-                    ]}
-                  />
-                  <p className="mt-1 text-2xs text-subtle-foreground">
-                    «Копить» — каждый открытый раздел остаётся вкладкой. «Заменять» — раздел открывается на месте текущей вкладки; закрепить другую рядом можно перетаскиванием из меню или через «⋯».
-                  </p>
-                </Field>
-                {form.theme !== "kaiden-precision" ? <>
-                <Field label="Фон">
-                  <SegmentedControl<UserPreference["backgroundStyle"]>
-                    value={form.backgroundStyle}
-                    onChange={(backgroundStyle) => setForm({ ...form, backgroundStyle })}
-                    options={[
-                      { value: "none", label: "Обычный" },
-                      { value: "aurora", label: "Аврора" },
-                      { value: "grid", label: "Сетка" },
-                      { value: "liquid-ether", label: "Жидкий эфир" },
-                      { value: "light-pillar", label: "Столб света" },
-                      { value: "dark-veil", label: "Тёмная вуаль" },
-                      { value: "shape-waves", label: "Волны" }
-                    ]}
-                  />
-                </Field>
-                {form.backgroundStyle !== "none" ? (
-                  <Field label="Сила фона">
-                    <SegmentedControl<UserPreference["backgroundIntensity"]>
-                      value={form.backgroundIntensity}
-                      onChange={(backgroundIntensity) => setForm({ ...form, backgroundIntensity })}
-                      options={[
-                        { value: "low", label: "Слабая" },
-                        { value: "medium", label: "Средняя" },
-                        { value: "high", label: "Сильная" }
-                      ]}
-                    />
-                  </Field>
-                ) : null}
-                {WEBGL_BACKGROUND_STYLES.has(form.backgroundStyle) ? (
-                  <BackgroundEffectSettingsForm
-                    variant={form.backgroundStyle as UserPreference["backgroundStyle"] & keyof UserPreference["backgroundEffectSettings"]}
-                    settings={form.backgroundEffectSettings}
-                    accentHex={ACCENT_HEX[form.accent]}
-                    onChange={(backgroundEffectSettings) => setForm({ ...form, backgroundEffectSettings })}
-                  />
-                ) : null}
-                <Field label="Поверхности">
-                  <SegmentedControl<UserPreference["surfaceStyle"]>
-                    value={form.surfaceStyle}
-                    onChange={(surfaceStyle) => setForm({ ...form, surfaceStyle })}
-                    options={[
-                      { value: "solid", label: "Сплошные" },
-                      { value: "glass", label: "Стекло" }
-                    ]}
-                  />
-                </Field>
-                {form.backgroundStyle !== "none" && form.surfaceStyle === "solid" ? (
-                  <p className="text-2xs text-warning">
-                    Фон виден только сквозь прозрачные поверхности — включите «Стекло» выше, иначе он будет скрыт.
-                  </p>
-                ) : null}
-                {form.surfaceStyle === "glass" ? (
-                  <div className="grid gap-4 rounded-lg border border-border p-3 [@container(min-width:576px)]:grid-cols-3">
-                    <Field label={`Прозрачность панелей: ${Math.round(form.panelOpacity * 100)}%`}>
-                      <input
-                        type="range"
-                        min={0.1}
-                        max={1}
-                        step={0.05}
-                        value={form.panelOpacity}
-                        onChange={(e) => setForm({ ...form, panelOpacity: Number(e.target.value) })}
-                        className="w-full accent-accent"
-                      />
-                    </Field>
-                    <Field label={`Сила блюра: ${form.panelBlur}px`}>
-                      <input
-                        type="range"
-                        min={0}
-                        max={40}
-                        step={1}
-                        value={form.panelBlur}
-                        onChange={(e) => setForm({ ...form, panelBlur: Number(e.target.value) })}
-                        className="w-full accent-accent"
-                      />
-                    </Field>
-                    <Field label="Цвет панелей">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={form.panelAccent ?? "#0d0d11"}
-                          onChange={(e) => setForm({ ...form, panelAccent: e.target.value })}
-                          className="h-9 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
-                        />
-                        {form.panelAccent ? (
-                          <button
-                            type="button"
-                            className="text-2xs text-accent-text hover:underline"
-                            onClick={() => setForm({ ...form, panelAccent: null })}
-                          >
-                            Нейтральный
-                          </button>
-                        ) : (
-                          <span className="text-2xs text-subtle-foreground">Нейтральный</span>
-                        )}
-                      </div>
-                    </Field>
-                  </div>
-                ) : null}
-                </> : null}
-                <Field label="Номера заметок">
-                  <div className="flex items-center gap-2">
-                    <Switch checked={form.showNoteIds} onChange={(showNoteIds) => setForm({ ...form, showNoteIds })} />
-                    <span className="text-xs text-muted-foreground">
-                      Короткий номер вида N-104 в списке и в заметке — для ссылок и разговоров; в поиске находится по номеру
-                    </span>
-                  </div>
-                </Field>
-                <Field label="Курсор-цель">
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={form.targetCursorEnabled}
-                      onChange={(targetCursorEnabled) => setForm({ ...form, targetCursorEnabled })}
-                    />
-                    <span className="text-xs text-muted-foreground">Рамка вокруг кнопки или ссылки под курсором; сам курсор остаётся системным и не тормозит</span>
-                  </div>
-                </Field>
-                <div className="grid gap-4 [@container(min-width:576px)]:grid-cols-2">
-                  <Field label="Часовой пояс"><Input placeholder="Europe/Moscow" value={form.timeZone ?? ""} onChange={(e) => setForm({ ...form, timeZone: e.target.value.trim() || null })} /></Field>
-                  <Field label="Начало недели">
-                    <Select className="w-full" value={form.weekStartsOn} onChange={(e) => setForm({ ...form, weekStartsOn: Number(e.target.value) })}>
-                      <option value={0}>С воскресенья</option>
-                      <option value={1}>С понедельника</option>
-                    </Select>
-                  </Field>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Виджеты дашборда — только просмотр, набор меняет сам дашборд.</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {form.dashboardWidgets.length > 0 ? (
-                      form.dashboardWidgets.map((widget) => <Badge key={widget}>{widget}</Badge>)
-                    ) : (
-                      <span className="text-xs text-subtle-foreground">Пока пусто</span>
-                    )}
-                  </div>
-                </div>
-                <div className="border-t border-border pt-3">
-                  <p className="text-xs text-muted-foreground">Подсказка первого запуска на дашборде «Сегодня».</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                    disabled={updatePreferences.isPending}
-                    onClick={() =>
-                      updatePreferences.mutate(
-                        { onboardingCompletedAt: form.onboardingCompletedAt ? null : new Date().toISOString() },
-                        {
-                          onSuccess: () =>
-                            toast({
-                              title: form.onboardingCompletedAt ? "Подсказка снова на дашборде" : "Подсказка скрыта",
-                              tone: "success"
-                            })
-                        }
-                      )
-                    }
-                  >
-                    {form.onboardingCompletedAt ? "Показать подсказку снова" : "Скрыть подсказку"}
-                  </Button>
-                </div>
+          <PanelSection title="Внешний вид" actions={<LiveSaveHint pending={updatePreferences.isPending} failed={updatePreferences.isError} />}>
+            {preferences.isError ? preferencesError : !form ? <Skeleton className="h-56" /> : <AppearanceSettings form={form} setForm={setForm} />}
+          </PanelSection>
+        ) : null}
+
+        {tab === "themes" ? (
+          <Anchored anchor="theme-library">
+            <PanelSection title="Темы">
+              <Card>
                 <ThemeSettings />
               </Card>
+            </PanelSection>
+          </Anchored>
+        ) : null}
+
+        {tab === "region" ? (
+          <PanelSection title="Дата и время" actions={<LiveSaveHint pending={updatePreferences.isPending} failed={updatePreferences.isError} />}>
+            {preferences.isError ? preferencesError : !form ? (
+              <Skeleton className="h-32" />
+            ) : (
+              <RegionSettings timeZone={form.timeZone} weekStartsOn={form.weekStartsOn} onChange={(patch) => setForm({ ...form, ...patch })} />
             )}
           </PanelSection>
         ) : null}
@@ -758,7 +620,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "about" ? (
           <>
             <PanelSection title="Приложение">
-              <Card>
+              <Card data-setting="app-info">
                 {appInfo.isLoading ? (
                   <Skeleton className="h-28" />
                 ) : appInfo.data ? (
@@ -784,17 +646,58 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
               </Card>
             </PanelSection>
 
-            <PanelSection title="Состояние API" actions={<Button size="sm" variant="outline" disabled={healthBusy} onClick={() => void checkHealth()}>Проверить</Button>}>
-              <Card>
-                {health ? (
-                  <p className="text-sm text-muted-foreground">
-                    API: <span className="text-foreground">{health.status}</span>, база: <span className="text-foreground">{health.database}</span>, время: <span className="text-foreground">{shortDateTime(health.timestamp)}</span>
-                  </p>
-                ) : healthError ? (
-                  <p className="text-sm text-destructive">{healthError}</p>
-                ) : <p className="text-sm text-muted-foreground">Нажмите «Проверить», чтобы узнать состояние API.</p>}
+            <PanelSection title="Знакомство с ORION">
+              <Card data-setting="onboarding" className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Короткая подсказка «Как устроен день» на дашборде: захват, разбор инбокса, сегодняшние дела.
+                </p>
+                {form ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={updatePreferences.isPending}
+                    onClick={() =>
+                      updatePreferences.mutate(
+                        { onboardingCompletedAt: form.onboardingCompletedAt ? null : new Date().toISOString() },
+                        {
+                          onSuccess: () =>
+                            toast({
+                              title: form.onboardingCompletedAt ? "Подсказка снова на дашборде" : "Подсказка скрыта",
+                              tone: "success"
+                            })
+                        }
+                      )
+                    }
+                  >
+                    {form.onboardingCompletedAt ? "Показать подсказку снова" : "Скрыть подсказку"}
+                  </Button>
+                ) : null}
               </Card>
             </PanelSection>
+          </>
+        ) : null}
+
+        {tab === "diagnostics" ? (
+          <>
+            <Anchored anchor="components">
+              <PanelSection title="Компоненты">
+                <ComponentsDiagnostics />
+              </PanelSection>
+            </Anchored>
+            <Anchored anchor="api-health">
+              <PanelSection title="Состояние API" actions={<Button size="sm" variant="outline" disabled={healthBusy} onClick={() => void checkHealth()}>Проверить</Button>}>
+                <Card>
+                  {health ? (
+                    <p className="text-sm text-muted-foreground">
+                      API: <span className="text-foreground">{health.status}</span>, база: <span className="text-foreground">{health.database}</span>, время: <span className="text-foreground">{shortDateTime(health.timestamp)}</span>
+                    </p>
+                  ) : healthError ? (
+                    <p className="text-sm text-destructive">{healthError}</p>
+                  ) : <p className="text-sm text-muted-foreground">Нажмите «Проверить», чтобы узнать состояние API.</p>}
+                </Card>
+              </PanelSection>
+            </Anchored>
           </>
         ) : null}
           </div>
@@ -821,31 +724,20 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
-  // `<label>` is inline by default — without `flex` here, `space-y-1` has no
-  // block context to work with, and sibling Fields can end up sharing a
-  // line instead of stacking (visible once the accent picker grew wider).
-  return (
-    <label className="flex flex-col items-start gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }): React.ReactElement {
-  return (
-    <div className="flex items-center justify-between gap-3 text-sm text-foreground">
-      <span>{label}</span>
-      <Switch checked={checked} onChange={onChange} label={label} />
-    </div>
-  );
-}
-
 function Row({ label, value, className }: { label: string; value: string; className?: string }): React.ReactElement {
   return <div className={className}><dt className="text-2xs text-subtle-foreground">{label}</dt><dd className="break-all text-sm text-foreground">{value}</dd></div>;
 }
 
 function Message({ children }: { children: React.ReactNode }): React.ReactElement {
   return <Card className="text-sm text-muted-foreground">{children}</Card>;
+}
+
+/** A whole section as one search target, for tabs rendered by their own component. */
+function Anchored({ anchor, children }: { anchor: string; children: ReactNode }): React.ReactElement {
+  return <div data-setting={anchor}>{children}</div>;
+}
+
+/** Who a change on this tab affects — shown above every tab that changes something. */
+function ScopeNote({ children }: { children: ReactNode }): React.ReactElement {
+  return <p className="mb-3 text-2xs text-subtle-foreground">{children}</p>;
 }

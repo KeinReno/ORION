@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Check, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useMotionLevel } from "./motion-level";
 
 export type CallChipStatus = "running" | "done" | "error";
 
@@ -26,7 +27,7 @@ export interface CallChipProps {
  * honestly indeterminate — "still working," not "73% done."
  */
 export function CallChip({ label, sublabel, status, onRetry, className }: CallChipProps): React.ReactElement {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionLevel() === "off";
   const [elapsedMs, setElapsedMs] = useState(0);
   const startRef = useRef<number>(Date.now());
 

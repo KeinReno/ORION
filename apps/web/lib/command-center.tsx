@@ -13,15 +13,19 @@ import {
   ListTodo,
   Plus,
   Receipt,
+  Settings,
   StickyNote,
   UserRound,
   type LucideIcon
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useCaptureToList } from "./capture-to-list";
-import { openEntity, openList, openPanel } from "./panel-bus";
-import { selectPaletteResults, type PaletteEntry } from "./palette-results";
-import { panelRegistry } from "./panel-registry";
+import { openEntity, openList, openPanel, openSettings } from "./panel-bus";
+import { groupPaletteResults, selectPaletteResults, type PaletteEntry } from "./palette-results";
+import { isPanelAvailable, panelRegistry } from "./panel-registry";
+import { SETTINGS_FIELDS, settingsScopeText, settingsTabInfo } from "./settings-catalog";
+import { relativeTime, shortDate } from "./format";
+import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "./task-labels";
 import type { ViewRef } from "@orion/shared-types";
 import { ObjectOpenMenu } from "../components/object-open-menu";
 import { useActiveWorkspace } from "./use-active-workspace";
@@ -60,6 +64,42 @@ const SEARCH_RESULT_ICONS: Record<string, LucideIcon> = {
   contact: UserRound,
   list: ListChecks
 };
+/** Group heading of a server-side search hit, by entity type. */
+const SEARCH_RESULT_GROUPS: Record<string, string> = {
+  project: "Проекты",
+  task: "Задачи",
+  note: "Заметки",
+  event: "События",
+  document: "Документы",
+  transaction: "Операции",
+  contact: "Контакты",
+  list: "Списки"
+};
+
+/** Which group a palette entry is listed under; derived from the id prefix every builder already uses. */
+function paletteGroupOf(entry: PaletteEntry): string {
+  const [prefix, type] = entry.id.split(":");
+  if (prefix === "a") return "Действия";
+  if (prefix === "p") return "Разделы";
+  if (prefix === "c") return "Настройки";
+  if (prefix === "t") return "Задачи";
+  if (prefix === "n") return "Заметки";
+  if (prefix === "s") return SEARCH_RESULT_GROUPS[type ?? ""] ?? "Найдено";
+  return "Другое";
+}
+
+interface PalettePreview {
+  kind: string;
+  title: string;
+  meta: string[];
+  body?: string;
+}
+
+const excerpt = (text: string, max = 280): string => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+};
+
 const SEARCH_RESULT_LABELS: Record<string, string> = {
   project: "проект",
   task: "задача",
@@ -67,7 +107,8 @@ const SEARCH_RESULT_LABELS: Record<string, string> = {
   event: "событие",
   document: "документ",
   transaction: "операция",
-  contact: "контакт"
+  contact: "контакт",
+  list: "список"
 };
 
 /** Second key after G. Letters avoid colliding with bare N (capture). */
@@ -86,7 +127,7 @@ const GOTO_PANELS: { key: string; panelId: string; label: string }[] = [
   { key: "m", panelId: "markets", label: "Рынки" },
   { key: "b", panelId: "browser", label: "Браузер" },
   { key: "o", panelId: "documents", label: "Документы" },
-  { key: "y", panelId: "sync", label: "Синхронизация" },
+  { key: "y", panelId: "sync", label: "Резервные копии" },
   { key: "s", panelId: "settings", label: "Настройки" }
 ];
 
@@ -261,13 +302,23 @@ export function CommandCenter(): React.ReactElement {
     }
     for (const panel of panelRegistry) {
       if (panel.instanced) continue; // opened per record (e.g. a project), not as a bare panel
-      if (panel.moduleId && !isModuleEnabled(disabledModules, panel.moduleId)) continue;
+      if (!isPanelAvailable(panel, disabledModules, workspace?.pluginOverrides)) continue;
       base.push({
         id: `p:${panel.id}`,
         label: panel.label,
         hint: "панель",
         icon: panel.icon,
         run: () => openPanel(panel.id)
+      });
+    }
+    // Every settings parameter, so «тихие часы» lands on the field itself, not on the settings panel.
+    for (const field of SETTINGS_FIELDS) {
+      base.push({
+        id: `c:${field.tab}:${field.anchor}`,
+        label: field.label,
+        hint: `настройки · ${settingsTabInfo(field.tab)?.label ?? field.tab}`,
+        icon: Settings,
+        run: () => openSettings(field.tab, field.anchor)
       });
     }
     if (isEnabled("tasks")) {
@@ -313,15 +364,69 @@ export function CommandCenter(): React.ReactElement {
       });
     }
     return base;
-  }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id]);
+  }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id, workspace?.pluginOverrides]);
 
   const results = useMemo(() => {
     return selectPaletteResults(commands, query, debouncedQuery);
   }, [commands, query, debouncedQuery]);
+  // Grouped for display; `ordered` is what ↑/↓ and Enter walk, so the keyboard follows the groups.
+  const { groups, ordered } = useMemo(() => groupPaletteResults(results, paletteGroupOf), [results]);
+  const activeEntry = ordered[activeIndex];
+
+  /** What the right-hand pane says about the highlighted entry — read from data already loaded, no extra request. */
+  function previewOf(entry: Command | undefined): PalettePreview | null {
+    if (!entry) return null;
+    const [prefix, a, b] = entry.id.split(":");
+    if (prefix === "t") {
+      const task = tasks?.find((item) => item.id === a);
+      if (!task) return null;
+      return {
+        kind: "Задача",
+        title: task.title,
+        meta: [
+          TASK_STATUS_LABEL[task.status],
+          task.dueAt ? `срок ${shortDate(task.dueAt)}` : "без срока",
+          ...(task.priority !== "normal" ? [`приоритет: ${TASK_PRIORITY_LABEL[task.priority].toLowerCase()}`] : [])
+        ],
+        body: task.description ? excerpt(task.description) : undefined
+      };
+    }
+    if (prefix === "n") {
+      const note = notes?.find((item) => item.id === a);
+      if (!note) return null;
+      return {
+        kind: "Заметка",
+        title: note.title || "Без заголовка",
+        meta: [`изменена ${relativeTime(note.updatedAt)}`, ...note.tags.slice(0, 4).map((tag) => `#${tag}`)],
+        body: note.body ? excerpt(note.body) : "Пустая заметка"
+      };
+    }
+    if (prefix === "s") {
+      const hit = searchHits?.find((item) => item.type === a && item.id === b);
+      if (!hit) return null;
+      return {
+        kind: (SEARCH_RESULT_LABELS[hit.type] ?? hit.type).replace(/^./, (letter) => letter.toUpperCase()),
+        title: hit.title || "Без названия",
+        meta: [hit.subtitle, `изменено ${relativeTime(hit.updatedAt)}`].filter(Boolean),
+        body: hit.matchedText ? excerpt(hit.matchedText) : undefined
+      };
+    }
+    if (prefix === "c") {
+      const info = settingsTabInfo(a);
+      return {
+        kind: "Настройка",
+        title: entry.label,
+        meta: [`Настройки → ${info?.label ?? a}`],
+        body: info ? settingsScopeText(info.scope, workspace?.name) ?? undefined : undefined
+      };
+    }
+    if (prefix === "p") return { kind: "Раздел", title: entry.label, meta: ["Откроется вкладкой в доке или перейдёт к уже открытой"] };
+    return { kind: "Действие", title: entry.label, meta: [] };
+  }
 
   useEffect(() => {
-    setActiveIndex((i) => Math.min(i, Math.max(0, results.length - 1)));
-  }, [results.length]);
+    setActiveIndex((i) => Math.min(i, Math.max(0, ordered.length - 1)));
+  }, [ordered.length]);
 
   function runCommand(cmd: Command | undefined): void {
     if (!cmd) return;
@@ -330,7 +435,7 @@ export function CommandCenter(): React.ReactElement {
   }
 
   function runActive(): void {
-    runCommand(results[activeIndex]);
+    runCommand(activeEntry);
   }
 
   async function submitCapture(event: FormEvent): Promise<void> {
@@ -372,7 +477,7 @@ export function CommandCenter(): React.ReactElement {
 
   return (
     <>
-      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="md" returnFocus={false}>
+      <Modal open={paletteOpen} onClose={() => setPaletteOpen(false)} title="Поиск и команды" size="lg" returnFocus={false}>
         <div className="space-y-3">
           <Input
             autoFocus
@@ -386,7 +491,7 @@ export function CommandCenter(): React.ReactElement {
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+                setActiveIndex((i) => Math.min(i + 1, ordered.length - 1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setActiveIndex((i) => Math.max(i - 1, 0));
@@ -396,35 +501,43 @@ export function CommandCenter(): React.ReactElement {
               }
             }}
           />
-          <ul className="max-h-72 space-y-0.5 overflow-y-auto">
-            {results.length === 0 ? (
-              <li className="px-2 py-6 text-center text-xs text-muted-foreground">
-                {searchPending ? "Ищу…" : "Ничего не найдено"}
-              </li>
-            ) : (
-              results.map((cmd, i) => {
-                const Icon = cmd.icon;
-                return (
-                  <li key={cmd.entityKey ?? cmd.id} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActiveIndex(i)}
-                      onClick={() => runCommand(cmd)}
-                      className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
-                        i === activeIndex ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 shrink-0 text-subtle-foreground" />
-                      <span className="flex-1 truncate">{cmd.label}</span>
-                      {cmd.hint ? <span className="text-2xs text-subtle-foreground">{cmd.hint}</span> : null}
-                      {i === activeIndex ? <CornerDownLeft className="h-3.5 w-3.5 text-subtle-foreground" /> : null}
-                    </button>
-                    {cmd.view ? <ObjectOpenMenu view={cmd.view} title={cmd.label} beforeOpen={() => setPaletteOpen(false)} /> : null}
-                  </li>
-                );
-              })
-            )}
-          </ul>
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+            <div className="max-h-80 overflow-y-auto">
+              {ordered.length === 0 ? (
+                <p className="px-2 py-6 text-center text-xs text-muted-foreground">{searchPending ? "Ищу…" : "Ничего не найдено"}</p>
+              ) : (
+                groups.map((group) => (
+                  <section key={group.group} aria-label={group.group} className="mb-2 last:mb-0">
+                    <h3 className="px-2.5 pb-1 pt-1.5 text-micro uppercase tracking-wide text-subtle-foreground">{group.group}</h3>
+                    <ul className="space-y-0.5">
+                      {group.items.map(({ entry: cmd, index: i }) => {
+                        const Icon = cmd.icon;
+                        return (
+                          <li key={cmd.entityKey ?? cmd.id} className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onMouseEnter={() => setActiveIndex(i)}
+                              onClick={() => runCommand(cmd)}
+                              className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${
+                                i === activeIndex ? "bg-white/10 text-foreground" : "text-muted-foreground hover:bg-white/5"
+                              }`}
+                            >
+                              <Icon className="h-4 w-4 shrink-0 text-subtle-foreground" />
+                              <span className="flex-1 truncate">{cmd.label}</span>
+                              {cmd.hint ? <span className="text-2xs text-subtle-foreground">{cmd.hint}</span> : null}
+                              {i === activeIndex ? <CornerDownLeft className="h-3.5 w-3.5 text-subtle-foreground" /> : null}
+                            </button>
+                            {cmd.view ? <ObjectOpenMenu view={cmd.view} title={cmd.label} beforeOpen={() => setPaletteOpen(false)} /> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))
+              )}
+            </div>
+            <PreviewPane preview={previewOf(activeEntry)} />
+          </div>
           <div className="flex items-center justify-end gap-1 border-t border-border pt-2 text-2xs text-subtle-foreground">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd>
@@ -464,5 +577,33 @@ export function CommandCenter(): React.ReactElement {
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Command Menu's right-hand pane (wide windows only): what the highlighted entry is before it is
+ * opened — a task's status and due date, the start of a note, where a setting lives and whom it
+ * affects. Plain text, no controls: acting stays in the list on the left.
+ */
+function PreviewPane({ preview }: { preview: PalettePreview | null }): React.ReactElement {
+  return (
+    <aside aria-label="Предпросмотр" className="hidden min-w-0 rounded-xl border border-border bg-white/[0.02] p-3 md:block">
+      {preview ? (
+        <div className="space-y-2">
+          <p className="text-micro uppercase tracking-wide text-subtle-foreground">{preview.kind}</p>
+          <p className="break-words text-sm font-medium text-foreground">{preview.title}</p>
+          {preview.meta.length > 0 ? (
+            <ul className="space-y-0.5 text-2xs text-muted-foreground">
+              {preview.meta.map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          {preview.body ? <p className="whitespace-pre-line break-words border-t border-border pt-2 text-xs text-muted-foreground">{preview.body}</p> : null}
+        </div>
+      ) : (
+        <p className="text-2xs text-subtle-foreground">Наведите на строку или выберите стрелками — здесь появится краткое содержание.</p>
+      )}
+    </aside>
   );
 }

@@ -54,3 +54,22 @@ export function usePersistedDraft(workspaceId: string | undefined, name: string)
   }, [key, value]);
   return [value, setValue];
 }
+
+/**
+ * Does this workspace have a non-empty persisted draft (capture, a comment…)? Lets a workspace
+ * switch ask before leaving even when the panel that owns the draft has not mounted yet after a
+ * reload — the registry in `unsaved-drafts.ts` only knows mounted editors, so a fast switch right
+ * after a reload used to slip past the question.
+ */
+export function hasStoredDraft(storage: Pick<Storage, "length" | "key" | "getItem">, workspaceId: string): boolean {
+  const prefix = draftStorageKey(workspaceId, "");
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(prefix) && readDraft(storage, key).trim() !== "") return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}

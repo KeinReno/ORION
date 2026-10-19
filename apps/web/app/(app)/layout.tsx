@@ -74,7 +74,7 @@ import {
   readDraggedPanelId,
   resolveDropAction
 } from "../../lib/panel-drop";
-import { openPanel as focusPanel, openEntity, registerPanelBus } from "../../lib/panel-bus";
+import { openPanel as focusPanel, openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
@@ -268,9 +268,9 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
         panelId={moduleSettingsFor}
         open={moduleSettingsFor !== null}
         onClose={() => setModuleSettingsFor(null)}
-        onOpenAllSettings={() => {
+        onOpenAppearance={() => {
           setModuleSettingsFor(null);
-          focusPanel("settings");
+          openSettings("appearance");
         }}
       />
       <ResourcesToggle />
@@ -321,21 +321,21 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const wideInspector = useMediaQuery("(min-width: 1360px)");
-  const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules);
+  const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides);
 
   // The user's own sidebar folders: personal, saved with their preferences.
   const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
   const sidebarPosition = preferences?.sidebarPosition ?? "left";
   const pendingSwitch = usePendingSwitch();
-  const [pendingExit, setPendingExit] = useState<"spaces" | "account" | "logout" | null>(null);
+  const [pendingExit, setPendingExit] = useState<"spaces" | "logout" | null>(null);
   const [pendingTabClose, setPendingTabClose] = useState<string | null>(null);
-  const leaveWorkbench = useCallback((destination: "spaces" | "account" | "logout") => {
+  const leaveWorkbench = useCallback((destination: "spaces" | "logout") => {
     if (hasUnsavedDrafts()) {
       setPendingExit(destination);
       return;
     }
     if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
-    else router.push(destination === "spaces" ? "/spaces" : "/account");
+    else router.push("/spaces");
   }, [logout, router]);
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
@@ -838,10 +838,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       router.replace("/login");
       return;
     }
-    if (status === "authenticated" && !workspacesLoading && !workspace) {
+    // Same stale-snapshot guard as the panel window: an id already stored for this window that
+    // names one of the user's workspaces will be picked up on the next render — don't bounce to /spaces.
+    const storedId = getActiveWorkspaceId();
+    const storedIsKnown = storedId !== null && workspaces.some((item) => item.id === storedId);
+    if (status === "authenticated" && !workspacesLoading && !workspace && !storedIsKnown) {
       router.replace("/spaces");
     }
-  }, [status, workspacesLoading, workspace, router]);
+  }, [status, workspacesLoading, workspace, workspaces, router]);
 
   const projectViews = [
     { id: "project", label: "Обзор" }, { id: "projecttasks", label: "Задачи" },
@@ -1069,7 +1073,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
               <button
                 type="button"
-                onClick={() => leaveWorkbench("account")}
+                // The profile opens inside the workbench: leaving for /account dropped the open tabs' context.
+                onClick={() => openSettings("profile")}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
               >
                 <AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={28} />
@@ -1142,11 +1147,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
           ]} />
           {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
-          <button type="button" aria-label="Учётная запись" onClick={() => leaveWorkbench("account")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
+          <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
         </header> : null}
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border">
-            <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+            <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId} activeKind={activeDefinition?.navParent ?? activeDefinition?.id}
               projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
               links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => openFromMenu(panel.id) }))}
               switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={requestWorkspaceSwitch} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
@@ -1160,7 +1165,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         </main>
       </div>
       <Sheet open={Boolean(precision && compact && mobileContextOpen)} onClose={() => setMobileContextOpen(false)} title="Навигация пространства" bare width="22rem">
-        <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId}
+        <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId} activeKind={activeDefinition?.navParent ?? activeDefinition?.id}
           projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
           links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => { openFromMenu(panel.id); setMobileContextOpen(false); } }))}
           switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={id => { requestWorkspaceSwitch(id); setMobileContextOpen(false); }} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
@@ -1187,7 +1192,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           const destination = pendingExit;
           setPendingExit(null);
           if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
-          else if (destination) router.push(destination === "spaces" ? "/spaces" : "/account");
+          else if (destination) router.push("/spaces");
         }}
         onCancel={() => setPendingExit(null)}
       />

@@ -2,7 +2,7 @@
 
 import { useAttachToHome, useCreateTask, useRefreshHome, useSession, useTasks, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
 import { isTaskClosed } from "@orion/shared-types";
-import { CheckToggle, Select, cx, useToast } from "@orion/ui";
+import { CheckToggle, cx, Select, StrikeText, useToast } from "@orion/ui";
 import { ListTodo, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { describeError } from "../../lib/error-message";
@@ -110,8 +110,8 @@ export function HomeTasks({ workspaceId, home, overview }: HomeSectionProps): Re
                   label={task.status === "done" ? "Вернуть в работу" : "Выполнено"}
                   size="sm"
                 />
-                <button type="button" onClick={() => focusTask(task.id)} className={cx("min-w-0 flex-1 truncate text-left text-label hover:underline", closed && "text-subtle-foreground line-through")}>
-                  {task.title}
+                <button type="button" onClick={() => focusTask(task.id)} className={cx("min-w-0 flex-1 truncate text-left text-label hover:underline", closed && "text-subtle-foreground")}>
+                  <StrikeText done={closed}>{task.title}</StrikeText>
                 </button>
                 {task.assigneeId && memberName.get(task.assigneeId) ? <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-2xs text-muted-foreground">{memberName.get(task.assigneeId)}</span> : null}
                 {task.dueAt ? <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">{shortDate(task.dueAt)}</span> : null}

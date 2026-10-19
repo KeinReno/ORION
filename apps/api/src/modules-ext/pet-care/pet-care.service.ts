@@ -43,7 +43,11 @@ export class PetCareService {
           name: input.name,
           species: input.species,
           birthday: input.birthday ? dayDate(input.birthday) : null,
-          notes: input.notes
+          notes: input.notes,
+          breed: input.breed,
+          vetContact: input.vetContact,
+          chronic: input.chronic,
+          allergies: input.allergies
         }
       });
     });
@@ -60,7 +64,11 @@ export class PetCareService {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.species !== undefined ? { species: input.species } : {}),
           ...(input.birthday !== undefined ? { birthday: input.birthday ? dayDate(input.birthday) : null } : {}),
-          ...(input.notes !== undefined ? { notes: input.notes } : {})
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.breed !== undefined ? { breed: input.breed } : {}),
+          ...(input.vetContact !== undefined ? { vetContact: input.vetContact } : {}),
+          ...(input.chronic !== undefined ? { chronic: input.chronic } : {}),
+          ...(input.allergies !== undefined ? { allergies: input.allergies } : {})
         }
       });
     });
@@ -135,6 +143,10 @@ function toPetDto(row: {
   species: string;
   birthday: Date | null;
   notes: string;
+  breed: string;
+  vetContact: string;
+  chronic: string;
+  allergies: string;
   createdAt: Date;
   updatedAt: Date;
 }): PetCarePet {
@@ -146,6 +158,10 @@ function toPetDto(row: {
     species: petCareSpeciesSchema.catch("other").parse(row.species),
     birthday: row.birthday ? row.birthday.toISOString().slice(0, 10) : null,
     notes: row.notes,
+    breed: row.breed,
+    vetContact: row.vetContact,
+    chronic: row.chronic,
+    allergies: row.allergies,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

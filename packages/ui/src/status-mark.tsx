@@ -1,10 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Ban, CircleDashed, CircleDot } from "lucide-react";
 import type { ComponentType } from "react";
-import { SPRING_SNAP } from "./motion";
+import { useMotionLevel, useMotionSpring } from "./motion-level";
 
 export type StatusMarkValue = "pending" | "running" | "cancelled";
 
@@ -37,7 +37,8 @@ export function StatusMark({
   label?: string;
   className?: string;
 }): React.ReactElement {
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useMotionLevel() === "off";
+  const snap = useMotionSpring("snap");
   const Icon = ICON[status];
 
   return (
@@ -49,7 +50,7 @@ export function StatusMark({
             initial={reduceMotion ? false : { scale: 0.4, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { scale: 0.4, opacity: 0 }}
-            transition={reduceMotion ? { duration: 0 } : SPRING_SNAP}
+            transition={snap}
             className="flex"
           >
             <Icon className="h-3.5 w-3.5" />

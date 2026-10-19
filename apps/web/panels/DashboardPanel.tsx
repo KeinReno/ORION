@@ -40,6 +40,7 @@ import {
   Button,
   CheckToggle,
   ConfirmDialog,
+  cx,
   EmptyState,
   Input,
   LiveDot,
@@ -47,7 +48,7 @@ import {
   PanelHeader,
   PanelShell,
   Skeleton,
-  cx,
+  StrikeText,
   useToast
 } from "@orion/ui";
 import {
@@ -484,10 +485,10 @@ function DashboardOverview(): React.ReactElement {
                           <span
                             className={cx(
                               "min-w-0 flex-1 truncate text-body",
-                              habit.doneToday && "text-muted-foreground line-through"
+                              habit.doneToday && "text-muted-foreground"
                             )}
                           >
-                            {habit.name}
+                            <StrikeText done={habit.doneToday}>{habit.name}</StrikeText>
                           </span>
                           {habit.streak > 0 ? (
                             <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">

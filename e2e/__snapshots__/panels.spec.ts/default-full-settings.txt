@@ -1,14 +1,17 @@
 button: Безопасность
 button: Внешний вид
 button: Вынести вкладку «Профиль»
+button: Дата и время
+button: Диагностика
 button: ИИ-агенты
 button: Модули
 button: О приложении
+button: Обновления
+button: Общее
 button: Плагины
-button: Пространство
 button: Профиль
 button: Сеть и устройства
-button: Сохранить
-button: Сферы
+button: Сферы и избранное
+button: Темы
 button: Уведомления
 button: Участники
