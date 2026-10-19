@@ -1,5 +1,7 @@
 # ORION — instructions for AI development agents
 
+> **Навигация и жизненный цикл документов:** [docs/DOCUMENTATION_LIFECYCLE.md](docs/DOCUMENTATION_LIFECYCLE.md) (для файлов из `docs/` — путь без префикса). Исторический отчёт фиксирует факты своего commit, но не переопределяет текущие требования, код и [docs/STATUS.md](docs/STATUS.md). Не повторяйте завершённые ТЗ без сверки с актуальным HEAD.
+
 This file is the mandatory entry point for AI agents working in this repository.
 
 ## Read before changing code
