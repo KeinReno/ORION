@@ -34,11 +34,12 @@ export class WorkspacesService {
    * creation time), same fix: `asSystem`. Added in v0.13 to give a "Демо"
    * space kept apart from real data — not a general sharing/invite feature.
    */
-  async createForUser(userId: string, name: string, template?: WorkspaceTemplate): Promise<Workspace> {
+  async createForUser(userId: string, name: string, template?: WorkspaceTemplate, isPersonal = false): Promise<Workspace> {
     const workspace = await this.prisma.asSystem(async (tx) => {
       const workspace = await tx.workspace.create({
         data: {
           name,
+          isPersonal,
           icsToken: randomBytes(24).toString("base64url"),
           // Solo-dev kernel: money/stock stay in the catalog but out of the way.
           disabledModules: disabledModulesFor(template)

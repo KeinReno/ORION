@@ -30,7 +30,8 @@ export default function SpacesPage(): React.ReactElement {
   const logout = useLogout();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
-  const [template, setTemplate] = useState<"" | "solo-dev" | "home">("solo-dev");
+  const [template, setTemplate] = useState<"" | "solo-dev" | "home">("");
+  const [isPersonal, setIsPersonal] = useState(true);
 
   useEffect(() => {
     // "unavailable" (API unreachable) must not bounce to /login — that's
@@ -46,7 +47,7 @@ export default function SpacesPage(): React.ReactElement {
     router.replace("/dashboard");
   }
 
-  async function createSpace(input: { name: string; template?: "solo-dev" | "home" }): Promise<void> {
+  async function createSpace(input: { name: string; template?: "solo-dev" | "home"; isPersonal: boolean }): Promise<void> {
     const created = await create.mutateAsync(input);
     enter(created.id);
   }
@@ -56,15 +57,7 @@ export default function SpacesPage(): React.ReactElement {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      await createSpace({ name: trimmed, template: template || undefined });
-    } catch {
-      return;
-    }
-  }
-
-  async function onCreateOrion(): Promise<void> {
-    try {
-      await createSpace({ name: "ORION", template: "solo-dev" });
+      await createSpace({ name: trimmed, template: template || undefined, isPersonal });
     } catch {
       return;
     }
@@ -92,7 +85,7 @@ export default function SpacesPage(): React.ReactElement {
   }
 
   const list = workspaces ?? [];
-  const hasOrion = list.some((space) => space.name.toLowerCase() === "orion");
+  const firstSpace = !listLoading && !isError && list.length === 0;
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
@@ -108,9 +101,9 @@ export default function SpacesPage(): React.ReactElement {
             <KaidenLogo className="h-8 w-8" />
             <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
           </div>
-          <h1 className="mb-1 text-lg font-semibold text-foreground">Пространства учётки</h1>
+          <h1 className="mb-1 text-lg font-semibold text-foreground">{firstSpace ? "Первое пространство" : "Ваши пространства"}</h1>
           <p className="mb-6 text-sm text-muted-foreground">
-            Они принадлежат «{user.name}». Откройте существующее или создайте новое — данные не смешиваются.
+            {firstSpace ? "Назовите его как удобно: например, «Личное» или «Работа»." : "Откройте пространство или создайте новое."}
           </p>
 
           {listLoading ? (
@@ -136,7 +129,7 @@ export default function SpacesPage(): React.ReactElement {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-foreground">{space.name}</span>
                         <span className="text-2xs text-subtle-foreground">
-                          {ROLE_LABEL[space.role]}
+                          {space.isPersonal ? "Личное" : ROLE_LABEL[space.role]}
                           {last ? " · последнее" : ""}
                         </span>
                       </span>
@@ -151,24 +144,12 @@ export default function SpacesPage(): React.ReactElement {
             </ul>
           )}
 
-          {!listLoading && !isError && !hasOrion ? (
-            <button
-              type="button"
-              disabled={create.isPending}
-              onClick={() => void onCreateOrion()}
-              className="mt-4 flex w-full flex-col gap-1 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-left transition-colors hover:border-accent/50 hover:bg-accent/15 disabled:opacity-50"
-            >
-              <span className="text-sm font-medium text-foreground">Создать пространство ORION</span>
-              <span className="text-2xs text-muted-foreground">
-                Ядро соло-разработчика: проект, задачи, заметки, привычки. Финансы и склад выключены.
-              </span>
-            </button>
-          ) : null}
-
-          {creating ? (
+          {creating || firstSpace ? (
             <form className="mt-4 flex flex-col gap-2" onSubmit={onCreate}>
               <Input
                 autoFocus
+                name="workspaceName"
+                aria-label="Название пространства"
                 maxLength={80}
                 placeholder="Название пространства"
                 value={name}
@@ -177,11 +158,15 @@ export default function SpacesPage(): React.ReactElement {
               />
               <label className="space-y-1 text-sm text-muted-foreground">
                 <span>Шаблон</span>
-                <Select value={template} onChange={(e) => setTemplate(e.target.value as "" | "solo-dev" | "home")}>
+                <Select name="template" value={template} onChange={(e) => { const next = e.target.value as "" | "solo-dev" | "home"; setTemplate(next); if (next === "home") setIsPersonal(false); }}>
+                  <option value="">Пустое — всё добавлю сам</option>
                   <option value="solo-dev">Ядро соло-разработчика</option>
                   <option value="home">Дом — общее пространство семьи (списки, задачи, календарь, дом, склад)</option>
-                  <option value="">Пустое</option>
                 </Select>
+              </label>
+              <label className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+                <input name="isPersonal" type="checkbox" checked={isPersonal} disabled={template === "home"} onChange={(event) => setIsPersonal(event.target.checked)} />
+                Личное пространство
               </label>
               {create.isError ? (
                 <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -192,9 +177,9 @@ export default function SpacesPage(): React.ReactElement {
                 <Button type="submit" disabled={create.isPending || !name.trim()}>
                   {create.isPending ? "Создаём…" : "Создать и открыть"}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setCreating(false)}>
+                {!firstSpace ? <Button type="button" variant="outline" onClick={() => setCreating(false)}>
                   Отмена
-                </Button>
+                </Button> : null}
               </div>
             </form>
           ) : (
@@ -208,8 +193,11 @@ export default function SpacesPage(): React.ReactElement {
             </button>
           )}
 
-          <JoinByCodeCard onJoined={() => undefined} />
-          <ImportWorkspaceCard onImported={enter} />
+          <details className="mt-5 text-sm text-muted-foreground">
+            <summary className="cursor-pointer">Приглашение или перенос данных</summary>
+            <JoinByCodeCard onJoined={() => undefined} />
+            <ImportWorkspaceCard onImported={enter} />
+          </details>
 
           <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
             <a
