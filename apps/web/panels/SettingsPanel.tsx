@@ -42,6 +42,7 @@ import { BackgroundEffectSettingsForm } from "./settings/background-effect-form"
 import { ThemeSettings } from "./settings/theme-library";
 import { ComponentsDiagnostics } from "./settings/components-section";
 import { ModulesSettings } from "./settings/modules-section";
+import { UpdatesSettings } from "./settings/updates-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
@@ -65,6 +66,7 @@ type Tab =
   | "spheres"
   | "members"
   | "network"
+  | "updates"
   | "about";
 type PreferenceKey = keyof UserPreference;
 
@@ -80,6 +82,7 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "members", label: "Участники" },
   { value: "agents", label: "ИИ-агенты" },
   { value: "network", label: "Сеть и устройства" },
+  { value: "updates", label: "Обновления" },
   { value: "about", label: "О приложении" }
 ];
 
@@ -523,6 +526,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "network" ? (
           <PanelSection title="Сеть и устройства">
             <NetworkSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "updates" ? (
+          <PanelSection title="Обновления">
+            <UpdatesSettings />
           </PanelSection>
         ) : null}
 

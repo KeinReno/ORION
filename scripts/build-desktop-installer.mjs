@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run on Windows: builds the static web app and a self-contained NSIS package.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +37,11 @@ cpSync(process.execPath, join(stage, 'node.exe'));
 cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'launcher.cjs'), join(stage, 'launcher.cjs'));
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'ascii-path.cjs'), join(stage, 'ascii-path.cjs'));
+// Метка сборки для проверки обновлений: ORION_BUILD_TAG=v0.1.0-windows-beta.3 pnpm build:desktop-installer (должна совпадать с тегом релиза).
+const buildTag = process.env.ORION_BUILD_TAG || '';
+const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+writeFileSync(join(stage, 'build.json'), JSON.stringify({ tag: buildTag, commit, builtAt: new Date().toISOString() }, null, 2));
+console.log(`Build tag: ${buildTag || '(не задана — обновления сочтут версию неизвестной)'} @ ${commit}`);
 // Agent Manual (TZ-02): shipped beside the runtime so the «Подключить агента» wizard can show its real path.
 cpSync(join(root, 'docs', 'AGENT_MANUAL.md'), join(stage, 'AGENT_MANUAL.md'));
 const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js'];
