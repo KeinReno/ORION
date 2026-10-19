@@ -28,7 +28,7 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading, status, retry: retrySession } = useSession();
-  const { workspace, isLoading: workspacesLoading } = useActiveWorkspace();
+  const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   // An instanced panel (a project) arrives as `/panel/project?instance=<id>` — see `panelWindowUrl`.
   const instanceId = searchParams.get("instance");
   const definition = getPanelDefinition(instanceId ? instancePanelId(panelId, instanceId) : panelId);
@@ -53,10 +53,16 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
       router.replace("/login");
       return;
     }
-    if (status === "authenticated" && !workspacesLoading && !workspace) {
+    // The seeded id can already be in sessionStorage while this render still holds the store's
+    // previous (empty) snapshot — the next render picks it up. Redirecting on that stale frame sent
+    // every freshly opened panel window to /spaces, so a stored id that names one of the user's
+    // workspaces is trusted here, synchronously.
+    const storedId = getActiveWorkspaceId();
+    const storedIsKnown = storedId !== null && workspaces.some((item) => item.id === storedId);
+    if (status === "authenticated" && !workspacesLoading && !workspace && !storedIsKnown) {
       router.replace("/spaces");
     }
-  }, [status, workspacesLoading, workspace, router]);
+  }, [status, workspacesLoading, workspace, workspaces, router]);
 
   if (status === "unavailable") {
     return (
