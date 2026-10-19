@@ -11,7 +11,8 @@ const GROUP_TITLE: Record<AgentToolGroup, string> = {
   projects: "Проекты",
   finance: "Финансы (только черновики)",
   agents: "Другие агенты",
-  approvals: "Запросы на подтверждение"
+  approvals: "Запросы на подтверждение",
+  modules: "Подключаемые модули"
 };
 
 function paramTable(tool: AgentToolDef): string {
@@ -28,7 +29,7 @@ function paramTable(tool: AgentToolDef): string {
 }
 
 function toolSection(tool: AgentToolDef): string {
-  const scopes = tool.scopes === null ? "любой действующий токен" : tool.scopes.map((s) => `\`${s}\``).join(" или ");
+  const scopes = tool.permission ? `\`${tool.permission}\` (разрешение модуля)` : tool.scopes === null ? "любой действующий токен" : tool.scopes.map((s) => `\`${s}\``).join(" или ");
   const lines = [`#### \`${tool.name}\``, "", tool.description, "", `Нужно разрешение: ${scopes}. HTTP: \`${tool.http.method} ${tool.http.path}\`.`, "", agentToolModeNote(tool), "", paramTable(tool)];
   if (tool.example) lines.push("", "Пример аргументов:", "", "```json", JSON.stringify(tool.example, null, 2), "```");
   return lines.join("\n");

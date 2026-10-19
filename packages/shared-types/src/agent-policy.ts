@@ -65,6 +65,8 @@ export interface AgentPolicySubject {
   scopes: readonly AgentScope[];
   permissions: AgentPermissions | null;
   forbidden: readonly AgentForbidden[];
+  /** Разрешения реестра для инструментов подключаемых модулей (G13); нет поля = нет таких разрешений. */
+  modulePermissions?: readonly string[];
 }
 
 export type AgentDecision = { kind: "allow" } | { kind: "propose" } | { kind: "deny"; reason: string };
@@ -98,6 +100,18 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
     case "propose":
       return granted.has("propose") || granted.has("update") ? { kind: "propose" } : deny("У токена нет права предлагать в этом разделе");
   }
+}
+
+/**
+ * Инструмент подключаемого модуля (G13): разрешение из реестра (`pet-care.pet.create`) должно быть выдано токену.
+ * Только чтение и создание: «изменение через запрос на подтверждение» для модулей ещё не сделано, поэтому его здесь нет.
+ * Порядок тот же, что у `decideAgentOperation`: запреты → выданное право → режим; ни один шаг ничего не добавляет.
+ */
+export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create"): AgentDecision {
+  if (!subject.modulePermissions?.includes(permission)) return deny(`У токена нет разрешения «${permission}»`);
+  if (op === "read") return { kind: "allow" };
+  if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
+  return { kind: "allow" };
 }
 
 /** Предельный срок токена агента на сервере, доступном извне (ADR-0017). */

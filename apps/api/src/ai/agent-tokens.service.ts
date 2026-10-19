@@ -8,6 +8,7 @@ import {
   agentModeSchema,
   agentPermissionsSchema,
   agentScopeSchema,
+  isExtensionAgentPermission,
   remoteTokenViolations,
   scopesFromPermissions,
   type AgentAuditEntry,
@@ -56,6 +57,8 @@ export interface AgentContext extends AgentPolicySubject {
   /** The member the token acts as — every service call runs with this user's RLS context. */
   userId: string;
   scopes: AgentScope[];
+  /** Разрешения реестра для инструментов модулей (G13); в БД лежат в той же колонке `scopes`. */
+  modulePermissions: string[];
   allowedProjectIds: string[];
   writeLimitPerHour: number | null;
   autoCommitProjectIds: string[];
@@ -91,6 +94,8 @@ export class AgentTokensService {
     const scopes = input.permissions
       ? [...new Set([...scopesFromPermissions(input.permissions), ...input.scopes.filter((s) => NON_MATRIX_SCOPES.includes(s))])]
       : [...new Set(input.scopes)];
+    const unknownPermission = input.modulePermissions.find((permission) => !isExtensionAgentPermission(permission));
+    if (unknownPermission) throw new BadRequestException(`Разрешение «${unknownPermission}» не объявлено ни одним модулем`);
     // ADR-0017: на сервере токен живёт ограниченно и без удаления. Запрет удаления добавляем сами, остальное — отказ.
     const forbidden = isServerMode() ? [...new Set([...input.forbidden, "delete" as const])] : [...new Set(input.forbidden)];
     if (isServerMode()) {
@@ -107,7 +112,7 @@ export class AgentTokensService {
           name: input.name,
           tokenHash: hashAgentSecret(secret),
           prefix: secret.slice(0, AGENT_TOKEN_PREFIX.length + 4),
-          scopes,
+          scopes: [...scopes, ...new Set(input.modulePermissions)],
           mode: input.mode,
           permissions: input.permissions ?? undefined,
           allowedProjectIds: [...new Set(input.allowedProjectIds)],
@@ -383,6 +388,7 @@ function contextOf(row: TokenRow): AgentContext {
     workspaceId: row.workspaceId,
     userId: row.createdById,
     scopes: row.scopes.filter((s): s is AgentScope => agentScopeSchema.safeParse(s).success),
+    modulePermissions: row.scopes.filter(isExtensionAgentPermission),
     mode: agentModeSchema.catch("assistant").parse(row.mode),
     permissions: agentPermissionsSchema.nullable().catch(null).parse(row.permissions),
     forbidden: forbiddenOf(row.forbidden),
@@ -440,6 +446,7 @@ function toDto(row: TokenRow): AgentToken {
     name: row.name,
     prefix: row.prefix,
     scopes: row.scopes.filter((s): s is AgentScope => agentScopeSchema.safeParse(s).success),
+    modulePermissions: row.scopes.filter(isExtensionAgentPermission),
     mode: agentModeSchema.catch("assistant").parse(row.mode),
     permissions: agentPermissionsSchema.nullable().catch(null).parse(row.permissions),
     allowedProjectIds: row.allowedProjectIds,
