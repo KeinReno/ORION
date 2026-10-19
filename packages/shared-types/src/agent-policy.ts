@@ -112,6 +112,8 @@ export function decideAgentModuleOperation(subject: AgentPolicySubject, permissi
   if (op === "read") return { kind: "allow" };
   if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
   return { kind: "allow" };
+}
+
 /** Предельный срок токена агента на сервере, доступном извне (ADR-0017). */
 export const REMOTE_TOKEN_MAX_DAYS = 30;
 

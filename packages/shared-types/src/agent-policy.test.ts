@@ -117,6 +117,9 @@ describe("decideAgentModuleOperation (G13)", () => {
     expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), create, "create")).toMatchObject({ kind: "deny" });
     expect(decideAgentModuleOperation(subject({ mode: "assistant", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
     expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
+  });
+});
+
 describe("remoteTokenViolations (ADR-0017)", () => {
   it("токен на сервере: помощник со сроком ≤ 30 дней и запретом удаления допустим", () => {
     expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 30, forbidden: ["delete"] })).toEqual([]);

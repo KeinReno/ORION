@@ -252,6 +252,9 @@ describe("module-registry: инструменты агента (G13)", () => {
   it("op: update пока не поддержан", () => {
     withTools([tool({ op: "update" })]);
     expect(problems()).toContain("op ∈ read | create");
+  });
+});
+
 describe("module-registry: шаблон RLS (G10)", () => {
   const MIGRATION = { name: "20261018120000_fixture_mod", file: "prisma/migration.sql", rls: "workspace-member" };
   const prismaWith = (migration) => ({
