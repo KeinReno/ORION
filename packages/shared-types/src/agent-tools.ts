@@ -1,4 +1,5 @@
 import type { AgentMode, AgentScope } from "./agent";
+import { GENERATED_AGENT_TOOLS } from "./modules-ext/agent-tools.generated";
 
 /**
  * The single catalogue of agent tools (TZ-02, ADR-0014). Three things are generated from it so they cannot drift:
@@ -14,7 +15,7 @@ export interface AgentToolJsonSchema {
   additionalProperties: false;
 }
 
-export type AgentToolGroup = "start" | "capture" | "tasks" | "notes" | "events" | "projects" | "finance" | "agents" | "approvals";
+export type AgentToolGroup = "start" | "capture" | "tasks" | "notes" | "events" | "projects" | "finance" | "agents" | "approvals" | "modules";
 
 /**
  * What a call does, as the token modes (observer / assistant / manager) see it. It decides the "Режимы" sentence of the
@@ -44,6 +45,12 @@ export interface AgentToolDef {
   input: AgentToolJsonSchema;
   /** One concrete example of the arguments, rendered into the manual. */
   example?: Record<string, unknown>;
+  /**
+   * Инструмент подключаемого модуля (G13): вместо `scopes` нужен токену id разрешения из реестра (`pet-care.pet.create`),
+   * выданный в `AgentToken.modulePermissions`. У таких инструментов `scopes === null`.
+   */
+  permission?: string;
+  moduleId?: string;
 }
 
 const str = (description: string): Record<string, unknown> => ({ type: "string", description });
@@ -57,7 +64,7 @@ const priority = { type: "string", enum: ["low", "normal", "high", "urgent"] };
 const entityType = { type: "string", enum: ["project", "task", "note", "event"] };
 const relationKind = { type: "string", enum: ["related_to", "supports"], description: "related_to — просто связаны (по умолчанию); supports — заметка — материал для задачи" };
 
-export const AGENT_TOOLS: readonly AgentToolDef[] = [
+const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_get_context",
     group: "start",
@@ -416,6 +423,16 @@ export const AGENT_TOOLS: readonly AgentToolDef[] = [
   }
 ];
 
+/** Инструменты ядра + инструменты модулей, подключённых манифестом (`modules-ext/<id>/module.manifest.json` → `agent.tools`). */
+export const AGENT_TOOLS: readonly AgentToolDef[] = [...CORE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS];
+
+/** Разрешения реестра, которые токен может получить для инструментов модулей (проверяются при выпуске токена). */
+export const EXTENSION_AGENT_PERMISSIONS: readonly string[] = [...new Set(GENERATED_AGENT_TOOLS.flatMap((tool) => (tool.permission ? [tool.permission] : [])))];
+
+export function isExtensionAgentPermission(value: string): boolean {
+  return EXTENSION_AGENT_PERMISSIONS.includes(value);
+}
+
 const MODE_NAME: Record<AgentMode, string> = { observer: "наблюдатель", assistant: "помощник", manager: "менеджер" };
 
 /** The per-mode outcome of one tool, as three short phrases (observer / assistant / manager). */
@@ -471,7 +488,9 @@ export function agentToolModeOutcome(tool: AgentToolDef, mode: AgentMode): strin
 
 /** Tool description as agents see it: the tool's own text, the scopes it needs, then what each mode does with it. */
 export function agentToolDescription(tool: AgentToolDef, mode?: AgentMode): string {
-  const needs = tool.scopes === null ? "Нужен любой действующий токен." : `Нужно разрешение: ${tool.scopes.join(" или ")}.`;
+  const needs = tool.permission
+    ? `Нужно разрешение модуля: ${tool.permission}.`
+    : tool.scopes === null ? "Нужен любой действующий токен." : `Нужно разрешение: ${tool.scopes.join(" или ")}.`;
   const tail = mode && tool.effect !== "any" && tool.effect !== "read" ? ` ${agentToolModeOutcome(tool, mode)}` : "";
   return `${tool.description} ${needs} ${agentToolModeNote(tool)}${tail}`;
 }

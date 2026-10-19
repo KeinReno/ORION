@@ -11,7 +11,9 @@ export type AgentRequest = { headers: Record<string, string | string[] | undefin
  */
 @Injectable()
 export class AgentTokenGuard implements CanActivate {
-  private readonly limiter = new SlidingWindowLimiter(resolveAiRateLimit());
+  /** Один счётчик на процесс: контроллеры подключаемых модулей получают свой экземпляр гварда, бюджет токена у всех общий. */
+  private static shared: SlidingWindowLimiter | null = null;
+  private readonly limiter = (AgentTokenGuard.shared ??= new SlidingWindowLimiter(resolveAiRateLimit()));
 
   constructor(private readonly tokens: AgentTokensService) {}
 

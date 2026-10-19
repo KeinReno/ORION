@@ -40,6 +40,7 @@ import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
 import { BackgroundEffectSettingsForm } from "./settings/background-effect-form";
 import { ThemeSettings } from "./settings/theme-library";
+import { ComponentsDiagnostics } from "./settings/components-section";
 import { ModulesSettings } from "./settings/modules-section";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../lib/accent-options";
 import { PluginsSettings } from "./settings/plugins-section";
@@ -480,6 +481,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "modules" ? (
           <PanelSection title="Модули пространства">
             <ModulesSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "modules" ? (
+          <PanelSection title="Диагностика компонентов">
+            <ComponentsDiagnostics />
           </PanelSection>
         ) : null}
 
