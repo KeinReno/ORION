@@ -25,3 +25,16 @@ export const linkDeviceSchema = z.object({
   revokedAt: z.string().nullable()
 });
 export type LinkDevice = z.infer<typeof linkDeviceSchema>;
+
+/** Ротация ключа: `cutOffOld` стирает прежние ключи — устройства со старым ключом перестают быть читаемыми и должны быть спарены заново. */
+export const rotateLinkKeyInputSchema = z.object({
+  cutOffOld: z.boolean().default(false)
+});
+export type RotateLinkKeyInput = z.input<typeof rotateLinkKeyInputSchema>;
+
+export const linkKeyInfoSchema = z.object({
+  keyId: z.string(),
+  epoch: z.number().int(),
+  cutOffOld: z.boolean()
+});
+export type LinkKeyInfo = z.infer<typeof linkKeyInfoSchema>;

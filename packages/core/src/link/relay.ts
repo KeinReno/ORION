@@ -36,16 +36,24 @@ interface RequestBody {
 }
 type ResponseBody =
   | { ok: true; value: unknown }
-  | { ok: false; status: number; code?: string; message: string }
-  /** Ответ не поместился в один пакет: части `<n>.cNNN.pkt` лежат рядом, этот файл пишется последним. */
-  | { chunked: { total: number; bytes: number; sha256: string } };
+  | { ok: false; status: number; code?: string; message: string };
 
-/** Размер одной части ответа (до шифрования). Снимок пространства режется на такие части. */
+/** Файл-манифест: тело не поместилось в один пакет, части `<n>.cNNNN.pkt` лежат рядом, манифест пишется последним. */
+interface Manifest {
+  chunked: { total: number; bytes: number; sha256: string };
+}
+
+/** Размер одной части (до шифрования). Снимок пространства и большие пачки операций режутся на такие части. */
 export const DEFAULT_CHUNK_BYTES = 512 * 1024;
 /** Сколько последних ответов клиент оставляет в ящике (по ним же восстанавливается следующий номер запроса). */
 const KEEP_RESPONSES = 20;
 
+const pad = (n: number) => String(n).padStart(12, "0");
 const chunkName = (seq: number, i: number) => `${pad(seq)}.c${String(i).padStart(4, "0")}.pkt`;
+const isChunkFile = (name: string) => /\.c\d{4}\.pkt$/.test(name);
+const root = (ws: string, epoch: number) => `orion-link/v1/${ws}/${epoch}`;
+const upDir = (ws: string, epoch: number, device: string) => `${root(ws, epoch)}/up/${device}`;
+const downDir = (ws: string, epoch: number, device: string) => `${root(ws, epoch)}/down/${device}`;
 
 function toBase64(bytes: Uint8Array): string {
   let bin = "";
@@ -59,14 +67,70 @@ function fromBase64(text: string): Uint8Array {
   return out;
 }
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes as unknown as Parameters<typeof globalThis.crypto.subtle.digest>[1]));
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest("SHA-256", bytes as unknown as Parameters<typeof globalThis.crypto.subtle.digest>[1])
+  );
   return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-const pad = (n: number) => String(n).padStart(12, "0");
-const root = (ws: string, epoch: number) => `orion-link/v1/${ws}/${epoch}`;
-const upDir = (ws: string, epoch: number, device: string) => `${root(ws, epoch)}/up/${device}`;
-const downDir = (ws: string, epoch: number, device: string) => `${root(ws, epoch)}/down/${device}`;
+/** Пишет тело как один пакет или, если оно больше `chunkBytes`, как части + манифест последним. */
+async function writeBody(
+  box: PacketTransport,
+  dir: string,
+  header: PacketHeader,
+  body: unknown,
+  key: LinkKey,
+  chunkBytes: number
+): Promise<void> {
+  const payload = new TextEncoder().encode(JSON.stringify(body));
+  if (payload.length <= chunkBytes) {
+    await box.put(`${dir}/${pad(header.seq)}.pkt`, await encryptPacket(header, body, key));
+    return;
+  }
+  const total = Math.ceil(payload.length / chunkBytes);
+  for (let i = 0; i < total; i += 1) {
+    const part = payload.subarray(i * chunkBytes, (i + 1) * chunkBytes);
+    await box.put(`${dir}/${chunkName(header.seq, i)}`, await encryptPacket(header, { i, data: toBase64(part) }, key));
+  }
+  const manifest: Manifest = { chunked: { total, bytes: payload.length, sha256: await sha256Hex(payload) } };
+  await box.put(`${dir}/${pad(header.seq)}.pkt`, await encryptPacket(header, manifest, key));
+}
+
+/**
+ * Читает тело, записанное `writeBody`. `null` — файла или каких-то частей ещё не видно (повторим позже);
+ * `PacketError` — файл виден, но испорчен/чужой.
+ */
+async function readBody<T>(
+  box: PacketTransport,
+  dir: string,
+  seq: number,
+  context: PacketContext
+): Promise<{ header: PacketHeader; body: T } | null> {
+  const raw = await box.get(`${dir}/${pad(seq)}.pkt`);
+  if (!raw) return null;
+  const first = await decryptPacket<T | Manifest>(raw, context);
+  if (first.header.seq !== seq) throw new PacketError("wrong_context", "Пакет не на своём месте");
+  const meta = (first.body as Partial<Manifest> | null)?.chunked;
+  if (!meta) return first as { header: PacketHeader; body: T };
+  const parts: Uint8Array[] = [];
+  for (let i = 0; i < meta.total; i += 1) {
+    const part = await box.get(`${dir}/${chunkName(seq, i)}`);
+    if (!part) return null;
+    const { header, body } = await decryptPacket<{ i: number; data: string }>(part, context);
+    if (header.seq !== seq || body.i !== i) throw new PacketError("wrong_context", "Часть не на своём месте");
+    parts.push(fromBase64(body.data));
+  }
+  const joined = new Uint8Array(parts.reduce((n, x) => n + x.length, 0));
+  let off = 0;
+  for (const x of parts) {
+    joined.set(x, off);
+    off += x.length;
+  }
+  if (joined.length !== meta.bytes || (await sha256Hex(joined)) !== meta.sha256) {
+    throw new PacketError("corrupt", "Собранное тело не совпало по размеру/хэшу");
+  }
+  return { header: first.header, body: JSON.parse(new TextDecoder().decode(joined)) as T };
+}
 
 export interface RelayConfig {
   box: PacketTransport;
@@ -80,6 +144,8 @@ export interface RelayClientOptions extends RelayConfig {
   deviceId: string;
   /** Сколько раз проверить ответ, прежде чем сдаться. */
   maxPolls?: number;
+  /** Порог разбиения запроса на части (по умолчанию `DEFAULT_CHUNK_BYTES`). */
+  chunkBytes?: number;
   /** Пауза между проверками; в тестах — прогон `RelayIngress.pollOnce()`. */
   wait?: (attempt: number) => Promise<void>;
   now?: () => Date;
@@ -134,24 +200,27 @@ export class RelayNodeTransport implements SyncTransport {
       keyId: keys[0]!.keyId,
       createdAt: (this.options.now?.() ?? new Date()).toISOString()
     };
-    const bytes = await encryptPacket(header, { method, args } satisfies RequestBody, keys[0]!);
-    await box.put(`${upDir(workspaceId, epoch, deviceId)}/${pad(seq)}.pkt`, bytes);
+    await writeBody(
+      box,
+      upDir(workspaceId, epoch, deviceId),
+      header,
+      { method, args } satisfies RequestBody,
+      keys[0]!,
+      this.options.chunkBytes ?? DEFAULT_CHUNK_BYTES
+    );
 
     const maxPolls = this.options.maxPolls ?? 20;
     for (let attempt = 0; attempt < maxPolls; attempt += 1) {
       await this.options.wait?.(attempt);
-      const answer = await box.get(`${downDir(workspaceId, epoch, deviceId)}/${pad(seq)}.pkt`);
-      if (!answer) continue;
       try {
-        const { header: h, body } = await decryptPacket<ResponseBody>(answer, this.context());
-        if (h.kind !== "response" || h.seq !== seq) throw new PacketError("wrong_context", "Ответ на другой запрос");
-        const resolved = "chunked" in body ? await this.assemble(seq, body.chunked) : body;
-        if (!resolved) continue;
+        const answer = await readBody<ResponseBody>(box, downDir(workspaceId, epoch, deviceId), seq, this.context());
+        if (!answer) continue;
+        if (answer.header.kind !== "response") throw new PacketError("wrong_context", "Ответ на другой запрос");
         void this.prune(seq);
-        if (resolved.ok) return resolved.value as T;
-        throw Object.assign(new Error(resolved.message), {
-          status: resolved.status,
-          details: resolved.code ? { code: resolved.code } : undefined
+        if (answer.body.ok) return answer.body.value as T;
+        throw Object.assign(new Error(answer.body.message), {
+          status: answer.body.status,
+          details: answer.body.code ? { code: answer.body.code } : undefined
         });
       } catch (error) {
         if (error instanceof PacketError) {
@@ -163,29 +232,6 @@ export class RelayNodeTransport implements SyncTransport {
       }
     }
     throw new TypeError("Узел не ответил через ящик Link");
-  }
-
-  /** Собирает ответ из частей; `null` — какие-то части ещё не видны (повторим опрос). */
-  private async assemble(seq: number, meta: { total: number; bytes: number; sha256: string }): Promise<Exclude<ResponseBody, { chunked: unknown }> | null> {
-    const { box, workspaceId, epoch } = this.options;
-    const parts: Uint8Array[] = [];
-    for (let i = 0; i < meta.total; i += 1) {
-      const raw = await box.get(`${downDir(workspaceId, epoch, this.options.deviceId)}/${chunkName(seq, i)}`);
-      if (!raw) return null;
-      const { header, body } = await decryptPacket<{ i: number; data: string }>(raw, this.context());
-      if (header.seq !== seq || body.i !== i) throw new PacketError("wrong_context", "Часть ответа не на своём месте");
-      parts.push(fromBase64(body.data));
-    }
-    const joined = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-    let off = 0;
-    for (const p of parts) {
-      joined.set(p, off);
-      off += p.length;
-    }
-    if (joined.length !== meta.bytes || (await sha256Hex(joined)) !== meta.sha256) {
-      throw new PacketError("corrupt", "Собранный ответ не совпал по размеру/хэшу");
-    }
-    return JSON.parse(new TextDecoder().decode(joined)) as Exclude<ResponseBody, { chunked: unknown }>;
   }
 
   /** Удаляет старые ответы (и их части), оставляя последние `KEEP_RESPONSES`. Сбой очистки не важен. */
@@ -227,7 +273,7 @@ export class RelayIngress {
     let handled = 0;
     for (const device of await box.list(`${root(workspaceId, epoch)}/up`)) {
       for (const name of await box.list(upDir(workspaceId, epoch, device))) {
-        if (await this.handle(device, name)) handled += 1;
+        if (!isChunkFile(name) && (await this.handle(device, name))) handled += 1;
       }
     }
     return handled;
@@ -235,19 +281,18 @@ export class RelayIngress {
 
   private async handle(device: string, name: string): Promise<boolean> {
     const { box, workspaceId, epoch, keys, host } = this.options;
-    const upPath = `${upDir(workspaceId, epoch, device)}/${name}`;
-    const downPath = `${downDir(workspaceId, epoch, device)}/${name}`;
+    const dir = upDir(workspaceId, epoch, device);
+    const seq = Number.parseInt(name, 10);
+    if (!Number.isFinite(seq)) return false;
     // Ответ уже есть (узел упал между ответом и очисткой): запрос повторно не исполняем.
     if ((await box.list(downDir(workspaceId, epoch, device))).includes(name)) {
-      await box.remove(upPath);
+      await this.cleanup(dir, seq);
       return false;
     }
-    const bytes = await box.get(upPath);
-    if (!bytes) return false;
-    let request: { header: PacketHeader; body: RequestBody };
+    let request: { header: PacketHeader; body: RequestBody } | null;
     try {
-      request = await decryptPacket<RequestBody>(bytes, { workspaceId, epoch, keys });
-      if (request.header.kind !== "request" || request.header.sourceDeviceId !== device) {
+      request = await readBody<RequestBody>(box, dir, seq, { workspaceId, epoch, keys });
+      if (request && (request.header.kind !== "request" || request.header.sourceDeviceId !== device)) {
         throw new PacketError("wrong_context", "Пакет не от этого устройства");
       }
     } catch (error) {
@@ -256,6 +301,9 @@ export class RelayIngress {
       this.rejected.push(error);
       return false;
     }
+    if (!request) return false;
+    // Отвечаем ключом запроса: устройство со старым ключом (до ротации) иначе не прочитало бы ответ.
+    const answerKey = keys.find((k) => k.keyId === request.header.keyId) ?? keys[0]!;
     const node = typeof host === "function" ? await host(device) : host;
     const response: ResponseBody = node
       ? await this.execute(request.body, node)
@@ -267,27 +315,22 @@ export class RelayIngress {
       epoch,
       sourceDeviceId: "node",
       kind: "response",
-      seq: request.header.seq,
-      keyId: keys[0]!.keyId,
+      seq,
+      keyId: answerKey.keyId,
       createdAt: (this.options.now?.() ?? new Date()).toISOString()
     };
-    const chunkBytes = this.options.chunkBytes ?? DEFAULT_CHUNK_BYTES;
-    const payload = new TextEncoder().encode(JSON.stringify(response));
-    if (payload.length <= chunkBytes) {
-      await box.put(downPath, await encryptPacket(header, response, keys[0]!));
-    } else {
-      const total = Math.ceil(payload.length / chunkBytes);
-      const dir = downDir(workspaceId, epoch, device);
-      for (let i = 0; i < total; i += 1) {
-        const part = payload.subarray(i * chunkBytes, (i + 1) * chunkBytes);
-        await box.put(`${dir}/${chunkName(request.header.seq, i)}`, await encryptPacket(header, { i, data: toBase64(part) }, keys[0]!));
-      }
-      const manifest: ResponseBody = { chunked: { total, bytes: payload.length, sha256: await sha256Hex(payload) } };
-      // Манифест — последним: пока его нет, клиент ответа не видит.
-      await box.put(downPath, await encryptPacket(header, manifest, keys[0]!));
-    }
-    await box.remove(upPath);
+    // Манифест/единственный файл пишется последним: пока его нет, клиент ответа не видит.
+    await writeBody(box, downDir(workspaceId, epoch, device), header, response, answerKey, this.options.chunkBytes ?? DEFAULT_CHUNK_BYTES);
+    await this.cleanup(dir, seq);
     return true;
+  }
+
+  /** Убирает запрос и его части. */
+  private async cleanup(dir: string, seq: number): Promise<void> {
+    const { box } = this.options;
+    for (const file of await box.list(dir)) {
+      if (Number.parseInt(file, 10) === seq) await box.remove(`${dir}/${file}`);
+    }
   }
 
   private async execute(request: RequestBody, host: SyncTransport): Promise<ResponseBody> {

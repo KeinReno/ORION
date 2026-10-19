@@ -301,4 +301,53 @@ describe("Orion Link: ReplicaEngine через ящик (прототип ADR-00
     await fresh.engine.sync();
     expect(Math.min(...[...box.files.keys()].filter((k) => k.includes("/down/pc/")).map((k) => Number.parseInt(k.split("/").pop()!, 10)))).toBeGreaterThan(1);
   });
+
+  it("большой запрос (заметка) режется на части, узел исполняет его один раз, части убираются", async () => {
+    const { host, box, keys } = world();
+    const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys, host });
+    const transport = new RelayNodeTransport({
+      box, workspaceId: WS, epoch: 1, keys, deviceId: "pc", maxPolls: 3, chunkBytes: 1024,
+      wait: async () => void (await ingress.pollOnce())
+    });
+    const engine = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "u1", workspaceId: WS, uuid, now: () => host.nowMs });
+    await engine.sync();
+    const body = "Длинный текст ".repeat(1000);
+    await engine.enqueue({ entity: "note", kind: "create", fields: { title: "Большая", body } });
+    await engine.sync();
+    expect(engine.status().pending).toBe(0);
+    expect([...host.rows.keys()].filter((k) => k.startsWith("note:"))).toHaveLength(1);
+    expect([...box.files.keys()].filter((k) => k.includes("/up/"))).toEqual([]);
+  });
+
+  it("недописанный запрос (нет манифеста) узел не исполняет и не трогает", async () => {
+    const { host, box, keys } = world();
+    const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys, host, chunkBytes: 1024 });
+    const transport = new RelayNodeTransport({
+      box, workspaceId: WS, epoch: 1, keys, deviceId: "pc", maxPolls: 1, chunkBytes: 1024,
+      wait: async () => undefined
+    });
+    // Клиент «упал» после записи частей, но до манифеста: симулируем потерей файла манифеста.
+    const pending = transport.push(WS, { protocol: 1, deviceId: "d", ops: [] } as never).catch(() => undefined);
+    await pending;
+    for (const path of [...box.files.keys()]) if (/\/up\/pc\/\d+\.pkt$/.test(path)) box.files.delete(path);
+    expect(await ingress.pollOnce()).toBe(0);
+    expect(host.devices.size).toBe(0);
+  });
+
+  it("после ротации узел отвечает ключом запроса: устройство со старым ключом продолжает работать", async () => {
+    const { host, box } = world();
+    const oldKey = generateLinkKey("old");
+    const newKey = generateLinkKey("new");
+    const ingress = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys: [newKey, oldKey], host });
+    const mk = (deviceId: string, key: typeof oldKey) =>
+      new RelayNodeTransport({ box, workspaceId: WS, epoch: 1, keys: [key], deviceId, maxPolls: 2, wait: async () => void (await ingress.pollOnce()) });
+    await mk("legacy", oldKey).registerDevice({ deviceId: "a", name: "a" });
+    await mk("fresh", newKey).registerDevice({ deviceId: "b", name: "b" });
+    expect([...host.devices].sort()).toEqual(["a", "b"]);
+    // «cut off»: узел знает только новый ключ — старое устройство больше не читается и не исполняется
+    const strict = new RelayIngress({ box, workspaceId: WS, epoch: 1, keys: [newKey], host });
+    const cut = new RelayNodeTransport({ box, workspaceId: WS, epoch: 1, keys: [oldKey], deviceId: "legacy", maxPolls: 1, wait: async () => void (await strict.pollOnce()) });
+    await expect(cut.registerDevice({ deviceId: "c", name: "c" })).rejects.toBeInstanceOf(TypeError);
+    expect(host.devices.has("c")).toBe(false);
+  });
 });

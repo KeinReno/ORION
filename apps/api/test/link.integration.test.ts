@@ -170,4 +170,24 @@ describe("Orion Link: устройства и ключи", () => {
     const after = await prisma.withUser(owner.userId, (tx) => tx.list.count({ where: { workspaceId: owner.workspaceId } }));
     expect(after).toBe(1);
   });
+
+  it("ротация ключа: только владелец; прежний ключ читается, cutOffOld его стирает", async () => {
+    const owner = await register("rot-o");
+    const member = await register("rot-m");
+    await prisma.asSystem((tx) =>
+      tx.workspaceMember.create({ data: { workspaceId: owner.workspaceId, userId: member.userId, role: "member" } })
+    );
+    const first = await link.pair(owner.userId, owner.workspaceId, "ПК");
+    await expect(link.rotateKey(member.userId, owner.workspaceId, false)).rejects.toMatchObject({ status: 403 });
+
+    const soft = await link.rotateKey(owner.userId, owner.workspaceId, false);
+    expect(soft.keyId).not.toBe(first.keyId);
+    const keys = await link.keysFor(owner.workspaceId);
+    expect(keys!.keys.map((k) => k.keyId)).toEqual([soft.keyId, first.keyId]);
+    expect((await link.pair(member.userId, owner.workspaceId, "Телефон")).keyId).toBe(soft.keyId);
+
+    const hard = await link.rotateKey(owner.userId, owner.workspaceId, true);
+    const after = await link.keysFor(owner.workspaceId);
+    expect(after!.keys.map((k) => k.keyId)).toEqual([hard.keyId]);
+  });
 });

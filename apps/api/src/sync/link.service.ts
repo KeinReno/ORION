@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes, randomUUID } from "node:crypto";
-import type { LinkDevice as LinkDeviceDto, LinkPairing } from "@orion/shared-types";
+import type { LinkDevice as LinkDeviceDto, LinkKeyInfo, LinkPairing } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { openSecret, sealSecret } from "./sync-crypto";
@@ -46,6 +46,32 @@ export class LinkService {
       keyId: active.keyId,
       key: openSecret(active.keyEnc)
     };
+  }
+
+  /**
+   * Ротация `K_ws` (только владелец). Прежний ключ помечается `retiredAt` и остаётся читаемым, пока устройства не
+   * спарены заново; `cutOffOld` стирает его — устройства со старым ключом перестают читаться (отзыв доступа).
+   */
+  async rotateKey(userId: string, workspaceId: string, cutOffOld: boolean): Promise<LinkKeyInfo> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
+    });
+    return this.prisma.asSystem(async (tx) => {
+      const current = await tx.linkKey.findFirst({
+        where: { workspaceId, retiredAt: null },
+        orderBy: [{ epoch: "desc" }, { createdAt: "desc" }]
+      });
+      const epoch = current?.epoch ?? 1;
+      const created = await tx.linkKey.create({
+        data: { workspaceId, keyId: randomUUID(), epoch, keyEnc: sealSecret(randomBytes(32).toString("base64")) }
+      });
+      if (cutOffOld) {
+        await tx.linkKey.deleteMany({ where: { workspaceId, NOT: { id: created.id } } });
+      } else {
+        await tx.linkKey.updateMany({ where: { workspaceId, retiredAt: null, NOT: { id: created.id } }, data: { retiredAt: new Date() } });
+      }
+      return { keyId: created.keyId, epoch, cutOffOld };
+    });
   }
 
   async list(userId: string, workspaceId: string): Promise<LinkDeviceDto[]> {
