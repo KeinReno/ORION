@@ -4,6 +4,7 @@ import { AGENT_TOOLS, agentToolDescription, agentToolModeNote } from "@orion/sha
 import { describe, expect, it } from "vitest";
 import { handleMcpMessage, loadSettings, redact } from "../mcp/orion-mcp";
 import { resolveAgentConnection } from "./agent-connection";
+import { GENERATED_AGENT_CONTROLLERS } from "../modules-ext/modules.generated";
 import { AgentGatewayController } from "./agent-gateway.controller";
 import { AiController } from "./ai.controller";
 
@@ -25,7 +26,9 @@ function routesOf(controller: { prototype: object }, prefix: string): string[] {
 }
 
 describe("каталог инструментов ↔ маршруты /ai/v1", () => {
-  const actual = new Set([...routesOf(AiController, "ai/v1"), ...routesOf(AgentGatewayController, "ai/v1")]);
+  // Контроллеры подключаемых модулей (G13) лежат в своих каталогах; префикс — из их собственного @Controller.
+  const moduleRoutes = GENERATED_AGENT_CONTROLLERS.flatMap((controller) => routesOf(controller, Reflect.getMetadata("path", controller) as string));
+  const actual = new Set([...routesOf(AiController, "ai/v1"), ...routesOf(AgentGatewayController, "ai/v1"), ...moduleRoutes]);
   const declared = new Set(AGENT_TOOLS.map((tool) => `${tool.http.method} ${tool.http.path}`.replace(/\{\w+\}/g, ":p")));
 
   it("у каждого инструмента есть настоящий маршрут", () => {

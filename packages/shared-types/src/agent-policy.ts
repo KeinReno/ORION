@@ -65,6 +65,8 @@ export interface AgentPolicySubject {
   scopes: readonly AgentScope[];
   permissions: AgentPermissions | null;
   forbidden: readonly AgentForbidden[];
+  /** Разрешения реестра для инструментов подключаемых модулей (G13); нет поля = нет таких разрешений. */
+  modulePermissions?: readonly string[];
 }
 
 export type AgentDecision = { kind: "allow" } | { kind: "propose" } | { kind: "deny"; reason: string };
@@ -98,6 +100,36 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
     case "propose":
       return granted.has("propose") || granted.has("update") ? { kind: "propose" } : deny("У токена нет права предлагать в этом разделе");
   }
+}
+
+/**
+ * Инструмент подключаемого модуля (G13): разрешение из реестра (`pet-care.pet.create`) должно быть выдано токену.
+ * Только чтение и создание: «изменение через запрос на подтверждение» для модулей ещё не сделано, поэтому его здесь нет.
+ * Порядок тот же, что у `decideAgentOperation`: запреты → выданное право → режим; ни один шаг ничего не добавляет.
+ */
+export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create"): AgentDecision {
+  if (!subject.modulePermissions?.includes(permission)) return deny(`У токена нет разрешения «${permission}»`);
+  if (op === "read") return { kind: "allow" };
+  if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
+  return { kind: "allow" };
+}
+
+/** Предельный срок токена агента на сервере, доступном извне (ADR-0017). */
+export const REMOTE_TOKEN_MAX_DAYS = 30;
+
+/**
+ * ADR-0017, «что запрещено при любом варианте»: токен, который может использоваться удалённо (режим `server`), живёт
+ * не дольше `REMOTE_TOKEN_MAX_DAYS`, не бывает `manager` и всегда несёт запрет удаления. Чистая функция: сервер отказывает
+ * ею, экран настроек может показать те же причины. Пустой список — токен допустим.
+ */
+export function remoteTokenViolations(token: { mode: AgentMode; expiresInDays?: number | null; forbidden: readonly AgentForbidden[] }, checkExpiry = true): string[] {
+  const problems: string[] = [];
+  if (token.mode === "manager") problems.push("Режим «менеджер» недоступен для токенов на сервере: выберите «помощник» или «наблюдатель»");
+  if (checkExpiry && (token.expiresInDays === null || token.expiresInDays === undefined || token.expiresInDays > REMOTE_TOKEN_MAX_DAYS)) {
+    problems.push(`На сервере токен выпускается со сроком не больше ${REMOTE_TOKEN_MAX_DAYS} дней`);
+  }
+  if (!token.forbidden.includes("delete")) problems.push("На сервере у токена всегда включён запрет удаления");
+  return problems;
 }
 
 /** Short Russian sentence for a matrix cell set, used in the settings list. */

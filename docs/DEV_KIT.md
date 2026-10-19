@@ -37,7 +37,7 @@ pnpm db:generate                                          # Prisma-клиент 
 | `prisma/models.prisma` | модель `<Id>Item`: `workspaceId`, `@@map`, связь с `Workspace` (`onDelete: Cascade`), `@@index([workspaceId])` |
 | `prisma/migration.sql` | таблица + `ENABLE` и `FORCE ROW LEVEL SECURITY` + `CREATE POLICY`; копия в `apps/api/prisma/migrations/<метка>_<id>/` генерируется, правьте этот исходник |
 | `MODULE.md`, `AI_CONTEXT.md` | описание и контекст для агента; блок между маркерами `generated:manifest` собирает `module-docs`, остальное пишете вы |
-| `apps/web/modules-ext/<id>/<Id>Panel.tsx`, `use-<id>.ts` | панель на `PanelShell`/`PanelHeader`/`PanelBody` из `@orion/ui`, строки по-русски, состояния «загрузка / ошибка / пусто / нет пространства»; хуки через `ApiClient.extensionRequest`, ключи кэша `["<id>", ...]` |
+| `apps/web/modules-ext/<id>/<Id>Panel.tsx`, `use-<id>.ts` | панель на `PanelShell`/`PanelHeader`/`PanelBody` из `@orion/ui`, строки по-русски, состояния «загрузка / ошибка / пусто / нет пространства»; хуки через `createModuleClient` (`@orion/core`, поверх `ApiClient.extensionRequest`), ключи кэша `["<id>", ...]` |
 | `packages/shared-types/src/modules-ext/<id>/index.ts` | zod-контракты: схема ответа (без `.default`), входные схемы create/update (с `.default`), схема «204 без тела» |
 | `apps/api/test/modules-ext/<id>/<id>.integration.test.ts` | интеграционный тест: регистрация через сгенерированные реестры, CRUD, изоляция второго пользователя (API и RLS), 409 при выключенном модуле и сохранность данных |
 

@@ -114,10 +114,14 @@ describe("file backups and restore with recovery (S04)", () => {
       });
       expect(backup.status).toBe(201);
       expect(capture.sealedLatest).not.toBeNull();
+      // У пространства нет данных Compass — в копии их нет, и ответ говорит об этом (G22).
+      expect((backup.data as { compassIncluded: boolean }).compassIncluded).toBe(false);
 
       const payload = JSON.parse(decryptSnapshot(capture.sealedLatest!).toString("utf8")) as {
         blobs: Array<{ key: string; sha256: string; size: number; data: string }>;
+        compass?: unknown;
       };
+      expect(payload.compass).toBeUndefined();
       const expectedSha = createHash("sha256").update(Buffer.from(original, "utf8")).digest("hex");
       const entry = payload.blobs.find((b) => b.key.endsWith("report.txt"));
       expect(entry).toBeDefined();

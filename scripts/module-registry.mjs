@@ -34,6 +34,24 @@ import { fileURLToPath } from "node:url";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * G10: шаблон изоляции по пространству — единственный вид RLS, который модуль получает без ручного SQL.
+ * Текст обязан совпадать с политиками ядра (`workspace_members` по `app.current_user_id`): структурный тест api-rls это проверяет.
+ */
+export function workspaceMemberRlsBlock(table) {
+  return [
+    `ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`,
+    `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY;`,
+    `CREATE POLICY ${table}_isolation ON "${table}"`,
+    `  USING (EXISTS (`,
+    `    SELECT 1 FROM "workspace_members" wm`,
+    `    WHERE wm."workspaceId" = "${table}"."workspaceId"`,
+    `      AND wm."userId" = current_setting('app.current_user_id', true)`,
+    `  ));`,
+    ""
+  ].join("\n");
+}
+
 export const MANIFEST_FILE = "module.manifest.json";
 const HEADER = "// АВТОГЕНЕРИРУЕТСЯ scripts/module-registry.mjs из modules-ext/*/module.manifest.json — руками не править.\n// Обновить: pnpm module-registry; сверить: pnpm module-registry --check.\n";
 
@@ -49,6 +67,7 @@ const PATHS = {
 
 export const GENERATED_FILES = [
   `${PATHS.sharedExt}/registry.generated.ts`,
+  `${PATHS.sharedExt}/agent-tools.generated.ts`,
   `${PATHS.apiExt}/modules.generated.ts`,
   `${PATHS.apiExt}/data.generated.ts`,
   `${PATHS.webExt}/panels.generated.ts`,
@@ -61,6 +80,7 @@ const MIGRATION_RE = /^\d{14}_[a-z0-9_]+$/;
 const SNAPSHOT_POLICIES = ["included", "derived", "identity-excluded", "secret-excluded", "ephemeral-excluded"];
 const SYNC_CLASSES = ["mergeable-text", "lww-fields", "append-only", "strict", "not-synced"];
 const SYNC_STAGES = ["stage2", "stage3", "later", "never"];
+const AGENT_TOOL_OPS = ["read", "create"];
 const CATALOG_STRING_FIELDS = ["label", "summary", "owns", "livesWithout", "disableBehavior", "panelId"];
 
 const pascal = (id) => id.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("");
@@ -99,6 +119,7 @@ export function collectModules(root = defaultRoot) {
   const seenExports = new Set();
   const seenMigrations = new Set();
   const seenModels = new Set();
+  const seenToolNames = new Set();
 
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const dir = `${PATHS.apiExt}/${entry.name}`;
@@ -205,7 +226,19 @@ export function collectModules(root = defaultRoot) {
       else if (seenMigrations.has(item.name)) fail(`миграция ${item.name} уже объявлена`);
       const sqlPath = `${dir}/${item.file}`;
       if (!existsSync(join(root, sqlPath))) fail(`нет файла миграции ${sqlPath}`);
-      else migrations.push({ name: item.name, sql: read(root, sqlPath) });
+      else {
+        let sql = read(root, sqlPath);
+        if (item.rls === "workspace-member") {
+          // RLS выводится из шаблона для каждой созданной здесь таблицы модуля с workspaceId; руками его в файле не пишут.
+          if (/ENABLE ROW LEVEL SECURITY/.test(sql)) fail(`миграция ${item.name}: rls задан шаблоном — уберите ручной ENABLE ROW LEVEL SECURITY из ${sqlPath}`);
+          const created = [...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((m) => m[1]);
+          const own = parsedModels.filter((parsed) => parsed.table && parsed.hasWorkspaceId && created.includes(parsed.table)).map((parsed) => parsed.table);
+          const ordered = created.filter((table) => own.includes(table));
+          if (ordered.length === 0) fail(`миграция ${item.name}: rls задан, но она не создаёт таблиц модуля с workspaceId`);
+          else sql = `${sql.trimEnd()}\n\n-- Row Level Security\n${ordered.map(workspaceMemberRlsBlock).join("\n")}`;
+        } else if (item.rls !== undefined) fail(`миграция ${item.name}: rls ∈ "workspace-member"`);
+        migrations.push({ name: item.name, sql });
+      }
     }
     if (parsedModels.length > 0) {
       const sql = migrations.map((item) => item.sql).join("\n");
@@ -219,14 +252,47 @@ export function collectModules(root = defaultRoot) {
       }
     }
 
+    // G13: инструменты для ИИ-агентов. Разрешение выводится из реестра (`<id>.<основной ресурс>.<op>`), а не объявляется руками;
+    // поддержаны только чтение и создание — изменение через «запрос на подтверждение» для модулей ещё не сделано.
+    const agentTools = [];
+    const toolPrefix = typeof id === "string" ? `orion_${id.replaceAll("-", "_")}_` : "";
+    for (const tool of Array.isArray(manifest.agent?.tools) ? manifest.agent.tools : []) {
+      const label = `agent.tools "${tool?.name}"`;
+      if (typeof tool?.name !== "string" || !tool.name.startsWith(toolPrefix) || !/^orion_[a-z_]+$/.test(tool.name)) fail(`${label}: имя вида ${toolPrefix}<действие>`);
+      if (!AGENT_TOOL_OPS.includes(tool?.op)) fail(`${label}: op ∈ ${AGENT_TOOL_OPS.join(" | ")}`);
+      if (typeof tool?.description !== "string" || tool.description === "") fail(`${label}: description обязателен`);
+      const route = tool?.http;
+      if (!["GET", "POST", "PATCH", "DELETE"].includes(route?.method) || typeof route?.path !== "string" || !route.path.startsWith(`/ai/v1/${id}/`)) {
+        fail(`${label}: http = { method, path }, путь начинается с /ai/v1/${id}/`);
+      } else if ((tool.op === "read") !== (route.method === "GET")) fail(`${label}: read ↔ GET, create ↔ POST`);
+      const schema = tool?.input;
+      if (schema?.type !== "object" || schema.additionalProperties !== false || typeof schema.properties !== "object" || !Array.isArray(schema.required)) {
+        fail(`${label}: input — JSON-схема { type: "object", properties, required, additionalProperties: false }`);
+      } else {
+        for (const name of schema.required) if (!(name in schema.properties)) fail(`${label}: required "${name}" нет в properties`);
+        for (const [, param] of String(route?.path ?? "").matchAll(/\{(\w+)\}/g)) {
+          if (!schema.required.includes(param)) fail(`${label}: параметр пути {${param}} должен быть обязательным в input`);
+        }
+      }
+      if (agentTools.some((item) => item.name === tool?.name) || seenToolNames.has(tool?.name)) fail(`${label}: имя инструмента уже занято`);
+      agentTools.push(tool);
+    }
+    const primaryResource = manifest.permissions?.primaryResource;
+    const agentController = manifest.agent?.controller;
+    if (agentTools.length > 0) {
+      if (typeof agentController?.file !== "string" || typeof agentController?.export !== "string") fail("agent.controller = { file, export } — контроллер маршрутов ai/v1/<модуль>/* обязателен, если объявлены agent.tools");
+      else if (!existsSync(join(root, `${dir}/${agentController.file}.ts`))) fail(`нет файла ${dir}/${agentController.file}.ts`);
+    }
+
     if (problems.length > 0) {
       errors.push(...problems);
       continue;
     }
+    for (const tool of agentTools) seenToolNames.add(tool.name);
     seenIds.add(id);
     seenExports.add(apiModule.export);
     for (const item of migrations) seenMigrations.add(item.name);
-    modules.push({ id, dir, name: entry.name, manifest, fragment, models, migrations, backRelations });
+    modules.push({ id, dir, name: entry.name, manifest, fragment, models, migrations, backRelations, agentTools, primaryResource, agentController: agentTools.length > 0 ? agentController : null });
   }
   return { modules, errors };
 }
@@ -275,16 +341,47 @@ export function renderOutputs(modules, root = defaultRoot) {
       `export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = ${json(catalog)};\n\n` +
       `/** Основной ресурс модуля для реестра разрешений (\`<module>.<resource>.<action>\`). */\n` +
       `export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = ${json(resources)};\n` +
+      `\n/** Имена миграций модуля в порядке применения (G11): манифест компонента и \`GET system/components\` сверяют их с базой. */\n` +
+      `export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = ${json(Object.fromEntries(modules.map((m) => [m.id, m.migrations.map((item) => item.name)])))};\n` +
       modules.map((m) => `\nexport * from "./${m.name}";`).join("") +
       (modules.length > 0 ? "\n" : "")
+  );
+
+  const agentTools = modules.flatMap((m) =>
+    m.agentTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      group: "modules",
+      effect: tool.op,
+      scopes: null,
+      http: tool.http,
+      input: tool.input,
+      ...(tool.example ? { example: tool.example } : {}),
+      permission: `${m.id}.${m.primaryResource}.${tool.op}`,
+      moduleId: m.id
+    }))
+  );
+  out.set(
+    `${PATHS.sharedExt}/agent-tools.generated.ts`,
+    HEADER +
+      `import type { AgentToolDef } from "../agent-tools";
+
+` +
+      `/** Инструменты ИИ-агентов, объявленные модулями в манифесте (\`agent.tools\`); \`AGENT_TOOLS\` добавляет их к инструментам ядра. */
+` +
+      `export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = ${json(agentTools)};
+`
   );
 
   out.set(
     `${PATHS.apiExt}/modules.generated.ts`,
     HEADER +
       modules.map((m) => `import { ${m.manifest.api.module.export} } from "./${m.name}/${m.manifest.api.module.file}";\n`).join("") +
+      modules.filter((m) => m.agentController).map((m) => `import { ${m.agentController.export} } from "./${m.name}/${m.agentController.file}";\n`).join("") +
       `\n/** Nest-модули подключаемых модулей; app.module.ts разворачивает этот список в \`imports\`. */\n` +
-      `export const GENERATED_NEST_MODULES = [${modules.map((m) => m.manifest.api.module.export).join(", ")}];\n`
+      `export const GENERATED_NEST_MODULES = [${modules.map((m) => m.manifest.api.module.export).join(", ")}];\n\n` +
+      `/** Контроллеры маршрутов агента \`ai/v1/<модуль>/*\` (G13): тест «инструмент ↔ маршрут» сверяет их с каталогом. */\n` +
+      `export const GENERATED_AGENT_CONTROLLERS = [${modules.filter((m) => m.agentController).map((m) => m.agentController.export).join(", ")}];\n`
   );
 
   const allModels = modules.flatMap((m) => m.models);

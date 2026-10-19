@@ -8,21 +8,39 @@
     "summary": "Карточки питомцев и журнал ухода: кормление, ветеринар, лекарства, прогулки.",
     "owns": "Питомцы пространства (имя, вид, день рождения, заметки) и записи ухода за ними.",
     "livesWithout": "Полностью самостоятелен: не требует и не использует другие предметные модули.",
-    "provides": ["Панель «Питомцы»", "Журнал ухода по каждому питомцу"],
+    "provides": [
+      "Панель «Питомцы»",
+      "Журнал ухода по каждому питомцу"
+    ],
     "optionalDependencies": [],
     "disableBehavior": "Панель и API скрываются. Питомцы и записи ухода сохраняются и вернутся при включении.",
     "panelId": "pet-care",
     "defaultEnabled": true
   },
-  "permissions": { "primaryResource": "pet" },
-  "api": { "module": { "file": "pet-care.module", "export": "PetCareModule" }, "probePath": "/pet-care/pets" },
+  "permissions": {
+    "primaryResource": "pet"
+  },
+  "api": {
+    "module": {
+      "file": "pet-care.module",
+      "export": "PetCareModule"
+    },
+    "probePath": "/pet-care/pets"
+  },
   "web": {
-    "panel": { "id": "pet-care", "label": "Питомцы", "icon": "PawPrint", "group": "Семья и дом", "file": "PetCarePanel", "export": "PetCarePanel" }
+    "panel": {
+      "id": "pet-care",
+      "label": "Питомцы",
+      "icon": "PawPrint",
+      "group": "Семья и дом",
+      "file": "PetCarePanel",
+      "export": "PetCarePanel"
+    }
   },
   "prisma": {
     "fragment": "prisma/models.prisma",
     "workspaceBackRelations": ["petCarePets    PetCarePet[]", "petCareEntries PetCareEntry[]"],
-    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql" }]
+    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql", "rls": "workspace-member" }]
   },
   "data": {
     "models": [
@@ -32,7 +50,11 @@
         "snapshotKey": "petCarePets",
         "snapshotPolicy": "included",
         "reason": "Питомцы — пользовательский контент модуля; вставляются раньше записей ухода, которые на них ссылаются.",
-        "sync": { "syncClass": "lww-fields", "stage": "later", "note": "Поля питомца — LWW по полю; офлайн-запись не включена." }
+        "sync": {
+          "syncClass": "lww-fields",
+          "stage": "later",
+          "note": "Поля питомца — LWW по полю; офлайн-запись не включена."
+        }
       },
       {
         "model": "PetCareEntry",
@@ -40,7 +62,77 @@
         "snapshotKey": "petCareEntries",
         "snapshotPolicy": "included",
         "reason": "Журнал ухода — пользовательский контент; после питомцев (petId).",
-        "sync": { "syncClass": "append-only", "stage": "later", "note": "Запись ухода — факт: добавляется, не правится; дубли гасит естественный ключ клиента." }
+        "sync": {
+          "syncClass": "append-only",
+          "stage": "later",
+          "note": "Запись ухода — факт: добавляется, не правится; дубли гасит естественный ключ клиента."
+        }
+      }
+    ]
+  },
+  "agent": {
+    "controller": { "file": "pet-care.agent.controller", "export": "PetCareAgentController" },
+    "tools": [
+      {
+        "name": "orion_pet_care_list_pets",
+        "op": "read",
+        "description": "Список питомцев пространства (id, имя, вид, день рождения, заметки). id нужен для orion_pet_care_add_entry.",
+        "http": {
+          "method": "GET",
+          "path": "/ai/v1/pet-care/pets"
+        },
+        "input": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "orion_pet_care_add_entry",
+        "op": "create",
+        "description": "Записать в журнал ухода факт: кормление, ветеринар, лекарство или прогулка. Это факт, а не напоминание.",
+        "http": {
+          "method": "POST",
+          "path": "/ai/v1/pet-care/pets/{petId}/entries"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "petId": {
+              "type": "string",
+              "description": "id питомца из orion_pet_care_list_pets"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "feeding",
+                "vet",
+                "medication",
+                "walk"
+              ],
+              "description": "feeding — кормление, vet — ветеринар, medication — лекарство, walk — прогулка"
+            },
+            "occurredAt": {
+              "type": "string",
+              "description": "Когда было (ISO-дата со временем); без значения — сейчас"
+            },
+            "note": {
+              "type": "string",
+              "description": "Комментарий (до 2000 символов)"
+            }
+          },
+          "required": [
+            "petId",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "example": {
+          "petId": "<id питомца>",
+          "kind": "feeding",
+          "note": "Сухой корм, 60 г"
+        }
       }
     ]
   }

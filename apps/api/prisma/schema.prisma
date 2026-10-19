@@ -27,6 +27,7 @@ model User {
   healthGrants      HealthGrant[]      @relation("HealthGrantee")
   checkedListItems  ListItem[]        @relation("ListItemCheckedBy")
   agentTokens       AgentToken[]
+  assistantKey      AssistantKey?
   privateNotes      Note[]            @relation("NotePrivate")
   refreshTokens     RefreshToken[]
   preference        UserPreference?
@@ -1934,6 +1935,22 @@ model ProjectStatusUpdate {
   @@index([workspaceId])
   @@index([projectId, createdAt])
   @@map("project_status_updates")
+}
+
+/// Ключ владельца к языковой модели для чата внутри ORION (ADR-0017, вариант C). Ключ лежит только в зашифрованном виде
+/// (`sealSecret`), наружу не отдаётся; строка видна только самому пользователю (RLS по `userId`). Не бэкапится.
+model AssistantKey {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  provider  String   @default("anthropic")
+  model     String
+  keyEnc    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("assistant_keys")
 }
 
 /// ORION AI Bridge (ADR-0007). Only the sha256 of the secret is stored; the secret is
