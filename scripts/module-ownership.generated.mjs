@@ -8,5 +8,13 @@ export const GENERATED_MODEL_OWNERS = [
   [
     "PetCareEntry",
     "modules-ext"
+  ],
+  [
+    "PetCareDay",
+    "modules-ext"
+  ],
+  [
+    "PetCareEvent",
+    "modules-ext"
   ]
 ];

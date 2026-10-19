@@ -1,31 +1,45 @@
 "use client";
 
-import {
-  PET_CARE_KINDS,
-  PET_CARE_KIND_LABELS,
-  PET_SPECIES,
-  PET_SPECIES_LABELS,
-  type PetCareKind,
-  type PetCarePet,
-  type PetCareSpecies
-} from "@orion/shared-types";
-import { Button, EmptyState, Input, Modal, PanelBody, PanelHeader, PanelShell, Select, Skeleton, Textarea, useToast } from "@orion/ui";
-import { PawPrint, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { PET_SPECIES_LABELS, type PetCarePet } from "@orion/shared-types";
+import { Button, ConfirmDialog, EmptyState, Modal, PanelBody, PanelHeader, PanelShell, SegmentedControl, Skeleton, useToast } from "@orion/ui";
+import { FileUp, PawPrint, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { describeError } from "../../lib/error-message";
-import { formatDayTitle, shortDateTime } from "../../lib/format";
+import { formatPetDay, petAgeLabel } from "../../lib/pet-care-days";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
-import {
-  useCreatePetCareEntry,
-  useCreatePetCarePet,
-  useDeletePetCareEntry,
-  useDeletePetCarePet,
-  usePetCareEntries,
-  usePetCarePets
-} from "./use-pet-care";
+import { PetCareJournal } from "./care-journal";
+import { PetDiaryTab } from "./diary-tab";
+import { PetEventsTab } from "./events";
+import { PetMurhpImport } from "./import-murhp";
+import { PetForm, petToFormValues, type PetFormValues } from "./pet-form";
+import { PetReportTab } from "./report-tab";
+import { PetStatsTab } from "./stats-tab";
+import { useCreatePetCarePet, useDeletePetCarePet, usePetCarePets, useUpdatePetCarePet } from "./use-pet-care";
+
+type Tab = "diary" | "stats" | "events" | "report" | "care" | "profile";
+
+const TABS: Array<{ value: Tab; label: string }> = [
+  { value: "diary", label: "Дневник" },
+  { value: "stats", label: "Статистика" },
+  { value: "events", label: "События" },
+  { value: "report", label: "Отчёт" },
+  { value: "care", label: "Уход" },
+  { value: "profile", label: "Профиль" }
+];
+
+const toInput = (values: PetFormValues) => ({
+  name: values.name,
+  species: values.species,
+  birthday: values.birthday || null,
+  breed: values.breed,
+  vetContact: values.vetContact,
+  chronic: values.chronic,
+  allergies: values.allergies,
+  notes: values.notes
+});
 
 /**
- * Pet Care (образец модуля по манифесту): список питомцев с формой добавления и журналом ухода.
+ * Pet Care: питомцы пространства, журнал ухода и дневник самочувствия (перенос MurHP).
  * Подключается генерируемым `modules-ext/panels.generated.ts`, а не строкой в `panel-registry.ts`.
  */
 export function PetCarePanel(): React.ReactElement {
@@ -35,16 +49,22 @@ export function PetCarePanel(): React.ReactElement {
   const pets = usePetCarePets(workspaceId);
   const createPet = useCreatePetCarePet(workspaceId);
   const [creating, setCreating] = useState(false);
+  const [petId, setPetId] = useState<string | undefined>();
+  const [tab, setTab] = useState<Tab>("diary");
 
-  async function submit(values: { name: string; species: PetCareSpecies; birthday: string; notes: string }): Promise<void> {
+  const list = pets.data ?? [];
+  // Выбранного питомца могли удалить (в другом окне) — тогда берём первого, а не показываем пустоту.
+  const pet = list.find((item) => item.id === petId) ?? list[0];
+  useEffect(() => {
+    if (pet && pet.id !== petId) setPetId(pet.id);
+  }, [pet, petId]);
+
+  async function submit(values: PetFormValues): Promise<void> {
     try {
-      await createPet.mutateAsync({
-        name: values.name,
-        species: values.species,
-        birthday: values.birthday || null,
-        notes: values.notes
-      });
+      const created = await createPet.mutateAsync(toInput(values));
       setCreating(false);
+      setPetId(created.id);
+      setTab("diary");
       toast({ title: "Питомец добавлен", tone: "success" });
     } catch (error) {
       toast({ title: "Не удалось добавить питомца", description: describeError(error), tone: "danger" });
@@ -56,7 +76,7 @@ export function PetCarePanel(): React.ReactElement {
       <PanelHeader
         icon={PawPrint}
         title="Питомцы"
-        subtitle="Карточки питомцев и журнал ухода"
+        subtitle="Дневник самочувствия, журнал ухода и отчёт для ветеринара"
         actions={
           <Button size="sm" onClick={() => setCreating(true)} disabled={workspaceId === undefined}>
             <Plus className="h-4 w-4" /> Новый питомец
@@ -88,11 +108,11 @@ export function PetCarePanel(): React.ReactElement {
               </Button>
             }
           />
-        ) : (pets.data ?? []).length === 0 ? (
+        ) : !pet ? (
           <EmptyState
             icon={PawPrint}
             title="Питомцев пока нет"
-            description="Добавьте первого питомца и записывайте кормление, визиты к ветеринару, лекарства и прогулки."
+            description="Добавьте питомца, отмечайте его самочувствие по дням и записывайте кормление, визиты, лекарства и прогулки. Дневник из MurHP можно перенести импортом."
             action={
               <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus className="h-4 w-4" /> Новый питомец
@@ -100,171 +120,104 @@ export function PetCarePanel(): React.ReactElement {
             }
           />
         ) : (
-          <ul className="space-y-3" aria-label="Питомцы">
-            {(pets.data ?? []).map((pet) => (
-              <PetCard key={pet.id} workspaceId={workspaceId} pet={pet} />
-            ))}
-          </ul>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {list.length > 1 ? (
+                  <SegmentedControl
+                    aria-label="Питомец"
+                    options={list.map((item) => ({ value: item.id, label: item.name }))}
+                    value={pet.id}
+                    onChange={setPetId}
+                  />
+                ) : (
+                  <span className="text-sm font-medium">{pet.name}</span>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {[PET_SPECIES_LABELS[pet.species], pet.breed, petAgeLabel(pet.birthday)].filter(Boolean).join(" · ")}
+                </span>
+              </div>
+              <SegmentedControl aria-label="Раздел" options={TABS} value={tab} onChange={setTab} />
+            </div>
+
+            {/* key: при смене питомца внутренние состояния вкладок (выбранный день, период) не должны переезжать на другого. */}
+            <div key={pet.id}>
+              {tab === "diary" ? <PetDiaryTab workspaceId={workspaceId} pet={pet} /> : null}
+              {tab === "stats" ? <PetStatsTab workspaceId={workspaceId} pet={pet} /> : null}
+              {tab === "events" ? <PetEventsTab workspaceId={workspaceId} pet={pet} /> : null}
+              {tab === "report" ? <PetReportTab workspaceId={workspaceId} pet={pet} /> : null}
+              {tab === "care" ? <PetCareJournal workspaceId={workspaceId} pet={pet} /> : null}
+              {tab === "profile" ? <PetProfile workspaceId={workspaceId} pet={pet} /> : null}
+            </div>
+          </div>
         )}
       </PanelBody>
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Новый питомец">
-        <PetForm busy={createPet.isPending} onSubmit={submit} onCancel={() => setCreating(false)} />
+        <PetForm initial={petToFormValues()} busy={createPet.isPending} submitLabel="Добавить" onSubmit={submit} onCancel={() => setCreating(false)} />
       </Modal>
     </PanelShell>
   );
 }
 
-function PetForm({
-  busy,
-  onSubmit,
-  onCancel
-}: {
-  busy: boolean;
-  onSubmit: (values: { name: string; species: PetCareSpecies; birthday: string; notes: string }) => void | Promise<void>;
-  onCancel: () => void;
-}): React.ReactElement {
-  const [name, setName] = useState("");
-  const [species, setSpecies] = useState<PetCareSpecies>("other");
-  const [birthday, setBirthday] = useState("");
-  const [notes, setNotes] = useState("");
-
-  function handle(event: FormEvent): void {
-    event.preventDefault();
-    if (name.trim() === "") return;
-    void onSubmit({ name: name.trim(), species, birthday, notes });
-  }
-
-  return (
-    <form onSubmit={handle} className="space-y-3">
-      <label className="block space-y-1 text-sm">
-        <span>Имя</span>
-        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, Барсик" maxLength={120} autoFocus required />
-      </label>
-      <label className="block space-y-1 text-sm">
-        <span>Вид</span>
-        <Select value={species} onChange={(event) => setSpecies(event.target.value as PetCareSpecies)}>
-          {PET_SPECIES.map((item) => (
-            <option key={item} value={item}>
-              {PET_SPECIES_LABELS[item]}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className="block space-y-1 text-sm">
-        <span>День рождения</span>
-        <Input type="date" value={birthday} onChange={(event) => setBirthday(event.target.value)} />
-      </label>
-      <label className="block space-y-1 text-sm">
-        <span>Заметки</span>
-        <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} maxLength={4000} />
-      </label>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Отмена
-        </Button>
-        <Button type="submit" disabled={busy || name.trim() === ""}>
-          Добавить
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function PetCard({ workspaceId, pet }: { workspaceId: string; pet: PetCarePet }): React.ReactElement {
+function PetProfile({ workspaceId, pet }: { workspaceId: string; pet: PetCarePet }): React.ReactElement {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<PetCareKind>("feeding");
-  const [note, setNote] = useState("");
-  const entries = usePetCareEntries(workspaceId, open ? pet.id : undefined);
-  const createEntry = useCreatePetCareEntry(workspaceId, pet.id);
-  const deleteEntry = useDeletePetCareEntry(workspaceId, pet.id);
-  const deletePet = useDeletePetCarePet(workspaceId);
+  const update = useUpdatePetCarePet(workspaceId);
+  const remove = useDeletePetCarePet(workspaceId);
+  const [importing, setImporting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  async function addEntry(event: FormEvent): Promise<void> {
-    event.preventDefault();
+  async function save(values: PetFormValues): Promise<void> {
     try {
-      await createEntry.mutateAsync({ kind, note: note.trim() });
-      setNote("");
+      await update.mutateAsync({ petId: pet.id, input: toInput(values) });
+      toast({ title: "Профиль сохранён", tone: "success" });
     } catch (error) {
-      toast({ title: "Не удалось записать уход", description: describeError(error), tone: "danger" });
+      toast({ title: "Не удалось сохранить профиль", description: describeError(error), tone: "danger" });
     }
   }
 
   async function removePet(): Promise<void> {
-    if (!window.confirm(`Удалить «${pet.name}» вместе с журналом ухода?`)) return;
+    setConfirmDelete(false);
     try {
-      await deletePet.mutateAsync(pet.id);
+      await remove.mutateAsync(pet.id);
     } catch (error) {
       toast({ title: "Не удалось удалить питомца", description: describeError(error), tone: "danger" });
     }
   }
 
   return (
-    <li className="rounded-lg border border-border bg-card p-3" data-testid={`pet-care-pet-${pet.id}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-medium">{pet.name}</div>
-          <div className="text-xs text-muted-foreground">
-            {PET_SPECIES_LABELS[pet.species]}
-            {pet.birthday ? ` · родился ${formatDayTitle(pet.birthday)}` : ""}
-          </div>
-          {pet.notes ? <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{pet.notes}</p> : null}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button size="sm" variant="outline" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-            {open ? "Скрыть журнал" : "Журнал ухода"}
-          </Button>
-          <Button size="sm" variant="subtle" onClick={() => void removePet()} aria-label={`Удалить ${pet.name}`}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-4">
+      {/* key: после сохранения или смены питомца форма читает свежие значения. */}
+      <PetForm key={`${pet.id}:${pet.updatedAt}`} initial={petToFormValues(pet)} busy={update.isPending} submitLabel="Сохранить профиль" onSubmit={save} />
 
-      {open ? (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
-          <form onSubmit={(event) => void addEntry(event)} className="flex flex-wrap items-center gap-2">
-            <Select value={kind} onChange={(event) => setKind(event.target.value as PetCareKind)} aria-label="Вид ухода">
-              {PET_CARE_KINDS.map((item) => (
-                <option key={item} value={item}>
-                  {PET_CARE_KIND_LABELS[item]}
-                </option>
-              ))}
-            </Select>
-            <Input
-              className="min-w-[10rem] flex-1"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Заметка (необязательно)"
-              maxLength={2000}
-              aria-label="Заметка к записи"
-            />
-            <Button type="submit" size="sm" disabled={createEntry.isPending}>
-              Записать
-            </Button>
-          </form>
-          {entries.isLoading ? (
-            <Skeleton className="h-10 w-full" />
-          ) : (entries.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">Записей ухода пока нет.</p>
-          ) : (
-            <ul className="space-y-1">
-              {(entries.data ?? []).map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="min-w-0">
-                    <span className="font-medium">{PET_CARE_KIND_LABELS[entry.kind]}</span>
-                    <span className="text-muted-foreground"> · {shortDateTime(entry.occurredAt)}</span>
-                    {entry.note ? <span className="text-muted-foreground"> — {entry.note}</span> : null}
-                  </span>
-                  <Button size="sm" variant="subtle" onClick={() => deleteEntry.mutate(entry.id)} aria-label="Удалить запись">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
-    </li>
+      <section className="rounded-lg border border-border p-3">
+        <h3 className="text-sm font-semibold">Перенос из MurHP</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Откройте MurHP → Настройки → «Экспорт копии (.json)» и выберите этот файл здесь. Дни и события добавятся к дневнику, пустые поля профиля заполнятся.
+        </p>
+        <Button className="mt-2" size="sm" variant="outline" onClick={() => setImporting(true)}>
+          <FileUp className="h-4 w-4" /> Импортировать копию MurHP
+        </Button>
+      </section>
+
+      <section className="rounded-lg border border-destructive/30 p-3">
+        <h3 className="text-sm font-semibold">Удаление</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Питомец {pet.birthday ? `(родился ${formatPetDay(pet.birthday)}) ` : ""}будет удалён вместе с дневником, событиями и журналом ухода. Отменить нельзя.
+        </p>
+        <Button className="mt-2" size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
+          <Trash2 className="h-4 w-4" /> Удалить питомца
+        </Button>
+      </section>
+
+      <PetMurhpImport open={importing} onClose={() => setImporting(false)} workspaceId={workspaceId} pet={pet} />
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Удалить «${pet.name}»?`}
+        description="Вместе с питомцем удалятся дневник самочувствия, события и журнал ухода."
+        onConfirm={() => void removePet()}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
   );
 }

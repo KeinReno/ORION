@@ -5,15 +5,17 @@
     "kind": "additional",
     "required": false,
     "label": "Питомцы",
-    "summary": "Карточки питомцев и журнал ухода: кормление, ветеринар, лекарства, прогулки.",
-    "owns": "Питомцы пространства (имя, вид, день рождения, заметки) и записи ухода за ними.",
+    "summary": "Карточки питомцев, журнал ухода и дневник самочувствия: симптомы по дням, события, статистика, отчёт для ветеринара.",
+    "owns": "Питомцы пространства (профиль, порода, контакт клиники), записи ухода, дневник самочувствия по дням и события питомца.",
     "livesWithout": "Полностью самостоятелен: не требует и не использует другие предметные модули.",
     "provides": [
       "Панель «Питомцы»",
-      "Журнал ухода по каждому питомцу"
+      "Журнал ухода по каждому питомцу",
+      "Дневник самочувствия с календарём, статистикой и отчётом для ветеринара",
+      "Импорт резервной копии MurHP"
     ],
     "optionalDependencies": [],
-    "disableBehavior": "Панель и API скрываются. Питомцы и записи ухода сохраняются и вернутся при включении.",
+    "disableBehavior": "Панель и API скрываются. Питомцы, записи ухода, дневник и события сохраняются и вернутся при включении.",
     "panelId": "pet-care",
     "defaultEnabled": true
   },
@@ -39,8 +41,24 @@
   },
   "prisma": {
     "fragment": "prisma/models.prisma",
-    "workspaceBackRelations": ["petCarePets    PetCarePet[]", "petCareEntries PetCareEntry[]"],
-    "migrations": [{ "name": "20261018120000_pet_care", "file": "prisma/migration.sql", "rls": "workspace-member" }]
+    "workspaceBackRelations": [
+      "petCarePets    PetCarePet[]",
+      "petCareEntries PetCareEntry[]",
+      "petCareDays    PetCareDay[]",
+      "petCareEvents  PetCareEvent[]"
+    ],
+    "migrations": [
+      {
+        "name": "20261018120000_pet_care",
+        "file": "prisma/migration.sql",
+        "rls": "workspace-member"
+      },
+      {
+        "name": "20261019150000_pet_care_wellbeing",
+        "file": "prisma/migration-wellbeing.sql",
+        "rls": "workspace-member"
+      }
+    ]
   },
   "data": {
     "models": [
@@ -67,11 +85,38 @@
           "stage": "later",
           "note": "Запись ухода — факт: добавляется, не правится; дубли гасит естественный ключ клиента."
         }
+      },
+      {
+        "model": "PetCareDay",
+        "delegate": "petCareDay",
+        "snapshotKey": "petCareDays",
+        "snapshotPolicy": "included",
+        "reason": "Дневник самочувствия — пользовательский контент; после питомцев (petId). День один на (питомец, дата).",
+        "sync": {
+          "syncClass": "lww-fields",
+          "stage": "later",
+          "note": "Запись дня заменяется целиком (PUT по (petId, day)); офлайн-запись не включена."
+        }
+      },
+      {
+        "model": "PetCareEvent",
+        "delegate": "petCareEvent",
+        "snapshotKey": "petCareEvents",
+        "snapshotPolicy": "included",
+        "reason": "События питомца — пользовательский контент; после питомцев (petId).",
+        "sync": {
+          "syncClass": "append-only",
+          "stage": "later",
+          "note": "Событие — факт: добавляется и удаляется, не правится."
+        }
       }
     ]
   },
   "agent": {
-    "controller": { "file": "pet-care.agent.controller", "export": "PetCareAgentController" },
+    "controller": {
+      "file": "pet-care.agent.controller",
+      "export": "PetCareAgentController"
+    },
     "tools": [
       {
         "name": "orion_pet_care_list_pets",

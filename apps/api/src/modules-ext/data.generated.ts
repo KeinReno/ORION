@@ -22,13 +22,27 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
     "snapshotKey": "petCareEntries",
     "policy": "included",
     "reason": "Журнал ухода — пользовательский контент; после питомцев (petId)."
+  },
+  {
+    "model": "PetCareDay",
+    "snapshotKey": "petCareDays",
+    "policy": "included",
+    "reason": "Дневник самочувствия — пользовательский контент; после питомцев (petId). День один на (питомец, дата)."
+  },
+  {
+    "model": "PetCareEvent",
+    "snapshotKey": "petCareEvents",
+    "policy": "included",
+    "reason": "События питомца — пользовательский контент; после питомцев (petId)."
   }
 ];
 
 /** Делегаты для снапшота; порядок — «родитель раньше ребёнка» (в `SNAPSHOT_MODELS`). */
 export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prisma.TransactionClient) => unknown }> = [
   { key: "petCarePets", delegate: (tx) => tx.petCarePet },
-  { key: "petCareEntries", delegate: (tx) => tx.petCareEntry }
+  { key: "petCareEntries", delegate: (tx) => tx.petCareEntry },
+  { key: "petCareDays", delegate: (tx) => tx.petCareDay },
+  { key: "petCareEvents", delegate: (tx) => tx.petCareEvent }
 ];
 
 /** Класс гибридной синхронизации моделей подключаемых модулей (в `SYNC_CLASSIFICATION`). */
@@ -42,5 +56,15 @@ export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> =
     "syncClass": "append-only",
     "stage": "later",
     "note": "Запись ухода — факт: добавляется, не правится; дубли гасит естественный ключ клиента."
+  },
+  "PetCareDay": {
+    "syncClass": "lww-fields",
+    "stage": "later",
+    "note": "Запись дня заменяется целиком (PUT по (petId, day)); офлайн-запись не включена."
+  },
+  "PetCareEvent": {
+    "syncClass": "append-only",
+    "stage": "later",
+    "note": "Событие — факт: добавляется и удаляется, не правится."
   }
 };

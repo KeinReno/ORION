@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./wellbeing";
+
 /**
  * Pet Care — образец модуля, подключённого манифестом (PLATFORM.md этап 7, PLATFORM_AUDIT G5/G10).
  * Контракт живёт в каталоге модуля; в `@orion/shared-types` он попадает через автогенерируемый
@@ -41,6 +43,11 @@ export const petCarePetSchema = z.object({
   species: petCareSpeciesSchema,
   birthday: petCareDaySchema.nullable(),
   notes: z.string(),
+  /** Профиль для ветеринара (из дневника самочувствия): порода, контакт клиники, хронические болезни, аллергии. */
+  breed: z.string(),
+  vetContact: z.string(),
+  chronic: z.string(),
+  allergies: z.string(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -50,7 +57,11 @@ export const createPetCarePetInputSchema = z.object({
   name: z.string().trim().min(1, "Имя обязательно").max(120),
   species: petCareSpeciesSchema.default("other"),
   birthday: petCareDaySchema.nullable().optional(),
-  notes: z.string().max(4000).default("")
+  notes: z.string().max(4000).default(""),
+  breed: z.string().trim().max(120).default(""),
+  vetContact: z.string().trim().max(500).default(""),
+  chronic: z.string().max(1000).default(""),
+  allergies: z.string().max(1000).default("")
 });
 export type CreatePetCarePetInput = z.infer<typeof createPetCarePetInputSchema>;
 
@@ -58,7 +69,11 @@ export const updatePetCarePetInputSchema = z.object({
   name: z.string().trim().min(1, "Имя обязательно").max(120).optional(),
   species: petCareSpeciesSchema.optional(),
   birthday: petCareDaySchema.nullable().optional(),
-  notes: z.string().max(4000).optional()
+  notes: z.string().max(4000).optional(),
+  breed: z.string().trim().max(120).optional(),
+  vetContact: z.string().trim().max(500).optional(),
+  chronic: z.string().max(1000).optional(),
+  allergies: z.string().max(1000).optional()
 });
 export type UpdatePetCarePetInput = z.infer<typeof updatePetCarePetInputSchema>;
 
