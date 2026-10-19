@@ -12,18 +12,13 @@ export interface SearchEngine {
   label: string;
   /** The query is appended encoded. */
   url: string;
-  /**
-   * Whether the engine's results page lets itself be shown in a frame. Google allows it with `igu=1`, Bing does; Yandex
-   * and DuckDuckGo answer `X-Frame-Options`/`frame-ancestors` for framed pages in most setups, so they usually stay blank.
-   */
-  embeds: "yes" | "maybe" | "no";
 }
 
 export const SEARCH_ENGINES: readonly SearchEngine[] = [
-  { id: "google", label: "Google", url: "https://www.google.com/search?igu=1&q=", embeds: "yes" },
-  { id: "yandex", label: "Яндекс", url: "https://yandex.ru/search/?text=", embeds: "maybe" },
-  { id: "bing", label: "Bing", url: "https://www.bing.com/search?q=", embeds: "yes" },
-  { id: "duckduckgo", label: "DuckDuckGo", url: "https://duckduckgo.com/?q=", embeds: "no" }
+  { id: "google", label: "Google", url: "https://www.google.com/search?q=" },
+  { id: "yandex", label: "Яндекс", url: "https://yandex.ru/search/?text=" },
+  { id: "bing", label: "Bing", url: "https://www.bing.com/search?q=" },
+  { id: "duckduckgo", label: "DuckDuckGo", url: "https://duckduckgo.com/?q=" }
 ];
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngineId = "google";

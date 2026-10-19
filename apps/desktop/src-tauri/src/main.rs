@@ -2,6 +2,10 @@
 // Product logic remains in apps/api; database and documents stay in LocalAppData.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod browser;
+#[cfg(debug_assertions)]
+mod browser_smoke;
+
 #[cfg(all(windows, not(debug_assertions)))]
 fn ready() -> bool {
     use std::io::{Read, Write};
@@ -112,10 +116,11 @@ fn open_orion_link(app: &tauri::AppHandle, url: &str) {
     let Some(query) = url.strip_prefix("orion://open?") else {
         return;
     };
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(webview) = app.get_webview("main") {
+        let window = webview.window();
         // serde_json quotes and escapes the string, so the query cannot break out of the JS literal.
         if let Ok(target) = serde_json::to_string(&format!("/open?{query}")) {
-            let _ = window.eval(&format!("window.location.assign({target})"));
+            let _ = webview.eval(&format!("window.location.assign({target})"));
         }
         let _ = window.show();
         let _ = window.unminimize();
@@ -128,7 +133,11 @@ static PENDING_LINK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(No
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![browser::browser_open, browser::browser_control])
         .on_page_load(|webview, payload| {
+            #[cfg(debug_assertions)]
+            browser_smoke::loaded(webview, &payload);
+            if webview.label().starts_with("browser-") { return; }
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                 let pending = PENDING_LINK.lock().ok().and_then(|mut slot| slot.take());
                 if let Some(url) = pending {
@@ -159,7 +168,9 @@ fn main() {
             });
             // The installer registers the scheme; in a dev build register it at run time.
             #[cfg(all(windows, debug_assertions))]
-            let _ = app.deep_link().register_all();
+            if std::env::var_os("ORION_BROWSER_SMOKE").is_none() {
+                let _ = app.deep_link().register_all();
+            }
             #[cfg(all(windows, not(debug_assertions)))]
             if let Err(message) = start_local_runtime(app) {
                 show_startup_error(&message);

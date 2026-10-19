@@ -2,17 +2,17 @@
 
 import { useCreateNote } from "@orion/core-react";
 import { Button, IconButton, Select, useToast } from "@orion/ui";
-import { ClipboardCopy, ExternalLink, FileText, Globe, RotateCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardCopy, ExternalLink, FileText, Globe, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { readEngine, saveEngine } from "../lib/browser-pages";
 import { isSameOrigin, resolveBrowserInput, SEARCH_ENGINES, searchEngine, tabLabel, type SearchEngineId } from "../lib/browser-url";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
+import { isTauri } from "../lib/is-tauri";
+import { NativeBrowserView, type BrowserAction } from "./native-browser-view";
 
 /**
- * One page of the built-in browser: the address/search bar over a sandboxed frame. Used by the tabbed browser panel and by a
- * page torn out into a dock panel of its own — the same component, so they behave the same. The page is shown in a frame, so
- * sites that forbid being framed may stay blank. The visible «Открыть отдельно» action lets the user open the URL
- * outside the frame; cross-origin framing failures cannot be detected reliably from this component.
+ * Shared by browser tabs and torn-out dock pages. Desktop uses an isolated native child WebView;
+ * the web client keeps a sandboxed frame and its explicit separate-page fallback.
  */
 export function BrowserPage({
   url,
@@ -30,10 +30,13 @@ export function BrowserPage({
   const [draft, setDraft] = useState(url ?? "");
   const [reload, setReload] = useState(0);
   const [engine, setEngine] = useState<SearchEngineId>("google");
+  const [desktop, setDesktop] = useState<boolean | null>(null);
+  const [action, setAction] = useState<BrowserAction | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   // localStorage is read after mount, so the server render and the first client render agree.
   useEffect(() => setEngine(readEngine(localStorage)), []);
+  useEffect(() => setDesktop(isTauri()), []);
   useEffect(() => setDraft(url ?? ""), [url]);
   useEffect(() => {
     if (autoFocusBar) input.current?.focus();
@@ -68,7 +71,11 @@ export function BrowserPage({
   return (
     <>
       <form onSubmit={submit} className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5">
-        <IconButton label="Обновить" size="sm" disabled={!url} onClick={() => setReload((n) => n + 1)}>
+        {desktop ? <>
+          <IconButton label="Назад" size="sm" disabled={!url} onClick={() => setAction((prev) => ({ sequence: (prev?.sequence ?? 0) + 1, name: "back" }))}><ArrowLeft className="h-4 w-4" /></IconButton>
+          <IconButton label="Вперёд" size="sm" disabled={!url} onClick={() => setAction((prev) => ({ sequence: (prev?.sequence ?? 0) + 1, name: "forward" }))}><ArrowRight className="h-4 w-4" /></IconButton>
+        </> : null}
+        <IconButton label="Обновить" size="sm" disabled={!url} onClick={() => desktop ? setAction((prev) => ({ sequence: (prev?.sequence ?? 0) + 1, name: "reload" })) : setReload((n) => n + 1)}>
           <RotateCw className="h-4 w-4" />
         </IconButton>
         <input
@@ -81,7 +88,7 @@ export function BrowserPage({
         />
         <Select
           aria-label="Поисковая система"
-          title={current.embeds === "yes" ? `${current.label}: выдача показывается во вкладке` : current.embeds === "maybe" ? `${current.label}: выдача может не показаться во вкладке` : `${current.label}: выдача, как правило, не показывается во вкладке`}
+          title={`Искать в ${current.label}`}
           value={engine}
           onChange={(event) => {
             const next = event.target.value as SearchEngineId;
@@ -110,7 +117,7 @@ export function BrowserPage({
         <IconButton label="Сохранить ссылку заметкой" size="sm" disabled={!url || createNote.isPending} onClick={() => void clip()}>
           <FileText className="h-4 w-4" />
         </IconButton>
-        {url ? (
+        {url && !desktop ? (
           <Button
             size="sm"
             variant="subtle"
@@ -123,7 +130,7 @@ export function BrowserPage({
       </form>
 
       <div className="relative min-h-0 flex-1 bg-background">
-        {url ? (
+        {url && desktop === true ? <NativeBrowserView url={url} onNavigate={onNavigate} action={action} /> : url && desktop === false ? (
           <iframe
             key={`${reload}:${url}`}
             src={url}
@@ -137,7 +144,7 @@ export function BrowserPage({
             <Globe className="h-8 w-8" aria-hidden />
             <p className="text-foreground">Введите адрес сайта или запрос в строке выше</p>
             <p className="max-w-md text-xs">
-              Запрос уйдёт в {current.label}. Страница откроется здесь, во вкладке ORION. Если сайт не покажет содержимое, нажмите «Открыть отдельно».
+              {desktop ? `Поиск в ${current.label}. Страница откроется здесь, внутри ORION.` : `Поиск в ${current.label}. В веб-версии некоторые сайты запрещают встроенный просмотр. Полноценный браузер доступен в приложении ORION для Windows.`}
             </p>
           </div>
         )}
