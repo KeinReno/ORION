@@ -121,4 +121,27 @@ describe("Private notes in a shared workspace", () => {
     // Автор может снова сделать собственную заметку личной? Нет — только создать новую личную.
     expect((await request(`/workspaces/${ws}/notes/${note.data.id}`, "PATCH", alice.token, { isPrivate: true })).status).toBe(409);
   });
+  it("ревизии, ссылки и вложения личной заметки тоже скрыты от остальных на уровне БД", async () => {
+    const { alice, bob, ws } = await pair();
+    const note = await request(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Секрет", body: "ссылка на [[Общая цель]]", isPrivate: true });
+    await prisma.asSystem(async (tx) => {
+      await tx.noteRevision.create({ data: { workspaceId: ws, noteId: note.data.id, title: "Секрет", summary: "", body: "старый текст секрета", tags: [] } });
+    });
+    const links = await prisma.withUser(alice.userId, (tx) => tx.noteLink.count({ where: { sourceNoteId: note.data.id } }));
+    expect(links).toBe(1);
+
+    const seenByAlice = await prisma.withUser(alice.userId, (tx) => tx.noteRevision.count({ where: { noteId: note.data.id } }));
+    expect(seenByAlice).toBe(1);
+    expect(await prisma.withUser(bob.userId, (tx) => tx.noteRevision.count({ where: { noteId: note.data.id } }))).toBe(0);
+    expect(await prisma.withUser(bob.userId, (tx) => tx.noteLink.count({ where: { sourceNoteId: note.data.id } }))).toBe(0);
+    expect(await prisma.withUser(bob.userId, (tx) => tx.noteAttachment.count({ where: { noteId: note.data.id } }))).toBe(0);
+    // Подбросить Алисе ревизию от имени Боба нельзя.
+    await expect(
+      prisma.withUser(bob.userId, (tx) => tx.noteRevision.create({ data: { workspaceId: ws, noteId: note.data.id, title: "x", summary: "", body: "x", tags: [] } }))
+    ).rejects.toThrow();
+
+    // После публикации заметка и её история видны всем.
+    await request(`/workspaces/${ws}/notes/${note.data.id}`, "PATCH", alice.token, { isPrivate: false });
+    expect(await prisma.withUser(bob.userId, (tx) => tx.noteRevision.count({ where: { noteId: note.data.id } }))).toBe(1);
+  });
 });
