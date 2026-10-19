@@ -13,12 +13,12 @@ const path = require('node:path');
 const isAsciiPath = value => /^[\x20-\x7E]*$/.test(String(value));
 
 function programDataRoot(env = process.env) {
-  return path.join(env.ProgramData || 'C:\ProgramData', 'ORION');
+  return path.join(env.ProgramData || 'C:/ProgramData', 'ORION');
 }
 
 /** Короткий ASCII-идентификатор пользователя (хеш имени), чтобы у каждого пользователя Windows был свой каталог. */
 function userTag(env = process.env, os = require('node:os')) {
-  const who = `${env.USERDOMAIN || ''}\${env.USERNAME || os.userInfo().username}`;
+  const who = `${env.USERDOMAIN || ''}/${env.USERNAME || os.userInfo().username}`;
   return createHash('sha256').update(who.toLowerCase()).digest('hex').slice(0, 10);
 }
 
