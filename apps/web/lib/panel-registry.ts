@@ -8,6 +8,7 @@ import {
   GanttChartSquare,
   CandlestickChart,
   Flag,
+  Bot,
   Globe,
   HeartPulse,
   Home as HomeIcon,
@@ -104,6 +105,7 @@ const LazyListsPanel = dynamic(() => import("../panels/ListsPanel").then((module
 const LazyListPanel = dynamic(() => import("../panels/ListPanel").then((module) => module.ListPanel), { ssr: false });
 const LazyFinancePanel = dynamic(() => import("../panels/FinancePanel").then((module) => module.FinancePanel), { ssr: false });
 const LazyInventoryPanel = dynamic(() => import("../panels/InventoryPanel").then((module) => module.InventoryPanel), { ssr: false });
+const LazyAssistantPanel = dynamic(() => import("../panels/AssistantPanel").then((module) => module.AssistantPanel), { ssr: false });
 const LazyBrowserPanel = dynamic(() => import("../panels/BrowserPanel").then((module) => module.BrowserPanel), { ssr: false });
 const LazyBrowserPagePanel = dynamic(() => import("../panels/BrowserPagePanel").then((module) => module.BrowserPagePanel), { ssr: false });
 const LazyMarketsPanel = dynamic(() => import("../panels/MarketsPanel").then((module) => module.MarketsPanel), { ssr: false });
@@ -141,6 +143,7 @@ const ListPanel: FunctionComponent<PanelComponentProps> = (props) => createEleme
 const FinancePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyFinancePanel as ComponentType<PanelComponentProps>, props);
 const InventoryPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyInventoryPanel as ComponentType<PanelComponentProps>, props);
 const MarketsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyMarketsPanel as ComponentType<PanelComponentProps>, props);
+const AssistantPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyAssistantPanel as ComponentType<PanelComponentProps>, props);
 const BrowserPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPanel as ComponentType<PanelComponentProps>, props);
 const BrowserPagePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyBrowserPagePanel, props);
 const DocumentsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentsPanel as ComponentType<PanelComponentProps>, props);
@@ -263,6 +266,8 @@ const panelEntries: PanelEntry[] = [
   { id: "markets", label: "Рынки", icon: CandlestickChart, component: MarketsPanel, moduleId: "markets", group: "Деньги и склад" },
   // A shell tool, not a domain module: always available, no data of its own in the database.
   { id: "browser", label: "Браузер", icon: Globe, component: BrowserPanel, group: "Инструменты" },
+  // Чат с языковой моделью владельца (ADR-0017, вариант C): оболочка, своих данных в БД нет, кроме зашифрованного ключа.
+  { id: "assistant", label: "Ассистент", icon: Bot, component: AssistantPanel, group: "Инструменты" },
   // A page torn out of the browser panel (or dragged from its tab strip) into a dock tab of its own.
   {
     id: "browsertab",
