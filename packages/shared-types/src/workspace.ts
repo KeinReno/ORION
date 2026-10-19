@@ -35,6 +35,8 @@ export type WorkspaceTemplate = z.infer<typeof workspaceTemplateSchema>;
 
 export const createWorkspaceInputSchema = z.object({
   name: z.string().min(1, "Название обязательно").max(80),
+  /** Mark a manually created space as personal. Defaults to shared for existing API callers. */
+  isPersonal: z.boolean().optional(),
   /**
    * `solo-dev` fills the space as a kernel for one person building a product (ORION).
    * `home` (ТЗ-05) — общий «Дом»: списки, задачи, календарь, дом/коммуналка, склад; финансы выключены (включаются в Настройки → Модули).

@@ -10,7 +10,9 @@ export const registerInputSchema = z
     name: z.string().trim().min(1, "Имя обязательно").max(120),
     email: z.string().trim().max(254).optional(),
     password: z.string().min(8, "Пароль должен быть не короче 8 символов").max(128).optional(),
-    pin: pinSchema.optional()
+    pin: pinSchema.optional(),
+    /** False for the guided first run: the person creates their own space next. Omission preserves API compatibility. */
+    createPersonalWorkspace: z.boolean().optional()
   })
   .superRefine((value, ctx) => {
     const email = value.email?.trim();

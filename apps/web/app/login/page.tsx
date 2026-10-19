@@ -36,7 +36,10 @@ function LoginContent(): React.ReactElement {
   const isServerMode = orionMode.data?.loginPolicy === "strict";
   const accounts = useAuthAccounts(!isServerMode);
   const login = useLogin();
-  const [selected, setSelected] = useState<AccountPublic | null>(null);
+  const [picked, setSelected] = useState<AccountPublic | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const list = accounts.data ?? [];
+  const selected = picked ?? (!choosing && list.length === 1 ? list[0] : null);
   const [secret, setSecret] = useState("");
   // Server mode: no directory, no PIN — a named email+password form instead.
   const [serverEmail, setServerEmail] = useState("");
@@ -48,7 +51,7 @@ function LoginContent(): React.ReactElement {
 
   async function unlock(event?: FormEvent, pin?: string): Promise<void> {
     event?.preventDefault();
-    if (!selected) return;
+    if (!selected || login.isPending) return;
     const value = pin ?? secret;
     if (!value) return;
     try {
@@ -64,9 +67,9 @@ function LoginContent(): React.ReactElement {
     router.replace(returnTo);
   }
 
-  function onPinDigit(digit: string): void {
-    if (!selected || secret.length >= 4) return;
-    const next = secret + digit;
+  function onPinChange(value: string): void {
+    if (!selected || login.isPending) return;
+    const next = value.replace(/\D/g, "").slice(0, 4);
     setSecret(next);
     if (next.length === 4) void unlock(undefined, next);
   }
@@ -82,8 +85,6 @@ function LoginContent(): React.ReactElement {
     }
     router.replace(returnTo);
   }
-
-  const list = accounts.data ?? [];
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
@@ -104,11 +105,13 @@ function LoginContent(): React.ReactElement {
             <>
               <h1 className="mb-1 text-lg font-semibold text-foreground">Вход</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Серверный режим: список учётных записей и PIN отключены — войдите по email и паролю.
+                Войдите в свой профиль на сервере.
               </p>
               <form className="flex flex-col gap-3" onSubmit={(e) => void unlockServer(e)}>
                 <Input
                   type="email"
+                  name="email"
+                  aria-label="Почта"
                   autoFocus
                   autoComplete="username"
                   placeholder="Email"
@@ -118,6 +121,8 @@ function LoginContent(): React.ReactElement {
                 />
                 <Input
                   type="password"
+                  name="password"
+                  aria-label="Пароль"
                   autoComplete="current-password"
                   placeholder="Пароль"
                   value={serverPassword}
@@ -141,39 +146,34 @@ function LoginContent(): React.ReactElement {
                 Новая учётная запись
               </a>
             </>
-          ) : selected ? (
+          ) : !orionMode.isLoading && !accounts.isLoading && selected ? (
             <>
               <button
                 type="button"
                 className="mb-4 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   setSelected(null);
+                  setChoosing(true);
                   setSecret("");
                   login.reset();
                 }}
               >
-                ← Другая учётная запись
+                ← Другой профиль
               </button>
               <div className="mb-4 flex items-center gap-3">
                 <AccountAvatar userId={selected.id} name={selected.name} hasAvatar={selected.hasAvatar} size={48} />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{selected.name}</p>
-                  <p className="truncate text-2xs text-subtle-foreground">
-                    {selected.workspaces.map((space) => space.name).join(" · ") || "Нет пространств"}
-                  </p>
+                  <h1 className="truncate text-lg font-semibold text-foreground">{selected.name}</h1>
                 </div>
               </div>
               {selected.unlockKind === "pin" ? (
                 <>
-                  <p className="mb-3 text-sm text-muted-foreground">PIN из 4 цифр</p>
-                  <div className="mb-3 flex justify-center gap-2">
-                    {[0, 1, 2, 3].map((i) => (
-                      <span
-                        key={i}
-                        className={`h-3 w-3 rounded-full border border-border ${i < secret.length ? "bg-accent" : ""}`}
-                      />
-                    ))}
-                  </div>
+                  <label className="mb-4 block space-y-2 text-sm text-muted-foreground">
+                    <span>Введите PIN</span>
+                    <Input key={selected.id} type="password" name="pin" aria-label="PIN" inputMode="numeric" autoComplete="off" autoFocus maxLength={4}
+                      value={secret} readOnly={login.isPending} onChange={(event) => onPinChange(event.target.value)}
+                      className="text-center text-xl tracking-[0.5em]" />
+                  </label>
                   <div className="grid grid-cols-3 gap-2">
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((key) =>
                       key === "" ? (
@@ -182,10 +182,12 @@ function LoginContent(): React.ReactElement {
                         <button
                           key={key}
                           type="button"
-                          className="rounded-xl border border-border py-3 text-sm text-foreground hover:bg-white/5"
+                          aria-label={key === "⌫" ? "Стереть цифру" : key}
+                          disabled={login.isPending}
+                          className="min-h-12 rounded-xl border border-border py-3 text-base text-foreground hover:bg-accent/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
                           onClick={() => {
                             if (key === "⌫") setSecret((s) => s.slice(0, -1));
-                            else onPinDigit(key);
+                            else if (secret.length < 4) onPinChange(secret + key);
                           }}
                         >
                           {key}
@@ -193,11 +195,14 @@ function LoginContent(): React.ReactElement {
                       )
                     )}
                   </div>
+                  {login.isPending ? <p role="status" className="mt-3 text-center text-sm text-muted-foreground">Входим…</p> : null}
                 </>
               ) : (
                 <form className="flex flex-col gap-3" onSubmit={(e) => void unlock(e)}>
                   <Input
                     type="password"
+                    name="password"
+                    aria-label="Пароль"
                     autoFocus
                     autoComplete="current-password"
                     placeholder="Пароль"
@@ -218,16 +223,16 @@ function LoginContent(): React.ReactElement {
             </>
           ) : (
             <>
-              <h1 className="mb-1 text-lg font-semibold text-foreground">Кто входит?</h1>
+              <h1 className="mb-1 text-lg font-semibold text-foreground">{!accounts.isLoading && !accounts.isError && list.length === 0 ? "Добро пожаловать" : "Выберите профиль"}</h1>
               <p className="mb-6 text-sm text-muted-foreground">
-                Учётная запись — это вы. Пространства внутри неё — отдельные хранилища.
+                {!accounts.isLoading && !accounts.isError && list.length === 0 ? "Создайте свой профиль, чтобы начать." : "Выберите, под каким именем войти."}
               </p>
-              {accounts.isLoading ? (
+              {orionMode.isLoading || accounts.isLoading ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Загружаем учётные записи…</p>
               ) : accounts.isError ? (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Не удаётся связаться с сервером — это не значит, что учётных записей нет.
+                    Не удалось загрузить профили. Попробуйте ещё раз.
                   </p>
                   <button
                     type="button"
@@ -238,7 +243,7 @@ function LoginContent(): React.ReactElement {
                   </button>
                 </>
               ) : list.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Пока никого нет — создайте первую учётку.</p>
+                <p className="text-sm text-muted-foreground">Достаточно имени и PIN из четырёх цифр.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {list.map((account) => (
@@ -247,6 +252,7 @@ function LoginContent(): React.ReactElement {
                         type="button"
                         onClick={() => {
                           setSelected(account);
+                          setChoosing(false);
                           setSecret("");
                           login.reset();
                         }}
@@ -256,8 +262,7 @@ function LoginContent(): React.ReactElement {
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-foreground">{account.name}</span>
                           <span className="block truncate text-2xs text-subtle-foreground">
-                            {account.workspaces.map((space) => space.name).join(" · ") || "Нет пространств"}
-                            {account.unlockKind === "pin" ? " · PIN" : ""}
+                            {account.unlockKind === "pin" ? "Вход по PIN" : "Вход по паролю"}
                           </span>
                         </span>
                       </button>
@@ -270,7 +275,7 @@ function LoginContent(): React.ReactElement {
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground transition-colors hover:border-accent/40 hover:text-foreground"
               >
                 <UserPlus className="h-4 w-4" />
-                Новая учётная запись
+                Создать профиль
               </a>
             </>
           )}

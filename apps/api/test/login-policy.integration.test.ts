@@ -50,10 +50,10 @@ describe("Login policy of a LAN host", () => {
     fs.rmSync(nodeDir, { recursive: true, force: true });
   });
 
-  async function request<T = any>(path: string, method: string, body?: unknown) {
+  async function request<T = any>(path: string, method: string, body?: unknown, token?: string) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
     const text = await response.text();
@@ -81,6 +81,27 @@ describe("Login policy of a LAN host", () => {
 
   let counter = 0;
   const name = () => `${emailPrefix}-${counter++}`;
+
+  it("чистый старт: профиль без почты и автопространства; своё пустое личное пространство создаётся отдельно", async () => {
+    const created = await request<{ accessToken: string; user: { id: string } }>("/auth/register", "POST", {
+      name: name(), pin: "4821", createPersonalWorkspace: false
+    });
+    expect(created.status).toBe(201);
+    const token = created.data.accessToken;
+    expect((await request("/workspaces/me", "GET", undefined, token)).data).toEqual([]);
+    const space = await request<{ id: string; name: string; isPersonal: boolean }>("/workspaces", "POST", {
+      name: "Моё пространство", isPersonal: true
+    }, token);
+    expect(space.status).toBe(201);
+    expect(space.data).toMatchObject({ name: "Моё пространство", isPersonal: true });
+    const counts = await prisma.asSystem(async (tx) => ({
+      projects: await tx.project.count({ where: { workspaceId: space.data.id } }),
+      tasks: await tx.task.count({ where: { workspaceId: space.data.id } }),
+      notes: await tx.note.count({ where: { workspaceId: space.data.id } })
+    }));
+    expect(counts).toEqual({ projects: 0, tasks: 0, notes: 0 });
+    expect((await request("/auth/login", "POST", { userId: created.data.user.id, pin: "4821" })).status).toBe(201);
+  });
 
   it("/system/mode сообщает политику: local в «Локальном», home и strict на хосте, strict на обычном сервере", async () => {
     expect((await request("/system/mode", "GET")).data).toEqual({ mode: "local", loginPolicy: "local" });

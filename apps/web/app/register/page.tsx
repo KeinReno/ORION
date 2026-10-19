@@ -27,7 +27,7 @@ function RegisterContent(): React.ReactElement {
   const isServerMode = orionMode.data?.loginPolicy === "strict";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [unlock, setUnlock] = useState<"password" | "pin">("password");
+  const [unlock, setUnlock] = useState<"password" | "pin">("pin");
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
 
@@ -45,6 +45,7 @@ function RegisterContent(): React.ReactElement {
       await register.mutateAsync({
         name,
         email: email.trim() || undefined,
+        createPersonalWorkspace: false,
         ...(unlock === "pin" && !isServerMode ? { pin } : { password })
       });
     } catch {
@@ -55,40 +56,45 @@ function RegisterContent(): React.ReactElement {
 
   return (
     <AuthShell
-      title="Новая учётная запись"
-      subtitle="Для локальной работы достаточно имени и пароля или PIN из 4 цифр. Email не обязателен."
+      title="Создать профиль"
+      subtitle={isServerMode ? "Имя, почта и пароль для входа на сервер." : "Как вас зовут? Придумайте PIN из четырёх цифр."}
       footer={
         <>
-          Уже есть учётка?{" "}
+          Уже есть профиль?{" "}
           <a className="text-foreground underline" href={returnTo === "/spaces" ? "/login" : `/login?next=${encodeURIComponent(returnTo)}`}>
-            Выбрать
+            Войти
           </a>
         </>
       }
     >
       <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-        <Input placeholder="Имя" value={name} onChange={(e) => setName(e.target.value)} required />
-        <Input
+        <Input name="name" aria-label="Ваше имя" autoComplete="nickname" autoFocus placeholder="Ваше имя" value={name} onChange={(e) => setName(e.target.value)} required />
+        {isServerMode ? <Input
+          name="email"
+          aria-label="Почта"
           type="email"
-          placeholder="Email (необязательно)"
+          autoComplete="email"
+          placeholder="Почта"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-        />
+          required
+        /> : null}
         {isServerMode ? null : (
           <div className="flex gap-2">
-            <Button type="button" variant={unlock === "password" ? "primary" : "outline"} onClick={() => setUnlock("password")}>
-              Пароль
-            </Button>
-            <Button type="button" variant={unlock === "pin" ? "primary" : "outline"} onClick={() => setUnlock("pin")}>
-              PIN
+            <Button type="button" size="sm" variant="ghost" onClick={() => setUnlock(unlock === "pin" ? "password" : "pin")}>
+              {unlock === "pin" ? "Использовать пароль вместо PIN" : "Использовать PIN"}
             </Button>
           </div>
         )}
         {unlock === "pin" && !isServerMode ? (
           <Input
+            type="password"
+            name="pin"
+            aria-label="Придумайте PIN"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="4 цифры"
+            placeholder="PIN · 4 цифры"
+            pattern="[0-9]{4}"
             maxLength={4}
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -96,6 +102,8 @@ function RegisterContent(): React.ReactElement {
           />
         ) : (
           <Input
+            name="password"
+            aria-label="Придумайте пароль"
             type="password"
             autoComplete="new-password"
             placeholder="Пароль (мин. 8 символов)"
@@ -110,8 +118,8 @@ function RegisterContent(): React.ReactElement {
             {describeAuthError(register.error)}
           </p>
         ) : null}
-        <Button type="submit" disabled={register.isPending}>
-          {register.isPending ? "Создаём…" : "Создать и войти"}
+        <Button type="submit" disabled={register.isPending || orionMode.isLoading}>
+          {register.isPending ? "Создаём…" : "Продолжить"}
         </Button>
       </form>
     </AuthShell>

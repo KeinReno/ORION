@@ -30,7 +30,7 @@ export class WorkspacesController {
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(createWorkspaceInputSchema)) body: CreateWorkspaceInput
   ): Promise<Workspace> {
-    return this.workspaces.createForUser(user.userId, body.name, body.template);
+    return this.workspaces.createForUser(user.userId, body.name, body.template, body.isPersonal);
   }
 
   @Patch(":workspaceId")

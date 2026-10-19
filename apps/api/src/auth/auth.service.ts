@@ -130,12 +130,14 @@ export class AuthService {
           passwordChangedAt: new Date()
         }
       });
-      const workspace = await tx.workspace.create({
-        data: { name: `${input.name} — личное пространство`, icsToken: randomBytes(24).toString("base64url"), isPersonal: true }
-      });
-      await tx.workspaceMember.create({
-        data: { workspaceId: workspace.id, userId: created.id, role: "owner" }
-      });
+      if (input.createPersonalWorkspace !== false) {
+        const workspace = await tx.workspace.create({
+          data: { name: `${input.name} — личное пространство`, icsToken: randomBytes(24).toString("base64url"), isPersonal: true }
+        });
+        await tx.workspaceMember.create({
+          data: { workspaceId: workspace.id, userId: created.id, role: "owner" }
+        });
+      }
       return created;
     });
 
