@@ -6,6 +6,7 @@ import {
   lanApprovePairInputSchema,
   lanClientConnectInputSchema,
   lanEnableHostInputSchema,
+  lanSetLoginPolicyInputSchema,
   lanPairRequestInputSchema,
   type LanApprovePairInput,
   type LanClientConnectInput,
@@ -14,6 +15,7 @@ import {
   type LanDevice,
   type LanDiscoveredNode,
   type LanEnableHostInput,
+  type LanSetLoginPolicyInput,
   type LanHostStatus,
   type LanNodeCard,
   type LanPairRequestCreated,
@@ -104,6 +106,12 @@ export class LanController {
   @Post("host/enable")
   enable(@CurrentUser() user: RequestUser, @Body(new ZodValidationPipe(lanEnableHostInputSchema)) body: LanEnableHostInput): Promise<{ restarting: boolean; status: LanHostStatus }> {
     return this.lan.enableHost(user.userId, body);
+  }
+
+  @UseGuards(LoopbackOnlyGuard, JwtAuthGuard)
+  @Patch("host/login-policy")
+  setLoginPolicy(@CurrentUser() user: RequestUser, @Body(new ZodValidationPipe(lanSetLoginPolicyInputSchema)) body: LanSetLoginPolicyInput): Promise<LanHostStatus> {
+    return this.lan.setLoginPolicy(user.userId, body);
   }
 
   @UseGuards(LoopbackOnlyGuard, JwtAuthGuard)

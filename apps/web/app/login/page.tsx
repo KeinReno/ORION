@@ -33,7 +33,7 @@ function LoginContent(): React.ReactElement {
   // fail-open direction — the server-side gate is what actually enforces
   // server mode) doesn't flash empty.
   const orionMode = useOrionMode();
-  const isServerMode = orionMode.data?.mode === "server";
+  const isServerMode = orionMode.data?.loginPolicy === "strict";
   const accounts = useAuthAccounts(!isServerMode);
   const login = useLogin();
   const [selected, setSelected] = useState<AccountPublic | null>(null);

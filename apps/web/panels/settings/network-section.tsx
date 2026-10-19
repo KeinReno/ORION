@@ -15,9 +15,10 @@ import {
   usePollLanPairing,
   useOpenLanFirewall,
   useRevokeLanDevice,
+  useSetLanLoginPolicy,
   useStartLanPairing
 } from "@orion/core-react";
-import type { LanClientStatus, LanDiscoveredNode } from "@orion/shared-types";
+import type { LanClientStatus, LanDiscoveredNode, LanLoginPolicy } from "@orion/shared-types";
 import { LAN_DEFAULT_PORT } from "@orion/shared-types";
 import { Badge, Button, Card, Input, useToast } from "@orion/ui";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -131,6 +132,7 @@ function HostSection(): React.ReactElement {
   const [confirming, setConfirming] = useState(false);
   const [name, setName] = useState("");
   const [passwords, setPasswords] = useState<Record<string, string>>({});
+  const [policy, setPolicy] = useState<LanLoginPolicy>("home");
 
   if (host.isLoading || !host.data) return <p className="text-label text-muted-foreground">Загрузка…</p>;
   const data = host.data;
@@ -138,7 +140,7 @@ function HostSection(): React.ReactElement {
   async function onEnable(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const result = await enable.mutateAsync({ acknowledged: true, name: name.trim() || undefined, passwords });
+      const result = await enable.mutateAsync({ acknowledged: true, name: name.trim() || undefined, passwords: policy === "strict" ? passwords : {}, loginPolicy: policy });
       setConfirming(false);
       toast({
         title: result.restarting ? "Включаю «Хост LAN»…" : "Режим сохранён",
@@ -173,13 +175,14 @@ function HostSection(): React.ReactElement {
               <p className="font-medium">Что изменится</p>
               <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
                 <li>API станет доступен в вашей локальной сети по HTTPS (порт {data.port}); PostgreSQL останется только на этом компьютере.</li>
-                <li>Вход по PIN и список аккаунтов отключаются; нужен пароль не короче 12 символов или сочетание регистров, цифр и символов.</li>
+                <li>Политика входа выбирается ниже: «домашняя» (PIN, список аккаунтов, блокировка после серии неверных попыток; только устройства, подтверждённые вами кодом) или «строгая» (только email и пароль).</li>
                 <li>Устройство получит доступ только после вашего подтверждения кодом из 6 цифр.</li>
                 <li>Брандмауэр Windows спросит права администратора — порты молча не открываются.</li>
               </ul>
             </Card>
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={`Имя узла (по умолчанию ${data.name})`} maxLength={80} />
-            {pinAccounts.data && pinAccounts.data.length > 0 ? (
+            <PolicyChoice value={policy} onChange={setPolicy} />
+            {policy === "strict" && pinAccounts.data && pinAccounts.data.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-label">Этим аккаунтам нужен пароль вместо PIN:</p>
                 {pinAccounts.data.map((account) => (
@@ -234,12 +237,89 @@ function HostSection(): React.ReactElement {
             </Button>
           </div>
         ) : null}
+        <HostPolicy current={data.loginPolicy} />
         <div>
           <Button size="sm" variant="outline" onClick={() => void onDisable()} disabled={disable.isPending}>Выключить хост LAN</Button>
         </div>
       </Card>
       {data.active ? <PendingPairs /> : null}
       <Devices />
+    </div>
+  );
+}
+
+const POLICY_TEXT: Record<LanLoginPolicy, { title: string; text: string }> = {
+  home: {
+    title: "Домашняя",
+    text: "Вход по PIN или паролю от 8 символов, список аккаунтов на экране входа (только на устройствах, подтверждённых вами кодом). После 5 неверных попыток аккаунт блокируется на 15 минут."
+  },
+  strict: {
+    title: "Строгая",
+    text: "Как у сервера: только email и пароль (не короче 12 символов или сложный), без PIN и списка аккаунтов. Для узла, доступного из интернета."
+  }
+};
+
+function PolicyChoice({ value, onChange }: { value: LanLoginPolicy; onChange: (value: LanLoginPolicy) => void }): React.ReactElement {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-label font-medium">Политика входа</legend>
+      {(["home", "strict"] as const).map((item) => (
+        <label key={item} className="flex cursor-pointer items-start gap-2 text-label">
+          <input type="radio" name="login-policy" className="mt-0.5" checked={value === item} onChange={() => onChange(item)} />
+          <span>
+            <span className="font-medium">{POLICY_TEXT[item].title}</span>
+            <span className="block text-muted-foreground">{POLICY_TEXT[item].text}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function HostPolicy({ current }: { current: LanLoginPolicy }): React.ReactElement {
+  const setPolicy = useSetLanLoginPolicy();
+  const pinAccounts = useLanPinAccounts(true);
+  const { toast } = useToast();
+  const [passwords, setPasswords] = useState<Record<string, string>>({});
+  const next: LanLoginPolicy = current === "home" ? "strict" : "home";
+  const needPasswords = next === "strict" && (pinAccounts.data?.length ?? 0) > 0;
+
+  async function change(): Promise<void> {
+    try {
+      await setPolicy.mutateAsync({ loginPolicy: next, passwords: next === "strict" ? passwords : {} });
+      setPasswords({});
+      toast({ title: `Политика входа: ${POLICY_TEXT[next].title.toLowerCase()}`, tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось сменить политику входа", description: describeError(error), tone: "danger" });
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-label">
+        Политика входа: <span className="font-medium">{POLICY_TEXT[current].title}</span>
+      </p>
+      <p className="text-label text-muted-foreground">{POLICY_TEXT[current].text}</p>
+      {needPasswords ? (
+        <div className="space-y-2">
+          <p className="text-label">При строгой политике этим аккаунтам нужен пароль вместо PIN:</p>
+          {pinAccounts.data?.map((account) => (
+            <label key={account.userId} className="flex items-center gap-2 text-label">
+              <span className="w-40 shrink-0 truncate">{account.name}</span>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={passwords[account.userId] ?? ""}
+                onChange={(event) => setPasswords((prev) => ({ ...prev, [account.userId]: event.target.value }))}
+                placeholder="Новый пароль"
+              />
+            </label>
+          ))}
+        </div>
+      ) : null}
+      <Button size="sm" variant="outline" disabled={setPolicy.isPending} onClick={() => void change()}>
+        Перейти на «{POLICY_TEXT[next].title.toLowerCase()}»
+      </Button>
     </div>
   );
 }

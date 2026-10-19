@@ -27,6 +27,7 @@ import {
   type LanDevice,
   type LanDiscoveredNode,
   type LanEnableHostInput,
+  type LanLoginPolicy,
   type LanHostStatus,
   type LanPendingPair,
   type LanPinAccount
@@ -2541,8 +2542,12 @@ export class ApiClient {
     return this.request("GET", "/lan/host/pin-accounts", undefined, z.array(lanPinAccountSchema));
   }
 
-  enableLanHost(input: Omit<LanEnableHostInput, "passwords"> & { passwords?: Record<string, string> }): Promise<{ restarting: boolean; status: LanHostStatus }> {
+  enableLanHost(input: Omit<LanEnableHostInput, "passwords" | "loginPolicy"> & { passwords?: Record<string, string>; loginPolicy?: LanLoginPolicy }): Promise<{ restarting: boolean; status: LanHostStatus }> {
     return this.request("POST", "/lan/host/enable", input, z.object({ restarting: z.boolean(), status: lanHostStatusSchema }));
+  }
+
+  setLanLoginPolicy(input: { loginPolicy: LanLoginPolicy; passwords?: Record<string, string> }): Promise<LanHostStatus> {
+    return this.request("PATCH", "/lan/host/login-policy", input, lanHostStatusSchema);
   }
 
   disableLanHost(): Promise<{ restarting: boolean; status: LanHostStatus }> {

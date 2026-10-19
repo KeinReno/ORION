@@ -112,14 +112,14 @@ describe("S05: local/server mode over HTTP", () => {
     process.env.ORION_MODE = "local";
     const res = await fetch(`${baseUrl}/system/mode`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ mode: "local" });
+    expect(await res.json()).toEqual({ mode: "local", loginPolicy: "local" });
   });
 
   it("GET /system/mode reports server mode without requiring auth either", async () => {
     process.env.ORION_MODE = "server";
     const res = await fetch(`${baseUrl}/system/mode`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ mode: "server" });
+    expect(await res.json()).toEqual({ mode: "server", loginPolicy: "strict" });
   });
 
   it("local mode serves the account picker directory", async () => {

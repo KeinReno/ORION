@@ -8,6 +8,7 @@ import type {
   LanDiscoveredNode,
   LanEnableHostInput,
   LanHostStatus,
+  LanLoginPolicy,
   LanPendingPair,
   LanPinAccount
 } from "@orion/shared-types";
@@ -32,8 +33,17 @@ export function useLanPinAccounts(enabled = true) {
 export function useEnableLanHost() {
   const { api } = useCore();
   const queryClient = useQueryClient();
-  return useMutation<{ restarting: boolean; status: LanHostStatus }, Error, Omit<LanEnableHostInput, "passwords"> & { passwords?: Record<string, string> }>({
+  return useMutation<{ restarting: boolean; status: LanHostStatus }, Error, Omit<LanEnableHostInput, "passwords" | "loginPolicy"> & { passwords?: Record<string, string>; loginPolicy?: LanLoginPolicy }>({
     mutationFn: (input) => api.enableLanHost(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lan"] })
+  });
+}
+
+export function useSetLanLoginPolicy() {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<LanHostStatus, Error, { loginPolicy: LanLoginPolicy; passwords?: Record<string, string> }>({
+    mutationFn: (input) => api.setLanLoginPolicy(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lan"] })
   });
 }
