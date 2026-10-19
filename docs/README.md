@@ -20,7 +20,7 @@
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Многопользовательская модель и WebDAV | [SYNC.md](SYNC.md) |
-| KAIDEN Opportunity Hub: первый срез, ТЗ профилей/импорта/ИИ-менеджера | [OPPORTUNITY_HUB_SPEC.md](OPPORTUNITY_HUB_SPEC.md), [OPPORTUNITY_HUB_PROGRESS.md](OPPORTUNITY_HUB_PROGRESS.md), [ADR-0008](adr/ADR-0008-opportunity-hub.md) |
+| KAIDEN Opportunity Hub: Base R0.1–R0.3, серверная симуляция R1; реальный hh.ru-адаптер отсутствует | [OPPORTUNITY_HUB_SPEC.md](OPPORTUNITY_HUB_SPEC.md), [OPPORTUNITY_HUB_PROGRESS.md](OPPORTUNITY_HUB_PROGRESS.md), [ADR-0008](adr/ADR-0008-opportunity-hub.md) |
 | Agent Gateway: capture, context, связи, поиск, MCP в установленной версии, мастер «Подключить агента» (реализовано, ТЗ-02) | [ADR-0018](adr/ADR-0018-agent-gateway.md), [AGENT_MANUAL.md](AGENT_MANUAL.md), [tz/TZ-02-agent-gateway.md](tz/TZ-02-agent-gateway.md) |
 | Agent Manager: режимы автономности, матрица прав, превью изменений, журнал и откат (реализовано, ТЗ-03) | [ADR-0007](adr/ADR-0007-ai-bridge.md), [ADR-0017](adr/ADR-0017-agent-remote-access.md) (удалённый доступ, без кода), [tz/TZ-03-agent-manager.md](tz/TZ-03-agent-manager.md) |
 | LAN Host/Client: режимы узла, mDNS, доверие устройств, TLS (реализовано, ТЗ-04) | [ADR-0015](adr/ADR-0015-lan-host-client.md), [tz/TZ-04-lan-host-client.md](tz/TZ-04-lan-host-client.md), [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
