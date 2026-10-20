@@ -8,6 +8,7 @@ import {
   type AssistantChatResult,
   type AssistantConversation,
   type AssistantConversationSummary,
+  type AssistantEngineStatus,
   type AssistantSendInput,
   type AssistantSendResult,
   type AssistantKeyStatus,
@@ -43,6 +44,12 @@ export class AssistantController {
   @Patch("assistant/key")
   setModel(@CurrentUser() user: RequestUser, @Body(new ZodValidationPipe(setAssistantModelInputSchema)) body: SetAssistantModelInput): Promise<AssistantKeyStatus> {
     return this.keys.setModel(user.userId, body.model);
+  }
+
+  /** Who can answer in the chat on this computer: the key, Codex, Cursor — with what is missing for the rest. */
+  @Get("assistant/engines")
+  engines(@CurrentUser() user: RequestUser): Promise<AssistantEngineStatus[]> {
+    return this.chat.engines(user.userId);
   }
 
   @Delete("assistant/key")

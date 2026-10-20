@@ -298,6 +298,14 @@ export class TimeService {
     }
   }
 
+  /** One entry the caller may edit (their own or an author-unknown legacy one) — the same rule as update/remove. */
+  async get(userId: string, workspaceId: string, entryId: string): Promise<TimeEntry> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return toDto(await this.assertOwnedTx(tx, workspaceId, entryId, userId), userId);
+    });
+  }
+
   async remove(userId: string, workspaceId: string, entryId: string): Promise<void> {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);

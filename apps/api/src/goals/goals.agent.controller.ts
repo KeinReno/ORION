@@ -1,5 +1,14 @@
-import { Body, Controller, Get, OnModuleInit, Param, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
-import { addGoalPlanInputSchema, createGoalInputSchema, updateGoalInputSchema, type AddGoalPlanInput, type CreateGoalInput, type Goal } from "@orion/shared-types";
+import { Body, Controller, Delete, Get, OnModuleInit, Param, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  addGoalPlanInputSchema,
+  agentDeleteRequestSchema,
+  createGoalInputSchema,
+  updateGoalInputSchema,
+  type AddGoalPlanInput,
+  type AgentDeleteRequest,
+  type CreateGoalInput,
+  type Goal
+} from "@orion/shared-types";
 import type { Response } from "express";
 import { AgentModuleToolsService, type ModuleChangeResult } from "../ai/agent-module-tools.service";
 import { AgentTokenGuard, type AgentRequest } from "../ai/agent-token.guard";
@@ -21,16 +30,18 @@ export class GoalsAgentController implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    const describe = async (userId: string, workspaceId: string, goalId: string) => {
+      const goal = (await this.goals.list(userId, workspaceId)).find((item) => item.id === goalId);
+      return goal
+        ? { title: goal.title, fields: { title: goal.title, description: goal.description, status: goal.status, dueAt: goal.dueAt }, labels: { title: "Название", description: "Описание", status: "Статус", dueAt: "Срок" } }
+        : null;
+    };
     this.tools.register("orion_goals_update", {
       noun: "цель",
-      describe: async (userId, workspaceId, goalId) => {
-        const goal = (await this.goals.list(userId, workspaceId)).find((item) => item.id === goalId);
-        return goal
-          ? { title: goal.title, fields: { title: goal.title, description: goal.description, status: goal.status, dueAt: goal.dueAt }, labels: { title: "Название", description: "Описание", status: "Статус", dueAt: "Срок" } }
-          : null;
-      },
+      describe,
       apply: (userId, workspaceId, goalId, args) => this.goals.update(userId, workspaceId, goalId, goalChangeSchema.parse(args))
     });
+    this.tools.register("orion_goals_delete", { noun: "цель", describe, apply: (userId, workspaceId, goalId) => this.goals.remove(userId, workspaceId, goalId) });
   }
 
   @Get()
@@ -70,5 +81,16 @@ export class GoalsAgentController implements OnModuleInit {
       (agent) => this.goals.addPlan(agent.userId, agent.workspaceId, goalId, body),
       (goal) => ({ resource: `goal:${goal.id}`, objectType: "goal", objectId: goal.id, summary: `Привязал проект к цели «${goal.title}»` })
     );
+  }
+
+  /** The goal only: its linked projects stay as they are. */
+  @Delete(":goalId")
+  remove(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("goalId") goalId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_goals_delete", goalId, {}, { reason: body.reason });
   }
 }

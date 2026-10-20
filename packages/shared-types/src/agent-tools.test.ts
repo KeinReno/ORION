@@ -106,7 +106,7 @@ describe("инструменты подключаемых модулей (G13)",
 
   it("разрешения ядра не выдаются как разрешения модулей", () => {
     expect(isExtensionAgentPermission("tasks.task.create")).toBe(false);
-    expect(isExtensionAgentPermission("pet-care.pet.delete")).toBe(false);
+    expect(isExtensionAgentPermission("markets.trade.delete")).toBe(false);
   });
 
   it("токен можно выпустить только с разрешениями модуля", () => {

@@ -163,6 +163,86 @@ describe("Agent tools of the core modules", () => {
     expect((await call(`/ai/v1/habits/${habit.id}`, "DELETE", noDelete.data.secret, {})).status).toBe(403);
   });
 
+  it("deletion everywhere: every module's delete tool files a request; approving removes (or archives) the record", async () => {
+    const { human, ws } = await setup("deleter");
+    expect((await call(`/workspaces/${ws}/modules/health`, "PATCH", human, { enabled: true })).status).toBe(200);
+    const make = async <T>(path: string, body: unknown): Promise<T> => {
+      const created = await call<T>(path, "POST", human, body);
+      expect(created.status, `${path}: ${JSON.stringify(created.data)}`).toBe(201);
+      return created.data;
+    };
+    const project = await make<{ id: string }>(`/workspaces/${ws}/projects`, { name: "Ремонт" });
+    const goal = await make<{ id: string }>(`/workspaces/${ws}/goals`, { title: "Переезд" });
+    const list = await make<{ id: string }>(`/workspaces/${ws}/lists`, { name: "Сборы" });
+    const entry = await make<{ id: string }>(`/workspaces/${ws}/time`, { startedAt: "2026-10-20T08:00:00.000Z", endedAt: "2026-10-20T09:00:00.000Z" });
+    const contact = await make<{ id: string }>(`/workspaces/${ws}/contacts`, { name: "Иван" });
+    const folder = await make<{ id: string }>(`/workspaces/${ws}/documents`, { name: "Старое" });
+    const item = await make<{ id: string }>(`/workspaces/${ws}/inventory/items`, { name: "Лампочки" });
+    const account = await make<{ id: string }>(`/workspaces/${ws}/finance/accounts`, { name: "Карта" });
+    const payment = await make<{ id: string }>(`/workspaces/${ws}/finance/transactions`, { accountId: account.id, type: "expense", occurredAt: "2026-10-20T10:00:00.000Z", lines: [{ amount: 50000 }] });
+    const subject = await make<{ id: string }>(`/workspaces/${ws}/health/subjects`, { kind: "member", name: "Я" });
+    const measurement = await make<{ id: string }>(`/workspaces/${ws}/health/subjects/${subject.id}/measurements`, { kind: "pulse", value: 70 });
+    const home = await make<{ id: string }>(`/workspaces/${ws}/homes`, { name: "Квартира" });
+    const meter = await make<{ id: string }>(`/workspaces/${ws}/homes/${home.id}/meters`, { name: "Вода" });
+    const reading = (await make<{ readings: Array<{ id: string }> }>(`/workspaces/${ws}/homes/${home.id}/meters/${meter.id}/readings`, { value: 12 })).readings[0]!;
+    const pet = await make<{ id: string }>(`/workspaces/${ws}/pet-care/pets`, { name: "Мурчик", species: "cat" });
+    const event = await make<{ id: string }>(`/workspaces/${ws}/events`, { title: "Врач", startAt: "2026-10-22T10:00:00.000Z", endAt: "2026-10-22T11:00:00.000Z" });
+
+    const resources: Record<string, string> = { projects: "project", lists: "list", time: "entry", contacts: "contact", documents: "document", finance: "transaction", inventory: "item", health: "record", home: "item", "pet-care": "pet" };
+    const modulePermissions = Object.entries(resources).flatMap(([module, resource]) => [`${module}.${resource}.read`, `${module}.${resource}.delete`]);
+    // Even a manager never deletes directly.
+    const issued = await call<{ secret: string }>(`/workspaces/${ws}/agent-tokens`, "POST", human, { name: "Чистильщик", scopes: ["events:read", "events:write"], modulePermissions, mode: "manager", expiresInDays: 7 });
+    expect(issued.status, JSON.stringify(issued.data)).toBe(201);
+    const agent = issued.data.secret;
+
+    const requests: Array<[string, string]> = [
+      [`/ai/v1/projects/${project.id}`, "проект: Ремонт"],
+      [`/ai/v1/goals/${goal.id}`, "цель: Переезд"],
+      [`/ai/v1/lists/${list.id}`, "список: Сборы"],
+      [`/ai/v1/time/entries/${entry.id}`, "запись времени: 60 мин"],
+      [`/ai/v1/contacts/${contact.id}`, "контакт: Иван"],
+      [`/ai/v1/documents/${folder.id}`, "документ: Старое"],
+      [`/ai/v1/inventory/${item.id}`, "позиция склада: Лампочки"],
+      [`/ai/v1/finance/transactions/${payment.id}`, "операция: 500.00 от 2026-10-20"],
+      [`/ai/v1/health/${subject.id}/measurements/${measurement.id}`, ""],
+      [`/ai/v1/home/${home.id}/meters/${meter.id}/readings/${reading.id}`, ""],
+      [`/ai/v1/pet-care/pets/${pet.id}`, "питомец: Мурчик"]
+    ];
+    const proposalIds: string[] = [];
+    for (const [path, title] of requests) {
+      const filed = await call<{ proposed: boolean; proposal: { id: string; action: string; targetTitle: string } }>(path, "DELETE", agent, { reason: "больше не нужно" });
+      expect(filed.status, `${path}: ${JSON.stringify(filed.data)}`).toBe(202);
+      expect(filed.data.proposal.action).toBe("module.delete");
+      if (title) expect(filed.data.proposal.targetTitle).toBe(title);
+      proposalIds.push(filed.data.proposal.id);
+    }
+    const eventRequest = await call<{ id: string; action: string; targetTitle: string }>("/ai/v1/proposals", "POST", agent, { action: "event.delete", targetId: event.id, reason: "отменили" });
+    expect(eventRequest.status, JSON.stringify(eventRequest.data)).toBe(201);
+    expect(eventRequest.data).toMatchObject({ action: "event.delete", targetTitle: "Врач" });
+    proposalIds.push(eventRequest.data.id);
+
+    // Nothing is gone before the human decides.
+    expect((await call(`/workspaces/${ws}/contacts/${contact.id}`, "GET", human)).status).toBe(200);
+
+    for (const id of proposalIds) {
+      const approved = await call<{ status: string }>(`/workspaces/${ws}/agent-tokens/proposals/${id}/approve`, "POST", human, {});
+      expect(approved.status, JSON.stringify(approved.data)).toBe(201);
+      expect(approved.data.status).toBe("approved");
+    }
+
+    expect((await call(`/workspaces/${ws}/contacts/${contact.id}`, "GET", human)).status).toBe(404);
+    const ids = async (path: string): Promise<string[]> => (await call<Array<{ id: string }>>(path, "GET", human)).data.map((row) => row.id);
+    expect(await ids(`/workspaces/${ws}/goals`)).not.toContain(goal.id);
+    expect(await ids(`/workspaces/${ws}/lists`)).not.toContain(list.id);
+    expect(await ids(`/workspaces/${ws}/inventory/items`)).not.toContain(item.id);
+    expect(await ids(`/workspaces/${ws}/documents`)).not.toContain(folder.id);
+    expect(await ids(`/workspaces/${ws}/projects`)).not.toContain(project.id);
+    expect(await ids(`/workspaces/${ws}/health/subjects/${subject.id}/measurements`)).toEqual([]);
+    expect(await ids(`/workspaces/${ws}/pet-care/pets`)).toEqual([]);
+    expect(await ids(`/workspaces/${ws}/contacts`)).toEqual([]);
+    expect((await call(`/workspaces/${ws}/events/${event.id}`, "GET", human)).status).toBe(404);
+  });
+
   it("health and the pet diary: an agent records with the human's rights", async () => {
     const { human, ws, agentToken } = await setup("health");
     // «Здоровье» is off until a human switches it on.

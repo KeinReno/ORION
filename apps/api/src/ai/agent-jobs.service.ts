@@ -285,6 +285,9 @@ export class AgentJobsService {
         return this.tasks.remove(userId, workspaceId, row.targetId);
       case "note.delete":
         return this.notes.remove(userId, workspaceId, row.targetId);
+      case "event.delete":
+        // The whole event (every occurrence of a series): the request named the event, not one date.
+        return this.events.remove(userId, workspaceId, row.targetId, "all");
       case "task.update":
         await this.tasks.update(userId, workspaceId, row.targetId, agentTaskPatchSchema.parse({ ...((row.patch ?? {}) as object), ...casOf(row, force) }), agentName);
         return;

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 /**
  * Чат-ассистент внутри ORION (ADR-0017, вариант C): язык модели вызывается по ключу владельца, а действия ассистента
- * идут через те же `/ai/v1`-инструменты, что и у внешних агентов (режим «помощник», без удаления и финансов).
+ * идут через те же `/ai/v1`-инструменты, что и у внешних агентов (режим «помощник», удаление — только запросом, финансы —
+ * только чтение). Отвечать может и программа по подписке на этом компьютере (Codex, Cursor) — см. `ASSISTANT_ENGINES`.
  * Схемы ответов без `.default(...)`.
  */
 export const ASSISTANT_DEFAULT_MODEL = "claude-sonnet-5-5";
@@ -31,6 +32,32 @@ export const ASSISTANT_MODELS: ReadonlyArray<{ id: string; label: string; hint: 
   { id: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "самая сильная, дороже — для сложных просьб" },
   { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "самая быстрая и дешёвая" }
 ];
+
+/**
+ * Who answers in the assistant's chat: the model by the user's own Anthropic key, or a program installed on THIS computer
+ * that the user already pays for (Codex, Cursor) — ORION runs it for one answer with a short-lived token and its MCP
+ * server, exactly as when that program is connected in «ИИ и агенты». Only in a local ORION.
+ */
+export const ASSISTANT_ENGINES = ["anthropic", "codex", "cursor"] as const;
+export const assistantEngineSchema = z.enum(ASSISTANT_ENGINES);
+export type AssistantEngine = z.infer<typeof assistantEngineSchema>;
+
+export const ASSISTANT_ENGINE_LABEL: Record<AssistantEngine, string> = {
+  anthropic: "Свой ключ Anthropic",
+  codex: "Codex (подписка ChatGPT)",
+  cursor: "Cursor (подписка Cursor)"
+};
+
+export const assistantEngineStatusSchema = z.object({
+  engine: assistantEngineSchema,
+  label: z.string(),
+  available: z.boolean(),
+  /** Why it cannot answer now, in Russian; `null` when it can. */
+  reason: z.string().nullable(),
+  /** How to make it available (install, sign in) — shown next to the reason. */
+  hint: z.string().nullable()
+});
+export type AssistantEngineStatus = z.infer<typeof assistantEngineStatusSchema>;
 
 /** Change only the model; the stored key stays as it is. */
 export const setAssistantModelInputSchema = z.object({ model: z.string().trim().min(1).max(80) });
@@ -83,7 +110,9 @@ export const assistantStoredMessageSchema = z.object({
   /** The answer hit the length limit and was cut. */
   truncated: z.boolean(),
   /** Files the user sent with this message. Absent in messages saved before attachments existed. */
-  attachments: z.array(assistantStoredAttachmentSchema).optional()
+  attachments: z.array(assistantStoredAttachmentSchema).optional(),
+  /** Who answered (absent = the Anthropic key, as before engines existed). */
+  engine: assistantEngineSchema.optional()
 });
 export type AssistantStoredMessage = z.infer<typeof assistantStoredMessageSchema>;
 
@@ -136,7 +165,8 @@ export const assistantSendInputSchema = z.object({
   /** Text; may be empty when files say it all («вот скан, разберись»). */
   message: z.string().trim().max(8000),
   context: assistantViewContextSchema.nullable().optional(),
-  attachments: z.array(assistantAttachmentInputSchema).max(10).default([])
+  attachments: z.array(assistantAttachmentInputSchema).max(10).default([]),
+  engine: assistantEngineSchema.default("anthropic")
 }).refine((value) => value.message.length > 0 || value.attachments.length > 0, { message: "Пустое сообщение", path: ["message"] });
 export type AssistantSendInput = z.input<typeof assistantSendInputSchema>;
 

@@ -10,6 +10,12 @@ export function useAssistantKey() {
   return useQuery<AssistantKeyStatus>({ queryKey: ["assistant", "key"], queryFn: () => api.getAssistantKeyStatus() });
 }
 
+/** Key, Codex, Cursor — and what each of them is missing on this computer. */
+export function useAssistantEngines() {
+  const { api } = useCore();
+  return useQuery({ queryKey: ["assistant", "engines"], queryFn: () => api.listAssistantEngines(), staleTime: 60_000 });
+}
+
 export function useSaveAssistantKey() {
   const { api } = useCore();
   const queryClient = useQueryClient();

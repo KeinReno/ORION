@@ -416,10 +416,10 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
     group: "approvals",
     effect: "delete_request",
     description:
-      "Попросить удалить задачу или заметку. Удаление агентом не выполняется: создаётся запрос, который человек подтверждает или отклоняет в Настройках ORION.",
-    scopes: ["tasks:write", "notes:write"],
+      "Попросить удалить задачу, заметку или событие календаря (событие — целиком, со всеми повторами). Удаление агентом не выполняется: создаётся запрос, который человек подтверждает или отклоняет в Настройках ORION или в чате ассистента. Записи других разделов удаляются их собственными инструментами *_delete*/*_archive*.",
+    scopes: ["tasks:write", "notes:write", "events:write"],
     http: { method: "POST", path: "/ai/v1/proposals" },
-    input: obj({ action: { type: "string", enum: ["task.delete", "note.delete"] }, targetId: str("id задачи или заметки"), reason: str("Почему") }, ["action", "targetId"])
+    input: obj({ action: { type: "string", enum: ["task.delete", "note.delete", "event.delete"] }, targetId: str("id задачи, заметки или события"), reason: str("Почему") }, ["action", "targetId"])
   }
 ];
 
@@ -928,6 +928,160 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
     http: { method: "POST", path: "/ai/v1/home/{homeId}/meters/{meterId}/readings" },
     input: { type: "object", properties: {"homeId": {"type": "string", "description": "id дома"}, "meterId": {"type": "string", "description": "id счётчика"}, "value": {"type": "number", "description": "Показание"}, "readAt": {"type": "string", "description": "Когда снято, дата и время ISO-8601"}, "note": {"type": "string", "description": "Заметка"}}, required: ["homeId", "meterId", "value"], additionalProperties: false },
     permission: "home.item.update",
+    moduleId: "home"
+  },
+  {
+    name: "orion_projects_archive",
+    group: "modules",
+    effect: "delete_request",
+    description: "Убрать проект в архив (задачи, заметки и история сохраняются). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/projects/{projectId}" },
+    input: { type: "object", properties: {"projectId": {"type": "string", "description": "id проекта"}, "reason": {"type": "string", "description": "Почему"}}, required: ["projectId"], additionalProperties: false },
+    permission: "projects.project.delete",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_goals_delete",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить цель (привязанные проекты не трогаются). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/goals/{goalId}" },
+    input: { type: "object", properties: {"goalId": {"type": "string", "description": "id цели"}, "reason": {"type": "string", "description": "Почему"}}, required: ["goalId"], additionalProperties: false },
+    permission: "projects.project.delete",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_lists_archive",
+    group: "modules",
+    effect: "delete_request",
+    description: "Убрать список в архив (насовсем его удаляет только человек из архива). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/lists/{listId}" },
+    input: { type: "object", properties: {"listId": {"type": "string", "description": "id списка"}, "reason": {"type": "string", "description": "Почему"}}, required: ["listId"], additionalProperties: false },
+    permission: "lists.list.delete",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_time_delete_entry",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить запись времени (только свою или без автора). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/time/entries/{entryId}" },
+    input: { type: "object", properties: {"entryId": {"type": "string", "description": "id записи времени"}, "reason": {"type": "string", "description": "Почему"}}, required: ["entryId"], additionalProperties: false },
+    permission: "time.entry.delete",
+    moduleId: "time"
+  },
+  {
+    name: "orion_contacts_delete",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить контакт. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/contacts/{contactId}" },
+    input: { type: "object", properties: {"contactId": {"type": "string", "description": "id контакта"}, "reason": {"type": "string", "description": "Почему"}}, required: ["contactId"], additionalProperties: false },
+    permission: "contacts.contact.delete",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_contacts_delete_interaction",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить запись общения с контактом. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/contacts/{contactId}/interactions/{interactionId}" },
+    input: { type: "object", properties: {"contactId": {"type": "string", "description": "id контакта"}, "interactionId": {"type": "string", "description": "id записи общения"}, "reason": {"type": "string", "description": "Почему"}}, required: ["contactId", "interactionId"], additionalProperties: false },
+    permission: "contacts.contact.delete",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_documents_delete",
+    group: "modules",
+    effect: "delete_request",
+    description: "Убрать файл или папку (с содержимым) в корзину «Документов» — 30 дней можно вернуть. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/documents/{documentId}" },
+    input: { type: "object", properties: {"documentId": {"type": "string", "description": "id файла или папки"}, "reason": {"type": "string", "description": "Почему"}}, required: ["documentId"], additionalProperties: false },
+    permission: "documents.document.delete",
+    moduleId: "documents"
+  },
+  {
+    name: "orion_finance_delete_transaction",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить операцию. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/finance/transactions/{transactionId}" },
+    input: { type: "object", properties: {"transactionId": {"type": "string", "description": "id операции"}, "reason": {"type": "string", "description": "Почему"}}, required: ["transactionId"], additionalProperties: false },
+    permission: "finance.transaction.delete",
+    moduleId: "finance"
+  },
+  {
+    name: "orion_inventory_archive_item",
+    group: "modules",
+    effect: "delete_request",
+    description: "Убрать позицию склада в архив (история движений сохраняется). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/inventory/{itemId}" },
+    input: { type: "object", properties: {"itemId": {"type": "string", "description": "id позиции"}, "reason": {"type": "string", "description": "Почему"}}, required: ["itemId"], additionalProperties: false },
+    permission: "inventory.item.delete",
+    moduleId: "inventory"
+  },
+  {
+    name: "orion_health_delete_measurement",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить измерение (давление, вес и т. п.). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/measurements/{measurementId}" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "measurementId": {"type": "string", "description": "id измерения"}, "reason": {"type": "string", "description": "Почему"}}, required: ["subjectId", "measurementId"], additionalProperties: false },
+    permission: "health.record.delete",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_delete_symptom",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить запись о симптоме. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/symptoms/{symptomId}" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "symptomId": {"type": "string", "description": "id симптома"}, "reason": {"type": "string", "description": "Почему"}}, required: ["subjectId", "symptomId"], additionalProperties: false },
+    permission: "health.record.delete",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_delete_appointment",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить визит к врачу. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/appointments/{appointmentId}" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "appointmentId": {"type": "string", "description": "id визита"}, "reason": {"type": "string", "description": "Почему"}}, required: ["subjectId", "appointmentId"], additionalProperties: false },
+    permission: "health.record.delete",
+    moduleId: "health"
+  },
+  {
+    name: "orion_home_delete_reading",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить показание счётчика (например, внесённое по ошибке). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/home/{homeId}/meters/{meterId}/readings/{readingId}" },
+    input: { type: "object", properties: {"homeId": {"type": "string", "description": "id дома"}, "meterId": {"type": "string", "description": "id счётчика"}, "readingId": {"type": "string", "description": "id показания"}, "reason": {"type": "string", "description": "Почему"}}, required: ["homeId", "meterId", "readingId"], additionalProperties: false },
+    permission: "home.item.delete",
+    moduleId: "home"
+  },
+  {
+    name: "orion_home_delete_meter",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить счётчик со всеми показаниями. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/home/{homeId}/meters/{meterId}" },
+    input: { type: "object", properties: {"homeId": {"type": "string", "description": "id дома"}, "meterId": {"type": "string", "description": "id счётчика"}, "reason": {"type": "string", "description": "Почему"}}, required: ["homeId", "meterId"], additionalProperties: false },
+    permission: "home.item.delete",
     moduleId: "home"
   }
 ];

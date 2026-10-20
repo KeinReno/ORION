@@ -125,14 +125,14 @@ describe("Assistant chat (variant C)", () => {
     expect(result.data).toMatchObject({ reply: "Сохранил идею в заметки.", inputTokens: 110, outputTokens: 25 });
     expect(result.data.actions).toEqual([{ tool: "orion_capture", ok: true, summary: "готово", proposalId: null }]);
 
-    // Ключ ушёл провайдеру в заголовке, модель — та, что сохранена; в запросе нет инструментов удаления и финансов.
+    // Ключ ушёл провайдеру в заголовке, модель — та, что сохранена; удаление — только инструментами-запросами, финансы — только чтение.
     expect(seen[0]!.key).toBe(API_KEY);
     expect(seen[0]!.body.model).toBe("claude-test");
     const toolNames: string[] = seen[0]!.body.tools.map((t: { name: string }) => t.name);
     expect(toolNames).toContain("orion_capture");
-    // No deletion, no finance drafts, no manual; finances only as read tools of the module (G13).
-    expect(toolNames.some((name) => name.includes("propose_deletion") || name === "orion_propose_transaction" || name === "orion_finance_refs" || name === "orion_get_manual")).toBe(false);
-    expect(toolNames).toEqual(expect.arrayContaining(["orion_habits_list", "orion_lists_add_items", "orion_finance_accounts"]));
+    // No finance drafts, no manual; finances only as read tools of the module (G13); deletion only as a request.
+    expect(toolNames.some((name) => name === "orion_propose_transaction" || name === "orion_finance_refs" || name === "orion_get_manual")).toBe(false);
+    expect(toolNames).toEqual(expect.arrayContaining(["orion_habits_list", "orion_lists_add_items", "orion_finance_accounts", "orion_propose_deletion", "orion_habits_archive"]));
     // Результат инструмента вернулся модели во втором запросе.
     expect(JSON.stringify(seen[1]!.body.messages)).toContain("tu1");
 
@@ -150,16 +150,35 @@ describe("Assistant chat (variant C)", () => {
     const { token, ws } = await user();
     await request("/assistant/key", "PUT", token, { apiKey: API_KEY });
     script = [
-      () => ({ json: { content: [{ type: "tool_use", id: "tu9", name: "orion_propose_deletion", input: { action: "note.delete", targetId: "x" } }], stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 } } }),
-      () => text("Удалять не могу.")
+      () => ({ json: { content: [{ type: "tool_use", id: "tu9", name: "orion_propose_transaction", input: { accountId: "x", amount: 100 } }], stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 } } }),
+      () => text("Записывать операции не могу.")
     ];
-    const refused = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "удали заметку" }] });
-    expect(refused.data.actions).toEqual([{ tool: "orion_propose_deletion", ok: false, summary: "инструмент недоступен", proposalId: null }]);
+    const refused = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "запиши расход" }] });
+    expect(refused.data.actions).toEqual([{ tool: "orion_propose_transaction", ok: false, summary: "инструмент недоступен", proposalId: null }]);
 
     script = [() => ({ status: 401, json: { error: { message: `bad key ${API_KEY}` } } })];
     const failed = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "привет" }] });
     expect(failed.status).toBe(502);
     expect(JSON.stringify(failed.data)).not.toContain(API_KEY);
+  });
+
+  it("удаление — только запрос: заметка остаётся, пока человек не подтвердит его из ответа чата", async () => {
+    const { token, ws } = await user();
+    await request("/assistant/key", "PUT", token, { apiKey: API_KEY });
+    const note = (await request<{ id: string }>(`/workspaces/${ws}/notes`, "POST", token, { title: "Черновик", body: "" })).data;
+    script = [
+      () => ({ json: { content: [{ type: "tool_use", id: "td1", name: "orion_propose_deletion", input: { action: "note.delete", targetId: note.id, reason: "просили" } }], stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 } } }),
+      () => text("Попросил удалить — подтвердите.")
+    ];
+    const answer = await request<{ actions: Array<{ tool: string; ok: boolean; proposalId: string | null }> }>(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "удали черновик" }] });
+    expect(answer.status).toBe(201);
+    const proposalId = answer.data.actions[0]?.proposalId;
+    expect(answer.data.actions[0]).toMatchObject({ tool: "orion_propose_deletion", ok: true });
+    expect(proposalId).toBeTruthy();
+    expect((await request(`/workspaces/${ws}/notes/${note.id}`, "GET", token)).status).toBe(200);
+    expect((await request(`/workspaces/${ws}/agent-tokens/proposals/${proposalId}/approve`, "POST", token, {})).status).toBe(201);
+    const notes = await request<Array<{ id: string }>>(`/workspaces/${ws}/notes`, "GET", token);
+    expect(notes.data.map((item) => item.id)).not.toContain(note.id);
   });
 
   it("правка существующей задачи — запрос на подтверждение: id приходит в ответе чата, подтверждение применяет её", async () => {

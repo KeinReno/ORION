@@ -85,7 +85,10 @@ const MIGRATION_RE = /^\d{14}_[a-z0-9_]+$/;
 const SNAPSHOT_POLICIES = ["included", "derived", "identity-excluded", "secret-excluded", "ephemeral-excluded"];
 const SYNC_CLASSES = ["mergeable-text", "lww-fields", "append-only", "strict", "not-synced"];
 const SYNC_STAGES = ["stage2", "stage3", "later", "never"];
-const AGENT_TOOL_OPS = ["read", "create"];
+const AGENT_TOOL_OPS = ["read", "create", "delete"];
+const AGENT_TOOL_METHOD = { read: "GET", create: "POST", delete: "DELETE" };
+/** `delete` is never executed by the agent: the tool files a request a human confirms (`AgentModuleToolsService.change`). */
+const AGENT_TOOL_EFFECT = { read: "read", create: "create", delete: "delete_request" };
 const CATALOG_STRING_FIELDS = ["label", "summary", "owns", "livesWithout", "disableBehavior", "panelId"];
 
 const pascal = (id) => id.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("");
@@ -258,7 +261,7 @@ export function collectModules(root = defaultRoot) {
     }
 
     // G13: инструменты для ИИ-агентов. Разрешение выводится из реестра (`<id>.<основной ресурс>.<op>`), а не объявляется руками;
-    // поддержаны только чтение и создание — изменение через «запрос на подтверждение» для модулей ещё не сделано.
+    // чтение, создание и удаление (удаление — всегда запрос человеку на подтверждение, обработчик регистрирует контроллер).
     const agentTools = [];
     const toolPrefix = typeof id === "string" ? `orion_${id.replaceAll("-", "_")}_` : "";
     for (const tool of Array.isArray(manifest.agent?.tools) ? manifest.agent.tools : []) {
@@ -269,7 +272,7 @@ export function collectModules(root = defaultRoot) {
       const route = tool?.http;
       if (!["GET", "POST", "PATCH", "DELETE"].includes(route?.method) || typeof route?.path !== "string" || !route.path.startsWith(`/ai/v1/${id}/`)) {
         fail(`${label}: http = { method, path }, путь начинается с /ai/v1/${id}/`);
-      } else if ((tool.op === "read") !== (route.method === "GET")) fail(`${label}: read ↔ GET, create ↔ POST`);
+      } else if (AGENT_TOOL_OPS.includes(tool.op) && route.method !== AGENT_TOOL_METHOD[tool.op]) fail(`${label}: read ↔ GET, create ↔ POST, delete ↔ DELETE`);
       const schema = tool?.input;
       if (schema?.type !== "object" || schema.additionalProperties !== false || typeof schema.properties !== "object" || !Array.isArray(schema.required)) {
         fail(`${label}: input — JSON-схема { type: "object", properties, required, additionalProperties: false }`);
@@ -364,7 +367,7 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
       name: tool.name,
       description: tool.description,
       group: "modules",
-      effect: tool.op,
+      effect: AGENT_TOOL_EFFECT[tool.op],
       scopes: null,
       http: tool.http,
       input: tool.input,

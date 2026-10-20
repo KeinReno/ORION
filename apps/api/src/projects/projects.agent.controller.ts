@@ -1,5 +1,12 @@
-import { Body, Controller, OnModuleInit, Param, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
-import { createProjectInputSchema, updateProjectInputSchema, type CreateProjectInput, type Project } from "@orion/shared-types";
+import { Body, Controller, Delete, OnModuleInit, Param, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  agentDeleteRequestSchema,
+  createProjectInputSchema,
+  updateProjectInputSchema,
+  type AgentDeleteRequest,
+  type CreateProjectInput,
+  type Project
+} from "@orion/shared-types";
 import type { Response } from "express";
 import { AgentModuleToolsService, type ModuleChangeResult } from "../ai/agent-module-tools.service";
 import { AgentTokenGuard, type AgentRequest } from "../ai/agent-token.guard";
@@ -31,16 +38,18 @@ export class ProjectsAgentController implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    const describe = async (userId: string, workspaceId: string, projectId: string) => {
+      const project = await this.projects.get(userId, workspaceId, projectId).catch(() => null);
+      if (!project) return null;
+      const fields = Object.fromEntries(Object.keys(PROJECT_LABELS).map((key) => [key, (project as unknown as Record<string, unknown>)[key]]));
+      return { title: project.name, fields, labels: PROJECT_LABELS };
+    };
     this.tools.register("orion_projects_update", {
       noun: "проект",
-      describe: async (userId, workspaceId, projectId) => {
-        const project = await this.projects.get(userId, workspaceId, projectId).catch(() => null);
-        if (!project) return null;
-        const fields = Object.fromEntries(Object.keys(PROJECT_LABELS).map((key) => [key, (project as unknown as Record<string, unknown>)[key]]));
-        return { title: project.name, fields, labels: PROJECT_LABELS };
-      },
+      describe,
       apply: (userId, workspaceId, projectId, args) => this.projects.update(userId, workspaceId, projectId, projectChangeSchema.parse(args))
     });
+    this.tools.register("orion_projects_archive", { noun: "проект", describe, apply: (userId, workspaceId, projectId) => this.projects.archive(userId, workspaceId, projectId) });
   }
 
   @Post()
@@ -61,5 +70,16 @@ export class ProjectsAgentController implements OnModuleInit {
     @Body(new ZodValidationPipe(projectChangeSchema)) body: Record<string, unknown>
   ): Promise<ModuleChangeResult> {
     return this.tools.change(req, res, "orion_projects_update", projectId, body);
+  }
+
+  /** Archive, as the panel does: tasks, notes and history stay; the project leaves the active list. */
+  @Delete(":projectId")
+  archive(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("projectId") projectId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_projects_archive", projectId, {}, { reason: body.reason });
   }
 }

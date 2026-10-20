@@ -243,5 +243,140 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     },
     "permission": "pet-care.pet.create",
     "moduleId": "pet-care"
+  },
+  {
+    "name": "orion_pet_care_delete_day",
+    "description": "Удалить запись дневника самочувствия за день. Всегда только запрос человеку.",
+    "group": "modules",
+    "effect": "delete_request",
+    "scopes": null,
+    "http": {
+      "method": "DELETE",
+      "path": "/ai/v1/pet-care/pets/{petId}/days/{day}"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "petId": {
+          "type": "string",
+          "description": "id питомца"
+        },
+        "day": {
+          "type": "string",
+          "description": "День YYYY-MM-DD"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Почему"
+        }
+      },
+      "required": [
+        "petId",
+        "day"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "pet-care.pet.delete",
+    "moduleId": "pet-care"
+  },
+  {
+    "name": "orion_pet_care_delete_event",
+    "description": "Удалить событие дневника питомца (смена корма, прививка и т. п.). Всегда только запрос человеку.",
+    "group": "modules",
+    "effect": "delete_request",
+    "scopes": null,
+    "http": {
+      "method": "DELETE",
+      "path": "/ai/v1/pet-care/pets/{petId}/events/{eventId}"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "petId": {
+          "type": "string",
+          "description": "id питомца"
+        },
+        "eventId": {
+          "type": "string",
+          "description": "id события"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Почему"
+        }
+      },
+      "required": [
+        "petId",
+        "eventId"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "pet-care.pet.delete",
+    "moduleId": "pet-care"
+  },
+  {
+    "name": "orion_pet_care_delete_entry",
+    "description": "Удалить запись ухода (кормление, прогулка, груминг…). Всегда только запрос человеку.",
+    "group": "modules",
+    "effect": "delete_request",
+    "scopes": null,
+    "http": {
+      "method": "DELETE",
+      "path": "/ai/v1/pet-care/pets/{petId}/entries/{entryId}"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "petId": {
+          "type": "string",
+          "description": "id питомца"
+        },
+        "entryId": {
+          "type": "string",
+          "description": "id записи"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Почему"
+        }
+      },
+      "required": [
+        "petId",
+        "entryId"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "pet-care.pet.delete",
+    "moduleId": "pet-care"
+  },
+  {
+    "name": "orion_pet_care_delete_pet",
+    "description": "Удалить питомца вместе со всем дневником и уходом. Всегда только запрос человеку; спрашивайте, только если человек сам этого хочет.",
+    "group": "modules",
+    "effect": "delete_request",
+    "scopes": null,
+    "http": {
+      "method": "DELETE",
+      "path": "/ai/v1/pet-care/pets/{petId}"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "petId": {
+          "type": "string",
+          "description": "id питомца"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Почему"
+        }
+      },
+      "required": [
+        "petId"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "pet-care.pet.delete",
+    "moduleId": "pet-care"
   }
 ];

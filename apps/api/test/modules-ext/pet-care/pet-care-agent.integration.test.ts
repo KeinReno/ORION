@@ -83,7 +83,7 @@ describe("Pet Care tools for AI agents (manifest-declared)", () => {
   it("отказывает в выпуске токена с разрешением, которого не объявил ни один модуль", async () => {
     const { issue } = await setup();
     expect((await issue({ modulePermissions: ["tasks.task.create"] })).status).toBe(400);
-    expect((await issue({ modulePermissions: ["pet-care.pet.delete"] })).status).toBe(400);
+    expect((await issue({ modulePermissions: ["markets.trade.delete"] })).status).toBe(400);
     expect((await issue({ modulePermissions: [READ] })).status).toBe(201);
   });
 

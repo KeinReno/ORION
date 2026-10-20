@@ -1,9 +1,11 @@
-import { Body, Controller, Get, OnModuleInit, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, OnModuleInit, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import {
+  agentDeleteRequestSchema,
   agentSearchQuerySchema,
   createContactCardInputSchema,
   createContactInteractionInputSchema,
   updateContactCardInputSchema,
+  type AgentDeleteRequest,
   type AgentSearchQuery,
   type ContactCard,
   type ContactInteraction,
@@ -26,6 +28,12 @@ const contactChangeSchema = updateContactCardInputSchema.pick({
   birthday: true
 });
 
+/** An interaction is addressed as `<contactId>:<interactionId>` in requests: the service needs both. */
+const splitKey = (key: string): [string, string] => {
+  const at = key.indexOf(":");
+  return [key.slice(0, at), key.slice(at + 1)];
+};
+
 const CONTACT_LABELS = { name: "Имя", phone: "Телефон", email: "Почта", organization: "Организация", role: "Должность", address: "Адрес", birthday: "День рождения" };
 
 /**
@@ -41,15 +49,35 @@ export class ContactsAgentController implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    const describe = async (userId: string, workspaceId: string, contactId: string) => {
+      const card = await this.contacts.get(userId, workspaceId, contactId).catch(() => null);
+      if (!card) return null;
+      const fields = Object.fromEntries(Object.keys(CONTACT_LABELS).map((key) => [key, (card as unknown as Record<string, unknown>)[key]]));
+      return { title: card.name, fields, labels: CONTACT_LABELS };
+    };
     this.tools.register("orion_contacts_update", {
       noun: "контакт",
-      describe: async (userId, workspaceId, contactId) => {
-        const card = await this.contacts.get(userId, workspaceId, contactId).catch(() => null);
-        if (!card) return null;
-        const fields = Object.fromEntries(Object.keys(CONTACT_LABELS).map((key) => [key, (card as unknown as Record<string, unknown>)[key]]));
-        return { title: card.name, fields, labels: CONTACT_LABELS };
-      },
+      describe,
       apply: (userId, workspaceId, contactId, args) => this.contacts.update(userId, workspaceId, contactId, contactChangeSchema.parse(args))
+    });
+    this.tools.register("orion_contacts_delete", { noun: "контакт", describe, apply: (userId, workspaceId, contactId) => this.contacts.remove(userId, workspaceId, contactId) });
+    this.tools.register("orion_contacts_delete_interaction", {
+      noun: "запись общения",
+      describe: async (userId, workspaceId, key) => {
+        const [contactId, interactionId] = splitKey(key);
+        const card = await this.contacts.get(userId, workspaceId, contactId).catch(() => null);
+        const item = card ? (await this.contacts.listInteractions(userId, workspaceId, contactId)).find((entry) => entry.id === interactionId) : undefined;
+        if (!card || !item) return null;
+        return {
+          title: `${card.name}: ${item.note || item.kind}`,
+          fields: { kind: item.kind, occurredAt: item.occurredAt, note: item.note },
+          labels: { kind: "Вид", occurredAt: "Когда", note: "Заметка" }
+        };
+      },
+      apply: (userId, workspaceId, key) => {
+        const [contactId, interactionId] = splitKey(key);
+        return this.contacts.removeInteraction(userId, workspaceId, contactId, interactionId);
+      }
     });
   }
 
@@ -94,5 +122,26 @@ export class ContactsAgentController implements OnModuleInit {
       (agent) => this.contacts.createInteraction(agent.userId, agent.workspaceId, contactId, body),
       () => ({ resource: `contact:${contactId}`, objectType: "contact", objectId: contactId, summary: "Записал общение с контактом" })
     );
+  }
+
+  @Delete(":contactId")
+  remove(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("contactId") contactId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_contacts_delete", contactId, {}, { reason: body.reason });
+  }
+
+  @Delete(":contactId/interactions/:interactionId")
+  removeInteraction(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("contactId") contactId: string,
+    @Param("interactionId") interactionId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_contacts_delete_interaction", `${contactId}:${interactionId}`, {}, { reason: body.reason });
   }
 }

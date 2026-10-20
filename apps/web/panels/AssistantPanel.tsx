@@ -4,14 +4,22 @@ import {
   useAgentProposals,
   useAssistantConversation,
   useAssistantConversations,
+  useAssistantEngines,
   useAssistantKey,
   useDecideAgentProposal,
   useDeleteAssistantConversation,
   useSendToAssistant,
   useUploadToAssistant
 } from "@orion/core-react";
-import { AGENT_PROPOSAL_ACTION_LABEL, type AssistantAttachmentInput, type AssistantStoredMessage } from "@orion/shared-types";
-import { Button, CallChip, Card, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
+import {
+  AGENT_PROPOSAL_ACTION_LABEL,
+  ASSISTANT_ENGINE_LABEL,
+  type AssistantAttachmentInput,
+  type AssistantEngine,
+  type AssistantEngineStatus,
+  type AssistantStoredMessage
+} from "@orion/shared-types";
+import { Button, CallChip, Card, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Select, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
 import { Bot, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
@@ -26,6 +34,31 @@ import { AssistantKeyForm } from "./assistant-key";
 import { DiffTable } from "./settings/agents-proposals";
 
 const OPEN_CONVERSATION_KEY = "orion.assistant.conversation";
+const ENGINE_KEY = "orion.assistant.engine";
+
+function rememberedEngine(): AssistantEngine | null {
+  try {
+    const value = localStorage.getItem(ENGINE_KEY);
+    return value === "anthropic" || value === "codex" || value === "cursor" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberEngine(engine: AssistantEngine): void {
+  try {
+    localStorage.setItem(ENGINE_KEY, engine);
+  } catch {
+    /* the choice is a convenience only */
+  }
+}
+
+/** The remembered engine while it can answer; otherwise the first one that can (the key first, then Codex, Cursor). */
+export function pickEngine(engines: readonly AssistantEngineStatus[], remembered: AssistantEngine | null): AssistantEngine | null {
+  const ready = engines.filter((item) => item.available).map((item) => item.engine);
+  if (remembered && ready.includes(remembered)) return remembered;
+  return ready[0] ?? null;
+}
 const COMPOSER_ID = "assistant-composer";
 
 function rememberedConversation(workspaceId: string | undefined): string | null {
@@ -48,16 +81,19 @@ function rememberConversation(workspaceId: string | undefined, id: string | null
 }
 
 /**
- * Чат-ассистент внутри ORION (ADR-0017, вариант C). Ключ к модели — ваш, хранится зашифрованным на этом узле и сюда не
- * возвращается. Беседы сохраняются на сервере (личные, в этом пространстве); с каждым сообщением уходит, что было на экране
+ * Чат-ассистент внутри ORION (ADR-0017, вариант C). Отвечает модель по вашему ключу (хранится зашифрованным на этом узле
+ * и сюда не возвращается) или программа на этом компьютере по вашей подписке — Codex, Cursor (`assistant-cli.ts` на сервере). Беседы сохраняются на сервере (личные, в этом пространстве); с каждым сообщением уходит, что было на экране
  * («эта задача»). Ассистент действует через те же инструменты, что и внешние агенты: изменения существующего он только
- * предлагает — подтвердить можно прямо в ответе; удалять и трогать финансы не может; всё видно в «Настройки → ИИ и агенты».
+ * предлагает, удаление — только запросом; подтвердить можно прямо в ответе; финансы только смотрит; всё видно в «Настройки → ИИ и агенты».
  */
 export function AssistantPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const workspaceId = workspace?.id;
   const key = useAssistantKey();
-  const conversations = useAssistantConversations(key.data?.configured ? workspaceId : undefined);
+  const engines = useAssistantEngines();
+  const [chosenEngine, setChosenEngine] = useState<AssistantEngine | null>(rememberedEngine);
+  const engine = pickEngine(engines.data ?? [], chosenEngine);
+  const conversations = useAssistantConversations(engine ? workspaceId : undefined);
   const [openId, setOpenId] = useState<string | null>(() => rememberedConversation(workspaceId));
   const conversation = useAssistantConversation(workspaceId, openId);
   const send = useSendToAssistant(workspaceId);
@@ -125,7 +161,7 @@ export function AssistantPanel(): React.ReactElement {
     setDraft("");
     setAttached([]);
     try {
-      const result = await send.mutateAsync({ conversationId: openId, message: text, context: screen, attachments: fitImages(files) });
+      const result = await send.mutateAsync({ conversationId: openId, message: text, context: screen, attachments: fitImages(files), engine: engine ?? "anthropic" });
       choose(result.conversationId);
     } catch (error) {
       setDraft(text);
@@ -136,8 +172,8 @@ export function AssistantPanel(): React.ReactElement {
     }
   }
 
-  const header = <PanelHeader icon={Bot} title="Ассистент" subtitle="Чат с вашей языковой моделью" />;
-  if (key.isLoading) {
+  const header = <PanelHeader icon={Bot} title="Ассистент" subtitle="Чат с вашей моделью или программой по подписке" />;
+  if (key.isLoading || engines.isLoading) {
     return (
       <PanelShell>
         {header}
@@ -147,7 +183,7 @@ export function AssistantPanel(): React.ReactElement {
       </PanelShell>
     );
   }
-  if (key.isError || !key.data || !key.data.available || !key.data.configured) {
+  if (key.isError || !key.data || !engine) {
     return (
       <PanelShell>
         {header}
@@ -157,9 +193,12 @@ export function AssistantPanel(): React.ReactElement {
           ) : !key.data.available ? (
             <EmptyState icon={KeyRound} title="Ассистент недоступен на этом узле" description={key.data.reason ?? undefined} />
           ) : (
-            <PanelSection title="Подключить языковую модель">
-              <AssistantKeyForm />
-            </PanelSection>
+            <>
+              <PanelSection title="Подключить языковую модель">
+                <AssistantKeyForm />
+              </PanelSection>
+              <EngineHints engines={(engines.data ?? []).filter((item) => item.engine !== "anthropic")} />
+            </>
           )}
         </PanelBody>
       </PanelShell>
@@ -318,7 +357,26 @@ export function AssistantPanel(): React.ReactElement {
                 <span>Откройте раздел или запись — ассистент поймёт, о чём «это».</span>
               )}
               <span className="flex items-center gap-2">
-                Модель: {key.data.model} ·
+                <label className="flex items-center gap-1.5">
+                  Отвечает:
+                  <Select
+                    aria-label="Кто отвечает"
+                    value={engine}
+                    className="h-7 w-auto py-0 text-2xs"
+                    onChange={(event) => {
+                      const next = event.target.value as AssistantEngine;
+                      setChosenEngine(next);
+                      rememberEngine(next);
+                    }}
+                  >
+                    {(engines.data ?? []).map((item) => (
+                      <option key={item.engine} value={item.engine} disabled={!item.available} title={item.available ? undefined : [item.reason, item.hint].filter(Boolean).join(". ")}>
+                        {item.engine === "anthropic" && key.data.model ? `${item.label} · ${key.data.model}` : item.label}
+                        {item.available ? "" : ` — ${item.reason ?? "недоступно"}`}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
                 <Button size="sm" variant="ghost" onClick={() => openSettings("agents", "agents")}>
                   Настройки ИИ
                 </Button>
@@ -335,7 +393,7 @@ function Line({ message, workspaceId }: { message: AssistantStoredMessage; works
   const mine = message.role === "user";
   return (
     <Card className={mine ? "ml-8 space-y-1 py-2" : "mr-8 space-y-1 py-2"}>
-      <p className="text-label text-subtle-foreground">{mine ? "Вы" : "Ассистент"}</p>
+      <p className="text-label text-subtle-foreground">{mine ? "Вы" : message.engine && message.engine !== "anthropic" ? `Ассистент · ${ASSISTANT_ENGINE_LABEL[message.engine].replace(/ \(.*\)$/, "")}` : "Ассистент"}</p>
       {mine ? (
         message.content ? <p className="whitespace-pre-wrap text-sm text-foreground">{message.content}</p> : null
       ) : (
@@ -414,5 +472,24 @@ function ProposalDecision({ workspaceId, proposalId }: { workspaceId: string | u
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Codex / Cursor that could answer instead of a key: what each is missing on this computer. */
+function EngineHints({ engines }: { engines: readonly AssistantEngineStatus[] }): React.ReactElement | null {
+  if (engines.length === 0) return null;
+  return (
+    <PanelSection title="Или программа по вашей подписке">
+      <p className="text-sm text-muted-foreground">Если на этом компьютере установлен Codex или Cursor CLI, ассистент может отвечать через него — без отдельного ключа.</p>
+      <ul className="mt-2 space-y-1.5">
+        {engines.map((item) => (
+          <li key={item.engine} className="text-sm">
+            <span className="text-foreground">{item.label}</span>
+            <span className="text-muted-foreground"> — {item.available ? "готов" : item.reason}</span>
+            {item.hint ? <span className="block text-2xs text-subtle-foreground">{item.hint}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </PanelSection>
   );
 }
