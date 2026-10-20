@@ -68,6 +68,7 @@ import {
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { OnboardingCard } from "../components/onboarding-card";
 import { ExtensionSlot } from "../lib/extensions/slot";
+import { ExtensionWidgets } from "../lib/extensions/places-host";
 import { usePersistedDraft } from "../lib/draft-storage";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { describeError } from "../lib/error-message";
@@ -649,6 +650,8 @@ function DashboardOverview(): React.ReactElement {
                 ) : null}
               </div>
             ) : null}
+            {/* Cards that enabled plugins and extensions add (ADR-0022); nothing at all when there are none. */}
+            {wsId ? <ExtensionWidgets workspaceId={wsId} className="grid gap-6 [@container(min-width:640px)]:grid-cols-2" /> : null}
             {tasksOn ? <DashboardAnalytics workspaceId={wsId} tasks={tasks ?? []} now={localNow} /> : null}
           </>
         )}

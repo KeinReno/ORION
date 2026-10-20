@@ -2,13 +2,15 @@
  * Плагины, подключаемые манифестом (DEV_KIT.md, «Свой плагин»). Зеркало реестра модулей для плагинов интерфейса:
  *
  *   apps/web/plugins-ext/<id>/plugin.manifest.json   ← манифест (единственная точка обнаружения)
- *   apps/web/plugins-ext/<id>/*.tsx                   ← компоненты, которые плагин вносит в слоты
+ *   apps/web/plugins-ext/<id>/*.tsx                   ← компоненты: вклады в слоты и новые места (панели, виджеты…)
  *
  * Генератор (вызывается из scripts/module-registry.mjs — одна команда `pnpm module-registry`) пишет:
  *
  *   packages/shared-types/src/plugins-ext/registry.generated.ts   id и записи каталога; ядро дописывает их в
  *                                                                  ORION_PLUGIN_IDS / PLUGIN_CATALOG (plugins.ts)
- *   apps/web/plugins-ext/contributions.generated.ts               вклады в слоты (`contribute(...)`) с ленивой загрузкой
+ *   apps/web/plugins-ext/contributions.generated.ts               вклады в слоты (`contribute(...)`) и места, которые плагин
+ *                                                                  ДОБАВЛЯЕТ (`addPlace(...)`: панель, виджет дашборда, раздел
+ *                                                                  настроек, команда Ctrl+K — ADR-0022), с ленивой загрузкой
  *
  * Плагин здесь — только интерфейс: компоненты в существующие слоты (`SlotContracts`, apps/web/lib/extensions/contracts.ts),
  * доступ к хосту — через lib/extensions/host-api.ts. Серверную часть плагина манифест пока не описывает: такие плагины
@@ -41,6 +43,16 @@ const EXPORT_RE = /^[A-Z][A-Za-z0-9]*$/;
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const SURFACES = ["dock", "side", "widget", "floating", "window"];
 const CATALOG_STRING_FIELDS = ["label", "summary", "disableBehavior"];
+const ICON_RE = /^[A-Z][A-Za-z0-9]*$/;
+const PLACE_ID_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+/** Места, которые плагин добавляет: ключ манифеста → вид в `lib/extensions/places.ts` и обязательные строковые поля. */
+const PLACE_KINDS = {
+  panels: { kind: "panel", strings: ["label"], icon: "required", group: true },
+  widgets: { kind: "widget", strings: ["title"], icon: "none", group: false },
+  settings: { kind: "settings", strings: ["label"], icon: "none", group: false },
+  commands: { kind: "command", strings: ["label"], icon: "optional", group: false }
+};
 
 const pascal = (id) => id.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("");
 const json = (value) => JSON.stringify(value, null, 2);
@@ -141,10 +153,13 @@ export function collectPlugins(root, moduleIds) {
     const surfaces = manifest.surfaces ?? [];
     if (!Array.isArray(surfaces) || surfaces.some((item) => !SURFACES.includes(item))) fail(`surfaces — подмножество ${SURFACES.join(" | ")}`);
 
-    const contributions = manifest.web?.contributions;
+    const contributions = manifest.web?.contributions ?? [];
     const usedSlots = new Set();
-    if (!Array.isArray(contributions) || contributions.length === 0) {
-      fail("web.contributions — непустой массив { slot, file, export, order?, meta? }");
+    const placeCount = Object.keys(PLACE_KINDS).reduce((sum, key) => sum + (Array.isArray(manifest.web?.[key]) ? manifest.web[key].length : 0), 0);
+    if (!Array.isArray(contributions)) {
+      fail("web.contributions — массив { slot, file, export, order?, meta? }");
+    } else if (contributions.length === 0 && placeCount === 0) {
+      fail("плагин ничего не добавляет: нужен хотя бы один из web.contributions, web.panels, web.widgets, web.settings, web.commands");
     } else {
       contributions.forEach((item, index) => {
         const label = `web.contributions[${index}]`;
@@ -163,6 +178,34 @@ export function collectPlugins(root, moduleIds) {
           fail(`${label}: слоту "${item.slot}" нужен meta (см. SlotMeta в ${PLUGIN_PATHS.contracts})`);
         }
         if (!needsMeta && item?.meta !== undefined) fail(`${label}: слот "${item?.slot}" не принимает meta`);
+      });
+    }
+
+    const fileExists = (file) => existsSync(join(root, `${dir}/${file}.tsx`)) || existsSync(join(root, `${dir}/${file}.ts`));
+    for (const [key, spec] of Object.entries(PLACE_KINDS)) {
+      const list = manifest.web?.[key];
+      if (list === undefined) continue;
+      if (!Array.isArray(list)) {
+        fail(`web.${key} — массив`);
+        continue;
+      }
+      const ids = new Set();
+      list.forEach((item, index) => {
+        const label = `web.${key}[${index}]`;
+        if (typeof item?.id !== "string" || !PLACE_ID_RE.test(item.id)) fail(`${label}: id в kebab-case`);
+        else if (ids.has(item.id)) fail(`${label}: id "${item.id}" повторяется`);
+        else ids.add(item.id);
+        for (const field of spec.strings) if (typeof item?.[field] !== "string" || item[field] === "") fail(`${label}: ${field} — непустая строка`);
+        if (spec.icon === "required" || (spec.icon === "optional" && item?.icon !== undefined)) {
+          if (typeof item?.icon !== "string" || !ICON_RE.test(item.icon)) fail(`${label}: icon — имя иконки lucide-react (например "Coins")`);
+        } else if (item?.icon !== undefined) fail(`${label}: icon здесь не используется`);
+        if (spec.group) {
+          if (item?.group !== undefined && (typeof item.group !== "string" || item.group === "")) fail(`${label}: group — непустая строка`);
+        } else if (item?.group !== undefined) fail(`${label}: group здесь не используется`);
+        if (typeof item?.file !== "string" || !FILE_RE.test(item.file) || item.file.includes("..")) fail(`${label}: file — путь внутри каталога плагина без расширения`);
+        else if (!fileExists(item.file)) fail(`${label}: нет файла ${dir}/${item.file}.tsx`);
+        if (typeof item?.export !== "string" || !/^[A-Za-z][A-Za-z0-9]*$/.test(item.export)) fail(`${label}: export — имя экспорта`);
+        if (item?.order !== undefined && typeof item.order !== "number") fail(`${label}: order — число`);
       });
     }
 
@@ -204,8 +247,12 @@ export function renderPluginOutputs(plugins) {
   );
 
   const lines = [];
+  const icons = new Set();
+  let needsPlaces = false;
+  let needsDynamic = false;
   for (const p of plugins) {
-    for (const item of p.manifest.web.contributions) {
+    for (const item of p.manifest.web.contributions ?? []) {
+      needsDynamic = true;
       const ident = `${pascal(p.id)}${item.export}`;
       const slot = JSON.stringify(item.slot);
       lines.push(
@@ -217,13 +264,49 @@ export function renderPluginOutputs(plugins) {
         ""
       );
     }
+    for (const [key, spec] of Object.entries(PLACE_KINDS)) {
+      for (const item of p.manifest.web[key] ?? []) {
+        needsPlaces = true;
+        const ident = `${pascal(p.id)}${pascal(spec.kind)}${pascal(item.id)}`;
+        const common =
+          `pluginId: ${JSON.stringify(p.id)}, id: ${JSON.stringify(item.id)}` +
+          spec.strings.map((field) => `, ${field}: ${JSON.stringify(item[field])}`).join("") +
+          (item.icon !== undefined ? `, icon: ${item.icon}` : "") +
+          (item.group !== undefined ? `, group: ${JSON.stringify(item.group)}` : "") +
+          (item.order !== undefined ? `, order: ${item.order}` : "");
+        if (item.icon !== undefined) icons.add(item.icon);
+        if (spec.kind === "command") {
+          lines.push(
+            // Assigning to the typed `run` lets the export take fewer parameters (no context) without a type error.
+            `addPlace("command", { ${common}, run: (context) => import("./${p.name}/${item.file}").then((module) => { const run: CommandPlace["run"] = module.${item.export}; return run(context); }) });`,
+            ""
+          );
+        } else {
+          needsDynamic = true;
+          const props = spec.kind === "panel" ? "ExtensionPanelProps" : "ExtensionPlaceProps";
+          lines.push(
+            `const ${ident} = dynamic<${props}>(() => import("./${p.name}/${item.file}").then((module) => module.${item.export}), { ssr: false });`,
+            `addPlace(${JSON.stringify(spec.kind)}, { ${common}, component: ${ident} });`,
+            ""
+          );
+        }
+      }
+    }
   }
+  const usesSlots = plugins.some((p) => (p.manifest.web.contributions ?? []).length > 0);
+  const imports = [
+    icons.size > 0 ? `import { ${[...icons].sort().join(", ")} } from "lucide-react";` : null,
+    needsDynamic ? `import dynamic from "next/dynamic";` : null,
+    usesSlots ? `import type { SlotContracts } from "../lib/extensions/contracts";` : null,
+    needsPlaces ? `import { addPlace, type CommandPlace, type ExtensionPanelProps, type ExtensionPlaceProps } from "../lib/extensions/places";` : null,
+    usesSlots ? `import { contribute } from "../lib/extensions/registry";` : null
+  ].filter(Boolean);
   out.set(
     `${PLUGIN_PATHS.webExt}/contributions.generated.ts`,
     HEADER +
       (lines.length > 0
-        ? `import dynamic from "next/dynamic";\nimport type { SlotContracts } from "../lib/extensions/contracts";\nimport { contribute } from "../lib/extensions/registry";\n\n` +
-          `/** Вклады плагинов, подключённых манифестом; импорт этого файла (lib/extensions/slot.tsx) их регистрирует. */\n\n` +
+        ? `${imports.join("\n")}\n\n` +
+          `/** Вклады и места плагинов, подключённых манифестом; импорт этого файла (lib/extensions/slot.tsx) их регистрирует. */\n\n` +
           lines.join("\n")
         : `/** Вклады плагинов, подключённых манифестом; пока таких плагинов нет. */\nexport {};\n`)
   );

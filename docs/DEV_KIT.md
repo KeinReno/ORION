@@ -106,6 +106,26 @@ apps/web/plugins-ext/<id>/<Компонент>.tsx
 - Код плагина обращается к хосту только через `lib/extensions/contracts` и `lib/extensions/host-api`, а также пакеты
   `@orion/*`; цвета — токенами темы. Это проверяет `scripts/architecture-check.mjs`, как и для плагинов основной сборки.
 
+### Новые места: панель, карточка дашборда, раздел настроек, команда
+
+Кроме вкладов в существующие слоты плагин может **добавить** свои места (ADR-0022, E1) — в `web` манифеста:
+
+```json
+"panels":   [{ "id": "usage", "label": "Расход ИИ", "icon": "Coins", "group": "Работа", "file": "UsagePanel", "export": "UsagePanel" }],
+"widgets":  [{ "id": "today", "title": "Расход за сегодня", "file": "TodayCard", "export": "TodayCard" }],
+"settings": [{ "id": "keys", "label": "Расход ИИ", "file": "KeysSettings", "export": "KeysSettings" }],
+"commands": [{ "id": "refresh", "label": "Обновить расход ИИ", "icon": "RefreshCw", "file": "commands", "export": "refresh" }]
+```
+
+- **Панель** — пункт меню (группа `group`, по умолчанию «Расширения») и вкладка дока `ext:<plugin>.<id>`; открывается рядом и
+  отдельным окном (`/panel/ext?instance=<plugin>.<id>`). Компонент получает `ExtensionPanelProps` (`workspaceId`, `setTitle`).
+- **Виджет** — карточка на дашборде с заголовком `title`; **раздел настроек** — вкладка в группе «Расширения» панели
+  настроек. Оба получают `ExtensionPlaceProps` (`workspaceId`).
+- **Команда** — пункт Ctrl+K в группе «Расширения»; `export` — функция `(context: { workspaceId }) => void | Promise<void>`.
+- `id` — kebab-case, уникален внутри плагина и вида; `order` — порядок; иконки — имена `lucide-react`. Типы пропсов —
+  из `lib/extensions/contracts`. Всё добавленное исчезает, когда плагин выключен; открытая вкладка панели объясняет это.
+- Хост мест: `lib/extensions/places.ts` (хранилище, работает во время выполнения) и `places-host.tsx`.
+
 После добавления каталога — `pnpm module-registry`: генератор (`scripts/plugin-registry.mjs`) дописывает плагин в
 `GENERATED_PLUGIN_IDS`/каталог (`packages/shared-types/src/plugins-ext/registry.generated.ts`) и в вклады слотов
 (`apps/web/plugins-ext/contributions.generated.ts`). Плагин появляется в «Настройки → Плагины» и включается/выключается для

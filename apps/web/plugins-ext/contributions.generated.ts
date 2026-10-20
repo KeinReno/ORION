@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import type { SlotContracts } from "../lib/extensions/contracts";
 import { contribute } from "../lib/extensions/registry";
 
-/** Вклады плагинов, подключённых манифестом; импорт этого файла (lib/extensions/slot.tsx) их регистрирует. */
+/** Вклады и места плагинов, подключённых манифестом; импорт этого файла (lib/extensions/slot.tsx) их регистрирует. */
 
 const HabitsInsightsHabitsInsights = dynamic<SlotContracts["habits.insights"]>(() => import("./habits-insights/insights").then((module) => module.HabitsInsights), { ssr: false });
 contribute("habits.insights", { pluginId: "habits-insights", component: HabitsInsightsHabitsInsights });

@@ -459,3 +459,6 @@ export interface SlotMeta {
 }
 
 export type MetaOf<S extends SlotName> = S extends keyof SlotMeta ? SlotMeta[S] : undefined;
+
+/** Props of the places a plugin or extension ADDS (panel, dashboard card, settings section) — ADR-0022, lib/extensions/places.ts. */
+export type { ExtensionPanelProps, ExtensionPlaceProps } from "./places";

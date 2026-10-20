@@ -12,6 +12,7 @@ import {
   ListChecks,
   ListTodo,
   Plus,
+  Puzzle,
   Receipt,
   Settings,
   StickyNote,
@@ -22,7 +23,9 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useCaptureToList } from "./capture-to-list";
 import { openEntity, openList, openPanel, openSettings } from "./panel-bus";
 import { groupPaletteResults, selectPaletteResults, type PaletteEntry } from "./palette-results";
-import { isPanelAvailable, panelRegistry } from "./panel-registry";
+import { instancePanelId, isPanelAvailable, panelRegistry } from "./panel-registry";
+import { placeKey } from "./extensions/places";
+import { useEnabledPlaces } from "./extensions/places-host";
 import { SETTINGS_FIELDS, settingsScopeText, settingsTabInfo } from "./settings-catalog";
 import { relativeTime, shortDate } from "./format";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "./task-labels";
@@ -82,6 +85,7 @@ function paletteGroupOf(entry: PaletteEntry): string {
   if (prefix === "a") return "Действия";
   if (prefix === "p") return "Разделы";
   if (prefix === "c") return "Настройки";
+  if (prefix === "x") return "Расширения";
   if (prefix === "t") return "Задачи";
   if (prefix === "n") return "Заметки";
   if (prefix === "s") return SEARCH_RESULT_GROUPS[type ?? ""] ?? "Найдено";
@@ -149,6 +153,8 @@ export function CommandCenter(): React.ReactElement {
   const captureInbox = useCaptureInboxItem(workspace?.id);
   const captureToList = useCaptureToList(workspace?.id);
   const { toast } = useToast();
+  const extensionPanels = useEnabledPlaces("panel");
+  const extensionCommands = useEnabledPlaces("command");
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -311,6 +317,14 @@ export function CommandCenter(): React.ReactElement {
         run: () => openPanel(panel.id)
       });
     }
+    // Panels and commands added by plugins and extensions (ADR-0022).
+    for (const place of extensionPanels) {
+      const panelId = instancePanelId("ext", placeKey(place));
+      base.push({ id: `p:${panelId}`, label: place.label, hint: "панель", icon: place.icon, run: () => openPanel(panelId, place.label) });
+    }
+    for (const place of extensionCommands) {
+      base.push({ id: `x:${placeKey(place)}`, label: place.label, hint: "расширение", icon: place.icon ?? Puzzle, run: () => void place.run({ workspaceId: workspace?.id }) });
+    }
     // Every settings parameter, so «тихие часы» lands on the field itself, not on the settings panel.
     for (const field of SETTINGS_FIELDS) {
       base.push({
@@ -364,7 +378,7 @@ export function CommandCenter(): React.ReactElement {
       });
     }
     return base;
-  }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id, workspace?.pluginOverrides]);
+  }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id, workspace?.pluginOverrides, extensionPanels, extensionCommands]);
 
   const results = useMemo(() => {
     return selectPaletteResults(commands, query, debouncedQuery);

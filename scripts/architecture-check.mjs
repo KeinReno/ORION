@@ -71,7 +71,7 @@ export function architectureViolations(projectRoot = root) {
       if (base === "plugin" && !rootOf(target) && !within(target, panels) && within(target, web)) {
         const hostPath = relative(web, target).split(sep).join("/");
         const publicSurface = hostPath === "lib/extensions/contracts" || hostPath === "lib/extensions/host-api" ||
-          (composition.includes(file) && hostPath === "lib/extensions/registry");
+          (composition.includes(file) && (hostPath === "lib/extensions/registry" || hostPath === "lib/extensions/places"));
         if (!publicSurface) {
           violations.push(`${relative(projectRoot, file)}:${specifier.line} imports host internals ${specifier.value} (use lib/extensions/host-api)`);
         }
@@ -193,6 +193,15 @@ export function pluginCatalogViolations(projectRoot = root) {
     const source = parseTs(file);
     const where = (node) => `${relative(projectRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
     (function visit(node) {
+      // A place the plugin ADDS (ADR-0022, `addPlace(kind, { pluginId, … })`) is web usage too.
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "addPlace" &&
+        node.arguments.length >= 2 && ts.isObjectLiteralExpression(node.arguments[1])) {
+        const pluginId = propertyString(node.arguments[1], "pluginId");
+        if (pluginId) {
+          webPlugins.add(pluginId);
+          if (!catalog.has(pluginId)) violations.push(`${where(node)} плагин "${pluginId}" добавляет место, но отсутствует в PLUGIN_CATALOG`);
+        }
+      }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "contribute" &&
         node.arguments.length >= 2 && ts.isStringLiteral(node.arguments[0]) && ts.isObjectLiteralExpression(node.arguments[1])) {
         const slot = node.arguments[0].text;

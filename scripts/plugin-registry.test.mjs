@@ -90,6 +90,43 @@ describe("plugin-registry: плагин из манифеста", () => {
   });
 });
 
+describe("plugin-registry: места, которые плагин добавляет (ADR-0022)", () => {
+  const withPlaces = (web) => manifest({ web });
+
+  it("панель, виджет, раздел настроек и команда — без вкладов в слоты", () => {
+    addPlugin(
+      withPlaces({
+        panels: [{ id: "usage", label: "Расход", icon: "Coins", group: "Работа", file: "view", export: "FixtureView", order: 3 }],
+        widgets: [{ id: "today", title: "Сегодня", file: "view", export: "FixtureView" }],
+        settings: [{ id: "keys", label: "Ключи", file: "view", export: "FixtureView" }],
+        commands: [{ id: "refresh", label: "Обновить расход", icon: "RefreshCw", file: "view", export: "refresh" }]
+      })
+    );
+    expect(problems()).toBe("");
+    writeRegistry(root);
+    const code = readFileSync(join(root, "apps/web/plugins-ext/contributions.generated.ts"), "utf8");
+    expect(code).toContain('import { Coins, RefreshCw } from "lucide-react";');
+    expect(code).toContain('import { addPlace, type CommandPlace, type ExtensionPanelProps, type ExtensionPlaceProps } from "../lib/extensions/places";');
+    expect(code).not.toContain("SlotContracts");
+    expect(code).toContain('addPlace("panel", { pluginId: "fixture-plugin", id: "usage", label: "Расход", icon: Coins, group: "Работа", order: 3, component: FixturePluginPanelUsage });');
+    expect(code).toContain('dynamic<ExtensionPlaceProps>(() => import("./fixture-plugin/view")');
+    expect(code).toContain('addPlace("settings", { pluginId: "fixture-plugin", id: "keys", label: "Ключи", component: FixturePluginSettingsKeys });');
+    expect(code).toContain('addPlace("command", { pluginId: "fixture-plugin", id: "refresh", label: "Обновить расход", icon: RefreshCw, run: (context) => import("./fixture-plugin/view").then((module) => { const run: CommandPlace["run"] = module.refresh; return run(context); }) });');
+    expect(registryViolations(root)).toEqual([]);
+  });
+
+  it("отвергает плагин без вкладов, панель без иконки и повтор id", () => {
+    addPlugin(withPlaces({}));
+    expect(problems()).toContain("плагин ничего не добавляет");
+    addPlugin(withPlaces({ panels: [{ id: "usage", label: "Расход", file: "view", export: "FixtureView" }] }));
+    expect(problems()).toContain("icon — имя иконки lucide-react");
+    addPlugin(withPlaces({ widgets: [{ id: "a", title: "А", file: "view", export: "FixtureView" }, { id: "a", title: "Б", file: "view", export: "FixtureView" }] }));
+    expect(problems()).toContain('id "a" повторяется');
+    addPlugin(withPlaces({ widgets: [{ id: "a", title: "А", file: "view", export: "FixtureView", group: "Работа" }] }));
+    expect(problems()).toContain("group здесь не используется");
+  });
+});
+
 describe("plugin-registry: отказы с понятной причиной", () => {
   it("неизвестный слот, занятый id, чужой модуль", () => {
     addPlugin(manifest({ web: { contributions: [{ slot: "habits.unknown", file: "view", export: "FixtureView" }] } }));
