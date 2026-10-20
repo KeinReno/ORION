@@ -135,6 +135,16 @@ let focusNonce = 0;
 const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
 let browserNonce = 0;
 
+const assistantChannel = makeIntentChannel<{ text: string; nonce: number }>("assistant");
+let assistantNonce = 0;
+
+/** Open the assistant with a question already typed (Ctrl+K «Спросить ассистента»); the user sends it with Enter. */
+export function askAssistant(text: string): void {
+  assistantNonce += 1;
+  assistantChannel.emit({ text, nonce: assistantNonce });
+}
+export const useAssistantRequest = assistantChannel.useIntent;
+
 /** Open a web page in ORION's built-in browser (a new tab there; the panel is opened/focused first). */
 export function openInBrowser(url: string): void {
   browserNonce += 1;

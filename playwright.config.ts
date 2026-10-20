@@ -23,7 +23,11 @@ const apiEnv: Record<string, string> = {
   ORION_EXTENSIONS_DIR: "../../tmp/e2e-extensions",
   ORION_NODE_DIR: "../../tmp/e2e-node",
   // «Подключить в один клик» writes AI programs' configs: in e2e only into a scratch profile, never the real one.
-  ORION_AGENT_CLIENT_HOME: "../../tmp/e2e-agent-home"
+  ORION_AGENT_CLIENT_HOME: "../../tmp/e2e-agent-home",
+  // The assistant chat: its key is sealed with SYNC_SECRET (a throwaway one here), and the «model» is a fake server that
+  // e2e/assistant-chat.spec.ts runs on this port — no request ever leaves the machine.
+  SYNC_SECRET: "b3Jpb24tZTJlLXN5bmMtc2VjcmV0LTMyLWJ5dGVzISE=",
+  ORION_ANTHROPIC_URL: "http://127.0.0.1:4555"
 };
 // Tells e2e/agent-one-click.spec.ts that the API it talks to was started with the scratch profile above.
 process.env.ORION_E2E_AGENT_HOME = "tmp/e2e-agent-home";
