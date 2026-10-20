@@ -4,13 +4,39 @@ import { useCore, useExtensions, useSession } from "@orion/core-react";
 import type { ExtensionsState } from "@orion/shared-types";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { readNodeMark } from "../../node-mode";
-import { createExtensionRuntime, type ExtensionLoadState, type ExtensionModule } from "./loader";
+import type { ApiClient } from "@orion/core";
+import { createExtensionRuntime, type ExtensionLoadState, type ExtensionModule, type ExtensionServices } from "./loader";
 import { installSdk } from "./sdk";
+
+/** ApiClient of this window, set by `RuntimeExtensions` once the core is up (the runtime itself is created at import). */
+let apiClient: ApiClient | null = null;
+
+function servicesFor(extensionId: string): ExtensionServices {
+  const api = (): ApiClient => {
+    if (!apiClient) throw new Error("ORION ещё не готов");
+    return apiClient;
+  };
+  return {
+    storage: {
+      list: (workspaceId, collection) => api().listExtensionRecords(workspaceId, extensionId, collection),
+      get: async (workspaceId, collection, key) => (await api().listExtensionRecords(workspaceId, extensionId, collection)).find((record) => record.key === key),
+      put: (workspaceId, collection, key, data) => api().putExtensionRecord(workspaceId, extensionId, collection, key, data),
+      remove: (workspaceId, collection, key) => api().deleteExtensionRecord(workspaceId, extensionId, collection, key)
+    },
+    secrets: {
+      status: () => api().getExtensionSecrets(extensionId),
+      set: (name, value) => api().setExtensionSecret(extensionId, name, value),
+      clear: (name) => api().clearExtensionSecret(extensionId, name)
+    },
+    fetch: (workspaceId, input) => api().extensionFetch(workspaceId, extensionId, input)
+  };
+}
 
 /** Один на окно: загруженные расширения живут, пока живёт страница. */
 export const extensionRuntime = createExtensionRuntime(
   // webpackIgnore: the URL is only known at run time and must be loaded by the browser as is, not bundled.
-  (url) => import(/* webpackIgnore: true */ url) as Promise<ExtensionModule>
+  (url) => import(/* webpackIgnore: true */ url) as Promise<ExtensionModule>,
+  servicesFor
 );
 
 /** Пока у какого-то расширения включён режим разработчика — правка файла видна через ~2 с; иначе опрос редкий. */
@@ -26,6 +52,7 @@ function pollInterval(state: ExtensionsState | undefined): number {
 export function RuntimeExtensions(): null {
   const { user } = useSession();
   const { api } = useCore();
+  apiClient = api;
   const [clientMode] = useState(() => readNodeMark() !== null);
   const active = Boolean(user) && !clientMode;
   const extensions = useExtensions({ enabled: active, pollMs: pollInterval });

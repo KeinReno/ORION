@@ -121,6 +121,87 @@ describe("Extensions from the folder", () => {
     expect(revoked.data.items.find((entry) => entry.id === "hello-it")?.status).toBe("pending");
   });
 
+  describe("E3: data, secrets, network", () => {
+    async function approvedDataExtension(token: string, permissions: Record<string, unknown> = { storage: true, secrets: ["api_key"], network: ["api.example.com"] }): Promise<void> {
+      fs.mkdirSync(path.join(extensionsDir, "data-it"), { recursive: true });
+      fs.writeFileSync(
+        path.join(extensionsDir, "data-it", "orion.extension.json"),
+        JSON.stringify({ id: "data-it", name: "Данные", version: "0.1.0", engines: { orion: "^1.0.0" }, permissions })
+      );
+      fs.writeFileSync(path.join(extensionsDir, "data-it", "web.js"), "export function activate() {}\n");
+      const state = await call<State>("/extensions", { token });
+      const sha = state.data.items.find((entry) => entry.id === "data-it")!.sha256;
+      expect((await call("/extensions/data-it/approve", { method: "POST", token, body: { sha256: sha } })).status).toBe(200);
+    }
+    async function workspaceOf(token: string): Promise<string> {
+      return (await call<Array<{ id: string }>>("/workspaces/me", { token })).data[0].id;
+    }
+
+    it("stores records per workspace, isolated from non-members, within limits", async () => {
+      const alice = await register("data-alice");
+      const bob = await register("data-bob");
+      await approvedDataExtension(alice.token);
+      const ws = await workspaceOf(alice.token);
+      const base = `/workspaces/${ws}/ext/data-it/collections/usage`;
+
+      const put = await call<{ key: string; data: unknown }>(`${base}/2026-10-20`, { method: "PUT", token: alice.token, body: { data: { tokens: 1200 } } });
+      expect(put.status).toBe(200);
+      await call(`${base}/2026-10-20`, { method: "PUT", token: alice.token, body: { data: { tokens: 1500 } } });
+      const list = await call<Array<{ key: string; data: { tokens: number } }>>(base, { token: alice.token });
+      expect(list.data).toEqual([expect.objectContaining({ key: "2026-10-20", data: { tokens: 1500 } })]);
+
+      expect((await call(base, { token: bob.token })).status).toBe(403);
+      expect((await call(`${base}/bad key`, { method: "PUT", token: alice.token, body: { data: 1 } })).status).toBe(400);
+      expect((await call(`${base}/big`, { method: "PUT", token: alice.token, body: { data: "x".repeat(70_000) } })).status).toBe(400);
+      expect((await call(`${base}/2026-10-20`, { method: "DELETE", token: alice.token })).status).toBe(204);
+      expect((await call<unknown[]>(base, { token: alice.token })).data).toEqual([]);
+
+      // The database itself hides the rows from a non-member (RLS), not only the service check.
+      await call(`${base}/again`, { method: "PUT", token: alice.token, body: { data: 1 } });
+      const seenByBob = await prisma.withUser(bob.userId, (tx) => tx.extensionRecord.count({ where: { workspaceId: ws } }));
+      expect(seenByBob).toBe(0);
+    });
+
+    it("refuses storage the manifest did not declare, and anything for a switched-off extension", async () => {
+      const carol = await register("data-carol");
+      await approvedDataExtension(carol.token, { storage: false });
+      const ws = await workspaceOf(carol.token);
+      expect((await call(`/workspaces/${ws}/ext/data-it/collections/usage`, { token: carol.token })).status).toBe(403);
+      await approvedDataExtension(carol.token);
+      await call("/extensions/data-it", { method: "PATCH", token: carol.token, body: { enabled: false } });
+      expect((await call(`/workspaces/${ws}/ext/data-it/collections/usage`, { token: carol.token })).status).toBe(409);
+    });
+
+    it("keeps secrets per user and never returns the value", async () => {
+      const dave = await register("data-dave");
+      const erin = await register("data-erin");
+      await approvedDataExtension(dave.token);
+      const set = await call<{ name: string; set: boolean }>("/extensions/data-it/secrets/api_key", { method: "PUT", token: dave.token, body: { value: "sk-very-secret" } });
+      expect(set.data).toMatchObject({ name: "api_key", set: true });
+      expect(set.text).not.toContain("sk-very-secret");
+      const mine = await call<Array<{ name: string; set: boolean }>>("/extensions/data-it/secrets", { token: dave.token });
+      expect(mine.data).toEqual([expect.objectContaining({ name: "api_key", set: true })]);
+      expect(mine.text).not.toContain("sk-very-secret");
+      const theirs = await call<Array<{ name: string; set: boolean }>>("/extensions/data-it/secrets", { token: erin.token });
+      expect(theirs.data).toEqual([expect.objectContaining({ name: "api_key", set: false })]);
+      expect((await call("/extensions/data-it/secrets/other", { method: "PUT", token: dave.token, body: { value: "x" } })).status).toBe(404);
+      const stored = await prisma.asSystem((tx) => tx.extensionSecret.findFirstOrThrow({ where: { userId: dave.userId } }));
+      expect(stored.valueEnc).not.toContain("sk-very-secret");
+    });
+
+    it("network: only https to a declared host, declared secrets that are set, no server-owned headers", async () => {
+      const frank = await register("data-frank");
+      await approvedDataExtension(frank.token);
+      const ws = await workspaceOf(frank.token);
+      const fetchVia = (body: unknown) => call(`/workspaces/${ws}/ext/data-it/fetch`, { method: "POST", token: frank.token, body });
+      expect((await fetchVia({ url: "https://evil.example.org/x" })).status).toBe(403);
+      expect((await fetchVia({ url: "http://api.example.com/x" })).status).toBe(400);
+      expect((await fetchVia({ url: "https://api.example.com/x", headers: { Host: "other.example.com" } })).status).toBe(400);
+      expect((await fetchVia({ url: "https://api.example.com/x", headers: { Authorization: "Bearer {{secret:undeclared}}" } })).status).toBe(403);
+      expect((await fetchVia({ url: "https://api.example.com/x", headers: { Authorization: "Bearer {{secret:api_key}}" } })).status).toBe(409);
+    });
+  });
+
   it("only an owner of some workspace may approve, and only with a JSON request", async () => {
     writeExtension("export function activate() {}\n");
     const guest = await register("guest");

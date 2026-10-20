@@ -32,7 +32,7 @@ import {
   type LanPendingPair,
   type LanPinAccount
 } from "@orion/shared-types";
-import { extensionInfoSchema, extensionsStateSchema, type ApproveExtensionInput, type ExtensionInfo, type ExtensionsState, type UpdateExtensionInput } from "@orion/shared-types";
+import { extensionFetchResultSchema, extensionInfoSchema, extensionRecordSchema, extensionSecretStatusSchema, extensionsStateSchema, type ApproveExtensionInput, type ExtensionFetchInput, type ExtensionFetchResult, type ExtensionInfo, type ExtensionRecord, type ExtensionSecretStatus, type ExtensionsState, type UpdateExtensionInput } from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
 import { policySchema, policyReportSchema, tickResultSchema, type CreatePolicyInput, type PolicyActionInput } from "@orion/shared-types";
 import { connectionSchema, createdConnectionSchema, attemptSchema, attemptPageSchema, type CreateConnectionInput, type ConnectionActionInput, type CreateAttemptInput, type ApproveAttemptInput, type CancelAttemptInput, type ReconcileAttemptInput } from "@orion/shared-types";
@@ -2028,6 +2028,41 @@ export class ApiClient {
 
   openExtensionsFolder(): Promise<{ dir: string }> {
     return this.request("POST", "/extensions/open-folder", {}, z.object({ dir: z.string() }));
+  }
+
+  // ---- E3: an extension's data, secrets and network (scoped to that extension id by the server) ----
+
+  listExtensionRecords(workspaceId: string, extensionId: string, collection: string): Promise<ExtensionRecord[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/ext/${encodeURIComponent(extensionId)}/collections/${encodeURIComponent(collection)}`, undefined, z.array(extensionRecordSchema));
+  }
+
+  putExtensionRecord(workspaceId: string, extensionId: string, collection: string, key: string, data: unknown): Promise<ExtensionRecord> {
+    return this.request(
+      "PUT",
+      `/workspaces/${workspaceId}/ext/${encodeURIComponent(extensionId)}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(key)}`,
+      { data },
+      extensionRecordSchema
+    );
+  }
+
+  async deleteExtensionRecord(workspaceId: string, extensionId: string, collection: string, key: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/ext/${encodeURIComponent(extensionId)}/collections/${encodeURIComponent(collection)}/${encodeURIComponent(key)}`, undefined, z.unknown());
+  }
+
+  getExtensionSecrets(extensionId: string): Promise<ExtensionSecretStatus[]> {
+    return this.request("GET", `/extensions/${encodeURIComponent(extensionId)}/secrets`, undefined, z.array(extensionSecretStatusSchema));
+  }
+
+  setExtensionSecret(extensionId: string, name: string, value: string): Promise<ExtensionSecretStatus> {
+    return this.request("PUT", `/extensions/${encodeURIComponent(extensionId)}/secrets/${encodeURIComponent(name)}`, { value }, extensionSecretStatusSchema);
+  }
+
+  async clearExtensionSecret(extensionId: string, name: string): Promise<void> {
+    await this.request("DELETE", `/extensions/${encodeURIComponent(extensionId)}/secrets/${encodeURIComponent(name)}`, undefined, z.unknown());
+  }
+
+  extensionFetch(workspaceId: string, extensionId: string, input: ExtensionFetchInput): Promise<ExtensionFetchResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/ext/${encodeURIComponent(extensionId)}/fetch`, input, extensionFetchResultSchema);
   }
 
   /** Absolute URL of an approved extension's code (`entryPath` from the state) for `import()`. */

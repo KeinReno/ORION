@@ -2,13 +2,15 @@
 
 import {
   useApproveExtension,
+  useExtensionSecrets,
   useExtensions,
   useOpenExtensionsFolder,
   useRevokeExtension,
+  useSetExtensionSecret,
   useUpdateExtension
 } from "@orion/core-react";
 import type { ExtensionInfo, ExtensionStatus } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton, Switch, useToast } from "@orion/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, Switch, useToast } from "@orion/ui";
 import { FolderOpen, Puzzle } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
@@ -192,6 +194,8 @@ function ExtensionCard({ item, canManage, onApprove }: { item: ExtensionInfo; ca
 
       <Permissions item={item} />
 
+      {item.status === "approved" && (item.permissions?.secrets.length ?? 0) > 0 ? <ExtensionSecrets extensionId={item.id} /> : null}
+
       {canManage && approved ? (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
           <label className="flex items-center gap-2 text-label text-muted-foreground">
@@ -216,5 +220,62 @@ function ExtensionCard({ item, canManage, onApprove }: { item: ExtensionInfo; ca
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Секреты, объявленные расширением (E3): каждый пользователь задаёт свои. Значение уходит на сервер, шифруется там и
+ * обратно не возвращается — расширение получает его только подстановкой в свой сетевой запрос.
+ */
+function ExtensionSecrets({ extensionId }: { extensionId: string }): React.ReactElement | null {
+  const secrets = useExtensionSecrets(extensionId);
+  const save = useSetExtensionSecret(extensionId);
+  const { toast } = useToast();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  if (!secrets.data) return null;
+  const submit = (name: string, value: string | null): void =>
+    save.mutate(
+      { name, value },
+      {
+        onSuccess: () => {
+          setDrafts((current) => ({ ...current, [name]: "" }));
+          toast({ title: value === null ? `Секрет «${name}» удалён` : `Секрет «${name}» сохранён`, tone: "success" });
+        },
+        onError: (error) => toast({ title: "Не удалось сохранить секрет", description: describeAuthError(error), tone: "danger" })
+      }
+    );
+  return (
+    <div className="space-y-2 border-t border-border pt-3">
+      <p className="text-2xs text-subtle-foreground">Ваши секреты для этого расширения: хранятся зашифрованными, после сохранения не показываются.</p>
+      {secrets.data.map((secret) => (
+        <form
+          key={secret.name}
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (drafts[secret.name]?.trim()) submit(secret.name, drafts[secret.name].trim());
+          }}
+        >
+          <span className="w-32 shrink-0 font-mono text-label text-muted-foreground">{secret.name}</span>
+          <Input
+            type="password"
+            autoComplete="off"
+            aria-label={`Секрет ${secret.name}`}
+            placeholder={secret.set ? "задан — введите новый, чтобы заменить" : "не задан"}
+            className="min-w-0 flex-1"
+            value={drafts[secret.name] ?? ""}
+            onChange={(event) => setDrafts((current) => ({ ...current, [secret.name]: event.target.value }))}
+          />
+          <Button type="submit" size="sm" variant="outline" disabled={save.isPending || !drafts[secret.name]?.trim()}>
+            Сохранить
+          </Button>
+          {secret.set ? (
+            <Button type="button" size="sm" variant="ghost" disabled={save.isPending} onClick={() => submit(secret.name, null)}>
+              Удалить
+            </Button>
+          ) : null}
+        </form>
+      ))}
+    </div>
   );
 }

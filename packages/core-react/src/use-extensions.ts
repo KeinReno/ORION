@@ -45,3 +45,21 @@ export function useOpenExtensionsFolder() {
   const { api } = useCore();
   return useMutation({ mutationFn: () => api.openExtensionsFolder() });
 }
+
+/** Объявленные секреты расширения и заданы ли они у пользователя (E3). Значение сервер не отдаёт никогда. */
+export function useExtensionSecrets(extensionId: string, enabled = true) {
+  const { api } = useCore();
+  return useQuery({ queryKey: ["extension-secrets", extensionId], queryFn: () => api.getExtensionSecrets(extensionId), enabled, retry: false });
+}
+
+export function useSetExtensionSecret(extensionId: string) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, value }: { name: string; value: string | null }): Promise<void> => {
+      if (value === null) await api.clearExtensionSecret(extensionId, name);
+      else await api.setExtensionSecret(extensionId, name, value);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["extension-secrets", extensionId] })
+  });
+}

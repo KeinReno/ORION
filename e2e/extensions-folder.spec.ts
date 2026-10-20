@@ -41,11 +41,18 @@ test("drop a folder, approve once, it runs; dev mode reloads edits; switching of
   const nav = page.getByRole("navigation", { name: "Разделы", exact: true });
   await nav.getByRole("button", { name: "Привет", exact: true }).click();
   await expect(page.getByText("Задач в этом пространстве: 0", { exact: true })).toBeVisible();
+  // E3: ctx.storage keeps the counter on the server, per workspace — it survives a reload.
+  await page.getByRole("button", { name: "Нажато: 0", exact: true }).click();
+  await page.getByRole("button", { name: "Нажато: 1", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Нажато: 2", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Нажато: 2", exact: true })).toBeVisible();
   await nav.getByRole("button", { name: "Дашборд", exact: true }).click();
   await expect(page.getByRole("region", { name: "Привет", exact: true })).toContainText("Задач: 0");
 
   // Dev mode: an edit + rebuild shows up without approving again or reloading the page
   await page.getByRole("button", { name: "Настройки", exact: true }).first().click();
+  await settingsNav.getByRole("button", { name: "Расширения", exact: true }).click();
   await card.getByRole("switch", { name: "Режим разработчика", exact: true }).click();
   await expect(card).toContainText("режим разработчика");
   const source = join(folder, "src", "index.tsx");

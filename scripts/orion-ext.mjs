@@ -119,24 +119,46 @@ export function templateFiles(id, name) {
         description: "Новое расширение ORION.",
         engines: { orion: `^${platformVersion()}` },
         entry: "web.js",
-        permissions: { network: [], secrets: [], storage: false }
+        permissions: { network: [], secrets: [], storage: true }
       },
       null,
       2
     ) + "\n",
     "src/index.tsx": `import { useTasks } from "@orion/core-react";
 import { openPanel, type ExtensionContext, type ExtensionPanelProps, type ExtensionPlaceProps } from "@orion/sdk";
-import { PanelBody, PanelHeader, PanelShell } from "@orion/ui";
+import { Button, PanelBody, PanelHeader, PanelShell } from "@orion/ui";
 import { Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+
+/** Контекст расширения: места, данные (\`storage\`), секреты, сеть. Задаётся в activate. */
+let extension: ExtensionContext;
+
+/** Счётчик в хранилище расширения: переживает перезапуск, у каждого пространства свой. */
+function useClicks(workspaceId: string): [number | null, () => void] {
+  const [clicks, setClicks] = useState<number | null>(null);
+  useEffect(() => {
+    void extension.storage.get(workspaceId, "stats", "clicks").then((record) => setClicks(typeof record?.data === "number" ? record.data : 0));
+  }, [workspaceId]);
+  const click = () => {
+    const next = (clicks ?? 0) + 1;
+    setClicks(next);
+    void extension.storage.put(workspaceId, "stats", "clicks", next);
+  };
+  return [clicks, click];
+}
 
 /** Панель расширения: своя вкладка дока и пункт меню (группа «Расширения»). */
 function ${component}Panel({ workspaceId }: ExtensionPanelProps) {
   const tasks = useTasks(workspaceId);
+  const [clicks, click] = useClicks(workspaceId);
   return (
     <PanelShell>
       <PanelHeader icon={Sparkles} title=${JSON.stringify(name)} subtitle="Расширение из папки" />
       <PanelBody>
         <p className="text-sm text-muted-foreground">Задач в этом пространстве: {tasks.data?.length ?? "…"}</p>
+        <Button className="mt-3" size="sm" variant="outline" onClick={click}>
+          Нажато: {clicks ?? "…"}
+        </Button>
       </PanelBody>
     </PanelShell>
   );
@@ -150,6 +172,7 @@ function ${component}Card({ workspaceId }: ExtensionPlaceProps) {
 
 /** Вызывается, когда ORION загружает расширение; всё зарегистрированное снимется само при выключении. */
 export function activate(ctx: ExtensionContext) {
+  extension = ctx;
   ctx.addPanel({ id: "main", label: ${JSON.stringify(name)}, icon: Sparkles, component: ${component}Panel });
   ctx.addWidget({ id: "card", title: ${JSON.stringify(name)}, component: ${component}Card });
   ctx.addCommand({ id: "open", label: ${JSON.stringify(`Открыть «${name}»`)}, icon: Sparkles, run: () => openPanel(\`ext:\${ctx.id}.main\`) });
@@ -183,7 +206,8 @@ export function activate(ctx: ExtensionContext) {
 3. В ORION: «Настройки → Этот компьютер → Расширения» — подтвердите расширение. Пока правите, включите «Режим разработчика»:
    изменения видны без повторного подтверждения и без перезапуска.
 
-Что доступно коду: \`ctx.addPanel / addWidget / addSettings / addCommand\`, компоненты \`@orion/ui\`, хуки данных \`@orion/core-react\`
+Что доступно коду: \`ctx.addPanel / addWidget / addSettings / addCommand\`, данные \`ctx.storage\` (нужно
+\`permissions.storage\`), секреты \`ctx.secrets\` и запросы \`ctx.fetch\` к хостам из \`permissions.network\`, компоненты \`@orion/ui\`, хуки данных \`@orion/core-react\`
 (с правами пользователя), функции \`@orion/sdk\` (openPanel, openEntity, форматирование…).
 `
   };

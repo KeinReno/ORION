@@ -58,6 +58,7 @@ export const MODEL_OWNERS = new Map([
   ...owned("inventory", "InventoryItem InventoryMovement"),
   ...owned("goals", "Goal GoalPlan"),
   ...owned("ai", "AgentToken AgentCapture AgentAuditEntry AgentMessage AgentTask AgentProposal AssistantKey"),
+  ...owned("extensions", "ExtensionRecord ExtensionSecret"),
   ...owned("opportunities", "Opportunity OpportunityProfile OpportunityFact OpportunityTrack OpportunityMaterial OpportunityImport OpportunityCapture OpportunityHistory OpportunityAssessment OpportunityDraft OpportunityConnection OpportunityAttempt OpportunityGrant OpportunityBudget OpportunityPolicy OpportunityManagerAction"),
   ...owned("home", "Home Meter MeterReading"),
   ...owned("home-utilities", "HomeUtilityMonth HomeUtilityPayment HomeElectricityTariff"),

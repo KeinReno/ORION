@@ -67,3 +67,31 @@ describe("extension runtime", () => {
     expect(runtime.state("empty")).toEqual({ status: "failed", error: "в модуле нет функции activate(ctx)" });
   });
 });
+
+describe("extension runtime services (E3)", () => {
+  it("binds storage, secrets and fetch to the extension's own id", async () => {
+    const calls: string[] = [];
+    const services = (id: string) => ({
+      storage: {
+        list: async () => (calls.push(`${id}:list`), []),
+        get: async () => undefined,
+        put: async () => ({ collection: "c", key: "k", data: null, createdAt: "", updatedAt: "" }),
+        remove: async () => undefined
+      },
+      secrets: { status: async () => [], set: async (name: string) => ({ name, set: true, updatedAt: null }), clear: async () => undefined },
+      fetch: async () => (calls.push(`${id}:fetch`), { status: 200, headers: {}, body: "" })
+    });
+    const runtime = createExtensionRuntime(
+      async () => ({
+        async activate(ctx) {
+          await ctx.storage.list("ws", "usage");
+          await ctx.fetch("ws", { url: "https://api.example.com/x" });
+        }
+      }),
+      services
+    );
+    await runtime.sync([{ id: "ai-tokens", url: "/a.js" }]);
+    expect(calls).toEqual(["ai-tokens:list", "ai-tokens:fetch"]);
+    await runtime.sync([]);
+  });
+});

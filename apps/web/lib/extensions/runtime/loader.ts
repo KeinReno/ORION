@@ -1,3 +1,4 @@
+import type { ExtensionFetchInput, ExtensionFetchResult, ExtensionRecord, ExtensionSecretStatus } from "@orion/shared-types";
 import { addPlace, type CommandPlace, type PanelPlace, type SettingsPlace, type WidgetPlace } from "../places";
 
 /**
@@ -10,7 +11,28 @@ import { addPlace, type CommandPlace, type PanelPlace, type SettingsPlace, type 
 
 type Omitted = "pluginId" | "runtime";
 
-export interface ExtensionContext {
+/**
+ * Данные, секреты и сеть расширения (E3), уже привязанные к его id: чужие данные оно не видит, а сервер ещё раз
+ * проверяет, что всё это объявлено в манифесте (`permissions.storage / secrets / network`).
+ */
+export interface ExtensionServices {
+  storage: {
+    list(workspaceId: string, collection: string): Promise<ExtensionRecord[]>;
+    get(workspaceId: string, collection: string, key: string): Promise<ExtensionRecord | undefined>;
+    put(workspaceId: string, collection: string, key: string, data: unknown): Promise<ExtensionRecord>;
+    remove(workspaceId: string, collection: string, key: string): Promise<void>;
+  };
+  secrets: {
+    /** Объявленные секреты и заданы ли они у пользователя (значение интерфейсу не отдаётся). */
+    status(): Promise<ExtensionSecretStatus[]>;
+    set(name: string, value: string): Promise<ExtensionSecretStatus>;
+    clear(name: string): Promise<void>;
+  };
+  /** https-запрос к объявленному хосту через сервер; `{{secret:имя}}` в заголовках подставляет сервер. */
+  fetch(workspaceId: string, input: ExtensionFetchInput): Promise<ExtensionFetchResult>;
+}
+
+export interface ExtensionContext extends ExtensionServices {
   /** id расширения из манифеста. */
   id: string;
   addPanel(place: Omit<PanelPlace, Omitted>): () => void;
@@ -49,7 +71,19 @@ export interface ExtensionRuntime {
 }
 
 /** `importModule` — подмена для тестов; в браузере это настоящий `import(url)`. */
-export function createExtensionRuntime(importModule: (url: string) => Promise<ExtensionModule>): ExtensionRuntime {
+const NO_SERVICES = (): ExtensionServices => {
+  const unavailable = (): Promise<never> => Promise.reject(new Error("Данные расширений недоступны в этом окне"));
+  return { storage: { list: unavailable, get: unavailable, put: unavailable, remove: unavailable }, secrets: { status: unavailable, set: unavailable, clear: unavailable }, fetch: unavailable };
+};
+
+/**
+ * `importModule` — подмена для тестов; в браузере это настоящий `import(url)`. `services(id)` — данные, секреты и сеть
+ * для расширения `id` (в браузере — поверх ApiClient).
+ */
+export function createExtensionRuntime(
+  importModule: (url: string) => Promise<ExtensionModule>,
+  services: (extensionId: string) => ExtensionServices = NO_SERVICES
+): ExtensionRuntime {
   const loaded = new Map<string, Loaded>();
   const states = new Map<string, ExtensionLoadState>();
   const listeners = new Set<() => void>();
@@ -93,6 +127,7 @@ export function createExtensionRuntime(importModule: (url: string) => Promise<Ex
       return dispose;
     };
     const context: ExtensionContext = {
+      ...services(target.id),
       id: target.id,
       addPanel: (place) => track(addPlace("panel", { ...place, pluginId: target.id, runtime: true })),
       addWidget: (place) => track(addPlace("widget", { ...place, pluginId: target.id, runtime: true })),

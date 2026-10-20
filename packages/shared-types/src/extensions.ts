@@ -99,3 +99,53 @@ export const updateExtensionInputSchema = z
   .object({ enabled: z.boolean().optional(), devMode: z.boolean().optional() })
   .refine((value) => value.enabled !== undefined || value.devMode !== undefined, "нужно enabled или devMode");
 export type UpdateExtensionInput = z.infer<typeof updateExtensionInputSchema>;
+
+// ---- E3: data, secrets and network for extensions (ADR-0022) ----
+
+/** Коллекция данных расширения: `usage`, `daily-limits`. */
+export const extensionCollectionSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/, "коллекция — строчные латинские буквы, цифры, «-», «_», до 40 символов");
+/** Ключ записи внутри коллекции: `2026-10-20`, `provider:anthropic`. */
+export const extensionRecordKeySchema = z.string().regex(/^[A-Za-z0-9._:-]{1,120}$/, "ключ — латинские буквы, цифры и . _ : -, до 120 символов");
+
+/** Одна запись хранилища расширения. `data` — произвольный JSON (до 64 КБ). */
+export const extensionRecordSchema = z.object({
+  collection: z.string(),
+  key: z.string(),
+  data: z.unknown(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type ExtensionRecord = z.infer<typeof extensionRecordSchema>;
+
+export const putExtensionRecordInputSchema = z.object({ data: z.unknown() });
+export type PutExtensionRecordInput = z.infer<typeof putExtensionRecordInputSchema>;
+
+/** Объявленный в манифесте секрет и задан ли он у этого пользователя. Значение интерфейсу не отдаётся никогда. */
+export const extensionSecretStatusSchema = z.object({
+  name: z.string(),
+  set: z.boolean(),
+  updatedAt: z.string().nullable()
+});
+export type ExtensionSecretStatus = z.infer<typeof extensionSecretStatusSchema>;
+
+export const setExtensionSecretInputSchema = z.object({ value: z.string().min(1, "пустой секрет").max(4_000) });
+export type SetExtensionSecretInput = z.infer<typeof setExtensionSecretInputSchema>;
+
+/**
+ * Сетевой запрос расширения через сервер: только https и только хосты из `permissions.network`. В заголовках можно
+ * сослаться на свой секрет — `Authorization: "Bearer {{secret:anthropic_key}}"`: сервер подставит значение сам.
+ */
+export const extensionFetchInputSchema = z.object({
+  url: z.string().url().max(2_000),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
+  headers: z.record(z.string().max(4_000)).default({}),
+  body: z.string().max(1_000_000).optional()
+});
+export type ExtensionFetchInput = z.input<typeof extensionFetchInputSchema>;
+
+export const extensionFetchResultSchema = z.object({
+  status: z.number().int(),
+  headers: z.record(z.string()),
+  body: z.string()
+});
+export type ExtensionFetchResult = z.infer<typeof extensionFetchResultSchema>;

@@ -8,6 +8,7 @@ import {
   PLATFORM_API_VERSION,
   type ApproveExtensionInput,
   type ExtensionInfo,
+  type ExtensionManifest,
   type ExtensionsState,
   type UpdateExtensionInput
 } from "@orion/shared-types";
@@ -134,6 +135,19 @@ export class ExtensionsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException("Расширение не подтверждено или выключено");
     }
     return fs.readFileSync(scanned.entryFile);
+  }
+
+  /**
+   * Манифест расширения, которое сейчас работает (подтверждено, включено, код не менялся или режим разработчика) —
+   * условие для его данных, секретов и сети (E3). Выключенное расширение не получает ничего.
+   */
+  requireActive(id: string): ExtensionManifest {
+    this.assertAvailable();
+    const scanned = this.find(id);
+    if (statusOf(scanned, this.readApprovals()[id], PLATFORM_API_VERSION) !== "approved" || !scanned.manifest) {
+      throw new ConflictException({ code: "extension_inactive", message: "Расширение не подтверждено или выключено" });
+    }
+    return scanned.manifest;
   }
 
   private toInfo(scanned: ScannedExtension, approval: ExtensionApproval | undefined): ExtensionInfo {
