@@ -70,6 +70,10 @@ export type AssistantChatResult = z.infer<typeof assistantChatResultSchema>;
 export const ASSISTANT_HISTORY_MAX = 200;
 export const ASSISTANT_CONTEXT_MESSAGES = 30;
 
+/** What a stored message keeps about its files (no picture bytes). */
+export const assistantStoredAttachmentSchema = z.object({ documentId: z.string(), name: z.string(), mimeType: z.string(), sizeBytes: z.number().int() });
+export type AssistantStoredAttachment = z.infer<typeof assistantStoredAttachmentSchema>;
+
 export const assistantStoredMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string(),
@@ -77,7 +81,9 @@ export const assistantStoredMessageSchema = z.object({
   actions: z.array(assistantActionSchema),
   at: z.string(),
   /** The answer hit the length limit and was cut. */
-  truncated: z.boolean()
+  truncated: z.boolean(),
+  /** Files the user sent with this message. Absent in messages saved before attachments existed. */
+  attachments: z.array(assistantStoredAttachmentSchema).optional()
 });
 export type AssistantStoredMessage = z.infer<typeof assistantStoredMessageSchema>;
 
@@ -107,13 +113,32 @@ export const assistantViewContextSchema = z.object({
 });
 export type AssistantViewContext = z.infer<typeof assistantViewContextSchema>;
 
+/** Image formats the model can look at; the client downsizes photos to ≤ 1568 px before sending. */
+export const ASSISTANT_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+
+/**
+ * A file the user attached: already saved in «Документы → Ассистент — входящие» (`documentId`); `excerpt` is the start of
+ * its extracted text, `image` the downsized picture itself (base64) so the model can see it.
+ */
+export const assistantAttachmentInputSchema = z.object({
+  documentId: z.string().min(1).max(80),
+  name: z.string().max(260),
+  mimeType: z.string().max(160),
+  sizeBytes: z.number().int().min(0),
+  excerpt: z.string().max(4000).default(""),
+  image: z.object({ mediaType: z.enum(ASSISTANT_IMAGE_TYPES), data: z.string().max(1_500_000) }).optional()
+});
+export type AssistantAttachmentInput = z.infer<typeof assistantAttachmentInputSchema>;
+
 export const assistantSendInputSchema = z.object({
   /** null/absent — start a new conversation. */
   conversationId: z.string().min(1).nullable().optional(),
-  message: z.string().trim().min(1).max(8000),
-  context: assistantViewContextSchema.nullable().optional()
-});
-export type AssistantSendInput = z.infer<typeof assistantSendInputSchema>;
+  /** Text; may be empty when files say it all («вот скан, разберись»). */
+  message: z.string().trim().max(8000),
+  context: assistantViewContextSchema.nullable().optional(),
+  attachments: z.array(assistantAttachmentInputSchema).max(10).default([])
+}).refine((value) => value.message.length > 0 || value.attachments.length > 0, { message: "Пустое сообщение", path: ["message"] });
+export type AssistantSendInput = z.input<typeof assistantSendInputSchema>;
 
 export const assistantSendResultSchema = assistantChatResultSchema.extend({
   conversationId: z.string(),

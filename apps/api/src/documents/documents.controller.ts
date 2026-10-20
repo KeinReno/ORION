@@ -77,6 +77,18 @@ export class DocumentsController {
     return this.documents.upload(user.userId, workspaceId, parentId && parentId.length > 0 ? parentId : null, decoded);
   }
 
+  /** «Прикрепить к сообщению ассистента»: the files go to «Документы → Ассистент — входящие», the chat gets their ids. */
+  @Post("assistant-inbox")
+  @UseInterceptors(FilesInterceptor("files", 10, { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  uploadToAssistant(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @UploadedFiles() files: UploadedDocumentFile[]
+  ): Promise<DocumentItem[]> {
+    const decoded = (files ?? []).map((f) => ({ ...f, originalname: fixMultipartFilename(f.originalname) }));
+    return this.documents.uploadToAssistantInbox(user.userId, workspaceId, decoded);
+  }
+
   @Patch(":id")
   update(
     @CurrentUser() user: RequestUser,

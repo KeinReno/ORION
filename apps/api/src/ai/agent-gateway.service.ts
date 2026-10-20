@@ -10,6 +10,7 @@ import {
   AGENT_TOOLS,
   MODULE_CATALOG,
   agentAccessibleTypes,
+  agentLinkableTypes,
   buildOrionLink,
   createEventInputSchema,
   createNoteInputSchema,
@@ -19,6 +20,7 @@ import {
   type AgentCaptureResult,
   type AgentCapability,
   type AgentEntityType,
+  type AgentLinkEntityType,
   type AgentGatewayContext,
   type AgentLink,
   type AgentLinkInput,
@@ -358,7 +360,7 @@ export class AgentGatewayService {
 
   // ── links ─────────────────────────────────────────────────────────────────────────────────────
   async link(agent: AgentContext, input: AgentLinkInput): Promise<AgentLink> {
-    const allowed = agentAccessibleTypes(agent.scopes);
+    const allowed: string[] = agentLinkableTypes(agent.scopes, agent.modulePermissions);
     for (const type of [input.sourceType, input.targetType]) {
       if (!allowed.includes(type)) throw new ForbiddenException(`У токена нет доступа к объектам типа «${type}»`);
     }
@@ -375,14 +377,14 @@ export class AgentGatewayService {
   }
 
   async unlink(agent: AgentContext, linkId: string): Promise<void> {
-    const allowed = agentAccessibleTypes(agent.scopes);
+    const allowed: string[] = agentLinkableTypes(agent.scopes, agent.modulePermissions);
     const row = await this.prisma.withUser(agent.userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
       return tx.entityLink.findUnique({ where: { id: linkId }, select: { workspaceId: true, sourceType: true, targetType: true } });
     });
     if (!row || row.workspaceId !== agent.workspaceId) throw new NotFoundException("Связь не найдена");
     // A link whose end the token cannot see is not the token's to touch — and its existence is not confirmed.
-    if (!allowed.includes(row.sourceType as AgentEntityType) || !allowed.includes(row.targetType as AgentEntityType)) {
+    if (!allowed.includes(row.sourceType) || !allowed.includes(row.targetType)) {
       throw new NotFoundException("Связь не найдена");
     }
     await this.search.removeLink(agent.userId, agent.workspaceId, linkId);
@@ -395,13 +397,13 @@ function toAgentLink(
 ): AgentLink {
   return {
     id: link.id,
-    sourceType: link.sourceType as AgentEntityType,
+    sourceType: link.sourceType as AgentLinkEntityType,
     sourceId: link.sourceId,
-    targetType: link.targetType as AgentEntityType,
+    targetType: link.targetType as AgentLinkEntityType,
     targetId: link.targetId,
     kind: link.kind,
-    sourceUrl: buildOrionLink({ type: link.sourceType as AgentEntityType, id: link.sourceId, workspaceId }),
-    targetUrl: buildOrionLink({ type: link.targetType as AgentEntityType, id: link.targetId, workspaceId })
+    sourceUrl: buildOrionLink({ type: link.sourceType as AgentLinkEntityType, id: link.sourceId, workspaceId }),
+    targetUrl: buildOrionLink({ type: link.targetType as AgentLinkEntityType, id: link.targetId, workspaceId })
   };
 }
 

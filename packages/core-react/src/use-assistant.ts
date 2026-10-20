@@ -49,6 +49,16 @@ export function useSendToAssistant(workspaceId: string | undefined) {
   });
 }
 
+/** Upload files for the next assistant message; the documents list is refreshed (they appear in the inbox folder). */
+export function useUploadToAssistant(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (files: File[]) => api.uploadToAssistantInbox(workspaceId as string, files),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] })
+  });
+}
+
 export function useDeleteAssistantConversation(workspaceId: string | undefined) {
   const { api } = useCore();
   const queryClient = useQueryClient();

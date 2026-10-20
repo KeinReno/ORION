@@ -3,6 +3,7 @@ import type { Readable } from "node:stream";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type Document as DocRow, type DocumentVersion as DocVersionRow } from "@prisma/client";
 import {
+  ASSISTANT_INBOX_FOLDER,
   isDescendant,
   nextAvailableName,
   sanitizeSegment,
@@ -78,6 +79,19 @@ export class DocumentsService {
       });
     });
     return rows.map(toDto);
+  }
+
+  /**
+   * Files sent to the assistant land in one root folder («Ассистент — входящие»); it is created on the first upload. The
+   * assistant then moves each file where it belongs (or asks), so this folder is a short-lived tray, not storage.
+   */
+  async uploadToAssistantInbox(userId: string, workspaceId: string, files: UploadedDocumentFile[]): Promise<DocumentItem[]> {
+    const existing = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return tx.document.findFirst({ where: { workspaceId, parentId: null, kind: "folder", name: ASSISTANT_INBOX_FOLDER, deletedAt: null }, select: { id: true } });
+    });
+    const inboxId = existing?.id ?? (await this.createFolder(userId, workspaceId, { name: ASSISTANT_INBOX_FOLDER, parentId: null })).id;
+    return this.upload(userId, workspaceId, inboxId, files);
   }
 
   async createFolder(userId: string, workspaceId: string, input: CreateFolderInput): Promise<DocumentItem> {

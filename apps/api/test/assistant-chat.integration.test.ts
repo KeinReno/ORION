@@ -231,4 +231,49 @@ describe("Assistant chat (variant C)", () => {
     expect((await request(`/workspaces/${alice.ws}/assistant/conversations/${first.data.conversationId}`, "DELETE", alice.token)).status).toBe(204);
     expect((await request<unknown[]>(`/workspaces/${alice.ws}/assistant/conversations`, "GET", alice.token)).data).toEqual([]);
   });
+
+  it("файлы: сохраняются во «входящие ассистента», модель получает их описание, отрывок и картинку, история помнит id", async () => {
+    const { token, ws } = await user();
+    await request("/assistant/key", "PUT", token, { apiKey: API_KEY, model: "claude-test" });
+    const form = new FormData();
+    form.append("files", new Blob(["Счёт за интернет, октябрь: 650 ₽"], { type: "text/plain" }), "счёт.txt");
+    const uploaded = await fetch(`${baseUrl}/workspaces/${ws}/documents/assistant-inbox`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+    expect(uploaded.status).toBe(201);
+    const [doc] = (await uploaded.json()) as Array<{ id: string; name: string; parentId: string; mimeType: string; sizeBytes: number; extractedText: string }>;
+    const folders = await request<Array<{ id: string; name: string }>>(`/workspaces/${ws}/documents`, "GET", token);
+    expect(folders.data.find((item) => item.id === doc!.parentId)?.name).toBe("Ассистент — входящие");
+
+    seen.length = 0;
+    script = [() => text("Это счёт за интернет — положу в «Счета»?")];
+    const sent = await request<{ conversationId: string; title: string }>(`/workspaces/${ws}/assistant/send`, "POST", token, {
+      message: "",
+      attachments: [
+        { documentId: doc!.id, name: doc!.name, mimeType: "text/plain", sizeBytes: doc!.sizeBytes, excerpt: doc!.extractedText.slice(0, 100) },
+        { documentId: doc!.id, name: "фото.jpg", mimeType: "image/jpeg", sizeBytes: 10, image: { mediaType: "image/jpeg", data: "QUJD" } }
+      ]
+    });
+    expect(sent.status).toBe(201);
+    expect(sent.data.title).toBe("счёт.txt, фото.jpg");
+    const content = seen[0]!.body.messages.at(-1).content as Array<{ type: string; text?: string; source?: { data: string } }>;
+    expect(content[0]!.type).toBe("text");
+    expect(content[0]!.text).toContain(`documentId=${doc!.id}`);
+    expect(content[0]!.text).toContain("Счёт за интернет");
+    expect(content[1]).toMatchObject({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "QUJD" } });
+    expect(seen[0]!.body.system).toContain("Ассистент — входящие");
+
+    const saved = await request<{ messages: Array<{ role: string; attachments?: Array<{ documentId: string; name: string }> }> }>(
+      `/workspaces/${ws}/assistant/conversations/${sent.data.conversationId}`,
+      "GET",
+      token
+    );
+    expect(saved.data.messages[0]!.attachments?.map((item) => item.name)).toEqual(["счёт.txt", "фото.jpg"]);
+    expect(JSON.stringify(saved.data)).not.toContain("QUJD");
+
+    // The next turn: the model's history names the earlier files by id.
+    seen.length = 0;
+    script = [() => text("Готово.")];
+    await request(`/workspaces/${ws}/assistant/send`, "POST", token, { conversationId: sent.data.conversationId, message: "да" });
+    expect(String(seen[0]!.body.messages[0].content)).toContain(`documentId=${doc!.id}`);
+    expect((await request(`/workspaces/${ws}/assistant/send`, "POST", token, { message: "" })).status).toBe(400);
+  });
 });

@@ -61,7 +61,7 @@ const obj = (properties: Record<string, Record<string, unknown>>, required: stri
   additionalProperties: false
 });
 const priority = { type: "string", enum: ["low", "normal", "high", "urgent"] };
-const entityType = { type: "string", enum: ["project", "task", "note", "event"] };
+const entityType = { type: "string", enum: ["project", "task", "note", "event", "document"], description: "document — файл из «Документов» (нужно разрешение на документы)" };
 const relationKind = { type: "string", enum: ["related_to", "supports"], description: "related_to — просто связаны (по умолчанию); supports — заметка — материал для задачи" };
 
 const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [

@@ -49,7 +49,7 @@ export function agentAccessibleTypes(scopes: readonly string[]): AgentEntityType
  * own access-checked API, so a link never widens access.
  */
 export const ORION_LINK_SCHEME = "orion";
-export const ORION_LINK_TYPES = [...AGENT_ENTITY_TYPES, "inbox"] as const;
+export const ORION_LINK_TYPES = [...AGENT_ENTITY_TYPES, "document", "inbox"] as const;
 export type OrionLinkType = (typeof ORION_LINK_TYPES)[number];
 
 export function buildOrionLink(link: { type: OrionLinkType; id: string; workspaceId: string }): string {
@@ -118,10 +118,22 @@ export const agentCaptureResultSchema = z.object({
 export type AgentCaptureResult = z.infer<typeof agentCaptureResultSchema>;
 
 // ── Links ───────────────────────────────────────────────────────────────────────────────────────
+/** What a link may join: the core types plus documents (open to a token with `documents.document.read`). */
+export const AGENT_LINK_TYPES = [...AGENT_ENTITY_TYPES, "document"] as const;
+export const agentLinkEntityTypeSchema = z.enum(AGENT_LINK_TYPES);
+export type AgentLinkEntityType = z.infer<typeof agentLinkEntityTypeSchema>;
+
+/** The link types this token may touch: scopes open the core ones, the documents module permission opens documents. */
+export function agentLinkableTypes(scopes: readonly string[], modulePermissions: readonly string[] = []): AgentLinkEntityType[] {
+  const types: AgentLinkEntityType[] = [...agentAccessibleTypes(scopes)];
+  if (modulePermissions.includes("documents.document.read")) types.push("document");
+  return types;
+}
+
 export const agentLinkInputSchema = z.object({
-  sourceType: agentEntityTypeSchema,
+  sourceType: agentLinkEntityTypeSchema,
   sourceId: z.string().trim().min(1),
-  targetType: agentEntityTypeSchema,
+  targetType: agentLinkEntityTypeSchema,
   targetId: z.string().trim().min(1),
   kind: relationKindSchema.default("related_to")
 });
@@ -129,9 +141,9 @@ export type AgentLinkInput = z.infer<typeof agentLinkInputSchema>;
 
 export const agentLinkSchema = z.object({
   id: z.string(),
-  sourceType: agentEntityTypeSchema,
+  sourceType: agentLinkEntityTypeSchema,
   sourceId: z.string(),
-  targetType: agentEntityTypeSchema,
+  targetType: agentLinkEntityTypeSchema,
   targetId: z.string(),
   kind: relationKindSchema,
   sourceUrl: z.string(),
