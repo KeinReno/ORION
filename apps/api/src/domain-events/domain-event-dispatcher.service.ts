@@ -90,9 +90,13 @@ export class DomainEventDispatcherService {
 
   private async deliverNext(now: Date): Promise<"none" | "done" | "skipped" | "failed" | "retry"> {
     return this.prisma.asSystem(async (tx) => {
+      // `nextAttemptAt` is `timestamp without time zone` holding UTC wall time (as Prisma writes it). A bare Date
+      // parameter arrives as timestamptz, and Postgres would read the column in the session zone — on a Moscow
+      // server every backoff looked 3 h overdue and a failing handler burned all attempts in one pass. Same
+      // `::timestamp` idiom as time.service / execution.service.
       const [claimed] = await tx.$queryRaw<ClaimedDelivery[]>`
         SELECT "id", "eventId", "subscriberId", "workspaceId", "attempts" FROM "domain_event_deliveries"
-        WHERE "status" = 'pending' AND "nextAttemptAt" <= ${now}
+        WHERE "status" = 'pending' AND "nextAttemptAt" <= ${now.toISOString()}::timestamp
         ORDER BY "nextAttemptAt", "id"
         LIMIT 1
         FOR UPDATE SKIP LOCKED`;
