@@ -6,7 +6,6 @@ import {
   agentJobStatusSchema,
   agentNotePatchSchema,
   agentProposalActionSchema,
-  agentProposalDiffEntrySchema,
   agentTaskPatchSchema,
   type AgentJob,
   type AgentJobStatus,
@@ -25,6 +24,7 @@ import { NotesService } from "../notes/notes.service";
 import { TasksService } from "../tasks/tasks.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { buildProposalDiff, patchFields, type DiffKind } from "./agent-diff";
+import { AgentModuleProposalsService, proposalDto, type ProposalRow } from "./agent-module-proposals.service";
 import type { AgentContext } from "./agent-tokens.service";
 
 const TERMINAL: AgentJobStatus[] = ["done", "failed", "canceled"];
@@ -41,7 +41,8 @@ export class AgentJobsService {
     private readonly workspaces: WorkspacesService,
     private readonly tasks: TasksService,
     private readonly notes: NotesService,
-    private readonly events: EventsService
+    private readonly events: EventsService,
+    private readonly moduleProposals: AgentModuleProposalsService
   ) {}
 
   // ---------------------------------------------------------------- jobs
@@ -222,12 +223,13 @@ export class AgentJobsService {
    * next plain approval applies exactly what the refreshed preview shows.
    */
   async refresh(userId: string, workspaceId: string, proposalId: string): Promise<AgentProposal> {
-    const row = await this.prisma.withUser(userId, async (tx) => {
+    const updated = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const current = await tx.agentProposal.findFirst({
         where: { id: proposalId, workspaceId, status: "pending", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
       });
       if (!current) throw new NotFoundException("Запрос не найден или уже обработан");
+      if (current.action.startsWith("module.")) return null;
       const action = agentProposalActionSchema.parse(current.action);
       const target = await this.findTargetTx(tx, workspaceId, action, current.targetId);
       if (!target) throw new ConflictException("Объект уже удалён — запрос можно только отклонить");
@@ -238,6 +240,22 @@ export class AgentJobsService {
         include: { token: { select: { name: true } } }
       });
     });
+    // A module's record is described by its own handler, outside this transaction.
+    const row =
+      updated ??
+      (await (async () => {
+        const current = await this.prisma.withUser(userId, (tx) =>
+          tx.agentProposal.findFirstOrThrow({ where: { id: proposalId, workspaceId }, include: { token: { select: { name: true } } } })
+        );
+        const fresh = await this.moduleProposals.refreshDiff(userId, workspaceId, current);
+        return this.prisma.withUser(userId, (tx) =>
+          tx.agentProposal.update({
+            where: { id: proposalId },
+            data: { diff: fresh.diff as unknown as Prisma.InputJsonValue, targetTitle: fresh.title },
+            include: { token: { select: { name: true } } }
+          })
+        );
+      })());
     return proposalDto(row);
   }
 
@@ -259,6 +277,7 @@ export class AgentJobsService {
   }
 
   private async execute(userId: string, workspaceId: string, row: ProposalRow, force: boolean): Promise<void> {
+    if (row.action === "module.update" || row.action === "module.delete") return this.moduleProposals.apply(userId, workspaceId, row);
     const action = agentProposalActionSchema.parse(row.action);
     const agentName = row.token.name;
     switch (action) {
@@ -327,6 +346,8 @@ export class AgentJobsService {
    * object is not stale either — executing reports it (404) as before.
    */
   private async staleCheckTx(tx: Prisma.TransactionClient, workspaceId: string, row: ProposalRow): Promise<StaleInfo | null> {
+    // Module requests carry no CAS basis: approving applies the requested fields to the record as it is.
+    if (row.action.startsWith("module.")) return null;
     const action = agentProposalActionSchema.parse(row.action);
     const target = await this.findTargetTx(tx, workspaceId, action, row.targetId);
     if (!target) return null;
@@ -407,26 +428,3 @@ interface StaleInfo {
   currentDiff: AgentProposalDiffEntry[];
 }
 
-type ProposalRow = Prisma.AgentProposalGetPayload<{ include: { token: { select: { name: true } } } }>;
-
-function proposalDto(row: ProposalRow): AgentProposal {
-  return {
-    id: row.id,
-    tokenId: row.tokenId,
-    tokenName: row.token.name,
-    action: agentProposalActionSchema.parse(row.action),
-    targetId: row.targetId,
-    targetTitle: row.targetTitle,
-    reason: row.reason,
-    status:
-      row.status === "approved" || row.status === "rejected"
-        ? row.status
-        : row.expiresAt && row.expiresAt.getTime() <= Date.now()
-          ? "expired"
-          : "pending",
-    diff: z.array(agentProposalDiffEntrySchema).catch([]).parse(row.diff ?? []),
-    expiresAt: row.expiresAt?.toISOString() ?? null,
-    createdAt: row.createdAt.toISOString(),
-    decidedAt: row.decidedAt?.toISOString() ?? null
-  };
-}

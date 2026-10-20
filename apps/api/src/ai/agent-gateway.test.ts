@@ -14,9 +14,25 @@ import { HabitsAgentController } from "../habits/habits.agent.controller";
 import { InventoryAgentController } from "../inventory/inventory.agent.controller";
 import { ListsAgentController } from "../lists/lists.agent.controller";
 import { TimeAgentController } from "../time/time.agent.controller";
+import { GoalsAgentController } from "../goals/goals.agent.controller";
+import { HealthAgentController } from "../health/health.agent.controller";
+import { HomeAgentController } from "../home/home.agent.controller";
+import { ProjectsAgentController } from "../projects/projects.agent.controller";
 
 /** Agent tools of the core modules live next to each module (G13), like the manifest modules' ones. */
-const CORE_MODULE_AGENT_CONTROLLERS = [HabitsAgentController, ListsAgentController, TimeAgentController, ContactsAgentController, DocumentsAgentController, FinanceAgentController, InventoryAgentController];
+const CORE_MODULE_AGENT_CONTROLLERS = [
+  HabitsAgentController,
+  ListsAgentController,
+  TimeAgentController,
+  ContactsAgentController,
+  DocumentsAgentController,
+  FinanceAgentController,
+  InventoryAgentController,
+  ProjectsAgentController,
+  GoalsAgentController,
+  HealthAgentController,
+  HomeAgentController
+];
 
 const TOKEN = "orion_agt_SECRETSECRETSECRETSECRET1234";
 
