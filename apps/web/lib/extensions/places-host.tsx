@@ -19,7 +19,7 @@ import "./slot";
 export function useEnabledPlaces<K extends PlaceKind>(kind: K): PlaceKinds[K][] {
   const version = useSyncExternalStore(places.subscribe, places.version, places.version);
   const { isEnabled } = useEnabledPlugins();
-  const enabled = places.list(kind).filter((place) => isOrionPluginId(place.pluginId) && isEnabled(place.pluginId));
+  const enabled = places.list(kind).filter((place) => place.runtime === true || (isOrionPluginId(place.pluginId) && isEnabled(place.pluginId)));
   // The same list object while nothing changed, so consumers can put it in memo/effect dependencies.
   const signature = `${version}|${enabled.map(placeKey).join(",")}`;
   // eslint-disable-next-line react-hooks/exhaustive-deps

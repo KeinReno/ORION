@@ -24,6 +24,7 @@ export * from "./use-finance-obligations";
 export * from "./use-markets";
 export * from "./use-sync";
 export * from "./use-settings";
+export * from "./use-extensions";
 export * from "./use-workspace-organization";
 export * from "./use-projects";
 export * from "./use-inbox";

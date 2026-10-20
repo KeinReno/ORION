@@ -10,6 +10,7 @@ button: Обновления
 button: Общее
 button: Плагины
 button: Профиль
+button: Расширения
 button: Сеть и устройства
 button: Сферы и избранное
 button: Темы

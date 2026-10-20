@@ -38,7 +38,7 @@ export function SettingsNav({
 }: {
   value: SettingsTab | ExtensionSettingsTab["value"];
   workspaceName: string | undefined;
-  /** Shown as their own group «Расширения» before «Справка». */
+  /** Shown as their own group «Разделы расширений» before «Справка». */
   extensionTabs?: readonly ExtensionSettingsTab[];
   onChange: (value: SettingsTab | ExtensionSettingsTab["value"]) => void;
   /** A search hit: switch to its tab and bring the parameter into view. */
@@ -56,7 +56,7 @@ export function SettingsNav({
   );
   if (extensionTabs.length > 0) {
     const help = groups.findIndex((group) => group.id === "help");
-    groups.splice(help === -1 ? groups.length : help, 0, { id: "extensions", label: "Расширения", tabs: extensionTabs });
+    groups.splice(help === -1 ? groups.length : help, 0, { id: "extension-sections", label: "Разделы расширений", tabs: extensionTabs });
   }
 
   function pick(hit: SettingsSearchHit): void {

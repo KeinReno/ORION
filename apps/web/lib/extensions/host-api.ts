@@ -35,3 +35,7 @@ export { useUnsavedDraft } from "../unsaved-drafts";
 export { useActiveWorkspace } from "../use-active-workspace";
 export { useEnabledModules } from "../use-enabled-modules";
 export { useLocalNow } from "../use-day-boundary";
+
+// Types an extension from the folder (ADR-0022) writes against; type-only, nothing extra at run time.
+export type { ExtensionContext } from "./runtime/loader";
+export type { ExtensionPanelProps, ExtensionPlaceProps } from "./places";

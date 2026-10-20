@@ -20,6 +20,7 @@ export type SettingsTab =
   | "agents"
   | "network"
   | "updates"
+  | "extensions"
   | "about"
   | "diagnostics";
 
@@ -64,7 +65,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     id: "device",
     tabs: [
       { value: "network", label: "Сеть и устройства", scope: "device" },
-      { value: "updates", label: "Обновления", scope: "device" }
+      { value: "updates", label: "Обновления", scope: "device" },
+      { value: "extensions", label: "Расширения", scope: "device" }
     ]
   },
   {
@@ -165,6 +167,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   { anchor: "agents", tab: "agents", label: "ИИ-агенты", keywords: "токен mcp ai bridge доступ" },
   { anchor: "network", tab: "network", label: "Сеть и устройства", keywords: "lan хост подключение локальный" },
   { anchor: "updates", tab: "updates", label: "Обновления", keywords: "версия github токен установить" },
+  { anchor: "extensions-folder", tab: "extensions", label: "Папка расширений", keywords: "плагины установить добавить подтвердить режим разработчика" },
   { anchor: "app-info", tab: "about", label: "Версия приложения", keywords: "о программе" },
   { anchor: "onboarding", tab: "about", label: "Подсказка первого запуска", keywords: "знакомство обучение помощь" },
   { anchor: "components", tab: "diagnostics", label: "Диагностика компонентов", keywords: "миграции модули ошибки" },

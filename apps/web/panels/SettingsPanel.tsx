@@ -41,6 +41,7 @@ import { ThemeSettings } from "./settings/theme-library";
 import { ComponentsDiagnostics } from "./settings/components-section";
 import { ModulesSettings } from "./settings/modules-section";
 import { UpdatesSettings } from "./settings/updates-section";
+import { ExtensionsSettings } from "./settings/extensions-section";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
@@ -598,6 +599,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "network" ? (
           <PanelSection title="Сеть и устройства">
             <NetworkSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "extensions" ? (
+          <PanelSection title="Расширения">
+            <ExtensionsSettings />
           </PanelSection>
         ) : null}
 

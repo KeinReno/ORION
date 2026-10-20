@@ -412,6 +412,12 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   (`extends`, `catalog`, `web.contributions[{ slot, file, export }]`), затем `pnpm module-registry` — генератор дописывает его
   в `ORION_PLUGIN_IDS`/`PLUGIN_CATALOG` (через `GENERATED_PLUGIN_*`) и в вклады слотов. `CORE_PLUGIN_IDS` — плагины основной
   сборки. Подробно — `docs/DEV_KIT.md`, «Свой плагин интерфейса».
+- **Расширения (ADR-0022).** Плагин/расширение может ДОБАВЛЯТЬ места — панель (`ext:<plugin>.<id>`), карточку дашборда,
+  раздел настроек, команду Ctrl+K — через `lib/extensions/places.ts` (хранилище во время выполнения, `places-host.tsx`
+  показывает места включённых владельцев). Расширения из папки `Документы\ORION\Расширения` грузятся БЕЗ пересборки:
+  сервер — `apps/api/src/extensions/` (опрос папки, подтверждения в `extensions.json` узла, только loopback), интерфейс —
+  `lib/extensions/runtime/` (`RuntimeExtensions` в провайдерах, SDK в `globalThis.__ORION_SDK__`), сборка — `pnpm orion-ext`.
+  e2e: `e2e/extensions-folder.spec.ts` (папки `tmp/e2e-extensions`, `tmp/e2e-node`).
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
   (`Workspace.disabledModules` по умолчанию `["markets"]`).
 

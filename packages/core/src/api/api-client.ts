@@ -32,6 +32,7 @@ import {
   type LanPendingPair,
   type LanPinAccount
 } from "@orion/shared-types";
+import { extensionInfoSchema, extensionsStateSchema, type ApproveExtensionInput, type ExtensionInfo, type ExtensionsState, type UpdateExtensionInput } from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
 import { policySchema, policyReportSchema, tickResultSchema, type CreatePolicyInput, type PolicyActionInput } from "@orion/shared-types";
 import { connectionSchema, createdConnectionSchema, attemptSchema, attemptPageSchema, type CreateConnectionInput, type ConnectionActionInput, type CreateAttemptInput, type ApproveAttemptInput, type CancelAttemptInput, type ReconcileAttemptInput } from "@orion/shared-types";
@@ -2006,6 +2007,33 @@ export class ApiClient {
   }
 
   // --- Preferences (v0.14, user-scoped: not under /workspaces) -----------
+
+  // ---- Extensions from the folder (ADR-0022, E2): local installation only ----
+
+  getExtensions(): Promise<ExtensionsState> {
+    return this.request("GET", "/extensions", undefined, extensionsStateSchema);
+  }
+
+  approveExtension(id: string, input: ApproveExtensionInput): Promise<ExtensionInfo> {
+    return this.request("POST", `/extensions/${encodeURIComponent(id)}/approve`, input, extensionInfoSchema);
+  }
+
+  updateExtension(id: string, input: UpdateExtensionInput): Promise<ExtensionInfo> {
+    return this.request("PATCH", `/extensions/${encodeURIComponent(id)}`, input, extensionInfoSchema);
+  }
+
+  async revokeExtension(id: string): Promise<void> {
+    await this.request("DELETE", `/extensions/${encodeURIComponent(id)}/approval`, undefined, z.unknown());
+  }
+
+  openExtensionsFolder(): Promise<{ dir: string }> {
+    return this.request("POST", "/extensions/open-folder", {}, z.object({ dir: z.string() }));
+  }
+
+  /** Absolute URL of an approved extension's code (`entryPath` from the state) for `import()`. */
+  extensionEntryUrl(entryPath: string): string {
+    return `${this.options.baseUrl}${entryPath}`;
+  }
 
   getPreferences(): Promise<UserPreference> {
     return this.request("GET", "/settings/preferences", undefined, userPreferenceSchema);
