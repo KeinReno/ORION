@@ -1,15 +1,46 @@
 "use client";
 
-import type { AgentConnectionInfo, AgentAuditEntry, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
+import type { AgentConnectionInfo, AgentAuditEntry, AgentPresence, InstallAgentClientInput, InstalledAgentClient, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
-export function useAgentTokens(workspaceId: string | undefined) {
+export function useAgentTokens(workspaceId: string | undefined, options: { pollMs?: number } = {}) {
   const { api } = useCore();
   return useQuery<AgentToken[]>({
     queryKey: ["agent-tokens", workspaceId],
     queryFn: () => api.listAgentTokens(workspaceId as string),
-    enabled: Boolean(workspaceId)
+    enabled: Boolean(workspaceId),
+    refetchInterval: options.pollMs ?? false
+  });
+}
+
+/**
+ * Live activity of your agents. Polls every 2 s while something happened in the last half minute, otherwise every
+ * 6 s — fast enough to light up a panel while an agent works, cheap when nobody does.
+ */
+export function useAgentPresence(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useQuery<AgentPresence>({
+    queryKey: ["agent-presence", workspaceId],
+    queryFn: () => api.getAgentPresence(workspaceId as string),
+    enabled: Boolean(workspaceId),
+    retry: false,
+    refetchIntervalInBackground: false,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const last = data?.events[data.events.length - 1];
+      if (!data || !last) return 6_000;
+      return Date.parse(data.now) - Date.parse(last.at) < 30_000 ? 2_000 : 6_000;
+    }
+  });
+}
+
+export function useInstallAgentClient(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<InstalledAgentClient, Error, InstallAgentClientInput>({
+    mutationFn: (input) => api.installAgentClient(workspaceId as string, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent-tokens", workspaceId] })
   });
 }
 

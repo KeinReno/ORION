@@ -3,7 +3,7 @@
  * ORION MCP server for a SOURCE CHECKOUT. The adapter itself lives in `apps/api/src/mcp/orion-mcp.ts`; its tool list is
  * generated from the shared catalogue (`AGENT_TOOLS`), so this file has none of its own. The installed app ships the
  * compiled adapter instead (`runtime/api/dist/mcp/orion-mcp.js`, run with the bundled node.exe) — no Node, repo or paths
- * needed there: Настройки → ИИ-агенты → «Подключить агента» prints the exact command.
+ * needed there: Настройки → ИИ и агенты → «Подключить агента» prints the exact command.
  *
  *   ORION_AGENT_TOKEN=orion_agt_…  [ORION_API_URL=http://127.0.0.1:4000]  node scripts/orion-mcp.mjs
  *

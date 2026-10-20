@@ -276,6 +276,16 @@ export interface ProjectOverviewPlanSlotProps {
 }
 
 /**
+ * projects.overview.side — a card in the right column of a project's overview (next to «Прогресс», «Срок», «Состав»):
+ * what a plugin knows about this project, e.g. the goals it leads to (projects-goals). Nothing contributed — nothing drawn.
+ */
+export interface ProjectOverviewSideSlotProps {
+  workspaceId: string | undefined;
+  projectId: string;
+  projectName: string;
+}
+
+/**
  * inventory.alerts — the low-stock threshold. Draws nothing by itself: `meta.api` holds the presentational
  * parts the host places (summary card, item badge, hint, threshold field). The host still colours the
  * balance red when an alerts plugin is on.
@@ -420,6 +430,7 @@ export interface SlotContracts {
   "tasks.planning": TasksPlanningSlotProps;
   "projects.tabs": ProjectTabSlotProps;
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
+  "projects.overview.side": ProjectOverviewSideSlotProps;
   "inventory.alerts": InventoryAlertsSlotProps;
   "inventory.costing": InventoryCostingSlotProps;
   "inventory.item.actions": InventoryItemActionsSlotProps;
@@ -497,6 +508,7 @@ export const CORE_SLOT_NAMES = [
   "tasks.planning",
   "projects.tabs",
   "projects.overview.plan",
+  "projects.overview.side",
   "inventory.alerts",
   "inventory.costing",
   "inventory.item.actions",

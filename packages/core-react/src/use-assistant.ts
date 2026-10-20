@@ -19,6 +19,15 @@ export function useSaveAssistantKey() {
   });
 }
 
+export function useSetAssistantModel() {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (model: string) => api.setAssistantModel(model),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant", "key"] })
+  });
+}
+
 export function useClearAssistantKey() {
   const { api } = useCore();
   const queryClient = useQueryClient();

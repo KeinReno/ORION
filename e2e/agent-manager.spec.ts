@@ -3,13 +3,13 @@ import { apiUrl, register, signIn } from "./support";
 
 /**
  * TZ-03 — Agent Manager through the real shell: the agent (plain HTTP with a token) proposes a change, the human sees the
- * before/after in Settings → ИИ-агенты, approves it, finds the call in the journal, undoes a creation, and revokes all tokens.
+ * before/after in Settings → ИИ и агенты, approves it, finds the call in the journal, undoes a creation, and revokes all tokens.
  */
 
 async function openAgents(page: Page, workspaceId: string): Promise<void> {
   await page.goto(`/dashboard?workspaceId=${workspaceId}`);
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByRole("button", { name: "ИИ-агенты", exact: true }).click();
+  await page.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
 }
 
 test("помощник предлагает правку: превью → подтверждение → журнал → отмена создания → отозвать все", async ({ page, request }) => {
@@ -35,7 +35,7 @@ test("помощник предлагает правку: превью → по�
   await openAgents(page, account.workspaceId);
 
   // The token list shows the mode; the proposal shows what changes.
-  await expect(page.getByLabel("Режим токена")).toHaveValue("assistant");
+  await expect(page.getByLabel("Режим: Claude E2E")).toHaveValue("assistant");
   const proposals = page.getByRole("region", { name: "Запросы агентов" });
   await expect(proposals.getByText("Изменить задачу «Исходная задача»")).toBeVisible();
   await expect(proposals.getByRole("cell", { name: "Исходная задача" })).toBeVisible();
@@ -47,6 +47,7 @@ test("помощник предлагает правку: превью → по�
   expect(tasks.find((t) => t.id === task.id)).toMatchObject({ title: "Новое название", status: "done" });
 
   // The journal says what was done, and filters narrow it.
+  await page.getByRole("tab", { name: "Журнал", exact: true }).click();
   await expect(page.getByText("Создал заметку «Заметка агента»")).toBeVisible();
   await page.getByLabel("Результат").selectOption("proposed");
   await expect(page.getByText("Создал заметку «Заметка агента»")).toHaveCount(0);
@@ -60,8 +61,10 @@ test("помощник предлагает правку: превью → по�
   expect(trash.map((n) => n.id)).toContain(note.id);
 
   // Panic button.
-  await page.getByRole("button", { name: "Отозвать все токены" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Отозвать", exact: true }).click();
-  await expect(page.getByText("отозван", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Подключения", exact: true }).click();
+  await page.getByRole("button", { name: "Отключить все" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Отключить", exact: true }).click();
+  await page.getByRole("button", { name: /^Отключённые и истёкшие/ }).click();
+  await expect(page.getByText("отключено", { exact: true })).toBeVisible();
   expect((await request.get(`${apiUrl()}/ai/v1/tasks`, { headers: agent })).status()).toBe(401);
 });

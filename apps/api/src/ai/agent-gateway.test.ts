@@ -130,7 +130,7 @@ describe("MCP-адаптер", () => {
       content: Array<{ text: string }>;
     };
     expect(result.isError).toBe(true);
-    expect(result.content[0]!.text).toContain("Подключить агента");
+    expect(result.content[0]!.text).toContain("Подключить программу");
   });
 
   it("неизвестный инструмент — ошибка протокола; уведомление без ответа", async () => {

@@ -21,8 +21,12 @@ const apiEnv: Record<string, string> = {
   REGISTER_RATE_LIMIT_PER_IP: "10000",
   // ADR-0022: extensions and their approvals live in throwaway folders, never in the developer's Documents or node dir.
   ORION_EXTENSIONS_DIR: "../../tmp/e2e-extensions",
-  ORION_NODE_DIR: "../../tmp/e2e-node"
+  ORION_NODE_DIR: "../../tmp/e2e-node",
+  // «Подключить в один клик» writes AI programs' configs: in e2e only into a scratch profile, never the real one.
+  ORION_AGENT_CLIENT_HOME: "../../tmp/e2e-agent-home"
 };
+// Tells e2e/agent-one-click.spec.ts that the API it talks to was started with the scratch profile above.
+process.env.ORION_E2E_AGENT_HOME = "tmp/e2e-agent-home";
 if (process.env.E2E_DATABASE_URL) apiEnv.DATABASE_URL = process.env.E2E_DATABASE_URL;
 if (process.env.E2E_APP_DATABASE_URL) apiEnv.APP_DATABASE_URL = process.env.E2E_APP_DATABASE_URL;
 

@@ -176,6 +176,9 @@ import {
   type ProjectCapture,
   type ProjectCaptureKind,
   type AgentAuditEntry,
+  type AgentPresence,
+  type InstallAgentClientInput,
+  type InstalledAgentClient,
   type AgentAuditQuery,
   type AgentProposalBulkInput,
   type AgentProposalBulkResult,
@@ -258,6 +261,8 @@ import {
   meterSchema,
   agentProposalSchema,
   agentAuditEntrySchema,
+  agentPresenceSchema,
+  installedAgentClientSchema,
   agentProposalBulkResultSchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
@@ -1346,6 +1351,11 @@ export class ApiClient {
   }
 
   /** Real command/paths of this install, for the «Подключить агента» wizard (TZ-02). */
+  /** «Подключить в один клик»: ORION writes itself into the program's MCP config on this computer (token stays on the server). */
+  installAgentClient(workspaceId: string, input: InstallAgentClientInput): Promise<InstalledAgentClient> {
+    return this.request("POST", `/workspaces/${workspaceId}/agent-connection/install`, input, installedAgentClientSchema);
+  }
+
   getAgentConnection(workspaceId: string): Promise<AgentConnectionInfo> {
     return this.request("GET", `/workspaces/${workspaceId}/agent-connection`, undefined, agentConnectionInfoSchema);
   }
@@ -1374,6 +1384,11 @@ export class ApiClient {
 
   decideAgentProposalsBulk(workspaceId: string, input: AgentProposalBulkInput): Promise<AgentProposalBulkResult> {
     return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/bulk`, input, agentProposalBulkResultSchema);
+  }
+
+  /** What your agents are doing in this workspace right now (last two minutes of calls). */
+  getAgentPresence(workspaceId: string): Promise<AgentPresence> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/presence`, undefined, agentPresenceSchema);
   }
 
   listAgentAudit(workspaceId: string, query: AgentAuditQuery = {}): Promise<AgentAuditEntry[]> {
@@ -2575,6 +2590,10 @@ export class ApiClient {
 
   saveAssistantKey(input: SetAssistantKeyInput): Promise<AssistantKeyStatus> {
     return this.request("PUT", "/assistant/key", input, assistantKeyStatusSchema);
+  }
+
+  setAssistantModel(model: string): Promise<AssistantKeyStatus> {
+    return this.request("PATCH", "/assistant/key", { model }, assistantKeyStatusSchema);
   }
 
   clearAssistantKey(): Promise<void> {

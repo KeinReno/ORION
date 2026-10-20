@@ -3,7 +3,7 @@ button: Внешний вид
 button: Вынести вкладку «Профиль»
 button: Дата и время
 button: Диагностика
-button: ИИ-агенты
+button: ИИ и агенты
 button: Модули
 button: О приложении
 button: Обновления

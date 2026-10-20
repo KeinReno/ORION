@@ -165,7 +165,7 @@ export async function handleMcpMessage(message: JsonRpcMessage, settings: McpSet
       const tool = params?.name ? agentToolByName(params.name) : undefined;
       if (!tool) throw new McpError(`Неизвестный инструмент: ${params?.name}`, -32602);
       if (!settings.token) {
-        return textResult("Не задан токен агента: укажите ORION_AGENT_TOKEN (или ORION_AGENT_TOKEN_FILE). Выпустить его можно в ORION: Настройки → ИИ-агенты → «Подключить агента».", true);
+        return textResult("Не задан токен агента: укажите ORION_AGENT_TOKEN (или ORION_AGENT_TOKEN_FILE). Выпустить его можно в ORION: Настройки → ИИ и агенты → «Подключить программу».", true);
       }
       let request;
       try {

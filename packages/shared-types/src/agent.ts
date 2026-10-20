@@ -209,6 +209,37 @@ export const agentAuditEntrySchema = z.object({
 });
 export type AgentAuditEntry = z.infer<typeof agentAuditEntrySchema>;
 
+/** Name of the short-lived token the built-in assistant chat issues per exchange (`AssistantChatService`). */
+export const ASSISTANT_CHAT_TOKEN_NAME = "Чат ORION";
+
+/**
+ * Live activity of agents (what they are doing right now): `reading` and `writing` come from their calls,
+ * `proposing` is a change waiting for your confirmation, `denied` a refused call, `thinking` the built-in assistant
+ * waiting for its model.
+ */
+export const agentPresenceActivitySchema = z.enum(["reading", "writing", "proposing", "denied", "thinking"]);
+export type AgentPresenceActivity = z.infer<typeof agentPresenceActivitySchema>;
+
+export const agentPresenceEventSchema = z.object({
+  id: z.number().int(),
+  tokenId: z.string().nullable(),
+  agentName: z.string(),
+  /** The built-in assistant chat, not an external program. */
+  assistant: z.boolean(),
+  activity: agentPresenceActivitySchema,
+  /** Module touched (`tasks`, `notes`, `calendar`, …) — the panel of that module lights up. */
+  module: z.string().nullable(),
+  summary: z.string().nullable(),
+  objectType: z.string().nullable(),
+  objectId: z.string().nullable(),
+  at: z.string()
+});
+export type AgentPresenceEvent = z.infer<typeof agentPresenceEventSchema>;
+
+/** The last two minutes of your agents' calls in this workspace; `now` is the server clock to age them against. */
+export const agentPresenceSchema = z.object({ now: z.string(), events: z.array(agentPresenceEventSchema) });
+export type AgentPresence = z.infer<typeof agentPresenceSchema>;
+
 /** A peer an agent may write to: another live token of the same workspace. */
 export const agentPeerSchema = z.object({ id: z.string(), name: z.string() });
 export type AgentPeer = z.infer<typeof agentPeerSchema>;

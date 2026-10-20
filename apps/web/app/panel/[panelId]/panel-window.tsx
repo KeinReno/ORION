@@ -9,6 +9,7 @@ import { getPanelDefinition, instancePanelId } from "../../../lib/panel-registry
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { PanelDraftScope } from "../../../lib/unsaved-drafts";
 import { useTaskProjectRouting } from "../../../lib/task-project-routing";
+import { AgentPanelFrame, AgentPresenceFeed } from "../../../lib/agent-presence";
 import { useEnabledModules } from "../../../lib/use-enabled-modules";
 
 /**
@@ -114,7 +115,10 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
   const scopeId = instanceId ? instancePanelId(panelId, instanceId) : panelId;
   return (
     <div className="h-screen overflow-hidden">
-      <PanelDraftScope panelId={scopeId}><ObjectContextScope panelId={scopeId}><Component params={instanceId ? { instanceId } : undefined} /></ObjectContextScope></PanelDraftScope>
+      <AgentPresenceFeed />
+      <AgentPanelFrame moduleId={definition.moduleId ?? null}>
+        <PanelDraftScope panelId={scopeId}><ObjectContextScope panelId={scopeId}><Component params={instanceId ? { instanceId } : undefined} /></ObjectContextScope></PanelDraftScope>
+      </AgentPanelFrame>
     </div>
   );
 }

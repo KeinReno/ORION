@@ -425,6 +425,24 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
   (`Workspace.disabledModules` по умолчанию `["markets"]`).
 
+### Агенты за работой (индикация)
+
+- Каждый вызов агента (`AgentTokensService.record`) кроме журнала попадает в живую ленту `AgentPresenceService`
+  (память процесса, 2 минуты, только агенты самого пользователя); `GET workspaces/:id/agent-tokens/presence`.
+  Встроенный ассистент пишет туда «думает» перед каждым обращением к модели.
+- Клиент: `lib/agent-presence.tsx` — `AgentPresenceFeed` (один на окно, опрос 2/6 с) кладёт снимок в модульное хранилище;
+  `AgentPresencePill` в шапке, `AgentPanelFrame` (рамка `.agent-frame` вокруг панели модуля) в обёртке `panelComponents`,
+  `useAgentRowMark(id)` подсвечивает запись (`.agent-touched`). Когда агент ЧТО-ТО ИЗМЕНИЛ, лента перечитывает запросы
+  модуля (`MODULE_QUERIES`) — открытая панель показывает правку сразу. Новый модуль с инструментами агента = строка там.
+- «Подключить в один клик»: `POST workspaces/:id/agent-connection/install` (loopback + JSON, только `local`) выпускает
+  токен и дописывает `mcpServers.orion` в конфиг Claude Desktop / Claude Code (`~/.claude.json`) / Cursor / Codex
+  (`agent-client-install.ts`: чужой файл не трогается, если не разобран; прежний — копией `.orion-backup-<время>`; прежние
+  токены этой программы отзываются). Секрет наружу не отдаётся. В тестах — `ORION_AGENT_CLIENT_HOME` (e2e: tmp/e2e-agent-home).
+- Настройки «ИИ и агенты» (`panels/settings/agents-section.tsx`): запросы на подтверждение сверху, разделы «Подключения»
+  (мастер + карточки программ, токены чата «Чат ORION» не показываются, ручной токен — в «Дополнительно»), «Ассистент»
+  (ключ, `PATCH assistant/key` меняет модель), «Журнал». Правки, которые ассистент предлагает, подтверждаются прямо в чате
+  (`AssistantAction.proposalId`).
+
 ### Разрешения: `@RequirePermission` (G12, первый срез)
 
 - Реестр id `<module>.<resource>.<action>` — `packages/shared-types/src/permissions.ts`; манифесты и агентские scope'ы

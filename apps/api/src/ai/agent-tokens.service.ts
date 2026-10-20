@@ -3,6 +3,8 @@ import type { AgentToken as TokenRow, Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
 import {
   AGENT_TOKEN_PREFIX,
+  ASSISTANT_CHAT_TOKEN_NAME,
+  type AgentPresence,
   agentAuditResultOf,
   agentForbiddenSchema,
   agentModeSchema,
@@ -27,6 +29,7 @@ import {
 import { isServerMode } from "../common/orion-mode";
 import { PrismaService } from "../common/prisma.service";
 import { NotificationCenterService } from "../notifications/notification-center.service";
+import { AgentPresenceService, objectOfResource, presenceActivity } from "./agent-presence.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,7 +87,8 @@ export class AgentTokensService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly notifications: NotificationCenterService
+    private readonly notifications: NotificationCenterService,
+    private readonly presence: AgentPresenceService
   ) {}
 
   async create(userId: string, workspaceId: string, input: ParsedCreateAgentTokenInput): Promise<CreatedAgentToken> {
@@ -339,6 +343,12 @@ export class AgentTokensService {
     });
   }
 
+  /** What your agents are doing in this workspace right now (live feed, see `AgentPresenceService`). */
+  async presenceFor(userId: string, workspaceId: string): Promise<AgentPresence> {
+    await this.prisma.withUser(userId, (tx) => this.workspaces.assertMemberTx(tx, userId, workspaceId));
+    return this.presence.recent(workspaceId, userId);
+  }
+
   async record(agent: AgentContext, action: string, resource: string | null, status: number, meta: AuditMeta = {}): Promise<void> {
     await this.prisma.asSystem((tx) =>
       tx.agentAuditEntry.create({
@@ -357,6 +367,19 @@ export class AgentTokensService {
         }
       })
     );
+    const object = meta.objectId ? { type: meta.objectType ?? "", id: meta.objectId } : objectOfResource(resource);
+    this.presence.push({
+      workspaceId: agent.workspaceId,
+      userId: agent.userId,
+      tokenId: agent.tokenId,
+      agentName: agent.tokenName,
+      assistant: agent.tokenName === ASSISTANT_CHAT_TOKEN_NAME,
+      activity: presenceActivity(action, status, meta.wrote ?? false),
+      module: meta.module ?? null,
+      summary: meta.summary ?? null,
+      objectType: object?.type || null,
+      objectId: object?.id ?? null
+    });
     if (status === 403 || status === 429) await this.checkDenialSeries(agent);
   }
 

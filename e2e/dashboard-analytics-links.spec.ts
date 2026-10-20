@@ -25,6 +25,6 @@ test("dashboard analytics: a figure opens the list it counts, the agents block o
   await page.locator(".dv-tab").filter({ hasText: /Дашборд|Сегодня/ }).first().click();
   await analytics.getByRole("tab", { name: "ИИ", exact: true }).click();
   await analytics.getByRole("button", { name: /агентов$/ }).click();
-  await expect(page.getByRole("heading", { name: "Мои токены", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Подключённые программы", exact: true })).toBeVisible();
   await expect(page.getByText("Только ваши агенты и только в пространстве", { exact: false })).toBeVisible();
 });
