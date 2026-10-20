@@ -214,6 +214,25 @@ export function useProjectTaskRequest(projectId: string | null): ProjectTaskRequ
   return current;
 }
 
+/** Where a task lives: its project id, or null (no project, or projects off). Set by `useTaskProjectRouting`. */
+let taskProjectResolver: ((taskId: string) => Promise<string | null>) | null = null;
+export function setTaskProjectResolver(resolver: ((taskId: string) => Promise<string | null>) | null): void {
+  taskProjectResolver = resolver;
+}
+
+/**
+ * Open a task where it lives: inside its project when it has one, otherwise in Tasks. Without a resolver (no workspace
+ * yet, projects off) or when the lookup fails, it falls back to Tasks — a click is never lost.
+ */
+export function openTask(taskId: string): void {
+  const resolve = taskProjectResolver;
+  if (!resolve) return focusTask(taskId);
+  resolve(taskId).then(
+    (projectId) => (projectId ? openProjectTask(projectId, taskId) : focusTask(taskId)),
+    () => focusTask(taskId)
+  );
+}
+
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);
@@ -230,7 +249,7 @@ export function focusProject(projectId: string): void {
 export function openEntity(type: SearchableEntityType, id: string, title?: string): void {
   switch (type) {
     case "task":
-      focusTask(id);
+      openTask(id);
       return;
     case "note":
       focusNote(id);

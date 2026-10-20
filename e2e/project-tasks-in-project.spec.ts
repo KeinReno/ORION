@@ -30,6 +30,16 @@ for (const pluginsOff of [false, true]) {
     await activity.getByText("Скачать офлайн-карты", { exact: true }).click();
     await expectTaskInProject(page, "Скачать офлайн-карты");
 
+    // From outside the project — search (Ctrl+K) from the dashboard: a project's task still opens in its project.
+    await page.getByRole("button", { name: "Сегодня", exact: true }).or(page.getByRole("button", { name: "Дашборд", exact: true })).first().click();
+    const palette = page.getByRole("dialog", { name: "Поиск и команды", exact: true });
+    await page.getByRole("button", { name: "Поиск и команды", exact: true }).click();
+    await palette.getByRole("textbox", { name: "Поиск команд и записей", exact: true }).fill("Составить список снаряжения");
+    await expect(palette.getByRole("button", { name: "Открытие: Составить список снаряжения", exact: true })).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(palette).not.toBeVisible();
+    await expectTaskInProject(page, "Составить список снаряжения");
+
     if (!pluginsOff) {
       // The plan (Gantt) of the projects-planning plugin.
       await page.getByRole("tab", { name: /^План/ }).first().click();
