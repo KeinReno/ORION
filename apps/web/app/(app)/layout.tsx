@@ -76,6 +76,7 @@ import {
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
 import { useTaskProjectRouting } from "../../lib/task-project-routing";
+import { AgentPanelFrame, AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
@@ -138,7 +139,11 @@ const panelComponents: Record<string, (props: IDockviewPanelProps) => React.Reac
           fallback: (error, reset) => createElement(PanelCrash, { error, onRetry: reset }),
           onError: (error) => console.error(`[panels] panel "${panel.id}" crashed`, error)
         },
-        createElement(PanelScrollMemory, { panelId: props.api.id }, createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))))
+        // The frame lights up while an agent works in this panel's module (lib/agent-presence.tsx).
+        createElement(AgentPanelFrame, {
+          moduleId: panel.moduleId ?? null,
+          children: createElement(PanelScrollMemory, { panelId: props.api.id }, createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))))
+        })
       )
   ])
 );
@@ -252,6 +257,9 @@ function FloatHeaderAction({ containerApi, api, activePanel }: IDockviewHeaderAc
 function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement | null {
   const compact = useMediaQuery("(max-width: 767px)");
   const [moduleSettingsFor, setModuleSettingsFor] = useState<string | null>(null);
+  // Precision shows the agents' pill in its own header; the legacy shell has only this strip.
+  const { data: preferences } = usePreferences();
+  const precision = preferences?.theme === "kaiden-precision";
   if (compact) return null;
   const activeId = props.activePanel?.id;
   return (
@@ -279,6 +287,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
       <ResourcesToggle />
       <FloatHeaderAction {...props} />
       <DetachHeaderAction {...props} />
+      {precision ? null : <AgentPresencePill />}
       <RunningTimerChip />
       <NotificationBell size="sm" />
       <button
@@ -1138,6 +1147,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
               {getPanelDefinition(activePanelId ?? "dashboard")?.label ?? "ORION"}
             </span>
+            <AgentPresencePill className="min-w-0" />
             <RunningTimerChip />
             <ResourcesToggle size="md" />
             <NotificationBell />
@@ -1154,6 +1164,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           <IconButton id="orion-context-toggle" label="Контекст пространства" aria-controls="orion-workspace-context" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => compact ? setMobileContextOpen(value => !value) : setContextHidden(value => !value)} aria-expanded={compact ? mobileContextOpen : !contextHidden}><PanelLeft className="h-4 w-4" /></IconButton>
           <div className="min-w-0 flex-1 truncate text-label text-subtle-foreground"><span className="hidden text-muted-foreground md:inline">{workspace.name}</span><span aria-hidden className="hidden px-2 md:inline">/</span>{editorContext?.title || activeDefinition?.label || "Рабочая область"}</div>
           {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : editorContext.entityType === "document" ? "документа" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
+          <AgentPresencePill />
           <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
           <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
             { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
@@ -1172,6 +1183,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               onOpen={openContextProject} onClose={() => { document.getElementById("orion-context-toggle")?.focus(); setContextHidden(true); }} />
           </div> : null}
           <div className="min-h-0 min-w-0 flex-1">
+            <AgentPresenceFeed />
             <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
           </div>
           {precision && inspectorOpen && !editorContext && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}

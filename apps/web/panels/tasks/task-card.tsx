@@ -7,6 +7,7 @@ import { useSlotContributions } from "../../lib/extensions/slot";
 import { projectColor, shortDateTime } from "../../lib/format";
 import type { SubtaskProgress } from "../../lib/task-structure";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "../task-form";
+import { useAgentRowMark } from "../../lib/agent-presence";
 
 /** Just enough of `WorkspaceMember` for the assignee avatar + tooltip. */
 export interface TaskAssignee {
@@ -86,6 +87,9 @@ export function TaskCard({
     }))
   );
 
+  // Lit while an agent has just read or changed this task (lib/agent-presence.tsx).
+  const agentMark = useAgentRowMark(task.id);
+
   return (
     <div
       id={`task-${task.id}`}
@@ -119,7 +123,8 @@ export function TaskCard({
         "group relative flex cursor-pointer flex-col gap-2 rounded-2xl border bg-card px-3 py-card-row transition-colors hover:border-border-strong hover:bg-card-hover",
         focused || selected ? "border-accent" : "border-border",
         nested && "ml-4",
-        closed && "opacity-60"
+        closed && "opacity-60",
+        agentMark.className
       )}
     >
       <div className="flex items-start gap-2">
@@ -139,7 +144,7 @@ export function TaskCard({
           />
         </div>
         {PRIORITY_DOT[task.priority] ? <span className={cx("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", PRIORITY_DOT[task.priority])} title={`Приоритет: ${TASK_PRIORITY_LABEL[task.priority]}`} /> : null}
-        <span className="flex-1 text-body font-medium"><StrikeText done={done || canceled}>{task.title}</StrikeText></span>
+        <span className="flex-1 text-body font-medium"><StrikeText done={done || canceled}>{task.title}</StrikeText>{agentMark.tag}</span>
         <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100" onClick={(event) => event.stopPropagation()} role="presentation"><DropdownMenu trigger={({ toggle }) => <IconButton label="Действия" size="sm" onClick={toggle}><MoreHorizontal className="h-4 w-4" /></IconButton>} items={items} /></div>
       </div>
       {task.description ? <p className="line-clamp-2 text-label text-muted-foreground">{task.description}</p> : null}

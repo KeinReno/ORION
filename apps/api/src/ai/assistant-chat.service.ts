@@ -1,6 +1,7 @@
 import { BadRequestException, HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import {
   AGENT_TOOLS,
+  ASSISTANT_CHAT_TOKEN_NAME,
   agentToolByName,
   agentToolDescription,
   buildAgentToolRequest,
@@ -11,6 +12,7 @@ import {
 } from "@orion/shared-types";
 import { callAnthropic, type AnthropicContentBlock, type AnthropicMessage, type AnthropicTool } from "./assistant-anthropic";
 import { AssistantKeyService } from "./assistant-key.service";
+import { AgentPresenceService } from "./agent-presence.service";
 import { AgentTokensService } from "./agent-tokens.service";
 
 /**
@@ -52,7 +54,8 @@ export class AssistantChatService {
 
   constructor(
     private readonly keys: AssistantKeyService,
-    private readonly tokens: AgentTokensService
+    private readonly tokens: AgentTokensService,
+    private readonly presence: AgentPresenceService
   ) {}
 
   private spend(userId: string): void {
@@ -73,7 +76,7 @@ export class AssistantChatService {
     if (input.messages[input.messages.length - 1]?.role !== "user") throw new BadRequestException("Последнее сообщение должно быть от пользователя");
 
     const created = await this.tokens.create(userId, workspaceId, {
-      name: "Чат ORION",
+      name: ASSISTANT_CHAT_TOKEN_NAME,
       scopes: CHAT_SCOPES,
       modulePermissions: [],
       mode: "assistant",
@@ -85,13 +88,33 @@ export class AssistantChatService {
     } as Parameters<AgentTokensService["create"]>[2]);
 
     try {
-      return await this.converse(key, created.secret, input, localBase);
+      // While the model thinks there is no call to show: say so, so the shell does not look idle.
+      const thinking = (): void =>
+        this.presence.push({
+          workspaceId,
+          userId,
+          tokenId: created.id,
+          agentName: ASSISTANT_CHAT_TOKEN_NAME,
+          assistant: true,
+          activity: "thinking",
+          module: null,
+          summary: "Думает над ответом",
+          objectType: null,
+          objectId: null
+        });
+      return await this.converse(key, created.secret, input, localBase, thinking);
     } finally {
       await this.tokens.revoke(userId, workspaceId, created.id).catch((error) => this.logger.warn(`Не удалось отозвать токен чата: ${error instanceof Error ? error.message : String(error)}`));
     }
   }
 
-  private async converse(key: { apiKey: string; model: string }, agentSecret: string, input: AssistantChatInput, localBase: string): Promise<AssistantChatResult> {
+  private async converse(
+    key: { apiKey: string; model: string },
+    agentSecret: string,
+    input: AssistantChatInput,
+    localBase: string,
+    thinking: () => void
+  ): Promise<AssistantChatResult> {
     const tools = chatTools();
     const messages: AnthropicMessage[] = input.messages.map((message) => ({ role: message.role, content: message.content }));
     const actions: AssistantAction[] = [];
@@ -99,6 +122,7 @@ export class AssistantChatService {
     let outputTokens = 0;
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
+      thinking();
       const response = await callAnthropic(key.apiKey, { model: key.model, system: SYSTEM_PROMPT, tools, messages, max_tokens: MAX_TOKENS });
       inputTokens += response.usage?.input_tokens ?? 0;
       outputTokens += response.usage?.output_tokens ?? 0;

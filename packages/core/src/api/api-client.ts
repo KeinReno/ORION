@@ -176,6 +176,7 @@ import {
   type ProjectCapture,
   type ProjectCaptureKind,
   type AgentAuditEntry,
+  type AgentPresence,
   type AgentAuditQuery,
   type AgentProposalBulkInput,
   type AgentProposalBulkResult,
@@ -258,6 +259,7 @@ import {
   meterSchema,
   agentProposalSchema,
   agentAuditEntrySchema,
+  agentPresenceSchema,
   agentProposalBulkResultSchema,
   createdAgentTokenSchema,
   type UpdateTaskCommentInput,
@@ -1374,6 +1376,11 @@ export class ApiClient {
 
   decideAgentProposalsBulk(workspaceId: string, input: AgentProposalBulkInput): Promise<AgentProposalBulkResult> {
     return this.request("POST", `/workspaces/${workspaceId}/agent-tokens/proposals/bulk`, input, agentProposalBulkResultSchema);
+  }
+
+  /** What your agents are doing in this workspace right now (last two minutes of calls). */
+  getAgentPresence(workspaceId: string): Promise<AgentPresence> {
+    return this.request("GET", `/workspaces/${workspaceId}/agent-tokens/presence`, undefined, agentPresenceSchema);
   }
 
   listAgentAudit(workspaceId: string, query: AgentAuditQuery = {}): Promise<AgentAuditEntry[]> {

@@ -71,7 +71,8 @@ import {
   type Project,
   type Task,
   type UpdateNoteInput,
-  type UpdateTaskInput
+  type UpdateTaskInput,
+  type AgentPresence
 } from "@orion/shared-types";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
@@ -118,6 +119,12 @@ export class AgentTokensController {
   @Post("revoke-all")
   async revokeAll(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<{ revoked: number }> {
     return { revoked: await this.tokens.revokeAll(user.userId, workspaceId) };
+  }
+
+  /** Live: what your agents are doing here now (polled by the shell to light up panels and records). */
+  @Get("presence")
+  presence(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AgentPresence> {
+    return this.tokens.presenceFor(user.userId, workspaceId);
   }
 
   /** Filters: `tokenId`, `module`, `result` (ok|proposed|denied|limited|error), `from`/`to`, `limit`. */

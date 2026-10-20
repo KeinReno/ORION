@@ -5,6 +5,7 @@ import { Badge, CheckToggle, cx, StrikeText } from "@orion/ui";
 import { shortDate } from "../../lib/format";
 import { isTaskOverdue } from "../../lib/project-focus";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "../task-form";
+import { useAgentRowMark } from "../../lib/agent-presence";
 
 /**
  * One task as a row inside a project (overview «Горит» / «Дальше», the list view).
@@ -24,8 +25,9 @@ export function TaskRow({
 }): React.ReactElement {
   const closed = isTaskClosed(task.status);
   const overdue = isTaskOverdue(task, now);
+  const agentMark = useAgentRowMark(task.id);
   return (
-    <li className="flex items-center gap-2 rounded-lg px-2 py-row transition-colors hover:bg-card-hover">
+    <li className={cx("flex items-center gap-2 rounded-lg px-2 py-row transition-colors hover:bg-card-hover", agentMark.className)}>
       <CheckToggle
         checked={task.status === "done"}
         onClick={onToggle}
@@ -44,6 +46,7 @@ export function TaskRow({
       >
         <StrikeText done={closed}>{task.title}</StrikeText>
       </button>
+      {agentMark.tag}
       {task.status === "in_progress" || task.status === "backlog" || task.status === "canceled" ? (
         <Badge tone={task.status === "in_progress" ? "accent" : "neutral"}>{TASK_STATUS_LABEL[task.status]}</Badge>
       ) : null}
