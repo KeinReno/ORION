@@ -1,6 +1,6 @@
 "use client";
 
-import type { AssistantChatInput, AssistantChatResult, AssistantKeyStatus, SetAssistantKeyInput } from "@orion/shared-types";
+import type { AssistantChatInput, AssistantChatResult, AssistantKeyStatus, AssistantSendInput, SetAssistantKeyInput } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
@@ -16,6 +16,45 @@ export function useSaveAssistantKey() {
   return useMutation({
     mutationFn: (input: SetAssistantKeyInput) => api.saveAssistantKey(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant", "key"] })
+  });
+}
+
+export function useAssistantConversations(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useQuery({
+    queryKey: ["assistant", "conversations", workspaceId],
+    queryFn: () => api.listAssistantConversations(workspaceId as string),
+    enabled: Boolean(workspaceId)
+  });
+}
+
+export function useAssistantConversation(workspaceId: string | undefined, id: string | null) {
+  const { api } = useCore();
+  return useQuery({
+    queryKey: ["assistant", "conversation", workspaceId, id],
+    queryFn: () => api.getAssistantConversation(workspaceId as string, id as string),
+    enabled: Boolean(workspaceId && id)
+  });
+}
+
+export function useSendToAssistant(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AssistantSendInput) => api.sendToAssistant(workspaceId as string, input),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["assistant", "conversations", workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ["assistant", "conversation", workspaceId, result.conversationId] });
+    }
+  });
+}
+
+export function useDeleteAssistantConversation(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteAssistantConversation(workspaceId as string, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assistant", "conversations", workspaceId] })
   });
 }
 

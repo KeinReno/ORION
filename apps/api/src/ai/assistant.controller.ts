@@ -1,10 +1,15 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import {
   assistantChatInputSchema,
+  assistantSendInputSchema,
   setAssistantKeyInputSchema,
   setAssistantModelInputSchema,
   type AssistantChatInput,
   type AssistantChatResult,
+  type AssistantConversation,
+  type AssistantConversationSummary,
+  type AssistantSendInput,
+  type AssistantSendResult,
   type AssistantKeyStatus,
   type SetAssistantKeyInput,
   type SetAssistantModelInput
@@ -55,5 +60,40 @@ export class AssistantController {
   ): Promise<AssistantChatResult> {
     // Инструменты ассистента вызываются на этом же процессе: адрес loopback строим из порта, на котором принят запрос.
     return this.chat.chat(user.userId, workspaceId, body, `http://127.0.0.1:${req.socket.localPort}`);
+  }
+
+  /** A message in a saved conversation; `context` — what the user is looking at («эта задача»). */
+  @Post("workspaces/:workspaceId/assistant/send")
+  sendInConversation(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(assistantSendInputSchema)) body: AssistantSendInput,
+    @Req() req: { socket: { localPort?: number } }
+  ): Promise<AssistantSendResult> {
+    return this.chat.send(user.userId, workspaceId, body, `http://127.0.0.1:${req.socket.localPort}`);
+  }
+
+  @Get("workspaces/:workspaceId/assistant/conversations")
+  conversations(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AssistantConversationSummary[]> {
+    return this.chat.listConversations(user.userId, workspaceId);
+  }
+
+  @Get("workspaces/:workspaceId/assistant/conversations/:conversationId")
+  conversation(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("conversationId") conversationId: string
+  ): Promise<AssistantConversation> {
+    return this.chat.getConversation(user.userId, workspaceId, conversationId);
+  }
+
+  @Delete("workspaces/:workspaceId/assistant/conversations/:conversationId")
+  @HttpCode(204)
+  async removeConversation(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("conversationId") conversationId: string
+  ): Promise<void> {
+    await this.chat.removeConversation(user.userId, workspaceId, conversationId);
   }
 }

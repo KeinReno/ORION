@@ -183,4 +183,50 @@ describe("Assistant chat (variant C)", () => {
     const tasks = await request<Array<{ id: string; title: string }>>(`/workspaces/${ws}/tasks`, "GET", token);
     expect(tasks.data.find((t) => t.id === task.data.id)?.title).toBe("Новое название");
   });
+
+  it("беседы: история сохраняется и уходит модели, контекст экрана — в системной подсказке, чужому не видна", async () => {
+    const alice = await user();
+    const bob = await user();
+    await request("/assistant/key", "PUT", alice.token, { apiKey: API_KEY, model: "claude-test" });
+    seen.length = 0;
+    script = [() => text("Привет! Чем помочь?")];
+    const first = await request<{ conversationId: string; title: string; reply: string; truncated: boolean }>(`/workspaces/${alice.ws}/assistant/send`, "POST", alice.token, {
+      message: "Привет, это первая беседа",
+      context: { panel: "tasks", label: "Задачи", entityType: "task", entityId: "t-1", title: "Купить корм" }
+    });
+    expect(first.status).toBe(201);
+    expect(first.data).toMatchObject({ title: "Привет, это первая беседа", reply: "Привет! Чем помочь?", truncated: false });
+    expect(seen[0]!.body.system).toContain("Сейчас пользователь смотрит раздел «Задачи»");
+    expect(seen[0]!.body.system).toContain("«Купить корм» (id t-1)");
+    expect(seen[0]!.body.max_tokens).toBe(4096);
+
+    // The second message carries the history to the model; a cut answer is marked.
+    seen.length = 0;
+    script = [() => ({ json: { content: [{ type: "text", text: "Длинный ответ…" }], stop_reason: "max_tokens", usage: { input_tokens: 1, output_tokens: 1 } } })];
+    const second = await request<{ conversationId: string; truncated: boolean }>(`/workspaces/${alice.ws}/assistant/send`, "POST", alice.token, {
+      conversationId: first.data.conversationId,
+      message: "А что дальше?"
+    });
+    expect(second.data).toMatchObject({ conversationId: first.data.conversationId, truncated: true });
+    expect(seen[0]!.body.messages.map((m: { role: string; content: unknown }) => [m.role, m.content])).toEqual([
+      ["user", "Привет, это первая беседа"],
+      ["assistant", "Привет! Чем помочь?"],
+      ["user", "А что дальше?"]
+    ]);
+    expect(seen[0]!.body.system).not.toContain("Сейчас пользователь смотрит");
+
+    const list = await request<Array<{ id: string; title: string; messageCount: number }>>(`/workspaces/${alice.ws}/assistant/conversations`, "GET", alice.token);
+    expect(list.data).toEqual([expect.objectContaining({ id: first.data.conversationId, messageCount: 4 })]);
+    const full = await request<{ messages: Array<{ role: string; truncated: boolean }> }>(`/workspaces/${alice.ws}/assistant/conversations/${first.data.conversationId}`, "GET", alice.token);
+    expect(full.data.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
+    expect(full.data.messages[3]!.truncated).toBe(true);
+
+    // Not Bob's: neither through the API (not a member → 403, and the id is not his) nor in the database (RLS).
+    expect((await request(`/workspaces/${alice.ws}/assistant/conversations/${first.data.conversationId}`, "GET", bob.token)).status).toBe(403);
+    expect((await request(`/workspaces/${bob.ws}/assistant/conversations/${first.data.conversationId}`, "GET", bob.token)).status).toBe(404);
+    expect(await prisma.withUser(bob.userId, (tx) => tx.assistantConversation.count())).toBe(0);
+
+    expect((await request(`/workspaces/${alice.ws}/assistant/conversations/${first.data.conversationId}`, "DELETE", alice.token)).status).toBe(204);
+    expect((await request<unknown[]>(`/workspaces/${alice.ws}/assistant/conversations`, "GET", alice.token)).data).toEqual([]);
+  });
 });
