@@ -76,6 +76,7 @@ import {
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
 import { useTaskProjectRouting } from "../../lib/task-project-routing";
+import { rememberAssistantView } from "../../lib/assistant-context";
 import { AgentPanelFrame, AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
@@ -555,6 +556,17 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const objectContext = useObjectContext(workspace?.id, activePanelId);
   const editorContext = objectContext && ["task", "note", "document"].includes(objectContext.entityType) ? objectContext : null;
   const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
+  // The assistant hears what was on screen before it («эта задача»): the last non-assistant panel and its open record.
+  useEffect(() => {
+    if (!activePanelId) return;
+    rememberAssistantView({
+      panel: activePanelId,
+      label: activeDefinition?.label ?? activePanelId,
+      entityType: objectContext?.entityType ?? (activeProjectId ? "project" : null),
+      entityId: objectContext?.entityId ?? activeProjectId ?? null,
+      title: objectContext?.title ?? null
+    });
+  }, [activePanelId, activeDefinition?.label, objectContext?.entityType, objectContext?.entityId, objectContext?.title, activeProjectId]);
   useEffect(() => { setInspectorOpen(false); setMobileContextOpen(false); }, [workspace?.id]);
   useEscapeKey(() => setDrawerOpen(false), compact && drawerOpen);
 

@@ -88,6 +88,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "ContactRelation", snapshotKey: "contactRelations", policy: "included", reason: "Связи между контактами («жена», «коллега»)." },
   { model: "ExtensionRecord", snapshotKey: "extensionRecords", policy: "included", reason: "Данные расширений из папки (ADR-0022 E3): пользовательские данные пространства; без самого расширения на новом узле просто не читаются." },
   { model: "ExtensionSecret", snapshotKey: null, policy: "secret-excluded", reason: "Личный зашифрованный секрет расширения (ADR-0022 E3) привязан к узлу и пользователю — на новом узле вводится заново." },
+  { model: "AssistantConversation", snapshotKey: null, policy: "identity-excluded", reason: "Личная переписка участника со встроенным ассистентом: принадлежит пользователю, а перенос между установками требует сопоставления пользователей, которого нет." },
   { model: "AssistantKey", snapshotKey: null, policy: "secret-excluded", reason: "Ключ владельца к языковой модели (ADR-0017, вариант C): лежит зашифрованным на этом узле и в бэкап не попадает — новый узел просит ввести его заново." },
   { model: "AgentToken", snapshotKey: null, policy: "secret-excluded", reason: "Учётные данные ИИ-агентов (ADR-0007): хранится только хеш секрета; токены не переносятся между узлами — их выпускают заново." },
   { model: "AgentMessage", snapshotKey: null, policy: "ephemeral-excluded", reason: "Сообщения между агентами привязаны к токенам узла; токены в бэкап не входят, а значит и переписка." },

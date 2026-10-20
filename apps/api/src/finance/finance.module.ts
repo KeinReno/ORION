@@ -1,3 +1,5 @@
+import { AgentCoreModule } from "../ai/agent-core.module";
+import { FinanceAgentController } from "./finance.agent.controller";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { NotificationsModule } from "../notifications/notifications.module";
@@ -49,8 +51,9 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
  * for no reason.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
   controllers: [
+    FinanceAgentController,
     AccountsController,
     CategoriesController,
     TransactionsController,

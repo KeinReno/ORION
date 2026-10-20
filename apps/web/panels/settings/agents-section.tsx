@@ -24,7 +24,7 @@ import { openPanel } from "../../lib/panel-bus";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { AssistantKeyForm, AssistantModelPicker, ClearAssistantKeyButton } from "../assistant-key";
 import { AgentConnectWizard } from "./agent-connect-wizard";
-import { AgentPolicyFields, defaultPolicy, policyIsEmpty, policyToInput, type PolicyDraft } from "./agent-permissions";
+import { AgentPolicyFields, defaultPolicy, describeModulePermissions, policyIsEmpty, policyToInput, type PolicyDraft } from "./agent-permissions";
 import { AgentJournal } from "./agents-journal";
 import { AgentProposals } from "./agents-proposals";
 
@@ -199,6 +199,7 @@ function ConnectionCard({ workspaceId, token }: { workspaceId: string | undefine
           {token.allowedProjectIds.length > 0 ? ` · проектов: ${token.allowedProjectIds.length}` : ""}
           {token.writeLimitPerHour ? ` · до ${token.writeLimitPerHour} записей/час` : ""}
           {token.forbidden.length > 0 ? ` · запрет: ${token.forbidden.join(", ")}` : ""}
+          {token.modulePermissions.length > 0 ? ` · ${describeModulePermissions(token.modulePermissions)}` : ""}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Select

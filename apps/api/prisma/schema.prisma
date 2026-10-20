@@ -27,6 +27,7 @@ model User {
   healthGrants      HealthGrant[]      @relation("HealthGrantee")
   checkedListItems  ListItem[]        @relation("ListItemCheckedBy")
   agentTokens       AgentToken[]
+  assistantConversations AssistantConversation[]
   assistantKey      AssistantKey?
   extensionSecrets  ExtensionSecret[]
   privateNotes      Note[]            @relation("NotePrivate")
@@ -267,6 +268,7 @@ model Workspace {
   milestoneDependencies MilestoneDependency[]
   captures              Capture[]
   agentTokens           AgentToken[]
+  assistantConversations AssistantConversation[]
   agentCaptures         AgentCapture[]
   homes                Home[]
   meters                Meter[]
@@ -1944,6 +1946,24 @@ model ProjectStatusUpdate {
 
 /// Ключ владельца к языковой модели для чата внутри ORION (ADR-0017, вариант C). Ключ лежит только в зашифрованном виде
 /// (`sealSecret`), наружу не отдаётся; строка видна только самому пользователю (RLS по `userId`). Не бэкапится.
+/// Беседы со встроенным ассистентом: личные (видны только автору) и в пределах одного пространства.
+model AssistantConversation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  title       String
+  /// [{ role, content, actions, at, truncated? }] — последние ASSISTANT_HISTORY_MAX сообщений.
+  messages    Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, updatedAt])
+  @@map("assistant_conversations")
+}
+
 model AssistantKey {
   id        String   @id @default(uuid())
   userId    String   @unique

@@ -134,9 +134,16 @@ import {
   type AssistantChatInput,
   type AssistantChatResult,
   type AssistantKeyStatus,
+  type AssistantConversation,
+  type AssistantConversationSummary,
+  type AssistantSendInput,
+  type AssistantSendResult,
   type BackgroundJobStatus,
   type SetAssistantKeyInput,
   assistantChatResultSchema,
+  assistantConversationSchema,
+  assistantConversationSummarySchema,
+  assistantSendResultSchema,
   assistantKeyStatusSchema,
   type ComponentDataStatus,
   backgroundJobListSchema,
@@ -2590,6 +2597,22 @@ export class ApiClient {
 
   saveAssistantKey(input: SetAssistantKeyInput): Promise<AssistantKeyStatus> {
     return this.request("PUT", "/assistant/key", input, assistantKeyStatusSchema);
+  }
+
+  sendToAssistant(workspaceId: string, input: AssistantSendInput): Promise<AssistantSendResult> {
+    return this.request("POST", `/workspaces/${workspaceId}/assistant/send`, input, assistantSendResultSchema);
+  }
+
+  listAssistantConversations(workspaceId: string): Promise<AssistantConversationSummary[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/assistant/conversations`, undefined, z.array(assistantConversationSummarySchema));
+  }
+
+  getAssistantConversation(workspaceId: string, id: string): Promise<AssistantConversation> {
+    return this.request("GET", `/workspaces/${workspaceId}/assistant/conversations/${id}`, undefined, assistantConversationSchema);
+  }
+
+  async deleteAssistantConversation(workspaceId: string, id: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/assistant/conversations/${id}`, undefined, z.void());
   }
 
   setAssistantModel(model: string): Promise<AssistantKeyStatus> {

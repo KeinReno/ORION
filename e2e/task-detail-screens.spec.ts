@@ -64,6 +64,8 @@ for (const pluginsOff of [false, true]) {
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       await expect(opened).toBeVisible();
+      // The pane re-lays out from the split view after the resize; measure once it spans the phone screen.
+      await expect.poll(() => opened.evaluate((node, w) => node.clientWidth > w * 0.8 && node.getBoundingClientRect().right <= w + 0.5, width)).toBe(true);
       expect.soft(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `no page overflow at ${width}`).toBe(true);
       expect.soft(await opened.evaluate((node) => node.scrollWidth <= node.clientWidth), `no pane overflow at ${width}`).toBe(true);
       const status = opened.getByRole("combobox", { name: "Статус", exact: true });

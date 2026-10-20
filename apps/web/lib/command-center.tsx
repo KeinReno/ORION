@@ -5,6 +5,7 @@ import { isModuleEnabled, localDayDueAt, quickCapturePlaceholder, resolveQuickCa
 import { Input, Kbd, Modal, isTypingTarget, useDebouncedValue, useHotkey, useToast } from "@orion/ui";
 import {
   CalendarDays,
+  Bot,
   CornerDownLeft,
   FileText,
   FolderKanban,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useCaptureToList } from "./capture-to-list";
-import { openEntity, openList, openPanel, openSettings } from "./panel-bus";
+import { askAssistant, openEntity, openList, openPanel, openSettings } from "./panel-bus";
 import { groupPaletteResults, selectPaletteResults, type PaletteEntry } from "./palette-results";
 import { instancePanelId, isPanelAvailable, panelRegistry } from "./panel-registry";
 import { placeKey } from "./extensions/places";
@@ -88,6 +89,7 @@ function paletteGroupOf(entry: PaletteEntry): string {
   if (prefix === "x") return "Расширения";
   if (prefix === "t") return "Задачи";
   if (prefix === "n") return "Заметки";
+  if (prefix === "q") return "Ассистент";
   if (prefix === "s") return SEARCH_RESULT_GROUPS[type ?? ""] ?? "Найдено";
   return "Другое";
 }
@@ -381,7 +383,12 @@ export function CommandCenter(): React.ReactElement {
   }, [tasks, notes, searchHits, disabledModules, isEnabled, workspace?.id, workspace?.pluginOverrides, extensionPanels, extensionCommands]);
 
   const results = useMemo(() => {
-    return selectPaletteResults(commands, query, debouncedQuery);
+    const found = selectPaletteResults(commands, query, debouncedQuery);
+    // Always last, so Enter still opens the best match: «Спросить ассистента» opens the chat with the text typed in.
+    const text = query.trim();
+    if (text.length < 3) return found;
+    const ask: Command = { id: "q:ask", label: `Спросить ассистента: «${text.length > 60 ? `${text.slice(0, 57)}…` : text}»`, hint: "ассистент", icon: Bot, run: () => askAssistant(text) };
+    return [...found, ask];
   }, [commands, query, debouncedQuery]);
   // Grouped for display; `ordered` is what ↑/↓ and Enter walk, so the keyboard follows the groups.
   const { groups, ordered } = useMemo(() => groupPaletteResults(results, paletteGroupOf), [results]);

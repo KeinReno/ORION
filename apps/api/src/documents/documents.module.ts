@@ -1,3 +1,5 @@
+import { AgentCoreModule } from "../ai/agent-core.module";
+import { DocumentsAgentController } from "./documents.agent.controller";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -18,8 +20,8 @@ import { DocumentsProjectAggregates } from "./documents-project-aggregates";
  * The dependency is one-way — this module must not import NotesModule.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, SearchRegistryModule],
-  controllers: [DocumentsController],
+  imports: [AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
+  controllers: [DocumentsController, DocumentsAgentController],
   providers: [DocumentsProjectAggregates, DocumentsService, DocumentTrashPurgeService, DocumentsSearchProvider],
   exports: [DocumentsService]
 })

@@ -236,9 +236,11 @@ export type AgentInstallClient = z.infer<typeof agentInstallClientSchema>;
 
 export const installAgentClientInputSchema = z.object({
   client: agentInstallClientSchema,
-  scopes: z.array(agentScopeSchema).min(1).max(20)
-});
-export type InstallAgentClientInput = z.infer<typeof installAgentClientInputSchema>;
+  scopes: z.array(agentScopeSchema).max(20),
+  /** Registry permissions of module tools (`habits.habit.read`, …; see `MODULE_AGENT_PERMISSIONS`). */
+  modulePermissions: z.array(z.string().min(1)).max(100).default([])
+}).refine((value) => value.scopes.length > 0 || value.modulePermissions.length > 0, { message: "Отметьте хотя бы одно разрешение" });
+export type InstallAgentClientInput = z.input<typeof installAgentClientInputSchema>;
 
 /** What was written where; the token itself never leaves the server. */
 export const installedAgentClientSchema = z.object({

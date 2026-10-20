@@ -51,7 +51,7 @@ export class AgentClientInstallService {
     const previous = (await this.tokens.list(userId, workspaceId)).filter(
       (token) => token.name === label && token.revokedAt === null && (token.expiresAt === null || Date.parse(token.expiresAt) > Date.now())
     );
-    const created = await this.tokens.create(userId, workspaceId, createAgentTokenInputSchema.parse({ name: label, scopes: input.scopes, expiresInDays: 90 }));
+    const created = await this.tokens.create(userId, workspaceId, createAgentTokenInputSchema.parse({ name: label, scopes: input.scopes, modulePermissions: input.modulePermissions ?? [], expiresInDays: 90 }));
 
     let backupPath: string | null;
     try {
