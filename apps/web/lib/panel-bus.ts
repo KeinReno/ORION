@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { ObjectOpenMode, SearchableEntityType, ViewRef } from "@orion/shared-types";
+import type { ObjectOpenMode, SearchableEntityType, TaskStatus, ViewRef } from "@orion/shared-types";
 import { createIntentChannel, type IntentChannel } from "./intent-channel";
 import { getActiveWorkspaceId } from "./use-active-workspace";
 
@@ -302,6 +302,21 @@ export function showTasksForProject(projectId: string): void {
 }
 
 export const useTasksProjectSignal = tasksProjectChannel.useIntent;
+
+/** Open Tasks already filtered (a dashboard number: «просрочено», «в работе»…); other filters are reset. */
+export interface TasksFilterRequest {
+  due: "all" | "overdue" | "today" | "week" | "none";
+  statuses: TaskStatus[];
+  at: number;
+}
+
+const tasksFilterChannel = makeIntentChannel<TasksFilterRequest>("tasks");
+
+export function showTasksFiltered(filter: { due?: TasksFilterRequest["due"]; statuses?: TaskStatus[] }): void {
+  tasksFilterChannel.emit({ due: filter.due ?? "all", statuses: filter.statuses ?? [], at: Date.now() });
+}
+
+export const useTasksFilterRequest = tasksFilterChannel.useIntent;
 
 /**
  * "Open settings on this tab, at this parameter" — from the avatar, a module's settings sheet or the
