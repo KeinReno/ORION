@@ -795,6 +795,8 @@ function OverviewTab({
 
         <DeadlineCard project={project} />
 
+        <ExtensionSlot name="projects.overview.side" props={{ workspaceId, projectId: project.id, projectName: project.name }} />
+
         <MoneyTimeCard project={project} financeOn={financeOn} timeOn={timeOn} tasksOn={tasksOn} onEdit={onEditProject} />
 
         <Card className="px-4 py-3">
