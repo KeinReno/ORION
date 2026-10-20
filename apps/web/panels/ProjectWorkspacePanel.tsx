@@ -69,7 +69,7 @@ import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from ".
 import { EntityLinksSection } from "../components/entity-links";
 import { describeError } from "../lib/error-message";
 import { formatMoney, formatSpentOther, relativeTime, shortDate, shortDateTime } from "../lib/format";
-import { openEntity, openPanel } from "../lib/panel-bus";
+import { openEntity, openPanel, openProjectTask, useProjectTaskRequest } from "../lib/panel-bus";
 import { usePublishResourceContext } from "../lib/resource-context-store";
 import { detachPanelToWindow } from "../lib/panel-window";
 import type { PanelComponentProps } from "../lib/panel-registry";
@@ -309,6 +309,22 @@ function ProjectWorkspace({
     }
   }
 
+  // «Open this task» from anywhere inside the project (plan, captures, a locked section view) lands here, not in Tasks.
+  const taskRequest = useProjectTaskRequest(locked ? null : project.id);
+  useEffect(() => {
+    if (!taskRequest) return;
+    setOpenTaskId(taskRequest.taskId);
+    setTab("tasks");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new request (nonce) should switch the tab
+  }, [taskRequest]);
+
+  /** A task of this project opens on this project's «Задачи», never in the global Tasks panel. */
+  function openTask(taskId: string): void {
+    if (locked) return openProjectTask(project.id, taskId, project.name);
+    setOpenTaskId(taskId);
+    setTab("tasks");
+  }
+
   function refreshProject(): void {
     void queryClient.invalidateQueries({ queryKey: ["project", workspaceId, project.id] });
     void queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
@@ -533,11 +549,8 @@ function ProjectWorkspace({
             onToggle={toggleTask}
             onGoTo={goTo}
             onEditProject={() => setEditing(true)}
-            onOpenTask={(task) => {
-              if (locked) return openEntity("task", task.id);
-              setOpenTaskId(task.id);
-              setTab("tasks");
-            }}
+            onOpenTask={(task) => openTask(task.id)}
+            onOpenTaskId={openTask}
             onAddTask={() => setAdding("task")}
           />
         ) : null}
@@ -654,6 +667,7 @@ function OverviewTab({
   onGoTo,
   onEditProject,
   onOpenTask,
+  onOpenTaskId,
   onAddTask
 }: {
   workspaceId: string | undefined;
@@ -671,6 +685,7 @@ function OverviewTab({
   onGoTo: (tab: ProjectTab) => void;
   onEditProject: () => void;
   onOpenTask: (task: Task) => void;
+  onOpenTaskId: (taskId: string) => void;
   onAddTask: () => void;
 }): React.ReactElement {
   const progress = Math.min(100, Math.max(0, project.progress));
@@ -758,7 +773,7 @@ function OverviewTab({
         <ContextNoteField value={project.contextNote} busy={busyNote} onSave={onSaveNote} />
 
         <PanelSection title="Последние изменения">
-          <ActivityList items={project.activity.slice(0, 8)} onPlan={hasPlan ? () => onGoTo("plan") : undefined} />
+          <ActivityList items={project.activity.slice(0, 8)} onPlan={hasPlan ? () => onGoTo("plan") : undefined} onTask={onOpenTaskId} />
         </PanelSection>
       </div>
 
@@ -862,7 +877,7 @@ function CompositionRow({
 }
 
 /** A row is a link into whatever panel owns that record; a milestone lives in this tab's own "План". */
-function ActivityList({ items, onPlan }: { items: ProjectActivity[]; onPlan?: () => void }): React.ReactElement {
+function ActivityList({ items, onPlan, onTask }: { items: ProjectActivity[]; onPlan?: () => void; onTask: (taskId: string) => void }): React.ReactElement {
   if (items.length === 0) {
     return <p className="text-label text-subtle-foreground">Связанных задач, заметок и операций пока нет.</p>;
   }
@@ -870,6 +885,7 @@ function ActivityList({ items, onPlan }: { items: ProjectActivity[]; onPlan?: ()
   function open(item: ProjectActivity): void {
     if (item.type === "inventory") openPanel("inventory");
     else if (item.type === "milestone") onPlan?.();
+    else if (item.type === "task") onTask(item.id);
     else openEntity(item.type, item.id);
   }
 

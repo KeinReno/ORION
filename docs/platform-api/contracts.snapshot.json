@@ -21,7 +21,7 @@
     ]
   },
   "plugin": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "surface": [
       "host:ENTITY_TYPE_LABEL",
       "host:FilterChip",
@@ -67,6 +67,7 @@
       "host:openEntity",
       "host:openObject",
       "host:openPanel",
+      "host:openProjectTask",
       "host:parseCsv",
       "host:parseMoneyInput",
       "host:parseQuickEntry",

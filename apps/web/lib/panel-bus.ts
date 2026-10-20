@@ -176,6 +176,44 @@ export const useContactFocusRequest = contactChannel.useIntent;
 export const focusGoal = goalChannel.focus;
 export const useFocusedGoalId = goalChannel.useFocusedId;
 
+/** A task to open inside its project's tab; `nonce` tells a repeated click from an old request. */
+export interface ProjectTaskRequest { taskId: string; nonce: number }
+/**
+ * One channel per project: a single shared slot would hand the request to whichever project tab happens to be
+ * mounted (or drop it there), not to the project that owns the task.
+ */
+const projectTaskChannels = new Map<string, IntentChannel<ProjectTaskRequest>>();
+function projectTaskChannel(projectId: string): IntentChannel<ProjectTaskRequest> {
+  let channel = projectTaskChannels.get(projectId);
+  if (!channel) {
+    channel = createIntentChannel<ProjectTaskRequest>();
+    projectTaskChannels.set(projectId, channel);
+  }
+  return channel;
+}
+
+/**
+ * Open a task inside its project — the project's tab, «Задачи», the task's card — instead of the global Tasks
+ * panel. Everything that shows a project's tasks (overview, activity, plan, captures) opens them this way.
+ */
+export function openProjectTask(projectId: string, taskId: string, title?: string): void {
+  openProject(projectId, title);
+  projectTaskChannel(projectId).emit({ taskId, nonce: ++focusNonce }, getActiveWorkspaceId());
+}
+
+/** The project tab reads requests for its own project; `null` (a locked section view) subscribes to nothing. */
+export function useProjectTaskRequest(projectId: string | null): ProjectTaskRequest | null {
+  const [current, setCurrent] = useState<ProjectTaskRequest | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    const channel = projectTaskChannel(projectId);
+    const applied = channel.consumePending(getActiveWorkspaceId());
+    if (applied !== null) setCurrent(applied);
+    return channel.subscribe(setCurrent);
+  }, [projectId]);
+  return current;
+}
+
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);

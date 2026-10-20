@@ -31,7 +31,7 @@ import {
 import { Bug, Lightbulb, ListTodo, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectTabSlotProps } from "../../lib/extensions/contracts";
-import { describeAuthError, openEntity, relativeTime } from "../../lib/extensions/host-api";
+import { describeAuthError, openProjectTask, relativeTime } from "../../lib/extensions/host-api";
 
 const COPY: Record<
   ProjectCaptureKind,
@@ -331,7 +331,7 @@ export function ProjectCaptureBoard({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {selected.taskId ? (
-                  <Button size="sm" variant="outline" onClick={() => openEntity("task", selected.taskId as string)}>
+                  <Button size="sm" variant="outline" onClick={() => openProjectTask(projectId, selected.taskId as string)}>
                     <ListTodo className="h-4 w-4" />
                     Открыть задачу
                   </Button>
