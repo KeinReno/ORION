@@ -13,7 +13,7 @@ export default defineConfig({
   // Component lifecycle tests must transform Next's `jsx: preserve` sources for the test runtime.
   oxc: { jsx: { runtime: "automatic" } },
   test: {
-    include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "apps/web/plugins/**/*.test.ts", "apps/api/src/**/*.test.ts", "scripts/**/*.test.mjs"],
+    include: ["packages/**/*.test.ts", "apps/web/lib/**/*.test.ts", "apps/web/plugins/**/*.test.ts", "apps/web/plugins-ext/**/*.test.ts", "apps/api/src/**/*.test.ts", "scripts/**/*.test.mjs"],
     environment: "node"
   }
 });

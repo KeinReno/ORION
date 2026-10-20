@@ -28,6 +28,7 @@ model User {
   checkedListItems  ListItem[]        @relation("ListItemCheckedBy")
   agentTokens       AgentToken[]
   assistantKey      AssistantKey?
+  extensionSecrets  ExtensionSecret[]
   privateNotes      Note[]            @relation("NotePrivate")
   refreshTokens     RefreshToken[]
   preference        UserPreference?
@@ -194,6 +195,7 @@ model Workspace {
   theme     Json?
   createdAt DateTime          @default(now())
   syncChanges   SyncChange[]
+  extensionRecords ExtensionRecord[]
   syncOps       SyncOp[]
   syncStamps    SyncEntityStamp[]
   members       WorkspaceMember[]
@@ -1954,6 +1956,42 @@ model AssistantKey {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("assistant_keys")
+}
+
+/// ADR-0022 E3: данные расширения из папки внутри пространства — JSON-документы по коллекциям. Своих таблиц у
+/// расширения нет; видимость — по членству (RLS), в резервную копию пространства входят.
+model ExtensionRecord {
+  id          String   @id @default(uuid())
+  workspaceId String
+  extensionId String
+  collection  String
+  key         String
+  data        Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, extensionId, collection, key])
+  @@index([workspaceId, extensionId, collection])
+  @@map("extension_records")
+}
+
+/// ADR-0022 E3: секрет расширения (API-ключ) — личный, зашифрован как ключ ассистента; интерфейс значение не получает,
+/// сервер подставляет его в сетевой запрос. Виден только владельцу (RLS), в резервную копию не входит.
+model ExtensionSecret {
+  id          String   @id @default(uuid())
+  userId      String
+  extensionId String
+  name        String
+  valueEnc    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, extensionId, name])
+  @@map("extension_secrets")
 }
 
 /// ORION AI Bridge (ADR-0007). Only the sha256 of the secret is stored; the secret is

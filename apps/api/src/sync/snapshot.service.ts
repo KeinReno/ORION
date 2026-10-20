@@ -141,6 +141,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("investmentTrades", (tx) => tx.investmentTrade),
   spec("timeEntries", (tx) => tx.timeEntry),
   spec("habitEntries", (tx) => tx.habitEntry),
+  spec("extensionRecords", (tx) => tx.extensionRecord),
   spec("inventoryItems", (tx) => tx.inventoryItem),
   spec("inventoryMovements", (tx) => tx.inventoryMovement),
   // After inventory: a list item may point at a stock item and at the receipt its purchase created.

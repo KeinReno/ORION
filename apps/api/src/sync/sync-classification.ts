@@ -128,6 +128,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   WorkspaceInvite: never("Одноразовые токены."),
   SyncRemote: never("Секрет назначения бэкапа."),
   AssistantKey: never("Секрет владельца привязан к узлу."),
+  ExtensionRecord: never("Данные расширений (ADR-0022 E3): офлайн-синхронизация не продумана."),
+  ExtensionSecret: never("Секрет привязан к узлу и пользователю."),
   AgentToken: never("Токены агентов привязаны к узлу."),
   AgentMessage: never("Переписка агентов привязана к токенам узла."),
   AgentTask: never("Задания агентов привязаны к токенам узла."),

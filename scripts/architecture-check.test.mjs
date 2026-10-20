@@ -110,7 +110,7 @@ describe("plugin theme-token check", () => {
 describe("plugin catalog consistency (G23)", () => {
   function catalogFixture() {
     const root = fixture();
-    put(root, "packages/shared-types/src/plugins.ts", 'export const ORION_PLUGIN_IDS = ["alpha", "beta", "gamma"] as const;\n');
+    put(root, "packages/shared-types/src/plugins.ts", 'export const CORE_PLUGIN_IDS = ["alpha", "beta", "gamma"] as const;\n');
     put(root, "apps/web/lib/extensions/contracts.ts", 'export interface SlotContracts {\n  "tasks.views": X;\n  "notes.filters": Y;\n}\n');
     put(root, "apps/web/plugins/index.ts", 'contribute("tasks.views", { pluginId: "alpha", component: A });\n');
     put(root, "apps/api/src/beta.controller.ts", '@RequirePlugin("beta")\nexport class C {}\n');
@@ -120,6 +120,18 @@ describe("plugin catalog consistency (G23)", () => {
 
   it("accepts a consistent catalog", () => {
     expect(pluginCatalogViolations(catalogFixture())).toEqual([]);
+  });
+
+  it("counts manifest-declared plugins (plugins-ext) as part of the catalog", () => {
+    const root = catalogFixture();
+    put(root, "packages/shared-types/src/plugins-ext/registry.generated.ts", 'export const GENERATED_PLUGIN_IDS = ["omega"] as const;\n');
+    put(root, "apps/web/plugins-ext/contributions.generated.ts", 'contribute("notes.filters", { pluginId: "omega", component: O });\n');
+    expect(pluginCatalogViolations(root)).toEqual([]);
+    put(root, "apps/web/plugins-ext/contributions.generated.ts", 'contribute("notes.filters", { pluginId: "sigma", component: S });\n');
+    expect(pluginCatalogViolations(root)).toEqual([
+      expect.stringContaining('"sigma" зарегистрирован в вебе'),
+      expect.stringContaining('плагин "omega" есть в PLUGIN_CATALOG')
+    ]);
   });
 
   it("rejects a contribution to an unknown slot", () => {

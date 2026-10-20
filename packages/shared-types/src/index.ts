@@ -11,6 +11,7 @@ export * from "./workspace";
 export * from "./workspace-invite";
 export * from "./workspace-transfer";
 export * from "./plugins";
+export * from "./extensions";
 export * from "./modules";
 export * from "./note";
 export * from "./wiki-links";

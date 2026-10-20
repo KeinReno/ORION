@@ -79,7 +79,9 @@ import { resourceContextActions, setSectionResolver } from "../../lib/resource-c
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
 import { canStep, EMPTY_NAV_HISTORY, readNavHistory, recordVisit, saveNavHistory, stepHistory, type NavHistory } from "../../lib/nav-history";
-import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, panelSupportsSurface, visiblePanels } from "../../lib/panel-registry";
+import { getPanelDefinition, instancePanelId, isPanelAvailable, panelInstanceId, panelRegistry, panelSupportsSurface, visiblePanels, type PanelDefinition } from "../../lib/panel-registry";
+import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
+import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
@@ -321,7 +323,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const wideInspector = useMediaQuery("(min-width: 1360px)");
-  const navPanels = visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides);
+  // Panels that enabled plugins and extensions ADD (ADR-0022): `ext:<pluginId>.<id>` entries in the same list, so folders,
+  // ordering, "open beside" and "new window" treat them like any other section.
+  const extensionPanels = useEnabledPlaces("panel");
+  const extensionNav = extensionPanels.flatMap((place): PanelDefinition[] => {
+    const id = instancePanelId("ext", placeKey(place));
+    const host = getPanelDefinition(id);
+    return host ? [{ ...host, id, label: place.label, icon: place.icon, group: place.group ?? DEFAULT_PLACE_GROUP, hideFromNav: false }] : [];
+  });
+  const navPanels = [...visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides), ...extensionNav];
 
   // The user's own sidebar folders: personal, saved with their preferences.
   const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
@@ -529,6 +539,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }, [navHistory]);
   // A project tab (`project:<id>`) keeps "Проекты" lit in the sidebar.
   const activeDefinition = activePanelId ? getPanelDefinition(activePanelId) : undefined;
+  // An extension panel is its own menu item (`ext:<key>`), not the shared host kind.
+  const activeNavId = activeDefinition?.id === "ext" ? activePanelId : activeDefinition?.navParent ?? activeDefinition?.id;
   const objectContext = useObjectContext(workspace?.id, activePanelId);
   const editorContext = objectContext && ["task", "note", "document"].includes(objectContext.entityType) ? objectContext : null;
   const activeProjectId = activeDefinition?.navParent === "projects" ? projectContextId(activePanelId) : undefined;
@@ -996,7 +1008,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           id: panel.id,
           label: panel.label,
           icon: panel.icon,
-          isActive: panel.id === (activeDefinition?.navParent ?? activeDefinition?.id),
+          isActive: panel.id === activeNavId,
           group: panel.group,
           badge:
             panel.id === "inbox" && inboxCount > 0

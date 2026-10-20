@@ -18,7 +18,10 @@ const apiEnv: Record<string, string> = {
   STORAGE_DRIVER: "local",
   STORAGE_DIR: "../../tmp/e2e-documents",
   // Every spec registers its own accounts from 127.0.0.1; the suite outgrew the 60-per-5-minutes production cap.
-  REGISTER_RATE_LIMIT_PER_IP: "10000"
+  REGISTER_RATE_LIMIT_PER_IP: "10000",
+  // ADR-0022: extensions and their approvals live in throwaway folders, never in the developer's Documents or node dir.
+  ORION_EXTENSIONS_DIR: "../../tmp/e2e-extensions",
+  ORION_NODE_DIR: "../../tmp/e2e-node"
 };
 if (process.env.E2E_DATABASE_URL) apiEnv.DATABASE_URL = process.env.E2E_DATABASE_URL;
 if (process.env.E2E_APP_DATABASE_URL) apiEnv.APP_DATABASE_URL = process.env.E2E_APP_DATABASE_URL;

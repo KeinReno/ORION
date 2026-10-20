@@ -21,6 +21,9 @@
  *   apps/api/prisma/schema.prisma                                 только области между маркерами <module-registry:…>
  *   apps/api/prisma/migrations/<name>/migration.sql               копия миграции модуля
  *
+ * Тем же проходом подключаются плагины интерфейса из apps/web/plugins-ext/<id>/plugin.manifest.json
+ * (scripts/plugin-registry.mjs): их id и каталог, вклады в слоты.
+ *
  * Использование:
  *   node scripts/module-registry.mjs                 записать
  *   node scripts/module-registry.mjs --check         сверить с диском (CI / architecture-check), код 1 при расхождении
@@ -31,6 +34,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PLUGIN_GENERATED_FILES, PLUGIN_MANIFEST_FILE, PLUGIN_PATHS, allowedPathsForPlugins, collectPlugins, renderPluginOutputs } from "./plugin-registry.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -71,7 +75,8 @@ export const GENERATED_FILES = [
   `${PATHS.apiExt}/modules.generated.ts`,
   `${PATHS.apiExt}/data.generated.ts`,
   `${PATHS.webExt}/panels.generated.ts`,
-  "scripts/module-ownership.generated.mjs"
+  "scripts/module-ownership.generated.mjs",
+  ...PLUGIN_GENERATED_FILES
 ];
 
 const ID_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -297,6 +302,13 @@ export function collectModules(root = defaultRoot) {
   return { modules, errors };
 }
 
+/** Модули и плагины вместе: плагин вправе расширять модуль ядра или модуль, подключённый манифестом. */
+export function collectAll(root = defaultRoot) {
+  const { modules, errors } = collectModules(root);
+  const { plugins, errors: pluginErrors } = collectPlugins(root, [...coreModuleIds(root), ...modules.map((m) => m.id)]);
+  return { modules, plugins, errors: [...errors, ...pluginErrors] };
+}
+
 /** Заменяет область между маркерами `<module-registry:name>`; null, если маркеров нет. */
 export function spliceRegion(content, name, body) {
   const start = `// <module-registry:${name}>`;
@@ -311,8 +323,8 @@ export function spliceRegion(content, name, body) {
 }
 
 /** Всё, что должно лежать на диске: путь → содержимое. */
-export function renderOutputs(modules, root = defaultRoot) {
-  const out = new Map();
+export function renderOutputs(modules, root = defaultRoot, plugins = []) {
+  const out = new Map(renderPluginOutputs(plugins));
 
   const ids = modules.map((m) => m.id);
   const catalog = modules.map((m) => ({
@@ -469,17 +481,17 @@ export function renderOutputs(modules, root = defaultRoot) {
 
 /** Нарушения реестра: ошибки манифестов и устаревшие/отсутствующие генерируемые файлы. */
 export function registryViolations(root = defaultRoot) {
-  const { modules, errors } = collectModules(root);
+  const { modules, plugins, errors } = collectAll(root);
   const violations = [...errors];
   if (errors.length > 0) return violations;
-  for (const [path, content] of renderOutputs(modules, root)) {
+  for (const [path, content] of renderOutputs(modules, root, plugins)) {
     if (content === null) {
       violations.push(`${path}: нет маркеров <module-registry:…> — реестр не может записать модели модулей`);
       continue;
     }
     const full = join(root, path);
     if (!existsSync(full) || readFileSync(full, "utf8") !== content) {
-      violations.push(`${path}: расходится с манифестами модулей — запустите \`pnpm module-registry\``);
+      violations.push(`${path}: расходится с манифестами модулей и плагинов — запустите \`pnpm module-registry\``);
     }
   }
   return violations;
@@ -487,10 +499,10 @@ export function registryViolations(root = defaultRoot) {
 
 /** Записывает генерируемые файлы; возвращает пути, которые изменились. */
 export function writeRegistry(root = defaultRoot) {
-  const { modules, errors } = collectModules(root);
+  const { modules, plugins, errors } = collectAll(root);
   if (errors.length > 0) throw new Error(errors.join("\n"));
   const changed = [];
-  for (const [path, content] of renderOutputs(modules, root)) {
+  for (const [path, content] of renderOutputs(modules, root, plugins)) {
     if (content === null) throw new Error(`${path}: нет маркеров <module-registry:…>`);
     const full = join(root, path);
     if (existsSync(full) && readFileSync(full, "utf8") === content) continue;
@@ -511,8 +523,11 @@ export function allowedPathsForModules(modules) {
   return { prefixes: [...dirs, ...migrations, "docs/"], exact: [...GENERATED_FILES, PATHS.schema] };
 }
 
-export function coreFilesTouched(changedFiles, modules) {
-  const { prefixes, exact } = allowedPathsForModules(modules);
+export function coreFilesTouched(changedFiles, modules, plugins = []) {
+  const forModules = allowedPathsForModules(modules);
+  const forPlugins = allowedPathsForPlugins(plugins);
+  const prefixes = [...forModules.prefixes, ...forPlugins.prefixes];
+  const exact = [...forModules.exact, ...forPlugins.exact];
   return changedFiles.filter((file) => !exact.includes(file) && !prefixes.some((prefix) => file.startsWith(prefix)));
 }
 
@@ -520,18 +535,23 @@ function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
 }
 
-/** `--check-diff`: если изменения base..HEAD добавили манифест, то файлы ядра они менять не вправе. */
+/** `--check-diff`: если изменения base..HEAD добавили манифест модуля или плагина, то файлы ядра они менять не вправе. */
 export function diffViolations(base, root = defaultRoot) {
-  const added = git(root, ["diff", "--name-only", "--diff-filter=A", `${base}...HEAD`]).filter((file) => file.endsWith(`/${MANIFEST_FILE}`) && file.startsWith(PATHS.apiExt));
-  if (added.length === 0) return { addedModules: [], violations: [] };
-  const { modules } = collectModules(root);
-  const addedIds = new Set(added.map((file) => file.split("/").at(-2)));
-  const subject = modules.filter((m) => addedIds.has(m.name));
+  const addedFiles = git(root, ["diff", "--name-only", "--diff-filter=A", `${base}...HEAD`]);
+  const addedModules = addedFiles.filter((file) => file.endsWith(`/${MANIFEST_FILE}`) && file.startsWith(PATHS.apiExt));
+  const addedPlugins = addedFiles.filter((file) => file.endsWith(`/${PLUGIN_MANIFEST_FILE}`) && file.startsWith(PLUGIN_PATHS.webExt));
+  if (addedModules.length === 0 && addedPlugins.length === 0) return { addedModules: [], violations: [] };
+  const { modules, plugins } = collectAll(root);
+  const moduleNames = new Set(addedModules.map((file) => file.split("/").at(-2)));
+  const pluginNames = new Set(addedPlugins.map((file) => file.split("/").at(-2)));
+  const subjectModules = modules.filter((m) => moduleNames.has(m.name));
+  const subjectPlugins = plugins.filter((p) => pluginNames.has(p.name));
   const changed = git(root, ["diff", "--name-only", `${base}...HEAD`]);
-  const touched = coreFilesTouched(changed, subject);
+  const touched = coreFilesTouched(changed, subjectModules, subjectPlugins);
+  const names = [...moduleNames, ...pluginNames].join(", ");
   return {
-    addedModules: subject.map((m) => m.id),
-    violations: touched.map((file) => `${file}: файл ядра изменён вместе с добавлением модуля ${[...addedIds].join(", ")}`)
+    addedModules: [...subjectModules.map((m) => m.id), ...subjectPlugins.map((p) => p.id)],
+    violations: touched.map((file) => `${file}: файл ядра изменён вместе с добавлением ${names}`)
   };
 }
 
@@ -543,7 +563,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.error(violations.join("\n"));
       process.exitCode = 1;
     } else {
-      console.log("Module registry: OK (манифесты валидны, генерируемые файлы актуальны)");
+      console.log("Module registry: OK (манифесты модулей и плагинов валидны, генерируемые файлы актуальны)");
     }
   } else if (args.includes("--check-diff")) {
     const base = args[args.indexOf("--check-diff") + 1];
@@ -556,7 +576,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         console.error(violations.join("\n"));
         process.exitCode = 1;
       } else {
-        console.log(addedModules.length > 0 ? `Добавление модуля (${addedModules.join(", ")}) не изменило файлов ядра` : "Новых модулей в изменениях нет");
+        console.log(addedModules.length > 0 ? `Добавление (${addedModules.join(", ")}) не изменило файлов ядра` : "Новых модулей и плагинов в изменениях нет");
       }
     }
   } else {

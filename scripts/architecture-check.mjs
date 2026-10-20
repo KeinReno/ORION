@@ -45,33 +45,38 @@ function importSpecifiers(file) {
 
 export function architectureViolations(projectRoot = root) {
   const web = join(projectRoot, "apps", "web");
-  const plugins = join(web, "plugins");
+  // Plugins of the main build (apps/web/plugins) and plugins declared by a manifest (apps/web/plugins-ext) obey the same rules.
+  const pluginRoots = [join(web, "plugins"), join(web, "plugins-ext")];
   const panels = join(web, "panels");
   const loader = join(web, "lib", "extensions", "slot.tsx");
-  const paths = [join(projectRoot, "packages"), join(projectRoot, "apps", "api", "src"), join(web, "lib"), panels, plugins];
+  // The only files that compose plugins: they may import the registry and every plugin of their root.
+  const composition = [join(web, "plugins", "index.ts"), join(web, "plugins-ext", "contributions.generated.ts")];
+  const composedTargets = [join(web, "plugins"), join(web, "plugins-ext", "contributions.generated")];
+  const rootOf = (path) => pluginRoots.find((pluginRoot) => within(path, pluginRoot));
+  const paths = [join(projectRoot, "packages"), join(projectRoot, "apps", "api", "src"), join(web, "lib"), panels, ...pluginRoots.filter(existsSync)];
   const violations = [];
   for (const file of paths.flatMap(sourceFiles)) {
+    const plugins = rootOf(file);
     for (const specifier of importSpecifiers(file)) {
       if (!specifier.value.startsWith(".")) continue;
       const target = resolve(dirname(file), specifier.value);
-      const base = within(file, plugins) ? "plugin" : "base";
-      const composedByRegistry = file === loader && target === plugins;
-      if (base === "base" && within(target, plugins) && !composedByRegistry) {
+      const base = plugins ? "plugin" : "base";
+      const composedByRegistry = file === loader && composedTargets.includes(target);
+      if (base === "base" && rootOf(target) && !composedByRegistry) {
         violations.push(`${relative(projectRoot, file)}:${specifier.line} imports concrete plugin ${specifier.value}`);
       }
       if (base === "plugin" && within(target, panels)) {
         violations.push(`${relative(projectRoot, file)}:${specifier.line} imports host panel ${specifier.value}`);
       }
-      if (base === "plugin" && !within(target, plugins) && !within(target, panels) && within(target, web)) {
+      if (base === "plugin" && !rootOf(target) && !within(target, panels) && within(target, web)) {
         const hostPath = relative(web, target).split(sep).join("/");
-        const pluginFile = relative(plugins, file).split(sep).join("/");
         const publicSurface = hostPath === "lib/extensions/contracts" || hostPath === "lib/extensions/host-api" ||
-          (pluginFile === "index.ts" && hostPath === "lib/extensions/registry");
+          (composition.includes(file) && (hostPath === "lib/extensions/registry" || hostPath === "lib/extensions/places"));
         if (!publicSurface) {
           violations.push(`${relative(projectRoot, file)}:${specifier.line} imports host internals ${specifier.value} (use lib/extensions/host-api)`);
         }
       }
-      if (base === "plugin" && file !== join(plugins, "index.ts") && within(target, plugins)) {
+      if (base === "plugin" && rootOf(target) && !(composition.includes(file) && within(target, plugins))) {
         const owner = join(plugins, relative(plugins, file).split(sep)[0]);
         if (!within(target, owner)) {
           violations.push(`${relative(projectRoot, file)}:${specifier.line} imports another plugin ${specifier.value}`);
@@ -101,18 +106,19 @@ const COLOR_ALLOWLIST = new Map([
 ]);
 
 export function colorViolations(projectRoot = root) {
-  const plugins = join(projectRoot, "apps", "web", "plugins");
+  const roots = [join(projectRoot, "apps", "web", "plugins"), join(projectRoot, "apps", "web", "plugins-ext")].filter(existsSync);
   const violations = [];
-  for (const file of sourceFiles(plugins)) {
-    const rel = relative(plugins, file).split(sep).join("/");
+  for (const file of roots.flatMap((pluginRoot) => sourceFiles(pluginRoot).map((path) => ({ path, pluginRoot }))).map(({ path, pluginRoot }) => ({ file: path, rel: relative(pluginRoot, path).split(sep).join("/") }))) {
+    const { rel } = file;
     if (COLOR_ALLOWLIST.has(rel) || /\.test\.tsx?$/.test(rel)) continue;
-    const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true);
+    const path = file.file;
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
     function visit(node) {
       if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
         const text = node.text;
         const kind = PALETTE_CLASS.test(text) ? "palette class" : HEX_LITERAL.test(text) ? "hex colour" : COLOR_FUNCTION.test(text) ? "rgb/hsl colour" : null;
         // Import specifiers and the like never contain these shapes, so no extra filtering is needed.
-        if (kind) violations.push(`${relative(projectRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1} hard-coded ${kind} in plugin (use a theme token): ${text.trim().slice(0, 80)}`);
+        if (kind) violations.push(`${relative(projectRoot, path)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1} hard-coded ${kind} in plugin (use a theme token): ${text.trim().slice(0, 80)}`);
       }
       ts.forEachChild(node, visit);
     }
@@ -171,18 +177,31 @@ export function pluginCatalogViolations(projectRoot = root) {
   const violations = [];
   const catalogFile = join(projectRoot, "packages", "shared-types", "src", "plugins.ts");
   const contractsFile = join(projectRoot, "apps", "web", "lib", "extensions", "contracts.ts");
-  const plugins = join(projectRoot, "apps", "web", "plugins");
-  const catalog = new Set(stringArrayConst(catalogFile, "ORION_PLUGIN_IDS"));
+  const generatedFile = join(projectRoot, "packages", "shared-types", "src", "plugins-ext", "registry.generated.ts");
+  const pluginRoots = [join(projectRoot, "apps", "web", "plugins"), join(projectRoot, "apps", "web", "plugins-ext")].filter(existsSync);
+  const catalog = new Set([
+    ...stringArrayConst(catalogFile, "CORE_PLUGIN_IDS"),
+    ...(existsSync(generatedFile) ? stringArrayConst(generatedFile, "GENERATED_PLUGIN_IDS") : [])
+  ]);
   const slots = new Set(interfaceKeys(contractsFile, "SlotContracts"));
-  if (!catalog.size) violations.push("packages/shared-types/src/plugins.ts: ORION_PLUGIN_IDS не найден или пуст");
+  if (!catalog.size) violations.push("packages/shared-types/src/plugins.ts: CORE_PLUGIN_IDS не найден или пуст");
   if (!slots.size) violations.push("apps/web/lib/extensions/contracts.ts: SlotContracts не найден или пуст");
 
   const webPlugins = new Set();
-  for (const file of sourceFiles(plugins)) {
+  for (const file of pluginRoots.flatMap(sourceFiles)) {
     if (/\.test\.tsx?$/.test(file)) continue;
     const source = parseTs(file);
     const where = (node) => `${relative(projectRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
     (function visit(node) {
+      // A place the plugin ADDS (ADR-0022, `addPlace(kind, { pluginId, … })`) is web usage too.
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "addPlace" &&
+        node.arguments.length >= 2 && ts.isObjectLiteralExpression(node.arguments[1])) {
+        const pluginId = propertyString(node.arguments[1], "pluginId");
+        if (pluginId) {
+          webPlugins.add(pluginId);
+          if (!catalog.has(pluginId)) violations.push(`${where(node)} плагин "${pluginId}" добавляет место, но отсутствует в PLUGIN_CATALOG`);
+        }
+      }
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "contribute" &&
         node.arguments.length >= 2 && ts.isStringLiteral(node.arguments[0]) && ts.isObjectLiteralExpression(node.arguments[1])) {
         const slot = node.arguments[0].text;

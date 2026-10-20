@@ -210,3 +210,61 @@ export function fetchPublicText(
     request.end();
   });
 }
+
+export interface PublicResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/**
+ * Any method to a user/extension-supplied URL with the same outbound guards as `fetchPublicText` — connect-time DNS
+ * pinning, a timeout, a byte cap while streaming — but the response is returned whatever its status (an API's 4xx JSON
+ * is data for the caller, not an exception). Redirects are NOT followed: the 3xx comes back as is. ADR-0022 E3.
+ */
+export function requestPublic(
+  raw: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string; timeoutMs?: number; maxBytes?: number; label?: string } = {}
+): Promise<PublicResponse> {
+  const label = options.label ?? "Адрес";
+  const maxBytes = options.maxBytes ?? MAX_REMOTE_RESPONSE_BYTES;
+  const url = new URL(raw);
+  const client = url.protocol === "https:" ? https : http;
+  const body = options.body === undefined ? undefined : Buffer.from(options.body, "utf8");
+  const headers = { ...(options.headers ?? {}), ...(body ? { "Content-Length": String(body.length) } : {}) };
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      url,
+      { method: options.method ?? "GET", headers, lookup: publicOnlyLookup, timeout: options.timeoutMs ?? 20_000 },
+      (response) => {
+        const declared = Number(response.headers["content-length"] ?? "0");
+        if (declared > maxBytes) {
+          response.destroy();
+          reject(new Error(`${label}: ответ превышает допустимый размер`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        let received = 0;
+        response.on("data", (chunk: Buffer) => {
+          received += chunk.length;
+          if (received > maxBytes) {
+            response.destroy();
+            reject(new Error(`${label}: ответ превышает допустимый размер`));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on("end", () => {
+          const flat: Record<string, string> = {};
+          for (const [name, value] of Object.entries(response.headers)) if (value !== undefined) flat[name] = Array.isArray(value) ? value.join(", ") : value;
+          resolve({ status: response.statusCode ?? 0, headers: flat, body: Buffer.concat(chunks).toString("utf8") });
+        });
+        response.on("error", reject);
+      }
+    );
+    request.on("timeout", () => request.destroy(new Error(`${label}: превышено время ожидания`)));
+    request.on("error", reject);
+    if (body) request.write(body);
+    request.end();
+  });
+}

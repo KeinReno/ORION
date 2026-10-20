@@ -23,15 +23,24 @@ const BASE_ID = "settings";
  * change affects (a sidebar list on wide, a <select> with groups on narrow). Every tab can be its own
  * dock panel / OS window: Ctrl/Cmd+drag an entry into the dock, or use the «⧉» menu for the current one.
  */
+/** A settings section added by a plugin or extension (ADR-0022): tab value `ext:<pluginId>.<id>`. */
+export interface ExtensionSettingsTab {
+  value: `ext:${string}`;
+  label: string;
+}
+
 export function SettingsNav({
   value,
   workspaceName,
+  extensionTabs = [],
   onChange,
   onPick
 }: {
-  value: SettingsTab;
+  value: SettingsTab | ExtensionSettingsTab["value"];
   workspaceName: string | undefined;
-  onChange: (value: SettingsTab) => void;
+  /** Shown as their own group «Разделы расширений» before «Справка». */
+  extensionTabs?: readonly ExtensionSettingsTab[];
+  onChange: (value: SettingsTab | ExtensionSettingsTab["value"]) => void;
   /** A search hit: switch to its tab and bring the parameter into view. */
   onPick: (hit: SettingsSearchHit) => void;
 }): React.ReactElement {
@@ -41,6 +50,14 @@ export function SettingsNav({
   const active = settingsTabInfo(value);
   const activeId = active ? sectionViewPanelId({ base: BASE_ID, view: active.value }) : null;
   const name = active?.label ?? "";
+  // Built-in groups from the catalog, plus one group for sections plugins and extensions add.
+  const groups: { id: string; label: string; tabs: readonly { value: SettingsTab | ExtensionSettingsTab["value"]; label: string }[] }[] = SETTINGS_GROUPS.map(
+    (group) => ({ id: group.id, label: settingsGroupLabel(group.id, workspaceName), tabs: group.tabs })
+  );
+  if (extensionTabs.length > 0) {
+    const help = groups.findIndex((group) => group.id === "help");
+    groups.splice(help === -1 ? groups.length : help, 0, { id: "extension-sections", label: "Разделы расширений", tabs: extensionTabs });
+  }
 
   function pick(hit: SettingsSearchHit): void {
     setQuery("");
@@ -98,8 +115,8 @@ export function SettingsNav({
         {results}
         <div className="flex items-center gap-1">
           <Select value={value} onChange={(event) => onChange(event.target.value as SettingsTab)} className="min-w-0 flex-1" aria-label="Раздел настроек">
-            {SETTINGS_GROUPS.map((group) => (
-              <optgroup key={group.id} label={settingsGroupLabel(group.id, workspaceName)}>
+            {groups.map((group) => (
+              <optgroup key={group.id} label={group.label}>
                 {group.tabs.map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
@@ -115,13 +132,14 @@ export function SettingsNav({
         {search}
         {results ?? (
           <nav className="flex flex-col gap-3" aria-label="Разделы настроек" {...panelDragHandleProps(null)}>
-            {SETTINGS_GROUPS.map((group) => (
+            {groups.map((group) => (
               <div key={group.id} className="flex flex-col gap-0.5">
-                <p className="truncate px-3 pb-0.5 text-micro uppercase text-subtle-foreground" title={settingsGroupLabel(group.id, workspaceName)}>
-                  {settingsGroupLabel(group.id, workspaceName)}
+                <p className="truncate px-3 pb-0.5 text-micro uppercase text-subtle-foreground" title={group.label}>
+                  {group.label}
                 </p>
                 {group.tabs.map((item) => {
-                  const id = sectionViewPanelId({ base: BASE_ID, view: item.value });
+                  // Only built-in tabs detach into their own panel (`view:settings~<tab>`); extension sections stay in place.
+                  const id = settingsTabInfo(item.value) ? sectionViewPanelId({ base: BASE_ID, view: item.value }) : null;
                   return (
                     <button
                       key={item.value}

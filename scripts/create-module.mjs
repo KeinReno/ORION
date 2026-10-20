@@ -54,7 +54,8 @@ export function idProblems(id, root = defaultRoot) {
   const shared = join(root, "packages/shared-types/src");
   if (stringArrayConst(join(shared, "modules.ts"), "CORE_MODULE_IDS").includes(id)) problems.push(`id "${id}" занят модулем ядра (CORE_MODULE_IDS)`);
   if (dirNames(join(root, "apps/api/src/modules-ext")).includes(id)) problems.push(`id "${id}" уже занят модулем, подключённым манифестом`);
-  if (stringArrayConst(join(shared, "plugins.ts"), "ORION_PLUGIN_IDS").includes(id) || dirNames(join(root, "apps/web/plugins")).includes(id)) {
+  if (stringArrayConst(join(shared, "plugins.ts"), "CORE_PLUGIN_IDS").includes(id) || dirNames(join(root, "apps/web/plugins")).includes(id) ||
+    dirNames(join(root, "apps/web/plugins-ext")).includes(id)) {
     problems.push(`id "${id}" занят плагином`);
   }
   if (dirNames(join(root, "apps/api/src")).includes(id)) problems.push(`id "${id}" совпадает с каталогом apps/api/src/${id}`);

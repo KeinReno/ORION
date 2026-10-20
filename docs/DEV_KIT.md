@@ -80,13 +80,110 @@ pnpm db:generate                                          # Prisma-клиент 
 
 E2E (`pnpm test:e2e:local`) для модуля не обязателен, но панель стоит открыть руками в `pnpm dev:web`.
 
+## Свой плагин интерфейса (манифест)
+
+Плагин, который только добавляет компоненты в существующие слоты хоста, подключается без правки файлов ядра:
+
+```
+apps/web/plugins-ext/<id>/plugin.manifest.json
+apps/web/plugins-ext/<id>/<Компонент>.tsx
+```
+
+```json
+{
+  "id": "habits-insights",
+  "version": "1.0.0",
+  "extends": "habits",
+  "catalog": { "label": "…", "summary": "…", "provides": ["…"], "disableBehavior": "…", "defaultEnabled": true },
+  "web": { "contributions": [{ "slot": "habits.insights", "file": "insights", "export": "HabitsInsights" }] },
+  "surfaces": []
+}
+```
+
+- `extends` — модуль ядра или модуль из `modules-ext`; плагин выключается вместе с ним.
+- `slot` — ключ `SlotContracts` (`apps/web/lib/extensions/contracts.ts`); компонент получает пропсы этого слота. Слотам из
+  `SlotMeta` (вкладки и т.п.) нужен `meta`, остальным он запрещён. `order` — место среди вкладов слота.
+- Код плагина обращается к хосту только через `lib/extensions/contracts` и `lib/extensions/host-api`, а также пакеты
+  `@orion/*`; цвета — токенами темы. Это проверяет `scripts/architecture-check.mjs`, как и для плагинов основной сборки.
+
+### Новые места: панель, карточка дашборда, раздел настроек, команда
+
+Кроме вкладов в существующие слоты плагин может **добавить** свои места (ADR-0022, E1) — в `web` манифеста:
+
+```json
+"panels":   [{ "id": "usage", "label": "Расход ИИ", "icon": "Coins", "group": "Работа", "file": "UsagePanel", "export": "UsagePanel" }],
+"widgets":  [{ "id": "today", "title": "Расход за сегодня", "file": "TodayCard", "export": "TodayCard" }],
+"settings": [{ "id": "keys", "label": "Расход ИИ", "file": "KeysSettings", "export": "KeysSettings" }],
+"commands": [{ "id": "refresh", "label": "Обновить расход ИИ", "icon": "RefreshCw", "file": "commands", "export": "refresh" }]
+```
+
+- **Панель** — пункт меню (группа `group`, по умолчанию «Расширения») и вкладка дока `ext:<plugin>.<id>`; открывается рядом и
+  отдельным окном (`/panel/ext?instance=<plugin>.<id>`). Компонент получает `ExtensionPanelProps` (`workspaceId`, `setTitle`).
+- **Виджет** — карточка на дашборде с заголовком `title`; **раздел настроек** — вкладка в группе «Расширения» панели
+  настроек. Оба получают `ExtensionPlaceProps` (`workspaceId`).
+- **Команда** — пункт Ctrl+K в группе «Расширения»; `export` — функция `(context: { workspaceId }) => void | Promise<void>`.
+- `id` — kebab-case, уникален внутри плагина и вида; `order` — порядок; иконки — имена `lucide-react`. Типы пропсов —
+  из `lib/extensions/contracts`. Всё добавленное исчезает, когда плагин выключен; открытая вкладка панели объясняет это.
+- Хост мест: `lib/extensions/places.ts` (хранилище, работает во время выполнения) и `places-host.tsx`.
+
+После добавления каталога — `pnpm module-registry`: генератор (`scripts/plugin-registry.mjs`) дописывает плагин в
+`GENERATED_PLUGIN_IDS`/каталог (`packages/shared-types/src/plugins-ext/registry.generated.ts`) и в вклады слотов
+(`apps/web/plugins-ext/contributions.generated.ts`). Плагин появляется в «Настройки → Плагины» и включается/выключается для
+пространства, как любой другой. `pnpm module-registry --check-diff <base>` подтверждает, что добавление плагина не тронуло
+файлов ядра. Образец — `apps/web/plugins-ext/habits-insights/`, e2e — `e2e/plugins-ext.spec.ts`.
+
+## Расширение из папки — без пересборки ORION
+
+Для быстрого «своего» расширения на установленной программе (ADR-0022, E2). Нужны только этот репозиторий (для сборки)
+и установленный ORION.
+
+```bash
+pnpm orion-ext init ai-tokens --name "Расход токенов ИИ"   # создаёт и собирает Документы\ORION\Расширения\ai-tokens
+pnpm orion-ext build "<папка расширения>" --watch          # пересобирать на каждую правку src/index.tsx
+```
+
+1. ORION сам замечает папку (опрос раз в 2 с). «Настройки → Этот компьютер → Расширения» — карточка «ждёт подтверждения»
+   с разрешениями; «Подтвердить и включить» (владелец хотя бы одного пространства). Подтверждение — на всю установку.
+2. Код загружается в работающее окно: `activate(ctx)` регистрирует места через `ctx.addPanel / addWidget / addSettings /
+   addCommand` — те же панель, карточка, раздел настроек и команда, что у плагинов из `plugins-ext`. Всё снимается само
+   при выключении, удалении и перезагрузке.
+   `ctx.contribute(slot, { component, order?, meta? })` — вклад в слот ядра (`"habits.insights"`, `"finance.tabs"`…, список —
+   `CORE_SLOT_NAMES` в `lib/extensions/contracts.ts`; опечатка в имени слота ядра — ошибка активации) или в слот другого
+   расширения (`"ai-tokens.cards"`). `ctx.slot("cards")` — свой слот: компонент, который рисует вклады других расширений в
+   `<id>.cards` и передаёт им свои пропсы.
+3. Поменяли код после подтверждения — статус «файлы изменились», код не грузится, пока не подтвердите снова. Пока правите,
+   включите «Режим разработчика»: новая сборка подхватывается за ~2 с без подтверждения и перезапуска.
+
+Что доступно коду (`__ORION_SDK__`, `apps/web/lib/extensions/runtime/sdk.ts`): `react`, `@orion/ui`, `@orion/core-react`
+(данные с правами пользователя) и `@orion/sdk` = `lib/extensions/host-api.ts` (виртуальный модуль, отдельный пакет планируется (G24)). В бандл они не попадают; прочие пакеты
+(иконки `lucide-react`) — попадают. Манифест — `orion.extension.json` (`id` = имя папки, `version`, `engines.orion`,
+`entry`, `permissions`), схема — `extensionManifestSchema` в `packages/shared-types/src/extensions.ts`.
+
+**Данные, секреты, сеть (E3)** — через `ctx`, только то, что объявлено в `permissions` манифеста:
+
+- `ctx.storage.list / get / put / remove(workspaceId, collection, key[, data])` — JSON-записи внутри пространства (нужно
+  `"storage": true`; до 64 КБ на запись, 5000 записей на расширение в пространстве). Видны участникам пространства (RLS),
+  входят в его резервную копию, переживают выключение расширения.
+- `ctx.secrets.status / set / clear` — личные секреты пользователя из `permissions.secrets` (например, API-ключ);
+  зашифрованы на сервере, значение интерфейсу не возвращается. Задаются и в карточке расширения в настройках.
+- `ctx.fetch(workspaceId, { url, method, headers, body })` — https-запрос к хосту из `permissions.network` через сервер
+  (DNS-защита, без редиректов, до 2 МБ ответа); `"Authorization": "Bearer {{secret:api_key}}"` — сервер подставит секрет.
+  Служебные заголовки (`Host`, `Content-Length`…) задаёт сервер.
+
+**По пространствам (E5).** Подтверждение — на всю установку, но владелец пространства может выключить расширение у
+себя (карточка расширения → «Включено в «…»»): в этом пространстве код не загружается, а хранилище и сеть отвечают 409.
+
+Ограничения сейчас: своих таблиц нет, расписаний и серверного кода нет, файлы других
+программ на компьютере расширению недоступны. В режиме сервера (без `ORION_EXTENSIONS=on`) и на клиенте LAN расширения выключены. Всё API
+расширений отвечает только запросам с этого компьютера. Подтверждения — `extensions.json` в каталоге узла
+(`ORION_NODE_DIR`), папка — `ORION_EXTENSIONS_DIR`.
+
 ## Чего в комплекте нет
 
-- **Генератора плагинов (`create:plugin`).** Регистрация плагина пока не управляется данными: нужно вручную править
-  `ORION_PLUGIN_IDS` и каталог плагинов в `packages/shared-types/src/plugins.ts`, `apps/web/plugins/index.ts`
-  (вызовы `contribute(...)`) и, если нужен новый слот, `SlotContracts` в `apps/web/lib/extensions/contracts.ts`; проверка
-  `pluginCatalogViolations` сверяет эти места между собой. Скаффолдер, правящий их, нарушил бы принцип «ядро не правится
-  при подключении». Нужна G5-подобная схема «манифест плагина обнаруживается каталогом» — отдельная задача.
+- **Генератора плагинов (`create:plugin`) и плагинов с серверной частью по манифесту.** Плагин интерфейса подключается
+  манифестом (раздел ниже), но скелет для него пока создаётся руками по образцу `habits-insights`. Плагин с серверной частью
+  (`@RequirePlugin`, свои таблицы) по-прежнему регистрируется вручную в `plugins.ts`, `apps/web/plugins/index.ts` и
+  `apps/api/src`. Новый слот — правка `SlotContracts` в ядре.
 - **Валидатора манифеста как отдельной команды.** Валидацию выполняет `scripts/module-registry.mjs` (в том числе
   `--check`); отдельного CLI нет.
 - **Эксперимента «агент по этой документации создаёт образец, CI зелёный».** Не проводился (решение владельца: не сейчас).

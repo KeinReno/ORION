@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Home as HomeIcon,
   PanelTop,
+  Puzzle,
   UserRound,
   Globe2,
   Inbox,
@@ -112,6 +113,7 @@ const LazyMarketsPanel = dynamic(() => import("../panels/MarketsPanel").then((mo
 const LazyDocumentsPanel = dynamic(() => import("../panels/DocumentsPanel").then((module) => module.DocumentsPanel), { ssr: false });
 const LazyDocumentPanel = dynamic(() => import("../panels/DocumentPanel").then((module) => module.DocumentPanel), { ssr: false });
 const LazySyncPanel = dynamic(() => import("../panels/SyncPanel").then((module) => module.SyncPanel), { ssr: false });
+const LazyExtensionPanelHost = dynamic(() => import("./extensions/places-host").then((module) => module.ExtensionPanelHost), { ssr: false });
 const LazySettingsPanel = dynamic(() => import("../panels/SettingsPanel").then((module) => module.SettingsPanel), { ssr: false });
 
 const DashboardPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDashboardPanel as ComponentType<PanelComponentProps>, props);
@@ -150,6 +152,7 @@ const DocumentsPanel: FunctionComponent<PanelComponentProps> = (props) => create
 const DocumentPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentPanel as ComponentType<PanelComponentProps>, props);
 const SyncPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySyncPanel as ComponentType<PanelComponentProps>, props);
 const SettingsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySettingsPanel as ComponentType<PanelComponentProps>, props);
+const ExtensionPanelHost: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyExtensionPanelHost as ComponentType<PanelComponentProps>, props);
 
 /**
  * Modules are loaded on demand: opening the shell no longer downloads every
@@ -284,6 +287,9 @@ const panelEntries: PanelEntry[] = [
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true },
   // G5: панели модулей, подключённых манифестом (modules-ext/<id>/) — список генерирует scripts/module-registry.mjs.
   ...generatedPanelDefinitions,
+  // ADR-0022: a panel a plugin or extension ADDS (`ext:<pluginId>.<id>`) — one host for all of them, the place itself is
+  // looked up at run time (lib/extensions/places.ts), so a panel registered later still opens, also in its own window.
+  { id: "ext", label: "Расширение", icon: Puzzle, component: ExtensionPanelHost, hideFromNav: true, instanced: true },
   // One tab of any section panel as a panel of its own (dock tab or OS window): `view:<base>~<view>[~<instance>]`.
   { id: "view", label: "Раздел", icon: PanelTop, component: SectionViewPanel, hideFromNav: true, instanced: true }
 ];

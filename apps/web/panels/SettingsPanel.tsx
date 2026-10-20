@@ -14,7 +14,7 @@ import {
   useUpdateProfile,
   useUploadAvatar
 } from "@orion/core-react";
-import type { SessionInfo, UpdateUserPreferenceInput, UserPreference } from "@orion/shared-types";
+import { PLUGIN_CATALOG, type SessionInfo, type UpdateUserPreferenceInput, type UserPreference } from "@orion/shared-types";
 import {
   Badge,
   Button,
@@ -41,13 +41,16 @@ import { ThemeSettings } from "./settings/theme-library";
 import { ComponentsDiagnostics } from "./settings/components-section";
 import { ModulesSettings } from "./settings/modules-section";
 import { UpdatesSettings } from "./settings/updates-section";
+import { ExtensionsSettings } from "./settings/extensions-section";
 import { PluginsSettings } from "./settings/plugins-section";
 import { AgentsSettings } from "./settings/agents-section";
 import { MembersSettings } from "./settings/members-section";
 import { NetworkSettings } from "./settings/network-section";
 import { WorkspaceSettings } from "./settings/workspace-section";
 import { SpheresSettings } from "./settings/spheres-section";
-import { SettingsNav } from "./settings/settings-nav";
+import { SettingsNav, type ExtensionSettingsTab } from "./settings/settings-nav";
+import { PlaceBoundary, useEnabledPlaces } from "../lib/extensions/places-host";
+import { placeKey } from "../lib/extensions/places";
 import { RegionSettings } from "./settings/region-section";
 import { AppearanceSettings, NotificationSettings } from "./settings/preference-sections";
 import { SaveBar, SettingGroup, SettingRow } from "./settings/setting-row";
@@ -154,10 +157,14 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
 
   const { workspace } = useActiveWorkspace();
 
-  const [tabState, setTab] = useState<SettingsTab>("profile");
+  const [tabState, setTab] = useState<SettingsTab | ExtensionSettingsTab["value"]>("profile");
+  // Sections that enabled plugins and extensions add (ADR-0022), as tabs `ext:<pluginId>.<id>`.
+  const extensionSections = useEnabledPlaces("settings");
+  const extensionTabs = extensionSections.map((place): ExtensionSettingsTab => ({ value: `ext:${placeKey(place)}`, label: place.label }));
+  const extensionSection = extensionSections.find((place) => `ext:${placeKey(place)}` === tabState);
   const section = useSectionView(params, panelApi, "Настройки", SETTINGS_TABS);
   // Locked to a tab that no longer exists: "" matches no branch below, only the explanation is shown.
-  const tab: SettingsTab | "" = section.locked ? (section.view ?? "") : tabState;
+  const tab: SettingsTab | ExtensionSettingsTab["value"] | "" = section.locked ? (section.view ?? "") : tabState;
   const tabInfo = settingsTabInfo(tab);
   const scopeText = tabInfo ? settingsScopeText(tabInfo.scope, workspace?.name) : null;
 
@@ -351,11 +358,21 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
       <PanelBody measure="settings" className="[container-type:inline-size]">
         <div className={cx("flex flex-col gap-6", !section.locked && "[@container(min-width:640px)]:flex-row [@container(min-width:640px)]:items-start")}>
           {!section.locked ? (
-            <SettingsNav value={tab as SettingsTab} workspaceName={workspace?.name} onChange={setTab} onPick={pickSearchHit} />
+            <SettingsNav value={tab as SettingsTab} workspaceName={workspace?.name} extensionTabs={extensionTabs} onChange={setTab} onPick={pickSearchHit} />
           ) : null}
           <div ref={contentRef} className="min-w-0 flex-1 scroll-mt-4">
         {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет. Данные сохранены.</p> : null}
         {scopeText ? <ScopeNote>{scopeText}</ScopeNote> : null}
+        {extensionSection && workspace ? (
+          <>
+            <ScopeNote>Раздел добавлен расширением «{PLUGIN_CATALOG.find((item) => item.id === extensionSection.pluginId)?.label ?? extensionSection.pluginId}»; кого затрагивают его параметры, решает оно само.</ScopeNote>
+            <PanelSection title={extensionSection.label}>
+              <PlaceBoundary pluginId={extensionSection.pluginId}>
+                <extensionSection.component workspaceId={workspace.id} />
+              </PlaceBoundary>
+            </PanelSection>
+          </>
+        ) : null}
         {tab === "profile" ? (
           <PanelSection title="Профиль">
             <form id="settings-profile-form" onSubmit={saveProfile}>
@@ -582,6 +599,12 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         {tab === "network" ? (
           <PanelSection title="Сеть и устройства">
             <NetworkSettings />
+          </PanelSection>
+        ) : null}
+
+        {tab === "extensions" ? (
+          <PanelSection title="Расширения">
+            <ExtensionsSettings />
           </PanelSection>
         ) : null}
 
