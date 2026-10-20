@@ -25,6 +25,17 @@ export const setAssistantKeyInputSchema = z.object({
 });
 export type SetAssistantKeyInput = z.input<typeof setAssistantKeyInputSchema>;
 
+/** Models offered in the picker (any other id can still be typed); the first is the default. */
+export const ASSISTANT_MODELS: ReadonlyArray<{ id: string; label: string; hint: string }> = [
+  { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", hint: "баланс качества и цены — для повседневного чата" },
+  { id: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "самая сильная, дороже — для сложных просьб" },
+  { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "самая быстрая и дешёвая" }
+];
+
+/** Change only the model; the stored key stays as it is. */
+export const setAssistantModelInputSchema = z.object({ model: z.string().trim().min(1).max(80) });
+export type SetAssistantModelInput = z.infer<typeof setAssistantModelInputSchema>;
+
 export const assistantMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1).max(8000)
@@ -40,7 +51,9 @@ export const assistantActionSchema = z.object({
   tool: z.string(),
   ok: z.boolean(),
   /** Короткий итог вызова: что вернул ORION (или причина отказа). */
-  summary: z.string()
+  summary: z.string(),
+  /** Изменение ждёт подтверждения: id запроса — чат показывает «Применить / Отклонить» прямо в ответе. */
+  proposalId: z.string().nullable()
 });
 export type AssistantAction = z.infer<typeof assistantActionSchema>;
 

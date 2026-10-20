@@ -1,11 +1,13 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import {
   assistantChatInputSchema,
   setAssistantKeyInputSchema,
+  setAssistantModelInputSchema,
   type AssistantChatInput,
   type AssistantChatResult,
   type AssistantKeyStatus,
-  type SetAssistantKeyInput
+  type SetAssistantKeyInput,
+  type SetAssistantModelInput
 } from "@orion/shared-types";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
@@ -31,6 +33,11 @@ export class AssistantController {
   @Put("assistant/key")
   saveKey(@CurrentUser() user: RequestUser, @Body(new ZodValidationPipe(setAssistantKeyInputSchema)) body: SetAssistantKeyInput): Promise<AssistantKeyStatus> {
     return this.keys.save(user.userId, body);
+  }
+
+  @Patch("assistant/key")
+  setModel(@CurrentUser() user: RequestUser, @Body(new ZodValidationPipe(setAssistantModelInputSchema)) body: SetAssistantModelInput): Promise<AssistantKeyStatus> {
+    return this.keys.setModel(user.userId, body.model);
   }
 
   @Delete("assistant/key")

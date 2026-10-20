@@ -38,8 +38,8 @@ test("an agent at work: pill, panel frame, lit task, feed — and quiet afterwar
   await pill.click();
   const feed = page.getByRole("region", { name: "Что делают агенты", exact: true });
   await expect(feed).toContainText("Claude Desktop");
-  await feed.getByRole("button", { name: "Журнал и подтверждения", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Мои токены", exact: true })).toBeVisible();
+  await feed.getByRole("button", { name: "Открыть настройки ИИ", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Подключённые программы", exact: true })).toBeVisible();
 
   // Nothing new from the agent: the pill and the frame go out by themselves.
   await expect(pill).toHaveCount(0, { timeout: 20_000 });

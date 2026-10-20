@@ -239,7 +239,7 @@ export function AgentPresencePill({ className }: { className?: string }): React.
               openSettings("agents", "agents");
             }}
           >
-            Журнал и подтверждения
+            Открыть настройки ИИ
           </Button>
         </div>
       )}

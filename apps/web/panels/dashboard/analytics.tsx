@@ -247,7 +247,7 @@ export function DashboardAnalytics({
       {!section.missing && active === "ai" ? (
         (audit ?? []).length === 0 ? (
           <p className="text-label text-subtle-foreground">
-            Агенты пока ничего не делали. Токены выпускаются в Настройках → «ИИ-агенты».
+            Агенты пока ничего не делали. Подключить программу — в Настройках → «ИИ и агенты».
           </p>
         ) : (
           <div className="space-y-2">

@@ -1,15 +1,16 @@
 "use client";
 
-import type { AgentConnectionInfo, AgentAuditEntry, AgentPresence, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
+import type { AgentConnectionInfo, AgentAuditEntry, AgentPresence, InstallAgentClientInput, InstalledAgentClient, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
-export function useAgentTokens(workspaceId: string | undefined) {
+export function useAgentTokens(workspaceId: string | undefined, options: { pollMs?: number } = {}) {
   const { api } = useCore();
   return useQuery<AgentToken[]>({
     queryKey: ["agent-tokens", workspaceId],
     queryFn: () => api.listAgentTokens(workspaceId as string),
-    enabled: Boolean(workspaceId)
+    enabled: Boolean(workspaceId),
+    refetchInterval: options.pollMs ?? false
   });
 }
 
@@ -31,6 +32,15 @@ export function useAgentPresence(workspaceId: string | undefined) {
       if (!data || !last) return 6_000;
       return Date.parse(data.now) - Date.parse(last.at) < 30_000 ? 2_000 : 6_000;
     }
+  });
+}
+
+export function useInstallAgentClient(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<InstalledAgentClient, Error, InstallAgentClientInput>({
+    mutationFn: (input) => api.installAgentClient(workspaceId as string, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agent-tokens", workspaceId] })
   });
 }
 

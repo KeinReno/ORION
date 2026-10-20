@@ -591,7 +591,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
         ) : null}
 
         {tab === "agents" ? (
-          <PanelSection title="ИИ-агенты (AI Bridge)">
+          <PanelSection title="ИИ и агенты">
             <AgentsSettings />
           </PanelSection>
         ) : null}

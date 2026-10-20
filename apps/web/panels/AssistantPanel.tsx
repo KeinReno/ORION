@@ -1,11 +1,13 @@
 "use client";
 
-import { useAssistantChat, useAssistantKey, useClearAssistantKey, useSaveAssistantKey } from "@orion/core-react";
-import { ASSISTANT_DEFAULT_MODEL, type AssistantAction, type AssistantMessage } from "@orion/shared-types";
-import { Button, CallChip, Card, EmptyState, Input, LatticeLoader, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, StarBorder, Textarea, useToast } from "@orion/ui";
+import { useAgentProposals, useAssistantChat, useAssistantKey, useDecideAgentProposal } from "@orion/core-react";
+import { AGENT_PROPOSAL_ACTION_LABEL, type AssistantAction, type AssistantMessage } from "@orion/shared-types";
+import { Button, CallChip, Card, EmptyState, LatticeLoader, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, StarBorder, Textarea, useToast } from "@orion/ui";
 import { Bot, KeyRound, Send, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describeAuthError } from "../lib/error-message";
+import { AssistantKeyForm, ClearAssistantKeyButton } from "./assistant-key";
+import { DiffTable } from "./settings/agents-proposals";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
 interface ChatLine extends AssistantMessage {
@@ -15,7 +17,7 @@ interface ChatLine extends AssistantMessage {
 /**
  * Чат-ассистент внутри ORION (ADR-0017, вариант C). Ключ к модели — ваш, хранится зашифрованным на этом узле и сюда не
  * возвращается. Ассистент действует через те же инструменты, что и внешние агенты: изменения существующего он только
- * предлагает, удалять и трогать финансы не может; всё видно в «Настройки → ИИ-агенты».
+ * предлагает, удалять и трогать финансы не может; всё видно в «Настройки → ИИ и агенты».
  */
 export function AssistantPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
@@ -67,7 +69,9 @@ export function AssistantPanel(): React.ReactElement {
         ) : !key.data.available ? (
           <EmptyState icon={KeyRound} title="Ассистент недоступен на этом узле" description={key.data.reason ?? undefined} />
         ) : !key.data.configured ? (
-          <KeyForm />
+          <PanelSection title="Подключить языковую модель">
+            <AssistantKeyForm />
+          </PanelSection>
         ) : (
           <div className="flex min-h-[24rem] flex-col gap-4">
             <p className="text-xs text-muted-foreground">
@@ -78,7 +82,7 @@ export function AssistantPanel(): React.ReactElement {
               {lines.length === 0 ? (
                 <EmptyState icon={Bot} title="Спросите что-нибудь" description="Например: «Запомни идею: купить корм коту» или «Что у меня на сегодня?»" />
               ) : (
-                lines.map((line, index) => <Line key={index} line={line} />)
+                lines.map((line, index) => <Line key={index} line={line} workspaceId={workspace?.id} />)
               )}
               {chat.isPending ? <LatticeLoader label="Ассистент думает" /> : null}
               <div ref={endRef} />
@@ -106,7 +110,7 @@ export function AssistantPanel(): React.ReactElement {
               <Button size="sm" variant="ghost" disabled={lines.length === 0 || chat.isPending} onClick={() => setLines([])}>
                 Новая беседа
               </Button>
-              <ClearKeyButton />
+              <ClearAssistantKeyButton />
             </div>
           </div>
         )}
@@ -115,7 +119,7 @@ export function AssistantPanel(): React.ReactElement {
   );
 }
 
-function Line({ line }: { line: ChatLine }): React.ReactElement {
+function Line({ line, workspaceId }: { line: ChatLine; workspaceId: string | undefined }): React.ReactElement {
   const mine = line.role === "user";
   return (
     <Card className={mine ? "ml-8 space-y-1 py-2" : "mr-8 space-y-1 py-2"}>
@@ -132,68 +136,49 @@ function Line({ line }: { line: ChatLine }): React.ReactElement {
               sublabel={action.summary}
             />
           ))}
+          {line.actions.flatMap((action) => (action.proposalId ? [<ProposalDecision key={action.proposalId} workspaceId={workspaceId} proposalId={action.proposalId} />] : []))}
         </div>
       ) : null}
     </Card>
   );
 }
 
-function KeyForm(): React.ReactElement {
-  const save = useSaveAssistantKey();
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState(ASSISTANT_DEFAULT_MODEL);
+/**
+ * A change the assistant may only propose (edit of an existing note/task): the before/after and «Применить / Отклонить»
+ * right in its answer, instead of a trip to Settings → ИИ и агенты. Decided elsewhere — shows the outcome.
+ */
+function ProposalDecision({ workspaceId, proposalId }: { workspaceId: string | undefined; proposalId: string }): React.ReactElement | null {
+  const proposals = useAgentProposals(workspaceId);
+  const decide = useDecideAgentProposal(workspaceId);
   const { toast } = useToast();
-
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    try {
-      await save.mutateAsync({ apiKey, model });
-      setApiKey("");
-      toast({ title: "Ключ сохранён", description: "Он хранится зашифрованным на этом узле и больше не показывается.", tone: "success" });
-    } catch (error) {
-      toast({ title: "Не удалось сохранить ключ", description: describeAuthError(error), tone: "danger" });
-    }
+  const proposal = proposals.data?.find((item) => item.id === proposalId);
+  if (!proposal) return proposals.isLoading ? null : <p className="text-2xs text-subtle-foreground">Запрос на изменение уже обработан.</p>;
+  const label = `${AGENT_PROPOSAL_ACTION_LABEL[proposal.action]} «${proposal.targetTitle}»`;
+  if (proposal.status !== "pending") {
+    const outcome = proposal.status === "approved" ? "применено" : proposal.status === "rejected" ? "отклонено" : "срок подтверждения истёк";
+    return <p className="text-2xs text-subtle-foreground">{label}: {outcome}.</p>;
   }
-
-  return (
-    <PanelSection title="Подключить языковую модель">
-      <form onSubmit={(event) => void submit(event)} className="max-w-md space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Нужен ваш API-ключ Anthropic. ORION хранит его зашифрованным только на этом компьютере и использует лишь для вашего чата.
-          Сообщения и данные, которые ассистент читает по вашей просьбе, уходят провайдеру модели.
-        </p>
-        <label className="block space-y-1 text-sm">
-          <span>API-ключ</span>
-          <Input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-ant-…" />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span>Модель</span>
-          <Input value={model} onChange={(event) => setModel(event.target.value)} />
-        </label>
-        <Button type="submit" disabled={apiKey.trim().length < 20 || save.isPending}>
-          Сохранить ключ
-        </Button>
-      </form>
-    </PanelSection>
-  );
-}
-
-function ClearKeyButton(): React.ReactElement {
-  const clear = useClearAssistantKey();
-  const { toast } = useToast();
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={clear.isPending}
-      onClick={() =>
-        void clear.mutateAsync().then(
-          () => toast({ title: "Ключ удалён", tone: "success" }),
-          (error) => toast({ title: "Не удалось удалить ключ", description: describeAuthError(error), tone: "danger" })
-        )
+  function run(decision: "approve" | "reject"): void {
+    decide.mutate(
+      { proposalId, decision },
+      {
+        onSuccess: () => toast({ title: decision === "approve" ? "Изменение применено" : "Изменение отклонено", tone: "success" }),
+        onError: (error) => toast({ title: "Не удалось", description: describeAuthError(error), tone: "danger" })
       }
-    >
-      Удалить ключ
-    </Button>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-lg border border-warning/40 bg-warning/[0.06] p-2" role="group" aria-label={`Подтверждение: ${label}`}>
+      <p className="text-label font-medium text-foreground">Нужно ваше подтверждение: {label}</p>
+      {proposal.diff.length > 0 ? <DiffTable diff={proposal.diff} /> : null}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={decide.isPending} onClick={() => run("approve")}>
+          Применить
+        </Button>
+        <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => run("reject")}>
+          Отклонить
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -20,7 +20,7 @@ function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {
   return Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
 }
 
-function DiffTable({ diff }: { diff: AgentProposalDiffEntry[] }): React.ReactElement {
+export function DiffTable({ diff }: { diff: AgentProposalDiffEntry[] }): React.ReactElement {
   return (
     <table className="w-full table-fixed border-collapse rounded-lg border border-border bg-background text-2xs">
       <tbody>

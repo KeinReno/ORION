@@ -434,6 +434,14 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   `AgentPresencePill` в шапке, `AgentPanelFrame` (рамка `.agent-frame` вокруг панели модуля) в обёртке `panelComponents`,
   `useAgentRowMark(id)` подсвечивает запись (`.agent-touched`). Когда агент ЧТО-ТО ИЗМЕНИЛ, лента перечитывает запросы
   модуля (`MODULE_QUERIES`) — открытая панель показывает правку сразу. Новый модуль с инструментами агента = строка там.
+- «Подключить в один клик»: `POST workspaces/:id/agent-connection/install` (loopback + JSON, только `local`) выпускает
+  токен и дописывает `mcpServers.orion` в конфиг Claude Desktop / Claude Code (`~/.claude.json`) / Cursor / Codex
+  (`agent-client-install.ts`: чужой файл не трогается, если не разобран; прежний — копией `.orion-backup-<время>`; прежние
+  токены этой программы отзываются). Секрет наружу не отдаётся. В тестах — `ORION_AGENT_CLIENT_HOME` (e2e: tmp/e2e-agent-home).
+- Настройки «ИИ и агенты» (`panels/settings/agents-section.tsx`): запросы на подтверждение сверху, разделы «Подключения»
+  (мастер + карточки программ, токены чата «Чат ORION» не показываются, ручной токен — в «Дополнительно»), «Ассистент»
+  (ключ, `PATCH assistant/key` меняет модель), «Журнал». Правки, которые ассистент предлагает, подтверждаются прямо в чате
+  (`AssistantAction.proposalId`).
 
 ### Разрешения: `@RequirePermission` (G12, первый срез)
 

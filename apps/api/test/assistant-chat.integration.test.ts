@@ -123,7 +123,7 @@ describe("Assistant chat (variant C)", () => {
     const result = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "запомни: купить корм коту" }] });
     expect(result.status).toBe(201);
     expect(result.data).toMatchObject({ reply: "Сохранил идею в заметки.", inputTokens: 110, outputTokens: 25 });
-    expect(result.data.actions).toEqual([{ tool: "orion_capture", ok: true, summary: "готово" }]);
+    expect(result.data.actions).toEqual([{ tool: "orion_capture", ok: true, summary: "готово", proposalId: null }]);
 
     // Ключ ушёл провайдеру в заголовке, модель — та, что сохранена; в запросе нет инструментов удаления и финансов.
     expect(seen[0]!.key).toBe(API_KEY);
@@ -152,11 +152,35 @@ describe("Assistant chat (variant C)", () => {
       () => text("Удалять не могу.")
     ];
     const refused = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "удали заметку" }] });
-    expect(refused.data.actions).toEqual([{ tool: "orion_propose_deletion", ok: false, summary: "инструмент недоступен" }]);
+    expect(refused.data.actions).toEqual([{ tool: "orion_propose_deletion", ok: false, summary: "инструмент недоступен", proposalId: null }]);
 
     script = [() => ({ status: 401, json: { error: { message: `bad key ${API_KEY}` } } })];
     const failed = await request(`/workspaces/${ws}/assistant/chat`, "POST", token, { messages: [{ role: "user", content: "привет" }] });
     expect(failed.status).toBe(502);
     expect(JSON.stringify(failed.data)).not.toContain(API_KEY);
+  });
+
+  it("правка существующей задачи — запрос на подтверждение: id приходит в ответе чата, подтверждение применяет её", async () => {
+    const { token, ws } = await user();
+    await request("/assistant/key", "PUT", token, { apiKey: API_KEY, model: "claude-test" });
+    const task = await request<{ id: string }>(`/workspaces/${ws}/tasks`, "POST", token, { title: "Старое название" });
+    script = [
+      () => ({ json: { content: [{ type: "tool_use", id: "tu5", name: "orion_update_task", input: { taskId: task.data.id, title: "Новое название" } }], stop_reason: "tool_use", usage: { input_tokens: 1, output_tokens: 1 } } }),
+      () => text("Предложил переименовать — подтвердите.")
+    ];
+    const result = await request<{ actions: Array<{ ok: boolean; summary: string; proposalId: string | null }> }>(`/workspaces/${ws}/assistant/chat`, "POST", token, {
+      messages: [{ role: "user", content: "переименуй задачу" }]
+    });
+    expect(result.status).toBe(201);
+    expect(result.data.actions[0]).toMatchObject({ ok: true, summary: "ждёт подтверждения" });
+    const proposalId = result.data.actions[0]!.proposalId;
+    expect(proposalId).toBeTruthy();
+
+    // The chat token is already revoked, but the request stays decidable — that is what the buttons in the chat do.
+    const approved = await request<{ status: string }>(`/workspaces/${ws}/agent-tokens/proposals/${proposalId}/approve`, "POST", token, {});
+    expect(approved.status).toBe(201);
+    expect(approved.data.status).toBe("approved");
+    const tasks = await request<Array<{ id: string; title: string }>>(`/workspaces/${ws}/tasks`, "GET", token);
+    expect(tasks.data.find((t) => t.id === task.data.id)?.title).toBe("Новое название");
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { ASSISTANT_DEFAULT_MODEL, type AssistantKeyStatus, type SetAssistantKeyInput, setAssistantKeyInputSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { openSecret, sealSecret, SyncSecretMissingError } from "../sync/sync-crypto";
@@ -42,6 +42,13 @@ export class AssistantKeyService {
         update: { model: parsed.model || ASSISTANT_DEFAULT_MODEL, keyEnc }
       })
     );
+    return this.status(userId);
+  }
+
+  /** Another model for the stored key — without asking for the key again. */
+  async setModel(userId: string, model: string): Promise<AssistantKeyStatus> {
+    const updated = await this.prisma.withUser(userId, (tx) => tx.assistantKey.updateMany({ where: { userId }, data: { model } }));
+    if (updated.count === 0) throw new NotFoundException("Ключ ассистента не сохранён — сначала добавьте его");
     return this.status(userId);
   }
 

@@ -58,7 +58,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       { value: "members", label: "Участники", scope: "workspace" },
       { value: "modules", label: "Модули", scope: "workspace" },
       { value: "plugins", label: "Плагины", scope: "workspace" },
-      { value: "agents", label: "ИИ-агенты", scope: "workspace-personal" }
+      { value: "agents", label: "ИИ и агенты", scope: "workspace-personal" }
     ]
   },
   {
@@ -164,7 +164,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   { anchor: "invite", tab: "members", label: "Пригласить участника", keywords: "приглашение email ссылка" },
   { anchor: "modules", tab: "modules", label: "Модули пространства", keywords: "включить выключить скрыть разделы" },
   { anchor: "plugins", tab: "plugins", label: "Плагины", keywords: "расширения включить выключить" },
-  { anchor: "agents", tab: "agents", label: "ИИ-агенты", keywords: "токен mcp ai bridge доступ" },
+  { anchor: "agents", tab: "agents", label: "ИИ и агенты", keywords: "токен mcp ai bridge доступ ассистент ключ модель claude подписка подключить" },
   { anchor: "network", tab: "network", label: "Сеть и устройства", keywords: "lan хост подключение локальный" },
   { anchor: "updates", tab: "updates", label: "Обновления", keywords: "версия github токен установить" },
   { anchor: "extensions-folder", tab: "extensions", label: "Папка расширений", keywords: "плагины установить добавить подтвердить режим разработчика" },

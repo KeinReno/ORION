@@ -204,7 +204,7 @@ export const agentGatewayContextSchema = z.object({
 export type AgentGatewayContext = z.infer<typeof agentGatewayContextSchema>;
 
 export const AGENT_CONFIRMATION_RULES: Array<{ operation: string; how: string }> = [
-  { operation: "task.delete / note.delete", how: "Агент не удаляет: POST /ai/v1/proposals создаёт запрос, человек подтверждает его в Настройки → ИИ-агенты." },
+  { operation: "task.delete / note.delete", how: "Агент не удаляет: POST /ai/v1/proposals создаёт запрос, человек подтверждает его в Настройки → ИИ и агенты." },
   { operation: "finance.draft", how: "Операция — только черновик; человек правит и подтверждает её в «Финансах». Баланс до этого не меняется." },
   { operation: "capture без hint", how: "Текст попадает во «Входящие» и ждёт разбора человеком; ORION не угадывает, чем он является." }
 ];
@@ -228,6 +228,29 @@ export const agentConnectionInfoSchema = z.object({
   manualPath: z.string().nullable()
 });
 export type AgentConnectionInfo = z.infer<typeof agentConnectionInfoSchema>;
+
+/** Programs ORION can connect itself to in one click (writes its MCP entry into their config on this computer). */
+export const AGENT_INSTALL_CLIENTS = ["claude-desktop", "claude-code", "cursor", "codex"] as const;
+export const agentInstallClientSchema = z.enum(AGENT_INSTALL_CLIENTS);
+export type AgentInstallClient = z.infer<typeof agentInstallClientSchema>;
+
+export const installAgentClientInputSchema = z.object({
+  client: agentInstallClientSchema,
+  scopes: z.array(agentScopeSchema).min(1).max(20)
+});
+export type InstallAgentClientInput = z.infer<typeof installAgentClientInputSchema>;
+
+/** What was written where; the token itself never leaves the server. */
+export const installedAgentClientSchema = z.object({
+  client: agentInstallClientSchema,
+  tokenName: z.string(),
+  configPath: z.string(),
+  backupPath: z.string().nullable(),
+  /** Earlier tokens of the same program in this workspace, revoked because the config now carries the new one. */
+  revokedPrevious: z.number().int(),
+  restartHint: z.string()
+});
+export type InstalledAgentClient = z.infer<typeof installedAgentClientSchema>;
 
 /** The scopes the wizard ticks by default: read the map, save and link, never delete. */
 export const AGENT_RECOMMENDED_SCOPES = ["projects:read", "notes:read", "notes:write", "tasks:read", "tasks:write", "links:write"] as const;
