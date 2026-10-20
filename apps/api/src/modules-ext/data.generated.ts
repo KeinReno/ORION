@@ -6,11 +6,24 @@ import type { SyncClassification } from "../sync/sync-classification";
 
 /** GET-маршрут модуля внутри пространства (`/workspaces/:id` + путь): матричные тесты включения/выключения опрашивают его. */
 export const GENERATED_MODULE_PROBES: Record<string, string> = {
+  "chat-archive": "/chat-archive/conversations",
   "pet-care": "/pet-care/pets"
 };
 
 /** Политика снапшота моделей подключаемых модулей (в `SNAPSHOT_MODEL_REGISTRY`). */
 export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
+  {
+    "model": "ChatArchiveConversation",
+    "snapshotKey": null,
+    "policy": "derived",
+    "reason": "Копия внешних транскриптов (~/.claude, ~/.codex), заново импортируется из исходных файлов. В снапшот .orion не входит: архив — сотни МБ, а снапшот собирается в памяти; восстановление пространства архив не трогает."
+  },
+  {
+    "model": "ChatArchiveLine",
+    "snapshotKey": null,
+    "policy": "derived",
+    "reason": "Строки транскрипта — копия исходного файла; в снапшот не входят по той же причине, что и разговор."
+  },
   {
     "model": "PetCarePet",
     "snapshotKey": "petCarePets",
@@ -47,6 +60,16 @@ export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prism
 
 /** Класс гибридной синхронизации моделей подключаемых модулей (в `SYNC_CLASSIFICATION`). */
 export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
+  "ChatArchiveConversation": {
+    "syncClass": "not-synced",
+    "stage": "never",
+    "note": "Копия транскриптов, дописывается импортом с узла, где они лежат; в снапшот не входит — и не синхронизируется."
+  },
+  "ChatArchiveLine": {
+    "syncClass": "not-synced",
+    "stage": "never",
+    "note": "Строка — неизменяемая копия строки файла; не синхронизируется, как и разговор."
+  },
   "PetCarePet": {
     "syncClass": "lww-fields",
     "stage": "later",

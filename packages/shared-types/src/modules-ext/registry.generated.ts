@@ -3,6 +3,7 @@
 
 /** Идентификаторы модулей, подключённых манифестом; ядро дописывает их в закрытый `z.enum` (modules.ts). */
 export const GENERATED_MODULE_IDS = [
+  "chat-archive",
   "pet-care"
 ] as const;
 
@@ -24,6 +25,25 @@ export interface GeneratedModuleCatalogEntry {
 
 /** Записи каталога модулей; `MODULE_CATALOG` добавляет их к встроенным. */
 export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = [
+  {
+    "id": "chat-archive",
+    "kind": "additional",
+    "required": false,
+    "label": "Архив чатов",
+    "summary": "Разговоры с ИИ-агентами (Claude Code, Codex) в исходном виде: каждая строка транскрипта без изменений, чтение, поиск и выгрузка оригинала.",
+    "owns": "Личный архив разговоров каждого участника: разговор (источник, id сессии, проект, заголовок) и строки его транскрипта — исходная строка и извлечённый текст.",
+    "livesWithout": "Полностью самостоятелен: не требует и не использует другие предметные модули.",
+    "provides": [
+      "Панель «Архив чатов»: список разговоров, чтение, поиск, выгрузка оригинала",
+      "Импорт транскрипта Claude Code или Codex файлом",
+      "Автосохранение разговоров Claude Code хуком (chat-archive-push.mjs)",
+      "Поиск и чтение прошлых разговоров для ИИ-агентов"
+    ],
+    "optionalDependencies": [],
+    "disableBehavior": "Панель, API и инструменты агентов скрываются, хук получает отказ. Сохранённые разговоры остаются и вернутся при включении.",
+    "panelId": "chat-archive",
+    "defaultEnabled": true
+  },
   {
     "id": "pet-care",
     "kind": "additional",
@@ -47,11 +67,15 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
 
 /** Основной ресурс модуля для реестра разрешений (`<module>.<resource>.<action>`). */
 export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = {
+  "chat-archive": "conversation",
   "pet-care": "pet"
 };
 
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
+  "chat-archive": [
+    "20261020222504_chat_archive"
+  ],
   "pet-care": [
     "20261018120000_pet_care",
     "20261019150000_pet_care_wellbeing",
@@ -59,4 +83,5 @@ export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[n
   ]
 };
 
+export * from "./chat-archive";
 export * from "./pet-care";

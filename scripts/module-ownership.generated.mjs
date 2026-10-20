@@ -2,6 +2,14 @@
 /** Модели подключаемых модулей -> каталог-владелец (см. module-ownership.mjs). */
 export const GENERATED_MODEL_OWNERS = [
   [
+    "ChatArchiveConversation",
+    "modules-ext"
+  ],
+  [
+    "ChatArchiveLine",
+    "modules-ext"
+  ],
+  [
     "PetCarePet",
     "modules-ext"
   ],
