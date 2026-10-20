@@ -36,6 +36,11 @@ export function useUpdateExtension() {
   return useExtensionMutation<{ id: string } & UpdateExtensionInput>(({ id, ...input }) => api.updateExtension(id, input));
 }
 
+export function useSetExtensionWorkspace() {
+  const { api } = useCore();
+  return useExtensionMutation<{ id: string; workspaceId: string; enabled: boolean }>(({ id, workspaceId, enabled }) => api.setExtensionWorkspace(id, workspaceId, enabled));
+}
+
 export function useRevokeExtension() {
   const { api } = useCore();
   return useExtensionMutation<string>((id) => api.revokeExtension(id));

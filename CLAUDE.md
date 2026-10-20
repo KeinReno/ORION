@@ -418,6 +418,10 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   сервер — `apps/api/src/extensions/` (опрос папки, подтверждения в `extensions.json` узла, только loopback), интерфейс —
   `lib/extensions/runtime/` (`RuntimeExtensions` в провайдерах, SDK в `globalThis.__ORION_SDK__`), сборка — `pnpm orion-ext`.
   e2e: `e2e/extensions-folder.spec.ts` (папки `tmp/e2e-extensions`, `tmp/e2e-node`).
+  E5: расширение наполняет слоты ядра (`ctx.contribute`, вклад с `runtime: true` — реестр `lib/extensions/registry.ts`
+  теперь меняется во время выполнения, `useSlotContributions` подписан) и объявляет свои (`ctx.slot` → `<id>.<имя>`).
+  Новый слот ядра = ключ в `SlotContracts` **и** строка в `CORE_SLOT_NAMES` (тест `contracts-slots.test.ts` сверяет).
+  Владелец пространства выключает расширение у себя (`disabledWorkspaces` в подтверждении); `requireActive(id, workspaceId)`.
 - **Интеграции Compass / FinControl** — статус в конце `docs/INTEGRATIONS_COMPASS_FINCONTROL.md`; модуль `markets` по умолчанию выключен
   (`Workspace.disabledModules` по умолчанию `["markets"]`).
 

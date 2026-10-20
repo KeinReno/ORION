@@ -4,8 +4,10 @@ import { useCore, useExtensions, useSession } from "@orion/core-react";
 import type { ExtensionsState } from "@orion/shared-types";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { readNodeMark } from "../../node-mode";
+import { useActiveWorkspace } from "../../use-active-workspace";
 import type { ApiClient } from "@orion/core";
 import { createExtensionRuntime, type ExtensionLoadState, type ExtensionModule, type ExtensionServices } from "./loader";
+import { extensionOutlet } from "../slot";
 import { installSdk } from "./sdk";
 
 /** ApiClient of this window, set by `RuntimeExtensions` once the core is up (the runtime itself is created at import). */
@@ -36,7 +38,8 @@ function servicesFor(extensionId: string): ExtensionServices {
 export const extensionRuntime = createExtensionRuntime(
   // webpackIgnore: the URL is only known at run time and must be loaded by the browser as is, not bundled.
   (url) => import(/* webpackIgnore: true */ url) as Promise<ExtensionModule>,
-  servicesFor
+  servicesFor,
+  extensionOutlet
 );
 
 /** Пока у какого-то расширения включён режим разработчика — правка файла видна через ~2 с; иначе опрос редкий. */
@@ -57,6 +60,9 @@ export function RuntimeExtensions(): null {
   const active = Boolean(user) && !clientMode;
   const extensions = useExtensions({ enabled: active, pollMs: pollInterval });
   const data = extensions.data;
+  // An extension switched off in this workspace (E5) is not loaded here; switching workspaces loads/unloads it.
+  const { workspace } = useActiveWorkspace();
+  const workspaceId = workspace?.id ?? null;
 
   useEffect(() => {
     if (!active) {
@@ -65,11 +71,16 @@ export function RuntimeExtensions(): null {
     }
     if (!data) return;
     installSdk();
-    const desired = data.available
-      ? data.items.flatMap((item) => (item.status === "approved" && item.entryPath ? [{ id: item.id, url: api.extensionEntryUrl(item.entryPath) }] : []))
-      : [];
+    const desired =
+      data.available && workspaceId
+        ? data.items.flatMap((item) =>
+            item.status === "approved" && item.entryPath && !item.disabledWorkspaceIds.includes(workspaceId)
+              ? [{ id: item.id, url: api.extensionEntryUrl(item.entryPath) }]
+              : []
+          )
+        : [];
     void extensionRuntime.sync(desired);
-  }, [active, data, api]);
+  }, [active, data, api, workspaceId]);
 
   return null;
 }

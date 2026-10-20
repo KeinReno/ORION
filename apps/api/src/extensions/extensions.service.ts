@@ -15,6 +15,7 @@ import {
 import { resolveMode } from "../common/orion-mode";
 import { PrismaService } from "../common/prisma.service";
 import { LanService } from "../lan/lan.service";
+import { WorkspacesService } from "../workspaces/workspaces.service";
 import { nodeDir, writeJsonAtomic } from "../lan/node-config";
 import { extensionsDir, folderFingerprint, scanExtensions, statusOf, type ExtensionApproval, type ScannedExtension } from "./extension-scan";
 
@@ -36,7 +37,8 @@ export class ExtensionsService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly lan: LanService
+    private readonly lan: LanService,
+    private readonly workspaces: WorkspacesService
   ) {}
 
   onModuleInit(): void {
@@ -106,6 +108,22 @@ export class ExtensionsService implements OnModuleInit, OnModuleDestroy {
     return this.toInfo(scanned, approvals[id]);
   }
 
+  /** Включить/выключить подтверждённое расширение в одном пространстве — решает владелец этого пространства. */
+  async setWorkspace(userId: string, id: string, workspaceId: string, enabled: boolean): Promise<ExtensionInfo> {
+    this.assertAvailable();
+    await this.prisma.withUser(userId, (tx) => this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]));
+    const scanned = this.find(id);
+    const approvals = this.readApprovals();
+    const current = approvals[id];
+    if (!current) throw new ConflictException({ code: "extension_not_approved", message: "Сначала подтвердите расширение." });
+    const disabled = new Set(current.disabledWorkspaces ?? []);
+    if (enabled) disabled.delete(workspaceId);
+    else disabled.add(workspaceId);
+    approvals[id] = { ...current, disabledWorkspaces: [...disabled] };
+    this.writeApprovals(approvals);
+    return this.toInfo(scanned, approvals[id]);
+  }
+
   async revoke(userId: string, id: string): Promise<void> {
     await this.assertManager(userId);
     const approvals = this.readApprovals();
@@ -141,11 +159,15 @@ export class ExtensionsService implements OnModuleInit, OnModuleDestroy {
    * Манифест расширения, которое сейчас работает (подтверждено, включено, код не менялся или режим разработчика) —
    * условие для его данных, секретов и сети (E3). Выключенное расширение не получает ничего.
    */
-  requireActive(id: string): ExtensionManifest {
+  requireActive(id: string, workspaceId?: string): ExtensionManifest {
     this.assertAvailable();
     const scanned = this.find(id);
-    if (statusOf(scanned, this.readApprovals()[id], PLATFORM_API_VERSION) !== "approved" || !scanned.manifest) {
+    const approval = this.readApprovals()[id];
+    if (statusOf(scanned, approval, PLATFORM_API_VERSION) !== "approved" || !scanned.manifest) {
       throw new ConflictException({ code: "extension_inactive", message: "Расширение не подтверждено или выключено" });
+    }
+    if (workspaceId && approval?.disabledWorkspaces?.includes(workspaceId)) {
+      throw new ConflictException({ code: "extension_inactive", message: "Расширение выключено в этом пространстве" });
     }
     return scanned.manifest;
   }
@@ -169,6 +191,7 @@ export class ExtensionsService implements OnModuleInit, OnModuleDestroy {
       devMode: approval?.devMode ?? false,
       approvedVersion: approval?.version ?? null,
       approvedAt: approval?.approvedAt ?? null,
+      disabledWorkspaceIds: approval?.disabledWorkspaces ?? [],
       // The hash in the URL busts the module cache when the code changes (dev mode reloads it).
       entryPath: status === "approved" && scanned.sha256 ? `/extensions/${encodeURIComponent(scanned.id)}/web.js?h=${scanned.sha256.slice(0, 16)}` : null
     };

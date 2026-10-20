@@ -60,8 +60,15 @@ test("drop a folder, approve once, it runs; dev mode reloads edits; switching of
   cli("build", folder);
   await expect(nav.getByRole("button", { name: "Привет, правка", exact: true })).toBeVisible({ timeout: 20_000 });
 
+  // Switched off in this workspace only (E5): its places disappear here, back when switched on again
+  const inWorkspace = card.getByRole("switch", { name: /^Включено в «/ });
+  await inWorkspace.click();
+  await expect(nav.getByRole("button", { name: "Привет, правка", exact: true })).toHaveCount(0, { timeout: 20_000 });
+  await inWorkspace.click();
+  await expect(nav.getByRole("button", { name: "Привет, правка", exact: true })).toBeVisible({ timeout: 20_000 });
+
   // Switched off: everything it added disappears; data of ORION untouched
-  await card.getByRole("switch", { name: "Включено", exact: true }).click();
+  await card.getByRole("switch", { name: "Включено на компьютере", exact: true }).click();
   await expect(card).toContainText("выключено");
   await expect(nav.getByRole("button", { name: "Привет, правка", exact: true })).toHaveCount(0);
 

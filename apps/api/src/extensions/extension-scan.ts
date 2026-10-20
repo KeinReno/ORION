@@ -42,6 +42,8 @@ export interface ExtensionApproval {
   devMode: boolean;
   approvedBy: string;
   approvedAt: string;
+  /** Пространства, где расширение выключено (E5). Нет поля — работает везде. */
+  disabledWorkspaces?: string[];
 }
 
 /** Хеш содержимого: манифест и код вместе — подтверждают именно эту пару. */

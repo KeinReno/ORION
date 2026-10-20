@@ -71,6 +71,8 @@ export const extensionInfoSchema = z.object({
   devMode: z.boolean(),
   approvedVersion: z.string().nullable(),
   approvedAt: z.string().nullable(),
+  /** Пространства, где подтверждённое расширение выключено (E5); в остальных оно работает. */
+  disabledWorkspaceIds: z.array(z.string()),
   /** Путь к коду относительно API (`/extensions/<id>/web.js?h=…`), только когда расширение загружается. */
   entryPath: z.string().nullable()
 });
@@ -99,6 +101,10 @@ export const updateExtensionInputSchema = z
   .object({ enabled: z.boolean().optional(), devMode: z.boolean().optional() })
   .refine((value) => value.enabled !== undefined || value.devMode !== undefined, "нужно enabled или devMode");
 export type UpdateExtensionInput = z.infer<typeof updateExtensionInputSchema>;
+
+/** Включить или выключить подтверждённое расширение в одном пространстве (E5); меняет владелец пространства. */
+export const setExtensionWorkspaceInputSchema = z.object({ enabled: z.boolean() });
+export type SetExtensionWorkspaceInput = z.infer<typeof setExtensionWorkspaceInputSchema>;
 
 // ---- E3: data, secrets and network for extensions (ADR-0022) ----
 

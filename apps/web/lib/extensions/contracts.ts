@@ -462,3 +462,48 @@ export type MetaOf<S extends SlotName> = S extends keyof SlotMeta ? SlotMeta[S] 
 
 /** Props of the places a plugin or extension ADDS (panel, dashboard card, settings section) — ADR-0022, lib/extensions/places.ts. */
 export type { ExtensionPanelProps, ExtensionPlaceProps } from "./places";
+
+/**
+ * Every slot of `SlotContracts`, available at run time: an extension loaded from the folder names a slot by string
+ * (ADR-0022, E5). `contracts-slots.test.ts` keeps it equal to the interface.
+ */
+export const CORE_SLOT_NAMES = [
+  "shell.context.resources",
+  "home.object.tabs",
+  "home.object.overview.cards",
+  "opportunities.views",
+  "opportunities.details.sections",
+  "shell.sidebar.widgets",
+  "habits.insights",
+  "habits.detail",
+  "finance.tabs",
+  "tasks.views.bar",
+  "documents.history",
+  "documents.editor",
+  "documents.create",
+  "notes.history",
+  "time.insights",
+  "time.billing",
+  "calendar.toolbar",
+  "tasks.detail.tabs",
+  "tasks.views",
+  "notes.header.actions",
+  "notes.filters",
+  "notes.header.actions.end",
+  "notes.templates",
+  "finance.summary",
+  "dashboard.finance",
+  "tasks.recurrence",
+  "tasks.planning",
+  "projects.tabs",
+  "projects.overview.plan",
+  "inventory.alerts",
+  "inventory.costing",
+  "inventory.item.actions",
+  "lists.item",
+  "lists.actions",
+  "lists.item.mark",
+  "calendar.event.recurrence",
+  "calendar.event.reminders",
+  "finance.transactions.top"
+] as const satisfies readonly SlotName[];

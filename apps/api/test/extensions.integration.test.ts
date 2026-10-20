@@ -172,6 +172,30 @@ describe("Extensions from the folder", () => {
       expect((await call(`/workspaces/${ws}/ext/data-it/collections/usage`, { token: carol.token })).status).toBe(409);
     });
 
+    it("E5: the owner switches an extension off in one workspace; its data there is refused, elsewhere it works", async () => {
+      const gina = await register("data-gina");
+      const hank = await register("data-hank");
+      await approvedDataExtension(gina.token);
+      const ws = await workspaceOf(gina.token);
+      const other = await workspaceOf(hank.token);
+      // Hank becomes a plain member of Gina's workspace: he may use the extension there but not switch it.
+      await prisma.asSystem((tx) => tx.workspaceMember.create({ data: { workspaceId: ws, userId: hank.userId, role: "member" } }));
+      const toggle = (token: string, workspaceId: string, enabled: boolean) =>
+        call<{ disabledWorkspaceIds: string[] }>(`/extensions/data-it/workspaces/${workspaceId}`, { method: "PATCH", token, body: { enabled } });
+
+      expect((await toggle(hank.token, ws, false)).status).toBe(403);
+      const off = await toggle(gina.token, ws, false);
+      expect(off.status).toBe(200);
+      expect(off.data.disabledWorkspaceIds).toEqual([ws]);
+      expect((await call(`/workspaces/${ws}/ext/data-it/collections/usage`, { token: gina.token })).status).toBe(409);
+      expect((await call(`/workspaces/${ws}/ext/data-it/fetch`, { method: "POST", token: gina.token, body: { url: "https://api.example.com/x" } })).status).toBe(409);
+      expect((await call(`/workspaces/${other}/ext/data-it/collections/usage`, { token: hank.token })).status).toBe(200);
+
+      const on = await toggle(gina.token, ws, true);
+      expect(on.data.disabledWorkspaceIds).toEqual([]);
+      expect((await call(`/workspaces/${ws}/ext/data-it/collections/usage`, { token: hank.token })).status).toBe(200);
+    });
+
     it("keeps secrets per user and never returns the value", async () => {
       const dave = await register("data-dave");
       const erin = await register("data-erin");

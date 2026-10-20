@@ -7,6 +7,7 @@ import {
   useOpenExtensionsFolder,
   useRevokeExtension,
   useSetExtensionSecret,
+  useSetExtensionWorkspace,
   useUpdateExtension
 } from "@orion/core-react";
 import type { ExtensionInfo, ExtensionStatus } from "@orion/shared-types";
@@ -16,6 +17,7 @@ import { useState } from "react";
 import { describeAuthError } from "../../lib/error-message";
 import { useExtensionLoadState } from "../../lib/extensions/runtime/runtime-extensions";
 import { relativeTime } from "../../lib/format";
+import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { SettingGroup, SettingRow } from "./setting-row";
 
 const STATUS: Record<ExtensionStatus, { label: string; tone: "neutral" | "accent" | "success" | "warning" | "danger" }> = {
@@ -142,6 +144,8 @@ function Permissions({ item }: { item: ExtensionInfo }): React.ReactElement | nu
 
 function ExtensionCard({ item, canManage, onApprove }: { item: ExtensionInfo; canManage: boolean; onApprove: () => void }): React.ReactElement {
   const update = useUpdateExtension();
+  const setWorkspace = useSetExtensionWorkspace();
+  const { workspace } = useActiveWorkspace();
   const revoke = useRevokeExtension();
   const load = useExtensionLoadState(item.id);
   const { toast } = useToast();
@@ -200,12 +204,26 @@ function ExtensionCard({ item, canManage, onApprove }: { item: ExtensionInfo; ca
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-3">
           <label className="flex items-center gap-2 text-label text-muted-foreground">
             <Switch
-              label="Включено"
+              label="Включено на компьютере"
               checked={item.status !== "disabled"}
               onChange={(enabled) => update.mutate({ id: item.id, enabled }, { onError: fail("Не удалось переключить") })}
             />
-            Включено
+            Включено на компьютере
           </label>
+          {workspace ? (
+            <label
+              className="flex items-center gap-2 text-label text-muted-foreground"
+              title={workspace.role === "owner" ? "Только в этом пространстве; в остальных — как было" : "Менять может владелец пространства"}
+            >
+              <Switch
+                label={`Включено в «${workspace.name}»`}
+                checked={!item.disabledWorkspaceIds.includes(workspace.id)}
+                disabled={workspace.role !== "owner" || item.status === "disabled"}
+                onChange={(enabled) => setWorkspace.mutate({ id: item.id, workspaceId: workspace.id, enabled }, { onError: fail("Не удалось переключить в пространстве") })}
+              />
+              В «{workspace.name}»
+            </label>
+          ) : null}
           <label className="flex items-center gap-2 text-label text-muted-foreground" title="Правки файлов применяются сразу, без повторного подтверждения">
             <Switch
               label="Режим разработчика"

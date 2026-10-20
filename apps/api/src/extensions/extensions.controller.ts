@@ -1,10 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Res, UseGuards } from "@nestjs/common";
 import {
   approveExtensionInputSchema,
+  setExtensionWorkspaceInputSchema,
   updateExtensionInputSchema,
   type ApproveExtensionInput,
   type ExtensionInfo,
   type ExtensionsState,
+  type SetExtensionWorkspaceInput,
   type UpdateExtensionInput
 } from "@orion/shared-types";
 import type { Response } from "express";
@@ -51,6 +53,17 @@ export class ExtensionsController {
     @Body(new ZodValidationPipe(updateExtensionInputSchema)) body: UpdateExtensionInput
   ): Promise<ExtensionInfo> {
     return this.extensions.update(user.userId, id, body);
+  }
+
+  @UseGuards(JwtAuthGuard, JsonBodyGuard)
+  @Patch(":id/workspaces/:workspaceId")
+  setWorkspace(
+    @CurrentUser() user: RequestUser,
+    @Param("id") id: string,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(setExtensionWorkspaceInputSchema)) body: SetExtensionWorkspaceInput
+  ): Promise<ExtensionInfo> {
+    return this.extensions.setWorkspace(user.userId, id, workspaceId, body.enabled);
   }
 
   @UseGuards(JwtAuthGuard)

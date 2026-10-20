@@ -42,7 +42,7 @@ export class ExtensionDataService {
   // ---- storage: per workspace, visible to its members (RLS) ----
 
   async list(userId: string, workspaceId: string, extensionId: string, collection: string): Promise<ExtensionRecord[]> {
-    this.requireStorage(extensionId);
+    this.requireStorage(extensionId, workspaceId);
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const rows = await tx.extensionRecord.findMany({ where: { workspaceId, extensionId, collection }, orderBy: { key: "asc" }, take: MAX_RECORDS_PER_EXTENSION });
@@ -51,7 +51,7 @@ export class ExtensionDataService {
   }
 
   async put(userId: string, workspaceId: string, extensionId: string, collection: string, key: string, data: unknown): Promise<ExtensionRecord> {
-    this.requireStorage(extensionId);
+    this.requireStorage(extensionId, workspaceId);
     if (data === undefined) throw new BadRequestException("data обязательно");
     const size = Buffer.byteLength(JSON.stringify(data), "utf8");
     if (size > MAX_RECORD_BYTES) throw new BadRequestException(`Запись больше ${MAX_RECORD_BYTES / 1024} КБ — храните в ней только нужное`);
@@ -72,7 +72,7 @@ export class ExtensionDataService {
   }
 
   async remove(userId: string, workspaceId: string, extensionId: string, collection: string, key: string): Promise<void> {
-    this.requireStorage(extensionId);
+    this.requireStorage(extensionId, workspaceId);
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await tx.extensionRecord.deleteMany({ where: { workspaceId, extensionId, collection, key } });
@@ -113,7 +113,7 @@ export class ExtensionDataService {
   // ---- network: https to declared hosts, secrets substituted here ----
 
   async fetch(userId: string, workspaceId: string, extensionId: string, raw: ExtensionFetchInput): Promise<ExtensionFetchResult> {
-    const manifest = this.extensions.requireActive(extensionId);
+    const manifest = this.extensions.requireActive(extensionId, workspaceId);
     const input = extensionFetchInputSchema.parse(raw);
     await this.workspaces.assertMember(userId, workspaceId);
     const url = new URL(input.url);
@@ -154,8 +154,8 @@ export class ExtensionDataService {
     return { status: response.status, headers: safeHeaders, body: response.body };
   }
 
-  private requireStorage(extensionId: string): ExtensionManifest {
-    const manifest = this.extensions.requireActive(extensionId);
+  private requireStorage(extensionId: string, workspaceId: string): ExtensionManifest {
+    const manifest = this.extensions.requireActive(extensionId, workspaceId);
     if (!manifest.permissions.storage) throw new ForbiddenException({ code: "extension_storage_not_declared", message: "Расширение не объявило permissions.storage" });
     return manifest;
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { places } from "../places";
-import { createExtensionRuntime, type ExtensionModule } from "./loader";
+import { extensionRegistry } from "../registry";
+import { assertContributableSlot, createExtensionRuntime, type ExtensionModule } from "./loader";
 
 const Noop = () => null;
 
@@ -93,5 +94,40 @@ describe("extension runtime services (E3)", () => {
     await runtime.sync([{ id: "ai-tokens", url: "/a.js" }]);
     expect(calls).toEqual(["ai-tokens:list", "ai-tokens:fetch"]);
     await runtime.sync([]);
+  });
+
+  it("contributes to core and extension slots and removes the contributions on unload", async () => {
+    const outlet = vi.fn((_slot: string) => Noop);
+    const modules: Record<string, ExtensionModule> = {
+      "/a.js": {
+        activate(ctx) {
+          ctx.contribute("habits.insights", { component: Noop });
+          ctx.slot("cards");
+        }
+      },
+      "/b.js": { activate: (ctx) => void ctx.contribute("ai-tokens.cards", { component: Noop, order: 2 }) }
+    };
+    const runtime = createExtensionRuntime(async (url) => modules[url]!, undefined, outlet);
+    await runtime.sync([
+      { id: "ai-tokens", url: "/a.js" },
+      { id: "cursor-card", url: "/b.js" }
+    ]);
+    expect(outlet).toHaveBeenCalledWith("ai-tokens.cards");
+    expect(extensionRegistry.enabled("habits.insights", () => false).map((item) => item.pluginId)).toContain("ai-tokens");
+    expect(extensionRegistry.enabled("ai-tokens.cards" as never, () => false)).toMatchObject([{ pluginId: "cursor-card", runtime: true }]);
+
+    await runtime.sync([]);
+    expect(extensionRegistry.all("habits.insights").some((item) => item.pluginId === "ai-tokens")).toBe(false);
+    expect(extensionRegistry.all("ai-tokens.cards" as never)).toEqual([]);
+  });
+
+  it("rejects a misspelt core slot or a malformed name, and fails the activation", async () => {
+    expect(() => assertContributableSlot("finance.tabs")).not.toThrow();
+    expect(() => assertContributableSlot("ai-tokens.cards")).not.toThrow();
+    expect(() => assertContributableSlot("habits.insight")).toThrow(/Слота ядра/);
+    expect(() => assertContributableSlot("Cards")).toThrow(/ожидается/);
+    const runtime = createExtensionRuntime(async () => ({ activate: (ctx) => void ctx.contribute("tasks.nope", { component: Noop }) }));
+    await runtime.sync([{ id: "typo", url: "/t.js" }]);
+    expect(runtime.state("typo")).toMatchObject({ status: "failed" });
   });
 });

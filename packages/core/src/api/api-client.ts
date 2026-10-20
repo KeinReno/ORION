@@ -2022,6 +2022,10 @@ export class ApiClient {
     return this.request("PATCH", `/extensions/${encodeURIComponent(id)}`, input, extensionInfoSchema);
   }
 
+  setExtensionWorkspace(id: string, workspaceId: string, enabled: boolean): Promise<ExtensionInfo> {
+    return this.request("PATCH", `/extensions/${encodeURIComponent(id)}/workspaces/${workspaceId}`, { enabled }, extensionInfoSchema);
+  }
+
   async revokeExtension(id: string): Promise<void> {
     await this.request("DELETE", `/extensions/${encodeURIComponent(id)}/approval`, undefined, z.unknown());
   }

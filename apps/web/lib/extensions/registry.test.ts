@@ -1,10 +1,10 @@
-import { MODULE_CATALOG, ORION_PLUGIN_IDS, PLUGIN_CATALOG, isPluginEnabled, pluginManifestSchema, type OrionPluginId } from "@orion/shared-types";
-import { describe, expect, it } from "vitest";
+import { MODULE_CATALOG, ORION_PLUGIN_IDS, PLUGIN_CATALOG, isPluginEnabled, pluginManifestSchema } from "@orion/shared-types";
+import { describe, expect, it, vi } from "vitest";
 import { createRegistry } from "./registry";
 
 const Noop = () => null;
-const all = (_id: OrionPluginId): boolean => true;
-const none = (_id: OrionPluginId): boolean => false;
+const all = (_id: string): boolean => true;
+const none = (_id: string): boolean => false;
 
 describe("extension registry", () => {
   it("is empty by default — a host with no plugins renders nothing in the slot", () => {
@@ -88,5 +88,21 @@ describe("plugin catalog invariants (default-full parity)", () => {
   it("the pre-existing optional plugin keeps its default (team stays off)", () => {
     expect(PLUGIN_CATALOG.find((p) => p.id === "team")?.defaultEnabled).toBe(false);
     expect(isPluginEnabled([], "team")).toBe(false);
+  });
+});
+
+describe("extension registry at run time (ADR-0022, E5)", () => {
+  it("removes a contribution with its undo, shows run-time ones regardless of the catalog and notifies subscribers", () => {
+    const registry = createRegistry();
+    const listener = vi.fn();
+    registry.subscribe(listener);
+    const undo = registry.contribute("habits.insights", { pluginId: "ai-tokens", component: Noop, runtime: true });
+    registry.contribute("habits.insights", { pluginId: "not-in-catalog", component: Noop });
+    expect(registry.enabled("habits.insights", none).map((c) => c.pluginId)).toEqual(["ai-tokens"]);
+    undo();
+    expect(registry.enabled("habits.insights", none)).toEqual([]);
+    expect(listener).toHaveBeenCalledTimes(3);
+    undo();
+    expect(listener).toHaveBeenCalledTimes(3);
   });
 });
