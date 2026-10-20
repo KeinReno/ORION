@@ -64,7 +64,11 @@ describe("каталог инструментов ↔ маршруты /ai/v1", 
 
   it("каждый маршрут агента описан инструментом (иначе агент о нём не узнает)", () => {
     // Маршруты, которых в каталоге нет сознательно: их список — единственное, что можно здесь пополнять.
-    const intentionallyUndeclared = new Set<string>();
+    const intentionallyUndeclared = new Set<string>([
+      // Архив чатов: импорт для скрипта-хука (multipart), а не для модели — модели есть orion_chat_archive_import.
+      "GET /ai/v1/chat-archive/import-state",
+      "POST /ai/v1/chat-archive/import-file"
+    ]);
     for (const route of actual) {
       if (!declared.has(route) && !intentionallyUndeclared.has(route)) throw new Error(`Маршрут ${route} есть в контроллере, но не описан в AGENT_TOOLS`);
     }

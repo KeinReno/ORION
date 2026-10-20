@@ -302,6 +302,8 @@ model Workspace {
   healthSymptoms     HealthSymptom[]
 
   // <module-registry:workspace-relations>
+  chatArchiveConversations ChatArchiveConversation[]
+  chatArchiveLines         ChatArchiveLine[]
   petCarePets    PetCarePet[]
   petCareEntries PetCareEntry[]
   petCareDays    PetCareDay[]
@@ -3344,6 +3346,60 @@ model DomainEventDelivery {
 // G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
 // генерирует scripts/module-registry.mjs — руками не править.
 // <module-registry:models>
+// module: chat-archive
+model ChatArchiveConversation {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  /// Владелец: архив личный, другие участники пространства его не видят (RLS).
+  userId       String
+  /// claude-code | codex — откуда транскрипт.
+  source       String
+  /// id сессии в источнике: повторный импорт дописывает к тому же разговору.
+  externalId   String
+  title        String
+  /// Откуда заголовок: fallback (первая реплика) < auto (придумал источник) < custom (задан в источнике) < manual (в ORION).
+  titleSource  String    @default("fallback")
+  projectPath  String?
+  startedAt    DateTime?
+  lastAt       DateTime?
+  lineCount    Int       @default(0)
+  messageCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lines     ChatArchiveLine[]
+
+  @@unique([workspaceId, userId, source, externalId], map: "chat_archive_conversations_session_key")
+  @@index([workspaceId, userId, lastAt])
+  @@map("chat_archive_conversations")
+}
+
+model ChatArchiveLine {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  userId         String
+  conversationId String
+  /// Номер строки исходного файла (с 0): оригинал = строки по seq через "\n".
+  seq            Int
+  role           String
+  kind           String
+  /// Извлечённый читаемый текст (для просмотра и поиска; длинное обрезано — целиком в raw).
+  text           String    @default("")
+  /// Строка исходного файла без изменений.
+  raw            String
+  /// sha256(raw): сверка перекрытия при повторном импорте без чтения больших строк.
+  sha            String
+  at             DateTime?
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation ChatArchiveConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, seq])
+  @@index([workspaceId])
+  @@map("chat_archive_lines")
+}
+
 // module: pet-care
 model PetCarePet {
   id          String    @id @default(uuid())

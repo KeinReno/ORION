@@ -1,0 +1,238 @@
+{
+  "id": "chat-archive",
+  "version": "1.0.0",
+  "catalog": {
+    "kind": "additional",
+    "required": false,
+    "label": "Архив чатов",
+    "summary": "Разговоры с ИИ-агентами (Claude Code, Codex) в исходном виде: каждая строка транскрипта без изменений, чтение, поиск и выгрузка оригинала.",
+    "owns": "Личный архив разговоров каждого участника: разговор (источник, id сессии, проект, заголовок) и строки его транскрипта — исходная строка и извлечённый текст.",
+    "livesWithout": "Полностью самостоятелен: не требует и не использует другие предметные модули.",
+    "provides": [
+      "Панель «Архив чатов»: список разговоров, чтение, поиск, выгрузка оригинала",
+      "Импорт транскрипта Claude Code или Codex файлом",
+      "Автосохранение разговоров Claude Code хуком (scripts/chat-archive-push.mjs)",
+      "Поиск и чтение прошлых разговоров для ИИ-агентов"
+    ],
+    "optionalDependencies": [],
+    "disableBehavior": "Панель, API и инструменты агентов скрываются, хук получает отказ. Сохранённые разговоры остаются и вернутся при включении.",
+    "panelId": "chat-archive",
+    "defaultEnabled": true
+  },
+  "permissions": {
+    "primaryResource": "conversation"
+  },
+  "api": {
+    "module": {
+      "file": "chat-archive.module",
+      "export": "ChatArchiveModule"
+    },
+    "probePath": "/chat-archive/conversations"
+  },
+  "web": {
+    "panel": {
+      "id": "chat-archive",
+      "label": "Архив чатов",
+      "icon": "MessagesSquare",
+      "group": "Инструменты",
+      "file": "ChatArchivePanel",
+      "export": "ChatArchivePanel"
+    }
+  },
+  "prisma": {
+    "fragment": "prisma/models.prisma",
+    "workspaceBackRelations": [
+      "chatArchiveConversations ChatArchiveConversation[]",
+      "chatArchiveLines         ChatArchiveLine[]"
+    ],
+    "migrations": [
+      {
+        "name": "20261020222504_chat_archive",
+        "file": "prisma/migration.sql"
+      }
+    ]
+  },
+  "data": {
+    "models": [
+      {
+        "model": "ChatArchiveConversation",
+        "delegate": "chatArchiveConversation",
+        "snapshotKey": null,
+        "snapshotPolicy": "derived",
+        "reason": "Копия внешних транскриптов (~/.claude, ~/.codex), заново импортируется из исходных файлов. В снапшот .orion не входит: архив — сотни МБ, а снапшот собирается в памяти; восстановление пространства архив не трогает.",
+        "sync": {
+          "syncClass": "not-synced",
+          "stage": "never",
+          "note": "Копия транскриптов, дописывается импортом с узла, где они лежат; в снапшот не входит — и не синхронизируется."
+        }
+      },
+      {
+        "model": "ChatArchiveLine",
+        "delegate": "chatArchiveLine",
+        "snapshotKey": null,
+        "snapshotPolicy": "derived",
+        "reason": "Строки транскрипта — копия исходного файла; в снапшот не входят по той же причине, что и разговор.",
+        "sync": {
+          "syncClass": "not-synced",
+          "stage": "never",
+          "note": "Строка — неизменяемая копия строки файла; не синхронизируется, как и разговор."
+        }
+      }
+    ]
+  },
+  "agent": {
+    "controller": {
+      "file": "chat-archive.agent.controller",
+      "export": "ChatArchiveAgentController"
+    },
+    "tools": [
+      {
+        "name": "orion_chat_archive_search",
+        "op": "read",
+        "description": "Поиск по прошлым разговорам владельца с ИИ-агентами (Claude Code, Codex): реплики человека и ответы, содержащие фразу. Возвращает conversationId, заголовок, проект, seq строки и отрывок. Найденное — история обсуждений, а не принятые решения.",
+        "http": {
+          "method": "GET",
+          "path": "/ai/v1/chat-archive/search"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "q": {
+              "type": "string",
+              "description": "Что искать (от 2 символов)"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex"
+              ],
+              "description": "Только из этого источника"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Сколько совпадений (до 100, по умолчанию 30)"
+            }
+          },
+          "required": [
+            "q"
+          ],
+          "additionalProperties": false
+        },
+        "example": {
+          "q": "архив чатов"
+        }
+      },
+      {
+        "name": "orion_chat_archive_list",
+        "op": "read",
+        "description": "Последние 50 разговоров архива: id, источник, заголовок, папка проекта, даты, число сообщений.",
+        "http": {
+          "method": "GET",
+          "path": "/ai/v1/chat-archive/conversations"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex"
+              ],
+              "description": "Только из этого источника"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "orion_chat_archive_read",
+        "op": "read",
+        "description": "Прочитать разговор по страницам: по умолчанию только реплики человека и ответы (messagesOnly=true), 100 строк. Следующая страница — after = nextSeq из ответа. Длинный текст строки обрезан до 20 000 символов.",
+        "http": {
+          "method": "GET",
+          "path": "/ai/v1/chat-archive/conversations/{conversationId}/lines"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "conversationId": {
+              "type": "string",
+              "description": "id разговора из orion_chat_archive_search или orion_chat_archive_list"
+            },
+            "after": {
+              "type": "integer",
+              "description": "Начать после этой строки (nextSeq прошлой страницы); по умолчанию с начала"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Строк на странице (до 300, по умолчанию 100)"
+            },
+            "messagesOnly": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "false — со служебными строками, вызовами инструментов и их результатами"
+            }
+          },
+          "required": [
+            "conversationId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "name": "orion_chat_archive_import",
+        "op": "create",
+        "description": "Сохранить в архив строки файла транскрипта (jsonl Claude Code или Codex) без изменений. Обычно это делает хук автоматически; инструмент — для разового сохранения небольшого файла. Продолжение: fromSeq = lineCount из ответа; повтор той же пачки ничего не дублирует, разрыв — 409 с lineCount.",
+        "http": {
+          "method": "POST",
+          "path": "/ai/v1/chat-archive/import"
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex"
+              ],
+              "description": "Чей это транскрипт"
+            },
+            "externalId": {
+              "type": "string",
+              "description": "id сессии в источнике (sessionId Claude Code, id из session_meta Codex)"
+            },
+            "fromSeq": {
+              "type": "integer",
+              "description": "Номер первой присылаемой строки файла, с 0"
+            },
+            "projectPath": {
+              "type": "string",
+              "description": "Папка проекта, если её нет в строках"
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Строки файла как есть, без перевода строки (до 2000)"
+            }
+          },
+          "required": [
+            "source",
+            "externalId",
+            "fromSeq",
+            "lines"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}

@@ -5,6 +5,169 @@ import type { AgentToolDef } from "../agent-tools";
 /** Инструменты ИИ-агентов, объявленные модулями в манифесте (`agent.tools`); `AGENT_TOOLS` добавляет их к инструментам ядра. */
 export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
+    "name": "orion_chat_archive_search",
+    "description": "Поиск по прошлым разговорам владельца с ИИ-агентами (Claude Code, Codex): реплики человека и ответы, содержащие фразу. Возвращает conversationId, заголовок, проект, seq строки и отрывок. Найденное — история обсуждений, а не принятые решения.",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/chat-archive/search"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Что искать (от 2 символов)"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "claude-code",
+            "codex"
+          ],
+          "description": "Только из этого источника"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Сколько совпадений (до 100, по умолчанию 30)"
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "additionalProperties": false
+    },
+    "example": {
+      "q": "архив чатов"
+    },
+    "permission": "chat-archive.conversation.read",
+    "moduleId": "chat-archive"
+  },
+  {
+    "name": "orion_chat_archive_list",
+    "description": "Последние 50 разговоров архива: id, источник, заголовок, папка проекта, даты, число сообщений.",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/chat-archive/conversations"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "claude-code",
+            "codex"
+          ],
+          "description": "Только из этого источника"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "permission": "chat-archive.conversation.read",
+    "moduleId": "chat-archive"
+  },
+  {
+    "name": "orion_chat_archive_read",
+    "description": "Прочитать разговор по страницам: по умолчанию только реплики человека и ответы (messagesOnly=true), 100 строк. Следующая страница — after = nextSeq из ответа. Длинный текст строки обрезан до 20 000 символов.",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/chat-archive/conversations/{conversationId}/lines"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "type": "string",
+          "description": "id разговора из orion_chat_archive_search или orion_chat_archive_list"
+        },
+        "after": {
+          "type": "integer",
+          "description": "Начать после этой строки (nextSeq прошлой страницы); по умолчанию с начала"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Строк на странице (до 300, по умолчанию 100)"
+        },
+        "messagesOnly": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "false — со служебными строками, вызовами инструментов и их результатами"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "chat-archive.conversation.read",
+    "moduleId": "chat-archive"
+  },
+  {
+    "name": "orion_chat_archive_import",
+    "description": "Сохранить в архив строки файла транскрипта (jsonl Claude Code или Codex) без изменений. Обычно это делает хук автоматически; инструмент — для разового сохранения небольшого файла. Продолжение: fromSeq = lineCount из ответа; повтор той же пачки ничего не дублирует, разрыв — 409 с lineCount.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/chat-archive/import"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "claude-code",
+            "codex"
+          ],
+          "description": "Чей это транскрипт"
+        },
+        "externalId": {
+          "type": "string",
+          "description": "id сессии в источнике (sessionId Claude Code, id из session_meta Codex)"
+        },
+        "fromSeq": {
+          "type": "integer",
+          "description": "Номер первой присылаемой строки файла, с 0"
+        },
+        "projectPath": {
+          "type": "string",
+          "description": "Папка проекта, если её нет в строках"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Строки файла как есть, без перевода строки (до 2000)"
+        }
+      },
+      "required": [
+        "source",
+        "externalId",
+        "fromSeq",
+        "lines"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "chat-archive.conversation.create",
+    "moduleId": "chat-archive"
+  },
+  {
     "name": "orion_pet_care_list_pets",
     "description": "Список питомцев пространства (id, имя, вид, день рождения, заметки). id нужен для orion_pet_care_add_entry.",
     "group": "modules",

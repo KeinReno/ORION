@@ -1,8 +1,9 @@
 {
   "module": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "surface": [
       "calendar",
+      "chat-archive",
       "contacts",
       "documents",
       "finance",
@@ -188,12 +189,16 @@
     ]
   },
   "permission": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "surface": [
       "calendar.event.create",
       "calendar.event.delete",
       "calendar.event.read",
       "calendar.event.update",
+      "chat-archive.conversation.create",
+      "chat-archive.conversation.delete",
+      "chat-archive.conversation.read",
+      "chat-archive.conversation.update",
       "contacts.contact.create",
       "contacts.contact.delete",
       "contacts.contact.read",
