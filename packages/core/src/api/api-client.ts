@@ -133,6 +133,7 @@ import {
   type AppInfo,
   type AssistantChatInput,
   type AssistantChatResult,
+  type AssistantEngineStatus,
   type AssistantKeyStatus,
   type AssistantConversation,
   type AssistantConversationSummary,
@@ -143,6 +144,7 @@ import {
   assistantChatResultSchema,
   assistantConversationSchema,
   assistantConversationSummarySchema,
+  assistantEngineStatusSchema,
   assistantSendResultSchema,
   assistantKeyStatusSchema,
   type ComponentDataStatus,
@@ -2600,6 +2602,11 @@ export class ApiClient {
   /** ADR-0017, вариант C: ключ к языковой модели и чат внутри ORION. Ключ наружу не возвращается. */
   getAssistantKeyStatus(): Promise<AssistantKeyStatus> {
     return this.request("GET", "/assistant/key", undefined, assistantKeyStatusSchema);
+  }
+
+  /** Who can answer in the chat on this computer (key, Codex, Cursor). */
+  listAssistantEngines(): Promise<AssistantEngineStatus[]> {
+    return this.request("GET", "/assistant/engines", undefined, z.array(assistantEngineStatusSchema));
   }
 
   saveAssistantKey(input: SetAssistantKeyInput): Promise<AssistantKeyStatus> {
