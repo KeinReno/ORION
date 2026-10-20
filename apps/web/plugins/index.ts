@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
 import type { HomeObjectTabSlotProps } from "../lib/extensions/contracts";
-import type { FinanceTabSlotProps, HabitDetailSlotProps, HabitsInsightsSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps, ResourcesSlotProps } from "../lib/extensions/contracts";
+import type { FinanceTabSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps, ResourcesSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
 import { contribute } from "../lib/extensions/registry";
@@ -35,19 +35,6 @@ import { isOfficeFile } from "./documents-office/codecs/office-kind";
  *
  * Importing this file (done by `lib/extensions/slot.tsx`) is what registers them.
  */
-
-const HabitsInsights = dynamic<HabitsInsightsSlotProps>(
-  () => import("./habits-insights/insights").then((module) => module.HabitsInsights),
-  { ssr: false }
-);
-
-const HabitDetailInsights = dynamic<HabitDetailSlotProps>(
-  () => import("./habits-insights/detail").then((module) => module.HabitDetailInsights),
-  { ssr: false }
-);
-
-contribute("habits.insights", { pluginId: "habits-insights", component: HabitsInsights });
-contribute("habits.detail", { pluginId: "habits-insights", component: HabitDetailInsights });
 
 /**
  * Finance tabs. Each is a self-contained view; the host draws the tab strip from `meta`.

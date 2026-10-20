@@ -54,7 +54,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "create-module-"));
   put("apps/api/prisma/schema.prisma", SCHEMA);
   put("packages/shared-types/src/modules.ts", 'export const CORE_MODULE_IDS = [\n  "tasks",\n  "notes"\n] as const;\n');
-  put("packages/shared-types/src/plugins.ts", 'export const ORION_PLUGIN_IDS = [\n  "tasks-planning"\n] as const;\n');
+  put("packages/shared-types/src/plugins.ts", 'export const CORE_PLUGIN_IDS = [\n  "tasks-planning"\n] as const;\n');
   put("apps/web/plugins/tasks-planning/planning.ts", "export {};\n");
   put("apps/web/lib/panel-registry.ts", "export {};\n");
   put("apps/web/panels/TasksPanel.tsx", "export {};\n");

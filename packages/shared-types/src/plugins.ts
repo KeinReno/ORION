@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { orionModuleIdSchema, type OrionModuleId } from "./modules";
+import { GENERATED_PLUGIN_CATALOG, GENERATED_PLUGIN_IDS } from "./plugins-ext/registry.generated";
 
 /**
  * Plugins extend exactly one existing domain module — never the base shell
@@ -10,7 +11,8 @@ import { orionModuleIdSchema, type OrionModuleId } from "./modules";
  * (PLUGIN_CATALOG mirrors MODULE_CATALOG) — the only extra rule is
  * `extendsModuleId` and auto-disable when that module is off.
  */
-export const ORION_PLUGIN_IDS = [
+/** Плагины основной сборки; плагины из apps/web/plugins-ext дописывает генератор (`GENERATED_PLUGIN_IDS`). */
+export const CORE_PLUGIN_IDS = [
   "team",
   "opportunities-profiles",
   "opportunities-hh-import",
@@ -18,7 +20,6 @@ export const ORION_PLUGIN_IDS = [
   "opportunities-execution",
   "opportunities-manager",
   "home-utilities",
-  "habits-insights",
   "finance-budgeting",
   "finance-goals",
   "finance-recurring",
@@ -60,6 +61,8 @@ export const ORION_PLUGIN_IDS = [
   "finance-exchange-rates",
   "finance-ai-drafts"
 ] as const;
+
+export const ORION_PLUGIN_IDS = [...CORE_PLUGIN_IDS, ...GENERATED_PLUGIN_IDS] as const;
 
 export const orionPluginIdSchema = z.enum(ORION_PLUGIN_IDS);
 export type OrionPluginId = z.infer<typeof orionPluginIdSchema>;
@@ -121,8 +124,8 @@ export function pluginStates(
   }));
 }
 
-/** Compiled-in catalog — same posture as MODULE_CATALOG, now two plugins: the original optional `team` and the first extraction, `habits-insights`. */
-export const PLUGIN_CATALOG: readonly PluginManifest[] = [
+/** Compiled-in catalog — same posture as MODULE_CATALOG; plugins declared by a manifest in apps/web/plugins-ext are appended at the end. */
+const CORE_PLUGIN_CATALOG: readonly PluginManifest[] = [
   { id: "home-utilities", extendsModuleId: "home", label: "Коммуналка", summary: "Помесячные начисления по квартире и калькулятор электричества.", provides: ["Квартирная плата и счета", "Копирование прошлого месяца", "Тарифы электричества"], disableBehavior: "Вкладка и API недоступны; месяцы и тарифы сохраняются.", defaultEnabled: true },
   { id: "opportunities-profiles", extendsModuleId: "opportunities", label: "Профили кандидатов", summary: "Люди, команды, подтверждённые факты и версии материалов.", provides: ["Профили", "Факты и треки", "Версии резюме"], disableBehavior: "Профили и материалы сохраняются; их API и экран недоступны.", defaultEnabled: false },
   { id: "opportunities-hh-import", extendsModuleId: "opportunities", label: "Импорт архива HH", summary: "Предварительный просмотр вакансий, резюме и исторических откликов.", provides: ["Импорт текстовых файлов", "Происхождение и защита от дублей"], disableBehavior: "Применение импорта блокируется; импортированные карточки сохраняются.", defaultEnabled: false },
@@ -137,17 +140,6 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Assignee у задачи", "Фильтр «Мои задачи»", "Роль «Тимлид»"],
     disableBehavior: "Назначение скрывается из интерфейса и не проверяется API; уже расставленные исполнители сохраняются.",
     defaultEnabled: false
-  },
-  {
-    id: "habits-insights",
-    extendsModuleId: "habits",
-    label: "Аналитика привычек",
-    summary: "Неделя по каждой привычке и 12-недельная карта активности рядом с ежедневным списком.",
-    provides: ["Блок «Неделя»", "Блок «Активность» (12 недель)", "Отметка любого дня недели"],
-    disableBehavior:
-      "Блоки «Неделя» и «Активность» скрываются; отметки, серии и список «Сегодня» работают как прежде, данные не удаляются.",
-    // Extracted from the base panel without changing what anyone sees: on by default.
-    defaultEnabled: true
   },
   {
     id: "finance-budgeting",
@@ -527,3 +519,6 @@ export const PLUGIN_CATALOG: readonly PluginManifest[] = [
     defaultEnabled: true
   }
 ];
+
+/** Весь каталог: плагины основной сборки и подключённые манифестом (apps/web/plugins-ext, scripts/plugin-registry.mjs). */
+export const PLUGIN_CATALOG: readonly PluginManifest[] = [...CORE_PLUGIN_CATALOG, ...GENERATED_PLUGIN_CATALOG];

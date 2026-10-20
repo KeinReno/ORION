@@ -3,6 +3,7 @@ import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
 import { GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
+import { GENERATED_PLUGIN_SURFACES } from "./plugins-ext/registry.generated";
 import { isRegisteredPermission, permissionsOfModule } from "./permissions";
 import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
 
@@ -159,7 +160,7 @@ export function buildComponentManifests(): ComponentManifest[] {
     description: plugin.summary,
     requires: { platform: PLATFORM_RANGE, modules: [plugin.extendsModuleId], optionalModules: [] },
     permissions: [],
-    surfaces: [...(PLUGIN_SURFACES[plugin.id] ?? [])],
+    surfaces: [...(PLUGIN_SURFACES[plugin.id] ?? GENERATED_PLUGIN_SURFACES[plugin.id] ?? [])],
     // Слоты, в которые вносит вклад плагин, известны только веб-реестру (apps/web/plugins/index.ts);
     // их сверка с каталогом — в scripts/architecture-check.mjs.
     contributions: {},

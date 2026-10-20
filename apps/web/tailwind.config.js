@@ -7,6 +7,7 @@ module.exports = {
     "./modules-ext/**/*.{ts,tsx}",
     "./panels/**/*.{ts,tsx}",
     "./plugins/**/*.{ts,tsx}",
+    "./plugins-ext/**/*.{ts,tsx}",
     "../../packages/ui/src/**/*.{ts,tsx}",
     "../../packages/core-react/src/**/*.{ts,tsx}"
   ],

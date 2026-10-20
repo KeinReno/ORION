@@ -1,0 +1,18 @@
+{
+  "id": "habits-insights",
+  "version": "1.0.0",
+  "extends": "habits",
+  "catalog": {
+    "label": "Аналитика привычек",
+    "summary": "Неделя по каждой привычке и 12-недельная карта активности рядом с ежедневным списком.",
+    "provides": ["Блок «Неделя»", "Блок «Активность» (12 недель)", "Отметка любого дня недели"],
+    "disableBehavior": "Блоки «Неделя» и «Активность» скрываются; отметки, серии и список «Сегодня» работают как прежде, данные не удаляются.",
+    "defaultEnabled": true
+  },
+  "web": {
+    "contributions": [
+      { "slot": "habits.insights", "file": "insights", "export": "HabitsInsights" },
+      { "slot": "habits.detail", "file": "detail", "export": "HabitDetailInsights" }
+    ]
+  }
+}

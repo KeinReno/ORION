@@ -102,7 +102,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe("module-registry: без модулей", () => {
   it("пишет пустые, но валидные реестры и остаётся актуальным", () => {
-    expect(writeRegistry(root)).toHaveLength(6);
+    expect(writeRegistry(root)).toHaveLength(8);
     expect(registryViolations(root)).toEqual([]);
     expect(readFileSync(join(root, "apps/api/src/modules-ext/modules.generated.ts"), "utf8")).toContain("GENERATED_NEST_MODULES = [];");
     expect(readFileSync(join(root, "packages/shared-types/src/modules-ext/registry.generated.ts"), "utf8")).toContain("GENERATED_MODULE_IDS = [] as const");
@@ -125,7 +125,9 @@ describe("module-registry: модуль-фикстура", () => {
         "apps/api/src/modules-ext/data.generated.ts",
         "apps/api/src/modules-ext/modules.generated.ts",
         "apps/web/modules-ext/panels.generated.ts",
+        "apps/web/plugins-ext/contributions.generated.ts",
         "packages/shared-types/src/modules-ext/agent-tools.generated.ts",
+        "packages/shared-types/src/plugins-ext/registry.generated.ts",
         "packages/shared-types/src/modules-ext/registry.generated.ts",
         "scripts/module-ownership.generated.mjs"
       ].sort()

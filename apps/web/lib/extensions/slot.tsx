@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import "../../plugins";
+import "../../plugins-ext/contributions.generated";
 import { useEnabledPlugins } from "../use-enabled-plugins";
 import type { SlotContracts, SlotName } from "./contracts";
 import { extensionRegistry, type Contribution } from "./registry";

@@ -80,13 +80,44 @@ pnpm db:generate                                          # Prisma-клиент 
 
 E2E (`pnpm test:e2e:local`) для модуля не обязателен, но панель стоит открыть руками в `pnpm dev:web`.
 
+## Свой плагин интерфейса (манифест)
+
+Плагин, который только добавляет компоненты в существующие слоты хоста, подключается без правки файлов ядра:
+
+```
+apps/web/plugins-ext/<id>/plugin.manifest.json
+apps/web/plugins-ext/<id>/<Компонент>.tsx
+```
+
+```json
+{
+  "id": "habits-insights",
+  "version": "1.0.0",
+  "extends": "habits",
+  "catalog": { "label": "…", "summary": "…", "provides": ["…"], "disableBehavior": "…", "defaultEnabled": true },
+  "web": { "contributions": [{ "slot": "habits.insights", "file": "insights", "export": "HabitsInsights" }] },
+  "surfaces": []
+}
+```
+
+- `extends` — модуль ядра или модуль из `modules-ext`; плагин выключается вместе с ним.
+- `slot` — ключ `SlotContracts` (`apps/web/lib/extensions/contracts.ts`); компонент получает пропсы этого слота. Слотам из
+  `SlotMeta` (вкладки и т.п.) нужен `meta`, остальным он запрещён. `order` — место среди вкладов слота.
+- Код плагина обращается к хосту только через `lib/extensions/contracts` и `lib/extensions/host-api`, а также пакеты
+  `@orion/*`; цвета — токенами темы. Это проверяет `scripts/architecture-check.mjs`, как и для плагинов основной сборки.
+
+После добавления каталога — `pnpm module-registry`: генератор (`scripts/plugin-registry.mjs`) дописывает плагин в
+`GENERATED_PLUGIN_IDS`/каталог (`packages/shared-types/src/plugins-ext/registry.generated.ts`) и в вклады слотов
+(`apps/web/plugins-ext/contributions.generated.ts`). Плагин появляется в «Настройки → Плагины» и включается/выключается для
+пространства, как любой другой. `pnpm module-registry --check-diff <base>` подтверждает, что добавление плагина не тронуло
+файлов ядра. Образец — `apps/web/plugins-ext/habits-insights/`, e2e — `e2e/plugins-ext.spec.ts`.
+
 ## Чего в комплекте нет
 
-- **Генератора плагинов (`create:plugin`).** Регистрация плагина пока не управляется данными: нужно вручную править
-  `ORION_PLUGIN_IDS` и каталог плагинов в `packages/shared-types/src/plugins.ts`, `apps/web/plugins/index.ts`
-  (вызовы `contribute(...)`) и, если нужен новый слот, `SlotContracts` в `apps/web/lib/extensions/contracts.ts`; проверка
-  `pluginCatalogViolations` сверяет эти места между собой. Скаффолдер, правящий их, нарушил бы принцип «ядро не правится
-  при подключении». Нужна G5-подобная схема «манифест плагина обнаруживается каталогом» — отдельная задача.
+- **Генератора плагинов (`create:plugin`) и плагинов с серверной частью по манифесту.** Плагин интерфейса подключается
+  манифестом (раздел ниже), но скелет для него пока создаётся руками по образцу `habits-insights`. Плагин с серверной частью
+  (`@RequirePlugin`, свои таблицы) по-прежнему регистрируется вручную в `plugins.ts`, `apps/web/plugins/index.ts` и
+  `apps/api/src`. Новый слот — правка `SlotContracts` в ядре.
 - **Валидатора манифеста как отдельной команды.** Валидацию выполняет `scripts/module-registry.mjs` (в том числе
   `--check`); отдельного CLI нет.
 - **Эксперимента «агент по этой документации создаёт образец, CI зелёный».** Не проводился (решение владельца: не сейчас).
