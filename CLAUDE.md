@@ -452,6 +452,15 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   (`ai/agent-core.module.ts`: токены, страж, обёртка, присутствие), а не `AiModule` — тот импортирует tasks/notes/finance, и
   documents/finance дали бы цикл. Галочки — `MODULE_AGENT_PERMISSIONS` / `ModulePermissionsField`; чат получает
   разрешения включённых модулей. Новый инструмент = запись в каталоге + маршрут (тест «у каждого инструмента есть маршрут»).
+- Правка и удаление записей ЛЮБОГО модуля агентом — `AgentModuleToolsService.change` + `AgentModuleProposalsService`
+  (`ai/agent-module-proposals.service.ts`): контроллер модуля в `onModuleInit` регистрирует обработчик `{ noun, describe, apply }`;
+  менеджер меняет сразу, помощник подаёт запрос `module.update` с «было/станет», удаление — всегда запрос `module.delete` (при
+  `forbidden: delete` — отказ). Запросы — обычные `agent_proposals` (`patch = { tool, args }`), их подтверждают в настройках и
+  в чате. Через `POST /ai/v1/proposals` модульный запрос подать нельзя. Инструменты есть у проектов, целей, привычек, списков,
+  времени, контактов, документов, финансов (чтение), склада, здоровья, дома и дневника питомца.
+- Файлы в чате ассистента: `POST workspaces/:id/documents/assistant-inbox` кладёт их в «Документы → Ассистент — входящие»;
+  сообщение несёт `attachments` (documentId, отрывок текста, картинка ≤1568 px base64 — `lib/assistant-attachments.ts`), модель
+  получает их блоками `text`/`image`. Из этой папки `orion_documents_update` перекладывает файл без запроса (`allowDirect`).
 
 ### Сеть: обнаружение узлов (LAN)
 

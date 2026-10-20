@@ -35,7 +35,7 @@ test("a pet's diary: record a day, see it in the calendar and stats, import MurH
   // It survives a reload and is marked in the calendar.
   await page.reload();
   await expect(page.getByRole("button", { name: /Плохо · авто/, pressed: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /: Плохо$/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /: Плохо(,|$)/ })).toHaveCount(1);
 
   // Statistics count it.
   await page.getByRole("tab", { name: "Статистика" }).click();

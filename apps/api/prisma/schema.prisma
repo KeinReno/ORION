@@ -3358,6 +3358,8 @@ model PetCarePet {
   vetContact  String    @default("")
   chronic     String    @default("")
   allergies   String    @default("")
+  /// Обычный вес питомца, кг (профиль MurHP); вес по дням — в дневнике.
+  weightKg    Float?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

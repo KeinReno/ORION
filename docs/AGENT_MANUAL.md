@@ -158,9 +158,9 @@ _Без аргументов._
 
 | Аргумент | Обязателен | Что это |
 | --- | --- | --- |
-| `sourceType` | да |  (project · task · note · event) |
+| `sourceType` | да | document — файл из «Документов» (нужно разрешение на документы) (project · task · note · event · document) |
 | `sourceId` | да | id первого объекта |
-| `targetType` | да |  (project · task · note · event) |
+| `targetType` | да | document — файл из «Документов» (нужно разрешение на документы) (project · task · note · event · document) |
 | `targetId` | да | id второго объекта |
 | `kind` | нет | related_to — просто связаны (по умолчанию); supports — заметка — материал для задачи (related_to · supports) |
 

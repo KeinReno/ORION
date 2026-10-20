@@ -54,7 +54,8 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
   "pet-care": [
     "20261018120000_pet_care",
-    "20261019150000_pet_care_wellbeing"
+    "20261019150000_pet_care_wellbeing",
+    "20261020200000_pet_care_weight"
   ]
 };
 

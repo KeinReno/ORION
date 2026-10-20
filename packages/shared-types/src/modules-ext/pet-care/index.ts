@@ -48,6 +48,8 @@ export const petCarePetSchema = z.object({
   vetContact: z.string(),
   chronic: z.string(),
   allergies: z.string(),
+  /** Обычный вес, кг; null — не указан. */
+  weightKg: z.number().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -61,7 +63,8 @@ export const createPetCarePetInputSchema = z.object({
   breed: z.string().trim().max(120).default(""),
   vetContact: z.string().trim().max(500).default(""),
   chronic: z.string().max(1000).default(""),
-  allergies: z.string().max(1000).default("")
+  allergies: z.string().max(1000).default(""),
+  weightKg: z.number().min(0.01).max(200).nullable().optional()
 });
 export type CreatePetCarePetInput = z.infer<typeof createPetCarePetInputSchema>;
 
@@ -73,7 +76,8 @@ export const updatePetCarePetInputSchema = z.object({
   breed: z.string().trim().max(120).optional(),
   vetContact: z.string().trim().max(500).optional(),
   chronic: z.string().max(1000).optional(),
-  allergies: z.string().max(1000).optional()
+  allergies: z.string().max(1000).optional(),
+  weightKg: z.number().min(0.01).max(200).nullable().optional()
 });
 export type UpdatePetCarePetInput = z.infer<typeof updatePetCarePetInputSchema>;
 

@@ -5,14 +5,15 @@ import { Button, Modal, Switch, useToast } from "@orion/ui";
 import { FileUp } from "lucide-react";
 import { useRef, useState } from "react";
 import { describeError } from "../../lib/error-message";
-import { useImportMurhp } from "./use-pet-care";
+import { useImportMurhp, useReadMurhpDatabase } from "./use-pet-care";
 
 type Preview = { fileName: string; backup: ReturnType<typeof importMurhpInputSchema.parse>["backup"]; days: number; events: number; invalidRows: number };
 
-/** Перенос дневника из приложения MurHP: файл «Настройки → Экспорт копии (.json)». Повторный импорт ничего не дублирует. */
+/** Перенос дневника из приложения MurHP: копия «Настройки → Экспорт копии (.json)» или сама база `murhp.db`. Повторный импорт ничего не дублирует. */
 export function PetMurhpImport({ open, onClose, workspaceId, pet }: { open: boolean; onClose: () => void; workspaceId: string; pet: PetCarePet }): React.ReactElement {
   const { toast } = useToast();
   const importer = useImportMurhp(workspaceId, pet.id);
+  const reader = useReadMurhpDatabase(workspaceId, pet.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
@@ -29,8 +30,11 @@ export function PetMurhpImport({ open, onClose, workspaceId, pet }: { open: bool
   async function pick(file: File | undefined): Promise<void> {
     reset();
     if (!file) return;
+    // The desktop MurHP keeps its data in SQLite (murhp.db): the server reads it into the same JSON as «Экспорт копии».
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const isSqlite = new TextDecoder("latin1").decode(head).startsWith("SQLite format 3");
     try {
-      const json: unknown = JSON.parse(await file.text());
+      const json: unknown = isSqlite ? (await reader.mutateAsync(file)).backup : JSON.parse(await file.text());
       const parsed = importMurhpInputSchema.safeParse({ backup: json });
       if (!parsed.success) {
         setError(parsed.error.issues[0]?.message ?? "Это не резервная копия MurHP");
@@ -38,8 +42,12 @@ export function PetMurhpImport({ open, onClose, workspaceId, pet }: { open: bool
       }
       const rows = parseMurhpBackup(parsed.data.backup);
       setPreview({ fileName: file.name, backup: parsed.data.backup, days: rows.days.length, events: rows.events.length, invalidRows: rows.invalidRows });
-    } catch {
-      setError("Файл не читается как JSON. Нужна копия из MurHP: Настройки → Экспорт копии (.json).");
+    } catch (failure) {
+      setError(
+        isSqlite
+          ? `Не удалось прочитать базу MurHP: ${describeError(failure)}`
+          : "Файл не читается. Нужна копия из MurHP (Настройки → Экспорт копии, .json) или сама база murhp.db."
+      );
     }
   }
 
@@ -61,10 +69,13 @@ export function PetMurhpImport({ open, onClose, workspaceId, pet }: { open: bool
   return (
     <Modal open={open} onClose={close} title={`Импорт из MurHP → ${pet.name}`} description="Дни, события и пустые поля профиля питомца. Уже записанное в ORION по умолчанию не трогаем.">
       <div className="space-y-3 text-sm">
-        <input ref={fileRef} type="file" accept=".json,application/json" className="sr-only" onChange={(event) => void pick(event.target.files?.[0])} aria-label="Файл копии MurHP" />
+        <input ref={fileRef} type="file" accept=".json,application/json,.db,.sqlite,.sqlite3" className="sr-only" onChange={(event) => void pick(event.target.files?.[0])} aria-label="Файл копии MurHP" />
         <Button variant="outline" onClick={() => fileRef.current?.click()}>
-          <FileUp className="h-4 w-4" /> Выбрать файл копии (.json)
+          <FileUp className="h-4 w-4" /> {reader.isPending ? "Читаю базу…" : "Выбрать файл: копия .json или база murhp.db"}
         </Button>
+        <p className="text-2xs text-muted-foreground">
+          База десктопной версии MurHP лежит в %APPDATA%\com.murhp.diary\murhp.db — её можно выбрать напрямую, без экспорта.
+        </p>
         {error ? <p className="text-destructive">{error}</p> : null}
 
         {preview && !result ? (

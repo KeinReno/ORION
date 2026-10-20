@@ -671,3 +671,6 @@ export function mergePetDay(existing: PetCareDayLog | null, patch: AgentPetDayPa
     symptoms: [...symptoms.values()]
   };
 }
+
+/** `POST …/pets/:petId/murhp-db`: MurHP's database file read into the JSON of its «Экспорт копии» (checked later by `importMurhpInputSchema`). */
+export const murhpDatabaseReadSchema = z.object({ backup: z.unknown() });

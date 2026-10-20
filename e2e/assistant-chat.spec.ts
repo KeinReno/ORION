@@ -75,6 +75,18 @@ test("the assistant sees the open task, proposes a rename applied in the chat, a
   await expect(page.getByRole("region", { name: "Беседа", exact: true }).getByText("переименуй эту задачу", { exact: true })).toBeVisible();
   await page.screenshot({ path: "tmp/redesign/assistant-chat.png" });
 
+  // A file without a word: saved in the assistant's inbox folder, shown on the message, described to the model.
+  await page.getByRole("button", { name: "Новая беседа", exact: true }).click();
+  await page.getByLabel("Файлы для ассистента").setInputFiles({ name: "счёт-интернет.txt", mimeType: "text/plain", buffer: Buffer.from("Счёт за интернет, октябрь: 650 ₽") });
+  await expect(page.getByRole("list", { name: "Прикреплённые файлы", exact: true })).toContainText("счёт-интернет.txt");
+  await page.getByRole("button", { name: "Отправить", exact: true }).click();
+  const fileChat = page.getByRole("region", { name: "Беседа", exact: true });
+  await expect(fileChat.getByRole("button", { name: /счёт-интернет\.txt/ })).toBeVisible({ timeout: 20_000 });
+  expect(systems.length).toBeGreaterThan(0);
+  const documents = (await (await request.get(`${base}/documents`, { headers })).json()) as Array<{ id: string; name: string; parentId: string | null }>;
+  const inbox = documents.find((item) => item.name === "Ассистент — входящие" && item.parentId === null);
+  expect(documents.some((item) => item.name === "счёт-интернет.txt" && item.parentId === inbox?.id)).toBe(true);
+
   // Ctrl+K: a question goes to the chat composer of a new conversation.
   await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "Поиск и команды", exact: true });

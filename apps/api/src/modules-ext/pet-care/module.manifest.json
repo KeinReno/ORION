@@ -57,6 +57,10 @@
         "name": "20261019150000_pet_care_wellbeing",
         "file": "prisma/migration-wellbeing.sql",
         "rls": "workspace-member"
+      },
+      {
+        "name": "20261020200000_pet_care_weight",
+        "file": "prisma/migration-weight.sql"
       }
     ]
   },

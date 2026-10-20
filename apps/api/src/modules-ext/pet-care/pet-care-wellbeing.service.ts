@@ -161,7 +161,7 @@ export class PetCareWellbeingService {
 
   private async fillProfileTx(
     tx: Prisma.TransactionClient,
-    pet: { id: string; birthday: Date | null; breed: string; vetContact: string; chronic: string; allergies: string; notes: string },
+    pet: { id: string; birthday: Date | null; breed: string; vetContact: string; chronic: string; allergies: string; notes: string; weightKg: number | null },
     profile: ReturnType<typeof parseMurhpBackup>["profile"]
   ): Promise<string[]> {
     if (!profile) return [];
@@ -182,6 +182,10 @@ export class PetCareWellbeingService {
     fill("хронические болезни", pet.chronic, profile.chronic, "chronic");
     fill("аллергии", pet.allergies, profile.allergies, "allergies");
     fill("заметки", pet.notes, profile.notes, "notes");
+    if (pet.weightKg === null && profile.weightKg !== null) {
+      data.weightKg = profile.weightKg;
+      filled.push("вес");
+    }
     if (filled.length > 0) await tx.petCarePet.update({ where: { id: pet.id }, data });
     return filled;
   }

@@ -93,7 +93,13 @@ describe("Pet Care tools for AI agents (manifest-declared)", () => {
 
     const context = await agent("GET", "/context");
     expect(context.status).toBe(200);
-    expect(context.data.moduleTools.map((t: { name: string }) => t.name).sort()).toEqual(["orion_pet_care_add_entry", "orion_pet_care_list_pets"]);
+    expect(context.data.moduleTools.map((t: { name: string }) => t.name).sort()).toEqual([
+      "orion_pet_care_add_entry",
+      "orion_pet_care_add_event",
+      "orion_pet_care_diary",
+      "orion_pet_care_list_pets",
+      "orion_pet_care_record_day"
+    ]);
     expect(context.data.modules.map((m: { id: string }) => m.id)).toContain("pet-care");
 
     const pets = await agent("GET", "/pet-care/pets");
@@ -117,7 +123,7 @@ describe("Pet Care tools for AI agents (manifest-declared)", () => {
     const readOnly = await agentOf({ modulePermissions: [READ] });
     expect((await readOnly("GET", "/pet-care/pets")).status).toBe(200);
     expect((await readOnly("POST", `/pet-care/pets/${petId}/entries`, { kind: "walk" })).status).toBe(403);
-    expect((await readOnly("GET", "/context")).data.moduleTools.map((t: { name: string }) => t.name)).toEqual(["orion_pet_care_list_pets"]);
+    expect((await readOnly("GET", "/context")).data.moduleTools.map((t: { name: string }) => t.name).sort()).toEqual(["orion_pet_care_diary", "orion_pet_care_list_pets"]);
 
     const observer = await agentOf({ modulePermissions: [READ, CREATE], mode: "observer" });
     expect((await observer("GET", "/pet-care/pets")).status).toBe(200);

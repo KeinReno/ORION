@@ -47,7 +47,8 @@ export class PetCareService {
           breed: input.breed,
           vetContact: input.vetContact,
           chronic: input.chronic,
-          allergies: input.allergies
+          allergies: input.allergies,
+          weightKg: input.weightKg ?? null
         }
       });
     });
@@ -68,7 +69,8 @@ export class PetCareService {
           ...(input.breed !== undefined ? { breed: input.breed } : {}),
           ...(input.vetContact !== undefined ? { vetContact: input.vetContact } : {}),
           ...(input.chronic !== undefined ? { chronic: input.chronic } : {}),
-          ...(input.allergies !== undefined ? { allergies: input.allergies } : {})
+          ...(input.allergies !== undefined ? { allergies: input.allergies } : {}),
+          ...(input.weightKg !== undefined ? { weightKg: input.weightKg } : {})
         }
       });
     });
@@ -147,6 +149,7 @@ function toPetDto(row: {
   vetContact: string;
   chronic: string;
   allergies: string;
+  weightKg: number | null;
   createdAt: Date;
   updatedAt: Date;
 }): PetCarePet {
@@ -162,6 +165,7 @@ function toPetDto(row: {
     vetContact: row.vetContact,
     chronic: row.chronic,
     allergies: row.allergies,
+    weightKg: row.weightKg,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };

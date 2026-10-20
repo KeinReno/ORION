@@ -4,6 +4,7 @@ import { createModuleClient, workspaceModuleBase } from "@orion/core";
 import { useCore } from "@orion/core-react";
 import {
   importMurhpResultSchema,
+  murhpDatabaseReadSchema,
   petCareDayLogSchema,
   petCareEntrySchema,
   petCareEventSchema,
@@ -155,6 +156,18 @@ export function useDeletePetCareEvent(workspaceId: string | undefined, petId: st
   return useMutation({
     mutationFn: (eventId: string) => petCare(api, workspaceId as string).delete(`/pets/${petId}/events/${eventId}`, petCareNoContentSchema),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pet-care", workspaceId, "events", petId] })
+  });
+}
+
+/** MurHP's database file (`murhp.db`) → the same JSON as its «Экспорт копии»; reads only, the import is separate. */
+export function useReadMurhpDatabase(workspaceId: string | undefined, petId: string) {
+  const { api } = useCore();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      return petCare(api, workspaceId as string).post(`/pets/${petId}/murhp-db`, form, murhpDatabaseReadSchema);
+    }
   });
 }
 
