@@ -1,5 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, OnModuleInit, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import {
+  agentDeleteRequestSchema,
   agentHealthMeasurementsQuerySchema,
   agentHealthMedicationsQuerySchema,
   agentHealthOverviewQuerySchema,
@@ -8,6 +9,7 @@ import {
   createHealthMeasurementInputSchema,
   createHealthSymptomInputSchema,
   putHealthIntakeInputSchema,
+  type AgentDeleteRequest,
   type CreateHealthAppointmentInput,
   type CreateHealthMeasurementInput,
   type CreateHealthSymptomInput,
@@ -21,7 +23,8 @@ import {
   type HealthToday,
   type PutHealthIntakeInput
 } from "@orion/shared-types";
-import { AgentModuleToolsService } from "../ai/agent-module-tools.service";
+import type { Response } from "express";
+import { AgentModuleToolsService, type ModuleChangeResult } from "../ai/agent-module-tools.service";
 import { AgentTokenGuard, type AgentRequest } from "../ai/agent-token.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { HealthMeasurementsService } from "./health-measurements.service";
@@ -30,6 +33,9 @@ import { HealthSummaryService } from "./health-summary.service";
 import { HealthSymptomsService } from "./health-symptoms.service";
 import { HealthService } from "./health.service";
 
+/** A nested record is addressed as `<parentId>:<id>` (or more parts) in requests: the service needs every id. */
+const splitKey = (key: string): string[] => key.split(":");
+
 /**
  * Инструменты ИИ-агента для модуля «Здоровье» (G13). Всё — от имени человека-владельца токена и его же правами: чужие
  * приватные записи (ADR-0021) агенту не видны так же, как ему самому. Агент записывает наблюдения, визиты и отметки о
@@ -37,7 +43,7 @@ import { HealthService } from "./health.service";
  */
 @UseGuards(AgentTokenGuard)
 @Controller("ai/v1/health")
-export class HealthAgentController {
+export class HealthAgentController implements OnModuleInit {
   constructor(
     private readonly health: HealthService,
     private readonly summaries: HealthSummaryService,
@@ -46,6 +52,64 @@ export class HealthAgentController {
     private readonly medications: HealthMedicationsService,
     private readonly tools: AgentModuleToolsService
   ) {}
+
+  /** Each record is looked up with the human's own read rights — another person's private record stays invisible. */
+  onModuleInit(): void {
+    this.tools.register("orion_health_delete_measurement", {
+      noun: "измерение",
+      describe: async (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        const item = (await this.measurements.list(userId, workspaceId, subjectId, {}).catch(() => [])).find((entry) => entry.id === id);
+        return item
+          ? {
+              title: `${item.kind}: ${item.value}${item.value2 !== null ? `/${item.value2}` : ""} (${item.measuredAt.slice(0, 10)})`,
+              fields: { kind: item.kind, value: item.value, value2: item.value2, measuredAt: item.measuredAt, note: item.note },
+              labels: { kind: "Показатель", value: "Значение", value2: "Второе значение", measuredAt: "Когда", note: "Заметка" }
+            }
+          : null;
+      },
+      apply: (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        return this.measurements.remove(userId, workspaceId, subjectId, id);
+      }
+    });
+    this.tools.register("orion_health_delete_symptom", {
+      noun: "симптом",
+      describe: async (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        const item = (await this.symptoms.list(userId, workspaceId, subjectId).catch(() => [])).find((entry) => entry.id === id);
+        return item
+          ? {
+              title: `${item.name} (${item.startedAt.slice(0, 10)})`,
+              fields: { name: item.name, severity: item.severity, startedAt: item.startedAt, endedAt: item.endedAt },
+              labels: { name: "Симптом", severity: "Сила", startedAt: "Начало", endedAt: "Конец" }
+            }
+          : null;
+      },
+      apply: (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        return this.symptoms.remove(userId, workspaceId, subjectId, id);
+      }
+    });
+    this.tools.register("orion_health_delete_appointment", {
+      noun: "визит",
+      describe: async (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        const item = (await this.health.listAppointments(userId, workspaceId, subjectId).catch(() => [])).find((entry) => entry.id === id);
+        return item
+          ? {
+              title: `${item.title} (${item.at.slice(0, 10)})`,
+              fields: { title: item.title, at: item.at, clinic: item.clinic, purpose: item.purpose },
+              labels: { title: "Визит", at: "Когда", clinic: "Клиника", purpose: "Цель" }
+            }
+          : null;
+      },
+      apply: (userId, workspaceId, key) => {
+        const [subjectId, id] = splitKey(key);
+        return this.health.removeAppointment(userId, workspaceId, subjectId, id);
+      }
+    });
+  }
 
   @Get()
   overview(
@@ -163,5 +227,38 @@ export class HealthAgentController {
       },
       () => ({ resource: `health:${medicationId}`, summary: `Отметил приём: ${body.status === "taken" ? "принято" : "пропущено"} (${body.day} ${body.time})` })
     );
+  }
+
+  @Delete(":subjectId/measurements/:measurementId")
+  deleteMeasurement(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("subjectId") subjectId: string,
+    @Param("measurementId") measurementId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_health_delete_measurement", `${subjectId}:${measurementId}`, {}, { reason: body.reason });
+  }
+
+  @Delete(":subjectId/symptoms/:symptomId")
+  deleteSymptom(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("subjectId") subjectId: string,
+    @Param("symptomId") symptomId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_health_delete_symptom", `${subjectId}:${symptomId}`, {}, { reason: body.reason });
+  }
+
+  @Delete(":subjectId/appointments/:appointmentId")
+  deleteAppointment(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("subjectId") subjectId: string,
+    @Param("appointmentId") appointmentId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_health_delete_appointment", `${subjectId}:${appointmentId}`, {}, { reason: body.reason });
   }
 }

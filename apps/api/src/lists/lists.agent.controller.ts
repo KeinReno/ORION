@@ -50,6 +50,14 @@ export class ListsAgentController implements OnModuleInit {
         labels: { label: "Текст", checked: "Отмечен", quantity: "Количество", unit: "Единица", note: "Заметка" }
       };
     };
+    this.tools.register("orion_lists_archive", {
+      noun: "список",
+      describe: async (userId, workspaceId, listId) => {
+        const list = await this.lists.get(userId, workspaceId, listId).catch(() => null);
+        return list ? { title: list.name, fields: { name: list.name, items: list.items.length }, labels: { name: "Название", items: "Пунктов" } } : null;
+      },
+      apply: (userId, workspaceId, listId) => this.lists.archive(userId, workspaceId, listId)
+    });
     this.tools.register("orion_lists_update_item", {
       noun: "пункт списка",
       describe,
@@ -127,5 +135,16 @@ export class ListsAgentController implements OnModuleInit {
     @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
   ): Promise<ModuleChangeResult> {
     return this.tools.change(req, res, "orion_lists_delete_item", itemKey(listId, itemId), {}, { reason: body.reason });
+  }
+
+  /** Archive, as the panel does: a list is erased for good only from the archive, by a human. */
+  @Delete(":listId")
+  archive(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("listId") listId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_lists_archive", listId, {}, { reason: body.reason });
   }
 }

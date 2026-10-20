@@ -1,10 +1,12 @@
-import { Body, Controller, Get, NotFoundException, OnModuleInit, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, NotFoundException, OnModuleInit, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import {
   AGENT_DOCUMENT_TEXT_MAX,
   ASSISTANT_INBOX_FOLDER,
+  agentDeleteRequestSchema,
   agentSearchQuerySchema,
   createFolderInputSchema,
   updateDocumentInputSchema,
+  type AgentDeleteRequest,
   type AgentDocumentText,
   type AgentSearchQuery,
   type CreateFolderInput,
@@ -31,21 +33,23 @@ export class DocumentsAgentController implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    const describe = async (userId: string, workspaceId: string, documentId: string) => {
+      const items = await this.documents.list(userId, workspaceId);
+      const item = items.find((doc) => doc.id === documentId);
+      if (!item) return null;
+      const folder = (id: string | null): string | null => (id ? (items.find((doc) => doc.id === id)?.name ?? id) : null);
+      return {
+        title: item.name,
+        fields: { name: item.name, parentId: folder(item.parentId), projectId: item.projectId },
+        labels: { name: "Название", parentId: "Папка", projectId: "Проект" }
+      };
+    };
     this.tools.register("orion_documents_update", {
       noun: "документ",
-      describe: async (userId, workspaceId, documentId) => {
-        const items = await this.documents.list(userId, workspaceId);
-        const item = items.find((doc) => doc.id === documentId);
-        if (!item) return null;
-        const folder = (id: string | null): string | null => (id ? (items.find((doc) => doc.id === id)?.name ?? id) : null);
-        return {
-          title: item.name,
-          fields: { name: item.name, parentId: folder(item.parentId), projectId: item.projectId },
-          labels: { name: "Название", parentId: "Папка", projectId: "Проект" }
-        };
-      },
+      describe,
       apply: (userId, workspaceId, documentId, args) => this.documents.update(userId, workspaceId, documentId, documentChangeSchema.parse(args))
     });
+    this.tools.register("orion_documents_delete", { noun: "документ", describe, apply: (userId, workspaceId, documentId) => this.documents.remove(userId, workspaceId, documentId) });
   }
 
   /** The list without the extracted text (it can be megabytes): the agent reads one document with `…/text`. */
@@ -98,5 +102,16 @@ export class DocumentsAgentController implements OnModuleInit {
     const item = items.find((doc) => doc.id === documentId);
     const inbox = items.find((doc) => doc.kind === "folder" && doc.parentId === null && doc.name === ASSISTANT_INBOX_FOLDER);
     return this.tools.change(req, res, "orion_documents_update", documentId, body, { allowDirect: Boolean(item && inbox && item.parentId === inbox.id) });
+  }
+
+  /** To the trash, as the panel does (restorable for 30 days); a folder goes with its contents. */
+  @Delete(":documentId")
+  remove(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("documentId") documentId: string,
+    @Body(new ZodValidationPipe(agentDeleteRequestSchema)) body: AgentDeleteRequest
+  ): Promise<ModuleChangeResult> {
+    return this.tools.change(req, res, "orion_documents_delete", documentId, {}, { reason: body.reason });
   }
 }

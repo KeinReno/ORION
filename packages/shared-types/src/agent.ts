@@ -295,7 +295,7 @@ export const updateAgentJobInputSchema = z.object({
 });
 export type UpdateAgentJobInput = z.infer<typeof updateAgentJobInputSchema>;
 
-export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete", "task.update", "note.update", "event.update"] as const;
+export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete", "event.delete", "task.update", "note.update", "event.update"] as const;
 export const agentProposalActionSchema = z.enum(AGENT_PROPOSAL_ACTIONS);
 export type AgentProposalAction = z.infer<typeof agentProposalActionSchema>;
 
@@ -310,6 +310,7 @@ export type AgentProposalRecordAction = z.infer<typeof agentProposalRecordAction
 export const AGENT_PROPOSAL_ACTION_LABEL: Record<AgentProposalRecordAction, string> = {
   "task.delete": "Удалить задачу",
   "note.delete": "Удалить заметку",
+  "event.delete": "Удалить событие",
   "task.update": "Изменить задачу",
   "note.update": "Изменить заметку",
   "event.update": "Изменить событие",

@@ -103,11 +103,6 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
 }
 
 /**
- * Инструмент подключаемого модуля (G13): разрешение из реестра (`pet-care.pet.create`) должно быть выдано токену.
- * Только чтение и создание: «изменение через запрос на подтверждение» для модулей ещё не сделано, поэтому его здесь нет.
- * Порядок тот же, что у `decideAgentOperation`: запреты → выданное право → режим; ни один шаг ничего не добавляет.
- */
-/**
  * A module tool (G13): reading needs only the permission; adding is refused to an observer; changing an existing record
  * is done at once only by a manager, an assistant files a request for the human; deleting is ALWAYS a request, and
  * refused outright when the token forbids deletion.
