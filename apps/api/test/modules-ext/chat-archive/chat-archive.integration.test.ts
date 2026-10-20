@@ -208,9 +208,9 @@ describe("Архив чатов", () => {
     };
     const writer = await issue(["chat-archive.conversation.read", "chat-archive.conversation.create"]);
     const reader = await issue(["chat-archive.conversation.read"]);
-    const state = (secret: string) => request(`/ai/v1/chat-archive/import-state?source=codex&externalId=c-1`, { method: "GET", token: secret });
+    const state = (secret: string) => request(`/ai/v1/chat-archive/hook/state?source=codex&externalId=c-1`, { method: "GET", token: secret });
     const pushFile = (secret: string, fromSeq: number, lines: string[]) =>
-      request(`/ai/v1/chat-archive/import-file?source=codex&externalId=c-1&fromSeq=${fromSeq}`, { method: "POST", token: secret, form: linesForm(lines) });
+      request(`/ai/v1/chat-archive/hook/lines?source=codex&externalId=c-1&fromSeq=${fromSeq}`, { method: "POST", token: secret, form: linesForm(lines) });
     const codex = [
       JSON.stringify({ type: "session_meta", timestamp: at(0), payload: { id: "c-1", cwd: "C:\\codex" } }),
       JSON.stringify({ type: "response_item", timestamp: at(1), payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Найди сделку" }], internal_chat_message_metadata_passthrough: { content_item_kinds: ["user.text"] } } })

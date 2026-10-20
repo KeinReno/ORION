@@ -18,7 +18,7 @@
 Пачка — строки файла с номера `fromSeq` (multipart, поле `lines`, каждая строка с `"\n"`; до 2000 строк и 8 МБ — укладывается
 в 5-секундную транзакцию Prisma). Сервер под `FOR UPDATE` строки разговора сверяет перекрытие по sha256 и дописывает только
 новое; `fromSeq` дальше конца — 409 `chat_archive_gap`, изменённая строка — 409 `chat_archive_diverged` (оба с `lineCount`).
-Импортёр сначала спрашивает `import-state` (`lineCount`, `lastSha`), сверяет хеш той же строки своего файла и шлёт хвост.
+Импортёр сначала спрашивает состояние (`import-state`; у хука — `hook/state`) (`lineCount`, `lastSha`), сверяет хеш той же строки своего файла и шлёт хвост.
 Оборванная последняя строка (агент ещё пишет) не отправляется. Заголовок: `fallback` (первая реплика) < `auto` (ai-title
 Claude Code) < `custom` (заданный в источнике) < `manual` (переименование в ORION — импорт его не трогает).
 
@@ -27,7 +27,7 @@ Claude Code) < `custom` (заданный в источнике) < `manual` (п�
 | Кто | Маршрут | Лимит записей / журнал агента |
 |---|---|---|
 | Панель «Импорт файла» | `POST workspaces/:id/chat-archive/import` (JWT) | — |
-| Хук `scripts/chat-archive-push.mjs` | `POST ai/v1/chat-archive/import-file` (токен агента) | нет: хук срабатывает после каждого ответа |
+| Хук `chat-archive-push.mjs` (в папке модуля) | `GET ai/v1/chat-archive/hook/state`, `POST …/hook/lines` (токен агента, `ChatArchiveHookController` — не инструмент MCP) | нет: хук срабатывает после каждого ответа |
 | Инструмент `orion_chat_archive_import` | `POST ai/v1/chat-archive/import` (JSON, до 2 МБ) | да, как любая запись агента |
 
 Хуку и инструменту нужно разрешение `chat-archive.conversation.create` (галочка инструмента импорта в подключении).
@@ -35,9 +35,9 @@ Claude Code) < `custom` (заданный в источнике) < `manual` (п�
 
 ## Хук Claude Code
 
-`~/.claude/settings.json` → `hooks.Stop` и `hooks.SessionEnd`: `node <ORION>/scripts/chat-archive-push.mjs --hook`. Скрипт берёт
+`~/.claude/settings.json` → `hooks.Stop` и `hooks.SessionEnd`: `node <ORION>/apps/api/src/modules-ext/chat-archive/chat-archive-push.mjs --hook`. Скрипт берёт
 `transcript_path` из события, токен — из `mcpServers.orion` в `~/.claude.json` (или `ORION_AGENT_TOKEN`), никогда не падает с
-ошибкой (сбои — в `~/.orion/chat-archive-push.log`). Вся прошлая история: `node scripts/chat-archive-push.mjs --all [--since 30]`.
+ошибкой (сбои — в `~/.orion/chat-archive-push.log`). Вся прошлая история: `node apps/api/src/modules-ext/chat-archive/chat-archive-push.mjs --all [--since 30]`.
 
 ## Ограничения (известные, осознанные)
 

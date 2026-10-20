@@ -5,12 +5,13 @@ import { ModulesModule } from "../../modules/modules.module";
 import { WorkspacesModule } from "../../workspaces/workspaces.module";
 import { ChatArchiveAgentController } from "./chat-archive.agent.controller";
 import { ChatArchiveController } from "./chat-archive.controller";
+import { ChatArchiveHookController } from "./chat-archive.hook.controller";
 import { ChatArchiveService } from "./chat-archive.service";
 
 /** Архив чатов — модуль, подключённый манифестом (см. MODULE.md). Структура — как у pet-care/. */
 @Module({
   imports: [AuthModule, WorkspacesModule, ModulesModule, AgentCoreModule],
-  controllers: [ChatArchiveController, ChatArchiveAgentController],
+  controllers: [ChatArchiveController, ChatArchiveAgentController, ChatArchiveHookController],
   providers: [ChatArchiveService]
 })
 export class ChatArchiveModule {}

@@ -2,15 +2,15 @@
 /**
  * Отправляет транскрипты разговоров с ИИ-агентами в «Архив чатов» ORION — построчно и без изменений.
  *
- *   node scripts/chat-archive-push.mjs --hook                 хук Claude Code (Stop / SessionEnd): JSON события в stdin
- *   node scripts/chat-archive-push.mjs <файл.jsonl> [...]     один или несколько файлов
- *   node scripts/chat-archive-push.mjs --all [--source claude-code|codex] [--since 30]   вся история (за N дней)
+ *   node apps/api/src/modules-ext/chat-archive/chat-archive-push.mjs --hook                 хук Claude Code (Stop / SessionEnd): JSON события в stdin
+ *   node apps/api/src/modules-ext/chat-archive/chat-archive-push.mjs <файл.jsonl> [...]     один или несколько файлов
+ *   node apps/api/src/modules-ext/chat-archive/chat-archive-push.mjs --all [--source claude-code|codex] [--since 30]   вся история (за N дней)
  *
  * Куда и с каким токеном: ORION_API_URL + ORION_AGENT_TOKEN из окружения, иначе — запись `mcpServers.orion` из
  * `~/.claude.json` (её пишет «Подключить в один клик»), затем из `~/.cursor/mcp.json`. Токену нужна галочка
  * «Архив чатов → сохранять» (`chat-archive.conversation.create`).
  *
- * Дописывание без дублей: сервер говорит, сколько строк разговора уже есть (`import-state`), скрипт сверяет хеш последней
+ * Дописывание без дублей: сервер говорит, сколько строк разговора уже есть (`hook/state`), скрипт сверяет хеш последней
  * из них с той же строкой файла и шлёт только хвост. Оборванная последняя строка файла (агент ещё пишет) не отправляется —
  * уйдёт в следующий раз. В режиме --hook скрипт никогда не падает с ошибкой: Claude Code не должен страдать из-за архива,
  * сбои пишутся в `~/.orion/chat-archive-push.log`.
@@ -141,8 +141,8 @@ export async function pushFile(connection, file, { sourceFilter } = {}) {
   let appended = 0;
   let title = null;
   for (let round = 0; round < 3; round += 1) {
-    const state = await api(connection, "GET", `/import-state?${query}`);
-    if (state.status !== 200) throw new PushError(`import-state ${state.status}: ${state.data?.message ?? ""}`);
+    const state = await api(connection, "GET", `/hook/state?${query}`);
+    if (state.status !== 200) throw new PushError(`hook/state ${state.status}: ${state.data?.message ?? ""}`);
     const { lineCount, lastSha } = state.data;
     if (lineCount > lines.length) throw new PushError(`в архиве ${lineCount} строк, в файле ${lines.length}: файл укоротился`);
     if (lineCount > 0 && sha256(lines[lineCount - 1]) !== lastSha) throw new PushError(`строка ${lineCount - 1} файла не совпадает с архивом: файл изменился не дописыванием`);
@@ -153,7 +153,7 @@ export async function pushFile(connection, file, { sourceFilter } = {}) {
       if (batch.bytes > 8 * 1024 * 1024) throw new PushError(`строка ${batch.from} больше 8 МБ — не отправить`);
       const form = new FormData();
       form.append("lines", new Blob([lines.slice(batch.from, batch.to).map((line) => `${line}\n`).join("")], { type: "application/x-ndjson" }), "lines.jsonl");
-      const result = await api(connection, "POST", `/import-file?${query}&fromSeq=${batch.from}`, form);
+      const result = await api(connection, "POST", `/hook/lines?${query}&fromSeq=${batch.from}`, form);
       if (result.status === 201) {
         appended += result.data.appended;
         title = result.data.conversation.title;
@@ -164,7 +164,7 @@ export async function pushFile(connection, file, { sourceFilter } = {}) {
         retry = true;
         break;
       }
-      throw new PushError(`import-file ${result.status}: ${result.data?.message ?? ""}`);
+      throw new PushError(`hook/lines ${result.status}: ${result.data?.message ?? ""}`);
     }
     if (!retry) return { appended, title };
   }

@@ -36,7 +36,7 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
     "provides": [
       "Панель «Архив чатов»: список разговоров, чтение, поиск, выгрузка оригинала",
       "Импорт транскрипта Claude Code или Codex файлом",
-      "Автосохранение разговоров Claude Code хуком (scripts/chat-archive-push.mjs)",
+      "Автосохранение разговоров Claude Code хуком (chat-archive-push.mjs)",
       "Поиск и чтение прошлых разговоров для ИИ-агентов"
     ],
     "optionalDependencies": [],

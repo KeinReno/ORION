@@ -158,7 +158,7 @@ export function ChatArchivePanel(): React.ReactElement {
               <EmptyState
                 icon={MessagesSquare}
                 title="Архив пуст"
-                description="Импортируйте файл транскрипта (.jsonl из ~/.claude/projects или ~/.codex/sessions) или включите автосохранение: scripts/chat-archive-push.mjs."
+                description="Импортируйте файл транскрипта (.jsonl из ~/.claude/projects или ~/.codex/sessions) или включите автосохранение хуком Claude Code (chat-archive-push.mjs, см. MODULE.md модуля)."
               />
             ) : (
               <ul className="space-y-2">
