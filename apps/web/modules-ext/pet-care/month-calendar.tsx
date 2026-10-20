@@ -62,7 +62,7 @@ export function PetMonthCalendar({
               type="button"
               onClick={() => onPick(cell.day)}
               aria-pressed={cell.day === selected}
-              aria-label={`${formatPetDay(cell.day)}${mark ? `: ${PET_DAY_STATUS_META[mark.status].label}` : ""}`}
+              aria-label={`${formatPetDay(cell.day)}${mark ? `: ${PET_DAY_STATUS_META[mark.status].label}` : ""}${mark?.symptomCount ? `, симптомов: ${mark.symptomCount}` : ""}${mark?.hasNote ? ", есть заметка" : ""}`}
               className={cx(
                 "relative flex aspect-square flex-col items-center justify-center rounded-md border text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/60",
                 cell.inMonth ? "text-foreground" : "text-muted-foreground/50",
@@ -74,6 +74,8 @@ export function PetMonthCalendar({
               <span className={cx("tabular-nums", cell.day === today && "font-bold underline underline-offset-2")}>{cell.dayOfMonth}</span>
               <span className="absolute bottom-1 flex gap-0.5" aria-hidden>
                 {color ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} /> : null}
+                {mark?.symptomCount ? <span className="font-mono text-[9px] font-bold leading-none text-muted-foreground">{mark.symptomCount}</span> : null}
+                {mark?.hasNote ? <span className="h-1 w-1 rounded-full bg-muted-foreground/70" /> : null}
                 {eventDays.has(cell.day) ? <span className="h-1.5 w-1.5 rotate-45 bg-muted-foreground" /> : null}
               </span>
             </button>

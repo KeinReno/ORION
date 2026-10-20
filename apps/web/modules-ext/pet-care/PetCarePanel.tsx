@@ -27,6 +27,12 @@ const TABS: Array<{ value: Tab; label: string }> = [
   { value: "profile", label: "Профиль" }
 ];
 
+/** «4,2» / «4.2» → 4.2; empty or out of range → null (not set). */
+function parseWeight(raw: string): number | null {
+  const value = Number(raw.trim().replace(",", "."));
+  return raw.trim() !== "" && Number.isFinite(value) && value >= 0.01 && value <= 200 ? value : null;
+}
+
 const toInput = (values: PetFormValues) => ({
   name: values.name,
   species: values.species,
@@ -35,6 +41,7 @@ const toInput = (values: PetFormValues) => ({
   vetContact: values.vetContact,
   chronic: values.chronic,
   allergies: values.allergies,
+  weightKg: parseWeight(values.weight),
   notes: values.notes
 });
 

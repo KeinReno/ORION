@@ -107,11 +107,18 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
  * Только чтение и создание: «изменение через запрос на подтверждение» для модулей ещё не сделано, поэтому его здесь нет.
  * Порядок тот же, что у `decideAgentOperation`: запреты → выданное право → режим; ни один шаг ничего не добавляет.
  */
-export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create"): AgentDecision {
+/**
+ * A module tool (G13): reading needs only the permission; adding is refused to an observer; changing an existing record
+ * is done at once only by a manager, an assistant files a request for the human; deleting is ALWAYS a request, and
+ * refused outright when the token forbids deletion.
+ */
+export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create" | "update" | "delete"): AgentDecision {
   if (!subject.modulePermissions?.includes(permission)) return deny(`У токена нет разрешения «${permission}»`);
   if (op === "read") return { kind: "allow" };
   if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
-  return { kind: "allow" };
+  if (op === "create") return { kind: "allow" };
+  if (op === "delete") return subject.forbidden?.includes("delete") ? deny("Этому агенту удаление запрещено") : { kind: "propose" };
+  return subject.mode === "manager" ? { kind: "allow" } : { kind: "propose" };
 }
 
 /** Предельный срок токена агента на сервере, доступном извне (ADR-0017). */

@@ -273,7 +273,7 @@ describe("Pet Care module connected by manifest", () => {
 
     const first = await call("POST", `/pets/${petId}/import-murhp`, { backup });
     expect(first.status).toBe(201);
-    expect(first.data).toEqual({ daysCreated: 2, daysUpdated: 0, daysSkipped: 0, eventsCreated: 1, eventsSkipped: 0, invalidRows: 3, profileFilled: ["день рождения", "контакт ветеринара", "аллергии"] });
+    expect(first.data).toEqual({ daysCreated: 2, daysUpdated: 0, daysSkipped: 0, eventsCreated: 1, eventsSkipped: 0, invalidRows: 3, profileFilled: ["день рождения", "контакт ветеринара", "аллергии", "вес"] });
 
     const days = (await call("GET", `/pets/${petId}/days?from=2026-10-01&to=2026-10-02`)).data;
     expect(days[0]).toMatchObject({ day: "2026-10-01", status: "bad", statusAuto: false, activity: "", stool: "liquid", temperature: 38.6, meds: "церукал" });

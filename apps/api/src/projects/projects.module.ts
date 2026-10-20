@@ -1,3 +1,5 @@
+import { AgentCoreModule } from "../ai/agent-core.module";
+import { ProjectsAgentController } from "./projects.agent.controller";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { CapturesModule } from "../captures/captures.module";
@@ -14,8 +16,8 @@ import { SearchRegistryModule } from "../search/search-registry.module";
 import { ProjectsSearchProvider } from "./projects-search.provider";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, CapturesModule, SearchRegistryModule],
-  controllers: [ProjectsController, ProjectUpdatesController, ProjectIdeasController, ProjectProblemsController],
+  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, CapturesModule, SearchRegistryModule, AgentCoreModule],
+  controllers: [ProjectsAgentController, ProjectsController, ProjectUpdatesController, ProjectIdeasController, ProjectProblemsController],
   providers: [ProjectsService, ProjectUpdatesService, ProjectCapturesService, ProjectsSearchProvider],
   exports: [ProjectsService]
 })

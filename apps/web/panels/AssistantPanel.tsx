@@ -7,17 +7,20 @@ import {
   useAssistantKey,
   useDecideAgentProposal,
   useDeleteAssistantConversation,
-  useSendToAssistant
+  useSendToAssistant,
+  useUploadToAssistant
 } from "@orion/core-react";
-import { AGENT_PROPOSAL_ACTION_LABEL, type AssistantStoredMessage } from "@orion/shared-types";
+import { AGENT_PROPOSAL_ACTION_LABEL, type AssistantAttachmentInput, type AssistantStoredMessage } from "@orion/shared-types";
 import { Button, CallChip, Card, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
-import { Bot, KeyRound, MessageSquarePlus, Send, Trash2, TriangleAlert } from "lucide-react";
+import { Bot, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Send, Trash2, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
+import { attachmentFor, fitImages, imageForModel } from "../lib/assistant-attachments";
 import { currentAssistantView, describeAssistantView } from "../lib/assistant-context";
 import { describeAuthError } from "../lib/error-message";
 import { relativeTime } from "../lib/format";
-import { openInBrowser, openSettings, useAssistantRequest } from "../lib/panel-bus";
+import { openEntity, openInBrowser, openSettings, useAssistantRequest } from "../lib/panel-bus";
+import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { AssistantKeyForm } from "./assistant-key";
 import { DiffTable } from "./settings/agents-proposals";
@@ -61,6 +64,13 @@ export function AssistantPanel(): React.ReactElement {
   const remove = useDeleteAssistantConversation(workspaceId);
   const [pending, setPending] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  /** Files attached to the next message: already saved in «Ассистент — входящие» (uploaded when picked). */
+  const [attached, setAttached] = useState<AssistantAttachmentInput[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const upload = useUploadToAssistant(workspaceId);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const documentsOn = useEnabledModules().isEnabled("documents");
   const [useScreen, setUseScreen] = useState(true);
   const [view, setView] = useState(currentAssistantView);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -91,18 +101,35 @@ export function AssistantPanel(): React.ReactElement {
     rememberConversation(workspaceId, id);
   }
 
+  /** Picked, dropped or pasted files: saved right away (so a send never waits on an upload), pictures downsized for the model. */
+  async function attach(files: File[]): Promise<void> {
+    if (files.length === 0 || !workspaceId || !documentsOn) return;
+    setUploading((count) => count + files.length);
+    try {
+      const [documents, images] = await Promise.all([upload.mutateAsync(files), Promise.all(files.map((file) => imageForModel(file)))]);
+      setAttached((current) => [...current, ...documents.map((document, index) => attachmentFor(document, images[index] ?? null))]);
+    } catch (error) {
+      toast({ title: "Не удалось прикрепить файл", description: describeAuthError(error), tone: "danger" });
+    } finally {
+      setUploading((count) => count - files.length);
+    }
+  }
+
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || send.isPending || !workspaceId) return;
+    if ((!text && attached.length === 0) || send.isPending || uploading > 0 || !workspaceId) return;
     const screen = useScreen ? currentAssistantView() : null;
-    setPending(text);
+    const files = attached;
+    setPending(text || files.map((item) => item.name).join(", "));
     setDraft("");
+    setAttached([]);
     try {
-      const result = await send.mutateAsync({ conversationId: openId, message: text, context: screen });
+      const result = await send.mutateAsync({ conversationId: openId, message: text, context: screen, attachments: fitImages(files) });
       choose(result.conversationId);
     } catch (error) {
       setDraft(text);
+      setAttached(files);
       toast({ title: "Ассистент не ответил", description: describeAuthError(error), tone: "danger" });
     } finally {
       setPending(null);
@@ -187,7 +214,22 @@ export function AssistantPanel(): React.ReactElement {
             </ul>
           </aside>
 
-          <section className="flex min-w-0 flex-col gap-3" aria-label="Беседа">
+          <section
+            className={cx("flex min-w-0 flex-col gap-3 rounded-xl", dragOver && "outline outline-2 outline-dashed outline-accent/60")}
+            aria-label="Беседа"
+            onDragOver={(event) => {
+              if (!documentsOn || !event.dataTransfer.types.includes("Files")) return;
+              event.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(event) => {
+              if (!documentsOn || event.dataTransfer.files.length === 0) return;
+              event.preventDefault();
+              setDragOver(false);
+              void attach([...event.dataTransfer.files]);
+            }}
+          >
             <div className="flex-1 space-y-3" aria-live="polite">
               {messages.length === 0 && !pending ? (
                 <EmptyState
@@ -202,23 +244,66 @@ export function AssistantPanel(): React.ReactElement {
               {send.isPending ? <LatticeLoader label={working ? `Ассистент ${describePresence(working)}` : "Ассистент думает"} /> : null}
               <div ref={endRef} />
             </div>
+            {attached.length > 0 || uploading > 0 ? (
+              <ul className="flex flex-wrap gap-1.5" aria-label="Прикреплённые файлы">
+                {attached.map((item) => (
+                  <li key={item.documentId} className="flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-2xs text-foreground">
+                    <FileText className="h-3 w-3 text-muted-foreground" aria-hidden />
+                    <span className="max-w-[14rem] truncate">{item.name}</span>
+                    <IconButton label={`Убрать «${item.name}» из сообщения`} size="sm" onClick={() => setAttached((current) => current.filter((entry) => entry.documentId !== item.documentId))}>
+                      <X className="h-3 w-3" />
+                    </IconButton>
+                  </li>
+                ))}
+                {uploading > 0 ? (
+                  <li className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-2xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Сохраняю файл…
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
             <StarBorder active={send.isPending} className="rounded-xl">
               <form onSubmit={(event) => void submit(event)} className="flex items-end gap-2 rounded-xl">
+                {documentsOn ? (
+                  <>
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      multiple
+                      hidden
+                      aria-label="Файлы для ассистента"
+                      onChange={(event) => {
+                        void attach([...(event.target.files ?? [])]);
+                        event.target.value = "";
+                      }}
+                    />
+                    <IconButton label="Прикрепить файл" onClick={() => fileInput.current?.click()} disabled={!workspaceId}>
+                      <Paperclip className="h-4 w-4" />
+                    </IconButton>
+                  </>
+                ) : null}
                 <Textarea
                   id={COMPOSER_ID}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => setView(currentAssistantView())}
+                  onPaste={(event) => {
+                    const files = [...event.clipboardData.files];
+                    if (files.length > 0 && documentsOn) {
+                      event.preventDefault();
+                      void attach(files);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) void submit(event);
                   }}
-                  placeholder="Сообщение ассистенту (Enter — отправить, Shift+Enter — перенос)"
+                  placeholder={documentsOn ? "Сообщение или файл — перетащите, вставьте или нажмите скрепку (Enter — отправить)" : "Сообщение ассистенту (Enter — отправить, Shift+Enter — перенос)"}
                   aria-label="Сообщение ассистенту"
                   rows={2}
                   maxLength={8000}
                   className="flex-1"
                 />
-                <Button type="submit" disabled={!draft.trim() || send.isPending || !workspaceId} aria-label="Отправить">
+                <Button type="submit" disabled={(!draft.trim() && attached.length === 0) || uploading > 0 || send.isPending || !workspaceId} aria-label="Отправить">
                   <Send className="h-4 w-4" aria-hidden />
                 </Button>
               </form>
@@ -252,10 +337,27 @@ function Line({ message, workspaceId }: { message: AssistantStoredMessage; works
     <Card className={mine ? "ml-8 space-y-1 py-2" : "mr-8 space-y-1 py-2"}>
       <p className="text-label text-subtle-foreground">{mine ? "Вы" : "Ассистент"}</p>
       {mine ? (
-        <p className="whitespace-pre-wrap text-sm text-foreground">{message.content}</p>
+        message.content ? <p className="whitespace-pre-wrap text-sm text-foreground">{message.content}</p> : null
       ) : (
         <MarkdownView source={message.content} className="text-sm" onExternalLink={openInBrowser} />
       )}
+      {message.attachments && message.attachments.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5 pt-1">
+          {message.attachments.map((item) => (
+            <li key={item.documentId}>
+              <button
+                type="button"
+                onClick={() => openEntity("document", item.documentId, item.name)}
+                className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-2xs text-foreground hover:bg-card-hover"
+                title="Открыть в «Документах»"
+              >
+                <FileText className="h-3 w-3 text-muted-foreground" aria-hidden />
+                <span className="max-w-[14rem] truncate">{item.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {message.truncated ? <p className="text-2xs text-warning">Ответ обрезан по длине — напишите «продолжи».</p> : null}
       {message.actions.length > 0 ? (
         <div className="grid gap-1.5 pt-1">

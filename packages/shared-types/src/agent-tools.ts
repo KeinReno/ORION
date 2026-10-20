@@ -61,7 +61,7 @@ const obj = (properties: Record<string, Record<string, unknown>>, required: stri
   additionalProperties: false
 });
 const priority = { type: "string", enum: ["low", "normal", "high", "urgent"] };
-const entityType = { type: "string", enum: ["project", "task", "note", "event"] };
+const entityType = { type: "string", enum: ["project", "task", "note", "event", "document"], description: "document — файл из «Документов» (нужно разрешение на документы)" };
 const relationKind = { type: "string", enum: ["related_to", "supports"], description: "related_to — просто связаны (по умолчанию); supports — заметка — материал для задачи" };
 
 const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
@@ -555,6 +555,380 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
     input: obj({}),
     permission: "inventory.item.read",
     moduleId: "inventory"
+  },
+  {
+    name: "orion_projects_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать проект.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/projects" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Название"}, "description": {"type": "string", "description": "Описание"}, "status": {"type": "string", "enum": ["active", "on_hold", "completed"], "description": "Статус"}, "startAt": {"type": "string", "description": "Начало, дата и время ISO-8601"}, "dueAt": {"type": "string", "description": "Срок, дата и время ISO-8601"}, "budgetAmount": {"type": "integer", "description": "Бюджет в копейках"}, "hourlyRate": {"type": "integer", "description": "Ставка в копейках за час"}}, required: ["name"], additionalProperties: false },
+    permission: "projects.project.create",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_projects_update",
+    group: "modules",
+    effect: "update",
+    description: "Изменить проект: название, описание, статус, сроки, бюджет. Помощник — через подтверждение человека.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/projects/{projectId}" },
+    input: { type: "object", properties: {"projectId": {"type": "string", "description": "id проекта из orion_list_projects"}, "name": {"type": "string", "description": "Название"}, "description": {"type": "string", "description": "Описание"}, "status": {"type": "string", "enum": ["active", "on_hold", "completed"], "description": "Статус"}, "startAt": {"type": "string", "description": "Начало, дата и время ISO-8601"}, "dueAt": {"type": "string", "description": "Срок, дата и время ISO-8601"}, "budgetAmount": {"type": "integer", "description": "Бюджет в копейках"}, "hourlyRate": {"type": "integer", "description": "Ставка в копейках за час"}}, required: ["projectId"], additionalProperties: false },
+    permission: "projects.project.update",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_goals_list",
+    group: "modules",
+    effect: "read",
+    description: "Цели: название, статус, срок, проекты-планы с весами и прогресс (считается по задачам проектов).",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/goals" },
+    input: { type: "object", properties: {}, required: [], additionalProperties: false },
+    permission: "projects.project.read",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_goals_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать цель (можно подцель — parentId).",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/goals" },
+    input: { type: "object", properties: {"title": {"type": "string", "description": "Название"}, "description": {"type": "string", "description": "Описание"}, "dueAt": {"type": "string", "description": "Срок, дата и время ISO-8601"}, "parentId": {"type": "string", "description": "id родительской цели"}}, required: ["title"], additionalProperties: false },
+    permission: "projects.project.create",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_goals_update",
+    group: "modules",
+    effect: "update",
+    description: "Изменить цель: название, описание, статус (active/achieved/dropped), срок. Помощник — через подтверждение.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/goals/{goalId}" },
+    input: { type: "object", properties: {"goalId": {"type": "string", "description": "id цели"}, "title": {"type": "string", "description": "Название"}, "description": {"type": "string", "description": "Описание"}, "status": {"type": "string", "enum": ["active", "achieved", "dropped"], "description": "Статус"}, "dueAt": {"type": "string", "description": "Срок, дата и время ISO-8601"}}, required: ["goalId"], additionalProperties: false },
+    permission: "projects.project.update",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_goals_add_project",
+    group: "modules",
+    effect: "create",
+    description: "Привязать проект к цели как план (вес — доля в прогрессе цели).",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/goals/{goalId}/plans" },
+    input: { type: "object", properties: {"goalId": {"type": "string", "description": "id цели"}, "projectId": {"type": "string", "description": "id проекта"}, "weight": {"type": "integer", "description": "Вес 1–100, по умолчанию 1"}}, required: ["goalId", "projectId"], additionalProperties: false },
+    permission: "projects.project.update",
+    moduleId: "projects"
+  },
+  {
+    name: "orion_habits_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать привычку. weekdays — дни недели 0–6 (0 — понедельник); пусто — каждый день.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/habits" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Название"}, "note": {"type": "string", "description": "Заметка"}, "weekdays": {"type": "array", "items": {"type": "integer"}, "description": "Дни 0–6; пусто — каждый день"}}, required: ["name"], additionalProperties: false },
+    permission: "habits.habit.create",
+    moduleId: "habits"
+  },
+  {
+    name: "orion_habits_update",
+    group: "modules",
+    effect: "update",
+    description: "Изменить привычку: название, заметку, дни. Помощник — через подтверждение.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/habits/{habitId}" },
+    input: { type: "object", properties: {"habitId": {"type": "string", "description": "id привычки"}, "name": {"type": "string", "description": "Название"}, "note": {"type": "string", "description": "Заметка"}, "weekdays": {"type": "array", "items": {"type": "integer"}, "description": "Дни 0–6"}}, required: ["habitId"], additionalProperties: false },
+    permission: "habits.habit.update",
+    moduleId: "habits"
+  },
+  {
+    name: "orion_habits_archive",
+    group: "modules",
+    effect: "delete_request",
+    description: "Убрать привычку в архив (история отметок сохраняется). Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/habits/{habitId}" },
+    input: { type: "object", properties: {"habitId": {"type": "string", "description": "id привычки"}, "reason": {"type": "string", "description": "Почему"}}, required: ["habitId"], additionalProperties: false },
+    permission: "habits.habit.delete",
+    moduleId: "habits"
+  },
+  {
+    name: "orion_lists_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать список (покупки, дела, сборы).",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/lists" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Название"}, "kind": {"type": "string", "enum": ["shopping", "todo", "packing", "general"], "description": "Вид списка"}}, required: ["name"], additionalProperties: false },
+    permission: "lists.list.create",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_lists_update_item",
+    group: "modules",
+    effect: "update",
+    description: "Изменить пункт списка: текст, отметку, количество, единицу, заметку. Помощник — через подтверждение.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/lists/{listId}/items/{itemId}" },
+    input: { type: "object", properties: {"listId": {"type": "string", "description": "id списка"}, "itemId": {"type": "string", "description": "id пункта"}, "label": {"type": "string", "description": "Текст"}, "checked": {"type": "boolean", "description": "Отмечен"}, "quantity": {"type": "number", "description": "Количество"}, "unit": {"type": "string", "description": "Единица"}, "note": {"type": "string", "description": "Заметка"}}, required: ["listId", "itemId"], additionalProperties: false },
+    permission: "lists.list.update",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_lists_delete_item",
+    group: "modules",
+    effect: "delete_request",
+    description: "Удалить пункт списка. Всегда только запрос человеку.",
+    scopes: null,
+    http: { method: "DELETE", path: "/ai/v1/lists/{listId}/items/{itemId}" },
+    input: { type: "object", properties: {"listId": {"type": "string", "description": "id списка"}, "itemId": {"type": "string", "description": "id пункта"}, "reason": {"type": "string", "description": "Почему"}}, required: ["listId", "itemId"], additionalProperties: false },
+    permission: "lists.list.delete",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_time_start",
+    group: "modules",
+    effect: "create",
+    description: "Запустить таймер (на задачу или проект). Уже идущий таймер этого человека — ошибка 409.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/time/start" },
+    input: { type: "object", properties: {"taskId": {"type": "string", "description": "id задачи"}, "projectId": {"type": "string", "description": "id проекта"}, "note": {"type": "string", "description": "Чем занят"}}, required: [], additionalProperties: false },
+    permission: "time.entry.create",
+    moduleId: "time"
+  },
+  {
+    name: "orion_time_stop",
+    group: "modules",
+    effect: "create",
+    description: "Остановить идущий таймер.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/time/stop" },
+    input: { type: "object", properties: {"note": {"type": "string", "description": "Заметка к записи"}}, required: [], additionalProperties: false },
+    permission: "time.entry.create",
+    moduleId: "time"
+  },
+  {
+    name: "orion_time_add_entry",
+    group: "modules",
+    effect: "create",
+    description: "Добавить запись времени задним числом.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/time/entries" },
+    input: { type: "object", properties: {"startedAt": {"type": "string", "description": "Начало, дата и время ISO-8601"}, "endedAt": {"type": "string", "description": "Конец, дата и время ISO-8601"}, "taskId": {"type": "string", "description": "id задачи"}, "projectId": {"type": "string", "description": "id проекта"}, "note": {"type": "string", "description": "Заметка"}}, required: ["startedAt", "endedAt"], additionalProperties: false },
+    permission: "time.entry.create",
+    moduleId: "time"
+  },
+  {
+    name: "orion_contacts_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать контакт.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/contacts" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Имя"}, "kind": {"type": "string", "enum": ["person", "organization"], "description": "Человек или организация"}, "phone": {"type": "string", "description": "Телефон"}, "email": {"type": "string", "description": "Почта"}, "organization": {"type": "string", "description": "Организация"}, "role": {"type": "string", "description": "Должность"}, "address": {"type": "string", "description": "Адрес"}, "birthday": {"type": "string", "description": "День рождения YYYY-MM-DD"}}, required: ["name"], additionalProperties: false },
+    permission: "contacts.contact.create",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_contacts_update",
+    group: "modules",
+    effect: "update",
+    description: "Изменить контакт. Помощник — через подтверждение.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/contacts/{contactId}" },
+    input: { type: "object", properties: {"contactId": {"type": "string", "description": "id контакта"}, "name": {"type": "string", "description": "Имя"}, "phone": {"type": "string", "description": "Телефон"}, "email": {"type": "string", "description": "Почта"}, "organization": {"type": "string", "description": "Организация"}, "role": {"type": "string", "description": "Должность"}, "address": {"type": "string", "description": "Адрес"}, "birthday": {"type": "string", "description": "День рождения YYYY-MM-DD"}}, required: ["contactId"], additionalProperties: false },
+    permission: "contacts.contact.update",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_contacts_log_interaction",
+    group: "modules",
+    effect: "create",
+    description: "Записать общение с контактом (звонок, встреча, письмо).",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/contacts/{contactId}/interactions" },
+    input: { type: "object", properties: {"contactId": {"type": "string", "description": "id контакта"}, "kind": {"type": "string", "enum": ["call", "message", "meeting", "email", "other"], "description": "Вид"}, "note": {"type": "string", "description": "О чём"}, "occurredAt": {"type": "string", "description": "Когда, дата и время ISO-8601"}}, required: ["contactId"], additionalProperties: false },
+    permission: "contacts.contact.update",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_documents_create_folder",
+    group: "modules",
+    effect: "create",
+    description: "Создать папку в «Документах».",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/documents/folders" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Название"}, "parentId": {"type": "string", "description": "id родительской папки; нет — в корне"}}, required: ["name"], additionalProperties: false },
+    permission: "documents.document.create",
+    moduleId: "documents"
+  },
+  {
+    name: "orion_documents_update",
+    group: "modules",
+    effect: "update",
+    description: "Переименовать или переложить документ/папку (parentId — новая папка, null — корень), привязать к проекту. Файл, который пользователь только что прислал ассистенту, перекладывается сразу; остальное у помощника — через подтверждение.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/documents/{documentId}" },
+    input: { type: "object", properties: {"documentId": {"type": "string", "description": "id документа"}, "name": {"type": "string", "description": "Новое название"}, "parentId": {"type": ["string", "null"], "description": "id папки, null — корень"}, "projectId": {"type": ["string", "null"], "description": "id проекта, null — без проекта"}}, required: ["documentId"], additionalProperties: false },
+    permission: "documents.document.update",
+    moduleId: "documents"
+  },
+  {
+    name: "orion_inventory_create_item",
+    group: "modules",
+    effect: "create",
+    description: "Завести вещь или запас на складе.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/inventory" },
+    input: { type: "object", properties: {"name": {"type": "string", "description": "Название"}, "unit": {"type": "string", "description": "Единица, по умолчанию «шт»"}, "minStock": {"type": "integer", "description": "Порог «мало»"}, "sku": {"type": "string", "description": "Артикул"}}, required: ["name"], additionalProperties: false },
+    permission: "inventory.item.create",
+    moduleId: "inventory"
+  },
+  {
+    name: "orion_inventory_move",
+    group: "modules",
+    effect: "create",
+    description: "Приход, расход или корректировка остатка.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/inventory/{itemId}/movements" },
+    input: { type: "object", properties: {"itemId": {"type": "string", "description": "id вещи"}, "type": {"type": "string", "enum": ["receipt", "issue", "adjustment"], "description": "receipt — приход, issue — расход, adjustment — корректировка"}, "quantity": {"type": "integer", "description": "Сколько, > 0"}, "direction": {"type": "string", "enum": ["+", "-"], "description": "Для корректировки: + или −"}, "note": {"type": "string", "description": "Заметка"}}, required: ["itemId", "type", "quantity"], additionalProperties: false },
+    permission: "inventory.item.update",
+    moduleId: "inventory"
+  },
+  {
+    name: "orion_health_overview",
+    group: "modules",
+    effect: "read",
+    description: "Здоровье: люди, чьё здоровье ведётся (subjectId), и что на сегодня — приёмы лекарств, визиты, профилактика. Видно только то, что видно человеку.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health" },
+    input: { type: "object", properties: {"today": {"type": "string", "description": "День YYYY-MM-DD; по умолчанию сегодня"}}, required: [], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_summary",
+    group: "modules",
+    effect: "read",
+    description: "Сводка по человеку: последние измерения, активные симптомы, лекарства, ближайшие визиты.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health/{subjectId}/summary" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id из orion_health_overview"}}, required: ["subjectId"], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_measurements",
+    group: "modules",
+    effect: "read",
+    description: "Измерения (вес, давление, пульс, сахар, температура, SpO2, рост) за период.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health/{subjectId}/measurements" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "kind": {"type": "string", "enum": ["weight", "blood_pressure", "pulse", "glucose", "temperature", "spo2", "height"], "description": "Вид"}, "from": {"type": "string", "description": "С, дата и время ISO-8601"}, "to": {"type": "string", "description": "По, дата и время ISO-8601"}}, required: ["subjectId"], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_add_measurement",
+    group: "modules",
+    effect: "create",
+    description: "Записать измерение. Давление: value — верхнее, value2 — нижнее.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/health/{subjectId}/measurements" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "kind": {"type": "string", "enum": ["weight", "blood_pressure", "pulse", "glucose", "temperature", "spo2", "height"], "description": "Вид"}, "value": {"type": "number", "description": "Значение"}, "value2": {"type": "number", "description": "Второе значение (нижнее давление)"}, "measuredAt": {"type": "string", "description": "Когда, дата и время ISO-8601"}, "context": {"type": "string", "description": "Обстоятельства: утром, после еды…"}, "note": {"type": "string", "description": "Заметка"}}, required: ["subjectId", "kind", "value"], additionalProperties: false },
+    permission: "health.record.create",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_symptoms",
+    group: "modules",
+    effect: "read",
+    description: "Симптомы человека.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health/{subjectId}/symptoms" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "from": {"type": "string", "description": "С, дата и время ISO-8601"}}, required: ["subjectId"], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_add_symptom",
+    group: "modules",
+    effect: "create",
+    description: "Записать симптом (выраженность 0–10). Это наблюдение, не диагноз.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/health/{subjectId}/symptoms" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "name": {"type": "string", "description": "Что беспокоит"}, "severity": {"type": "integer", "description": "Выраженность 0–10"}, "startedAt": {"type": "string", "description": "Когда началось, дата и время ISO-8601"}, "endedAt": {"type": "string", "description": "Когда прошло, дата и время ISO-8601"}, "triggers": {"type": "string", "description": "Что провоцирует"}, "relief": {"type": "string", "description": "Что помогает"}, "note": {"type": "string", "description": "Заметка"}}, required: ["subjectId", "name", "severity"], additionalProperties: false },
+    permission: "health.record.create",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_appointments",
+    group: "modules",
+    effect: "read",
+    description: "Визиты к врачам.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health/{subjectId}/appointments" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}}, required: ["subjectId"], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_add_appointment",
+    group: "modules",
+    effect: "create",
+    description: "Записать визит к врачу.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/health/{subjectId}/appointments" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "title": {"type": "string", "description": "К кому / зачем"}, "at": {"type": "string", "description": "Когда, дата и время ISO-8601"}, "clinic": {"type": "string", "description": "Клиника"}, "purpose": {"type": "string", "description": "Цель визита"}, "questions": {"type": "string", "description": "Вопросы врачу"}}, required: ["subjectId", "title", "at"], additionalProperties: false },
+    permission: "health.record.create",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_medications",
+    group: "modules",
+    effect: "read",
+    description: "Лекарства человека и расписание приёмов на день с отметками. Дозы — как ввёл человек; агент их не советует.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/health/{subjectId}/medications" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "day": {"type": "string", "description": "День YYYY-MM-DD; по умолчанию сегодня"}}, required: ["subjectId"], additionalProperties: false },
+    permission: "health.record.read",
+    moduleId: "health"
+  },
+  {
+    name: "orion_health_mark_intake",
+    group: "modules",
+    effect: "create",
+    description: "Отметить приём лекарства: принято или пропущено (день и время слота из расписания).",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/health/{subjectId}/medications/{medicationId}/intake" },
+    input: { type: "object", properties: {"subjectId": {"type": "string", "description": "id человека"}, "medicationId": {"type": "string", "description": "id лекарства"}, "day": {"type": "string", "description": "День YYYY-MM-DD"}, "time": {"type": "string", "description": "Время слота ЧЧ:ММ"}, "status": {"type": "string", "enum": ["taken", "skipped"], "description": "Принято или пропущено"}}, required: ["subjectId", "medicationId", "day", "time", "status"], additionalProperties: false },
+    permission: "health.record.update",
+    moduleId: "health"
+  },
+  {
+    name: "orion_home_list",
+    group: "modules",
+    effect: "read",
+    description: "Дома и квартиры: счётчики, последние показания, контакты, вещи и проекты дома.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/home" },
+    input: { type: "object", properties: {}, required: [], additionalProperties: false },
+    permission: "home.item.read",
+    moduleId: "home"
+  },
+  {
+    name: "orion_home_add_reading",
+    group: "modules",
+    effect: "create",
+    description: "Внести показание счётчика.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/home/{homeId}/meters/{meterId}/readings" },
+    input: { type: "object", properties: {"homeId": {"type": "string", "description": "id дома"}, "meterId": {"type": "string", "description": "id счётчика"}, "value": {"type": "number", "description": "Показание"}, "readAt": {"type": "string", "description": "Когда снято, дата и время ISO-8601"}, "note": {"type": "string", "description": "Заметка"}}, required: ["homeId", "meterId", "value"], additionalProperties: false },
+    permission: "home.item.update",
+    moduleId: "home"
   }
 ];
 
@@ -570,32 +944,52 @@ export const EXTENSION_AGENT_PERMISSIONS: readonly string[] = [
 export interface ModuleAgentPermission {
   permission: string;
   moduleId: string;
+  /** «Здоровье», «Проекты и цели» — the row of the permissions table. */
+  moduleLabel: string;
+  /** The last segment of the id: read / create / update / delete — the column. */
+  action: string;
   label: string;
-  /** Adds something (a habit mark, list items) — counted against the token's write limit, refused for an observer. */
+  /** Adds or changes something — counted against the token's write limit, refused for an observer. */
   writes: boolean;
 }
 
-const MODULE_PERMISSION_LABEL: Record<string, string> = {
-  "habits.habit.read": "Привычки: смотреть",
-  "habits.habit.update": "Привычки: отмечать выполнение",
-  "lists.list.read": "Списки: смотреть",
-  "lists.list.update": "Списки: добавлять пункты",
-  "time.entry.read": "Учёт времени: смотреть",
-  "contacts.contact.read": "Контакты: смотреть",
-  "documents.document.read": "Документы: смотреть и читать текст",
-  "finance.transaction.read": "Финансы: смотреть счета и операции",
-  "inventory.item.read": "Склад: смотреть"
+const MODULE_TITLE: Record<string, string> = {
+  projects: "Проекты и цели",
+  habits: "Привычки",
+  lists: "Списки",
+  time: "Учёт времени",
+  contacts: "Контакты",
+  documents: "Документы",
+  finance: "Финансы",
+  inventory: "Склад",
+  health: "Здоровье",
+  home: "Дом",
+  "pet-care": "Питомцы"
 };
 
-/** Every module permission an agent can be given, in the order of the tool catalog (manifest modules use their tool text). */
+/** Column titles of the permissions table; «удалять» is never direct — always a request to a human. */
+export const MODULE_PERMISSION_ACTION_LABEL: Record<string, string> = {
+  read: "смотреть",
+  create: "добавлять",
+  update: "менять",
+  delete: "удалять (с подтверждения)"
+};
+
+/** Every module permission an agent can be given, in the order of the tool catalog. */
 export const MODULE_AGENT_PERMISSIONS: readonly ModuleAgentPermission[] = (() => {
   const seen = new Map<string, ModuleAgentPermission>();
   for (const tool of [...CORE_MODULE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS]) {
-    if (!tool.permission || !tool.moduleId) continue;
-    const previous = seen.get(tool.permission);
-    const writes = tool.effect !== "read" || previous?.writes === true;
-    const label = MODULE_PERMISSION_LABEL[tool.permission] ?? `${tool.moduleId}: ${writes ? "записывать" : "смотреть"}`;
-    seen.set(tool.permission, { permission: tool.permission, moduleId: tool.moduleId, label, writes });
+    if (!tool.permission || !tool.moduleId || seen.has(tool.permission)) continue;
+    const action = tool.permission.split(".").pop() ?? "read";
+    const moduleLabel = MODULE_TITLE[tool.moduleId] ?? tool.moduleId;
+    seen.set(tool.permission, {
+      permission: tool.permission,
+      moduleId: tool.moduleId,
+      moduleLabel,
+      action,
+      label: `${moduleLabel}: ${MODULE_PERMISSION_ACTION_LABEL[action] ?? action}`,
+      writes: action !== "read"
+    });
   }
   return [...seen.values()];
 })();

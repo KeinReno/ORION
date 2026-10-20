@@ -118,6 +118,17 @@ describe("decideAgentModuleOperation (G13)", () => {
     expect(decideAgentModuleOperation(subject({ mode: "assistant", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
     expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted }), create, "create")).toEqual({ kind: "allow" });
   });
+
+  it("правка: менеджер сразу, помощник — запрос; удаление — всегда запрос, а при запрете удаления — отказ", () => {
+    const update = "habits.habit.update";
+    const remove = "habits.habit.delete";
+    const granted = [update, remove];
+    expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted }), update, "update")).toEqual({ kind: "allow" });
+    expect(decideAgentModuleOperation(subject({ mode: "assistant", modulePermissions: granted }), update, "update")).toEqual({ kind: "propose" });
+    expect(decideAgentModuleOperation(subject({ mode: "observer", modulePermissions: granted }), update, "update")).toMatchObject({ kind: "deny" });
+    expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted, forbidden: [] }), remove, "delete")).toEqual({ kind: "propose" });
+    expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted, forbidden: ["delete"] }), remove, "delete")).toMatchObject({ kind: "deny" });
+  });
 });
 
 describe("remoteTokenViolations (ADR-0017)", () => {

@@ -11,6 +11,9 @@ import { PetMonthCalendar, type PetCalendarMark, type PetMonthCursor } from "./m
 import { usePetCareDays, usePetCareEvents } from "./use-pet-care";
 
 /** Дневник: календарь месяца, тревожные сигналы, сводка за 30 дней и запись выбранного дня. */
+const BAD_TONE = "border-destructive/40 bg-destructive/[0.06]";
+const GOOD_TONE = "border-success/30";
+
 export function PetDiaryTab({ workspaceId, pet }: { workspaceId: string; pet: PetCarePet }): React.ReactElement {
   const today = petLocalDayKey();
   const [selected, setSelected] = useState(today);
@@ -73,10 +76,24 @@ export function PetDiaryTab({ workspaceId, pet }: { workspaceId: string; pet: Pe
       <div className="grid gap-3 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
         <div className="space-y-3">
           <PetMonthCalendar cursor={cursor} onCursor={setCursor} selected={selected} today={today} marks={marks} eventDays={eventDays} onPick={pick} />
+          {/* The same six figures as MurHP's «за 30 дней»; a worrying one is tinted (MurHP's tone rules). */}
           <div className="grid grid-cols-3 gap-2" aria-label="За 30 дней">
-            <StatCard label="Плохих" value={stats.badOrWorse} hint={`${petPlural(stats.badOrWorse, "день", "дня", "дней")} из ${stats.loggedDays}`} />
+            <StatCard
+              label="Плохих"
+              value={stats.badOrWorse}
+              hint={`${petPlural(stats.badOrWorse, "день", "дня", "дней")} из ${stats.loggedDays}`}
+              className={stats.badOrWorse > 0 ? BAD_TONE : GOOD_TONE}
+            />
             <StatCard label="Рвота" value={stats.vomitingEpisodes} hint="эпизодов" />
-            <StatCard label="Вес" value={weightDelta === null ? "—" : `${weightDelta > 0 ? "+" : ""}${weightDelta}`} hint="кг за месяц" />
+            <StatCard label="Жидкий стул" value={stats.looseStoolDays} hint={petPlural(stats.looseStoolDays, "день", "дня", "дней")} />
+            <StatCard label="Вялость" value={stats.lethargyDays} hint={petPlural(stats.lethargyDays, "день", "дня", "дней")} />
+            <StatCard label="Серия плохих" value={stats.longestBadStreak} hint="подряд, максимум" className={stats.longestBadStreak >= 3 ? BAD_TONE : undefined} />
+            <StatCard
+              label="Вес"
+              value={weightDelta === null ? "—" : `${weightDelta > 0 ? "+" : ""}${weightDelta}`}
+              hint={weightDelta === null ? "не отмечался" : "кг за месяц"}
+              className={weightDelta !== null && weightDelta <= -0.2 ? BAD_TONE : undefined}
+            />
           </div>
         </div>
 

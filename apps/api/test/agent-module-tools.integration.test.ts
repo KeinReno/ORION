@@ -131,7 +131,68 @@ describe("Agent tools of the core modules", () => {
 
   it("refuses to issue a token with a permission no tool uses", async () => {
     const { human, ws } = await setup("unknown");
-    const issued = await call(`/workspaces/${ws}/agent-tokens`, "POST", human, { name: "Странный", modulePermissions: ["health.record.read"], expiresInDays: 7 });
+    const issued = await call(`/workspaces/${ws}/agent-tokens`, "POST", human, { name: "Странный", modulePermissions: ["markets.trade.read"], expiresInDays: 7 });
     expect(issued.status).toBe(400);
+  });
+
+  it("changes: an assistant files a request applied on approval, a manager changes at once, deletion is always a request", async () => {
+    const { human, ws, agentToken } = await setup("changer");
+    const habit = (await call<{ id: string }>(`/workspaces/${ws}/habits`, "POST", human, { name: "Зарядка" })).data;
+    const perms = ["habits.habit.read", "habits.habit.update", "habits.habit.delete"];
+
+    const assistant = await agentToken(perms, "assistant");
+    const proposed = await call<{ proposed: boolean; proposal: { id: string; targetTitle: string; diff: Array<{ field: string; before: string; after: string }> } }>(`/ai/v1/habits/${habit.id}`, "PATCH", assistant, { name: "Утренняя зарядка" });
+    expect(proposed.status).toBe(202);
+    expect(proposed.data.proposal.targetTitle).toBe("привычка: Зарядка");
+    expect(proposed.data.proposal.diff).toEqual([{ field: "name", label: "Название", before: "Зарядка", after: "Утренняя зарядка" }]);
+    expect((await call<Array<{ id: string; name: string }>>(`/workspaces/${ws}/habits`, "GET", human)).data.find((item) => item.id === habit.id)?.name).toBe("Зарядка");
+    const approved = await call<{ status: string }>(`/workspaces/${ws}/agent-tokens/proposals/${proposed.data.proposal.id}/approve`, "POST", human, {});
+    expect(approved.data.status).toBe("approved");
+    expect((await call<Array<{ id: string; name: string }>>(`/workspaces/${ws}/habits`, "GET", human)).data.find((item) => item.id === habit.id)?.name).toBe("Утренняя зарядка");
+
+    const manager = await agentToken(perms, "manager");
+    const direct = await call<{ proposed: boolean }>(`/ai/v1/habits/${habit.id}`, "PATCH", manager, { note: "10 минут" });
+    expect(direct.status).toBe(200);
+    expect(direct.data.proposed).toBe(false);
+
+    const deletion = await call<{ proposed: boolean }>(`/ai/v1/habits/${habit.id}`, "DELETE", manager, { reason: "не нужна" });
+    expect(deletion.status).toBe(202);
+    expect(deletion.data.proposed).toBe(true);
+    // The assistant chat's tokens forbid deletion outright.
+    const noDelete = await call<{ secret: string }>(`/workspaces/${ws}/agent-tokens`, "POST", human, { name: "Без удаления", modulePermissions: perms, mode: "manager", forbidden: ["delete"], expiresInDays: 7 });
+    expect((await call(`/ai/v1/habits/${habit.id}`, "DELETE", noDelete.data.secret, {})).status).toBe(403);
+  });
+
+  it("health and the pet diary: an agent records with the human's rights", async () => {
+    const { human, ws, agentToken } = await setup("health");
+    // «Здоровье» is off until a human switches it on.
+    expect((await call(`/workspaces/${ws}/modules/health`, "PATCH", human, { enabled: true })).status).toBe(200);
+    const subject = (await call<{ id: string }>(`/workspaces/${ws}/health/subjects`, "POST", human, { kind: "member", name: "Я" })).data;
+    const pet = (await call<{ id: string }>(`/workspaces/${ws}/pet-care/pets`, "POST", human, { name: "Мурчик", species: "cat" })).data;
+    const agent = await agentToken(["health.record.read", "health.record.create", "pet-care.pet.read", "pet-care.pet.create"]);
+
+    const overview = await call<{ subjects: Array<{ id: string }> }>("/ai/v1/health", "GET", agent);
+    expect(overview.data.subjects.map((item) => item.id)).toContain(subject.id);
+    expect((await call(`/ai/v1/health/${subject.id}/measurements`, "POST", agent, { kind: "pulse", value: 72 })).status).toBe(201);
+    expect((await call<Array<{ value: number }>>(`/ai/v1/health/${subject.id}/measurements`, "GET", agent)).data.map((item) => item.value)).toEqual([72]);
+    expect((await call(`/ai/v1/health/${subject.id}/symptoms`, "POST", agent, { name: "Головная боль", severity: 4 })).status).toBe(201);
+
+    const day = "2026-10-20";
+    expect((await call(`/ai/v1/pet-care/pets/${pet.id}/days/${day}`, "POST", agent, { vomitingCount: 1, note: "Утром" })).status).toBe(200);
+    const second = await call<{ vomitingCount: number; note: string; appetite: string }>(`/ai/v1/pet-care/pets/${pet.id}/days/${day}`, "POST", agent, { appetite: "reduced", vomitingCount: 2, note: "Вечером" });
+    expect(second.data).toMatchObject({ vomitingCount: 2, appetite: "reduced", note: "Утром" + String.fromCharCode(10) + "Вечером" });
+    const diary = await call<{ days: unknown[]; alerts: unknown[] }>(`/ai/v1/pet-care/pets/${pet.id}/days?from=${day}&to=${day}&today=${day}`, "GET", agent);
+    expect(diary.data.days).toHaveLength(1);
+  });
+
+  it("a file in the assistant's inbox folder is moved at once even for an assistant token", async () => {
+    const { human, ws, agentToken } = await setup("inbox");
+    const inbox = (await call<{ id: string }>(`/workspaces/${ws}/documents`, "POST", human, { name: "Ассистент — входящие" })).data;
+    const sent = (await call<{ id: string }>(`/workspaces/${ws}/documents`, "POST", human, { name: "Сканы", parentId: inbox.id })).data;
+    const elsewhere = (await call<{ id: string }>(`/workspaces/${ws}/documents`, "POST", human, { name: "Архив" })).data;
+    const assistant = await agentToken(["documents.document.read", "documents.document.update"]);
+    expect((await call(`/ai/v1/documents/${sent.id}`, "PATCH", assistant, { parentId: elsewhere.id })).status).toBe(200);
+    // Outside the inbox the same move is a request.
+    expect((await call(`/ai/v1/documents/${sent.id}`, "PATCH", assistant, { name: "Сканы 2026" })).status).toBe(202);
   });
 });

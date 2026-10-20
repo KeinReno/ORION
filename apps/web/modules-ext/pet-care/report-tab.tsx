@@ -71,7 +71,7 @@ export function PetReportTab({ workspaceId, pet }: { workspaceId: string; pet: P
           <header>
             <h3 className="text-base font-semibold">Дневник самочувствия — {pet.name}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {[pet.breed && `Порода: ${pet.breed}`, pet.birthday && `Возраст: ${petAgeLabel(pet.birthday, to)}`, `Период: ${from} — ${to}`].filter(Boolean).join(" · ")}
+              {[pet.breed && `Порода: ${pet.breed}`, pet.weightKg != null && `Вес: ${pet.weightKg} кг`, pet.birthday && `Возраст: ${petAgeLabel(pet.birthday, to)}`, `Период: ${from} — ${to}`].filter(Boolean).join(" · ")}
             </p>
             {pet.chronic || pet.allergies || pet.vetContact ? (
               <p className="text-xs text-muted-foreground">

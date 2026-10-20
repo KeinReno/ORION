@@ -26,6 +26,6 @@ describe("componentDataStatus (G11)", () => {
 
 describe("манифесты и миграции (G11)", () => {
   it("манифест Pet Care перечисляет миграции модуля", () => {
-    expect(COMPONENT_MANIFESTS.find((m) => m.id === "pet-care")?.migrations).toEqual(["20261018120000_pet_care", "20261019150000_pet_care_wellbeing"]);
+    expect(COMPONENT_MANIFESTS.find((m) => m.id === "pet-care")?.migrations).toEqual(["20261018120000_pet_care", "20261019150000_pet_care_wellbeing", "20261020200000_pet_care_weight"]);
   });
 });

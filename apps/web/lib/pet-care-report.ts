@@ -69,6 +69,7 @@ export function petReportHtml(pet: PetCarePet, days: readonly PetCareDayLog[], f
   const daysWord = (n: number): string => petPlural(n, "день", "дня", "дней");
   const header = [
     pet.breed ? `Порода: ${pet.breed}` : "",
+    pet.weightKg != null ? `Обычный вес: ${pet.weightKg} кг` : "",
     pet.birthday ? `Возраст: ${petAgeLabel(pet.birthday, to)}` : "",
     `Период: ${from} — ${to}`,
     `Сформировано: ${generatedAt}`

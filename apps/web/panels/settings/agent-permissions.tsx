@@ -13,6 +13,7 @@ import {
   AGENT_PERMISSION_OP_LABEL,
   AGENT_SCOPE_LABEL,
   MODULE_AGENT_PERMISSIONS,
+  MODULE_PERMISSION_ACTION_LABEL,
   type OrionModuleId,
   type AgentForbidden,
   type AgentMode,
@@ -80,28 +81,61 @@ export const policyIsEmpty = (draft: PolicyDraft): boolean =>
   draft.extraScopes.length === 0 && draft.modulePermissions.length === 0 && AGENT_PERMISSION_MODULES.every((m) => draft.matrix[m].length === 0);
 
 /**
- * «Другие модули»: what an agent may do in habits, lists, time, contacts, documents, finance (read only), inventory and
- * modules added by manifest. Only modules switched on here are offered; a ticked permission of a module switched off
- * later simply answers 409 until it is back.
+ * «Другие разделы»: what an agent may do in each module beyond tasks/notes/calendar — a table of sections × actions
+ * (смотреть / добавлять / менять / удалять). Changing is direct only for a manager (an assistant asks you first); deleting
+ * is always a request. Only modules switched on here are offered.
  */
 export function ModulePermissionsField({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }): React.ReactElement | null {
   const { isEnabled } = useEnabledModules();
   const offered = MODULE_AGENT_PERMISSIONS.filter((item) => isEnabled(item.moduleId as OrionModuleId));
   if (offered.length === 0) return null;
+  const rows = [...new Set(offered.map((item) => item.moduleLabel))];
+  const actions = ["read", "create", "update", "delete"].filter((action) => offered.some((item) => item.action === action));
+  const all = offered.map((item) => item.permission);
+  const allOn = all.every((permission) => value.includes(permission));
   return (
-    <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
-      <legend className="mb-1 text-xs text-muted-foreground">Другие модули</legend>
-      {offered.map((item) => (
-        <label key={item.permission} className="flex items-center gap-1.5 text-label">
-          <input
-            type="checkbox"
-            checked={value.includes(item.permission)}
-            onChange={() => onChange(toggled(value, item.permission))}
-            className="accent-accent"
-          />
-          {item.label}
-        </label>
-      ))}
+    <fieldset className="space-y-1">
+      <legend className="mb-1 flex w-full items-center gap-2 text-xs text-muted-foreground">
+        Другие разделы
+        <button type="button" className="text-accent hover:underline" onClick={() => onChange(allOn ? value.filter((p) => !all.includes(p)) : [...new Set([...value, ...all])])}>
+          {allOn ? "Снять всё" : "Отметить всё"}
+        </button>
+      </legend>
+      <table className="text-label">
+        <thead>
+          <tr className="text-2xs text-muted-foreground">
+            <th className="pr-4 text-left font-normal" />
+            {actions.map((action) => (
+              <th key={action} className="px-2 text-center font-normal">{MODULE_PERMISSION_ACTION_LABEL[action] ?? action}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row}>
+              <th scope="row" className="pr-4 text-left font-normal">{row}</th>
+              {actions.map((action) => {
+                const item = offered.find((entry) => entry.moduleLabel === row && entry.action === action);
+                return (
+                  <td key={action} className="px-2 text-center">
+                    {item ? (
+                      <input
+                        type="checkbox"
+                        aria-label={item.label}
+                        checked={value.includes(item.permission)}
+                        onChange={() => onChange(toggled(value, item.permission))}
+                        className="accent-accent"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">·</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </fieldset>
   );
 }

@@ -618,3 +618,59 @@ export function parseMurhpBackup(backup: { days: unknown[]; events: unknown[]; c
 
   return { profile, days: [...days.entries()].map(([day, input]) => ({ day, input })), events, invalidRows };
 }
+
+// ── Инструменты ИИ-агента для дневника ───────────────────────────────────────────────────────────
+/** What an agent adds to a day: only the fields it mentions; the rest of the day stays as recorded. */
+export const agentPetDayPatchSchema = z.object({
+  appetite: petAppetiteSchema.optional(),
+  activity: petActivitySchema.optional(),
+  stool: petStoolSchema.optional(),
+  water: petWaterSchema.optional(),
+  vomitingCount: z.number().int().min(0).max(99).optional(),
+  weightKg: z.number().min(0.01).max(200).nullable().optional(),
+  temperature: z.number().min(30).max(45).nullable().optional(),
+  meds: z.string().max(1000).optional(),
+  note: z.string().max(2000).optional(),
+  symptoms: z.array(petDaySymptomInputSchema).max(40).optional()
+});
+export type AgentPetDayPatch = z.infer<typeof agentPetDayPatchSchema>;
+
+export const agentPetDiaryQuerySchema = z.object({ from: petDayKeySchema.optional(), to: petDayKeySchema.optional(), today: petDayKeySchema.optional() });
+export type AgentPetDiaryQuery = z.infer<typeof agentPetDiaryQuerySchema>;
+
+/**
+ * The day after an agent's note: given fields replace, the note is appended (not lost), a symptom with the same id is
+ * replaced and new ones are added. A manual status stays manual.
+ */
+export function mergePetDay(existing: PetCareDayLog | null, patch: AgentPetDayPatch): UpsertPetCareDayInput {
+  const base = upsertPetCareDayInputSchema.parse(
+    existing
+      ? {
+          status: existing.status,
+          statusAuto: existing.statusAuto,
+          appetite: existing.appetite,
+          activity: existing.activity,
+          stool: existing.stool,
+          water: existing.water,
+          vomitingCount: existing.vomitingCount,
+          weightKg: existing.weightKg,
+          temperature: existing.temperature,
+          meds: existing.meds,
+          note: existing.note,
+          symptoms: existing.symptoms.map(({ id, severity, count, time, note }) => ({ id, severity, count, time, note }))
+        }
+      : {}
+  );
+  const symptoms = new Map(base.symptoms.map((item) => [item.id, item]));
+  for (const item of patch.symptoms ?? []) symptoms.set(item.id, item);
+  const note = patch.note?.trim() ? (base.note.trim() ? `${base.note.trim()}\n${patch.note.trim()}` : patch.note.trim()) : base.note;
+  return {
+    ...base,
+    ...Object.fromEntries(Object.entries(patch).filter(([key, value]) => value !== undefined && key !== "note" && key !== "symptoms")),
+    note,
+    symptoms: [...symptoms.values()]
+  };
+}
+
+/** `POST …/pets/:petId/murhp-db`: MurHP's database file read into the JSON of its «Экспорт копии» (checked later by `importMurhpInputSchema`). */
+export const murhpDatabaseReadSchema = z.object({ backup: z.unknown() });

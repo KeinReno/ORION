@@ -33,3 +33,19 @@ export type AgentDocumentText = z.infer<typeof agentDocumentTextSchema>;
 export function defaultAgentPeriod(now: Date = new Date()): { from: string; to: string } {
   return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: now.toISOString() };
 }
+
+/** The «Документы» folder where files sent to the assistant land; the assistant may move them out without a request. */
+export const ASSISTANT_INBOX_FOLDER = "Ассистент — входящие";
+
+/** `reason` of a delete request, alongside the module's own fields. */
+export const agentDeleteRequestSchema = z.object({ reason: z.string().max(2000).default("") });
+export type AgentDeleteRequest = z.infer<typeof agentDeleteRequestSchema>;
+
+export const agentHealthOverviewQuerySchema = z.object({ today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
+export const agentHealthMeasurementsQuerySchema = z.object({
+  kind: z.enum(["weight", "blood_pressure", "pulse", "glucose", "temperature", "spo2", "height"]).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional()
+});
+export const agentHealthSymptomsQuerySchema = z.object({ from: z.string().datetime().optional() });
+export const agentHealthMedicationsQuerySchema = z.object({ day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });

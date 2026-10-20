@@ -6,6 +6,7 @@ import {
   computePetStats,
   diffPetDays,
   importMurhpInputSchema,
+  mergePetDay,
   parseMurhpBackup,
   petCareRangeQuerySchema,
   upsertPetCareDayInputSchema,
@@ -164,5 +165,45 @@ describe("parseMurhpBackup", () => {
     const parsed = parseMurhpBackup({ days: [{ date: "2026-10-01", note: "a" }, { date: "2026-10-01", note: "b" }], events: [] });
     expect(parsed.days).toHaveLength(1);
     expect(parsed.days[0]!.input.note).toBe("b");
+  });
+});
+
+describe("mergePetDay (agent notes)", () => {
+  const existing = {
+    id: "d1",
+    workspaceId: "w",
+    petId: "p",
+    day: "2026-10-20",
+    status: "bad" as const,
+    statusAuto: false,
+    appetite: "reduced" as const,
+    activity: "" as const,
+    stool: "" as const,
+    water: "" as const,
+    vomitingCount: 1,
+    weightKg: 4.2,
+    temperature: null,
+    meds: "",
+    note: "Утром вялый",
+    symptoms: [{ id: "vomiting", label: "Рвота", category: "gi" as const, severity: "mild" as const, count: 1, time: "morning" as const, note: "" }],
+    createdAt: "",
+    updatedAt: ""
+  };
+
+  it("adds only the mentioned fields, appends the note and replaces a symptom with the same id", () => {
+    const merged = mergePetDay(existing, {
+      vomitingCount: 2,
+      note: "Вечером снова рвало",
+      symptoms: [{ id: "vomiting", severity: "moderate", count: 2, time: "evening", note: "" }, { id: "lethargy", severity: "mild", count: 1, time: "", note: "" }]
+    });
+    expect(merged).toMatchObject({ appetite: "reduced", vomitingCount: 2, weightKg: 4.2, status: "bad", statusAuto: false, note: "Утром вялый\nВечером снова рвало" });
+    expect(merged.symptoms.map((item) => [item.id, item.severity, item.count])).toEqual([
+      ["vomiting", "moderate", 2],
+      ["lethargy", "mild", 1]
+    ]);
+  });
+
+  it("starts an empty day from the defaults", () => {
+    expect(mergePetDay(null, { water: "reduced" })).toMatchObject({ water: "reduced", vomitingCount: 0, statusAuto: true, note: "", symptoms: [] });
   });
 });

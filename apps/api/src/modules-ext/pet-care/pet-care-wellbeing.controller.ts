@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   createPetCareEventInputSchema,
   importMurhpInputSchema,
@@ -17,6 +18,7 @@ import type { RequestUser } from "../../auth/jwt.strategy";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { RequireModule } from "../../modules/require-module";
+import { readMurhpDatabase } from "./murhp-sqlite";
 import { PetCareWellbeingService } from "./pet-care-wellbeing.service";
 
 /** Дневник самочувствия питомца (перенос MurHP): дни, события, импорт копии. Маршрут тот же, что у `PetCareController`. */
@@ -87,6 +89,18 @@ export class PetCareWellbeingController {
     @Param("eventId") eventId: string
   ): Promise<void> {
     await this.wellbeing.deleteEvent(user.userId, workspaceId, petId, eventId);
+  }
+
+  /**
+   * Файл базы MurHP (`murhp.db`) → то же, что даёт «Экспорт копии (.json)» MurHP. Ничего не записывает: клиент показывает
+   * предпросмотр и импортирует его обычным `import-murhp`.
+   */
+  @Post("murhp-db")
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 50 * 1024 * 1024 } }))
+  async readMurhpDb(@UploadedFile() file: { buffer: Buffer } | undefined): Promise<{ backup: Awaited<ReturnType<typeof readMurhpDatabase>> }> {
+    if (!file?.buffer) throw new BadRequestException("Файл не получен");
+    return { backup: await readMurhpDatabase(file.buffer) };
   }
 
   /** Резервная копия MurHP (`.json`) → дни, события и пустые поля профиля питомца. Повторный импорт ничего не дублирует. */

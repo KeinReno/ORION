@@ -299,12 +299,22 @@ export const AGENT_PROPOSAL_ACTIONS = ["task.delete", "note.delete", "task.updat
 export const agentProposalActionSchema = z.enum(AGENT_PROPOSAL_ACTIONS);
 export type AgentProposalAction = z.infer<typeof agentProposalActionSchema>;
 
-export const AGENT_PROPOSAL_ACTION_LABEL: Record<AgentProposalAction, string> = {
+/**
+ * Requests filed through a module tool (G13): the change of any module's record, applied by that module's own handler on
+ * approval (`AgentModuleProposalsService`). Not accepted from `POST /ai/v1/proposals` — only the tool itself files them.
+ */
+export const AGENT_MODULE_PROPOSAL_ACTIONS = ["module.update", "module.delete"] as const;
+export const agentProposalRecordActionSchema = z.enum([...AGENT_PROPOSAL_ACTIONS, ...AGENT_MODULE_PROPOSAL_ACTIONS]);
+export type AgentProposalRecordAction = z.infer<typeof agentProposalRecordActionSchema>;
+
+export const AGENT_PROPOSAL_ACTION_LABEL: Record<AgentProposalRecordAction, string> = {
   "task.delete": "Удалить задачу",
   "note.delete": "Удалить заметку",
   "task.update": "Изменить задачу",
   "note.update": "Изменить заметку",
-  "event.update": "Изменить событие"
+  "event.update": "Изменить событие",
+  "module.update": "Изменить",
+  "module.delete": "Удалить"
 };
 
 /** A proposal nobody decided within this many days lapses (`expired`) and can no longer be approved. */
@@ -339,7 +349,7 @@ export const agentProposalSchema = z.object({
   id: z.string(),
   tokenId: z.string(),
   tokenName: z.string(),
-  action: agentProposalActionSchema,
+  action: agentProposalRecordActionSchema,
   targetId: z.string(),
   targetTitle: z.string(),
   reason: z.string(),

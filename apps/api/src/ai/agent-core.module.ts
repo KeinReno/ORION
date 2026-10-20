@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ModulesModule } from "../modules/modules.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
+import { AgentModuleProposalsService } from "./agent-module-proposals.service";
 import { AgentModuleToolsService } from "./agent-module-tools.service";
 import { AgentPresenceService } from "./agent-presence.service";
 import { AgentTokenGuard } from "./agent-token.guard";
@@ -14,7 +15,7 @@ import { AgentTokensService } from "./agent-tokens.service";
  */
 @Module({
   imports: [WorkspacesModule, ModulesModule, NotificationsModule],
-  providers: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleToolsService],
-  exports: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleToolsService]
+  providers: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService],
+  exports: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService]
 })
 export class AgentCoreModule {}

@@ -1,9 +1,22 @@
-import { Controller, Get, NotFoundException, Param, Query, Req, UseGuards } from "@nestjs/common";
-import { AGENT_DOCUMENT_TEXT_MAX, agentSearchQuerySchema, type AgentDocumentText, type AgentSearchQuery, type DocumentItem } from "@orion/shared-types";
-import { AgentModuleToolsService } from "../ai/agent-module-tools.service";
+import { Body, Controller, Get, NotFoundException, OnModuleInit, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import {
+  AGENT_DOCUMENT_TEXT_MAX,
+  ASSISTANT_INBOX_FOLDER,
+  agentSearchQuerySchema,
+  createFolderInputSchema,
+  updateDocumentInputSchema,
+  type AgentDocumentText,
+  type AgentSearchQuery,
+  type CreateFolderInput,
+  type DocumentItem
+} from "@orion/shared-types";
+import type { Response } from "express";
+import { AgentModuleToolsService, type ModuleChangeResult } from "../ai/agent-module-tools.service";
 import { AgentTokenGuard, type AgentRequest } from "../ai/agent-token.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { DocumentsService } from "./documents.service";
+
+const documentChangeSchema = updateDocumentInputSchema.pick({ name: true, parentId: true, projectId: true });
 
 /**
  * Инструменты ИИ-агента для модуля «Документы» (G13, каталог — `AGENT_TOOLS` в shared-types). Разрешение, режим, включённость
@@ -11,11 +24,29 @@ import { DocumentsService } from "./documents.service";
  */
 @UseGuards(AgentTokenGuard)
 @Controller("ai/v1/documents")
-export class DocumentsAgentController {
+export class DocumentsAgentController implements OnModuleInit {
   constructor(
     private readonly documents: DocumentsService,
     private readonly tools: AgentModuleToolsService
   ) {}
+
+  onModuleInit(): void {
+    this.tools.register("orion_documents_update", {
+      noun: "документ",
+      describe: async (userId, workspaceId, documentId) => {
+        const items = await this.documents.list(userId, workspaceId);
+        const item = items.find((doc) => doc.id === documentId);
+        if (!item) return null;
+        const folder = (id: string | null): string | null => (id ? (items.find((doc) => doc.id === id)?.name ?? id) : null);
+        return {
+          title: item.name,
+          fields: { name: item.name, parentId: folder(item.parentId), projectId: item.projectId },
+          labels: { name: "Название", parentId: "Папка", projectId: "Проект" }
+        };
+      },
+      apply: (userId, workspaceId, documentId, args) => this.documents.update(userId, workspaceId, documentId, documentChangeSchema.parse(args))
+    });
+  }
 
   /** The list without the extracted text (it can be megabytes): the agent reads one document with `…/text`. */
   @Get()
@@ -42,5 +73,30 @@ export class DocumentsAgentController {
       },
       (doc) => ({ resource: `document:${doc.id}`, objectType: "document", objectId: doc.id, summary: `Прочитал документ «${doc.name}»` })
     );
+  }
+
+  @Post("folders")
+  createFolder(@Req() req: AgentRequest, @Body(new ZodValidationPipe(createFolderInputSchema)) body: CreateFolderInput): Promise<DocumentItem> {
+    return this.tools.run(
+      req,
+      "orion_documents_create_folder",
+      (agent) => this.documents.createFolder(agent.userId, agent.workspaceId, body),
+      (folder) => ({ resource: `document:${folder.id}`, objectType: "document", objectId: folder.id, summary: `Создал папку «${folder.name}»` })
+    );
+  }
+
+  /** A file the user just sent to the assistant sits in its inbox folder: moving it out is their own request — no confirmation. */
+  @Patch(":documentId")
+  async update(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Param("documentId") documentId: string,
+    @Body(new ZodValidationPipe(documentChangeSchema)) body: Record<string, unknown>
+  ): Promise<ModuleChangeResult> {
+    const agent = req.agent!;
+    const items = await this.documents.list(agent.userId, agent.workspaceId).catch(() => [] as DocumentItem[]);
+    const item = items.find((doc) => doc.id === documentId);
+    const inbox = items.find((doc) => doc.kind === "folder" && doc.parentId === null && doc.name === ASSISTANT_INBOX_FOLDER);
+    return this.tools.change(req, res, "orion_documents_update", documentId, body, { allowDirect: Boolean(item && inbox && item.parentId === inbox.id) });
   }
 }

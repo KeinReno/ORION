@@ -12,6 +12,8 @@ export interface PetFormValues {
   vetContact: string;
   chronic: string;
   allergies: string;
+  /** Обычный вес, кг — строкой из поля; пусто — не указан. */
+  weight: string;
   notes: string;
 }
 
@@ -24,6 +26,7 @@ export function petToFormValues(pet?: PetCarePet): PetFormValues {
     vetContact: pet?.vetContact ?? "",
     chronic: pet?.chronic ?? "",
     allergies: pet?.allergies ?? "",
+    weight: pet?.weightKg != null ? String(pet.weightKg).replace(".", ",") : "",
     notes: pet?.notes ?? ""
   };
 }
@@ -77,6 +80,10 @@ export function PetForm({
           <Input value={values.breed} onChange={(event) => set("breed", event.target.value)} maxLength={120} />
         </label>
       </div>
+      <label className="block space-y-1 text-sm">
+        <span>Обычный вес, кг</span>
+        <Input value={values.weight} onChange={(event) => set("weight", event.target.value)} inputMode="decimal" placeholder="Например, 4,2" className="max-w-[10rem]" />
+      </label>
       <label className="block space-y-1 text-sm">
         <span>Ветеринар / клиника</span>
         <Input value={values.vetContact} onChange={(event) => set("vetContact", event.target.value)} maxLength={500} placeholder="Имя, телефон, адрес" />

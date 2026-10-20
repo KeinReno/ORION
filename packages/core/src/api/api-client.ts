@@ -887,6 +887,13 @@ export class ApiClient {
     return this.request("POST", `/workspaces/${workspaceId}/documents/upload`, form, z.array(documentSchema));
   }
 
+  /** Files attached to an assistant message: saved in «Документы → Ассистент — входящие» (the folder is created on first use). */
+  uploadToAssistantInbox(workspaceId: string, files: File[]): Promise<DocumentItem[]> {
+    const form = new FormData();
+    for (const file of files) form.append("files", file, file.name);
+    return this.request("POST", `/workspaces/${workspaceId}/documents/assistant-inbox`, form, z.array(documentSchema));
+  }
+
   /** Rename (`name`) and/or move (`parentId`) a file or folder. */
   renameOrMoveDocument(workspaceId: string, id: string, input: UpdateDocumentInput): Promise<DocumentItem> {
     return this.request("PATCH", `/workspaces/${workspaceId}/documents/${id}`, input, documentSchema);
