@@ -75,6 +75,7 @@ import {
   resolveDropAction
 } from "../../lib/panel-drop";
 import { openPanel as focusPanel, openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
+import { useTaskProjectRouting } from "../../lib/task-project-routing";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
@@ -294,6 +295,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
 
 export default function AppLayout({ children }: { children: ReactNode }): React.ReactElement {
   const router = useRouter();
+  useTaskProjectRouting();
   const { toast } = useToast();
   const { user, isLoading, status, previousUser, retry: retrySession } = useSession();
   const navigationToast = useRef(toast);

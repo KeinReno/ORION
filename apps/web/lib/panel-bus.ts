@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { ObjectOpenMode, SearchableEntityType, ViewRef } from "@orion/shared-types";
+import type { ObjectOpenMode, SearchableEntityType, TaskStatus, ViewRef } from "@orion/shared-types";
 import { createIntentChannel, type IntentChannel } from "./intent-channel";
 import { getActiveWorkspaceId } from "./use-active-workspace";
 
@@ -176,6 +176,63 @@ export const useContactFocusRequest = contactChannel.useIntent;
 export const focusGoal = goalChannel.focus;
 export const useFocusedGoalId = goalChannel.useFocusedId;
 
+/** A task to open inside its project's tab; `nonce` tells a repeated click from an old request. */
+export interface ProjectTaskRequest { taskId: string; nonce: number }
+/**
+ * One channel per project: a single shared slot would hand the request to whichever project tab happens to be
+ * mounted (or drop it there), not to the project that owns the task.
+ */
+const projectTaskChannels = new Map<string, IntentChannel<ProjectTaskRequest>>();
+function projectTaskChannel(projectId: string): IntentChannel<ProjectTaskRequest> {
+  let channel = projectTaskChannels.get(projectId);
+  if (!channel) {
+    channel = createIntentChannel<ProjectTaskRequest>();
+    projectTaskChannels.set(projectId, channel);
+  }
+  return channel;
+}
+
+/**
+ * Open a task inside its project — the project's tab, «Задачи», the task's card — instead of the global Tasks
+ * panel. Everything that shows a project's tasks (overview, activity, plan, captures) opens them this way.
+ */
+export function openProjectTask(projectId: string, taskId: string, title?: string): void {
+  openProject(projectId, title);
+  projectTaskChannel(projectId).emit({ taskId, nonce: ++focusNonce }, getActiveWorkspaceId());
+}
+
+/** The project tab reads requests for its own project; `null` (a locked section view) subscribes to nothing. */
+export function useProjectTaskRequest(projectId: string | null): ProjectTaskRequest | null {
+  const [current, setCurrent] = useState<ProjectTaskRequest | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    const channel = projectTaskChannel(projectId);
+    const applied = channel.consumePending(getActiveWorkspaceId());
+    if (applied !== null) setCurrent(applied);
+    return channel.subscribe(setCurrent);
+  }, [projectId]);
+  return current;
+}
+
+/** Where a task lives: its project id, or null (no project, or projects off). Set by `useTaskProjectRouting`. */
+let taskProjectResolver: ((taskId: string) => Promise<string | null>) | null = null;
+export function setTaskProjectResolver(resolver: ((taskId: string) => Promise<string | null>) | null): void {
+  taskProjectResolver = resolver;
+}
+
+/**
+ * Open a task where it lives: inside its project when it has one, otherwise in Tasks. Without a resolver (no workspace
+ * yet, projects off) or when the lookup fails, it falls back to Tasks — a click is never lost.
+ */
+export function openTask(taskId: string): void {
+  const resolve = taskProjectResolver;
+  if (!resolve) return focusTask(taskId);
+  resolve(taskId).then(
+    (projectId) => (projectId ? openProjectTask(projectId, taskId) : focusTask(taskId)),
+    () => focusTask(taskId)
+  );
+}
+
 /** Entity links address every type the same way; a project's "focus" is its own tab. */
 export function focusProject(projectId: string): void {
   openProject(projectId);
@@ -192,7 +249,7 @@ export function focusProject(projectId: string): void {
 export function openEntity(type: SearchableEntityType, id: string, title?: string): void {
   switch (type) {
     case "task":
-      focusTask(id);
+      openTask(id);
       return;
     case "note":
       focusNote(id);
@@ -245,6 +302,21 @@ export function showTasksForProject(projectId: string): void {
 }
 
 export const useTasksProjectSignal = tasksProjectChannel.useIntent;
+
+/** Open Tasks already filtered (a dashboard number: «просрочено», «в работе»…); other filters are reset. */
+export interface TasksFilterRequest {
+  due: "all" | "overdue" | "today" | "week" | "none";
+  statuses: TaskStatus[];
+  at: number;
+}
+
+const tasksFilterChannel = makeIntentChannel<TasksFilterRequest>("tasks");
+
+export function showTasksFiltered(filter: { due?: TasksFilterRequest["due"]; statuses?: TaskStatus[] }): void {
+  tasksFilterChannel.emit({ due: filter.due ?? "all", statuses: filter.statuses ?? [], at: Date.now() });
+}
+
+export const useTasksFilterRequest = tasksFilterChannel.useIntent;
 
 /**
  * "Open settings on this tab, at this parameter" — from the avatar, a module's settings sheet or the

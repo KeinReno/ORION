@@ -8,7 +8,7 @@ import { useMemo, useState } from "react";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../../components/section-tabs";
 import { shortDate } from "../../lib/format";
 import { dailyFlow, featuredGoal, flowTotals, workload, type DayFlow } from "../../lib/dashboard-stats";
-import { openEntity, openPanel, openProject } from "../../lib/panel-bus";
+import { openEntity, openPanel, openProject, openSettings, showTasksFiltered } from "../../lib/panel-bus";
 import type { PanelComponentProps } from "../../lib/panel-registry";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
@@ -160,12 +160,12 @@ export function DashboardAnalytics({
       {!section.missing && active === "personal" ? (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <StatTile value={load.open} label="открыто" onClick={() => openPanel("tasks")} />
-            <StatTile value={load.inProgress} label="в работе" onClick={() => openPanel("tasks")} />
-            <StatTile value={load.overdue} label="просрочено" tone={load.overdue > 0 ? "danger" : undefined} onClick={() => openPanel("tasks")} />
-            <StatTile value={load.dueToday} label="на сегодня" onClick={() => openPanel("tasks")} />
-            <StatTile value={load.dueWeek} label="ближайшие 7 дней" onClick={() => openPanel("tasks")} />
-            <StatTile value={load.blocked} label="ждут зависимость" tone={load.blocked > 0 ? "warning" : undefined} onClick={() => openPanel("tasks")} />
+            <StatTile value={load.open} label="открыто" onClick={() => showTasksFiltered({})} />
+            <StatTile value={load.inProgress} label="в работе" onClick={() => showTasksFiltered({ statuses: ["in_progress"] })} />
+            <StatTile value={load.overdue} label="просрочено" tone={load.overdue > 0 ? "danger" : undefined} onClick={() => showTasksFiltered({ due: "overdue" })} />
+            <StatTile value={load.dueToday} label="на сегодня" onClick={() => showTasksFiltered({ due: "today" })} />
+            <StatTile value={load.dueWeek} label="ближайшие 7 дней" onClick={() => showTasksFiltered({ due: "week" })} />
+            <StatTile value={load.blocked} label="ждут зависимость" tone={load.blocked > 0 ? "warning" : undefined} onClick={() => showTasksFiltered({})} />
           </div>
           <FlowChart flow={flow} />
         </div>
@@ -252,9 +252,9 @@ export function DashboardAnalytics({
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-2 sm:max-w-md">
-              <StatTile value={audit?.length ?? 0} label="последних действий" onClick={() => openPanel("settings")} />
-              <StatTile value={(audit ?? []).filter((e) => e.status >= 400).length} label="отказов и ошибок" tone={(audit ?? []).some((e) => e.status >= 400) ? "warning" : undefined} onClick={() => openPanel("settings")} />
-              <StatTile value={new Set((audit ?? []).map((e) => e.tokenName)).size} label="агентов" onClick={() => openPanel("settings")} />
+              <StatTile value={audit?.length ?? 0} label="последних действий" onClick={() => openSettings("agents", "agents")} />
+              <StatTile value={(audit ?? []).filter((e) => e.status >= 400).length} label="отказов и ошибок" tone={(audit ?? []).some((e) => e.status >= 400) ? "warning" : undefined} onClick={() => openSettings("agents", "agents")} />
+              <StatTile value={new Set((audit ?? []).map((e) => e.tokenName)).size} label="агентов" onClick={() => openSettings("agents", "agents")} />
             </div>
           </div>
         )

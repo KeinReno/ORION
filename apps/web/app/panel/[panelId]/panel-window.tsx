@@ -8,6 +8,7 @@ import { useEffect } from "react";
 import { getPanelDefinition, instancePanelId } from "../../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { PanelDraftScope } from "../../../lib/unsaved-drafts";
+import { useTaskProjectRouting } from "../../../lib/task-project-routing";
 import { useEnabledModules } from "../../../lib/use-enabled-modules";
 
 /**
@@ -25,6 +26,7 @@ import { useEnabledModules } from "../../../lib/use-enabled-modules";
  * `/spaces`; after that one-time seed it's an independent window context.
  */
 export function PanelWindow({ panelId }: { panelId: string }): React.ReactElement {
+  useTaskProjectRouting();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading, status, retry: retrySession } = useSession();

@@ -7,7 +7,7 @@ import { ListTodo, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { describeError } from "../../lib/error-message";
 import { shortDate } from "../../lib/format";
-import { focusTask } from "../../lib/panel-bus";
+import { openTask } from "../../lib/panel-bus";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
 import { AttachPicker, EmptyLine, QuickAdd, SectionCard, type HomeSectionProps } from "./shared";
 
@@ -110,7 +110,7 @@ export function HomeTasks({ workspaceId, home, overview }: HomeSectionProps): Re
                   label={task.status === "done" ? "Вернуть в работу" : "Выполнено"}
                   size="sm"
                 />
-                <button type="button" onClick={() => focusTask(task.id)} className={cx("min-w-0 flex-1 truncate text-left text-label hover:underline", closed && "text-subtle-foreground")}>
+                <button type="button" onClick={() => openTask(task.id)} className={cx("min-w-0 flex-1 truncate text-left text-label hover:underline", closed && "text-subtle-foreground")}>
                   <StrikeText done={closed}>{task.title}</StrikeText>
                 </button>
                 {task.assigneeId && memberName.get(task.assigneeId) ? <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-2xs text-muted-foreground">{memberName.get(task.assigneeId)}</span> : null}

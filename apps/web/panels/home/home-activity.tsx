@@ -2,7 +2,7 @@
 
 import { useHomeActivity } from "@orion/core-react";
 import { History } from "lucide-react";
-import { focusTask } from "../../lib/panel-bus";
+import { openTask } from "../../lib/panel-bus";
 import { EmptyLine, SectionCard, type HomeSectionProps } from "./shared";
 
 /** Lately around this home: chores moving, comments, meter readings — newest first. */
@@ -23,7 +23,7 @@ export function HomeActivity({ workspaceId, home }: HomeSectionProps): React.Rea
               {entry.actorName ? <span className="shrink-0">{entry.actorName}</span> : null}
               <span className="min-w-0 flex-1 text-muted-foreground">{entry.summary}</span>
               {entry.entity ? (
-                <button type="button" onClick={() => focusTask(entry.entity!.id)} className="max-w-[14rem] truncate hover:underline">
+                <button type="button" onClick={() => openTask(entry.entity!.id)} className="max-w-[14rem] truncate hover:underline">
                   {entry.entity.title}
                 </button>
               ) : null}

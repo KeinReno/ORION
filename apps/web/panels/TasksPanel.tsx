@@ -39,7 +39,7 @@ import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
-import { useFocusedTaskId, useTasksProjectSignal } from "../lib/panel-bus";
+import { useFocusedTaskId, useTasksFilterRequest, useTasksProjectSignal } from "../lib/panel-bus";
 import { usePublishResourceContext } from "../lib/resource-context-store";
 import {
   TASK_PRIORITY_LABEL,
@@ -254,6 +254,17 @@ export function TasksPanel(): React.ReactElement {
     if (!projectSignal) return;
     setProjectFilter(projectSignal.projectId);
   }, [projectSignal]);
+
+  const filterRequest = useTasksFilterRequest();
+  useEffect(() => {
+    if (!filterRequest) return;
+    setQuery("");
+    setProjectFilter(null);
+    setScope("all");
+    setPriorityFilter([]);
+    setDueFilter(filterRequest.due);
+    setStatusFilter(filterRequest.statuses);
+  }, [filterRequest]);
 
   const projectTags = useMemo(() => {
     const set = new Set<string>();
