@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   LAN_DEVICE_TOKEN_HEADER,
   LAN_PAIR_SECRET_HEADER,
+  LAN_DEFAULT_PORT,
   LAN_PROTOCOL_VERSION,
   LAN_REMOTE_PREFIX,
   type LanClientConnectInput,
@@ -25,6 +26,7 @@ import { passwordScore } from "../auth/auth.service";
 import { PrismaService } from "../common/prisma.service";
 import { DeviceStore } from "./device-store";
 import { firewallState, openFirewall, closeFirewall } from "./firewall";
+import { mergeDiscovered, scanSubnet } from "./lan-scan";
 import { discoverNodes, MdnsAdvertiser } from "./mdns";
 import {
   clearClientBinding,
@@ -275,8 +277,13 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
     this.linkState = state;
   }
 
+  /**
+   * Поиск хостов в домашней сети: mDNS по всем реальным адаптерам и, одновременно, перебор своей подсети по TCP (его не
+   * режут ни роутер, ни брандмауэр). Себя не показываем.
+   */
   async discover(): Promise<LanDiscoveredNode[]> {
-    return discoverNodes();
+    const [mdns, scanned] = await Promise.all([discoverNodes(), scanSubnet([LAN_DEFAULT_PORT, this.config.port])]);
+    return mergeDiscovered(mdns, scanned).filter((node) => node.nodeId !== this.config.nodeId);
   }
 
   private assertAddress(address: string): void {

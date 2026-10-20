@@ -153,12 +153,24 @@ async function main() {
 // ТЗ-04: «Хост LAN» — это тот же серверный режим (ORION_MODE=server), а не копия его проверок.
 // HTTP остаётся на 127.0.0.1 для окна ORION этого ПК и проверки готовности, а сам API дополнительно
 // слушает TLS на LAN-порту. PostgreSQL по-прежнему только на 127.0.0.1 (см. startPostgres).
+// Адрес хоста для ссылок — домашний адаптер, а не первый попавшийся: на Windows первым часто идёт Hyper-V/WSL/VPN
+// (тот же фильтр, что apps/api/src/lan/lan-scan.ts). Сначала 192.168.x.x, потом 10.x, потом 172.16–31.x.
+const VIRTUAL_ADAPTER = /vethernet|hyper-v|wsl|virtualbox|vmware|vbox|docker|podman|br-|veth|utun|tun|tap|zerotier|tailscale|wireguard|hamachi|radmin|npcap|loopback/i;
+function homeLanAddress() {
+  const rank = a => (a.startsWith('192.168.') ? 0 : a.startsWith('10.') ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(a) ? 2 : 3);
+  const all = Object.entries(os.networkInterfaces()).flatMap(([name, list]) => (list || []).map(item => ({ name, item })))
+    .filter(({ item }) => item && item.family === 'IPv4' && !item.internal && !item.address.startsWith('169.254.'));
+  const real = all.filter(({ name }) => !VIRTUAL_ADAPTER.test(name));
+  const pick = (real.length > 0 ? real : all).sort((a, b) => rank(a.item.address) - rank(b.item.address))[0];
+  return pick ? pick.item : null;
+}
+
 function lanEnv() {
   let node = null;
   try { node = JSON.parse(fs.readFileSync(path.join(data, 'lan-node.json'), 'utf8')); } catch { /* файла нет — «Локальный» */ }
   if (!node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
   const port = Number.isInteger(node.port) ? node.port : 4443;
-  const address = Object.values(os.networkInterfaces()).flat().find(item => item && item.family === 'IPv4' && !item.internal && !item.address.startsWith('169.254.'));
+  const address = homeLanAddress();
   return {
     ORION_MODE: 'server', ORION_LAN_HOST: '1', HOST: '127.0.0.1',
     PUBLIC_API_URL: `https://${address ? address.address : os.hostname()}:${port}`,
