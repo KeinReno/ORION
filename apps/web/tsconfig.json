@@ -28,8 +28,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next-kai/types/**/*.ts",
-    ".next-e2e-settings/types/**/*.ts"
+    ".next-kai/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
