@@ -442,6 +442,24 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   (мастер + карточки программ, токены чата «Чат ORION» не показываются, ручной токен — в «Дополнительно»), «Ассистент»
   (ключ, `PATCH assistant/key` меняет модель), «Журнал». Правки, которые ассистент предлагает, подтверждаются прямо в чате
   (`AssistantAction.proposalId`).
+- Ассистент: беседы хранятся на сервере (`AssistantConversation`, RLS «автор и участник», `identity-excluded` в бэкапе,
+  `POST workspaces/:id/assistant/send`, `GET/DELETE …/assistant/conversations[/:id]`); с сообщением уходит, что было на
+  экране (`lib/assistant-context.ts`: последняя НЕ-ассистентская панель и открытая запись → системная подсказка как данные).
+  Ответ до 4096 токенов, Markdown, `truncated`. Ctrl+K «Спросить ассистента» — `askAssistant(text)` в `panel-bus`.
+- Инструменты агента для основных модулей (G13, как у pet-care): `CORE_MODULE_AGENT_TOOLS` в `shared-types/src/agent-tools.ts`,
+  контроллеры `ai/v1/<модуль>` лежат в папке модуля (`habits/habits.agent.controller.ts`, lists, time, contacts, documents,
+  finance — только чтение, inventory) и идут через `AgentModuleToolsService.run`. Модули подключают `AgentCoreModule`
+  (`ai/agent-core.module.ts`: токены, страж, обёртка, присутствие), а не `AiModule` — тот импортирует tasks/notes/finance, и
+  documents/finance дали бы цикл. Галочки — `MODULE_AGENT_PERMISSIONS` / `ModulePermissionsField`; чат получает
+  разрешения включённых модулей. Новый инструмент = запись в каталоге + маршрут (тест «у каждого инструмента есть маршрут»).
+
+### Сеть: обнаружение узлов (LAN)
+
+- `GET lan/client/discover` = mDNS по КАЖДОМУ реальному адаптеру + перебор своей /24 по TCP на порт узла
+  (`lan/lan-scan.ts`: визитка `/lan/info` засчитывается, только если пришла по TLS с сертификатом, чей отпечаток в ней указан).
+  Виртуальные адаптеры (Hyper-V, WSL, VPN, VirtualBox…) отфильтрованы; объявление mDNS — через основной домашний адаптер.
+  Причина: на Windows multicast уходил в «адаптер по умолчанию» (часто VPN/Hyper-V), а брандмауэр ищущего ПК режет ответы
+  на UDP 5353. Лаунчер берёт адрес хоста тем же правилом (`homeLanAddress` в `apps/desktop/runtime/launcher.cjs`).
 
 ### Разрешения: `@RequirePermission` (G12, первый срез)
 

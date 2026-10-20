@@ -75,7 +75,9 @@ const MODULE_QUERIES: Record<string, readonly string[]> = {
   tasks: ["tasks", "project", "projects"],
   notes: ["notes", "project"],
   calendar: ["events"],
-  projects: ["projects", "project"]
+  projects: ["projects", "project"],
+  habits: ["habits", "habit-entries"],
+  lists: ["lists", "list"]
 };
 
 /** Modules an agent changed in events newer than `afterId` (reads and refusals change nothing). */

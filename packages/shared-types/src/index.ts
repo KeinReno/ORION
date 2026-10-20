@@ -2,6 +2,7 @@ export * from "./auth";
 export * from "./agent";
 export * from "./agent-gateway";
 export * from "./agent-tools";
+export * from "./agent-module-inputs";
 export * from "./assistant-chat";
 export * from "./app-update";
 export * from "./agent-manual";

@@ -7,6 +7,16 @@ import { resolveAgentConnection } from "./agent-connection";
 import { GENERATED_AGENT_CONTROLLERS } from "../modules-ext/modules.generated";
 import { AgentGatewayController } from "./agent-gateway.controller";
 import { AiController } from "./ai.controller";
+import { ContactsAgentController } from "../contacts/contacts.agent.controller";
+import { DocumentsAgentController } from "../documents/documents.agent.controller";
+import { FinanceAgentController } from "../finance/finance.agent.controller";
+import { HabitsAgentController } from "../habits/habits.agent.controller";
+import { InventoryAgentController } from "../inventory/inventory.agent.controller";
+import { ListsAgentController } from "../lists/lists.agent.controller";
+import { TimeAgentController } from "../time/time.agent.controller";
+
+/** Agent tools of the core modules live next to each module (G13), like the manifest modules' ones. */
+const CORE_MODULE_AGENT_CONTROLLERS = [HabitsAgentController, ListsAgentController, TimeAgentController, ContactsAgentController, DocumentsAgentController, FinanceAgentController, InventoryAgentController];
 
 const TOKEN = "orion_agt_SECRETSECRETSECRETSECRET1234";
 
@@ -27,7 +37,8 @@ function routesOf(controller: { prototype: object }, prefix: string): string[] {
 
 describe("каталог инструментов ↔ маршруты /ai/v1", () => {
   // Контроллеры подключаемых модулей (G13) лежат в своих каталогах; префикс — из их собственного @Controller.
-  const moduleRoutes = GENERATED_AGENT_CONTROLLERS.flatMap((controller) => routesOf(controller, Reflect.getMetadata("path", controller) as string));
+  const moduleControllers = [...GENERATED_AGENT_CONTROLLERS, ...CORE_MODULE_AGENT_CONTROLLERS];
+  const moduleRoutes = moduleControllers.flatMap((controller) => routesOf(controller, Reflect.getMetadata("path", controller) as string));
   const actual = new Set([...routesOf(AiController, "ai/v1"), ...routesOf(AgentGatewayController, "ai/v1"), ...moduleRoutes]);
   const declared = new Set(AGENT_TOOLS.map((tool) => `${tool.http.method} ${tool.http.path}`.replace(/\{\w+\}/g, ":p")));
 

@@ -15,6 +15,7 @@ import { Button, Card, Select, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { AGENT_CLIENTS, AGENT_CLIENT_LABEL, buildConnectSnippet, checkAgentConnection, type AgentClient, type ConnectionCheck } from "../../lib/agent-connect";
 import { describeError } from "../../lib/error-message";
+import { ModulePermissionsField } from "./agent-permissions";
 import { relativeTime } from "../../lib/format";
 
 const WIZARD_SCOPES = AGENT_SCOPES.filter((scope) => !scope.startsWith("agents:") && scope !== "finance:draft");
@@ -29,6 +30,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
   const create = useCreateAgentToken(workspaceId);
   const [client, setClient] = useState<AgentClient>("claude-desktop");
   const [scopes, setScopes] = useState<AgentScope[]>([...AGENT_RECOMMENDED_SCOPES]);
+  const [modulePermissions, setModulePermissions] = useState<string[]>([]);
   const [issued, setIssued] = useState<{ token: CreatedAgentToken; client: AgentClient } | null>(null);
   const [check, setCheck] = useState<ConnectionCheck | null>(null);
   const [checking, setChecking] = useState(false);
@@ -41,7 +43,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
 
   async function installNow(): Promise<void> {
     try {
-      setInstalled(await install.mutateAsync({ client: client as AgentInstallClient, scopes }));
+      setInstalled(await install.mutateAsync({ client: client as AgentInstallClient, scopes, modulePermissions }));
     } catch (error) {
       toast({ title: "Не удалось подключить автоматически", description: `${describeError(error)} Можно подключить вручную — кнопка рядом.`, tone: "danger" });
     }
@@ -51,7 +53,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, expiresInDays: 90 });
+      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, modulePermissions, expiresInDays: 90 });
       setIssued({ token, client });
       setCheck(null);
     } catch (error) {
@@ -149,13 +151,14 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
               </label>
             ))}
           </fieldset>
+          <ModulePermissionsField value={modulePermissions} onChange={setModulePermissions} />
           <div className="flex flex-wrap gap-2">
             {canInstall ? (
-              <Button type="button" size="sm" disabled={install.isPending || scopes.length === 0} onClick={() => void installNow()}>
+              <Button type="button" size="sm" disabled={install.isPending || (scopes.length === 0 && modulePermissions.length === 0)} onClick={() => void installNow()}>
                 {install.isPending ? "Подключаю…" : `Подключить ${AGENT_CLIENT_LABEL[client]} автоматически`}
               </Button>
             ) : null}
-            <Button type="submit" size="sm" variant={canInstall ? "outline" : "primary"} disabled={create.isPending || scopes.length === 0 || connection.isLoading}>
+            <Button type="submit" size="sm" variant={canInstall ? "outline" : "primary"} disabled={create.isPending || (scopes.length === 0 && modulePermissions.length === 0) || connection.isLoading}>
               {canInstall ? "Настроить вручную" : "Выпустить токен и показать настройку"}
             </Button>
           </div>

@@ -423,11 +423,182 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
   }
 ];
 
-/** Инструменты ядра + инструменты модулей, подключённых манифестом (`modules-ext/<id>/module.manifest.json` → `agent.tools`). */
-export const AGENT_TOOLS: readonly AgentToolDef[] = [...CORE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS];
+const dayKey = { type: "string", description: "День YYYY-MM-DD по времени пользователя; по умолчанию — сегодня" };
+const isoFrom = str("Начало периода, ISO-8601; по умолчанию — 7 дней назад");
+const isoTo = str("Конец периода, ISO-8601; по умолчанию — сейчас");
+
+/**
+ * Инструменты основных модулей (G13): как у подключаемых — разрешение из реестра в `AgentToken.modulePermissions`,
+ * модуль должен быть включён, запись считается в лимит и попадает в журнал (`AgentModuleToolsService`). Удалять и
+ * менять существующее они не умеют: только смотреть и добавлять новое (отметка привычки, пункты списка).
+ */
+const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
+  {
+    name: "orion_habits_list",
+    group: "modules",
+    effect: "read",
+    description: "Привычки пространства: id, название, расписание, серия дней подряд, нужно ли сегодня и отмечена ли сегодня.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/habits" },
+    input: obj({ today: dayKey }),
+    permission: "habits.habit.read",
+    moduleId: "habits"
+  },
+  {
+    name: "orion_habits_mark_done",
+    group: "modules",
+    effect: "create",
+    description: "Отметить привычку выполненной за день (по умолчанию сегодня). Уже отмеченная остаётся отмеченной — снимать отметку агент не может.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/habits/{habitId}/done" },
+    input: obj({ habitId: str("id привычки из orion_habits_list"), day: dayKey }, ["habitId"]),
+    example: { habitId: "<id привычки>" },
+    permission: "habits.habit.update",
+    moduleId: "habits"
+  },
+  {
+    name: "orion_lists_list",
+    group: "modules",
+    effect: "read",
+    description: "Списки пространства (покупки, дела, сборы) с пунктами: текст, количество, отмечен ли, группа.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/lists" },
+    input: obj({}),
+    permission: "lists.list.read",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_lists_add_items",
+    group: "modules",
+    effect: "create",
+    description: "Добавить пункты в список. По одному на строку, как человек пишет: «Молоко, 2 л», «Хлеб»; строка «# Молочное» задаёт группу следующих пунктов.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/lists/{listId}/items" },
+    input: obj({ listId: str("id списка из orion_lists_list"), text: str("Пункты, по одному на строку") }, ["listId", "text"]),
+    example: { listId: "<id списка>", text: "Молоко, 2 л\nХлеб" },
+    permission: "lists.list.update",
+    moduleId: "lists"
+  },
+  {
+    name: "orion_time_summary",
+    group: "modules",
+    effect: "read",
+    description: "Учёт времени за период: сколько минут всего, по проектам и по задачам; идёт ли сейчас таймер.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/time/summary" },
+    input: obj({ from: isoFrom, to: isoTo }),
+    permission: "time.entry.read",
+    moduleId: "time"
+  },
+  {
+    name: "orion_contacts_list",
+    group: "modules",
+    effect: "read",
+    description: "Контакты пространства: имя, телефоны, почта, день рождения, заметка. query — поиск по имени, телефону или почте.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/contacts" },
+    input: obj({ query: str("Что искать (необязательно)") }),
+    permission: "contacts.contact.read",
+    moduleId: "contacts"
+  },
+  {
+    name: "orion_documents_list",
+    group: "modules",
+    effect: "read",
+    description: "Файлы и папки раздела «Документы»: id, название, тип, размер, дата изменения. query — поиск по названию.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/documents" },
+    input: obj({ query: str("Что искать в названии (необязательно)") }),
+    permission: "documents.document.read",
+    moduleId: "documents"
+  },
+  {
+    name: "orion_documents_read_text",
+    group: "modules",
+    effect: "read",
+    description: "Текст документа (PDF, Word, текст), который ORION извлёк при загрузке, — для пересказа и ответов по документу. Длинный текст обрезан.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/documents/{documentId}/text" },
+    input: obj({ documentId: str("id документа из orion_documents_list") }, ["documentId"]),
+    permission: "documents.document.read",
+    moduleId: "documents"
+  },
+  {
+    name: "orion_finance_accounts",
+    group: "modules",
+    effect: "read",
+    description: "Счета и их балансы (в копейках). Видны только счета, доступные человеку, от имени которого работает агент.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/finance/accounts" },
+    input: obj({}),
+    permission: "finance.transaction.read",
+    moduleId: "finance"
+  },
+  {
+    name: "orion_finance_transactions",
+    group: "modules",
+    effect: "read",
+    description: "Операции за период (до 100): дата, сумма в копейках, счёт, категория, заметка. Только чтение.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/finance/transactions" },
+    input: obj({ from: isoFrom, to: isoTo, accountId: str("Только этот счёт (необязательно)"), q: str("Поиск по заметке (необязательно)") }),
+    permission: "finance.transaction.read",
+    moduleId: "finance"
+  },
+  {
+    name: "orion_inventory_list",
+    group: "modules",
+    effect: "read",
+    description: "Склад: вещи и запасы с остатками и порогом «мало».",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/inventory" },
+    input: obj({}),
+    permission: "inventory.item.read",
+    moduleId: "inventory"
+  }
+];
+
+/** Инструменты ядра + основных модулей + модулей, подключённых манифестом (`modules-ext/<id>/module.manifest.json` → `agent.tools`). */
+export const AGENT_TOOLS: readonly AgentToolDef[] = [...CORE_AGENT_TOOLS, ...CORE_MODULE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS];
 
 /** Разрешения реестра, которые токен может получить для инструментов модулей (проверяются при выпуске токена). */
-export const EXTENSION_AGENT_PERMISSIONS: readonly string[] = [...new Set(GENERATED_AGENT_TOOLS.flatMap((tool) => (tool.permission ? [tool.permission] : [])))];
+export const EXTENSION_AGENT_PERMISSIONS: readonly string[] = [
+  ...new Set([...CORE_MODULE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS].flatMap((tool) => (tool.permission ? [tool.permission] : [])))
+];
+
+/** One checkbox of «другие модули» when connecting an agent: a registry permission, the module it needs, a human label. */
+export interface ModuleAgentPermission {
+  permission: string;
+  moduleId: string;
+  label: string;
+  /** Adds something (a habit mark, list items) — counted against the token's write limit, refused for an observer. */
+  writes: boolean;
+}
+
+const MODULE_PERMISSION_LABEL: Record<string, string> = {
+  "habits.habit.read": "Привычки: смотреть",
+  "habits.habit.update": "Привычки: отмечать выполнение",
+  "lists.list.read": "Списки: смотреть",
+  "lists.list.update": "Списки: добавлять пункты",
+  "time.entry.read": "Учёт времени: смотреть",
+  "contacts.contact.read": "Контакты: смотреть",
+  "documents.document.read": "Документы: смотреть и читать текст",
+  "finance.transaction.read": "Финансы: смотреть счета и операции",
+  "inventory.item.read": "Склад: смотреть"
+};
+
+/** Every module permission an agent can be given, in the order of the tool catalog (manifest modules use their tool text). */
+export const MODULE_AGENT_PERMISSIONS: readonly ModuleAgentPermission[] = (() => {
+  const seen = new Map<string, ModuleAgentPermission>();
+  for (const tool of [...CORE_MODULE_AGENT_TOOLS, ...GENERATED_AGENT_TOOLS]) {
+    if (!tool.permission || !tool.moduleId) continue;
+    const previous = seen.get(tool.permission);
+    const writes = tool.effect !== "read" || previous?.writes === true;
+    const label = MODULE_PERMISSION_LABEL[tool.permission] ?? `${tool.moduleId}: ${writes ? "записывать" : "смотреть"}`;
+    seen.set(tool.permission, { permission: tool.permission, moduleId: tool.moduleId, label, writes });
+  }
+  return [...seen.values()];
+})();
 
 export function isExtensionAgentPermission(value: string): boolean {
   return EXTENSION_AGENT_PERMISSIONS.includes(value);

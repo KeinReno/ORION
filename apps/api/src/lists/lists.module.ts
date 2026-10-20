@@ -1,3 +1,5 @@
+import { AgentCoreModule } from "../ai/agent-core.module";
+import { ListsAgentController } from "./lists.agent.controller";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -8,8 +10,8 @@ import { ListsSearchProvider } from "./lists-search.provider";
 
 /** ORION «Списки» — one controller/service pair, like habits/ or time/. */
 @Module({
-  imports: [AuthModule, WorkspacesModule, SearchRegistryModule],
-  controllers: [ListsController],
+  imports: [AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
+  controllers: [ListsController, ListsAgentController],
   providers: [ListsService, ListsSearchProvider]
 })
 export class ListsModule {}

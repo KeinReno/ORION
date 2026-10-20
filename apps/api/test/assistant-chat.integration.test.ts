@@ -130,7 +130,9 @@ describe("Assistant chat (variant C)", () => {
     expect(seen[0]!.body.model).toBe("claude-test");
     const toolNames: string[] = seen[0]!.body.tools.map((t: { name: string }) => t.name);
     expect(toolNames).toContain("orion_capture");
-    expect(toolNames.some((name) => name.includes("propose_deletion") || name.includes("finance") || name === "orion_get_manual")).toBe(false);
+    // No deletion, no finance drafts, no manual; finances only as read tools of the module (G13).
+    expect(toolNames.some((name) => name.includes("propose_deletion") || name === "orion_propose_transaction" || name === "orion_finance_refs" || name === "orion_get_manual")).toBe(false);
+    expect(toolNames).toEqual(expect.arrayContaining(["orion_habits_list", "orion_lists_add_items", "orion_finance_accounts"]));
     // Результат инструмента вернулся модели во втором запросе.
     expect(JSON.stringify(seen[1]!.body.messages)).toContain("tu1");
 

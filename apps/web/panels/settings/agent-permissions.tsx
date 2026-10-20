@@ -12,6 +12,8 @@ import {
   AGENT_PERMISSION_OPS,
   AGENT_PERMISSION_OP_LABEL,
   AGENT_SCOPE_LABEL,
+  MODULE_AGENT_PERMISSIONS,
+  type OrionModuleId,
   type AgentForbidden,
   type AgentMode,
   type AgentPermissionModule,
@@ -21,6 +23,7 @@ import {
   type CreateAgentTokenInput
 } from "@orion/shared-types";
 import { Select } from "@orion/ui";
+import { useEnabledModules } from "../../lib/use-enabled-modules";
 
 /** Non-matrix scopes: agent-to-agent traffic and links. */
 const EXTRA_SCOPES: AgentScope[] = ["agents:message", "agents:delegate"];
@@ -42,6 +45,8 @@ export interface PolicyDraft {
   forbidden: AgentForbidden[];
   writeLimit: string;
   autoCommitProjectIds: string[];
+  /** Registry permissions of module tools: habits, lists, time, contacts, documents, finance (read), inventory… */
+  modulePermissions: string[];
 }
 
 export const defaultPolicy = (): PolicyDraft => ({
@@ -51,11 +56,12 @@ export const defaultPolicy = (): PolicyDraft => ({
   allowedProjectIds: [],
   forbidden: ["delete"],
   writeLimit: "",
+  modulePermissions: [],
   autoCommitProjectIds: []
 });
 
 /** The request body for `POST agent-tokens` minus name and expiry. */
-export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "mode" | "permissions" | "scopes" | "allowedProjectIds" | "forbidden" | "writeLimitPerHour" | "autoCommitProjectIds"> {
+export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "mode" | "permissions" | "scopes" | "allowedProjectIds" | "forbidden" | "writeLimitPerHour" | "autoCommitProjectIds" | "modulePermissions"> {
   const limit = Number(draft.writeLimit);
   return {
     mode: draft.mode,
@@ -64,13 +70,46 @@ export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "
     allowedProjectIds: draft.allowedProjectIds,
     forbidden: draft.forbidden,
     writeLimitPerHour: draft.writeLimit.trim() !== "" && Number.isInteger(limit) && limit > 0 ? limit : null,
-    autoCommitProjectIds: draft.mode === "manager" ? draft.autoCommitProjectIds : []
+    autoCommitProjectIds: draft.mode === "manager" ? draft.autoCommitProjectIds : [],
+    modulePermissions: draft.modulePermissions
   };
 }
 
 /** True when the matrix grants nothing and no extra scope is ticked: the server would refuse it. */
 export const policyIsEmpty = (draft: PolicyDraft): boolean =>
-  draft.extraScopes.length === 0 && AGENT_PERMISSION_MODULES.every((m) => draft.matrix[m].length === 0);
+  draft.extraScopes.length === 0 && draft.modulePermissions.length === 0 && AGENT_PERMISSION_MODULES.every((m) => draft.matrix[m].length === 0);
+
+/**
+ * «Другие модули»: what an agent may do in habits, lists, time, contacts, documents, finance (read only), inventory and
+ * modules added by manifest. Only modules switched on here are offered; a ticked permission of a module switched off
+ * later simply answers 409 until it is back.
+ */
+export function ModulePermissionsField({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }): React.ReactElement | null {
+  const { isEnabled } = useEnabledModules();
+  const offered = MODULE_AGENT_PERMISSIONS.filter((item) => isEnabled(item.moduleId as OrionModuleId));
+  if (offered.length === 0) return null;
+  return (
+    <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
+      <legend className="mb-1 text-xs text-muted-foreground">Другие модули</legend>
+      {offered.map((item) => (
+        <label key={item.permission} className="flex items-center gap-1.5 text-label">
+          <input
+            type="checkbox"
+            checked={value.includes(item.permission)}
+            onChange={() => onChange(toggled(value, item.permission))}
+            className="accent-accent"
+          />
+          {item.label}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Human labels of a token's module permissions, for its card. */
+export function describeModulePermissions(permissions: readonly string[]): string {
+  return MODULE_AGENT_PERMISSIONS.filter((item) => permissions.includes(item.permission)).map((item) => item.label).join(" · ");
+}
 
 const toggled = <T,>(list: T[], item: T): T[] => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 
@@ -138,6 +177,8 @@ export function AgentPolicyFields({
           «Менять» — править существующее; «Предлагать» — просить вас подтвердить (изменение или удаление). В режиме помощника любое изменение идёт через подтверждение.
         </p>
       </fieldset>
+
+      <ModulePermissionsField value={draft.modulePermissions} onChange={(modulePermissions) => set({ modulePermissions })} />
 
       <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
         <legend className="mb-1 text-xs text-muted-foreground">Взаимодействие агентов</legend>
