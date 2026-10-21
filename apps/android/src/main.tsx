@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet } from "lucide-react";
-import { MobileRepository, lanProfileSchema, createPortableBackup, type Draft, type MobileSnapshot } from "@orion/mobile-core";
+import { MobileRepository, lanProfileSchema, createPortableBackup, appendDictation, type Draft, type MobileSnapshot } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { storage } from "./storage";
+import { Dictation } from "./dictation";
 import { FinancePage } from "./finance";
 import { SettingsPage } from "./settings";
 import { useUpdates } from "./use-updates";
@@ -30,6 +31,7 @@ function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dictating, setDictating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState("");
   const [port, setPort] = useState("4443");
@@ -130,25 +132,39 @@ function App() {
     <button onClick={() => void connection.switchSpace(false)}>Открыть записи «На телефоне»</button></main>;
 
   if (editor) return <div className="shell"><header className="editor-bar">
-    <button className="icon-button" aria-label="Назад к списку, оставить черновик" disabled={busy} onClick={() => history.back()}><ArrowLeft /></button>
+    <button className="icon-button" aria-label="Назад к списку, оставить черновик" disabled={busy || dictating} onClick={() => history.back()}><ArrowLeft /></button>
     <h1 ref={heading} tabIndex={-1}>{editor.kind === "task" ? "Задача" : "Заметка"}</h1>
-    <button className="primary" disabled={busy || !editor.title.trim()} onClick={async () => {
+    <button className="primary" disabled={busy || dictating || !editor.title.trim()} onClick={async () => {
       if (await saveEntry(editor)) history.back();
     }}>Сохранить</button>
   </header><main className="editor">
     <p className="scope"><Smartphone size={16} /> {remote ? data.remoteSelection?.workspaceName + " · локальная копия ПК" : "Только на этом телефоне"}</p>
-    <label>Название<input aria-label="Название" autoFocus value={editor.title} maxLength={200} placeholder={editor.kind === "task" ? "Что нужно сделать?" : "О чём эта заметка?"}
-      disabled={busy} onChange={(e) => changeDraft({ ...editor, title: e.target.value })} /></label>
+    <Dictation disabled={busy} activity={setDictating}
+      prepare={async () => {
+        if (!repo.current) throw new Error("Хранилище недоступно");
+        try { if (remote) await repo.current.saveRemoteDraft(remote.key, editor); else await repo.current.saveDraft(editor); }
+        catch { throw new Error("Черновик не записан. Диктовка не запущена; повторите сохранение и попробуйте снова."); }
+        setData(repo.current.snapshot());
+      }}
+      apply={async (text, field, id) => {
+        if (!repo.current) throw new Error("Хранилище недоступно");
+        const next = appendDictation(editor, text, field, id);
+        try { if (remote) await repo.current.saveRemoteDraft(remote.key, next); else await repo.current.saveDraft(next); }
+        catch { throw new Error("Не удалось записать текст в черновик. Результат диктовки сохранён отдельно; освободите место и повторите добавление."); }
+        setEditor(next); setData(repo.current.snapshot());
+      }} />
+    <label>Название<input aria-label="Название" value={editor.title} maxLength={200} placeholder={editor.kind === "task" ? "Что нужно сделать?" : "О чём эта заметка?"}
+      disabled={busy || dictating} onChange={(e) => changeDraft({ ...editor, title: e.target.value })} /></label>
     {!editor.title.trim() && <p className="helper">Добавьте название, чтобы сохранить запись.</p>}
     <label>{editor.kind === "task" ? "Описание" : "Текст заметки"}
-      <textarea aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body} maxLength={20000} rows={12} disabled={busy}
+      <textarea aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body} maxLength={20000} rows={12} disabled={busy || dictating}
         placeholder={editor.kind === "task" ? "Детали, которые пригодятся позже" : "Пишите свободно. Разметка Markdown сохранится."}
         onChange={(e) => changeDraft({ ...editor, body: e.target.value })} /></label>
-    {editor.kind === "task" && <fieldset disabled={busy}><legend>Приоритет</legend><div className="segments">
+    {editor.kind === "task" && <fieldset disabled={busy || dictating}><legend>Приоритет</legend><div className="segments">
       {([["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]] as const).map(([value, label]) =>
         <label key={value}><input type="radio" name="priority" checked={editor.priority === value} onChange={() => changeDraft({ ...editor, priority: value })} /><span>{label}</span></label>)}
     </div></fieldset>}
-    {feedback}<button className="text-button" disabled={busy} onClick={async () => {
+    {feedback}<button className="text-button" disabled={busy || dictating} onClick={async () => {
       if (await action((value) => remote ? value.saveRemoteDraft(remote.key, null) : value.saveDraft(null), "Черновик отменён")) history.back();
     }}>Отменить изменения</button>
   </main></div>;

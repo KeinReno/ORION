@@ -23,3 +23,5 @@ Android — отдельная клиентская поверхность, не
 [Alpha.4 — быстрый ввод финансов и результаты проверки](FINANCE_ALPHA4.md).
 
 [Alpha.5 — общие темы KAIDEN](RELEASE_ALPHA5.md); [жесты и голосовой ввод: проект](DESIGN_AND_CAPTURE.md).
+
+[Alpha.6 — кнопка системной диктовки](RELEASE_ALPHA6.md).

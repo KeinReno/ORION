@@ -3,6 +3,7 @@ export * from "./android-updates";
 export * from "./mobile-finance";
 import { mobileFinanceSchema, createMobileFinance, financeDraftSchema, applyFinanceEntry, type FinanceDraft } from "./mobile-finance";
 export * from "./mobile-models";
+export * from "./dictation";
 export * from "./backup";
 export * from "./mobile-replica";
 export * from "./remote-client";
