@@ -29,11 +29,11 @@ export function useDepth(enabled: boolean, strength = 60) {
     const paint = () => {
       frame = 0; if (!alive || !wanted || touching) return;
       const scale = strengthRef.current / 100;
-      root.style.setProperty("--depth-lift", `${(48 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-x", `${(latest.x * 14 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-y", `${(latest.y * 14 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-rx", `${(-latest.y * 12 * scale).toFixed(2)}deg`);
-      root.style.setProperty("--depth-ry", `${(latest.x * 12 * scale).toFixed(2)}deg`);
+      root.style.setProperty("--depth-lift", `${(24 * scale).toFixed(2)}px`);
+      root.style.setProperty("--depth-x", `${(Math.max(-1, Math.min(1, latest.x * 1.5)) * 32 * scale).toFixed(2)}px`);
+      root.style.setProperty("--depth-y", `${(Math.max(-1, Math.min(1, latest.y * 1.5)) * 32 * scale).toFixed(2)}px`);
+      root.style.setProperty("--depth-rx", `${(-Math.max(-1, Math.min(1, latest.y * 1.5)) * 28 * scale).toFixed(2)}deg`);
+      root.style.setProperty("--depth-ry", `${(Math.max(-1, Math.min(1, latest.x * 1.5)) * 28 * scale).toFixed(2)}deg`);
     };
     const sync = () => {
       const editing = document.activeElement?.matches("input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select");

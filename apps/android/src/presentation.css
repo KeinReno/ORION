@@ -84,21 +84,20 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .depth-preview-front{inset:36px 0 0 36px;color:var(--accent);background:var(--surface);box-shadow:0 12px 28px #0003;font-weight:600}
 .depth-status{font-size:.85rem;min-height:2.5em;line-height:1.5}
 
-/* Shared card model, inspired by Aceternity: one perspective, one rotation, positive Z layers. */
+/* Shared card model: one perspective and rotation, one flat interactive surface. */
 :root{--depth-x:0px;--depth-y:0px;--depth-rx:0deg;--depth-ry:0deg;--depth-lift:0px}
 .depth-card{min-width:0;width:100%;perspective:1000px}
-.depth-card-body{min-width:0;transform-origin:center;transform-style:preserve-3d}
-.depth-card-body>*{transform-style:preserve-3d}
-.depth-card-body :is(.entry-main,.depth-controls,.depth-preview,.task-row,.note-depth-row,.finance-entry){transform-style:preserve-3d}
-:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card-body{transform:translate3d(calc(var(--depth-x)*.3),calc(var(--depth-y)*.3),0) rotateX(var(--depth-rx)) rotateY(var(--depth-ry));transition:transform 100ms linear}
+.depth-card-body{min-width:0;transform-origin:center;transform-style:flat}
+.depth-card-body>*{transform-style:flat}
+.depth-card-body :is(.entry-main,.depth-controls,.depth-preview,.task-row,.note-depth-row,.finance-entry){transform-style:flat}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card-body{transform:translate3d(var(--depth-x),var(--depth-y),var(--card-elevation,var(--depth-lift))) rotateX(var(--depth-rx)) rotateY(var(--depth-ry));transition:transform 100ms linear}
 :root[data-depth=paused] .depth-card-body{transition:none!important}
-:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card-body :is(h1,h2,.entry-main>strong,.finance-entry-amount,.finance-totals dd){transform:translateZ(var(--depth-lift))}
 :root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-back{transform:translateZ(var(--depth-lift))}
 :root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-front{transform:translateZ(calc(var(--depth-lift)*2))}
 .notes>li{display:block}.note-depth-row{display:flex;align-items:flex-start;gap:12px}
 /* Fixed navigation and gesture overlays are outside all depth cards. */
 
-.depth-preview{isolation:auto;perspective:none}
+.depth-preview{isolation:auto;perspective:1000px}
 .depth-card-body button{isolation:auto}
 .settings-page>.depth-card+.depth-card .settings-section,.connection>.depth-card+.depth-card .settings-section{padding-top:24px}
 
@@ -107,3 +106,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 /* Give entries a visible card surface so the border, controls and text rotate together. */
 .task-row,.note-depth-row,.finance-entry{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 5px 14px rgb(var(--kaiden-bg-canvas)/.1)}
 .task-list>li,.notes>li,.finance-entries>li{border-bottom:0}
+
+/* One rendered plane per interactive card. Text/buttons never form competing 3D hit planes. */
+.depth-card[data-elevation=base]{--card-elevation:0px}
+.entry-action-panel{padding:12px;display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line)}
+.entry-action-panel>p{width:100%;overflow-wrap:anywhere}.entry-action-panel .helper{margin:0 0 8px}.danger-action{color:var(--error)}
+.entry-menu-button{flex-shrink:0;padding:12px 8px;min-width:48px}

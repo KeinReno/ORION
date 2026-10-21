@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { isTaskClosed, type Task } from "@orion/shared-types";
 
-export function TaskList({ tasks, disabled, reorder, children }: {
-  tasks: Task[]; disabled: boolean; reorder: (ids: string[]) => Promise<boolean>; children: (task: Task) => ReactNode;
+export function TaskList({ tasks, disabled, reorder, children, actions }: {
+  tasks: Task[]; disabled: boolean; reorder: (ids: string[]) => Promise<boolean>; children: (task: Task) => ReactNode; actions?: (task: Task) => ReactNode;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const drag = useRef<{ id: string; pointer: number; moved: boolean; x: number; y: number } | null>(null);
@@ -75,5 +75,5 @@ export function TaskList({ tasks, disabled, reorder, children }: {
         <button disabled={disabled || saving || !tasks[index + 1] || isTaskClosed(tasks[index + 1]!.status) !== isTaskClosed(task.status)}
           onClick={() => void move(task.id, tasks[index + 1]!.id, true)}><ArrowDown size={18} />Ниже</button>
       </div>}
-    </DepthCard></li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
+    {actions?.(task)}</DepthCard></li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
 }

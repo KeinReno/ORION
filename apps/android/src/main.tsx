@@ -1,9 +1,10 @@
+import { EntryActions } from "./entry-actions";
 import { DepthCard } from "./depth-card";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { MoreHorizontal, ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { MobileRepository, lanProfileSchema, createPortableBackup, appendDictation, type Draft, type MobileSnapshot } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { storage } from "./storage";
@@ -30,6 +31,7 @@ const errorText = (error: unknown) => error instanceof Error && !("issues" in er
 function App() {
   const repo = useRef<MobileRepository | null>(null);
   const [data, setData] = useState<MobileSnapshot | null>(null);
+  const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string } | null>(null);
   const [tab, setTab] = useState<Tab>("tasks");
   const [editor, setEditor] = useState<Draft | null>(null);
   const [query, setQuery] = useState("");
@@ -76,6 +78,7 @@ function App() {
     }) : null;
     return () => { window.removeEventListener("popstate", back); void listener?.then((handle) => handle.remove()); };
   }, []);
+  useEffect(() => { setEntryMenu(null); }, [tab, editor?.kind, editor?.id]);
   useEffect(() => { heading.current?.focus(); }, [tab, editor?.kind, editor?.id]);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: light)");
@@ -181,6 +184,17 @@ function App() {
     }}>Отменить изменения</button>
   </main></DepthCard></div>;
 
+  const entryActions = (kind: "task" | "note", item: Task | Note) => entryMenu?.kind === kind && entryMenu.id === item.id
+    ? <EntryActions key={kind + item.id} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy}
+      close={() => setEntryMenu(null)} edit={() => { setEntryMenu(null); if (currentDraft) begin(currentDraft); else if (kind === "task") editTask(item as Task); else editNote(item as Note); }}
+      remove={() => action(async (value) => {
+        if (remote) { await remote.deleteEntry(kind, item.id); if (currentDraft?.kind === kind && currentDraft.id === item.id) await value.saveRemoteDraft(remote.key, null); }
+        else await value.deleteEntry(kind, item.id);
+      }, remote ? "Удаление сохранено в копии. Синхронизируйте для отправки на ПК." : "Запись удалена с телефона")} /> : null;
+  const menuButton = (kind: "task" | "note", item: Task | Note) => <button className="icon-button entry-menu-button" disabled={busy}
+    aria-label={(kind === "task" ? "Действия задачи: " : "Действия заметки: ") + item.title}
+    aria-expanded={entryMenu?.kind === kind && entryMenu.id === item.id}
+    onClick={() => setEntryMenu(entryMenu?.kind === kind && entryMenu.id === item.id ? null : { kind, id: item.id })}><MoreHorizontal size={20} /></button>;
   const needle = query.toLocaleLowerCase();
   const ranks = new Map((data.taskOrder[remote?.key ?? "phone"] ?? []).map((id, index) => [id, index]));
   const tasks = (remote ? remote.engine.tasks() : data.tasks).filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(needle))
@@ -203,10 +217,10 @@ function App() {
     { id: "note", label: "Заметка", icon: NotebookPen, disabled: remote ? !remote.hasModule("note") : false, run: () => quickEntry("note") },
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
-  ]}><div className="shell"><DepthCard><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
+  ]}><div className="shell"><DepthCard elevation="base"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
     <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header></DepthCard>
     <main className="content">
-      <DepthCard><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
+      <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
         <p>{tab === "finance" ? "Запишите расход, пока не забыли." : tab === "tasks" ? (tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : "Освободите голову. Начните с одного дела.") : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
       {(tab === "tasks" || tab === "notes") && <button className="primary" disabled={busy || (remote ? !remote.hasModule(tab === "tasks" ? "task" : "note") : false)} onClick={() => {
         // A single recoverable draft must never be silently replaced.
@@ -233,7 +247,7 @@ function App() {
       : tab !== "connection" ? <>
         <DepthCard><label className="search"><Search size={20} /><span className="sr-only">Поиск</span><input type="search" placeholder={tab === "tasks" ? "Найти задачу" : "Найти заметку"} value={query} onChange={(e) => setQuery(e.target.value)} /></label></DepthCard>
         {tab === "notes" && <div className="filters"><button aria-pressed={!archive} onClick={() => setArchive(false)}>Все заметки</button><button aria-pressed={archive} onClick={() => setArchive(true)}><Archive size={16} />Архив</button></div>}
-        {tab === "tasks" ? <TaskList tasks={tasks} disabled={busy || Boolean(query)}
+        {tab === "tasks" ? <TaskList tasks={tasks} disabled={busy || Boolean(query)} actions={(task) => entryActions("task", task)}
           reorder={(ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне")} >{(task) => <>
           <button className="check-button" aria-label={(isTaskClosed(task.status) ? "Вернуть в работу: " : "Завершить: ") + task.title}
             aria-pressed={isTaskClosed(task.status)} disabled={busy} onClick={() => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена")}>
@@ -241,12 +255,14 @@ function App() {
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editTask(task)}><strong>{task.title}</strong>
             {task.description && <span className="excerpt">{task.description}</span>}
             <small>{isTaskClosed(task.status) ? "Завершена" : task.priority === "high" ? "Высокий приоритет" : task.priority === "low" ? "Низкий приоритет" : "К выполнению"}</small></button>
+          {menuButton("task", task)}
         </>}</TaskList> : <ul className="entries notes">{notes.map((note) => <li key={note.id}><DepthCard><div className="note-depth-row">
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editNote(note)}><strong>{note.title}</strong>
             <span className="excerpt">{note.body || "Пока только название"}</span><small>{new Date(note.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</small></button>
           <button className="icon-button" aria-label={(archive ? "Вернуть из архива: " : "В архив: ") + note.title} disabled={busy}
             onClick={() => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть")}>{archive ? <RotateCcw size={20} /> : <Archive size={20} />}</button>
-        </div></DepthCard></li>)}</ul>}
+          {menuButton("note", note)}
+        </div>{entryActions("note", note)}</DepthCard></li>)}</ul>}
         {(tab === "tasks" ? tasks : notes).length === 0 && <DepthCard><section className="empty">
           {tab === "tasks" ? <ListTodo size={36} /> : <NotebookPen size={36} />}
           <h2>{query ? "Ничего не найдено" : archive && tab === "notes" ? "Архив пока пуст" : tab === "tasks" ? "Место для первого дела" : "Место для вашей мысли"}</h2>

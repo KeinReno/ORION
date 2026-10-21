@@ -13,6 +13,24 @@ const draft = (kind: "task" | "note", title = "Запись"): Draft => ({
 });
 
 describe("Android local repository", () => {
+  it("deletes only the chosen entry atomically and retains unrelated drafts and valid delete operations", async () => {
+    const disk = new Disk(); const repo = await MobileRepository.open(disk);
+    await repo.saveEntry(draft("task", "Удалить")); await repo.saveEntry(draft("note", "Оставить"));
+    const task = repo.snapshot().tasks[0];
+    await repo.saveTaskOrder("phone", [task.id]); await repo.saveDraft(draft("note", "Другой черновик"));
+    const before = repo.snapshot(); disk.fail = true;
+    await expect(repo.deleteEntry("task", task.id)).rejects.toThrow("disk full"); expect(repo.snapshot()).toEqual(before);
+    disk.fail = false; await repo.deleteEntry("task", task.id);
+    const restarted = await MobileRepository.open(disk);
+    expect(restarted.snapshot().tasks).toHaveLength(0); expect(restarted.snapshot().notes).toEqual(before.notes);
+    expect(restarted.snapshot().draft).toEqual(before.draft); expect(restarted.snapshot().taskOrder.phone).toEqual([]);
+    expect(restarted.snapshot().outbox.slice(-1)[0]).toMatchObject({ entity: "task", entityId: task.id, kind: "delete", expectedRevision: 1 });
+    expect(syncOpSchema.safeParse(restarted.snapshot().outbox.slice(-1)[0]).success).toBe(true);
+    const note = restarted.snapshot().notes[0]; await restarted.saveDraft({ ...draft("note"), id: note.id });
+    await restarted.deleteEntry("note", note.id); expect(restarted.snapshot().draft).toBeNull();
+    await expect(restarted.deleteEntry("note", note.id)).rejects.toThrow("Запись не найдена");
+  });
+
   it("persists entries, protocol operations, draft and device identity across restart", async () => {
     const disk = new Disk();
     const repo = await MobileRepository.open(disk);

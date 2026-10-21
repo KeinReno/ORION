@@ -199,7 +199,15 @@ export class MobileRepository {
     return this.transaction((next) => this.apply(next, "note", id, { archivedAt: archived ? new Date().toISOString() : null }));
   }
 
-  private apply(next: MobileSnapshot, entity: "task" | "note", id: string | null, fields: Record<string, unknown>) {
+  deleteEntry(entity: "task" | "note", id: string): Promise<void> {
+    return this.transaction((next) => {
+      this.apply(next, entity, id, {}, true);
+      if (next.draft?.kind === entity && next.draft.id === id) next.draft = null;
+      if (entity === "task" && next.taskOrder.phone) next.taskOrder.phone = next.taskOrder.phone.filter((value) => value !== id);
+    });
+  }
+
+  private apply(next: MobileSnapshot, entity: "task" | "note", id: string | null, fields: Record<string, unknown>, remove = false) {
     const existing: Task | Note | undefined = id
       ? (entity === "task" ? next.tasks : next.notes).find((item) => item.id === id) : undefined;
     if (id && !existing) throw new Error("Запись не найдена. Вернитесь к списку.");
@@ -207,7 +215,7 @@ export class MobileRepository {
     const op: SyncOp = syncOpSchema.parse({
       opId: crypto.randomUUID(), deviceId: next.deviceId, deviceSeq: next.deviceSeq + 1,
       hlc: clock.now(), entity, entityId: id ?? crypto.randomUUID(),
-      kind: id ? "patch" : "create",
+      kind: remove ? "delete" : id ? "patch" : "create",
       fields: normalizeOpFields(entity, fields),
       ...(existing ? { expectedRevision: existing.revision } : {}),
     });
@@ -216,7 +224,7 @@ export class MobileRepository {
     entities.note = Object.fromEntries(next.notes.map((item) => [item.id, { ...item }]));
     applyOpLocally(entities, op, { userId: "local-device", workspaceId: next.workspaceId, userName: null });
     const doc = entities[entity][op.entityId];
-    doc.revision = existing ? existing.revision + 1 : 1;
+    if (doc) doc.revision = existing ? existing.revision + 1 : 1;
     next.tasks = Object.values(entities.task).map((item) => taskSchema.parse(item));
     next.notes = Object.values(entities.note).map((item) => noteSchema.parse(item));
     next.outbox.push(op);

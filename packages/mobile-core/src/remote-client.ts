@@ -77,6 +77,12 @@ export class MobileRemoteClient {
   async archiveNote(id: string, archived: boolean): Promise<void> {
     await this.write(() => this.engine.enqueue({ entity: "note", entityId: id, kind: "patch", fields: { archivedAt: archived ? new Date().toISOString() : null }, expectedRevision: this.revision("note", id) }));
   }
+  async deleteEntry(entity: "task" | "note", id: string): Promise<void> {
+    if (!this.hasModule(entity)) throw new Error("Этот модуль недоступен в пространстве компьютера");
+    const revision = this.revision(entity, id);
+    if (revision === undefined) throw new Error("Запись не найдена. Вернитесь к списку.");
+    await this.write(() => this.engine.enqueue({ entity, entityId: id, kind: "delete", expectedRevision: revision }));
+  }
   async importLocal(source: MobileSnapshot): Promise<number> {
     if (this.networking || this.importing) throw new Error("Дождитесь завершения текущей синхронизации");
     if (!this.storage.envelope) throw new Error("Сначала загрузите копию пространства");

@@ -22,6 +22,21 @@ async function connected(io = new Copies(), host = new MemoryHost()) {
   return { client, io, host };
 }
 describe("Mobile remote replica and portable backup", () => {
+  it("keeps deletion durable offline and converges through the existing public protocol", async () => {
+    const { client, io, host } = await connected(); const note = draft("Удалить после синхронизации");
+    await client.saveEntry(note); await client.sync();
+    const observer = await MobileRemoteClient.create(scope, new Copies(), host); await observer.sync();
+    expect(observer.engine.notes()).toHaveLength(1);
+    io.fail = true;
+    await expect(client.deleteEntry("note", note.id)).rejects.toThrow("disk full");
+    expect(client.engine.notes()).toHaveLength(1);
+    io.fail = false; await client.deleteEntry("note", note.id);
+    const restarted = await MobileRemoteClient.create(scope, io, host);
+    expect(restarted.engine.notes()).toHaveLength(0); expect(restarted.engine.status().pending).toBe(1);
+    await restarted.sync(); await observer.sync(); expect(observer.engine.notes()).toHaveLength(0);
+    await expect(restarted.deleteEntry("note", note.id)).rejects.toThrow("Запись не найдена");
+  });
+
   it("keeps offline writes durable, restarts and retries lost acknowledgements without duplicates", async () => {
     const { client, io, host } = await connected();
     const note = draft("На телефоне без сети");
