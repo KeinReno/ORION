@@ -1,3 +1,4 @@
+import { DepthCard } from "./depth-card";
 import { useEffect, useState } from "react";
 import { DARK_PALETTES } from "./theme";
 import type { MobileSettings } from "@orion/mobile-core";
@@ -19,7 +20,7 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
   const { state, phase, error, message, percent } = updates;
   const busy = phase !== "idle";
   return <section className="settings-page">
-    <section className="settings-section">
+    <DepthCard><section className="settings-section">
       <h2>Внешний вид</h2>
       <fieldset disabled={saving}><legend>Тема на этом телефоне</legend>
         <div className="segments">{([["system", "Системная"], ["light", "Светлая"], ["dark", "Тёмная"]] as const).map(([theme, label]) =>
@@ -43,8 +44,8 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
         <p className="helper">Держите телефон удобно, затем плавно наклоняйте влево и вправо. После касания текущее положение становится исходным. При системном отключении анимаций эффект не работает.</p>
       </div>}
       <p className="helper">Общие темы с десктопным Orion. Светлый режим использует Arctic. Выбор на телефоне пока независим от ПК.</p>
-    </section>
-    <section className="settings-section" aria-labelledby="updates-heading">
+    </section></DepthCard>
+    <DepthCard><section className="settings-section" aria-labelledby="updates-heading">
       <h2 id="updates-heading">Обновления</h2>
       <p>Установлена {state?.installedVersion ?? ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</p>
       <label className="switch-row"><span><strong>Проверять автоматически</strong><small>При открытии приложения, не чаще раза за 6 часов</small></span>
@@ -74,10 +75,10 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
         <button disabled={busy} onClick={() => void updates.check(false)}><RefreshCw size={18} />Проверить обновления</button>
       </div>
       <p className="helper">Установку подтверждает Android. Обновление устанавливается поверх приложения и сохраняет записи. Не удаляйте Orion перед установкой.</p>
-    </section>
-    <section className="settings-section"><h2>На этом телефоне</h2>
+    </section></DepthCard>
+    <DepthCard><section className="settings-section"><h2>На этом телефоне</h2>
       <p>Задачи, заметки, финансовые операции и настройки хранятся локально. Проверка обновлений не передаёт их в GitHub.</p>
       <button disabled={backupBusy} onClick={backup}><Download size={18} />Сохранить резервную копию</button>
-    </section>
+    </section></DepthCard>
   </section>;
 }

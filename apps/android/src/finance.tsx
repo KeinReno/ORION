@@ -1,3 +1,4 @@
+import { DepthCard } from "./depth-card";
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2 } from "lucide-react";
 import { localDate, parseMoney, resolveFinanceDate, type FinanceDraft, type MobileFinance } from "@orion/mobile-core";
@@ -42,8 +43,8 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt));
   const total = (type: string) => entries.filter((entry) => entry.type === type).reduce((sum, entry) => sum + entry.totalAmount, 0);
   return <section className="finance">
-    <div className="finance-context"><strong>На телефоне <span>RUB</span></strong><p>В резервной копии · без синхронизации с ПК</p></div>
-    <form className="finance-form" onSubmit={async (event) => {
+    <DepthCard><div className="finance-context"><strong>На телефоне <span>RUB</span></strong><p>В резервной копии · без синхронизации с ПК</p></div></DepthCard>
+    <DepthCard><form className="finance-form" onSubmit={async (event) => {
       event.preventDefault(); if (busy) return;
       try { parseMoney(draft.amount); } catch (cause) { setError((cause as Error).message); return; }
       if (await save(resolveFinanceDate(draft))) { setDraft(fresh({ ...finance, lastAccountId: draft.accountId }, draft.type)); setDraftStatus(""); setError(""); }
@@ -70,17 +71,17 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
         <button className="primary finance-save" disabled={!draft.amount.trim()}>{busy ? "Сохраняем…" : editing ? "Сохранить изменения" : draft.type === "expense" ? "Записать расход" : "Записать доход"}</button>
         {(draft.amount || draft.note || finance.draft) && <button type="button" className="text-button" onClick={() => void reset()}>Отменить ввод</button>}
       </fieldset>
-    </form>
+    </form></DepthCard>
     <section className="finance-history" aria-labelledby="finance-history-title">
-      <h2 id="finance-history-title">Операции за месяц</h2>
-      <label className="sr-only" htmlFor="finance-month">Месяц операций</label><input id="finance-month" type="month" required value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} />
-      <dl className="finance-totals"><div><dt>Расходы</dt><dd>{money(total("expense"))}</dd></div><div><dt>Доходы</dt><dd>{money(total("income"))}</dd></div></dl>
+      <DepthCard><div><h2 id="finance-history-title">Операции за месяц</h2>
+      <label className="sr-only" htmlFor="finance-month">Месяц операций</label><input id="finance-month" type="month" required value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} /></div></DepthCard>
+      <DepthCard><dl className="finance-totals"><div><dt>Расходы</dt><dd>{money(total("expense"))}</dd></div><div><dt>Доходы</dt><dd>{money(total("income"))}</dd></div></dl></DepthCard>
       {!entries.length ? <p className="finance-empty">За этот месяц записей пока нет. Добавьте первую операцию выше.</p> : <ul className="entries finance-entries">{entries.map((entry) => <li key={entry.id}>
-        <div className="finance-entry"><button className="entry-main" aria-label={"Изменить операцию: " + (entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name)} disabled={busy} onClick={() => edit(entry)}>
+        <DepthCard><div className="finance-entry"><button className="entry-main" aria-label={"Изменить операцию: " + (entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name)} disabled={busy} onClick={() => edit(entry)}>
           <strong>{entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name}</strong>
           <small>{new Date(entry.occurredAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} · {finance.accounts.find((item) => item.id === entry.accountId)?.name} · {finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name}</small>
           <span className="finance-entry-amount">{entry.type === "expense" ? "−" : "+"}{money(entry.totalAmount)} <Pencil size={14} /></span></button>
-          <button type="button" className="icon-button" disabled={busy} aria-label={"Удалить операцию: " + (entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name)} onClick={() => setDeleting(entry.id)}><Trash2 size={18} /></button></div>
+          <button type="button" className="icon-button" disabled={busy} aria-label={"Удалить операцию: " + (entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name)} onClick={() => setDeleting(entry.id)}><Trash2 size={18} /></button></div></DepthCard>
         {deleting === entry.id && <div className="finance-delete"><p>Удалить эту операцию? Она исчезнет из итогов на телефоне.</p><button disabled={busy} onClick={async () => {
           if (await remove(entry.id)) { setDeleting(null); if (draft.id === entry.id) { setDraft(fresh(finance)); setDraftStatus(""); } }
         }}>Удалить операцию</button><button disabled={busy} onClick={() => setDeleting(null)}>Оставить</button></div>}

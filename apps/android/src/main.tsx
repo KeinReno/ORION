@@ -1,3 +1,4 @@
+import { DepthCard } from "./depth-card";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
@@ -148,7 +149,7 @@ function App() {
     <button className="primary" disabled={busy || dictating || !editor.title.trim()} onClick={async () => {
       if (await saveEntry(editor)) history.back();
     }}>Сохранить</button>
-  </header><main className="editor">
+  </header><DepthCard><main className="editor">
     <p className="scope"><Smartphone size={16} /> {remote ? data.remoteSelection?.workspaceName + " · локальная копия ПК" : "Только на этом телефоне"}</p>
     <Dictation disabled={busy} activity={setDictating}
       prepare={async () => {
@@ -178,7 +179,7 @@ function App() {
     {feedback}<button className="text-button" disabled={busy || dictating} onClick={async () => {
       if (await action((value) => remote ? value.saveRemoteDraft(remote.key, null) : value.saveDraft(null), "Черновик отменён")) history.back();
     }}>Отменить изменения</button>
-  </main></div>;
+  </main></DepthCard></div>;
 
   const needle = query.toLocaleLowerCase();
   const ranks = new Map((data.taskOrder[remote?.key ?? "phone"] ?? []).map((id, index) => [id, index]));
@@ -202,16 +203,16 @@ function App() {
     { id: "note", label: "Заметка", icon: NotebookPen, disabled: remote ? !remote.hasModule("note") : false, run: () => quickEntry("note") },
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
-  ]}><div className="shell"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
-    <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header>
+  ]}><div className="shell"><DepthCard><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
+    <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header></DepthCard>
     <main className="content">
-      <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
+      <DepthCard><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
         <p>{tab === "finance" ? "Запишите расход, пока не забыли." : tab === "tasks" ? (tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : "Освободите голову. Начните с одного дела.") : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
       {(tab === "tasks" || tab === "notes") && <button className="primary" disabled={busy || (remote ? !remote.hasModule(tab === "tasks" ? "task" : "note") : false)} onClick={() => {
         // A single recoverable draft must never be silently replaced.
         if (currentDraft) begin(currentDraft);
         else begin({ ...emptyDraft(tab === "tasks" ? "task" : "note"), ...(remote ? { id: crypto.randomUUID() } : {}) });
-      }}><Plus size={20} /><span>Создать</span></button>}</div>
+      }}><Plus size={20} /><span>Создать</span></button>}</div></DepthCard>
       {feedback}
       {remote && tab !== "connection" && tab !== "finance" && <div className="replica-banner"><p>Копия пространства ПК · в очереди {remote.engine.status().pending} · конфликтов {remote.engine.status().conflicts}</p>
         <button disabled={connection.busy} onClick={() => { setTab("connection"); void connection.sync(); }}>Синхронизировать</button></div>}
@@ -230,7 +231,7 @@ function App() {
         backup={() => void backup()} backupBusy={busy}
         save={(settings) => action((value) => value.saveSettings(settings), "Настройки сохранены на этом телефоне")} />
       : tab !== "connection" ? <>
-        <label className="search"><Search size={20} /><span className="sr-only">Поиск</span><input type="search" placeholder={tab === "tasks" ? "Найти задачу" : "Найти заметку"} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
+        <DepthCard><label className="search"><Search size={20} /><span className="sr-only">Поиск</span><input type="search" placeholder={tab === "tasks" ? "Найти задачу" : "Найти заметку"} value={query} onChange={(e) => setQuery(e.target.value)} /></label></DepthCard>
         {tab === "notes" && <div className="filters"><button aria-pressed={!archive} onClick={() => setArchive(false)}>Все заметки</button><button aria-pressed={archive} onClick={() => setArchive(true)}><Archive size={16} />Архив</button></div>}
         {tab === "tasks" ? <TaskList tasks={tasks} disabled={busy || Boolean(query)}
           reorder={(ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне")} >{(task) => <>
@@ -240,20 +241,20 @@ function App() {
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editTask(task)}><strong>{task.title}</strong>
             {task.description && <span className="excerpt">{task.description}</span>}
             <small>{isTaskClosed(task.status) ? "Завершена" : task.priority === "high" ? "Высокий приоритет" : task.priority === "low" ? "Низкий приоритет" : "К выполнению"}</small></button>
-        </>}</TaskList> : <ul className="entries notes">{notes.map((note) => <li key={note.id}>
+        </>}</TaskList> : <ul className="entries notes">{notes.map((note) => <li key={note.id}><DepthCard><div className="note-depth-row">
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editNote(note)}><strong>{note.title}</strong>
             <span className="excerpt">{note.body || "Пока только название"}</span><small>{new Date(note.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</small></button>
           <button className="icon-button" aria-label={(archive ? "Вернуть из архива: " : "В архив: ") + note.title} disabled={busy}
             onClick={() => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть")}>{archive ? <RotateCcw size={20} /> : <Archive size={20} />}</button>
-        </li>)}</ul>}
-        {(tab === "tasks" ? tasks : notes).length === 0 && <section className="empty">
+        </div></DepthCard></li>)}</ul>}
+        {(tab === "tasks" ? tasks : notes).length === 0 && <DepthCard><section className="empty">
           {tab === "tasks" ? <ListTodo size={36} /> : <NotebookPen size={36} />}
           <h2>{query ? "Ничего не найдено" : archive && tab === "notes" ? "Архив пока пуст" : tab === "tasks" ? "Место для первого дела" : "Место для вашей мысли"}</h2>
           <p>{query ? "Попробуйте другое слово или очистите поиск." : archive && tab === "notes" ? "Здесь будут заметки, которые вы отложили."
             : remote && !remote.hasModule(tab === "tasks" ? "task" : "note") ? "Этот модуль недоступен в пространстве компьютера."
             : remote ? "Создайте запись в локальной копии, затем синхронизируйте её с ПК." : "Нажмите «Создать». Всё сохранится на телефоне, даже в авиарежиме."}</p>
           {query && <button onClick={() => setQuery("")}>Очистить поиск</button>}
-        </section>}
+        </section></DepthCard>}
       </> : <ConnectionPage data={data} connection={connection} address={address} port={port}
         setAddress={setAddress} setPort={setPort} busy={busy} backup={() => void backup()}
         saveProfile={() => { const result = lanProfileSchema.safeParse({ address, port: Number(port) });

@@ -1,3 +1,4 @@
+import { DepthCard } from "./depth-card";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { isTaskClosed, type Task } from "@orion/shared-types";
@@ -38,7 +39,7 @@ export function TaskList({ tasks, disabled, reorder, children }: {
   return <>
     <ul ref={list} className="entries task-list">{tasks.map((task, index) => <li key={task.id} data-task-id={task.id}
       className={[isTaskClosed(task.status) ? "completed" : "", moving === task.id ? "task-moving" : "", target === task.id && moving !== task.id ? (dropAfter ? "task-drop-after" : "task-drop-target") : ""].join(" ")}>
-      <div className="task-row">{children(task)}
+      <DepthCard><div className="task-row">{children(task)}
         <button className="task-grip icon-button" disabled={disabled || saving} aria-label={"Переместить задачу: " + task.title} aria-expanded={controls === task.id}
           onPointerDown={(event) => {
             if (!event.isPrimary || event.button !== 0 || disabled || saving) return;
@@ -74,5 +75,5 @@ export function TaskList({ tasks, disabled, reorder, children }: {
         <button disabled={disabled || saving || !tasks[index + 1] || isTaskClosed(tasks[index + 1]!.status) !== isTaskClosed(task.status)}
           onClick={() => void move(task.id, tasks[index + 1]!.id, true)}><ArrowDown size={18} />Ниже</button>
       </div>}
-    </li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
+    </DepthCard></li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
 }

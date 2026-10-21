@@ -20,13 +20,16 @@ export function useDepth(enabled: boolean, strength = 60) {
     let listener: Promise<PluginListenerHandle> | null = null;
     const reset = () => {
       if (frame) cancelAnimationFrame(frame); frame = 0;
+      root.querySelectorAll<HTMLElement>(".depth-card-body").forEach((element) => element.style.removeProperty("transform"));
       root.dataset.depth = "off";
+      root.style.setProperty("--depth-lift", "0px");
       for (const key of ["x", "y"]) root.style.setProperty("--depth-" + key, "0px");
       for (const key of ["rx", "ry"]) root.style.setProperty("--depth-" + key, "0deg");
     };
     const paint = () => {
       frame = 0; if (!alive || !wanted || touching) return;
       const scale = strengthRef.current / 100;
+      root.style.setProperty("--depth-lift", `${(48 * scale).toFixed(2)}px`);
       root.style.setProperty("--depth-x", `${(latest.x * 14 * scale).toFixed(2)}px`);
       root.style.setProperty("--depth-y", `${(latest.y * 14 * scale).toFixed(2)}px`);
       root.style.setProperty("--depth-rx", `${(-latest.y * 12 * scale).toFixed(2)}deg`);
@@ -36,8 +39,16 @@ export function useDepth(enabled: boolean, strength = 60) {
       const editing = document.activeElement?.matches("input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select");
       const next = alive && enabled && Capacitor.isNativePlatform() && active && !document.hidden && !editing && !touching && root.dataset.motion === "full";
       if (!next) setStatus(!enabled ? "Эффект выключен" : !Capacitor.isNativePlatform() ? "Датчик доступен в Android-приложении" : root.dataset.motion !== "full" ? "Анимации отключены в настройках телефона" : "Пауза: касание, ввод или приложение в фоне");
-      if (next === wanted) return;
-      wanted = next; reset(); clearTimeout(watchdog); received = false;
+      if (next === wanted) { if (!next && !touching) reset(); return; }
+      wanted = next;
+      // Freeze the card under the finger: resetting here changes the pointer-up target.
+      if (touching && root.dataset.depth === "active" && root.dataset.motion === "full") {
+        const cards = Array.from(root.querySelectorAll<HTMLElement>(".depth-card-body"));
+        const transforms = cards.map((element) => getComputedStyle(element).transform);
+        cards.forEach((element, index) => { element.style.transform = transforms[index]!; });
+        root.dataset.depth = "paused";
+      } else if (!touching || root.dataset.motion !== "full") reset();
+      clearTimeout(watchdog); received = false;
       void serial(async () => {
         if (!next || !alive || !wanted) { await Depth.stop(); return; }
         if (listener) await listener;

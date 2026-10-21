@@ -1,3 +1,4 @@
+import { DepthCard } from "./depth-card";
 import { useEffect, useState } from "react";
 import { Check, Copy, Download, Link2, RefreshCw, ShieldCheck } from "lucide-react";
 import type { MobileSnapshot } from "@orion/mobile-core";
@@ -32,15 +33,15 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
   const blocked = busy || connection.busy;
   useEffect(() => { if (state?.user) setPassword(""); }, [state?.user]);
   return <section className="connection">
-    <section className="settings-section">
+    <DepthCard><section className="settings-section">
       <h2>Резервная копия</h2>
       <p>Сохраните задачи, заметки, финансы и черновики в JSON перед первым переносом на компьютер.</p>
       <button onClick={backup} disabled={blocked}><Download size={18} />Сохранить резервную копию</button>
       <p className="helper">{backupCurrent ? "Текущая версия записей телефона экспортирована." : "После изменения записей понадобится новая копия."}</p>
-    </section>
+    </section></DepthCard>
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     {connection.message && <p className="notice" role="status">{connection.message}</p>}
-    {!state?.paired ? <section className="settings-section">
+    {!state?.paired ? <DepthCard><section className="settings-section">
       <h2>Подключить компьютер</h2>
       <p>В Orion на ПК включите «Хост LAN». Введите его адрес и порт. Телефон и ПК должны находиться в одной сети.</p>
       <form onSubmit={(e) => { e.preventDefault(); saveProfile(); }}>
@@ -56,8 +57,8 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
         <button disabled={blocked} onClick={() => void connection.poll()}><RefreshCw size={18} />Проверить подтверждение</button>
       </div> : <button className="primary" disabled={blocked || !address.trim() || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535}
         onClick={() => void connection.begin(address, Number(port))}><Link2 size={18} />Запросить подключение</button>}
-    </section> : <>
-      <section className="settings-section"><h2><ShieldCheck size={20} /> {state.node?.name ?? "Компьютер подключён"}</h2>
+    </section></DepthCard> : <>
+      <DepthCard><section className="settings-section"><h2><ShieldCheck size={20} /> {state.node?.name ?? "Компьютер подключён"}</h2>
         <p>Доверие к компьютеру закреплено его сертификатом.</p>
         {!state.user ? <form onSubmit={(e) => {
           e.preventDefault();
@@ -84,8 +85,8 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
             </button></li>)}</ul> : <p>Список пока не загружен или доступных пространств нет.</p>}
           <button disabled={blocked} onClick={() => void connection.reloadWorkspaces()}>Обновить список пространств</button>
         </>}
-      </section>
-      {client && data.remoteSelection && <section className="settings-section">
+      </section></DepthCard>
+      {client && data.remoteSelection && <DepthCard><section className="settings-section">
         <h2>{data.remoteSelection.workspaceName}</h2>
         <div className="space-choice">
           <button aria-pressed={!data.remoteActive} disabled={blocked} onClick={() => void connection.switchSpace(false)}>На телефоне</button>
@@ -115,14 +116,14 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
             <button disabled={blocked} onClick={() => void connection.resolveConflict(conflict.opId, false)}>Оставить версию ПК</button>
           </section>)}
         </div>}
-      </section>}
-      <section className="settings-section">
+      </section></DepthCard>}
+      <DepthCard><section className="settings-section">
         <button className="text-button" onClick={() => setDisconnect((value) => !value)}>Отключение и выход</button>
         {disconnect && <div><p>Копии пространств и их неотправленные изменения будут удалены с этого телефона. Сначала экспортируйте нужные записи. Раздел «На телефоне» сохранится.</p>
           {state.user && <button disabled={blocked} onClick={() => void connection.disconnect(false)}>Выйти и удалить копии ПК</button>}
           <button disabled={blocked} onClick={() => void connection.disconnect(true)}>Отключить ПК и удалить его копии</button>
         </div>}
-      </section>
+      </section></DepthCard>
     </>}
     <dl><div><dt>Локальные операции телефона</dt><dd>{data.outbox.length}</dd></div><div><dt>Версия</dt><dd>{ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</dd></div></dl>
   </section>;
