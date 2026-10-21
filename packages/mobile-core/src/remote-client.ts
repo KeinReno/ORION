@@ -1,7 +1,7 @@
 import { prepareListMutation, type MobileListMutation } from "./mobile-lists";
 import { ReplicaEngine, type ReplicaState, type ReplicaStorage, type SyncTransport } from "@orion/core";
 import { parseMobileReplica, prepareLocalImport, remoteScopeKey, type MobileReplicaEnvelope, type RemoteScope } from "./mobile-replica";
-import type { Draft } from "./mobile-models";
+import { entryFields, type Draft } from "./mobile-models";
 import type { MobileSnapshot } from "./index";
 
 export interface ReplicaIO {
@@ -68,7 +68,7 @@ export class MobileRemoteClient {
     if (!this.storage.envelope?.replica.included.includes(draft.kind)) throw new Error("Этот модуль недоступен в пространстве компьютера");
     const id = draft.id ?? crypto.randomUUID();
     const existing = this.engine.entities()[draft.kind][id];
-    const fields = draft.kind === "task" ? { title: draft.title.trim(), description: draft.body, priority: draft.priority } : { title: draft.title.trim(), body: draft.body };
+    const fields = entryFields(draft);
     await this.write(() => this.engine.enqueue({ entity: draft.kind, entityId: id, kind: existing ? "patch" : "create", fields,
       ...(existing ? { expectedRevision: draft.expectedRevision ?? this.revision(draft.kind, id) } : {}) }));
   }

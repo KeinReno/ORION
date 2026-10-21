@@ -13,6 +13,29 @@ const draft = (kind: "task" | "note", title = "Запись"): Draft => ({
 });
 
 describe("Android local repository", () => {
+  it("preserves new fields, legacy drafts and invalid-tag input across durable saves", async () => {
+    const disk = new Disk(); const repo = await MobileRepository.open(disk);
+    await repo.saveEntry({ ...draft("task"), status: "in_progress", dueAt: "2026-11-02T12:30:00.000Z" });
+    const task = repo.snapshot().tasks[0];
+    await repo.saveEntry({ ...draft("task", "Legacy title"), id: task.id });
+    expect(repo.snapshot().tasks[0]).toMatchObject({ status: "in_progress", dueAt: task.dueAt });
+    await repo.saveEntry({ ...draft("task"), id: task.id, status: "canceled", dueAt: null });
+    expect(repo.snapshot().tasks[0]).toMatchObject({ status: "canceled", dueAt: null });
+    await repo.saveEntry({ ...draft("note"), summary: "Описание", tagsText: "идеи, работа, идеи, ", pinnedAt: "2026-10-21T12:00:00.000Z" });
+    const note = repo.snapshot().notes[0];
+    await repo.saveEntry({ ...draft("note", "Legacy note"), id: note.id });
+    expect(repo.snapshot().notes[0]).toMatchObject({ summary: "Описание", tags: ["идеи", "работа"], pinnedAt: note.pinnedAt });
+    const invalid = { ...draft("note", "Длинный тег"), tagsText: "x".repeat(41) };
+    await repo.saveDraft(invalid); const before = repo.snapshot();
+    await expect(repo.saveEntry(invalid)).rejects.toThrow("Не больше 20 тегов");
+    expect(repo.snapshot()).toEqual(before);
+    const reload = await MobileRepository.open(disk); expect(reload.snapshot().draft).toEqual(invalid);
+    disk.fail = true;
+    await expect(repo.saveEntry({ ...draft("note"), id: note.id, summary: "Не записано", tagsText: "", pinnedAt: null })).rejects.toThrow("disk full");
+    expect(repo.snapshot()).toEqual(before);
+    disk.fail = false; await repo.saveEntry({ ...draft("note"), id: note.id, summary: "", tagsText: "", pinnedAt: null });
+    expect(repo.snapshot().notes[0]).toMatchObject({ summary: "", tags: [], pinnedAt: null });
+  });
   it("deletes only the chosen entry atomically and retains unrelated drafts and valid delete operations", async () => {
     const disk = new Disk(); const repo = await MobileRepository.open(disk);
     await repo.saveEntry(draft("task", "Удалить")); await repo.saveEntry(draft("note", "Оставить"));

@@ -10,7 +10,7 @@ export * from "./dictation";
 export * from "./backup";
 export * from "./mobile-replica";
 export * from "./remote-client";
-import { draftSchema, type Draft } from "./mobile-models";
+import { draftSchema, entryFields, type Draft } from "./mobile-models";
 import { applyOpLocally, emptyEntities, type ReplicaEntityMap } from "@orion/core";
 import {
   HlcClock, LAN_DEFAULT_PORT, normalizeOpFields, noteSchema, taskSchema,
@@ -210,10 +210,7 @@ export class MobileRepository {
   saveEntry(draft: Draft): Promise<void> {
     const parsed = draftSchema.parse(draft);
     return this.transaction((next) => {
-      const title = parsed.title.trim();
-      const fields = parsed.kind === "task"
-        ? { title, description: parsed.body, priority: parsed.priority }
-        : { title, body: parsed.body };
+      const fields = entryFields(parsed);
       this.apply(next, parsed.kind, parsed.id, fields);
       next.draft = null;
     });
