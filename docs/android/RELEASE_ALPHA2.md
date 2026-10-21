@@ -55,3 +55,15 @@ scripts/android-settings-smoke.mjs; Android workflow и документация
 SHA-256: b0b67f0035296cc9c0fd3a8b058464f1489e296423ea4f6dacf4a8a29b9afbe5.
 Сертификат SHA-256 совпадает с alpha.1:
 5154216cb718e2d66a6811ce8168fd571ecfcacd7c15fd6e39d2e0ad29023b39.
+
+## Публикация и живой источник
+Публичный [релиз alpha.2](https://github.com/KeinReno/ORION-Android-Releases/releases/tag/v0.1.1-android-alpha.2).
+После загрузки проверены без авторизации: точный raw manifest URL вернул
+HTTP 200 и versionCode 2; APK скачан через release-assets.githubusercontent.com,
+HTTP 200, размер и SHA-256 совпали с manifest и локальным APK.
+Публичная ветка содержит только README.md и android-update.json; в Releases
+только APK, manifest и checksum. KeinReno/ORION остаётся приватным.
+Исходный код alpha.2 — commit 1e24411; дальнейшие правки отчёта код не меняют.
+
+GitHub Actions Android/CI не стартовали из-за billing/spending limit аккаунта
+(runs 39550117495, 39550117513); удалённые проверки не подтверждены.
