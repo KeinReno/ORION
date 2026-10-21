@@ -486,6 +486,11 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
   Виртуальные адаптеры (Hyper-V, WSL, VPN, VirtualBox…) отфильтрованы; объявление mDNS — через основной домашний адаптер.
   Причина: на Windows multicast уходил в «адаптер по умолчанию» (часто VPN/Hyper-V), а брандмауэр ищущего ПК режет ответы
   на UDP 5353. Лаунчер берёт адрес хоста тем же правилом (`homeLanAddress` в `apps/desktop/runtime/launcher.cjs`).
+- **Хост LAN не должен ронять API.** Не открылся TLS-порт (занят, нет прав) — `main.ts` ловит ошибку,
+  `LanService.reportListenFailure` гасит LAN-сторону и пишет причину в `LanHostStatus.error`, окно этого ПК работает дальше.
+  Упал сам старт в режиме хоста (например, проверка `assertServerConfig`) — лаунчер один раз поднимает API «Локальным» с
+  `ORION_LAN_HOST_FAILED` (причина из stderr, `failureReason`). Раньше режим сохранялся, и API падал при каждом запуске.
+  Порт хоста выбирается при включении (`LanEnableHostInput.port`).
 
 ### Разрешения: `@RequirePermission` (G12, первый срез)
 

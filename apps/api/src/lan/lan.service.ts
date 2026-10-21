@@ -69,8 +69,10 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger("lan");
   private readonly dir = nodeDir();
   private config: LanNodeConfig = loadNodeConfig(this.dir);
-  /** Режим применён к процессу (bind/TLS/доверие), а не только записан в настройках. */
-  readonly active = process.env.ORION_LAN_HOST === "1";
+  /** Режим применён к процессу (bind/TLS/доверие), а не только записан в настройках; сбрасывается, если порт не открылся. */
+  private listening = process.env.ORION_LAN_HOST === "1";
+  /** Why the host does not work (see `LanHostStatus.error`): set by main.ts or passed by the launcher after a failed start. */
+  private startError: string | null = process.env.ORION_LAN_HOST_FAILED?.trim() || null;
   readonly devices = new DeviceStore(this.dir);
   private cert: IssuedCertificate | null = null;
   private readonly mdns = new MdnsAdvertiser();
@@ -79,6 +81,22 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   readonly registry = new PairingRegistry(this.devices, () => this.cert?.fingerprint ?? "");
 
   constructor(private readonly prisma: PrismaService) {}
+
+  get active(): boolean {
+    return this.listening;
+  }
+
+  /**
+   * The HTTPS listener did not start (main.ts): the host stops advertising itself and says why, while the loopback API
+   * keeps serving this computer's window — a taken port must not take ORION down with it.
+   */
+  reportListenFailure(error: unknown): string {
+    this.listening = false;
+    this.mdns.stop();
+    this.startError = lanListenFailureMessage(error, this.config.port);
+    this.log.error(this.startError);
+    return this.startError;
+  }
 
   onModuleInit(): void {
     if (!this.active) return;
@@ -140,7 +158,8 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       supervised: process.env.ORION_SUPERVISED === "1",
       mdns: this.mdns.active,
       firewall: await firewallState(),
-      loginPolicy: this.config.loginPolicy
+      loginPolicy: this.config.loginPolicy,
+      error: this.config.mode === "host" ? this.startError : null
     };
   }
 
@@ -179,7 +198,14 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       // Старые сессии аккаунта, у которого сменили способ входа, закрываем: пароль теперь известен администратору хоста.
       await this.prisma.refreshToken.updateMany({ where: { userId: account.userId, revokedAt: null }, data: { revokedAt: new Date() } });
     }
-    this.config = { ...this.config, name: input.name?.trim() || this.config.name, mode: "host", ownerUserId: this.config.ownerUserId ?? userId, loginPolicy: input.loginPolicy };
+    this.config = {
+      ...this.config,
+      name: input.name?.trim() || this.config.name,
+      mode: "host",
+      ownerUserId: this.config.ownerUserId ?? userId,
+      loginPolicy: input.loginPolicy,
+      port: input.port ?? this.config.port
+    };
     saveNodeConfig(this.config, this.dir);
     this.ensureCertificate();
     return { restarting: this.restart(), status: await this.hostStatus() };
@@ -415,4 +441,14 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
     }
     return { mode: this.config.mode, paired, link, apiPath: this.config.mode === "client" ? LAN_REMOTE_PREFIX : "" };
   }
+}
+
+/** A Russian reason for a LAN listener that did not open, with what to do about it. */
+export function lanListenFailureMessage(error: unknown, port: number): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "EADDRINUSE") {
+    return `Порт ${port} занят другой программой на этом компьютере. Выключите «Хост LAN» и включите снова с другим портом (например, ${port === 4444 ? 4445 : 4444}).`;
+  }
+  if (code === "EACCES") return `Нет права открыть порт ${port}. Выберите порт выше 1024 или запустите ORION от имени пользователя с правами.`;
+  return `Не удалось открыть порт ${port} для сети: ${error instanceof Error ? error.message : String(error)}`;
 }
