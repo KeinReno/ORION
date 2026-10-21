@@ -56,6 +56,7 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "320px/font130 horizontal overflow");
   await page.screenshot({ path: output + "/finance-320-font130.png", fullPage: true });
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Данные и резервные копии/ }).click();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Сохранить резервную копию", exact: true }).click();
   const download = await downloaded;

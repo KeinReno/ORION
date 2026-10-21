@@ -54,3 +54,26 @@ h1{font-size:1.5rem;letter-spacing:-.02em}h2{font-size:1.125rem}.primary{font-we
 @media(max-width:839px){.content{padding-bottom:190px}}
 
 .task-drop-after{box-shadow:inset 0 -2px 0 var(--accent)}
+
+/* Mobile shell and the scoped settings center. */
+.brand{gap:8px;padding:16px 20px 12px}.brand>span{display:flex;flex-direction:column;font-size:.8rem;line-height:1.3;flex-shrink:0}.brand b{font-size:.72rem}
+.brand>.local-label{flex:1;min-width:48px;max-width:none;padding:5px 8px}.brand .local-label span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand .local-label svg{flex-shrink:0}
+.brand .settings-shortcut{flex-shrink:0;width:48px;height:48px;padding:12px;position:relative}.settings-shortcut .update-dot{position:absolute;top:7px;right:7px}
+.settings-group{margin:20px 0 28px}.settings-group>h2{font-size:.76rem;text-transform:uppercase;letter-spacing:.065em;color:var(--muted);font-weight:600;margin-bottom:8px}
+.settings-row{display:flex;align-items:center;gap:14px;min-height:72px;padding:14px 4px;border-bottom:1px solid var(--line);color:var(--text);text-decoration:none;text-align:left}
+.settings-row>svg{flex-shrink:0;color:var(--muted)}.settings-row>span{flex:1;min-width:0}.settings-row strong{display:block;font-size:1rem;font-weight:550;overflow-wrap:anywhere}.settings-row small{display:block;font-size:.8rem;color:var(--muted);line-height:1.5;margin-top:4px;overflow-wrap:anywhere}.settings-row>svg:last-child{margin-left:auto}
+.settings-scope{font-size:.8rem;color:var(--accent);line-height:1.5;margin-bottom:16px}.settings-back{background:none;padding:8px 0;color:var(--muted);margin-bottom:12px}.empty-settings{padding:20px 0;font-size:.9rem}
+.settings-page .settings-section{padding-top:12px}.settings-page .settings-section>h2{margin-bottom:16px}.settings-facts{margin:16px 0}.settings-facts>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:.85rem}.settings-facts dt{color:var(--muted)}.settings-facts dd{margin:0;text-align:right;overflow-wrap:anywhere;max-width:60%}
+.setting-write-state:empty{display:none}.setting-write-state{font-size:.85rem;margin:12px 0}.setting-write-state[role=alert] p{color:var(--error)}.setting-write-state button{margin-top:8px}
+#quick-actions{margin-top:24px}#quick-actions h2{font-size:1rem;margin-bottom:10px}
+@media(min-width:760px){.settings-hub,.settings-page,.more-page{max-width:620px;margin-inline:auto}}
+
+.list-draft{padding:16px;margin:16px 0;background:var(--raised);border:1px solid var(--line);border-radius:14px}.list-draft label{display:block;font-size:.9rem}.list-draft input{margin:8px 0 14px}
+.list-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}.lists-search{display:block;margin:20px 0;font-size:.85rem;color:var(--muted)}.lists-search input{margin-top:8px}
+.list-item-label{flex:1;min-width:0;padding:14px 0;overflow-wrap:anywhere;line-height:1.5}.list-item-label.checked{text-decoration:line-through;color:var(--muted)}.list-item-label small{font-size:.8rem;color:var(--muted)}.list-items>li{display:block;border-bottom:0}.list-items .icon-button{padding:12px 8px;min-width:44px;flex-shrink:0}.list-items .task-row{gap:4px}
+.list-delete{padding:16px;border:1px solid var(--error);border-radius:14px;margin-top:20px}.list-delete h2{font-size:1rem;overflow-wrap:anywhere}.list-delete p{margin-top:12px;font-size:.85rem}
+
+.navigation button{min-width:0}.navigation button>span:last-child{overflow-wrap:anywhere}
+@media(max-width:380px){.navigation button>span:last-child:not(.nav-icon){display:none}.navigation button{min-height:48px}}
+
+.navigation button{padding:8px 2px}

@@ -16,7 +16,7 @@ try {
         if (plugin === "OrionLan") return { paired: false, node: null, user: null, address: "", port: 4443 };
         if (plugin === "OrionMotion") return { reduced: false };
         if (plugin === "OrionDepth") { if (method === "start") { window.__starts++; if (window.__depthError) throw new Error("sensor failure"); return { available: window.__depthAvailable !== false }; } if (method === "stop") window.__stops++; return {}; }
-        if (plugin === "OrionUpdates") return { installedVersion: "0.1.11", installedCode: 12, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
+        if (plugin === "OrionUpdates") return { installedVersion: "0.1.12", installedCode: 13, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
         return {};
       },
     };
@@ -36,7 +36,7 @@ try {
     const m = new DOMMatrixReadOnly(getComputedStyle(element).transform); return [m.m11,m.m12,m.m13,m.m21,m.m22,m.m23,m.m31,m.m32,m.m33].join();
   }));
   assert.equal(new Set(rotationBlocks).size, 1, "one rotation, consistent base/card elevations");
-  await page.mouse.move(170, 40); await page.mouse.down();
+  await page.mouse.move(2, 240); await page.mouse.down();
   await page.waitForFunction(() => document.documentElement.dataset.depth === "paused");
   const frozen = await button.boundingBox();
   await page.evaluate(() => window.__callbacks["OrionDepth:tilt"].forEach((callback) => callback({ x: 1, y: -1 })));
@@ -100,6 +100,7 @@ try {
   await page.getByRole("button", { name: "Финансы", exact: true }).click(); await page.getByLabel("Сумма, ₽").focus();
   await page.waitForFunction(() => document.documentElement.dataset.depth === "off");
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Движение и жесты/ }).click();
   await page.waitForFunction(() => document.documentElement.dataset.depth === "active");
   await page.evaluate(() => window.__callbacks["OrionDepth:tilt"].forEach((callback) => callback({ x: 1, y: 1 })));
   await page.getByRole("status").filter({ hasText: "Датчик работает" }).waitFor();
@@ -115,7 +116,7 @@ try {
   }));
   assert.equal(layers[0].x, 0); assert.equal(layers[1].x, 0);
   assert.ok(layers[1].z > layers[0].z && layers[0].z > 0, "layers only rise on positive Z, never move in opposite X/Y directions");
-  const output = process.env.ANDROID_SMOKE_OUTPUT || "../../outputs/android-alpha12/preview";
+  const output = process.env.ANDROID_SMOKE_OUTPUT || "../../outputs/android-alpha13/preview";
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: output + "/depth-settings-synthetic.png", fullPage: true });
   await slider.fill("0"); await slider.dispatchEvent("keyup", { key: "ArrowLeft" });
@@ -130,6 +131,7 @@ try {
   assert.equal(await page.getByLabel("Сила наклона").count(), 0);
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("depth-snapshot")).settings.depthStrength), 0);
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Движение и жесты/ }).click();
   await page.evaluate(() => { window.__depthAvailable = false; });
   await page.getByRole("switch", { name: /Глубина при наклоне/ }).check();
   await page.getByRole("status").filter({ hasText: "Датчик наклона недоступен" }).waitFor();

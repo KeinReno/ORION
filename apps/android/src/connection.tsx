@@ -97,7 +97,7 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
         <p className="helper">В очереди: {status?.pending ?? 0}. Конфликтов: {status?.conflicts ?? 0}.</p>
         <button className="primary" disabled={blocked || status?.phase === "syncing"} onClick={() => void connection.sync()}><RefreshCw size={18} />Синхронизировать</button>
         <h3>Скопировать записи телефона</h3>
-        <p>Задач: {data.tasks.length}. Заметок: {data.notes.length}. Оригиналы останутся в разделе «На телефоне».</p>
+        <p>Задач: {data.tasks.length}. Заметок: {data.notes.length}. Оригиналы останутся в разделе «На телефоне».</p><p className="helper">Списки и финансы этим действием не копируются.</p>
         <label className="ack-row"><input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
           <span>Скопировать в «{data.remoteSelection.workspaceName}». Участники этого пространства смогут видеть копии согласно своим правам.</span></label>
         {!backupCurrent && <p className="helper">Сначала сохраните актуальную резервную копию кнопкой выше.</p>}

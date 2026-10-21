@@ -18,6 +18,7 @@ try {
   await page.locator("main.content").evaluate(async (element) => { await Promise.all(element.getAnimations().map((animation) => animation.finished)); });
   await page.screenshot({ path: out + "/tasks-precision.png", fullPage: true });
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Внешний вид/ }).click();
   for (const [id, rgb] of [["obsidian", "167 139 250"], ["midnight", "107 170 255"], ["emerald", "52 211 153"], ["crimson", "240 100 122"], ["kaiden-precision", "201 168 106"]]) {
     await page.getByLabel("Цвета тёмной темы").selectOption(id);
     await page.waitForFunction((expected) => document.documentElement.dataset.palette === expected, id);

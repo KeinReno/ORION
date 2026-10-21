@@ -17,9 +17,9 @@ try {
   await page.route("https://raw.githubusercontent.com/KeinReno/ORION-Android-Releases/main/android-update.json", async (route) => {
     requests++;
     if (mode === "offline") { await route.abort("failed"); return; }
-    const code = mode === "new" ? 13 : 12;
-    const version = mode === "new" ? "0.1.12" : "0.1.11";
-    const tag = mode === "new" ? "v0.1.12-android-alpha.13" : "v0.1.11-android-alpha.12";
+    const code = mode === "new" ? 14 : 13;
+    const version = mode === "new" ? "0.1.13" : "0.1.12";
+    const tag = mode === "new" ? "v0.1.13-android-alpha.14" : "v0.1.12-android-alpha.13";
     await route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({
       schemaVersion: 1, applicationId: "io.kaiden.orion.android",
       versionCode: code, versionName: version, tag,
@@ -33,20 +33,27 @@ try {
   await page.goto("http://127.0.0.1:3180");
   await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
   await page.getByRole("button", { name: /Настройки/ }).click();
-  await page.getByText("Доступна версия 0.1.12", { exact: true }).waitFor();
+  await page.getByRole("link", { name: /Обновления/ }).click();
+  await page.getByText("Доступна версия 0.1.13", { exact: true }).waitFor();
   assert.equal(requests, 1);
   await page.getByText("Что изменилось", { exact: true }).click();
   await page.getByText("Тестовый будущий релиз. Проверка описания обновлений.", { exact: true }).waitFor();
   await page.screenshot({ path: output + "/settings-update-dark.png", fullPage: true });
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Внешний вид/ }).click();
   await page.locator(".segments label").filter({ hasText: "Светлая" }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
   assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.getByRole("link", { name: /Обновления/ }).click();
   await page.getByRole("switch", { name: /Проверять автоматически/ }).click();
   await page.waitForFunction(() => !document.getElementById("auto-check-updates").checked);
   await page.getByRole("switch", { name: /Загружать по Wi-Fi/ }).click();
   await page.waitForFunction(() => document.getElementById("download-updates-wifi").checked);
+  await page.waitForFunction(() => !document.getElementById("auto-check-updates").disabled && !document.getElementById("download-updates-wifi").disabled);
   await page.reload();
   await page.getByRole("button", { name: /Настройки/ }).click();
+  await page.getByRole("link", { name: /Обновления/ }).click();
   await page.getByRole("heading", { name: "Обновления", exact: true }).waitFor();
   assert.equal(await page.getByRole("switch", { name: /Проверять автоматически/ }).isChecked(), false);
   assert.equal(await page.getByRole("switch", { name: /Загружать по Wi-Fi/ }).isChecked(), true);
