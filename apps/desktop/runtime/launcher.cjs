@@ -165,10 +165,10 @@ function homeLanAddress() {
   return pick ? pick.item : null;
 }
 
-function lanEnv() {
+function lanEnv(forceLocal) {
   let node = null;
   try { node = JSON.parse(fs.readFileSync(path.join(data, 'lan-node.json'), 'utf8')); } catch { /* файла нет — «Локальный» */ }
-  if (!node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
+  if (forceLocal || !node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
   const port = Number.isInteger(node.port) ? node.port : 4443;
   const address = homeLanAddress();
   return {
@@ -178,17 +178,40 @@ function lanEnv() {
   };
 }
 
-function superviseApi(baseEnv) {
-  const mode = lanEnv();
-  const env = { ...baseEnv, ...mode };
-  log(`Starting ORION API on 127.0.0.1:${apiPort} (${mode.ORION_LAN_HOST ? 'LAN host' : 'local'})`);
+// The first line of the API's own error that says what went wrong («Конфигурация ORION_MODE=server небезопасна…»).
+function failureReason(output) {
+  const colors = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+  const lines = output.split(/\r?\n/).map(line => line.replace(colors, '').trim()).filter(Boolean);
+  let at = lines.findIndex(line => /^Error: /.test(line));
+  if (at < 0) at = lines.findIndex(line => /небезопасна|не удалось|EADDRINUSE|EACCES/i.test(line));
+  if (at < 0) return (lines[lines.length - 1] || 'неизвестная ошибка').slice(0, 400);
+  // «…запуск остановлен:» lists the problems on the next lines («- APP_DATABASE_URL …»): keep them.
+  const details = [];
+  for (let next = at + 1; next < lines.length && lines[next].startsWith('- '); next += 1) details.push(lines[next]);
+  return [lines[at].replace(/^Error: /, ''), ...details].join(' ').slice(0, 400);
+}
+
+// `hostFailed`: the API did not start as «Хост LAN» — run it as «Локальный» once so this computer keeps working, and
+// tell the settings why (ORION_LAN_HOST_FAILED → «Сеть и устройства»). Without this a failed host start left the window
+// at «Локальный сервер ORION не отвечает» on every launch, the mode being saved.
+function superviseApi(baseEnv, hostFailed) {
+  const mode = lanEnv(Boolean(hostFailed));
+  const env = { ...baseEnv, ...mode, ...(hostFailed ? { ORION_LAN_HOST_FAILED: `«Хост LAN» не запустился: ${hostFailed}` } : {}) };
+  log(`Starting ORION API on 127.0.0.1:${apiPort} (${mode.ORION_LAN_HOST ? 'LAN host' : hostFailed ? 'local after a failed LAN host start' : 'local'})`);
   const child = spawn(process.execPath, [path.join(api, 'dist', 'main.js')], { cwd: api, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let errors = '';
   child.stdout.on('data', chunk => log(chunk.toString().trimEnd()));
-  child.stderr.on('data', chunk => log(chunk.toString().trimEnd()));
+  child.stderr.on('data', chunk => { const text = chunk.toString(); if (errors.length < 20000) errors += text; log(text.trimEnd()); });
   child.on('error', error => { log(`API failed: ${error.message}`); process.exitCode = 1; });
   child.on('exit', code => {
     // 75 — API просит применить новый режим узла (Хост LAN ⇄ Локальный): перечитываем lan-node.json и поднимаем заново.
     if (code === 75) { log('API restarting to apply node mode'); setTimeout(() => superviseApi(baseEnv), 500); return; }
+    if (mode.ORION_LAN_HOST && !hostFailed) {
+      const reason = failureReason(errors);
+      log(`API exited (${code}) as LAN host: ${reason}; starting as local`);
+      setTimeout(() => superviseApi(baseEnv, reason), 500);
+      return;
+    }
     log(`API exited (${code})`); process.exitCode = code || 1;
   });
 }

@@ -89,7 +89,12 @@ export const lanHostStatusSchema = z.object({
   supervised: z.boolean(),
   mdns: z.boolean(),
   firewall: z.enum(["unsupported", "missing", "present"]),
-  loginPolicy: lanLoginPolicySchema
+  loginPolicy: lanLoginPolicySchema,
+  /**
+   * Why the host is not working although it is switched on: the LAN port could not be opened (taken by another program)
+   * or the API did not start in host mode and the launcher brought it back as «Локальный». `null` — no problem.
+   */
+  error: z.string().nullable()
 });
 export type LanHostStatus = z.infer<typeof lanHostStatusSchema>;
 
@@ -100,7 +105,9 @@ export const lanEnableHostInputSchema = z.object({
   /** Владелец подтвердил, что понимает последствия (предупреждение показано). */
   acknowledged: z.literal(true),
   /** Политика входа; по умолчанию домашняя. При `strict` аккаунтам с PIN нужны пароли (`passwords`). */
-  loginPolicy: lanLoginPolicySchema.default("home")
+  loginPolicy: lanLoginPolicySchema.default("home"),
+  /** HTTPS-порт хоста в сети; не задан — прежний (по умолчанию 4443). Другой — если этот занят другой программой. */
+  port: z.number().int().min(1024).max(65535).optional()
 });
 export type LanEnableHostInput = z.infer<typeof lanEnableHostInputSchema>;
 
