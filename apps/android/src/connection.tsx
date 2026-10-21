@@ -34,7 +34,7 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
   return <section className="connection">
     <section className="settings-section">
       <h2>Резервная копия</h2>
-      <p>Сохраните задачи, заметки и черновики в JSON перед первым переносом на компьютер.</p>
+      <p>Сохраните задачи, заметки, финансы и черновики в JSON перед первым переносом на компьютер.</p>
       <button onClick={backup} disabled={blocked}><Download size={18} />Сохранить резервную копию</button>
       <p className="helper">{backupCurrent ? "Текущая версия записей телефона экспортирована." : "После изменения записей понадобится новая копия."}</p>
     </section>

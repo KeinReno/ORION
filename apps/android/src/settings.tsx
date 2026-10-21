@@ -53,7 +53,7 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
       <p className="helper">Установку подтверждает Android. Обновление устанавливается поверх приложения и сохраняет записи. Не удаляйте Orion перед установкой.</p>
     </section>
     <section className="settings-section"><h2>На этом телефоне</h2>
-      <p>Задачи, заметки и настройки хранятся локально. Проверка обновлений не передаёт их в GitHub.</p>
+      <p>Задачи, заметки, финансовые операции и настройки хранятся локально. Проверка обновлений не передаёт их в GitHub.</p>
       <button disabled={backupBusy} onClick={backup}><Download size={18} />Сохранить резервную копию</button>
     </section>
   </section>;

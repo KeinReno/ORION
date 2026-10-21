@@ -1,5 +1,7 @@
 import { z } from "zod";
 export * from "./android-updates";
+export * from "./mobile-finance";
+import { mobileFinanceSchema, createMobileFinance, financeDraftSchema, applyFinanceEntry, type FinanceDraft } from "./mobile-finance";
 export * from "./mobile-models";
 export * from "./backup";
 export * from "./mobile-replica";
@@ -37,6 +39,7 @@ export const remoteSelectionSchema = z.object({
 });
 export type RemoteSelection = z.infer<typeof remoteSelectionSchema>;
 const snapshotSchema = z.object({
+  finance: mobileFinanceSchema.nullable().default(null),
   version: z.literal(1),
   workspaceId: z.string().uuid(), deviceId: z.string().uuid(),
   deviceSeq: z.number().int().nonnegative(),
@@ -72,6 +75,7 @@ export class MobileRepository {
       }
     } else {
       state = {
+        finance: null,
         version: 1, workspaceId: crypto.randomUUID(), deviceId: crypto.randomUUID(),
         deviceSeq: 0, clock: { wallMs: 0, counter: 0 },
         tasks: [], notes: [], outbox: [], draft: null, lan: null,
@@ -80,6 +84,10 @@ export class MobileRepository {
         remoteDrafts: {},
         remoteSelection: null, remoteActive: false,
       };
+      await storage.write(JSON.stringify(state));
+    }
+    if (!state.finance) {
+      state.finance = createMobileFinance(state.workspaceId);
       await storage.write(JSON.stringify(state));
     }
     return new MobileRepository(storage, state);
@@ -100,6 +108,31 @@ export class MobileRepository {
     });
     this.tail = run.catch(() => undefined);
     return run;
+  }
+
+  saveFinanceDraft(draft: FinanceDraft | null): Promise<void> {
+    return this.transaction((next) => {
+      if (!next.finance) throw new Error("Финансы недоступны");
+      next.finance.draft = draft ? financeDraftSchema.parse(draft) : null;
+      next.lastBackupSeq = null;
+    });
+  }
+  saveFinanceEntry(draft: FinanceDraft): Promise<void> {
+    return this.transaction((next) => {
+      if (!next.finance) throw new Error("Финансы недоступны");
+      applyFinanceEntry(next.finance, next.workspaceId, draft);
+      next.lastBackupSeq = null;
+    });
+  }
+  deleteFinanceEntry(id: string): Promise<void> {
+    return this.transaction((next) => {
+      if (!next.finance) throw new Error("Финансы недоступны");
+      next.finance.transactions = next.finance.transactions.filter((entry) => entry.id !== id);
+      if (next.finance.draft?.id === id) next.finance.draft = null;
+      for (const account of next.finance.accounts) account.balance = account.startingBalance + next.finance.transactions
+        .filter((entry) => entry.accountId === account.id).reduce((sum, entry) => sum + (entry.type === "income" ? entry.totalAmount : -entry.totalAmount), 0);
+      next.lastBackupSeq = null;
+    });
   }
 
   saveDraft(draft: Draft | null): Promise<void> {

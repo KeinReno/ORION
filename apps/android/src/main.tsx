@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings } from "lucide-react";
+import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet } from "lucide-react";
 import { MobileRepository, lanProfileSchema, createPortableBackup, type Draft, type MobileSnapshot } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { storage } from "./storage";
+import { FinancePage } from "./finance";
 import { SettingsPage } from "./settings";
 import { useUpdates } from "./use-updates";
 import { useLan } from "./use-lan";
@@ -13,7 +14,7 @@ import { ConnectionPage } from "./connection";
 import { exportBackup } from "./backup";
 import "./style.css";
 
-type Tab = "tasks" | "notes" | "connection" | "settings";
+type Tab = "finance" | "tasks" | "notes" | "connection" | "settings";
 const emptyDraft = (kind: "task" | "note"): Draft => ({ kind, id: null, title: "", body: "", priority: "normal" });
 const errorText = (error: unknown) => error instanceof Error && !("issues" in error)
   ? error.message : "Не удалось сохранить. Проверьте название и повторите — введённый текст остаётся здесь.";
@@ -154,20 +155,24 @@ function App() {
   const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
     && (item.title + " " + item.body).toLocaleLowerCase().includes(needle)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return <div className="shell"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
-    <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header>
+    <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header>
     <main className="content">
-      <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
-        <p>{tab === "tasks" ? "Освободите голову. Начните с одного дела." : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
+      <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
+        <p>{tab === "finance" ? "Запишите расход, пока не забыли." : tab === "tasks" ? "Освободите голову. Начните с одного дела." : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
       {(tab === "tasks" || tab === "notes") && <button className="primary" disabled={busy || (remote ? !remote.hasModule(tab === "tasks" ? "task" : "note") : false)} onClick={() => {
         // A single recoverable draft must never be silently replaced.
         if (currentDraft) begin(currentDraft);
         else begin({ ...emptyDraft(tab === "tasks" ? "task" : "note"), ...(remote ? { id: crypto.randomUUID() } : {}) });
       }}><Plus size={20} /><span>Создать</span></button>}</div>
       {feedback}
-      {remote && tab !== "connection" && <div className="replica-banner"><p>Копия пространства ПК · в очереди {remote.engine.status().pending} · конфликтов {remote.engine.status().conflicts}</p>
+      {remote && tab !== "connection" && tab !== "finance" && <div className="replica-banner"><p>Копия пространства ПК · в очереди {remote.engine.status().pending} · конфликтов {remote.engine.status().conflicts}</p>
         <button disabled={connection.busy} onClick={() => { setTab("connection"); void connection.sync(); }}>Синхронизировать</button></div>}
-      {currentDraft && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
-      {tab === "settings" ? <SettingsPage settings={data.settings} saving={busy} updates={updates}
+      {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
+      {tab === "finance" && data.finance ? <FinancePage finance={data.finance} busy={busy}
+        saveDraft={async (draft) => { if (!repo.current) return; await repo.current.saveFinanceDraft(draft); setData(repo.current.snapshot()); }}
+        save={(draft) => action((value) => value.saveFinanceEntry(draft), "Операция сохранена на телефоне")}
+        remove={(id) => action((value) => value.deleteFinanceEntry(id), "Операция удалена")} />
+      : tab === "settings" ? <SettingsPage settings={data.settings} saving={busy} updates={updates}
         backup={() => void backup()} backupBusy={busy}
         save={(settings) => action((value) => value.saveSettings(settings), "Настройки сохранены на этом телефоне")} />
       : tab !== "connection" ? <>
@@ -202,7 +207,7 @@ function App() {
         }} />}
     </main>
     <nav className="navigation" aria-label="Разделы">{([
-      ["tasks", "Задачи", ListTodo], ["notes", "Заметки", NotebookPen], ["connection", "Связь", Link2],
+      ["tasks", "Задачи", ListTodo], ["notes", "Заметки", NotebookPen], ["finance", "Финансы", Wallet], ["connection", "Связь", Link2],
       ["settings", "Настройки", Settings],
     ] as const).map(([value, label, Icon]) => <button key={value} aria-current={tab === value ? "page" : undefined}
       onClick={() => { setTab(value); setQuery(""); setError(""); setNotice(""); }}><span className="nav-icon"><Icon size={23} />{value === "settings" && updates.state?.available && <span className="update-dot" aria-label="Доступно обновление" />}</span><span>{label}</span></button>)}</nav>
