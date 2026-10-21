@@ -1,3 +1,4 @@
+import { prepareListMutation, type MobileListMutation } from "./mobile-lists";
 import { ReplicaEngine, type ReplicaState, type ReplicaStorage, type SyncTransport } from "@orion/core";
 import { parseMobileReplica, prepareLocalImport, remoteScopeKey, type MobileReplicaEnvelope, type RemoteScope } from "./mobile-replica";
 import type { Draft } from "./mobile-models";
@@ -51,7 +52,7 @@ export class MobileRemoteClient {
       if (this.storage.saveFailed && this.engine.status().phase !== "revoked") await this.engine.open();
     } finally { this.networking = false; }
   }
-  hasModule(entity: "task" | "note"): boolean { return this.storage.envelope?.replica.included.includes(entity) ?? false; }
+  hasModule(entity: "task" | "note" | "list" | "listItem"): boolean { return this.storage.envelope?.replica.included.includes(entity) ?? false; }
   revision(entity: "task" | "note", id: string): number | undefined {
     const canonical = this.storage.envelope?.replica.entities[entity][id];
     const created = this.engine.pending().some((entry) => entry.op.entity === entity && entry.op.entityId === id && entry.op.kind === "create");
@@ -82,6 +83,11 @@ export class MobileRemoteClient {
     const revision = this.revision(entity, id);
     if (revision === undefined) throw new Error("Запись не найдена. Вернитесь к списку.");
     await this.write(() => this.engine.enqueue({ entity, entityId: id, kind: "delete", expectedRevision: revision }));
+  }
+  async mutateList(mutation: MobileListMutation): Promise<void> {
+    if (!this.hasModule(mutation.entity)) throw new Error("Списки недоступны в копии пространства");
+    const command = prepareListMutation(this.engine.lists().lists, mutation);
+    await this.write(() => this.engine.enqueue(command));
   }
   async importLocal(source: MobileSnapshot): Promise<number> {
     if (this.networking || this.importing) throw new Error("Дождитесь завершения текущей синхронизации");

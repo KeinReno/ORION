@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HlcClock, normalizeOpFields, syncOpSchema, syncEntityTypeSchema, syncOutcomeSchema, syncReasonSchema, noteSchema, taskSchema } from "@orion/shared-types";
+import { HlcClock, normalizeOpFields, syncOpSchema, syncEntityTypeSchema, syncOutcomeSchema, syncReasonSchema, noteSchema, taskSchema, replicaListSchema, replicaListItemSchema } from "@orion/shared-types";
 import type { ReplicaState } from "@orion/core";
 import type { MobileSnapshot } from "./index";
 
@@ -10,7 +10,7 @@ const replicaSchema = z.object({
   deviceId: z.string().uuid(), deviceName: z.string(), deviceRegistered: z.boolean(),
   protocol: z.number().int(), cursor: z.string().nullable(), asOf: z.string().nullable(),
   included: z.array(syncEntityTypeSchema),
-  entities: z.object({ list: z.record(document), listItem: z.record(document), note: z.record(noteSchema), task: z.record(taskSchema) }),
+  entities: z.object({ list: z.record(replicaListSchema), listItem: z.record(replicaListItemSchema), note: z.record(noteSchema), task: z.record(taskSchema) }),
   pending: z.array(z.object({ op: syncOpSchema, state: z.enum(["local", "queued"]), attempts: z.number().int().nonnegative(), createdAtMs: z.number() })),
   conflicts: z.array(z.object({ opId: z.string(), op: syncOpSchema, outcome: syncOutcomeSchema, reason: syncReasonSchema.optional(), lost: document.optional(), atMs: z.number() })),
   clock: z.object({ wallMs: z.number().int().nonnegative(), counter: z.number().int().nonnegative() }),
@@ -24,6 +24,8 @@ export function parseMobileReplica(raw: string, scope: RemoteScope): MobileRepli
     || parsed.replica.userId !== scope.userId || parsed.replica.workspaceId !== scope.workspaceId) throw new Error("Копия принадлежит другому пространству");
   if ([...Object.values(parsed.replica.entities.note), ...Object.values(parsed.replica.entities.task)].some((doc) => doc.workspaceId !== scope.workspaceId))
     throw new Error("В копии обнаружены записи другого пространства");
+  if (Object.entries(parsed.replica.entities.list).some(([id, list]) => id !== list.id || list.workspaceId !== scope.workspaceId)
+    || Object.entries(parsed.replica.entities.listItem).some(([id, item]) => id !== item.id || !parsed.replica.entities.list[item.listId])) throw new Error("В копии обнаружены списки другой области");
   return parsed as MobileReplicaEnvelope;
 }
 async function digest(value: unknown): Promise<Uint8Array> {

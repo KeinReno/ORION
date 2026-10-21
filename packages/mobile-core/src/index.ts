@@ -1,3 +1,6 @@
+import { listSchema } from "@orion/shared-types";
+import { mobileListDraftSchema, prepareListMutation, projectMobileListOp, type MobileListDraft, type MobileListMutation } from "./mobile-lists";
+export * from "./mobile-lists";
 import { z } from "zod";
 export * from "./android-updates";
 export * from "./mobile-finance";
@@ -49,6 +52,7 @@ const snapshotSchema = z.object({
   deviceSeq: z.number().int().nonnegative(),
   clock: z.object({ wallMs: z.number().int().nonnegative(), counter: z.number().int().nonnegative() }),
   tasks: z.array(taskSchema), notes: z.array(noteSchema),
+  lists: z.array(listSchema).default([]), listDrafts: z.record(mobileListDraftSchema).default({}),
   outbox: z.array(syncOpSchema),
   draft: draftSchema.nullable(),
   lan: lanProfileSchema.nullable(),
@@ -75,7 +79,8 @@ export class MobileRepository {
       state = snapshotSchema.parse(JSON.parse(raw));
       if (state.outbox.some((op) => op.deviceId !== state.deviceId || op.deviceSeq > state.deviceSeq)
         || state.tasks.some((item) => item.workspaceId !== state.workspaceId)
-        || state.notes.some((item) => item.workspaceId !== state.workspaceId)) {
+        || state.notes.some((item) => item.workspaceId !== state.workspaceId)
+        || state.lists.some((list) => list.workspaceId !== state.workspaceId || list.items.some((item) => item.listId !== list.id))) {
         throw new Error("Локальное хранилище не прошло проверку целостности");
       }
     } else {
@@ -83,7 +88,7 @@ export class MobileRepository {
         finance: null,
         version: 1, workspaceId: crypto.randomUUID(), deviceId: crypto.randomUUID(),
         deviceSeq: 0, clock: { wallMs: 0, counter: 0 },
-        tasks: [], notes: [], outbox: [], draft: null, lan: null,
+        tasks: [], notes: [], lists: [], listDrafts: {}, outbox: [], draft: null, lan: null,
         settings: mobileSettingsSchema.parse({}),
         lastBackupSeq: null,
         taskOrder: {}, remoteDrafts: {},
@@ -164,6 +169,28 @@ export class MobileRepository {
   saveSettings(settings: z.input<typeof mobileSettingsSchema>): Promise<void> {
     return this.transaction((next) => { next.settings = mobileSettingsSchema.parse(settings); });
   }
+  async patchSettings(patch: Partial<MobileSettings>): Promise<void> {
+    const parsed = mobileSettingsSchema.partial().strict().parse(patch);
+    return this.transaction((next) => { next.settings = mobileSettingsSchema.parse({ ...next.settings, ...parsed }); });
+  }
+  saveListDraft(scope: string, draft: MobileListDraft | null): Promise<void> {
+    if (scope !== "phone" && !/^[a-f0-9]{64}$/.test(scope)) return Promise.reject(new Error("Неверная область черновика списка"));
+    return this.transaction((next) => {
+      if (draft) next.listDrafts[scope] = mobileListDraftSchema.parse(draft);
+      else delete next.listDrafts[scope];
+    });
+  }
+  mutateList(mutation: MobileListMutation, clearDraft = false): Promise<void> {
+    return this.transaction((next) => {
+      const command = prepareListMutation(next.lists, mutation);
+      const clock = new HlcClock(next.deviceId, Date.now, next.clock);
+      const op = syncOpSchema.parse({ ...command, opId: crypto.randomUUID(), deviceId: next.deviceId, deviceSeq: next.deviceSeq + 1, hlc: clock.now() });
+      next.lists = projectMobileListOp(next.lists, op, next.workspaceId);
+      next.outbox.push(op); next.deviceSeq = op.deviceSeq; next.clock = clock.state();
+      const draft = next.listDrafts.phone;
+      if (draft && ((clearDraft && draft.id === op.entityId) || (op.kind === "delete" && (draft.id === op.entityId || (op.entity === "list" && draft.parentId === op.entityId))))) delete next.listDrafts.phone;
+    });
+  }
   markBackup(sequence: number): Promise<void> {
     return this.transaction((next) => {
       if (!Number.isInteger(sequence) || sequence < 0 || sequence > next.deviceSeq) throw new Error("Некорректная версия копии");
@@ -177,7 +204,7 @@ export class MobileRepository {
     });
   }
   clearRemote(): Promise<void> {
-    return this.transaction((next) => { next.remoteSelection = null; next.remoteActive = false; next.remoteDrafts = {}; next.taskOrder = { phone: next.taskOrder.phone ?? [] }; });
+    return this.transaction((next) => { next.remoteSelection = null; next.remoteActive = false; next.remoteDrafts = {}; next.listDrafts = next.listDrafts.phone ? { phone: next.listDrafts.phone } : {}; next.taskOrder = { phone: next.taskOrder.phone ?? [] }; });
   }
 
   saveEntry(draft: Draft): Promise<void> {

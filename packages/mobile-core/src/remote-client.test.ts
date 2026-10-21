@@ -22,6 +22,23 @@ async function connected(io = new Copies(), host = new MemoryHost()) {
   return { client, io, host };
 }
 describe("Mobile remote replica and portable backup", () => {
+  it("converges offline lists across two replicas and rejects list scope contamination", async () => {
+    const { client, io, host } = await connected();
+    const list = crypto.randomUUID(); const item = crypto.randomUUID();
+    await client.mutateList({ entity: "list", kind: "create", id: list, fields: { name: "Сборы" } });
+    await client.mutateList({ entity: "listItem", kind: "create", id: item, parentId: list, fields: { label: "Зарядка" } });
+    const restarted = await MobileRemoteClient.create(scope, io, host); expect(restarted.engine.lists().lists[0].items).toHaveLength(1);
+    await restarted.sync(); host.nowMs += 1000; const observer = await MobileRemoteClient.create(scope, new Copies(), host); await observer.sync();
+    await observer.mutateList({ entity: "listItem", kind: "patch", id: item, parentId: list, fields: { checked: true } });
+    await observer.sync(); await restarted.sync(); expect(restarted.engine.lists().lists[0].items[0].checked).toBe(true);
+    const raw = JSON.parse(io.data.get(restarted.key)!); raw.replica.entities.list[list].workspaceId = "another-workspace";
+    expect(() => parseMobileReplica(JSON.stringify(raw), scope)).toThrow();
+    io.fail = true; await expect(restarted.mutateList({ entity: "list", kind: "delete", id: list })).rejects.toThrow("disk full");
+    expect(restarted.engine.lists().lists).toHaveLength(1); io.fail = false;
+    await restarted.mutateList({ entity: "list", kind: "delete", id: list }); await restarted.sync(); await observer.sync();
+    expect(observer.engine.lists().lists).toHaveLength(0);
+  });
+
   it("keeps deletion durable offline and converges through the existing public protocol", async () => {
     const { client, io, host } = await connected(); const note = draft("Удалить после синхронизации");
     await client.saveEntry(note); await client.sync();
