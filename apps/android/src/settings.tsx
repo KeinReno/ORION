@@ -1,3 +1,4 @@
+import { DARK_PALETTES } from "./theme";
 import type { MobileSettings } from "@orion/mobile-core";
 import { Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { ANDROID_RELEASE_LABEL, ANDROID_VERSION } from "./updates";
@@ -20,6 +21,11 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
           <label key={theme}><input type="radio" name="theme" checked={settings.theme === theme}
             onChange={() => void save({ ...settings, theme })} /><span>{label}</span></label>)}</div>
       </fieldset>
+      <label className="palette-label">Цвета тёмной темы<select value={settings.darkTheme} disabled={saving}
+        onChange={(event) => void save({ ...settings, darkTheme: event.target.value as MobileSettings["darkTheme"] })}>
+        {DARK_PALETTES.map((palette) => <option key={palette.id} value={palette.id}>{palette.name}</option>)}
+      </select></label>
+      <p className="helper">Общие темы с десктопным Orion. Светлый режим использует Arctic. Выбор на телефоне пока независим от ПК.</p>
     </section>
     <section className="settings-section" aria-labelledby="updates-heading">
       <h2 id="updates-heading">Обновления</h2>

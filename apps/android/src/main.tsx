@@ -13,6 +13,7 @@ import { useLan } from "./use-lan";
 import { ConnectionPage } from "./connection";
 import { exportBackup } from "./backup";
 import "./style.css";
+import { applyMobileTheme } from "./theme";
 
 type Tab = "finance" | "tasks" | "notes" | "connection" | "settings";
 const emptyDraft = (kind: "task" | "note"): Draft => ({ kind, id: null, title: "", body: "", priority: "normal" });
@@ -63,8 +64,11 @@ function App() {
   }, []);
   useEffect(() => { heading.current?.focus(); }, [tab, editor?.kind, editor?.id]);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    const media = matchMedia("(prefers-color-scheme: light)");
+    const apply = () => applyMobileTheme(theme, data?.settings.darkTheme ?? "kaiden-precision", media.matches);
+    apply(); media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme, data?.settings.darkTheme]);
 
   async function action(work: (value: MobileRepository) => Promise<void>, message: string) {
     if (!repo.current || busy) return false;

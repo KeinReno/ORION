@@ -29,6 +29,7 @@ export const lanProfileSchema = z.object({
 export type LanProfile = z.infer<typeof lanProfileSchema>;
 export const mobileSettingsSchema = z.object({
   theme: z.enum(["system", "light", "dark"]).default("system"),
+  darkTheme: z.enum(["kaiden-precision", "obsidian", "midnight", "emerald", "crimson"]).default("kaiden-precision"),
   autoCheckUpdates: z.boolean().default(true),
   downloadUpdatesOnWifi: z.boolean().default(false),
 });
@@ -148,7 +149,7 @@ export class MobileRepository {
   saveLan(profile: LanProfile): Promise<void> {
     return this.transaction((next) => { next.lan = lanProfileSchema.parse(profile); });
   }
-  saveSettings(settings: MobileSettings): Promise<void> {
+  saveSettings(settings: z.input<typeof mobileSettingsSchema>): Promise<void> {
     return this.transaction((next) => { next.settings = mobileSettingsSchema.parse(settings); });
   }
   markBackup(sequence: number): Promise<void> {
