@@ -1,9 +1,11 @@
 # Android: центр настроек
 
-Статус **PROPOSED**, 21.10.2026. Архитектура: [FRONTEND_ARCHITECTURE](FRONTEND_ARCHITECTURE.md).
-Это структура будущих страниц, не список уже работающих переключателей.
-Сегодня settings.tsx содержит appearance/depth/update/export, остальные группы
-показывать только по мере появления работающих capabilities.
+Статус **PARTIALLY IMPLEMENTED**, alpha.13, 21.10.2026.
+Архитектура: [FRONTEND_ARCHITECTURE](FRONTEND_ARCHITECTURE.md).
+Реализованы device-only appearance/motion/voice/data/updates/diagnostics/about,
+поиск и anchors, независимое сохранение полей с retry. Подключение — отдельный
+существующий экран. Остальная IA ниже — проект, а не работающие переключатели.
+Account/workspace admin и plugin settings появятся только с capabilities.
 
 ## 1. Brief и принцип области действия
 

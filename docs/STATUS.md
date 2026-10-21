@@ -10,10 +10,14 @@
 
 ### Android: отдельная ветка alpha, 21.10.2026
 
-Проект следующего frontend-этапа: [архитектура](android/FRONTEND_ARCHITECTURE.md),
-[центр настроек](android/SETTINGS_SPEC.md), [экраны модулей](android/MODULE_SURFACES.md).
-Статус **PROPOSED**: описанные runtime/SDK/новые settings pages ещё не реализованы.
-Фактические alpha-срезы и аппаратные ограничения — в [Android index](android/README.md).
+Alpha.13 на Android-ветке (0.1.12/code 13): bundled registry и typed routes,
+нижняя навигация с иконками, «Ещё», семь страниц настроек с поиском и независимыми
+записями полей; Lists с офлайн CRUD/черновиком/архивом и существующим SyncOp.
+44 focused unit, 11 plugin, 10 browser scripts, workspace typecheck/lint,
+architecture/module-docs и native build/lint/JVM PASS. OPPO/LAN физически NOT RUN.
+Полный dynamic SDK, остальные домены и media migration не реализованы.
+[Результаты alpha.13](android/RELEASE_ALPHA13.md),
+[архитектура](android/FRONTEND_ARCHITECTURE.md), [настройки](android/SETTINGS_SPEC.md).
 
 Alpha.12 на Android-ветке (0.1.11/code 12): явные действия edit/delete для task/note,
 durable delete через существующий протокол, цельная плоскость interactive cards,
@@ -30,7 +34,7 @@ Alpha.2 (0.1.1/code 2): настройки темы, автоматическа�
 Ветка `feature/android-foundation-20261021` добавляет самостоятельный клиент
 для OPPO Reno8 5G: задачи, заметки, черновик, нативное SQLite-хранилище,
 общие контракты операций и LAN-профиль подготовки. Серверные API, desktop
-и миграции не меняются. **Передача по LAN ещё не реализована.**
+и миграции не меняются. LAN-клиент реализован начиная с alpha.3; физический обмен требует отдельной приёмки.
 Документы и точные границы проверок: [Android](android/README.md),
 [релиз](android/RELEASE.md). Это сводка ветки, не утверждение о слиянии в master.
 

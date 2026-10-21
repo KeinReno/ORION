@@ -1,9 +1,15 @@
 # Android frontend: архитектура роста
 
-Статус: **PROPOSED**, 21.10.2026. Это проект следующего этапа, не отчёт о готовом
-модульном runtime. Аудит исходников: `ba9934e` (alpha.11); исправления alpha.12
-учтены отдельным срезом. Направление: [PLATFORM](../PLATFORM.md), Stage 0.
-Не переопределяет [карту владения](../AI_REFACTOR_MIGRATION_MAP.md).
+Статус: **PARTIALLY IMPLEMENTED**, alpha.13, 21.10.2026. Направление:
+[PLATFORM](../PLATFORM.md), Stage 0; владение задаёт [карта миграции](../AI_REFACTOR_MIGRATION_MAP.md).
+Ниже сохраняется целевой проект. Реальный срез: [RELEASE_ALPHA13](RELEASE_ALPHA13.md).
+A1: composition root, repository/navigation controllers и Tasks/Notes вынесены;
+LAN/finance/native adapters пока сохраняют существующие реализации. A2: device settings
+catalog, partial patch и независимые ошибки полей. A3: typed hash routes со scope guard,
+статический bundled registry; это не полный dynamic extension runtime. A4: семь реальных
+settings pages, поиск/anchors, «Ещё», нижние иконки. A5: Lists на общих SyncOp.
+A0 физическая OPPO-приёмка не завершена; A6 entity tables/media/restore — следующий
+условный этап перед большими объёмами/файлами. G24 SDK не объявлен реализованным.
 
 Читать вместе: [экраны модулей](MODULE_SURFACES.md), [настройки](SETTINGS_SPEC.md),
 [предложение mobile contributions](EXTENSION_PROPOSAL_MOBILE_UI.md).
@@ -136,7 +142,7 @@ endpoint: сначала adapter, хранение, конфликтная се�
 ## 6. Навигация
 
 Целевой shell: контекст пространства сверху; внизу до четырёх закреплённых
-доступных направлений и «Ещё». Первые defaults: Задачи/Заметки/Финансы/Ещё.
+доступных направлений и «Ещё». Defaults alpha.13: Задачи/Заметки/Финансы/Списки/Ещё; иконки обязательны.
 «Ещё» содержит каталог модулей, настройки и подключение; настройки также доступны
 через явную шестерёнку header. Не занимать постоянную вкладку каждым новым модулем.
 Позже полезный «Обзор» — shell aggregate через contributions; до появления реальных
@@ -145,7 +151,7 @@ endpoint: сначала adapter, хранение, конфликтная се�
 Rule/navigation-vs-action, rule/structure-before-containers, rule/smallest-intervention.
 
 Typed routes включают scope, owner module, screen, entity ID; пример
-`#/phone/tasks/<id>` и `#/remote/<scope-key>/settings/appearance`. Секретов в URL нет.
+`#/scope/phone/module/lists?entity=<uuid>` и `#/settings/appearance?field=theme`. Секретов в URL нет.
 Начать с typed adapter над history/hash, уже пригодным для Capacitor; замену router
 library оценивать отдельно. Route definitions и search anchors стабильны.
 Back: закрыть действие/подтверждение → editor с сохранённым draft → list с фильтром

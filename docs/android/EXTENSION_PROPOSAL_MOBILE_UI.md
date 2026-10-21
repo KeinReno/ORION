@@ -1,6 +1,12 @@
 # Extension Proposal: mobile UI contributions
 
-**PROPOSED**, 21.10.2026. `NEW_EXTENSION_POINT_REQUIRED`.
+**PARTIALLY IMPLEMENTED**, alpha.13, 21.10.2026. `NEW_EXTENSION_POINT_REQUIRED`
+для оставшихся динамических contribution points. Владелец разрешил реализацию плана.
+Минимальный bundled screen contract реализован в `app/runtime/module-registry.ts`:
+canonical module ID, icon/label/summary/render/primary; duplicate ID guard и scope
+routes/error boundary принадлежат host. Lists добавлен через composition root,
+без нового domain branch в shell. Это внутренний Android contract, не G24 SDK.
+Plugin sections/overview/policy lifecycle/unregister остаются PROPOSED.
 Это предложение public contract, не реализованный SDK/разрешение подключать JS.
 Основание: Constitution §6–9; AI_REFACTOR_MIGRATION_MAP: Core владеет settings
 shell, modules/plugins добавляют typed sections. Desktop places/slots привязаны
