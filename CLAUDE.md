@@ -452,8 +452,9 @@ pnpm-store (`%LOCALAPPDATA%\pnpm\store`, общий для всех проект
 - **Кто отвечает в чате ассистента** — `AssistantSendInput.engine`: `anthropic` (ключ, как раньше), `codex`, `cursor` — программа
   на этом компьютере по подписке пользователя (`apps/api/src/ai/assistant-cli.ts`, только `ORION_MODE=local`). На один ответ:
   токен чата → временная папка → `codex exec … -` (задание через stdin, MCP-сервер `orion_chat` через `-c`, токен — только в
-  окружении, `env_vars`) или `cursor-agent -p --approve-mcps` (сервер в `.cursor/mcp.json` папки, задание — файлом
-  `ORION_TASK.md`). **Текст пользователя никогда не попадает в командную строку**: `.cmd`-обёртки идут через `cmd /d /s /c`,
+  окружении, `env_vars`) или `cursor-agent -p --trust --approve-mcps --sandbox enabled --workspace <папка>` (без `--trust` Cursor ждёт «доверять
+  папке?» и висит до таймаута; сервер в `.cursor/mcp.json` папки, задание — файлом `ORION_TASK.md`). Таймаут 4 мин — меньше
+  5-минутного таймаута запроса Node. Отказ программы — 502 с причиной; панель показывает её (`assistantFailure`), а не «сервер недоступен». **Текст пользователя никогда не попадает в командную строку**: `.cmd`-обёртки идут через `cmd /d /s /c`,
   каждый аргумент проходит `cmdQuote`. Что программа сделала, читается из журнала её токена и её запросов
   (`actionsOfToken`) — подтверждение под ответом то же. Доступность — `GET /assistant/engines`; программа ищется в PATH,
   переопределяется `ORION_CODEX_BIN` / `ORION_CURSOR_AGENT_BIN` (тест — поддельный codex). Картинки CLI-движку не передаются.
