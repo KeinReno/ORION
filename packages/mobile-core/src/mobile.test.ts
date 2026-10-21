@@ -13,6 +13,22 @@ const draft = (kind: "task" | "note", title = "Запись"): Draft => ({
 });
 
 describe("Android local repository", () => {
+  it("keeps task planning fields durable and validates minutes without discarding drafts", async () => {
+    const disk = new Disk(); const repo = await MobileRepository.open(disk);
+    await repo.saveEntry({ ...draft("task"), startAt: "2026-11-01T12:00:00.000Z", estimatedMinutesText: "45" });
+    const task = repo.snapshot().tasks[0];
+    await repo.saveEntry({ ...draft("task", "Legacy"), id: task.id });
+    expect(repo.snapshot().tasks[0]).toMatchObject({ startAt: task.startAt, estimatedMinutes: 45 });
+    const invalid = { ...draft("task"), id: task.id, estimatedMinutesText: "1.5" };
+    await repo.saveDraft(invalid); const before = repo.snapshot();
+    await expect(repo.saveEntry(invalid)).rejects.toThrow("целое число"); expect(repo.snapshot()).toEqual(before);
+    disk.fail = true;
+    await expect(repo.saveEntry({ ...draft("task"), id: task.id, startAt: null, estimatedMinutesText: "" })).rejects.toThrow("disk full");
+    expect(repo.snapshot()).toEqual(before); disk.fail = false;
+    await repo.saveEntry({ ...draft("task"), id: task.id, startAt: null, estimatedMinutesText: "0" });
+    expect((await MobileRepository.open(disk)).snapshot().tasks[0]).toMatchObject({ startAt: null, estimatedMinutes: 0 });
+    await repo.saveEntry({ ...draft("task"), id: task.id, estimatedMinutesText: "" }); expect(repo.snapshot().tasks[0].estimatedMinutes).toBeNull();
+  });
   it("preserves new fields, legacy drafts and invalid-tag input across durable saves", async () => {
     const disk = new Disk(); const repo = await MobileRepository.open(disk);
     await repo.saveEntry({ ...draft("task"), status: "in_progress", dueAt: "2026-11-02T12:30:00.000Z" });

@@ -25,12 +25,12 @@ describe("Mobile remote replica and portable backup", () => {
   it("converges extended task/note fields without clearing them on legacy edits", async () => {
     const { client, io, host } = await connected();
     const note = { ...draft("Теги"), summary: "Кратко", tagsText: "mobile, идеи", pinnedAt: "2026-10-21T10:00:00.000Z" };
-    const task = { ...draft("Срок"), kind: "task" as const, status: "in_progress" as const, dueAt: "2026-11-02T12:00:00.000Z" };
+    const task = { ...draft("Срок"), kind: "task" as const, status: "in_progress" as const, dueAt: "2026-11-02T12:00:00.000Z", startAt: "2026-11-01T12:00:00.000Z", estimatedMinutesText: "45" };
     await client.saveEntry(note); await client.saveEntry(task); await client.sync();
     host.nowMs += 1000;
     const observer = await MobileRemoteClient.create(scope, new Copies(), host); await observer.sync();
     expect(observer.engine.notes()[0]).toMatchObject({ summary: "Кратко", tags: ["mobile", "идеи"], pinnedAt: note.pinnedAt });
-    expect(observer.engine.tasks()[0]).toMatchObject({ status: "in_progress", dueAt: task.dueAt });
+    expect(observer.engine.tasks()[0]).toMatchObject({ status: "in_progress", dueAt: task.dueAt, startAt: task.startAt, estimatedMinutes: 45 });
     await observer.saveEntry({ ...draft("Legacy"), id: note.id }); await observer.sync(); await client.sync();
     expect(client.engine.notes()[0]).toMatchObject({ summary: "Кратко", tags: ["mobile", "идеи"] });
     io.fail = true;
