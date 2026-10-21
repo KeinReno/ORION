@@ -2,13 +2,16 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone } from "lucide-react";
+import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings } from "lucide-react";
 import { MobileRepository, lanProfileSchema, type Draft, type MobileSnapshot } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { storage } from "./storage";
+import { SettingsPage } from "./settings";
+import { useUpdates } from "./use-updates";
+import { ANDROID_VERSION, ANDROID_RELEASE_LABEL } from "./updates";
 import "./style.css";
 
-type Tab = "tasks" | "notes" | "connection";
+type Tab = "tasks" | "notes" | "connection" | "settings";
 const emptyDraft = (kind: "task" | "note"): Draft => ({ kind, id: null, title: "", body: "", priority: "normal" });
 const errorText = (error: unknown) => error instanceof Error && !("issues" in error)
   ? error.message : "Не удалось сохранить. Проверьте название и повторите — введённый текст остаётся здесь.";
@@ -27,6 +30,8 @@ function App() {
   const [address, setAddress] = useState("");
   const [port, setPort] = useState("4443");
   const heading = useRef<HTMLHeadingElement>(null);
+  const updates = useUpdates(data?.settings);
+  const theme = data?.settings.theme ?? "system";
 
   async function open() {
     setLoading(true); setError("");
@@ -49,6 +54,9 @@ function App() {
     return () => { window.removeEventListener("popstate", back); void listener?.then((handle) => handle.remove()); };
   }, []);
   useEffect(() => { heading.current?.focus(); }, [tab, editor?.kind, editor?.id]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   async function action(work: (value: MobileRepository) => Promise<void>, message: string) {
     if (!repo.current || busy) return false;
@@ -111,15 +119,17 @@ function App() {
   return <div className="shell"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
     <span>KAIDEN <b>Orion</b></span><span className="local-label">На телефоне</span></header>
     <main className="content">
-      <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : "Связь с компьютером"}</h1>
-        <p>{tab === "tasks" ? "Освободите голову. Начните с одного дела." : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : "Ваше пространство — рядом, даже без сети."}</p></div>
-      {tab !== "connection" && <button className="primary" disabled={busy} onClick={() => {
+      <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
+        <p>{tab === "tasks" ? "Освободите голову. Начните с одного дела." : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
+      {(tab === "tasks" || tab === "notes") && <button className="primary" disabled={busy} onClick={() => {
         // A single recoverable draft must never be silently replaced.
         if (data.draft) begin(data.draft); else begin(emptyDraft(tab === "tasks" ? "task" : "note"));
       }}><Plus size={20} /><span>Создать</span></button>}</div>
       {feedback}
       {data.draft && <button className="draft-banner" onClick={() => begin(data.draft!)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{data.draft.title || "Без названия"}</strong></span></button>}
-      {tab !== "connection" ? <>
+      {tab === "settings" ? <SettingsPage settings={data.settings} saving={busy} updates={updates}
+        save={(settings) => action((value) => value.saveSettings(settings), "Настройки сохранены на этом телефоне")} />
+      : tab !== "connection" ? <>
         <label className="search"><Search size={20} /><span className="sr-only">Поиск</span><input type="search" placeholder={tab === "tasks" ? "Найти задачу" : "Найти заметку"} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
         {tab === "notes" && <div className="filters"><button aria-pressed={!archive} onClick={() => setArchive(false)}>Все заметки</button><button aria-pressed={archive} onClick={() => setArchive(true)}><Archive size={16} />Архив</button></div>}
         {tab === "tasks" ? <ul className="entries">{tasks.map((task) => <li key={task.id} className={isTaskClosed(task.status) ? "completed" : ""}>
@@ -152,14 +162,15 @@ function App() {
           <label>Порт<input type="number" inputMode="numeric" min="1" max="65535" value={port} onChange={(e) => setPort(e.target.value)} /></label>
           <button className="primary" disabled={busy}>Сохранить профиль</button>
         </form>
-        <dl><div><dt>Локальные операции</dt><dd>{data.outbox.length}</dd></div><div><dt>Передано на компьютер</dt><dd>Не подключено</dd></div><div><dt>Версия</dt><dd>0.1.0 · alpha.1</dd></div></dl>
+        <dl><div><dt>Локальные операции</dt><dd>{data.outbox.length}</dd></div><div><dt>Передано на компьютер</dt><dd>Не подключено</dd></div><div><dt>Версия</dt><dd>{ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</dd></div></dl>
         <p className="helper">Удаление приложения удалит его локальные данные. Резервный экспорт появится в следующем срезе.</p>
       </section>}
     </main>
     <nav className="navigation" aria-label="Разделы">{([
       ["tasks", "Задачи", ListTodo], ["notes", "Заметки", NotebookPen], ["connection", "Связь", Link2],
+      ["settings", "Настройки", Settings],
     ] as const).map(([value, label, Icon]) => <button key={value} aria-current={tab === value ? "page" : undefined}
-      onClick={() => { setTab(value); setQuery(""); setError(""); setNotice(""); }}><Icon size={23} /><span>{label}</span></button>)}</nav>
+      onClick={() => { setTab(value); setQuery(""); setError(""); setNotice(""); }}><span className="nav-icon"><Icon size={23} />{value === "settings" && updates.state?.available && <span className="update-dot" aria-label="Доступно обновление" />}</span><span>{label}</span></button>)}</nav>
   </div>;
 }
 

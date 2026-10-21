@@ -8,6 +8,8 @@
 - [Архитектура](ARCHITECTURE.md)
 - [Синхронизация](SYNC.md)
 - [Первый релиз и проверка](RELEASE.md)
+- [Настройки и обновления](UPDATES.md)
+- [Alpha.2: результаты проверки](RELEASE_ALPHA2.md)
 
 Приоритеты: AGENTS.md → PLATFORM.md → ORION_CONSTITUTION.md.
 Android — отдельная клиентская поверхность, не новый предметный модуль и не

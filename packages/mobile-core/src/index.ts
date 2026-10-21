@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./android-updates";
 import { applyOpLocally, emptyEntities, type ReplicaEntityMap } from "@orion/core";
 import {
   HlcClock, LAN_DEFAULT_PORT, normalizeOpFields, noteSchema, taskSchema,
@@ -25,6 +26,12 @@ export const draftSchema = z.object({
   priority: z.enum(["low", "normal", "high"]),
 });
 export type Draft = z.infer<typeof draftSchema>;
+export const mobileSettingsSchema = z.object({
+  theme: z.enum(["system", "light", "dark"]).default("system"),
+  autoCheckUpdates: z.boolean().default(true),
+  downloadUpdatesOnWifi: z.boolean().default(false),
+});
+export type MobileSettings = z.infer<typeof mobileSettingsSchema>;
 const snapshotSchema = z.object({
   version: z.literal(1),
   workspaceId: z.string().uuid(), deviceId: z.string().uuid(),
@@ -34,6 +41,8 @@ const snapshotSchema = z.object({
   outbox: z.array(syncOpSchema),
   draft: draftSchema.nullable(),
   lan: lanProfileSchema.nullable(),
+  // Additive migration for alpha.1; content/outbox/device identity are retained.
+  settings: mobileSettingsSchema.default({}),
 });
 export type MobileSnapshot = z.infer<typeof snapshotSchema>;
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
@@ -58,6 +67,7 @@ export class MobileRepository {
         version: 1, workspaceId: crypto.randomUUID(), deviceId: crypto.randomUUID(),
         deviceSeq: 0, clock: { wallMs: 0, counter: 0 },
         tasks: [], notes: [], outbox: [], draft: null, lan: null,
+        settings: mobileSettingsSchema.parse({}),
       };
       await storage.write(JSON.stringify(state));
     }
@@ -86,6 +96,9 @@ export class MobileRepository {
   }
   saveLan(profile: LanProfile): Promise<void> {
     return this.transaction((next) => { next.lan = lanProfileSchema.parse(profile); });
+  }
+  saveSettings(settings: MobileSettings): Promise<void> {
+    return this.transaction((next) => { next.settings = mobileSettingsSchema.parse(settings); });
   }
 
   saveEntry(draft: Draft): Promise<void> {

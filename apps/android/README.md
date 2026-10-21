@@ -1,6 +1,8 @@
 # KAIDEN Orion Android
 
 Независимая офлайн alpha для OPPO Reno8 5G. [Документация и ограничения](../../docs/android/README.md).
+Alpha.2: настройки и обновления внутри приложения. С alpha.1 установить
+вручную поверх прежней версии, сохранив её данные.
 
 ```powershell
 pnpm install --frozen-lockfile

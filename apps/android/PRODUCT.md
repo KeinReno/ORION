@@ -10,6 +10,8 @@ shared existing contracts, mobile shell and preparation for LAN.
 Desktop stability and persisted data must be preserved.
 Personal and small-team use share the existing workspace/permission model.
 This alpha exposes only an independent local space.
+Owner authorized a public APK-only distribution repository on 21 October 2026.
+Settings/updater are device infrastructure; installation remains an Android system action.
 
 ## Stack
 Existing TypeScript workspace; Capacitor 8 + React 18 + Vite 6, selected for

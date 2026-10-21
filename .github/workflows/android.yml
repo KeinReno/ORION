@@ -8,6 +8,7 @@ on:
       - "packages/shared-types/**"
       - "packages/core/**"
       - "pnpm-lock.yaml"
+      - "scripts/android-*.mjs"
       - ".github/workflows/android.yml"
 permissions:
   contents: read
@@ -29,10 +30,10 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v3
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vitest run packages/mobile-core/src/mobile.test.ts
+      - run: pnpm exec vitest run packages/mobile-core/src
       - run: pnpm --filter @orion/android build
       - run: pnpm --filter @orion/android android:sync
-      - run: bash gradlew assembleDebug assembleRelease lintDebug --console=plain
+      - run: bash gradlew assembleDebug assembleRelease lintDebug testDebugUnitTest --console=plain
         working-directory: apps/android/android
       - uses: actions/upload-artifact@v4
         with:
