@@ -89,3 +89,15 @@ h1{font-size:1.5rem;letter-spacing:-.02em}h2{font-size:1.125rem}.primary{font-we
 .note-tags { color: var(--accent); font-size: .78rem; overflow-wrap: anywhere; }
 
 .module-filters select, .entry-fields select { font: inherit; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--raised); color: var(--text); }
+
+.markdown-preview { border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+.markdown-preview summary { min-height: 48px; cursor: pointer; padding: 10px 0; color: var(--text); }
+.markdown-body { overflow-wrap: anywhere; color: var(--text); line-height: 1.65; }
+.markdown-body :is(p,ul,ol,blockquote,pre,table) { margin: 12px 0; }
+.markdown-body :is(h1,h2,h3,h4,h5,h6) { font-size: 1.2rem; margin: 18px 0 8px; }
+.markdown-body h1 { font-size: 1.45rem; }
+.markdown-body pre { white-space: pre-wrap; background: var(--raised); padding: 12px; border-radius: 10px; }
+.markdown-body code { font-size: .85em; }
+.markdown-body blockquote { border-left: 3px solid var(--accent); padding-left: 12px; }
+.markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
+.markdown-body :is(td,th) { border: 1px solid var(--line); padding: 8px; }

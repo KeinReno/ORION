@@ -11,6 +11,11 @@ export function EntryFields({ draft, disabled, change }: { draft: Draft; disable
       {Object.entries(STATUS_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
     </select></label>
     <label>Срок задачи<input type="datetime-local" value={localDateTime(draft.dueAt)} disabled={disabled} onChange={(event) => change({ ...draft, dueAt: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
+    <label>Начало задачи<input type="datetime-local" value={localDateTime(draft.startAt)} disabled={disabled} onChange={(event) => change({ ...draft, startAt: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label>
+    <label>Плановое время, минуты<input inputMode="numeric" value={draft.estimatedMinutesText ?? ""} maxLength={32} disabled={disabled} placeholder="Не задано" onChange={(event) => change({ ...draft, estimatedMinutesText: event.target.value })} /></label>
+    <p className="helper">План не запускает таймер. Очистите поле, чтобы убрать оценку.</p>
+    {draft.startAt && <button className="text-button" disabled={disabled} onClick={() => change({ ...draft, startAt: null })}>Убрать начало</button>}
+    {draft.startAt && draft.dueAt && draft.startAt > draft.dueAt && <p className="helper">Начало позже срока — проверьте обе даты.</p>}
     <p className="helper">Время указано в часовом поясе телефона. Напоминания в этой версии не отправляются.</p>
     {draft.dueAt && <button className="text-button" disabled={disabled} onClick={() => change({ ...draft, dueAt: null })}>Убрать срок</button>}
   </> : <>

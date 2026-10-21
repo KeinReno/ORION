@@ -16,7 +16,7 @@ try {
         if (plugin === "OrionLan") return { paired: false, node: null, user: null, address: "", port: 4443 };
         if (plugin === "OrionMotion") return { reduced: false };
         if (plugin === "OrionDepth") { if (method === "start") { window.__starts++; if (window.__depthError) throw new Error("sensor failure"); return { available: window.__depthAvailable !== false }; } if (method === "stop") window.__stops++; return {}; }
-        if (plugin === "OrionUpdates") return { installedVersion: "0.1.13", installedCode: 14, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
+        if (plugin === "OrionUpdates") return { installedVersion: "0.1.14", installedCode: 15, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
         return {};
       },
     };
@@ -116,7 +116,7 @@ try {
   }));
   assert.equal(layers[0].x, 0); assert.equal(layers[1].x, 0);
   assert.ok(layers[1].z > layers[0].z && layers[0].z > 0, "layers only rise on positive Z, never move in opposite X/Y directions");
-  const output = process.env.ANDROID_SMOKE_OUTPUT || "../../outputs/android-alpha14/preview";
+  const output = process.env.ANDROID_SMOKE_OUTPUT || "../../outputs/android-alpha15/preview";
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: output + "/depth-settings-synthetic.png", fullPage: true });
   await slider.fill("0"); await slider.dispatchEvent("keyup", { key: "ArrowLeft" });

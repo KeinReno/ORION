@@ -1,4 +1,6 @@
 import { EMPTY_TASK_FILTERS } from "../features/tasks/task-filters";
+import { MarkdownPreview } from "../features/markdown-preview";
+import type { TaskSort, NoteSort } from "../features/view-order";
 import { EntryFields } from "../features/entry-fields";
 import type { AppRoute } from "./navigation/routes";
 import { useRepository } from "./use-repository";
@@ -51,6 +53,8 @@ export default function App() {
   const [editor, setEditor] = useState<Draft | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
   const [noteQuery, setNoteQuery] = useState("");
+  const [taskSort, setTaskSort] = useState<TaskSort>("manual");
+  const [noteSort, setNoteSort] = useState<NoteSort>("updated");
   const [taskFilters, setTaskFilters] = useState({ ...EMPTY_TASK_FILTERS });
   const [noteTag, setNoteTag] = useState("");
   const [pinnedNotes, setPinnedNotes] = useState(false);
@@ -110,7 +114,7 @@ export default function App() {
     }).catch(() => { draftWriteError.current = true; setError("Черновик не записан на диск. Не закрывайте редактор; попробуйте сохранить ещё раз."); setNotice(""); }).finally(() => { draftWrites.current--; });
   }
   function editTask(task: Task) {
-    begin({ kind: "task", id: task.id, title: task.title, body: task.description, priority: task.priority, status: task.status, dueAt: task.dueAt,
+    begin({ kind: "task", id: task.id, title: task.title, body: task.description, priority: task.priority, status: task.status, dueAt: task.dueAt, startAt: task.startAt, estimatedMinutesText: task.estimatedMinutes?.toString() ?? "",
       ...(remote ? { expectedRevision: remote.revision("task", task.id) } : {}) });
   }
   function editNote(note: Note) {
@@ -183,6 +187,7 @@ export default function App() {
       {([["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]] as const).map(([value, label]) =>
         <label key={value}><input type="radio" name="priority" checked={editor.priority === value} onChange={() => changeDraft({ ...editor, priority: value })} /><span>{label}</span></label>)}
     </div></fieldset>}
+    <MarkdownPreview source={editor.body} />
     <EntryFields draft={editor} disabled={busy || dictating} change={changeDraft} />
     <p className="helper">{editor.body.length.toLocaleString("ru-RU")} / 20 000 символов</p>
     {feedback}<button className="text-button" disabled={busy || dictating} onClick={async () => {
@@ -238,12 +243,12 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { tasks, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+    tasks: { tasks, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
       edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
-    notes: { notes, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
+    notes: { notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
       edit: (note) => currentDraft ? begin(currentDraft) : editNote(note),
       archiveNote: (note) => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть"),
       menu: (note) => menuButton("note", note), actions: (note) => entryActions("note", note) },
