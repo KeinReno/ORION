@@ -3,19 +3,19 @@ import { Plus, type LucideIcon } from "lucide-react";
 
 export interface QuickAction { id: string; label: string; icon: LucideIcon; disabled?: boolean; run: () => void }
 export function QuickActions({ children, actions, disabled }: { children: ReactNode; actions: QuickAction[]; disabled: boolean }) {
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; held: boolean } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const tracking = useRef<{ x: number; y: number; id: number; active: boolean; moved: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const suppressClick = useRef(false);
+  const suppressUntil = useRef(0);
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const clearTimer = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = null; }, []);
   const close = useCallback(() => { clearTimer(); tracking.current = null; setMenu(null); setSelected(null); }, [clearTimer]);
   useEffect(() => { if (disabled) close(); }, [disabled, close]);
-  function open(x: number, y: number) {
-    setMenu({ x: Math.max(126, Math.min(innerWidth - 126, x)), y: Math.max(156, Math.min(innerHeight - 156, y)) });
+  function open(x: number, y: number, held = false) {
+    setMenu({ held, x: Math.max(126, Math.min(innerWidth - 126, x)), y: Math.max(156, Math.min(innerHeight - 156, y)) });
     setSelected(null);
   }
   useEffect(() => {
@@ -26,7 +26,7 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
   useEffect(() => {
     if (!menu) return;
     const previous = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    if (!menu.held) panel.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
     const cancel = () => close();
     const back = (event: Event) => { event.preventDefault(); close(); };
     window.addEventListener("orion-back", back);
@@ -40,6 +40,7 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
   }
   return <div ref={root} className="gesture-root"
     onPointerDown={(event) => {
+      if (event.isPrimary) suppressUntil.current = 0;
       if (disabled || menu || !event.isPrimary || event.button !== 0) return;
       const target = event.target as HTMLElement;
       if (!target.matches("main,section,div,ul") || target.closest("button,input,textarea,select,label,a,summary,[data-task-id],.navigation,.finance-details,.dictation")) return;
@@ -50,7 +51,7 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
         if (!tracking.current) return;
         tracking.current.active = true;
         try { root.setPointerCapture(event.pointerId); } catch { /* Pointer already ended. */ }
-        open(event.clientX, event.clientY);
+        open(event.clientX, event.clientY, true);
         navigator.vibrate?.(15);
       }, 420);
     }}
@@ -66,14 +67,26 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
       if (!current || current.id !== event.pointerId) return;
       tracking.current = null;
       if (!current.active) return;
-      suppressClick.current = true;
+      suppressUntil.current = Date.now() + 500;
       const id = current.moved ? actionAt(event.clientX, event.clientY) : null;
-      close(); if (id) actions.find((action) => action.id === id)?.run();
+      if (id) { close(); actions.find((action) => action.id === id)?.run(); }
+      else if (current.moved) close();
+      else { setMenu((current) => current ? { ...current, held: false } : null); setSelected(null); }
     }}
-    onLostPointerCapture={() => { if (tracking.current?.active) close(); }}
-    onPointerCancel={() => { clearTimer(); if (tracking.current?.active) close(); tracking.current = null; }}
+    onLostPointerCapture={(event) => {
+      // A child loses its implicit touch capture when the host takes explicit capture.
+      if (event.target !== event.currentTarget || !tracking.current?.active || tracking.current.id !== event.pointerId) return;
+      tracking.current = null; suppressUntil.current = Date.now() + 500;
+      setMenu((current) => current ? { ...current, held: false } : null); setSelected(null);
+    }}
+    onPointerCancel={(event) => {
+      if (tracking.current?.id !== event.pointerId) return;
+      clearTimer();
+      if (tracking.current.active) { suppressUntil.current = Date.now() + 500; setMenu((current) => current ? { ...current, held: false } : null); setSelected(null); }
+      tracking.current = null;
+    }}
     onContextMenu={(event) => { if (tracking.current?.active || menu) event.preventDefault(); }}
-    onClickCapture={(event) => { if (suppressClick.current) { suppressClick.current = false; event.preventDefault(); event.stopPropagation(); } }}>
+    onClickCapture={(event) => { if (event.detail > 0 && Date.now() < suppressUntil.current) { suppressUntil.current = 0; event.preventDefault(); event.stopPropagation(); } }}>
     {children}
     <button ref={trigger} className="quick-trigger" aria-label="Быстрые действия" aria-haspopup="dialog" disabled={disabled} onClick={() => {
       const rect = trigger.current!.getBoundingClientRect(); open(rect.left + rect.width / 2, rect.top);
@@ -96,7 +109,7 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
           className={"quick-action quick-position-" + index} disabled={unavailable} aria-pressed={selected === id} onClick={() => { close(); run(); }}>
           <Icon size={24} /><span>{label}</span></button>)}
         <button className="quick-cancel" aria-label="Отменить быстрые действия" onClick={close}>×</button>
-        <p className="quick-hint" role="status">{actions.find((action) => action.id === selected)?.label ?? (tracking.current?.active ? "Отпустите в центре для отмены" : "Выберите действие")}</p>
+        <p className="quick-hint" role="status">{actions.find((action) => action.id === selected)?.label ?? (menu.held ? "Наведите на действие и отпустите" : "Выберите действие")}</p>
       </div>
     </div>}
   </div>;

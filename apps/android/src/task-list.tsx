@@ -35,7 +35,7 @@ export function TaskList({ tasks, disabled, reorder, children }: {
     try { if (await reorder(ids)) setMessage("Порядок задач сохранён на телефоне."); }
     finally { setSaving(false); }
   }
-  return <><p className="helper">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>
+  return <>
     <ul ref={list} className="entries task-list">{tasks.map((task, index) => <li key={task.id} data-task-id={task.id}
       className={[isTaskClosed(task.status) ? "completed" : "", moving === task.id ? "task-moving" : "", target === task.id && moving !== task.id ? (dropAfter ? "task-drop-after" : "task-drop-target") : ""].join(" ")}>
       <div className="task-row">{children(task)}
@@ -74,5 +74,5 @@ export function TaskList({ tasks, disabled, reorder, children }: {
         <button disabled={disabled || saving || !tasks[index + 1] || isTaskClosed(tasks[index + 1]!.status) !== isTaskClosed(task.status)}
           onClick={() => void move(task.id, tasks[index + 1]!.id, true)}><ArrowDown size={18} />Ниже</button>
       </div>}
-    </li>)}</ul><p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
+    </li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
 }

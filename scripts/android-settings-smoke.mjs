@@ -17,9 +17,9 @@ try {
   await page.route("https://raw.githubusercontent.com/KeinReno/ORION-Android-Releases/main/android-update.json", async (route) => {
     requests++;
     if (mode === "offline") { await route.abort("failed"); return; }
-    const code = mode === "new" ? 9 : 8;
-    const version = mode === "new" ? "0.1.8" : "0.1.7";
-    const tag = mode === "new" ? "v0.1.8-android-alpha.9" : "v0.1.7-android-alpha.8";
+    const code = mode === "new" ? 10 : 9;
+    const version = mode === "new" ? "0.1.9" : "0.1.8";
+    const tag = mode === "new" ? "v0.1.9-android-alpha.10" : "v0.1.8-android-alpha.9";
     await route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({
       schemaVersion: 1, applicationId: "io.kaiden.orion.android",
       versionCode: code, versionName: version, tag,
@@ -33,7 +33,7 @@ try {
   await page.goto("http://127.0.0.1:3180");
   await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
   await page.getByRole("button", { name: /Настройки/ }).click();
-  await page.getByText("Доступна версия 0.1.8", { exact: true }).waitFor();
+  await page.getByText("Доступна версия 0.1.9", { exact: true }).waitFor();
   assert.equal(requests, 1);
   await page.getByText("Что изменилось", { exact: true }).click();
   await page.getByText("Тестовый будущий релиз. Проверка описания обновлений.", { exact: true }).waitFor();
@@ -42,9 +42,9 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
   assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
   await page.getByRole("switch", { name: /Проверять автоматически/ }).click();
-  await page.waitForFunction(() => !document.querySelectorAll('input[role="switch"]')[0].checked);
+  await page.waitForFunction(() => !document.getElementById("auto-check-updates").checked);
   await page.getByRole("switch", { name: /Загружать по Wi-Fi/ }).click();
-  await page.waitForFunction(() => document.querySelectorAll('input[role="switch"]')[1].checked);
+  await page.waitForFunction(() => document.getElementById("download-updates-wifi").checked);
   await page.reload();
   await page.getByRole("button", { name: /Настройки/ }).click();
   await page.getByRole("heading", { name: "Обновления", exact: true }).waitFor();

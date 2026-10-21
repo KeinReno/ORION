@@ -66,3 +66,15 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .completed .check-button::before{background:var(--accent);border-color:var(--accent)}
 .check-button svg{position:relative;z-index:1}
 .gesture-root:has(input:focus,textarea:focus,select:focus) .quick-trigger{visibility:hidden}
+
+/* Depth affects only read-only/decorative layers; pointer targets stay flat. */
+:root{--depth-x:0px;--depth-y:0px;--depth-rx:0deg;--depth-ry:0deg}
+:root[data-depth=active][data-motion=full] .brand img,:root[data-depth=active][data-motion=full] .empty>svg{transform:perspective(420px) rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) translate(var(--depth-x),var(--depth-y));transition:transform 100ms linear}
+:root[data-depth=active][data-motion=full] .finance-totals>div{transform:perspective(620px) rotateX(var(--depth-rx)) rotateY(var(--depth-ry));transition:transform 100ms linear}
+.finance-context{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0 16px;border-bottom:1px solid var(--line)}
+.finance-context strong{font-size:.8rem;font-weight:500;white-space:nowrap}.finance-context strong span{display:block;font-size:.7rem;letter-spacing:.04em;color:var(--muted);margin-top:3px}
+.finance-context p{font-size:.75rem;text-align:right;max-width:26ch;line-height:1.5}
+.finance-form .finance-types{margin:16px 0 22px}.finance-form .finance-amount{min-height:86px;font-size:2.5rem}
+.finance-totals{border:0;padding:0;gap:12px}.finance-totals>div{padding:16px 14px;border:1px solid var(--line);border-radius:12px;background:rgb(var(--kaiden-bg-surface));box-shadow:0 4px 12px rgb(var(--kaiden-bg-canvas)/.12);transform-origin:center}
+.order-help{padding-top:10px;font-size:.75rem;max-width:48ch}
+@media(max-width:380px){.finance-context{gap:10px}.finance-context p{font-size:.72rem}.finance-form .finance-amount{font-size:2.2rem}.finance-totals>div{padding:12px 10px}}

@@ -42,7 +42,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt));
   const total = (type: string) => entries.filter((entry) => entry.type === type).reduce((sum, entry) => sum + entry.totalAmount, 0);
   return <section className="finance">
-    <p className="finance-scope">Только на телефоне · RUB. Операции входят в резервную копию. Синхронизация финансов с ПК пока недоступна.</p>
+    <div className="finance-context"><strong>На телефоне <span>RUB</span></strong><p>В резервной копии · без синхронизации с ПК</p></div>
     <form className="finance-form" onSubmit={async (event) => {
       event.preventDefault(); if (busy) return;
       try { parseMoney(draft.amount); } catch (cause) { setError((cause as Error).message); return; }
@@ -50,12 +50,12 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
     }}>
       <fieldset disabled={busy}>
         <legend>{editing ? "Изменить операцию" : "Новая операция"}</legend>
-        <div className="finance-types">{(["expense", "income"] as const).map((type) => <button type="button" key={type} aria-pressed={draft.type === type}
-          onClick={() => change({ ...draft, type, categoryId: finance.categories.find((item) => item.kind === type)!.id })}>
-          {type === "expense" ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}{type === "expense" ? "Расход" : "Доход"}</button>)}</div>
         <label htmlFor="finance-amount">Сумма, ₽</label>
         <input id="finance-amount" className="finance-amount" inputMode="decimal" autoComplete="off" placeholder="0,00" maxLength={30}
           value={draft.amount} onChange={(event) => change({ ...draft, amount: event.target.value })} aria-describedby="finance-error" aria-invalid={Boolean(error)} />
+        <div className="finance-types">{(["expense", "income"] as const).map((type) => <button type="button" key={type} aria-pressed={draft.type === type}
+          onClick={() => change({ ...draft, type, categoryId: finance.categories.find((item) => item.kind === type)!.id })}>
+          {type === "expense" ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}{type === "expense" ? "Расход" : "Доход"}</button>)}</div>
         <label htmlFor="finance-account">Счёт</label>
         <select id="finance-account" value={draft.accountId} onChange={(event) => change({ ...draft, accountId: event.target.value })}>
           {finance.accounts.filter((item) => !item.archivedAt).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>

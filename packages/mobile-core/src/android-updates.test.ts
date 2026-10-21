@@ -48,11 +48,11 @@ describe("Android update boundary", () => {
     const before = first.snapshot();
     const legacy: Record<string, unknown> = JSON.parse(raw!); delete legacy.settings; raw = JSON.stringify(legacy);
     const updated = await MobileRepository.open(storage);
-    expect(updated.snapshot()).toEqual({ ...before, settings: { darkTheme: "kaiden-precision", theme: "system", autoCheckUpdates: true, downloadUpdatesOnWifi: false } });
+    expect(updated.snapshot()).toEqual({ ...before, settings: { depthEffects: true, darkTheme: "kaiden-precision", theme: "system", autoCheckUpdates: true, downloadUpdatesOnWifi: false } });
     await updated.saveSettings({ theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
     const restarted = await MobileRepository.open(storage);
     expect(restarted.snapshot().notes).toEqual(before.notes);
     expect(restarted.snapshot().outbox).toEqual(before.outbox);
-    expect(restarted.snapshot().settings).toEqual({ darkTheme: "kaiden-precision", theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
+    expect(restarted.snapshot().settings).toEqual({ depthEffects: true, darkTheme: "kaiden-precision", theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
   });
 });

@@ -14,3 +14,5 @@ Browser snapshots prove the shared UI only. Android insets, keyboard, TalkBack,
 system font scale, SQLite durability and ColorOS require native acceptance.
 
 Motion: finite feedback (90–260ms); orbit menu is the focal moment. Hit targets remain stable. Keyboard/reduced-motion routes are instant. Native animator preference is read on resume. Presentation styles are mobile-only.
+
+Depth: native foreground gravity adapter, max 3deg/2.5px, decorative/read-only layers only. Paused during touch/input and disabled by reduced motion. Hold/release without selection now latches quick actions; descendant capture loss is not cancellation (alpha.9).

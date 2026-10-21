@@ -30,6 +30,7 @@ export const lanProfileSchema = z.object({
 export type LanProfile = z.infer<typeof lanProfileSchema>;
 export const mobileSettingsSchema = z.object({
   theme: z.enum(["system", "light", "dark"]).default("system"),
+  depthEffects: z.boolean().default(true),
   darkTheme: z.enum(["kaiden-precision", "obsidian", "midnight", "emerald", "crimson"]).default("kaiden-precision"),
   autoCheckUpdates: z.boolean().default(true),
   downloadUpdatesOnWifi: z.boolean().default(false),

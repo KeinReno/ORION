@@ -17,6 +17,7 @@ import { ConnectionPage } from "./connection";
 import { exportBackup } from "./backup";
 import "./style.css";
 import "./presentation.css";
+import { useDepth } from "./use-depth";
 import { useVisualMotion } from "./use-motion";
 import { applyMobileTheme } from "./theme";
 
@@ -45,6 +46,7 @@ function App() {
   const heading = useRef<HTMLHeadingElement>(null);
   const updates = useUpdates(data?.settings);
   const theme = data?.settings.theme ?? "system";
+  useDepth(data?.settings.depthEffects ?? false);
   useVisualMotion(data ? `${tab}:${editor ? editor.kind + ":" + (editor.id ?? "new") : "list"}` : "startup");
   const connection = useLan(repo.current, setData);
   const remote = data?.remoteActive && data.remoteSelection && connection.client &&
@@ -204,7 +206,7 @@ function App() {
     <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header>
     <main className="content">
       <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
-        <p>{tab === "finance" ? "Запишите расход, пока не забыли." : tab === "tasks" ? "Освободите голову. Начните с одного дела." : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
+        <p>{tab === "finance" ? "Запишите расход, пока не забыли." : tab === "tasks" ? (tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : "Освободите голову. Начните с одного дела.") : tab === "notes" ? "Мысли и детали, к которым хочется вернуться." : tab === "connection" ? "Ваше пространство — рядом, даже без сети." : "Внешний вид и новые версии приложения."}</p></div>
       {(tab === "tasks" || tab === "notes") && <button className="primary" disabled={busy || (remote ? !remote.hasModule(tab === "tasks" ? "task" : "note") : false)} onClick={() => {
         // A single recoverable draft must never be silently replaced.
         if (currentDraft) begin(currentDraft);

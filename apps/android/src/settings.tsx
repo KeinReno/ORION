@@ -25,16 +25,19 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
         onChange={(event) => void save({ ...settings, darkTheme: event.target.value as MobileSettings["darkTheme"] })}>
         {DARK_PALETTES.map((palette) => <option key={palette.id} value={palette.id}>{palette.name}</option>)}
       </select></label>
+      <label className="switch-row"><span><strong>Глубина при наклоне</strong><small>Мягкое движение декоративных слоёв. При вводе и касании эффект приостанавливается.</small></span>
+        <input type="checkbox" role="switch" id="depth-effects" checked={settings.depthEffects} disabled={saving}
+          onChange={(event) => void save({ ...settings, depthEffects: event.target.checked })} /></label>
       <p className="helper">Общие темы с десктопным Orion. Светлый режим использует Arctic. Выбор на телефоне пока независим от ПК.</p>
     </section>
     <section className="settings-section" aria-labelledby="updates-heading">
       <h2 id="updates-heading">Обновления</h2>
       <p>Установлена {state?.installedVersion ?? ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</p>
       <label className="switch-row"><span><strong>Проверять автоматически</strong><small>При открытии приложения, не чаще раза за 6 часов</small></span>
-        <input type="checkbox" role="switch" checked={settings.autoCheckUpdates} disabled={saving}
+        <input type="checkbox" role="switch" id="auto-check-updates" checked={settings.autoCheckUpdates} disabled={saving}
           onChange={(e) => void save({ ...settings, autoCheckUpdates: e.target.checked })} /></label>
       <label className="switch-row"><span><strong>Загружать по Wi-Fi</strong><small>После проверки, если есть новая версия и Wi-Fi без лимита трафика</small></span>
-        <input type="checkbox" role="switch" checked={settings.downloadUpdatesOnWifi} disabled={saving}
+        <input type="checkbox" role="switch" id="download-updates-wifi" checked={settings.downloadUpdatesOnWifi} disabled={saving}
           onChange={(e) => void save({ ...settings, downloadUpdatesOnWifi: e.target.checked })} /></label>
       <div className="update-state" aria-live="polite">
         {phase === "check" ? <p>Проверяем Android-релиз…</p>
