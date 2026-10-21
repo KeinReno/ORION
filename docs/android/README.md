@@ -17,6 +17,8 @@ Alpha.13 реализует bundled shell, центр настроек и Lists.
 
 ## Действующие реализации и отчёты
 
+- [Alpha.15: Markdown, порядок и плановое время](RELEASE_ALPHA15.md)
+
 - [Alpha.14: поля и фильтры задач/заметок](RELEASE_ALPHA14.md)
 
 - [Концепция](CONCEPT.md)

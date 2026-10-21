@@ -10,6 +10,12 @@
 
 ### Android: отдельная ветка alpha, 21.10.2026
 
+Alpha.15 на Android-ветке (0.1.14/code15): безопасный lazy Markdown preview,
+сортировки задач/заметок, начало и плановые минуты задачи через существующий SyncOp.
+50 focused unit/12 browser scripts/11 plugin, workspace checks и Android builds/lint/JVM
+PASS; physical OPPO/LAN NOT RUN, tilt unchanged. [RELEASE_ALPHA15](android/RELEASE_ALPHA15.md).
+
+
 Alpha.14 на Android-ветке (0.1.13/code14): статусы/сроки задач и фильтры;
 summary/tags/pin заметок, независимый поиск. Optional draft fields без очистки
 legacy metadata; local/remote public SyncOp unchanged. 47 focused tests,
