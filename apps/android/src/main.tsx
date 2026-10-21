@@ -46,7 +46,7 @@ function App() {
   const heading = useRef<HTMLHeadingElement>(null);
   const updates = useUpdates(data?.settings);
   const theme = data?.settings.theme ?? "system";
-  useDepth(data?.settings.depthEffects ?? false);
+  const depth = useDepth(data?.settings.depthEffects ?? false, data?.settings.depthStrength ?? 60);
   useVisualMotion(data ? `${tab}:${editor ? editor.kind + ":" + (editor.id ?? "new") : "list"}` : "startup");
   const connection = useLan(repo.current, setData);
   const remote = data?.remoteActive && data.remoteSelection && connection.client &&
@@ -226,7 +226,7 @@ function App() {
         }}
         save={async (draft) => { const saved = await action((value) => value.saveFinanceEntry(draft), "Операция сохранена на телефоне"); if (saved) financeWriteError.current = false; return saved; }}
         remove={(id) => action((value) => value.deleteFinanceEntry(id), "Операция удалена")} />
-      : tab === "settings" ? <SettingsPage settings={data.settings} saving={busy} updates={updates}
+      : tab === "settings" ? <SettingsPage depth={depth} settings={data.settings} saving={busy} updates={updates}
         backup={() => void backup()} backupBusy={busy}
         save={(settings) => action((value) => value.saveSettings(settings), "Настройки сохранены на этом телефоне")} />
       : tab !== "connection" ? <>

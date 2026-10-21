@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { androidUpdateManifestSchema, isNewerAndroidUpdate, MobileRepository, type SnapshotStorage } from "./index";
+import { androidUpdateManifestSchema, isNewerAndroidUpdate, mobileSettingsSchema, MobileRepository, type SnapshotStorage } from "./index";
 
 const manifest = () => ({
   schemaVersion: 1, applicationId: "io.kaiden.orion.android",
@@ -11,6 +11,14 @@ const manifest = () => ({
   },
 });
 describe("Android update boundary", () => {
+  it("adds depth strength to existing settings without overriding the depth switch", () => {
+    expect(mobileSettingsSchema.parse({ depthEffects: false })).toMatchObject({ depthEffects: false, depthStrength: 60 });
+    for (const depthStrength of [-1, 101, 1.5, Number.NaN, "60"]) {
+      expect(mobileSettingsSchema.safeParse({ depthStrength }).success).toBe(false);
+    }
+    expect(mobileSettingsSchema.parse({ depthStrength: 0 }).depthStrength).toBe(0);
+    expect(mobileSettingsSchema.parse({ depthStrength: 100 }).depthStrength).toBe(100);
+  });
   it("accepts only a newer version code, not a tag/title comparison", () => {
     const parsed = androidUpdateManifestSchema.parse(manifest());
     expect(isNewerAndroidUpdate(parsed, 1)).toBe(true);
@@ -48,11 +56,11 @@ describe("Android update boundary", () => {
     const before = first.snapshot();
     const legacy: Record<string, unknown> = JSON.parse(raw!); delete legacy.settings; raw = JSON.stringify(legacy);
     const updated = await MobileRepository.open(storage);
-    expect(updated.snapshot()).toEqual({ ...before, settings: { depthEffects: true, darkTheme: "kaiden-precision", theme: "system", autoCheckUpdates: true, downloadUpdatesOnWifi: false } });
+    expect(updated.snapshot()).toEqual({ ...before, settings: { depthEffects: true, depthStrength: 60, darkTheme: "kaiden-precision", theme: "system", autoCheckUpdates: true, downloadUpdatesOnWifi: false } });
     await updated.saveSettings({ theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
     const restarted = await MobileRepository.open(storage);
     expect(restarted.snapshot().notes).toEqual(before.notes);
     expect(restarted.snapshot().outbox).toEqual(before.outbox);
-    expect(restarted.snapshot().settings).toEqual({ depthEffects: true, darkTheme: "kaiden-precision", theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
+    expect(restarted.snapshot().settings).toEqual({ depthEffects: true, depthStrength: 60, darkTheme: "kaiden-precision", theme: "light", autoCheckUpdates: false, downloadUpdatesOnWifi: true });
   });
 });

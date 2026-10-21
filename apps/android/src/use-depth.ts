@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { App } from "@capacitor/app";
 
@@ -9,11 +9,14 @@ const Depth = registerPlugin<{
 let queue: Promise<unknown> = Promise.resolve();
 function serial(work: () => Promise<unknown>) { queue = queue.catch(() => {}).then(work); return queue; }
 
-export function useDepth(enabled: boolean) {
+export function useDepth(enabled: boolean, strength = 60) {
+  const strengthRef = useRef(strength);
+  strengthRef.current = strength;
+  const [status, setStatus] = useState("Ожидание датчика…");
   useEffect(() => {
     const root = document.documentElement;
     let alive = true; let active = true; let touching = false; let wanted = false;
-    let frame = 0; let resume = 0; let latest = { x: 0, y: 0 };
+    let frame = 0; let resume = 0; let watchdog = 0; let latest = { x: 0, y: 0 }; let received = false;
     let listener: Promise<PluginListenerHandle> | null = null;
     const reset = () => {
       if (frame) cancelAnimationFrame(frame); frame = 0;
@@ -23,28 +26,33 @@ export function useDepth(enabled: boolean) {
     };
     const paint = () => {
       frame = 0; if (!alive || !wanted || touching) return;
-      root.style.setProperty("--depth-x", `${(latest.x * 2.5).toFixed(2)}px`);
-      root.style.setProperty("--depth-y", `${(latest.y * 2.5).toFixed(2)}px`);
-      root.style.setProperty("--depth-rx", `${(-latest.y * 3).toFixed(2)}deg`);
-      root.style.setProperty("--depth-ry", `${(latest.x * 3).toFixed(2)}deg`);
+      const scale = strengthRef.current / 100;
+      root.style.setProperty("--depth-x", `${(latest.x * 14 * scale).toFixed(2)}px`);
+      root.style.setProperty("--depth-y", `${(latest.y * 14 * scale).toFixed(2)}px`);
+      root.style.setProperty("--depth-rx", `${(-latest.y * 12 * scale).toFixed(2)}deg`);
+      root.style.setProperty("--depth-ry", `${(latest.x * 12 * scale).toFixed(2)}deg`);
     };
     const sync = () => {
-      const editing = document.activeElement?.matches("input,textarea,select");
+      const editing = document.activeElement?.matches("input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select");
       const next = alive && enabled && Capacitor.isNativePlatform() && active && !document.hidden && !editing && !touching && root.dataset.motion === "full";
+      if (!next) setStatus(!enabled ? "Эффект выключен" : !Capacitor.isNativePlatform() ? "Датчик доступен в Android-приложении" : root.dataset.motion !== "full" ? "Анимации отключены в настройках телефона" : "Пауза: касание, ввод или приложение в фоне");
       if (next === wanted) return;
-      wanted = next; reset();
+      wanted = next; reset(); clearTimeout(watchdog); received = false;
       void serial(async () => {
         if (!next || !alive || !wanted) { await Depth.stop(); return; }
         if (listener) await listener;
         const state = await Depth.start();
-        if (alive && wanted && state.available) root.dataset.depth = "active";
-        else await Depth.stop();
-      }).catch(() => { if (alive) reset(); });
+        if (alive && wanted && state.available) {
+          root.dataset.depth = "active"; setStatus("Ожидание данных датчика…");
+          watchdog = window.setTimeout(() => { if (alive && wanted && !received) setStatus("Данные не поступают. Попробуйте выключить и включить эффект."); }, 2500);
+        } else { if (alive && wanted) setStatus("Датчик наклона недоступен"); await Depth.stop(); }
+      }).catch(() => { if (alive) { reset(); setStatus("Не удалось подключить датчик наклона"); } });
     };
     reset();
     if (Capacitor.isNativePlatform() && enabled) {
       listener = Depth.addListener("tilt", (value) => {
         if (!alive || !wanted || root.dataset.depth !== "active" || !Number.isFinite(value.x) || !Number.isFinite(value.y)) return;
+        if (!received) { received = true; clearTimeout(watchdog); setStatus("Датчик работает — наклоните телефон"); }
         latest = { x: Math.max(-1, Math.min(1, value.x)), y: Math.max(-1, Math.min(1, value.y)) };
         if (!frame) frame = requestAnimationFrame(paint);
       });
@@ -60,11 +68,12 @@ export function useDepth(enabled: boolean) {
     const app = Capacitor.isNativePlatform() ? App.addListener("appStateChange", ({ isActive }) => { active = isActive; touching = false; if (isActive) wanted = false; sync(); }) : null;
     sync();
     return () => {
-      alive = false; wanted = false; clearTimeout(resume); reset(); observer.disconnect();
+      alive = false; wanted = false; clearTimeout(resume); clearTimeout(watchdog); reset(); observer.disconnect();
       document.removeEventListener("pointerdown", down, true); document.removeEventListener("pointerup", up, true); document.removeEventListener("pointercancel", up, true);
       document.removeEventListener("focusin", focus); document.removeEventListener("focusout", focus); document.removeEventListener("visibilitychange", visibility);
       void listener?.then((handle) => handle.remove()).catch(() => {}); void app?.then((handle) => handle.remove());
       if (Capacitor.isNativePlatform()) void serial(() => Depth.stop()).catch(() => {});
     };
   }, [enabled]);
+  return { status };
 }

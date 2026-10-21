@@ -1,16 +1,21 @@
+import { useEffect, useState } from "react";
 import { DARK_PALETTES } from "./theme";
 import type { MobileSettings } from "@orion/mobile-core";
 import { Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { ANDROID_RELEASE_LABEL, ANDROID_VERSION } from "./updates";
 import type { useUpdates } from "./use-updates";
 
-export function SettingsPage({ settings, saving, save, updates, backup, backupBusy }: {
+export function SettingsPage({ settings, saving, save, updates, backup, backupBusy, depth }: {
+  depth: { status: string };
   settings: MobileSettings;
   saving: boolean;
   save: (settings: MobileSettings) => Promise<unknown>;
   updates: ReturnType<typeof useUpdates>;
   backup: () => void; backupBusy: boolean;
 }) {
+  const [strength, setStrength] = useState(settings.depthStrength);
+  useEffect(() => setStrength(settings.depthStrength), [settings.depthStrength]);
+  const commitStrength = () => { if (strength !== settings.depthStrength) void save({ ...settings, depthStrength: strength }); };
   const { state, phase, error, message, percent } = updates;
   const busy = phase !== "idle";
   return <section className="settings-page">
@@ -25,9 +30,18 @@ export function SettingsPage({ settings, saving, save, updates, backup, backupBu
         onChange={(event) => void save({ ...settings, darkTheme: event.target.value as MobileSettings["darkTheme"] })}>
         {DARK_PALETTES.map((palette) => <option key={palette.id} value={palette.id}>{palette.name}</option>)}
       </select></label>
-      <label className="switch-row"><span><strong>Глубина при наклоне</strong><small>Мягкое движение декоративных слоёв. При вводе и касании эффект приостанавливается.</small></span>
+      <label className="switch-row"><span><strong>Глубина при наклоне</strong><small>Объём и параллакс при физическом наклоне телефона. При вводе и касании эффект приостанавливается.</small></span>
         <input type="checkbox" role="switch" id="depth-effects" checked={settings.depthEffects} disabled={saving}
           onChange={(event) => void save({ ...settings, depthEffects: event.target.checked })} /></label>
+      {settings.depthEffects && <div className="depth-controls">
+        <label htmlFor="depth-strength">Сила наклона <output htmlFor="depth-strength">{strength}%</output></label>
+        <input id="depth-strength" type="range" min="0" max="100" step="5" value={strength} disabled={saving}
+          onChange={(event) => setStrength(Number(event.target.value))} onPointerUp={commitStrength} onKeyUp={commitStrength} onBlur={commitStrength} />
+        <p className="helper">0% — без движения · 100% — выраженная глубина. Отпустите ползунок, чтобы сохранить.</p>
+        <div className="depth-preview" aria-hidden="true"><span className="depth-preview-back">ORION</span><span className="depth-preview-front">Объём в движении</span></div>
+        <p className="depth-status" role="status">{depth.status}</p>
+        <p className="helper">Держите телефон удобно, затем плавно наклоняйте влево и вправо. После касания текущее положение становится исходным. При системном отключении анимаций эффект не работает.</p>
+      </div>}
       <p className="helper">Общие темы с десктопным Orion. Светлый режим использует Arctic. Выбор на телефоне пока независим от ПК.</p>
     </section>
     <section className="settings-section" aria-labelledby="updates-heading">

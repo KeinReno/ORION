@@ -55,7 +55,7 @@ public class OrionDepthPlugin extends Plugin implements SensorEventListener {
         if (!calibrated) { basePitch = pitch; baseRoll = roll; calibrated = true; }
         double nextX = x + (clamp(wrap(roll - baseRoll) / 22) - x) * .18;
         double nextY = y + (clamp(wrap(pitch - basePitch) / 22) - y) * .18;
-        if (Math.abs(nextX - x) + Math.abs(nextY - y) < .008) return;
+        // Emit stationary samples too: the UI can distinguish a live sensor from silence.
         x = nextX; y = nextY;
         JSObject result = new JSObject(); result.put("x", x); result.put("y", y); notifyListeners("tilt", result);
     }

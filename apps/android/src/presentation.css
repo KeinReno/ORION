@@ -78,3 +78,14 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .finance-totals{border:0;padding:0;gap:12px}.finance-totals>div{padding:16px 14px;border:1px solid var(--line);border-radius:12px;background:rgb(var(--kaiden-bg-surface));box-shadow:0 4px 12px rgb(var(--kaiden-bg-canvas)/.12);transform-origin:center}
 .order-help{padding-top:10px;font-size:.75rem;max-width:48ch}
 @media(max-width:380px){.finance-context{gap:10px}.finance-context p{font-size:.72rem}.finance-form .finance-amount{font-size:2.2rem}.finance-totals>div{padding:12px 10px}}
+
+/* Transform content inside stable controls, never their hit rectangles or fixed ancestors. */
+.depth-controls{margin:20px 0}.depth-controls>label{display:flex;justify-content:space-between;gap:16px}.depth-controls output{font-variant-numeric:tabular-nums;color:var(--accent)}
+.depth-controls input[type=range]{padding:12px 0;accent-color:var(--accent);border:0;background:none}
+.depth-preview{position:relative;isolation:isolate;height:132px;margin:20px 16px;perspective:500px;pointer-events:none}
+.depth-preview-back,.depth-preview-front{position:absolute;border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--raised);inset:4px 24px 30px 0;display:flex;align-items:center;color:var(--muted)}
+.depth-preview-front{inset:36px 0 0 36px;color:var(--accent);background:var(--surface);box-shadow:0 12px 28px #0003;font-weight:600}
+.depth-status{font-size:.85rem;min-height:2.5em;line-height:1.5}
+:root[data-depth=active][data-motion=full] .depth-preview-front{transform:rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) translate(var(--depth-x),var(--depth-y));transition:transform 100ms linear}
+:root[data-depth=active][data-motion=full] .depth-preview-back{transform:translate(calc(var(--depth-x)*-.45),calc(var(--depth-y)*-.45));transition:transform 100ms linear}
+:root[data-depth=active][data-motion=full] .entry-main>strong,:root[data-depth=active][data-motion=full] .entry-main>.excerpt{transform:perspective(620px) rotateX(var(--depth-rx)) rotateY(var(--depth-ry)) translate(calc(var(--depth-x)*.45),calc(var(--depth-y)*.45));transition:transform 100ms linear;pointer-events:none}
