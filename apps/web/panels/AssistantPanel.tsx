@@ -25,6 +25,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
 import { attachmentFor, fitImages, imageForModel } from "../lib/assistant-attachments";
 import { currentAssistantView, describeAssistantView } from "../lib/assistant-context";
+import { ApiError } from "@orion/core";
 import { describeAuthError } from "../lib/error-message";
 import { relativeTime } from "../lib/format";
 import { openEntity, openInBrowser, openSettings, useAssistantRequest } from "../lib/panel-bus";
@@ -35,6 +36,15 @@ import { DiffTable } from "./settings/agents-proposals";
 
 const OPEN_CONVERSATION_KEY = "orion.assistant.conversation";
 const ENGINE_KEY = "orion.assistant.engine";
+
+/**
+ * 502/504 from the chat is the model or the program refusing (no sign-in, a limit, no answer in time) and the server says
+ * which — not «the server is down», which the generic text would claim.
+ */
+function assistantFailure(error: unknown): string {
+  if (error instanceof ApiError && (error.status === 502 || error.status === 504) && error.message) return error.message;
+  return describeAuthError(error);
+}
 
 function rememberedEngine(): AssistantEngine | null {
   try {
@@ -166,7 +176,7 @@ export function AssistantPanel(): React.ReactElement {
     } catch (error) {
       setDraft(text);
       setAttached(files);
-      toast({ title: "Ассистент не ответил", description: describeAuthError(error), tone: "danger" });
+      toast({ title: "Ассистент не ответил", description: assistantFailure(error), tone: "danger" });
     } finally {
       setPending(null);
     }
