@@ -10,6 +10,18 @@
 
 ### Android: отдельная ветка alpha, 21.10.2026
 
+Проект следующего frontend-этапа: [архитектура](android/FRONTEND_ARCHITECTURE.md),
+[центр настроек](android/SETTINGS_SPEC.md), [экраны модулей](android/MODULE_SURFACES.md).
+Статус **PROPOSED**: описанные runtime/SDK/новые settings pages ещё не реализованы.
+Фактические alpha-срезы и аппаратные ограничения — в [Android index](android/README.md).
+
+Alpha.12 на Android-ветке (0.1.11/code 12): явные действия edit/delete для task/note,
+durable delete через существующий протокол, цельная плоскость interactive cards,
+усиление depth до 28°/32px. 36 mobile-core и 11 plugin tests, 9 browser scripts,
+workspace typecheck/lint, architecture/module-docs и native build/lint/JVM PASS;
+физические OPPO sensor/UX и настоящий LAN exchange NOT RUN в этом сеансе.
+Подробности: [RELEASE_ALPHA12](android/RELEASE_ALPHA12.md).
+
 Alpha.2 (0.1.1/code 2): настройки темы, автоматическая проверка и
 необязательная загрузка по Wi-Fi, проверяемый APK и системная установка.
 Источник APK отдельно от приватных исходников, по разрешению владельца.
