@@ -12,3 +12,5 @@ Empty, failed-storage, draft, saving, archived and local-only states are explici
 Light/dark use system preference; reduced motion disables the entrance.
 Browser snapshots prove the shared UI only. Android insets, keyboard, TalkBack,
 system font scale, SQLite durability and ColorOS require native acceptance.
+
+Motion: finite feedback (90–260ms); orbit menu is the focal moment. Hit targets remain stable. Keyboard/reduced-motion routes are instant. Native animator preference is read on resume. Presentation styles are mobile-only.

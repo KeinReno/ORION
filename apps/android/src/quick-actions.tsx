@@ -89,12 +89,14 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
           }
         }}>
+        <svg className="quick-orbit" viewBox="0 0 252 288" aria-hidden="true"><circle cx="126" cy="144" r="33" />
+          <path d="M126 105v-9m0 87v9m-39-48h-9m87 0h9M101 119l-7-7m57 7 7-7m-57 57-7 7m57-7 7 7" /></svg>
         <p className="quick-heading">Быстрые действия</p>
         {actions.map(({ id, label, icon: Icon, disabled: unavailable, run }, index) => <button key={id} data-quick={id}
           className={"quick-action quick-position-" + index} disabled={unavailable} aria-pressed={selected === id} onClick={() => { close(); run(); }}>
           <Icon size={24} /><span>{label}</span></button>)}
         <button className="quick-cancel" aria-label="Отменить быстрые действия" onClick={close}>×</button>
-        <p className="quick-hint" role="status">{actions.find((action) => action.id === selected)?.label ?? "Отпустите в центре для отмены"}</p>
+        <p className="quick-hint" role="status">{actions.find((action) => action.id === selected)?.label ?? (tracking.current?.active ? "Отпустите в центре для отмены" : "Выберите действие")}</p>
       </div>
     </div>}
   </div>;

@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(OrionBackupPlugin.class);
         registerPlugin(OrionLanPlugin.class);
         registerPlugin(OrionSpeechPlugin.class);
+        registerPlugin(OrionMotionPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

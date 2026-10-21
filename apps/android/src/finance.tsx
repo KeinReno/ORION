@@ -55,7 +55,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
           {type === "expense" ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}{type === "expense" ? "Расход" : "Доход"}</button>)}</div>
         <label htmlFor="finance-amount">Сумма, ₽</label>
         <input id="finance-amount" className="finance-amount" inputMode="decimal" autoComplete="off" placeholder="0,00" maxLength={30}
-          value={draft.amount} onChange={(event) => change({ ...draft, amount: event.target.value })} aria-describedby="finance-error" />
+          value={draft.amount} onChange={(event) => change({ ...draft, amount: event.target.value })} aria-describedby="finance-error" aria-invalid={Boolean(error)} />
         <label htmlFor="finance-account">Счёт</label>
         <select id="finance-account" value={draft.accountId} onChange={(event) => change({ ...draft, accountId: event.target.value })}>
           {finance.accounts.filter((item) => !item.archivedAt).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>

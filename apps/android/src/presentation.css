@@ -1,0 +1,68 @@
+/* KAIDEN finish: shared materials, bounded feedback, stable gesture targets. */
+:root{--motion-fast:0ms;--motion-settle:0ms;--motion-ease:cubic-bezier(.16,1,.3,1)}
+:root[data-motion=full]{--motion-fast:110ms;--motion-settle:180ms}
+:root[data-input=keyboard]{--motion-fast:0ms;--motion-settle:0ms}
+button{position:relative;isolation:isolate;transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast),box-shadow var(--motion-fast);-webkit-tap-highlight-color:transparent}
+button::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(circle at var(--press-x,50%) var(--press-y,50%),rgb(var(--kaiden-tint-base)/.16),transparent 70%);opacity:0;transition:opacity var(--motion-settle)}
+:root[data-motion=full][data-input=pointer] button:active::after{opacity:1;transition-duration:0ms}
+.primary{border:1px solid rgb(var(--kaiden-accent-hover)/.45);box-shadow:0 3px 9px rgb(var(--kaiden-bg-canvas)/.2)}
+.primary:disabled{box-shadow:none}
+.brand{border-bottom-color:rgb(var(--kaiden-border-default)/.75)}
+.brand>span{letter-spacing:.035em;font-size:.9rem;font-weight:550}.brand b{letter-spacing:0;font-weight:400}
+.brand img{outline:1px solid rgb(var(--kaiden-accent-base)/.2);outline-offset:3px}
+.brand .local-label{font-size:.72rem;border:1px solid var(--line);border-radius:20px;padding:5px 10px;min-height:48px}
+.page-heading{margin-bottom:26px}.page-heading h1{font-weight:650;letter-spacing:-.025em}.page-heading p{line-height:1.6}
+.search{box-shadow:inset 0 1px 0 rgb(var(--kaiden-tint-base)/.025)}
+input,textarea,select{transition:border-color var(--motion-fast),background-color var(--motion-fast),box-shadow var(--motion-fast)}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--kaiden-accent-base)/.12)}
+.editor-bar{border-bottom:1px solid var(--line)}.editor-bar h1{font-weight:600}.editor .scope{line-height:1.5}
+.entries li{border-bottom-color:rgb(var(--kaiden-border-default)/.7)}
+.entry-main strong{line-height:1.45;letter-spacing:-.01em}.entry-main small{line-height:1.55}
+.check-button{transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}
+.completed .check-button{box-shadow:0 2px 7px rgb(var(--kaiden-bg-canvas)/.2)}
+.empty>svg{width:68px;height:68px;padding:17px;border:1px solid rgb(var(--kaiden-accent-base)/.25);border-radius:50%;background:rgb(var(--kaiden-accent-base)/.055);stroke-width:1.5}
+.empty h2{font-weight:550}.empty p{line-height:1.7}
+.navigation{box-shadow:0 -3px 16px rgb(var(--kaiden-bg-canvas)/.12)}
+.navigation button{transition:color var(--motion-fast),background-color var(--motion-fast)}
+.navigation button[aria-current=page]{box-shadow:inset 0 1px 0 rgb(var(--kaiden-accent-base)/.18)}
+.navigation button[aria-current=page] .nav-icon{color:var(--accent)}
+.navigation button[aria-current=page]::before{content:"";position:absolute;top:4px;left:calc(50% - 8px);width:16px;height:2px;border-radius:2px;background:var(--accent)}
+.finance-types button{font-weight:550}.finance-categories button{border-color:rgb(var(--kaiden-border-default)/.85)}
+.finance [aria-pressed=true]{box-shadow:inset 0 1px 0 rgb(var(--kaiden-tint-base)/.12)}
+.finance-form .finance-amount{font-size:2.3rem;letter-spacing:-.025em;background:rgb(var(--kaiden-bg-surface));box-shadow:inset 0 1px 0 rgb(var(--kaiden-tint-base)/.04)}
+.finance-amount[aria-invalid=true]{border-color:var(--error)}
+.finance-totals{padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.finance-totals dd{font-size:1.3rem;letter-spacing:-.025em}.finance-entry-amount{letter-spacing:-.015em}
+.settings-section>h2,.finance-history>h2{letter-spacing:-.015em}
+.task-grip{color:var(--muted)}.task-grip:active{color:var(--accent);background:rgb(var(--kaiden-accent-base)/.1)}
+.task-row{border-radius:var(--kaiden-radius-8);transition:background-color var(--motion-fast)}
+.task-moving{opacity:.82}.task-moving .task-row{background:var(--raised);box-shadow:0 5px 16px rgb(var(--kaiden-bg-canvas)/.3)}
+.task-drop-target,.task-drop-after{background:rgb(var(--kaiden-accent-base)/.055)}
+.quick-trigger{box-shadow:0 7px 20px rgb(var(--kaiden-bg-canvas)/.35),inset 0 1px 0 rgb(var(--kaiden-tint-base)/.2)}
+.quick-trigger::before{content:"";position:absolute;inset:4px;border:1px solid rgb(var(--kaiden-accent-foreground)/.16);border-radius:inherit;pointer-events:none}
+.quick-action{border-color:rgb(var(--kaiden-border-strong)/.7);box-shadow:0 5px 18px rgb(var(--kaiden-bg-canvas)/.2)}
+.quick-action[aria-pressed=true]{box-shadow:inset 0 1px 0 rgb(var(--kaiden-tint-base)/.2),0 5px 18px rgb(var(--kaiden-bg-canvas)/.25)}
+.quick-heading{letter-spacing:.015em;font-weight:550}.quick-hint{font-size:.78rem}
+.quick-cancel{border-color:rgb(var(--kaiden-accent-base)/.45);color:var(--accent)}
+.quick-orbit{position:absolute;inset:0;width:252px;height:288px;pointer-events:none;fill:none;stroke:rgb(var(--kaiden-accent-base)/.35);stroke-width:1}
+@media(hover:hover) and (pointer:fine){button:not(.primary):not(.quick-trigger):not([aria-pressed=true]):not([aria-current=page]):hover:not(:disabled){filter:none;background-color:rgb(var(--kaiden-bg-hover))}.primary:hover:not(:disabled),.quick-trigger:hover:not(:disabled){background:rgb(var(--kaiden-accent-hover));color:var(--on-accent)}.quick-action:hover:not(:disabled){border-color:var(--accent)}}
+@media(prefers-reduced-motion:no-preference){
+  :root[data-motion=full][data-input=pointer] .quick-scrim{animation:kaiden-veil 90ms ease-out}
+  :root[data-motion=full][data-input=pointer] .quick-orbit{animation:kaiden-orbit 260ms var(--motion-ease)}
+  :root[data-motion=full][data-input=pointer] .quick-action svg{animation:kaiden-glyph 160ms var(--motion-ease)}
+  :root[data-motion=full][data-input=pointer] .completed .check-button svg path{stroke-dasharray:28;animation:kaiden-check 180ms var(--motion-ease)}
+  @keyframes kaiden-veil{from{opacity:.65}to{opacity:1}}
+  @keyframes kaiden-orbit{from{stroke-dasharray:2 12;opacity:.5}to{stroke-dasharray:2 0;opacity:1}}
+  @keyframes kaiden-glyph{from{transform:scale(.88);opacity:.7}to{transform:scale(1);opacity:1}}
+  @keyframes kaiden-check{from{stroke-dashoffset:28}to{stroke-dashoffset:0}}
+}
+:root[data-motion=reduced] *, :root[data-motion=reduced] *::before, :root[data-motion=reduced] *::after{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media(max-width:380px){.brand .local-label{padding:4px 7px;max-width:42%}.finance-form .finance-amount{font-size:2.1rem}}
+
+/* Keep mobile hit areas large while using the desktop checkbox silhouette. */
+.check-button,.completed .check-button{border:0;background:none;box-shadow:none;position:relative}
+.check-button::before{content:"";position:absolute;left:12px;top:12px;width:24px;height:24px;border:1px solid rgb(var(--kaiden-border-strong));border-radius:6px;background:rgb(var(--kaiden-bg-surface));pointer-events:none}
+.completed .check-button::before{background:var(--accent);border-color:var(--accent)}
+.check-button svg{position:relative;z-index:1}
+.gesture-root:has(input:focus,textarea:focus,select:focus) .quick-trigger{visibility:hidden}

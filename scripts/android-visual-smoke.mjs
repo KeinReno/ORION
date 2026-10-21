@@ -1,0 +1,62 @@
+// WebView surface evidence in Chromium; not GPU or physical Android acceptance.
+import { chromium } from "@playwright/test";
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+const out = "test-results/android-visual"; await mkdir(out, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 412, height: 915 }, colorScheme: "dark" });
+  const page = await context.newPage(); const errors = []; page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("https://raw.githubusercontent.com/**", (route) => route.abort());
+  const settle = async () => page.evaluate(async () => { await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {}))); });
+  const shot = async (name) => { await settle(); await page.screenshot({ path: out + "/" + name + ".png" }); };
+  await page.goto("http://127.0.0.1:3180");
+  await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
+  await page.waitForFunction(() => document.documentElement.dataset.motion === "full");
+  await shot("tasks-empty-precision");
+  for (const title of ["Подготовить материалы проекта", "Заехать за продуктами"]) {
+    await page.getByRole("button", { name: "Создать", exact: true }).click();
+    await page.getByLabel("Название", { exact: true }).fill(title);
+    await page.getByLabel("Описание", { exact: true }).fill("Детали под рукой — даже без интернета.");
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await page.getByRole("button", { name: "Завершить: " + title, exact: true }).waitFor();
+  }
+  await page.getByRole("button", { name: "Завершить: Заехать за продуктами", exact: true }).click();
+  await shot("tasks-filled-precision");
+  const trigger = page.getByRole("button", { name: "Быстрые действия", exact: true });
+  const rect = await trigger.boundingBox(); await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2); await page.mouse.down();
+  assert.equal(await trigger.evaluate((element) => getComputedStyle(element, "::after").opacity), "1");
+  await page.mouse.up();
+  const menu = page.getByRole("dialog", { name: "Быстрые действия" }); await menu.waitFor();
+  const before = await menu.getByRole("button", { name: "Задача", exact: true }).boundingBox();
+  await settle(); const after = await menu.getByRole("button", { name: "Задача", exact: true }).boundingBox();
+  assert.deepEqual(before, after, "menu motion must not move gesture hit targets");
+  await shot("quick-actions-precision"); await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Финансы", exact: true }).click();
+  await page.getByLabel("Сумма, ₽").fill("1250,50");
+  await page.getByRole("button", { name: "Продукты", exact: true }).click();
+  await page.getByLabel("Сумма, ₽").focus();
+  assert.equal(await trigger.isVisible(), false, "floating action must not cover a focused input");
+  await page.evaluate(() => scrollTo(0, 0)); await shot("finance-precision");
+  await page.getByRole("button", { name: "Настройки", exact: true }).click();
+  await page.evaluate(() => scrollTo(0, 0)); await shot("settings-precision");
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
+  await page.waitForFunction(() => document.documentElement.dataset.motion === "reduced" && document.documentElement.dataset.palette === "arctic");
+  await page.getByRole("button", { name: "Финансы", exact: true }).click();
+  assert.equal(await page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length), 0);
+  await page.setViewportSize({ width: 320, height: 740 }); await page.evaluate(() => { document.documentElement.style.fontSize = "130%"; scrollTo(0, 0); });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await shot("finance-arctic-320-reduced");
+  await page.getByRole("button", { name: "Быстрые действия", exact: true }).click(); await menu.waitFor();
+  assert.equal(await page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length), 0);
+  await shot("quick-actions-arctic-320-reduced"); await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "no-preference", colorScheme: "dark" });
+  await page.getByRole("button", { name: "Задачи", exact: true }).click();
+  await settle();
+  await page.getByRole("button", { name: "Создать", exact: true }).focus(); await page.keyboard.press("Enter");
+  await page.getByRole("heading", { name: "Задача", exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.input), "keyboard");
+  assert.equal(await page.evaluate(() => document.querySelector(".editor").getAnimations().length), 0);
+  assert.deepEqual(errors, []);
+  console.log("PASS: press light, stable menu targets, filled/empty states, themes, 320px/font130, reduced-motion with zero active animations, keyboard route without animation; browser-only.");
+} finally { await browser.close(); }

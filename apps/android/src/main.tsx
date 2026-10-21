@@ -16,6 +16,8 @@ import { useLan } from "./use-lan";
 import { ConnectionPage } from "./connection";
 import { exportBackup } from "./backup";
 import "./style.css";
+import "./presentation.css";
+import { useVisualMotion } from "./use-motion";
 import { applyMobileTheme } from "./theme";
 
 type Tab = "finance" | "tasks" | "notes" | "connection" | "settings";
@@ -43,6 +45,7 @@ function App() {
   const heading = useRef<HTMLHeadingElement>(null);
   const updates = useUpdates(data?.settings);
   const theme = data?.settings.theme ?? "system";
+  useVisualMotion(data ? `${tab}:${editor ? editor.kind + ":" + (editor.id ?? "new") : "list"}` : "startup");
   const connection = useLan(repo.current, setData);
   const remote = data?.remoteActive && data.remoteSelection && connection.client &&
     (["nodeId", "fingerprint", "userId", "workspaceId"] as const).every((key) => connection.client!.scope[key] === data.remoteSelection![key]) ? connection.client : null;
