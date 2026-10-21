@@ -1,8 +1,8 @@
 "use client";
 
 import { DropdownMenu, IconButton, Input, Select, cx } from "@orion/ui";
-import { ExternalLink, PanelRight, Search } from "lucide-react";
-import { useState } from "react";
+import { ChevronRight, ExternalLink, PanelRight, Puzzle, Search, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { openPanel } from "../../lib/panel-bus";
 import { detachPanelToWindow } from "../../lib/panel-window";
@@ -51,12 +51,30 @@ export function SettingsNav({
   const activeId = active ? sectionViewPanelId({ base: BASE_ID, view: active.value }) : null;
   const name = active?.label ?? "";
   // Built-in groups from the catalog, plus one group for sections plugins and extensions add.
-  const groups: { id: string; label: string; tabs: readonly { value: SettingsTab | ExtensionSettingsTab["value"]; label: string }[] }[] = SETTINGS_GROUPS.map(
+  const groups: { id: string; label: string; tabs: readonly { value: SettingsTab | ExtensionSettingsTab["value"]; label: string; icon?: LucideIcon }[] }[] = SETTINGS_GROUPS.map(
     (group) => ({ id: group.id, label: settingsGroupLabel(group.id, workspaceName), tabs: group.tabs })
   );
   if (extensionTabs.length > 0) {
     const help = groups.findIndex((group) => group.id === "help");
     groups.splice(help === -1 ? groups.length : help, 0, { id: "extension-sections", label: "Разделы расширений", tabs: extensionTabs });
+  }
+  const activeGroupId = groups.find((group) => group.tabs.some((tab) => tab.value === value))?.id;
+  // Long flat lists made it hard to tell where a setting lives — groups collapse to their
+  // heading, and only the one holding the active tab (plus any the person opens) stays shown.
+  // Not persisted across sessions on purpose: this is "tidy the view right now", like the
+  // sidebar's own folded section headers (see sidebar.tsx), not a remembered preference.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroupId ? [activeGroupId] : []));
+  useEffect(() => {
+    if (!activeGroupId) return;
+    setOpenGroups((prev) => (prev.has(activeGroupId) ? prev : new Set(prev).add(activeGroupId)));
+  }, [activeGroupId]);
+  function toggleGroup(id: string): void {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function pick(hit: SettingsSearchHit): void {
@@ -131,33 +149,48 @@ export function SettingsNav({
       <div className="hidden w-52 shrink-0 flex-col gap-3 [@container(min-width:640px)]:flex">
         {search}
         {results ?? (
-          <nav className="flex flex-col gap-3" aria-label="Разделы настроек" {...panelDragHandleProps(null)}>
-            {groups.map((group) => (
-              <div key={group.id} className="flex flex-col gap-0.5">
-                <p className="truncate px-3 pb-0.5 text-micro uppercase text-subtle-foreground" title={group.label}>
-                  {group.label}
-                </p>
-                {group.tabs.map((item) => {
-                  // Only built-in tabs detach into their own panel (`view:settings~<tab>`); extension sections stay in place.
-                  const id = settingsTabInfo(item.value) ? sectionViewPanelId({ base: BASE_ID, view: item.value }) : null;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => onChange(item.value)}
-                      aria-current={value === item.value ? "page" : undefined}
-                      {...(id ? { "data-panel-drag": id, "data-panel-title": `Настройки · ${item.label}` } : {})}
-                      className={cx(
-                        "rounded-lg px-3 py-row text-left text-label transition-colors",
-                        value === item.value ? "bg-accent/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
-                      )}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+          <nav className="flex flex-col gap-1" aria-label="Разделы настроек" {...panelDragHandleProps(null)}>
+            {groups.map((group) => {
+              const expanded = openGroups.has(group.id);
+              return (
+                <div key={group.id} className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.id)}
+                    aria-expanded={expanded}
+                    className="flex items-center gap-1 rounded-lg px-3 py-1 text-left text-micro uppercase text-subtle-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    <ChevronRight className={cx("h-3 w-3 shrink-0 transition-transform", expanded && "rotate-90")} aria-hidden />
+                    <span className="truncate" title={group.label}>{group.label}</span>
+                  </button>
+                  {expanded ? (
+                    <div className="flex flex-col gap-0.5">
+                      {group.tabs.map((item) => {
+                        // Only built-in tabs detach into their own panel (`view:settings~<tab>`); extension sections stay in place.
+                        const id = settingsTabInfo(item.value) ? sectionViewPanelId({ base: BASE_ID, view: item.value }) : null;
+                        const Icon = item.icon ?? Puzzle;
+                        return (
+                          <button
+                            key={item.value}
+                            type="button"
+                            onClick={() => onChange(item.value)}
+                            aria-current={value === item.value ? "page" : undefined}
+                            {...(id ? { "data-panel-drag": id, "data-panel-title": `Настройки · ${item.label}` } : {})}
+                            className={cx(
+                              "flex items-center gap-2 rounded-lg px-3 py-row text-left text-label transition-colors",
+                              value === item.value ? "bg-accent/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                            )}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
         )}
         {activeId && !searching ? (

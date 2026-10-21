@@ -40,6 +40,7 @@ import { assessmentSchema, assessmentPageSchema, assistantStatusSchema, draftSch
 import { hhHistoryPageSchema, type HhHistoryQuery, type UpdateOpportunityFactInput, type ArchiveOpportunityItemInput, type UpdateOpportunityTrackInput } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
+import { feedbackResultSchema, type FeedbackResult, type SendFeedbackInput } from "@orion/shared-types";
 import {
   accountPublicSchema,
   accountSchema,
@@ -2653,6 +2654,11 @@ export class ApiClient {
       undefined,
       z.object({ status: z.string(), database: z.string(), timestamp: z.string() })
     );
+  }
+
+  /** Кнопка «Обратная связь»: баг/предложение улетает issue'ем в GitHub (см. `FeedbackService` на сервере). */
+  sendFeedback(input: SendFeedbackInput): Promise<FeedbackResult> {
+    return this.request("POST", "/feedback", input, feedbackResultSchema);
   }
 
   // ───────── ТЗ-04: LAN Host/Client (управление узлом этого компьютера) ─────────

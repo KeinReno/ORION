@@ -5,6 +5,7 @@ export * from "./agent-tools";
 export * from "./agent-module-inputs";
 export * from "./assistant-chat";
 export * from "./app-update";
+export * from "./feedback";
 export * from "./agent-manual";
 export * from "./agent-policy";
 export * from "./activity";

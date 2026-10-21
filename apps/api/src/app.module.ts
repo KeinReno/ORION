@@ -19,6 +19,7 @@ import { SettingsModule } from "./settings/settings.module";
 import { SystemModule } from "./system/system.module";
 import { LanModule } from "./lan/lan.module";
 import { UpdatesModule } from "./updates/updates.module";
+import { FeedbackModule } from "./feedback/feedback.module";
 import { ExtensionsModule } from "./extensions/extensions.module";
 import { CapturesModule } from "./captures/captures.module";
 import { ProjectsModule } from "./projects/projects.module";
@@ -76,6 +77,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     SystemModule,
     LanModule,
     UpdatesModule,
+    FeedbackModule,
     ExtensionsModule,
     ProjectsModule,
     CapturesModule,

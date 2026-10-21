@@ -5,6 +5,27 @@
  * existing value is never renamed; a new tab gets a new value.
  */
 
+import {
+  Blocks,
+  Bot,
+  Building2,
+  Bell,
+  Clock,
+  Download,
+  Info,
+  Layers,
+  Network,
+  Palette,
+  Plug,
+  Puzzle,
+  ShieldCheck,
+  Sparkles,
+  Stethoscope,
+  User,
+  Users,
+  type LucideIcon
+} from "lucide-react";
+
 export type SettingsTab =
   | "profile"
   | "security"
@@ -31,6 +52,8 @@ export interface SettingsTabInfo {
   value: SettingsTab;
   label: string;
   scope: SettingsScope;
+  /** For quick visual scanning in the nav list — not used anywhere a tab is referenced by id. */
+  icon: LucideIcon;
 }
 
 export interface SettingsGroup {
@@ -42,38 +65,38 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   {
     id: "you",
     tabs: [
-      { value: "profile", label: "Профиль", scope: "personal" },
-      { value: "security", label: "Безопасность", scope: "personal" },
-      { value: "notifications", label: "Уведомления", scope: "personal" },
-      { value: "appearance", label: "Внешний вид", scope: "personal" },
-      { value: "themes", label: "Темы", scope: "personal" },
-      { value: "region", label: "Дата и время", scope: "personal" },
-      { value: "spheres", label: "Сферы и избранное", scope: "personal" }
+      { value: "profile", label: "Профиль", scope: "personal", icon: User },
+      { value: "security", label: "Безопасность", scope: "personal", icon: ShieldCheck },
+      { value: "notifications", label: "Уведомления", scope: "personal", icon: Bell },
+      { value: "appearance", label: "Внешний вид", scope: "personal", icon: Palette },
+      { value: "themes", label: "Темы", scope: "personal", icon: Sparkles },
+      { value: "region", label: "Дата и время", scope: "personal", icon: Clock },
+      { value: "spheres", label: "Сферы и избранное", scope: "personal", icon: Layers }
     ]
   },
   {
     id: "workspace",
     tabs: [
-      { value: "workspace", label: "Общее", scope: "workspace" },
-      { value: "members", label: "Участники", scope: "workspace" },
-      { value: "modules", label: "Модули", scope: "workspace" },
-      { value: "plugins", label: "Плагины", scope: "workspace" },
-      { value: "agents", label: "ИИ и агенты", scope: "workspace-personal" }
+      { value: "workspace", label: "Общее", scope: "workspace", icon: Building2 },
+      { value: "members", label: "Участники", scope: "workspace", icon: Users },
+      { value: "modules", label: "Модули", scope: "workspace", icon: Blocks },
+      { value: "plugins", label: "Плагины", scope: "workspace", icon: Puzzle },
+      { value: "agents", label: "ИИ и агенты", scope: "workspace-personal", icon: Bot }
     ]
   },
   {
     id: "device",
     tabs: [
-      { value: "network", label: "Сеть и устройства", scope: "device" },
-      { value: "updates", label: "Обновления", scope: "device" },
-      { value: "extensions", label: "Расширения", scope: "device" }
+      { value: "network", label: "Сеть и устройства", scope: "device", icon: Network },
+      { value: "updates", label: "Обновления", scope: "device", icon: Download },
+      { value: "extensions", label: "Расширения", scope: "device", icon: Plug }
     ]
   },
   {
     id: "help",
     tabs: [
-      { value: "about", label: "О приложении", scope: "info" },
-      { value: "diagnostics", label: "Диагностика", scope: "info" }
+      { value: "about", label: "О приложении", scope: "info", icon: Info },
+      { value: "diagnostics", label: "Диагностика", scope: "info", icon: Stethoscope }
     ]
   }
 ];
