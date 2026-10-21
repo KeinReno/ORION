@@ -3,11 +3,12 @@ import { Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { ANDROID_RELEASE_LABEL, ANDROID_VERSION } from "./updates";
 import type { useUpdates } from "./use-updates";
 
-export function SettingsPage({ settings, saving, save, updates }: {
+export function SettingsPage({ settings, saving, save, updates, backup, backupBusy }: {
   settings: MobileSettings;
   saving: boolean;
   save: (settings: MobileSettings) => Promise<unknown>;
   updates: ReturnType<typeof useUpdates>;
+  backup: () => void; backupBusy: boolean;
 }) {
   const { state, phase, error, message, percent } = updates;
   const busy = phase !== "idle";
@@ -53,6 +54,7 @@ export function SettingsPage({ settings, saving, save, updates }: {
     </section>
     <section className="settings-section"><h2>На этом телефоне</h2>
       <p>Задачи, заметки и настройки хранятся локально. Проверка обновлений не передаёт их в GitHub.</p>
+      <button disabled={backupBusy} onClick={backup}><Download size={18} />Сохранить резервную копию</button>
     </section>
   </section>;
 }

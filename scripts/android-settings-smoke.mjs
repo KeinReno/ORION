@@ -17,9 +17,9 @@ try {
   await page.route("https://raw.githubusercontent.com/KeinReno/ORION-Android-Releases/main/android-update.json", async (route) => {
     requests++;
     if (mode === "offline") { await route.abort("failed"); return; }
-    const code = mode === "new" ? 3 : 2;
-    const version = mode === "new" ? "0.1.2" : "0.1.1";
-    const tag = mode === "new" ? "v0.1.2-android-alpha.3" : "v0.1.1-android-alpha.2";
+    const code = mode === "new" ? 4 : 3;
+    const version = mode === "new" ? "0.1.3" : "0.1.2";
+    const tag = mode === "new" ? "v0.1.3-android-alpha.4" : "v0.1.2-android-alpha.3";
     await route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({
       schemaVersion: 1, applicationId: "io.kaiden.orion.android",
       versionCode: code, versionName: version, tag,
@@ -33,7 +33,7 @@ try {
   await page.goto("http://127.0.0.1:3180");
   await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
   await page.getByRole("button", { name: /Настройки/ }).click();
-  await page.getByText("Доступна версия 0.1.2", { exact: true }).waitFor();
+  await page.getByText("Доступна версия 0.1.3", { exact: true }).waitFor();
   assert.equal(requests, 1);
   await page.getByText("Что изменилось", { exact: true }).click();
   await page.getByText("Тестовый будущий релиз. Проверка описания обновлений.", { exact: true }).waitFor();

@@ -1,5 +1,10 @@
 import { z } from "zod";
 export * from "./android-updates";
+export * from "./mobile-models";
+export * from "./backup";
+export * from "./mobile-replica";
+export * from "./remote-client";
+import { draftSchema, type Draft } from "./mobile-models";
 import { applyOpLocally, emptyEntities, type ReplicaEntityMap } from "@orion/core";
 import {
   HlcClock, LAN_DEFAULT_PORT, normalizeOpFields, noteSchema, taskSchema,
@@ -20,18 +25,17 @@ export const lanProfileSchema = z.object({
   port: z.number().int().min(1).max(65535).default(LAN_DEFAULT_PORT),
 });
 export type LanProfile = z.infer<typeof lanProfileSchema>;
-export const draftSchema = z.object({
-  kind: z.enum(["task", "note"]), id: z.string().uuid().nullable(),
-  title: z.string().max(200), body: z.string().max(20_000),
-  priority: z.enum(["low", "normal", "high"]),
-});
-export type Draft = z.infer<typeof draftSchema>;
 export const mobileSettingsSchema = z.object({
   theme: z.enum(["system", "light", "dark"]).default("system"),
   autoCheckUpdates: z.boolean().default(true),
   downloadUpdatesOnWifi: z.boolean().default(false),
 });
 export type MobileSettings = z.infer<typeof mobileSettingsSchema>;
+export const remoteSelectionSchema = z.object({
+  nodeId: z.string(), fingerprint: z.string(), userId: z.string(),
+  workspaceId: z.string(), workspaceName: z.string(),
+});
+export type RemoteSelection = z.infer<typeof remoteSelectionSchema>;
 const snapshotSchema = z.object({
   version: z.literal(1),
   workspaceId: z.string().uuid(), deviceId: z.string().uuid(),
@@ -43,6 +47,10 @@ const snapshotSchema = z.object({
   lan: lanProfileSchema.nullable(),
   // Additive migration for alpha.1; content/outbox/device identity are retained.
   settings: mobileSettingsSchema.default({}),
+  lastBackupSeq: z.number().int().nonnegative().nullable().default(null),
+  remoteDrafts: z.record(draftSchema).default({}),
+  remoteSelection: remoteSelectionSchema.nullable().default(null),
+  remoteActive: z.boolean().default(false),
 });
 export type MobileSnapshot = z.infer<typeof snapshotSchema>;
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
@@ -68,6 +76,9 @@ export class MobileRepository {
         deviceSeq: 0, clock: { wallMs: 0, counter: 0 },
         tasks: [], notes: [], outbox: [], draft: null, lan: null,
         settings: mobileSettingsSchema.parse({}),
+        lastBackupSeq: null,
+        remoteDrafts: {},
+        remoteSelection: null, remoteActive: false,
       };
       await storage.write(JSON.stringify(state));
     }
@@ -94,11 +105,33 @@ export class MobileRepository {
   saveDraft(draft: Draft | null): Promise<void> {
     return this.transaction((next) => { next.draft = draft ? draftSchema.parse(draft) : null; });
   }
+  saveRemoteDraft(scope: string, draft: Draft | null): Promise<void> {
+    return this.transaction((next) => {
+      if (!/^[a-f0-9]{64}$/.test(scope)) throw new Error("Неверное пространство черновика");
+      if (draft) next.remoteDrafts[scope] = draftSchema.parse(draft);
+      else delete next.remoteDrafts[scope];
+    });
+  }
   saveLan(profile: LanProfile): Promise<void> {
     return this.transaction((next) => { next.lan = lanProfileSchema.parse(profile); });
   }
   saveSettings(settings: MobileSettings): Promise<void> {
     return this.transaction((next) => { next.settings = mobileSettingsSchema.parse(settings); });
+  }
+  markBackup(sequence: number): Promise<void> {
+    return this.transaction((next) => {
+      if (!Number.isInteger(sequence) || sequence < 0 || sequence > next.deviceSeq) throw new Error("Некорректная версия копии");
+      next.lastBackupSeq = sequence;
+    });
+  }
+  setRemote(selection: RemoteSelection | null, active: boolean): Promise<void> {
+    return this.transaction((next) => {
+      next.remoteSelection = selection ? remoteSelectionSchema.parse(selection) : null;
+      next.remoteActive = selection !== null && active;
+    });
+  }
+  clearRemote(): Promise<void> {
+    return this.transaction((next) => { next.remoteSelection = null; next.remoteActive = false; next.remoteDrafts = {}; });
   }
 
   saveEntry(draft: Draft): Promise<void> {

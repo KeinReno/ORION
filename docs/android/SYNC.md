@@ -14,7 +14,7 @@ GET .../replica/changes?cursor=...; POST .../ops.
 Для заметок patch требует expectedRevision; Android сохраняет базовую ревизию
 с учётом своих предшествующих правок, не заменяет конфликт last-write-wins.
 
-## Alpha
+## Alpha.1–2 (исторические границы)
 Сохраняет локальные записи и операции в одной транзакции, неизменные UUID,
 HLC и sequence переживают перезапуск. LAN-экран сохраняет адрес/порт как
 профиль подготовки. Это не pairing, не проверка доступности и не подключение.
@@ -22,7 +22,7 @@ HLC и sequence переживают перезапуск. LAN-экран сох
 обходит TLS. Начиная с alpha.2 отдельный updater обращается к публичному
 источнику версий; он не передаёт задачи, заметки и другие локальные данные.
 
-## Следующий срез
+## Реализовано в alpha.3 (физическая приёмка отдельно)
 1. Нативный Android TLS transport: чтение реального peer certificate,
    подтверждение fingerprint/code на ПК, pinning при каждом запросе.
    Запрещены trust-all, cleartext, доверие только node card и JS-заглушки TLS.
@@ -30,7 +30,7 @@ HLC и sequence переживают перезапуск. LAN-экран сох
 3. Вход через разрешённый LAN API, выбор workspace из ответа сервера.
 4. Регистрация sync device; отдельное хранилище по node + user + workspace.
 5. Пустая replica из настоящего snapshot, затем existing ReplicaEngine +
-   apiSyncTransport; таймауты, idempotent retries, paged pull.
+   NativeSyncTransport; таймауты, idempotent retries, paged pull.
 6. Явный импорт локальных записей в выбранное пространство с новыми
    операциями; не переносить local deviceSeq в уже зарегистрированное устройство.
 7. UI конфликтов и проверка политики стирания remote cache при revoke:
@@ -42,3 +42,5 @@ HLC и sequence переживают перезапуск. LAN-экран сох
 несовместимый protocol; подменённый сертификат; смена пользователя;
 недостаток места; ColorOS выгружает процесс. Нужны проверки на реальном
 OPPO Reno8 5G и ПК в одной LAN, отдельно от mock-тестов.
+
+Текущие детали и результаты: [LAN_ALPHA3.md](LAN_ALPHA3.md), [RELEASE_ALPHA3.md](RELEASE_ALPHA3.md).

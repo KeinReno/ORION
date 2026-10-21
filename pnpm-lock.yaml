@@ -56,6 +56,9 @@ importers:
       '@capacitor/core':
         specifier: 8.5.3
         version: 8.5.3
+      '@orion/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@orion/mobile-core':
         specifier: workspace:*
         version: link:../../packages/mobile-core
@@ -71,6 +74,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@capacitor/cli':
         specifier: 8.5.3
