@@ -1,3 +1,5 @@
+import { EMPTY_TASK_FILTERS } from "../features/tasks/task-filters";
+import { EntryFields } from "../features/entry-fields";
 import type { AppRoute } from "./navigation/routes";
 import { useRepository } from "./use-repository";
 import { useNavigation } from "./navigation/use-navigation";
@@ -47,7 +49,11 @@ export default function App() {
   const settingWrites = useSettingWrites(repo.current, setData);
   const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string } | null>(null);
   const [editor, setEditor] = useState<Draft | null>(null);
-  const [query, setQuery] = useState("");
+  const [taskQuery, setTaskQuery] = useState("");
+  const [noteQuery, setNoteQuery] = useState("");
+  const [taskFilters, setTaskFilters] = useState({ ...EMPTY_TASK_FILTERS });
+  const [noteTag, setNoteTag] = useState("");
+  const [pinnedNotes, setPinnedNotes] = useState(false);
   const [archive, setArchive] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [financeLaunch, setFinanceLaunch] = useState<{ id: number; type: "income" | "expense" } | null>(null);
@@ -104,11 +110,11 @@ export default function App() {
     }).catch(() => { draftWriteError.current = true; setError("Черновик не записан на диск. Не закрывайте редактор; попробуйте сохранить ещё раз."); setNotice(""); }).finally(() => { draftWrites.current--; });
   }
   function editTask(task: Task) {
-    begin({ kind: "task", id: task.id, title: task.title, body: task.description, priority: task.priority,
+    begin({ kind: "task", id: task.id, title: task.title, body: task.description, priority: task.priority, status: task.status, dueAt: task.dueAt,
       ...(remote ? { expectedRevision: remote.revision("task", task.id) } : {}) });
   }
   function editNote(note: Note) {
-    begin({ kind: "note", id: note.id, title: note.title, body: note.body, priority: "normal",
+    begin({ kind: "note", id: note.id, title: note.title, body: note.body, priority: "normal", summary: note.summary, tagsText: note.tags.join(", "), pinnedAt: note.pinnedAt,
       ...(remote ? { expectedRevision: remote.revision("note", note.id) } : {}) });
   }
   const saveEntry = (draft: Draft) => action(async (value) => {
@@ -177,6 +183,8 @@ export default function App() {
       {([["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]] as const).map(([value, label]) =>
         <label key={value}><input type="radio" name="priority" checked={editor.priority === value} onChange={() => changeDraft({ ...editor, priority: value })} /><span>{label}</span></label>)}
     </div></fieldset>}
+    <EntryFields draft={editor} disabled={busy || dictating} change={changeDraft} />
+    <p className="helper">{editor.body.length.toLocaleString("ru-RU")} / 20 000 символов</p>
     {feedback}<button className="text-button" disabled={busy || dictating} onClick={async () => {
       if (await action((value) => remote ? value.saveRemoteDraft(remote.key, null).then(() => { draftWriteError.current = false; }) : value.saveDraft(null).then(() => { draftWriteError.current = false; }), "Черновик отменён")) history.back();
     }}>Отменить изменения</button>
@@ -193,12 +201,13 @@ export default function App() {
     aria-label={(kind === "task" ? "Действия задачи: " : "Действия заметки: ") + item.title}
     aria-expanded={entryMenu?.kind === kind && entryMenu.id === item.id}
     onClick={() => setEntryMenu(entryMenu?.kind === kind && entryMenu.id === item.id ? null : { kind, id: item.id })}><MoreHorizontal size={20} /></button>;
-  const needle = query.toLocaleLowerCase();
+  const taskNeedle = taskQuery.toLocaleLowerCase();
+  const noteNeedle = noteQuery.toLocaleLowerCase();
   const ranks = new Map((data.taskOrder[remote?.key ?? "phone"] ?? []).map((id, index) => [id, index]));
-  const tasks = (remote ? remote.engine.tasks() : data.tasks).filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(needle))
+  const tasks = (remote ? remote.engine.tasks() : data.tasks).filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(taskNeedle))
     .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER) || b.updatedAt.localeCompare(a.updatedAt));
   const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
-    && (item.title + " " + item.body).toLocaleLowerCase().includes(needle)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    && (item.title + " " + item.summary + " " + item.body + " " + item.tags.join(" ")).toLocaleLowerCase().includes(noteNeedle)).sort((a, b) => Number(Boolean(b.pinnedAt)) - Number(Boolean(a.pinnedAt)) || b.updatedAt.localeCompare(a.updatedAt));
   const quickEntry = (kind: "task" | "note") => {
     if (financeWrites.current || financeWriteError.current) { setError("Сначала сохраните или отмените ввод финансов. Не удалось подтвердить запись черновика."); return; }
     if (currentDraft) { begin(currentDraft); setNotice("Открыт незавершённый черновик. Сохраните или отмените его перед новой записью."); }
@@ -229,12 +238,12 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { tasks, query, setQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+    tasks: { tasks, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
       edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
-    notes: { notes, query, setQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
+    notes: { notes, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
       edit: (note) => currentDraft ? begin(currentDraft) : editNote(note),
       archiveNote: (note) => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть"),
       menu: (note) => menuButton("note", note), actions: (note) => entryActions("note", note) },
@@ -282,7 +291,7 @@ export default function App() {
         : <ModuleOutlet definition={activeModule} scope={remote?.key ?? "phone"} />}
 
     </main>
-    <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); setQuery(""); setError(""); setNotice(""); }} />
+    <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); setError(""); setNotice(""); }} />
   </div></QuickActions>;
 }
 

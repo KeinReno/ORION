@@ -77,3 +77,15 @@ h1{font-size:1.5rem;letter-spacing:-.02em}h2{font-size:1.125rem}.primary{font-we
 @media(max-width:380px){.navigation button>span:last-child:not(.nav-icon){display:none}.navigation button{min-height:48px}}
 
 .navigation button{padding:8px 2px}
+
+/* Module filters keep their native controls readable on compact screens. */
+.module-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 145px),1fr)); gap: 12px; padding: 14px; }
+.module-filters label, .entry-fields > label { display: grid; gap: 7px; min-width: 0; }
+.module-filters .helper, .module-filters .text-button { grid-column: 1 / -1; margin: 0; }
+.module-filters select, .entry-fields select, .entry-fields input { min-width: 0; width: 100%; max-width: 100%; }
+.entry-fields { display: grid; gap: 14px; border-top: 1px solid var(--line); padding-top: 18px; }
+.entry-fields .switch-row, .module-filters .switch-row { display: flex; }
+.entry-fields input[type=checkbox], .module-filters input[type=checkbox] { width: 52px; flex-shrink: 0; }
+.note-tags { color: var(--accent); font-size: .78rem; overflow-wrap: anywhere; }
+
+.module-filters select, .entry-fields select { font: inherit; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--raised); color: var(--text); }
