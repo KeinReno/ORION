@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet } from "lucide-react";
+import { ArrowLeft, Plus, Search, Check, ListTodo, NotebookPen, Link2, Archive, RotateCcw, Smartphone, Settings, Wallet, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { MobileRepository, lanProfileSchema, createPortableBackup, appendDictation, type Draft, type MobileSnapshot } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { storage } from "./storage";
+import { QuickActions } from "./quick-actions";
+import { TaskList } from "./task-list";
 import { Dictation } from "./dictation";
 import { FinancePage } from "./finance";
 import { SettingsPage } from "./settings";
@@ -32,9 +34,12 @@ function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [dictating, setDictating] = useState(false);
+  const [financeLaunch, setFinanceLaunch] = useState<{ id: number; type: "income" | "expense" } | null>(null);
   const [loading, setLoading] = useState(true);
   const [address, setAddress] = useState("");
   const [port, setPort] = useState("4443");
+  const financeWrites = useRef(0);
+  const financeWriteError = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const updates = useUpdates(data?.settings);
   const theme = data?.settings.theme ?? "system";
@@ -59,6 +64,7 @@ function App() {
     const back = () => { setEditor(null); setError(""); };
     window.addEventListener("popstate", back);
     const listener = Capacitor.isNativePlatform() ? NativeApp.addListener("backButton", () => {
+      if (!window.dispatchEvent(new Event("orion-back", { cancelable: true }))) return;
       if (history.state?.editor) history.back();
       else void NativeApp.exitApp();
     }) : null;
@@ -170,11 +176,28 @@ function App() {
   </main></div>;
 
   const needle = query.toLocaleLowerCase();
+  const ranks = new Map((data.taskOrder[remote?.key ?? "phone"] ?? []).map((id, index) => [id, index]));
   const tasks = (remote ? remote.engine.tasks() : data.tasks).filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(needle))
-    .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER) || b.updatedAt.localeCompare(a.updatedAt));
   const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
     && (item.title + " " + item.body).toLocaleLowerCase().includes(needle)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return <div className="shell"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
+  const quickEntry = (kind: "task" | "note") => {
+    if (financeWrites.current || financeWriteError.current) { setError("Сначала сохраните или отмените ввод финансов. Не удалось подтвердить запись черновика."); return; }
+    if (currentDraft) { begin(currentDraft); setNotice("Открыт незавершённый черновик. Сохраните или отмените его перед новой записью."); }
+    else begin({ ...emptyDraft(kind), ...(remote ? { id: crypto.randomUUID() } : {}) });
+  };
+  const quickFinance = (type: "income" | "expense") => {
+    if (financeWrites.current || financeWriteError.current) { setError("Текущий ввод финансов ещё не записан. Сохраните или отмените его перед новой операцией."); return; }
+    setTab("finance"); setError("");
+    if (data.finance?.draft) { setNotice("Открыт незавершённый ввод финансов. Он не заменён новой операцией."); return; }
+    setFinanceLaunch({ id: Date.now(), type }); setNotice("");
+  };
+  return <QuickActions disabled={busy || dictating} actions={[
+    { id: "task", label: "Задача", icon: ListTodo, disabled: remote ? !remote.hasModule("task") : false, run: () => quickEntry("task") },
+    { id: "note", label: "Заметка", icon: NotebookPen, disabled: remote ? !remote.hasModule("note") : false, run: () => quickEntry("note") },
+    { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
+    { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
+  ]}><div className="shell"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
     <span>KAIDEN <b>Orion</b></span><button className="local-label" onClick={() => setTab("connection")}>{remote && tab !== "finance" ? data.remoteSelection?.workspaceName : "На телефоне"}</button></header>
     <main className="content">
       <div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "finance" ? "Финансы" : tab === "tasks" ? "Задачи" : tab === "notes" ? "Заметки" : tab === "connection" ? "Связь с компьютером" : "Настройки"}</h1>
@@ -188,9 +211,15 @@ function App() {
       {remote && tab !== "connection" && tab !== "finance" && <div className="replica-banner"><p>Копия пространства ПК · в очереди {remote.engine.status().pending} · конфликтов {remote.engine.status().conflicts}</p>
         <button disabled={connection.busy} onClick={() => { setTab("connection"); void connection.sync(); }}>Синхронизировать</button></div>}
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
-      {tab === "finance" && data.finance ? <FinancePage finance={data.finance} busy={busy}
-        saveDraft={async (draft) => { if (!repo.current) return; await repo.current.saveFinanceDraft(draft); setData(repo.current.snapshot()); }}
-        save={(draft) => action((value) => value.saveFinanceEntry(draft), "Операция сохранена на телефоне")}
+      {tab === "finance" && data.finance ? <FinancePage key={financeLaunch?.id ?? "default"} initialType={financeLaunch?.type} finance={data.finance} busy={busy}
+        saveDraft={async (draft) => {
+          if (!repo.current) return;
+          financeWrites.current++;
+          try { await repo.current.saveFinanceDraft(draft); financeWriteError.current = false; setData(repo.current.snapshot()); }
+          catch (cause) { financeWriteError.current = true; throw cause; }
+          finally { financeWrites.current--; }
+        }}
+        save={async (draft) => { const saved = await action((value) => value.saveFinanceEntry(draft), "Операция сохранена на телефоне"); if (saved) financeWriteError.current = false; return saved; }}
         remove={(id) => action((value) => value.deleteFinanceEntry(id), "Операция удалена")} />
       : tab === "settings" ? <SettingsPage settings={data.settings} saving={busy} updates={updates}
         backup={() => void backup()} backupBusy={busy}
@@ -198,14 +227,15 @@ function App() {
       : tab !== "connection" ? <>
         <label className="search"><Search size={20} /><span className="sr-only">Поиск</span><input type="search" placeholder={tab === "tasks" ? "Найти задачу" : "Найти заметку"} value={query} onChange={(e) => setQuery(e.target.value)} /></label>
         {tab === "notes" && <div className="filters"><button aria-pressed={!archive} onClick={() => setArchive(false)}>Все заметки</button><button aria-pressed={archive} onClick={() => setArchive(true)}><Archive size={16} />Архив</button></div>}
-        {tab === "tasks" ? <ul className="entries">{tasks.map((task) => <li key={task.id} className={isTaskClosed(task.status) ? "completed" : ""}>
+        {tab === "tasks" ? <TaskList tasks={tasks} disabled={busy || Boolean(query)}
+          reorder={(ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне")} >{(task) => <>
           <button className="check-button" aria-label={(isTaskClosed(task.status) ? "Вернуть в работу: " : "Завершить: ") + task.title}
             aria-pressed={isTaskClosed(task.status)} disabled={busy} onClick={() => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена")}>
             {isTaskClosed(task.status) && <Check size={19} />}</button>
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editTask(task)}><strong>{task.title}</strong>
             {task.description && <span className="excerpt">{task.description}</span>}
             <small>{isTaskClosed(task.status) ? "Завершена" : task.priority === "high" ? "Высокий приоритет" : task.priority === "low" ? "Низкий приоритет" : "К выполнению"}</small></button>
-        </li>)}</ul> : <ul className="entries notes">{notes.map((note) => <li key={note.id}>
+        </>}</TaskList> : <ul className="entries notes">{notes.map((note) => <li key={note.id}>
           <button className="entry-main" onClick={() => currentDraft ? begin(currentDraft) : editNote(note)}><strong>{note.title}</strong>
             <span className="excerpt">{note.body || "Пока только название"}</span><small>{new Date(note.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</small></button>
           <button className="icon-button" aria-label={(archive ? "Вернуть из архива: " : "В архив: ") + note.title} disabled={busy}
@@ -231,7 +261,7 @@ function App() {
       ["settings", "Настройки", Settings],
     ] as const).map(([value, label, Icon]) => <button key={value} aria-current={tab === value ? "page" : undefined}
       onClick={() => { setTab(value); setQuery(""); setError(""); setNotice(""); }}><span className="nav-icon"><Icon size={23} />{value === "settings" && updates.state?.available && <span className="update-dot" aria-label="Доступно обновление" />}</span><span>{label}</span></button>)}</nav>
-  </div>;
+  </div></QuickActions>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

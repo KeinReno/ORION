@@ -7,7 +7,7 @@ class Disk implements SnapshotStorage {
 }
 function entry(repo: MobileRepository, type: "income" | "expense" = "expense"): FinanceDraft {
   const finance = repo.snapshot().finance!;
-  return { id: crypto.randomUUID(), type, amount: "123,45", accountId: finance.accounts[0]!.id,
+  return { dateMode: "custom", id: crypto.randomUUID(), type, amount: "123,45", accountId: finance.accounts[0]!.id,
     categoryId: finance.categories.find((item) => item.kind === type)!.id, date: localDate(), note: "Обед" };
 }
 describe("mobile finance", () => {

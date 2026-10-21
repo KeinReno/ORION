@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2 } from "lucide-react";
-import { localDate, parseMoney, type FinanceDraft, type MobileFinance } from "@orion/mobile-core";
+import { localDate, parseMoney, resolveFinanceDate, type FinanceDraft, type MobileFinance } from "@orion/mobile-core";
+import { useToday } from "./use-today";
 import type { Transaction } from "@orion/shared-types";
 
 const money = (amount: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(amount / 100);
 function fresh(finance: MobileFinance, type: "expense" | "income" = "expense"): FinanceDraft {
-  return { id: crypto.randomUUID(), type, amount: "", accountId: finance.lastAccountId ?? finance.accounts[0]!.id,
+  return { dateMode: "today", id: crypto.randomUUID(), type, amount: "", accountId: finance.lastAccountId ?? finance.accounts[0]!.id,
     categoryId: finance.categories.find((item) => item.kind === type)!.id, note: "", date: localDate() };
 }
-export function FinancePage({ finance, busy, saveDraft, save, remove }: {
-  finance: MobileFinance; busy: boolean; saveDraft: (draft: FinanceDraft | null) => Promise<void>;
+export function FinancePage({ finance, busy, saveDraft, save, remove, initialType }: {
+  initialType?: "income" | "expense"; finance: MobileFinance; busy: boolean; saveDraft: (draft: FinanceDraft | null) => Promise<void>;
   save: (draft: FinanceDraft) => Promise<boolean>; remove: (id: string) => Promise<boolean>;
 }) {
-  const [draft, setDraft] = useState(() => finance.draft ?? fresh(finance));
-  const [month, setMonth] = useState(localDate().slice(0, 7));
+  const today = useToday();
+  const [storedDraft, setDraft] = useState(() => finance.draft ?? fresh(finance, initialType));
+  const draft = resolveFinanceDate(storedDraft);
+  const [chosenMonth, setMonth] = useState<string | null>(null);
+  const month = chosenMonth ?? today.slice(0, 7);
   const [error, setError] = useState("");
   const [draftStatus, setDraftStatus] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -30,7 +34,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove }: {
   }
   function edit(entry: Transaction) {
     if (draft.amount || draft.note || finance.draft) { setError("Сначала сохраните текущую операцию или нажмите «Отменить ввод»."); return; }
-    const next: FinanceDraft = { id: entry.id, type: entry.type === "income" ? "income" : "expense", amount: (entry.totalAmount / 100).toFixed(2).replace(".", ","),
+    const next: FinanceDraft = { dateMode: "custom", id: entry.id, type: entry.type === "income" ? "income" : "expense", amount: (entry.totalAmount / 100).toFixed(2).replace(".", ","),
       accountId: entry.accountId, categoryId: entry.lines[0]!.categoryId!, note: entry.note, date: localDate(new Date(entry.occurredAt)) };
     change(next); document.getElementById("finance-amount")?.focus();
   }
@@ -42,7 +46,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove }: {
     <form className="finance-form" onSubmit={async (event) => {
       event.preventDefault(); if (busy) return;
       try { parseMoney(draft.amount); } catch (cause) { setError((cause as Error).message); return; }
-      if (await save(draft)) { setDraft(fresh({ ...finance, lastAccountId: draft.accountId }, draft.type)); setDraftStatus(""); setError(""); }
+      if (await save(resolveFinanceDate(draft))) { setDraft(fresh({ ...finance, lastAccountId: draft.accountId }, draft.type)); setDraftStatus(""); setError(""); }
     }}>
       <fieldset disabled={busy}>
         <legend>{editing ? "Изменить операцию" : "Новая операция"}</legend>
@@ -59,7 +63,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove }: {
         <div className="finance-categories" role="group" aria-labelledby="finance-category-label">{finance.categories.filter((item) => item.kind === draft.type && !item.archivedAt)
           .map((category) => <button key={category.id} type="button" aria-pressed={draft.categoryId === category.id}
             onClick={() => change({ ...draft, categoryId: category.id })}>{category.name}</button>)}</div>
-        <details key={draft.id} className="finance-details" open={Boolean(draft.note) || draft.date !== localDate() || editing}><summary>Дата и комментарий · {draft.date === localDate() ? "сегодня" : draft.date}</summary><label>Дата<input type="date" required value={draft.date} onChange={(event) => change({ ...draft, date: event.target.value })} /></label>
+        <details key={draft.id} className="finance-details" open={Boolean(draft.note) || draft.date !== today || editing}><summary>Дата и комментарий · {draft.date === today ? "сегодня" : draft.date}</summary><label>Дата<input type="date" required value={draft.date} onChange={(event) => change({ ...draft, date: event.target.value, dateMode: "custom" })} /></label><button type="button" className="text-button" onClick={() => change({ ...draft, date: localDate(), dateMode: "today" })}>Сегодня</button>
           <label>Комментарий <span>(необязательно)</span><input value={draft.note} maxLength={2000} placeholder="Например, обед" onChange={(event) => change({ ...draft, note: event.target.value })} /></label></details>
         <p id="finance-error" className="error" role="alert">{error}</p>
         <p className="helper" role="status">{draftStatus}</p>

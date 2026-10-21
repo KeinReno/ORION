@@ -2,6 +2,7 @@ import { z } from "zod";
 import { accountSchema, financeCategorySchema, transactionSchema, createTransactionInputSchema, type Account, type FinanceCategory } from "@orion/shared-types";
 
 export const financeDraftSchema = z.object({
+  dateMode: z.enum(["today", "custom"]).default("custom"),
   id: z.string().uuid(), type: z.enum(["expense", "income"]), amount: z.string().max(30),
   accountId: z.string(), categoryId: z.string(), note: z.string().max(2000), date: z.string(),
 });
@@ -23,6 +24,9 @@ export function parseMoney(value: string): number {
 export function localDate(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
+export function resolveFinanceDate(draft: FinanceDraft, now = new Date()): FinanceDraft {
+  return draft.dateMode === "today" ? { ...draft, date: localDate(now) } : draft;
+}
 export function createMobileFinance(workspaceId: string): MobileFinance {
   const now = new Date().toISOString();
   const accounts: Account[] = (["Карта", "Наличные"] as const).map((name, index) => ({
@@ -38,7 +42,7 @@ export function createMobileFinance(workspaceId: string): MobileFinance {
   return { accounts, categories, transactions: [], draft: null, lastAccountId: accounts[0]!.id };
 }
 export function applyFinanceEntry(finance: MobileFinance, workspaceId: string, draft: FinanceDraft): void {
-  const parsed = financeDraftSchema.parse(draft);
+  const parsed = resolveFinanceDate(financeDraftSchema.parse(draft));
   const account = finance.accounts.find((item) => item.id === parsed.accountId && !item.archivedAt && item.workspaceId === workspaceId);
   const category = finance.categories.find((item) => item.id === parsed.categoryId && item.kind === parsed.type && !item.archivedAt && item.workspaceId === workspaceId);
   if (!account || !category) throw new Error("Выберите счёт и категорию для этой операции.");

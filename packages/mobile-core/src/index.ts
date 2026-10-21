@@ -53,6 +53,7 @@ const snapshotSchema = z.object({
   // Additive migration for alpha.1; content/outbox/device identity are retained.
   settings: mobileSettingsSchema.default({}),
   lastBackupSeq: z.number().int().nonnegative().nullable().default(null),
+  taskOrder: z.record(z.array(z.string().uuid())).default({}),
   remoteDrafts: z.record(draftSchema).default({}),
   remoteSelection: remoteSelectionSchema.nullable().default(null),
   remoteActive: z.boolean().default(false),
@@ -83,7 +84,7 @@ export class MobileRepository {
         tasks: [], notes: [], outbox: [], draft: null, lan: null,
         settings: mobileSettingsSchema.parse({}),
         lastBackupSeq: null,
-        remoteDrafts: {},
+        taskOrder: {}, remoteDrafts: {},
         remoteSelection: null, remoteActive: false,
       };
       await storage.write(JSON.stringify(state));
@@ -112,6 +113,14 @@ export class MobileRepository {
     return run;
   }
 
+  saveTaskOrder(scope: string, ids: string[]): Promise<void> {
+    return this.transaction((next) => {
+      if (scope !== "phone" && !/^[a-f0-9]{64}$/.test(scope)) throw new Error("Неверное пространство порядка задач");
+      const parsed = z.array(z.string().uuid()).max(50000).parse(ids);
+      if (new Set(parsed).size !== parsed.length) throw new Error("Задача повторяется в порядке");
+      next.taskOrder[scope] = parsed;
+    });
+  }
   saveFinanceDraft(draft: FinanceDraft | null): Promise<void> {
     return this.transaction((next) => {
       if (!next.finance) throw new Error("Финансы недоступны");
@@ -166,7 +175,7 @@ export class MobileRepository {
     });
   }
   clearRemote(): Promise<void> {
-    return this.transaction((next) => { next.remoteSelection = null; next.remoteActive = false; next.remoteDrafts = {}; });
+    return this.transaction((next) => { next.remoteSelection = null; next.remoteActive = false; next.remoteDrafts = {}; next.taskOrder = { phone: next.taskOrder.phone ?? [] }; });
   }
 
   saveEntry(draft: Draft): Promise<void> {
