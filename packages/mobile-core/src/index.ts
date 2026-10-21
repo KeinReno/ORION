@@ -1,0 +1,134 @@
+import { z } from "zod";
+import { applyOpLocally, emptyEntities, type ReplicaEntityMap } from "@orion/core";
+import {
+  HlcClock, LAN_DEFAULT_PORT, normalizeOpFields, noteSchema, taskSchema,
+  syncOpSchema, type Note, type Task, type SyncOp,
+} from "@orion/shared-types";
+
+export interface SnapshotStorage {
+  read(): Promise<string | null>;
+  write(value: string): Promise<void>;
+}
+
+// A profile is deliberately not a connection or a grant to upload local data.
+export const lanProfileSchema = z.object({
+  address: z.string().trim().min(1).max(253).refine(
+    (value) => /^[a-zA-Z0-9.-]+$/.test(value) && !value.includes(".."),
+    "Укажите имя компьютера или IPv4 без https://, пути и пароля",
+  ),
+  port: z.number().int().min(1).max(65535).default(LAN_DEFAULT_PORT),
+});
+export type LanProfile = z.infer<typeof lanProfileSchema>;
+export const draftSchema = z.object({
+  kind: z.enum(["task", "note"]), id: z.string().uuid().nullable(),
+  title: z.string().max(200), body: z.string().max(20_000),
+  priority: z.enum(["low", "normal", "high"]),
+});
+export type Draft = z.infer<typeof draftSchema>;
+const snapshotSchema = z.object({
+  version: z.literal(1),
+  workspaceId: z.string().uuid(), deviceId: z.string().uuid(),
+  deviceSeq: z.number().int().nonnegative(),
+  clock: z.object({ wallMs: z.number().int().nonnegative(), counter: z.number().int().nonnegative() }),
+  tasks: z.array(taskSchema), notes: z.array(noteSchema),
+  outbox: z.array(syncOpSchema),
+  draft: draftSchema.nullable(),
+  lan: lanProfileSchema.nullable(),
+});
+export type MobileSnapshot = z.infer<typeof snapshotSchema>;
+export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+
+export class MobileRepository {
+  private tail: Promise<unknown> = Promise.resolve();
+  private constructor(private readonly storage: SnapshotStorage, private state: MobileSnapshot) {}
+
+  static async open(storage: SnapshotStorage): Promise<MobileRepository> {
+    const raw = await storage.read();
+    let state: MobileSnapshot;
+    if (raw !== null) {
+      // Never replace an unreadable/future-version database with an empty one.
+      state = snapshotSchema.parse(JSON.parse(raw));
+      if (state.outbox.some((op) => op.deviceId !== state.deviceId || op.deviceSeq > state.deviceSeq)
+        || state.tasks.some((item) => item.workspaceId !== state.workspaceId)
+        || state.notes.some((item) => item.workspaceId !== state.workspaceId)) {
+        throw new Error("Локальное хранилище не прошло проверку целостности");
+      }
+    } else {
+      state = {
+        version: 1, workspaceId: crypto.randomUUID(), deviceId: crypto.randomUUID(),
+        deviceSeq: 0, clock: { wallMs: 0, counter: 0 },
+        tasks: [], notes: [], outbox: [], draft: null, lan: null,
+      };
+      await storage.write(JSON.stringify(state));
+    }
+    return new MobileRepository(storage, state);
+  }
+
+  snapshot(): MobileSnapshot { return structuredClone(this.state); }
+
+  private transaction(change: (next: MobileSnapshot) => void): Promise<void> {
+    const run = this.tail.then(async () => {
+      const next = structuredClone(this.state);
+      change(next);
+      const raw = JSON.stringify(snapshotSchema.parse(next));
+      if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
+        throw new Error("Хранилище alpha заполнено. Данные сохранены; новую запись сохранить не удалось.");
+      }
+      await this.storage.write(raw);
+      this.state = next;
+    });
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
+  saveDraft(draft: Draft | null): Promise<void> {
+    return this.transaction((next) => { next.draft = draft ? draftSchema.parse(draft) : null; });
+  }
+  saveLan(profile: LanProfile): Promise<void> {
+    return this.transaction((next) => { next.lan = lanProfileSchema.parse(profile); });
+  }
+
+  saveEntry(draft: Draft): Promise<void> {
+    const parsed = draftSchema.parse(draft);
+    return this.transaction((next) => {
+      const title = parsed.title.trim();
+      const fields = parsed.kind === "task"
+        ? { title, description: parsed.body, priority: parsed.priority }
+        : { title, body: parsed.body };
+      this.apply(next, parsed.kind, parsed.id, fields);
+      next.draft = null;
+    });
+  }
+
+  setTaskDone(id: string, done: boolean): Promise<void> {
+    return this.transaction((next) => this.apply(next, "task", id, { status: done ? "done" : "todo" }));
+  }
+  archiveNote(id: string, archived: boolean): Promise<void> {
+    return this.transaction((next) => this.apply(next, "note", id, { archivedAt: archived ? new Date().toISOString() : null }));
+  }
+
+  private apply(next: MobileSnapshot, entity: "task" | "note", id: string | null, fields: Record<string, unknown>) {
+    const existing: Task | Note | undefined = id
+      ? (entity === "task" ? next.tasks : next.notes).find((item) => item.id === id) : undefined;
+    if (id && !existing) throw new Error("Запись не найдена. Вернитесь к списку.");
+    const clock = new HlcClock(next.deviceId, Date.now, next.clock);
+    const op: SyncOp = syncOpSchema.parse({
+      opId: crypto.randomUUID(), deviceId: next.deviceId, deviceSeq: next.deviceSeq + 1,
+      hlc: clock.now(), entity, entityId: id ?? crypto.randomUUID(),
+      kind: id ? "patch" : "create",
+      fields: normalizeOpFields(entity, fields),
+      ...(existing ? { expectedRevision: existing.revision } : {}),
+    });
+    const entities: ReplicaEntityMap = emptyEntities();
+    entities.task = Object.fromEntries(next.tasks.map((item) => [item.id, { ...item }]));
+    entities.note = Object.fromEntries(next.notes.map((item) => [item.id, { ...item }]));
+    applyOpLocally(entities, op, { userId: "local-device", workspaceId: next.workspaceId, userName: null });
+    const doc = entities[entity][op.entityId];
+    doc.revision = existing ? existing.revision + 1 : 1;
+    next.tasks = Object.values(entities.task).map((item) => taskSchema.parse(item));
+    next.notes = Object.values(entities.note).map((item) => noteSchema.parse(item));
+    next.outbox.push(op);
+    next.deviceSeq = op.deviceSeq;
+    next.clock = clock.state();
+  }
+}
