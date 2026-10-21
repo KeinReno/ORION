@@ -10,6 +10,13 @@
 
 ### Android: отдельная ветка alpha, 21.10.2026
 
+Alpha.14 на Android-ветке (0.1.13/code14): статусы/сроки задач и фильтры;
+summary/tags/pin заметок, независимый поиск. Optional draft fields без очистки
+legacy metadata; local/remote public SyncOp unchanged. 47 focused tests,
+11 browser scripts, 11 plugin, workspace typecheck/lint/architecture/module-docs
+и Android build/lint/JVM PASS. Физические OPPO/LAN NOT RUN, tilt не менялся.
+[Подробности alpha.14](android/RELEASE_ALPHA14.md).
+
 Alpha.13 на Android-ветке (0.1.12/code 13): bundled registry и typed routes,
 нижняя навигация с иконками, «Ещё», семь страниц настроек с поиском и независимыми
 записями полей; Lists с офлайн CRUD/черновиком/архивом и существующим SyncOp.
