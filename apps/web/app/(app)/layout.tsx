@@ -74,10 +74,12 @@ import {
   readDraggedPanelId,
   resolveDropAction
 } from "../../lib/panel-drop";
-import { openPanel as focusPanel, openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
+import { openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
 import { useTaskProjectRouting } from "../../lib/task-project-routing";
 import { rememberAssistantView } from "../../lib/assistant-context";
 import { AgentPanelFrame, AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
+import { FeedbackButton } from "../../components/feedback-dialog";
+import { GlobalCorner } from "../../components/global-corner";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
@@ -291,14 +293,6 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
       {precision ? null : <AgentPresencePill />}
       <RunningTimerChip />
       <NotificationBell size="sm" />
-      <button
-        type="button"
-        onClick={() => focusPanel("settings")}
-        title="Настройки"
-        className="mr-2 flex h-6 w-6 items-center justify-center rounded text-subtle-foreground hover:bg-white/10 hover:text-foreground"
-      >
-        <Settings className="h-3.5 w-3.5" />
-      </button>
     </div>
   );
 }
@@ -1144,6 +1138,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         }
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Precision has its own single top bar (below) — the floating corner is only for the legacy
+            shell, which has no header of its own: there the dock's per-split tab-strip action bar used
+            to carry its own «Настройки», multiplying with every split. */}
+        {!compact && !precision ? <GlobalCorner /> : null}
         {compact ? (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 pt-[env(safe-area-inset-top)]">
             <button
@@ -1163,6 +1161,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             <RunningTimerChip />
             <ResourcesToggle size="md" />
             <NotificationBell />
+            <FeedbackButton />
             <IconButton label="Настройки" onClick={() => openPanel("settings")}>
               <Settings className="h-4 w-4" />
             </IconButton>
@@ -1184,6 +1183,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
           ]} />
           {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
+          <FeedbackButton className="h-11 w-11 sm:h-8 sm:w-8" />
+          <IconButton label="Настройки" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openPanel("settings")}><Settings className="h-4 w-4" /></IconButton>
           <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
         </header> : null}
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
