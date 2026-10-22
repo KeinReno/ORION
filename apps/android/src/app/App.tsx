@@ -1,4 +1,5 @@
 import { EMPTY_TASK_FILTERS } from "../features/tasks/task-filters";
+import { TaskChecklist } from "../features/tasks/task-checklist";
 import { MarkdownPreview } from "../features/markdown-preview";
 import type { TaskSort, NoteSort } from "../features/view-order";
 import { EntryFields } from "../features/entry-fields";
@@ -154,6 +155,31 @@ export default function App() {
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     <button onClick={() => void connection.switchSpace(false)}>Открыть записи «На телефоне»</button></main>;
 
+  const taskRecords = remote ? remote.engine.tasks() : data.tasks;
+  const tasksById = new Map(taskRecords.map((task) => [task.id, task]));
+  const checklistByParent = new Map<string, Task[]>();
+  for (const task of taskRecords) {
+    if (!task.parentId) continue;
+    const items = checklistByParent.get(task.parentId) ?? [];
+    items.push(task);
+    checklistByParent.set(task.parentId, items);
+  }
+  const nestedCounts = new Map<string, number>();
+  const counting = new Set<string>();
+  const countNested = (id: string): number => {
+    const known = nestedCounts.get(id);
+    if (known !== undefined) return known;
+    if (counting.has(id)) return 0;
+    counting.add(id);
+    let total = 0;
+    for (const child of checklistByParent.get(id) ?? []) total += 1 + countNested(child.id);
+    counting.delete(id);
+    nestedCounts.set(id, total);
+    return total;
+  };
+  for (const task of taskRecords) if (task.parentId) countNested(task.id);
+  const editorTaskId = editor?.kind === "task" && editor.id && tasksById.has(editor.id) ? editor.id : null;
+
   if (editor) return <div className="shell"><header className="editor-bar">
     <button className="icon-button" aria-label="Назад к списку, оставить черновик" disabled={busy || dictating} onClick={() => history.back()}><ArrowLeft /></button>
     <h1 ref={heading} tabIndex={-1}>{editor.kind === "task" ? "Задача" : "Заметка"}</h1>
@@ -183,6 +209,12 @@ export default function App() {
       <textarea aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body} maxLength={20000} rows={12} disabled={busy || dictating}
         placeholder={editor.kind === "task" ? "Детали, которые пригодятся позже" : "Пишите свободно. Разметка Markdown сохранится."}
         onChange={(e) => changeDraft({ ...editor, body: e.target.value })} /></label>
+    {editor.kind === "task" && <TaskChecklist parentId={editorTaskId} items={editorTaskId ? checklistByParent.get(editorTaskId) ?? [] : []} busy={busy || dictating}
+      remote={Boolean(remote)} nested={nestedCounts}
+      add={(title) => action((value) => remote ? remote.addTaskChecklistItem(editorTaskId!, title) : value.addTaskChecklistItem(editorTaskId!, title), remote ? "Пункт сохранён в копии. Синхронизируйте для отправки на ПК." : "Пункт добавлен")}
+      rename={(item, title) => action((value) => remote ? remote.renameTaskChecklistItem(item.id, title) : value.renameTaskChecklistItem(item.id, title), "Название пункта сохранено")}
+      toggle={(item) => action((value) => remote ? remote.setTaskDone(item.id, !isTaskClosed(item.status)) : value.setTaskDone(item.id, !isTaskClosed(item.status)), "Пункт чек-листа сохранён")}
+      remove={(item) => action((value) => remote ? remote.deleteEntry("task", item.id) : value.deleteEntry("task", item.id), remote ? "Удаление пункта сохранено в копии. Синхронизируйте для отправки на ПК." : "Пункт чек-листа удалён")} />}
     {editor.kind === "task" && <fieldset disabled={busy || dictating}><legend>Приоритет</legend><div className="segments">
       {([["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]] as const).map(([value, label]) =>
         <label key={value}><input type="radio" name="priority" checked={editor.priority === value} onChange={() => changeDraft({ ...editor, priority: value })} /><span>{label}</span></label>)}
@@ -209,7 +241,19 @@ export default function App() {
   const taskNeedle = taskQuery.toLocaleLowerCase();
   const noteNeedle = noteQuery.toLocaleLowerCase();
   const ranks = new Map((data.taskOrder[remote?.key ?? "phone"] ?? []).map((id, index) => [id, index]));
-  const tasks = (remote ? remote.engine.tasks() : data.tasks).filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(taskNeedle))
+  const matchingRoots = new Set<string>();
+  if (taskNeedle) {
+    for (const match of taskRecords.filter((item) => (item.title + " " + item.description).toLocaleLowerCase().includes(taskNeedle))) {
+      let cursor: Task | undefined = match;
+      const seen = new Set<string>();
+      while (cursor?.parentId && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        cursor = tasksById.get(cursor.parentId);
+      }
+      if (cursor && !cursor.parentId) matchingRoots.add(cursor.id);
+    }
+  }
+  const tasks = taskRecords.filter((item) => !item.parentId && (!taskNeedle || matchingRoots.has(item.id)))
     .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER) || b.updatedAt.localeCompare(a.updatedAt));
   const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
     && (item.title + " " + item.summary + " " + item.body + " " + item.tags.join(" ")).toLocaleLowerCase().includes(noteNeedle)).sort((a, b) => Number(Boolean(b.pinnedAt)) - Number(Boolean(a.pinnedAt)) || b.updatedAt.localeCompare(a.updatedAt));
@@ -243,7 +287,7 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { tasks, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+    tasks: { tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
       edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
