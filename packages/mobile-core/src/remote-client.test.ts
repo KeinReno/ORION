@@ -37,6 +37,28 @@ describe("Mobile remote replica and portable backup", () => {
     await expect(client.saveEntry({ ...note, tagsText: "changed" })).rejects.toThrow("disk full");
     expect(client.engine.notes()[0].tags).toEqual(["mobile", "идеи"]);
   });
+  it("converges task checklist items across replicas and removes them with their parent", async () => {
+    const { client, io, host } = await connected();
+    const parentId = crypto.randomUUID();
+    await client.saveEntry({ ...draft("Поездка"), kind: "task", id: parentId });
+    await client.addTaskChecklistItem(parentId, "Проверить документы");
+    const localItem = client.engine.tasks().find((task) => task.parentId === parentId)!;
+    expect(localItem.title).toBe("Проверить документы");
+    const restarted = await MobileRemoteClient.create(scope, io, host);
+    expect(restarted.engine.tasks().find((task) => task.id === localItem.id)?.parentId).toBe(parentId);
+
+    await restarted.sync(); host.nowMs += 1000;
+    const observer = await MobileRemoteClient.create(scope, new Copies(), host); await observer.sync();
+    const observedItem = observer.engine.tasks().find((task) => task.parentId === parentId)!;
+    await observer.renameTaskChecklistItem(observedItem.id, "Взять документы");
+    await observer.setTaskDone(observedItem.id, true);
+    await observer.sync(); await restarted.sync();
+    expect(restarted.engine.tasks().find((task) => task.id === observedItem.id)).toMatchObject({ title: "Взять документы", status: "done", parentId });
+
+    await restarted.deleteEntry("task", parentId); await restarted.sync(); await observer.sync();
+    expect(observer.engine.tasks().filter((task) => task.id === parentId || task.parentId === parentId)).toEqual([]);
+  });
+
   it("converges offline lists across two replicas and rejects list scope contamination", async () => {
     const { client, io, host } = await connected();
     const list = crypto.randomUUID(); const item = crypto.randomUUID();

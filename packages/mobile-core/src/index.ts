@@ -216,6 +216,28 @@ export class MobileRepository {
     });
   }
 
+  addTaskChecklistItem(parentId: string, title: string): Promise<void> {
+    return this.transaction((next) => {
+      if (!next.tasks.some((task) => task.id === parentId)) throw new Error("Родительская задача не найдена. Вернитесь к списку.");
+      const clean = this.checklistTitle(title);
+      const siblings = next.tasks.filter((task) => task.parentId === parentId);
+      const sortOrder = siblings.reduce((max, task) => Math.max(max, task.sortOrder), 0) + 10;
+      this.apply(next, "task", null, { title: clean, description: "", priority: "normal", parentId, sortOrder });
+    });
+  }
+  renameTaskChecklistItem(id: string, title: string): Promise<void> {
+    return this.transaction((next) => {
+      const task = next.tasks.find((item) => item.id === id);
+      if (!task?.parentId) throw new Error("Пункт чек-листа не найден. Вернитесь к списку.");
+      this.apply(next, "task", id, { title: this.checklistTitle(title) });
+    });
+  }
+  private checklistTitle(title: string): string {
+    const clean = title.trim();
+    if (!clean) throw new Error("Название пункта не может быть пустым.");
+    if (clean.length > 200) throw new Error("Название пункта длиннее 200 символов.");
+    return clean;
+  }
   setTaskDone(id: string, done: boolean): Promise<void> {
     return this.transaction((next) => this.apply(next, "task", id, { status: done ? "done" : "todo" }));
   }

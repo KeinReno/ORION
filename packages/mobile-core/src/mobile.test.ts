@@ -52,6 +52,29 @@ describe("Android local repository", () => {
     disk.fail = false; await repo.saveEntry({ ...draft("note"), id: note.id, summary: "", tagsText: "", pinnedAt: null });
     expect(repo.snapshot().notes[0]).toMatchObject({ summary: "", tags: [], pinnedAt: null });
   });
+  it("stores task checklists as durable child tasks and cascades parent deletion", async () => {
+    const disk = new Disk(); const repo = await MobileRepository.open(disk);
+    await repo.saveEntry(draft("task", "Поездка"));
+    const parent = repo.snapshot().tasks[0];
+    await repo.addTaskChecklistItem(parent.id, "Проверить документы");
+    const item = repo.snapshot().tasks.find((task) => task.parentId === parent.id)!;
+    expect(item).toMatchObject({ title: "Проверить документы", status: "todo", parentId: parent.id });
+    expect(repo.snapshot().outbox.slice(-1)[0]).toMatchObject({ entity: "task", kind: "create", fields: { parentId: parent.id } });
+
+    const beforeFailure = repo.snapshot(); disk.fail = true;
+    await expect(repo.addTaskChecklistItem(parent.id, "Не записалось")).rejects.toThrow("disk full");
+    expect(repo.snapshot()).toEqual(beforeFailure);
+    disk.fail = false;
+
+    await repo.renameTaskChecklistItem(item.id, "Взять документы");
+    await repo.setTaskDone(item.id, true);
+    const restarted = await MobileRepository.open(disk);
+    expect(restarted.snapshot().tasks.find((task) => task.id === item.id)).toMatchObject({ title: "Взять документы", status: "done", parentId: parent.id });
+    await restarted.deleteEntry("task", parent.id);
+    expect(restarted.snapshot().tasks).toEqual([]);
+    expect(syncOpSchema.safeParse(restarted.snapshot().outbox.slice(-1)[0]).success).toBe(true);
+  });
+
   it("deletes only the chosen entry atomically and retains unrelated drafts and valid delete operations", async () => {
     const disk = new Disk(); const repo = await MobileRepository.open(disk);
     await repo.saveEntry(draft("task", "Удалить")); await repo.saveEntry(draft("note", "Оставить"));

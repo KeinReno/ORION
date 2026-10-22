@@ -86,8 +86,8 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
   }
 
   async function getTask(call: Awaited<ReturnType<typeof setup>>["call"], id: string) {
-    const all = await call<Array<{ id: string; status: string; priority: string; completedAt: string | null }>>("GET", "/tasks");
-    return all.data.find((task) => task.id === id) as { id: string; status: string; priority: string; completedAt: string | null };
+    const all = await call<Array<{ id: string; parentId: string | null; status: string; priority: string; completedAt: string | null }>>("GET", "/tasks");
+    return all.data.find((task) => task.id === id) as { id: string; parentId: string | null; status: string; priority: string; completedAt: string | null };
   }
 
   let seq = 0;
@@ -395,6 +395,13 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
     expect(taskMade.data.results[0]?.outcome).toBe("applied");
     expect((await getTask(s.call, taskId))).toMatchObject({ status: "in_progress", priority: "low" });
 
+    const checklistId = randomUUID();
+    const checklistMade = await push([op(s.deviceId, { entity: "task", entityId: checklistId, kind: "create", fields: { title: "Проверить документы", parentId: taskId } }, t0 + 1)]);
+    expect(checklistMade.data.results[0]?.outcome).toBe("applied");
+    expect(await getTask(s.call, checklistId)).toMatchObject({ parentId: taskId, status: "todo" });
+    const missingParent = await push([op(s.deviceId, { entity: "task", entityId: randomUUID(), kind: "create", fields: { title: "Сирота", parentId: randomUUID() } }, t0 + 2)]);
+    expect(missingParent.data.results[0]).toMatchObject({ outcome: "rejected", reason: "parent_missing" });
+
     const done = await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "patch", fields: { status: "done" } }, t0 + 100)]);
     expect(done.data.results[0]?.outcome).toBe("applied");
     const afterDone = (await getTask(s.call, taskId));
@@ -416,6 +423,7 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
 
     await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "delete" })]);
     expect(await getTask(s.call, taskId)).toBeUndefined();
+    expect(await getTask(s.call, checklistId)).toBeUndefined();
     const late = await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "patch", fields: { title: "позже" } }, t0 + 900)]);
     expect(late.data.results[0]).toMatchObject({ outcome: "conflict", reason: "entity_deleted" });
   });

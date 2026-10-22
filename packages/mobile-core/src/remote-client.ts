@@ -72,6 +72,21 @@ export class MobileRemoteClient {
     await this.write(() => this.engine.enqueue({ entity: draft.kind, entityId: id, kind: existing ? "patch" : "create", fields,
       ...(existing ? { expectedRevision: draft.expectedRevision ?? this.revision(draft.kind, id) } : {}) }));
   }
+  async addTaskChecklistItem(parentId: string, title: string): Promise<void> {
+    if (!this.hasModule("task")) throw new Error("Задачи недоступны в копии пространства");
+    const clean = checklistTitle(title);
+    const tasks = Object.values(this.engine.entities().task);
+    if (!tasks.some((task) => task.id === parentId)) throw new Error("Родительская задача не найдена. Вернитесь к списку.");
+    const siblings = tasks.filter((task) => task.parentId === parentId);
+    const sortOrder = siblings.reduce((max, task) => Math.max(max, typeof task.sortOrder === "number" ? task.sortOrder : 0), 0) + 10;
+    await this.write(() => this.engine.enqueue({ entity: "task", kind: "create", fields: { title: clean, description: "", priority: "normal", parentId, sortOrder } }));
+  }
+  async renameTaskChecklistItem(id: string, title: string): Promise<void> {
+    const task = this.engine.entities().task[id];
+    if (!task || typeof task.parentId !== "string") throw new Error("Пункт чек-листа не найден. Вернитесь к списку.");
+    const clean = checklistTitle(title);
+    await this.write(() => this.engine.enqueue({ entity: "task", entityId: id, kind: "patch", fields: { title: clean }, expectedRevision: this.revision("task", id) }));
+  }
   async setTaskDone(id: string, done: boolean): Promise<void> {
     await this.write(() => this.engine.enqueue({ entity: "task", entityId: id, kind: "patch", fields: { status: done ? "done" : "todo" }, expectedRevision: this.revision("task", id) }));
   }
@@ -102,4 +117,11 @@ export class MobileRemoteClient {
   }
   async dismissConflict(id: string): Promise<void> { await this.write(() => this.engine.dismissConflict(id)); }
   async retryConflict(id: string): Promise<void> { await this.write(() => this.engine.retryConflict(id)); }
+}
+
+function checklistTitle(title: string): string {
+  const clean = title.trim();
+  if (!clean) throw new Error("Название пункта не может быть пустым.");
+  if (clean.length > 200) throw new Error("Название пункта длиннее 200 символов.");
+  return clean;
 }

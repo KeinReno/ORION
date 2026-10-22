@@ -342,7 +342,7 @@ export class HybridSyncService {
         updatedAtMs = row.updatedAt.getTime();
         revision = row.revision;
         fields = {
-          title: row.title, description: row.description, status: row.status, priority: row.priority,
+          title: row.title, description: row.description, status: row.status, priority: row.priority, parentId: row.parentId,
           dueAt: row.dueAt?.toISOString() ?? null, startAt: row.startAt?.toISOString() ?? null,
           estimatedMinutes: row.estimatedMinutes, sortOrder: row.sortOrder
         };
@@ -375,6 +375,12 @@ export class HybridSyncService {
       const list = await tx.list.findUnique({ where: { id: op.parentId }, select: { workspaceId: true } });
       if (list && list.workspaceId !== workspaceId) return "foreign";
       parent = { exists: Boolean(list), deleted: !list && (await this.wasDeletedTx(tx, workspaceId, "list", op.parentId)) };
+    }
+    const taskParentId = op.entity === "task" && typeof op.fields?.parentId === "string" ? op.fields.parentId : null;
+    if (taskParentId) {
+      const task = await tx.task.findUnique({ where: { id: taskParentId }, select: { workspaceId: true } });
+      if (task && task.workspaceId !== workspaceId) return "foreign";
+      parent = { exists: Boolean(task), deleted: !task && (await this.wasDeletedTx(tx, workspaceId, "task", taskParentId)) };
     }
     return { state: { exists, deleted, stamps, updatedAtMs, fields, ...(revision !== undefined ? { revision } : {}) }, parent };
   }
@@ -507,6 +513,7 @@ export class HybridSyncService {
             title: f.title as string,
             description: (f.description as string | undefined) ?? "",
             priority: (f.priority as "low" | "normal" | "high" | undefined) ?? "normal",
+            parentId: (f.parentId as string | null | undefined) ?? null,
             dueAt: (f.dueAt as string | null | undefined) ?? null,
             startAt: (f.startAt as string | null | undefined) ?? null,
             estimatedMinutes: (f.estimatedMinutes as number | null | undefined) ?? null
