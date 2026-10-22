@@ -10,11 +10,12 @@ import type {
   CreateTaskInput,
   SavedTaskView,
   Task,
+  TaskChecklistItem,
   TaskRecurrence,
   TaskViewFilters,
   UpdateTaskInput
 } from "@orion/shared-types";
-import { isModuleEnabled, isPluginEnabled, isTaskClosed } from "@orion/shared-types";
+import { isModuleEnabled, isPluginEnabled, isTaskClosed, taskChecklistItemSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
@@ -116,6 +117,7 @@ export class TasksService {
         estimatedMinutes: input.estimatedMinutes ?? null,
         milestoneId: input.milestoneId ?? null,
         homeId: input.homeId ?? null,
+        checklist: input.checklist as unknown as Prisma.InputJsonValue,
         recurrence: input.recurrence ? (input.recurrence as Prisma.InputJsonValue) : Prisma.DbNull
       }
     });
@@ -173,6 +175,7 @@ export class TasksService {
       }
       const datesChanged = input.startAt !== undefined || input.dueAt !== undefined;
       if (input.startAt !== undefined) data.startAt = input.startAt;
+      if (input.checklist !== undefined) data.checklist = input.checklist as unknown as Prisma.InputJsonValue;
 
       const firstCompletion = input.status === "done" && current.status !== "done";
       if (input.status !== undefined) {
@@ -296,7 +299,8 @@ export class TasksService {
             projectTag: projectTouched ? (data.projectTag as string | null) : current.projectTag,
             recurrence: recurrence as Prisma.InputJsonValue,
             sortOrder: input.sortOrder ?? current.sortOrder,
-            assigneeId: input.assigneeId === undefined ? current.assigneeId : data.assigneeId as string | null
+            assigneeId: input.assigneeId === undefined ? current.assigneeId : data.assigneeId as string | null,
+            checklist: (input.checklist ?? readChecklist(current.checklist)).map((item) => ({ ...item, done: false })) as unknown as Prisma.InputJsonValue
           }
         });
         const dependencyIds = input.dependencyIds ?? current.dependsOn.map((dependency) => dependency.dependsOnTaskId);
@@ -495,6 +499,16 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+function readChecklist(value: Prisma.JsonValue | undefined): TaskChecklistItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: TaskChecklistItem[] = [];
+  for (const item of value) {
+    const parsed = taskChecklistItemSchema.safeParse(item);
+    if (parsed.success) items.push(parsed.data);
+  }
+  return items;
+}
+
 function toDto(task: TaskModel): Task {
   const dependencyIds = task.dependsOn.map((dependency) => dependency.dependsOnTaskId);
   return {
@@ -518,6 +532,7 @@ function toDto(task: TaskModel): Task {
     startAt: task.startAt?.toISOString() ?? null,
     estimatedMinutes: task.estimatedMinutes,
     milestoneId: task.milestoneId,
+    checklist: readChecklist(task.checklist),
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString()
   };

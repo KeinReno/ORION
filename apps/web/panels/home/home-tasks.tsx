@@ -55,6 +55,7 @@ export function HomeTasks({ workspaceId, home, overview }: HomeSectionProps): Re
         title,
         description: "",
         priority: "normal",
+        checklist: [],
         homeId: home.id,
         ...(assignee ? { assigneeId: assignee } : {}),
         ...(due ? { dueAt: new Date(`${due}T12:00:00`).toISOString() } : {})

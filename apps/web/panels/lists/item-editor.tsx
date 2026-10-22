@@ -103,7 +103,7 @@ export function ItemEditor({
         kind: "related_to",
         entity: {
           type: "task",
-          input: { title: item.label.slice(0, 200), description: item.note, priority: "normal", dueAt: item.dueAt }
+          input: { title: item.label.slice(0, 200), description: item.note, priority: "normal", dueAt: item.dueAt, checklist: [] }
         }
       },
       {

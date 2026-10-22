@@ -52,6 +52,7 @@ import {
 } from "../task-form";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { buildPatch, fieldsFromTask, sameFields, type Fields } from "../../lib/task-fields";
+import { TaskChecklist } from "./task-checklist";
 
 /** "history" and "links" are the module's own; every other id is a tab a plugin adds via `tasks.detail.tabs`. */
 type DetailTab = string;
@@ -427,6 +428,8 @@ export function TaskDetail({
           value={fields.description}
           onChange={(event) => set("description", event.target.value)}
         />
+
+        <TaskChecklist items={fields.checklist} onChange={(checklist) => set("checklist", checklist)} />
 
         {planning ? <planning.SubtaskSection workspaceId={workspaceId} parent={task} tasks={tasks} onOpen={onOpenTask} /> : null}
 

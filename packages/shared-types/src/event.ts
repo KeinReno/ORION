@@ -59,7 +59,10 @@ export const eventSchema = z.object({
   /** Key into the curated calendar palette (packages/ui). */
   colorTag: z.string().nullable(),
   recurrence: recurrenceSpecSchema.nullable(),
-  /** Minutes before `startAt` to fire a reminder. */
+  /**
+   * Minutes before `startAt` to fire a reminder. Negative = after the start
+   * (a clock time later the same day, used for all-day events).
+   */
   reminders: z.array(z.number().int()),
   source: z.string(),
   readOnly: z.boolean(),
@@ -83,7 +86,21 @@ export const eventSchema = z.object({
 });
 export type Event = z.infer<typeof eventSchema>;
 
-const reminderOffsetSchema = z.number().int().min(0).max(40_320); // up to 4 weeks
+/** How many clock times one event may carry. */
+export const EVENT_REMINDER_LIMIT = 12;
+/** Negative = after the start (up to 7 days); positive = before (up to 4 weeks). */
+export const EVENT_REMINDER_MIN = -10_080;
+export const EVENT_REMINDER_MAX = 40_320;
+
+export const reminderOffsetSchema = z.number().int().min(EVENT_REMINDER_MIN).max(EVENT_REMINDER_MAX);
+
+/** Minutes from `startAt` back to `fireAt`. Null when the gap is outside the allowed window. */
+export function reminderOffsetMinutes(startAtMs: number, fireAtMs: number): number | null {
+  if (!Number.isFinite(startAtMs) || !Number.isFinite(fireAtMs)) return null;
+  const minutes = Math.round((startAtMs - fireAtMs) / 60_000);
+  if (minutes < EVENT_REMINDER_MIN || minutes > EVENT_REMINDER_MAX) return null;
+  return minutes;
+}
 
 const eventBodyShape = {
   title: z.string().min(1, "Название обязательно").max(200),
@@ -96,7 +113,7 @@ const eventBodyShape = {
   tz: z.string().max(64).nullable().optional(),
   colorTag: z.string().max(40).nullable().optional(),
   recurrence: recurrenceSpecSchema.nullable().optional(),
-  reminders: z.array(reminderOffsetSchema).max(5).default([]),
+  reminders: z.array(reminderOffsetSchema).max(EVENT_REMINDER_LIMIT).default([]),
   projectId: z.string().nullable().optional()
 };
 
@@ -119,7 +136,7 @@ export const updateEventInputSchema = z.object({
   tz: z.string().max(64).nullable().optional(),
   colorTag: z.string().max(40).nullable().optional(),
   recurrence: recurrenceSpecSchema.nullable().optional(),
-  reminders: z.array(reminderOffsetSchema).max(5).optional(),
+  reminders: z.array(reminderOffsetSchema).max(EVENT_REMINDER_LIMIT).optional(),
   projectId: z.string().nullable().optional()
 });
 export type UpdateEventInput = z.infer<typeof updateEventInputSchema>;

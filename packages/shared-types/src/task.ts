@@ -25,6 +25,16 @@ export const taskRecurrenceSchema = z.object({
 });
 export type TaskRecurrence = z.infer<typeof taskRecurrenceSchema>;
 
+/** One line of a task checklist (a checkup). Order in the array is the display order. */
+export const TASK_CHECKLIST_LIMIT = 30;
+export const taskChecklistItemSchema = z.object({
+  id: z.string().min(1).max(40),
+  title: z.string().trim().min(1).max(200),
+  done: z.boolean()
+});
+export type TaskChecklistItem = z.infer<typeof taskChecklistItemSchema>;
+export const taskChecklistSchema = z.array(taskChecklistItemSchema).max(TASK_CHECKLIST_LIMIT);
+
 export const taskSchema = z.object({
   id: z.string(),
   /** Concurrency token — send it back as `expectedRevision` when saving an edit made on top of this copy. */
@@ -50,6 +60,7 @@ export const taskSchema = z.object({
   /** Planned minutes — "план" side of план/факт. Факт is `entryMinutes` over this task's TimeEntry rows. */
   estimatedMinutes: z.number().int().nullable(),
   milestoneId: z.string().nullable(),
+  checklist: taskChecklistSchema,
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -70,7 +81,8 @@ export const createTaskInputSchema = z.object({
   estimatedMinutes: z.number().int().min(0).nullable().optional(),
   milestoneId: z.string().nullable().optional(),
   /** Module «Дом»: attach to this home on creation (the home must be in the same workspace). */
-  homeId: z.string().nullable().optional()
+  homeId: z.string().nullable().optional(),
+  checklist: taskChecklistSchema.default([])
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;
 
@@ -90,6 +102,7 @@ export const updateTaskInputSchema = z.object({
   startAt: z.string().datetime().nullable().optional(),
   estimatedMinutes: z.number().int().min(0).nullable().optional(),
   milestoneId: z.string().nullable().optional(),
+  checklist: taskChecklistSchema.optional(),
   /** The `revision` this edit was based on. Omitted by drag/quick actions (last write wins); the detail pane's autosave sends it. A mismatch is a 409. */
   expectedRevision: z.number().int().optional()
 });

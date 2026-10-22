@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { isTaskClosed, type MyOverview } from "@orion/shared-types";
+import type { Prisma } from "@prisma/client";
+import { isTaskClosed, taskChecklistItemSchema, type MyOverview, type TaskChecklistItem } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { computeNetByAccount } from "../finance/finance-refs.util";
 import { ModulesService } from "../modules/modules.service";
@@ -102,6 +103,7 @@ export class OverviewService {
             startAt: task.startAt?.toISOString() ?? null,
             estimatedMinutes: task.estimatedMinutes,
             milestoneId: task.milestoneId,
+            checklist: readChecklist(task.checklist),
             createdAt: task.createdAt.toISOString(),
             updatedAt: task.updatedAt.toISOString()
           });
@@ -152,4 +154,14 @@ export class OverviewService {
       balancesByCurrency: [...totals.entries()]
     };
   }
+}
+
+function readChecklist(value: Prisma.JsonValue): TaskChecklistItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: TaskChecklistItem[] = [];
+  for (const item of value) {
+    const parsed = taskChecklistItemSchema.safeParse(item);
+    if (parsed.success) items.push(parsed.data);
+  }
+  return items;
 }

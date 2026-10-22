@@ -20,6 +20,7 @@ import {
   formatHlc,
   listKindSchema,
   parseHlc,
+  type CreateTaskInput,
   type MergeDecision,
   type MergeEntityState,
   type OrionModuleId,
@@ -509,7 +510,8 @@ export class HybridSyncService {
             priority: (f.priority as "low" | "normal" | "high" | undefined) ?? "normal",
             dueAt: (f.dueAt as string | null | undefined) ?? null,
             startAt: (f.startAt as string | null | undefined) ?? null,
-            estimatedMinutes: (f.estimatedMinutes as number | null | undefined) ?? null
+            estimatedMinutes: (f.estimatedMinutes as number | null | undefined) ?? null,
+            checklist: Array.isArray(f.checklist) ? (f.checklist as CreateTaskInput["checklist"]) : []
           },
           op.entityId
         );

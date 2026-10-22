@@ -164,6 +164,7 @@ export class CapturesService {
         title: current.title,
         description: current.body,
         priority: "normal",
+        checklist: [],
         ...(current.anchorType === "project" ? { projectId: current.anchorId as string } : {}),
         ...(current.anchorType === "home" ? { homeId: current.anchorId as string } : {}),
         ...(current.anchorType === "task" ? { parentId: current.anchorId as string } : {})

@@ -384,7 +384,8 @@ function ProjectWorkspace({
         dependencyIds: values.dependencyIds,
         startAt: values.startAt,
         estimatedMinutes: values.estimatedMinutes,
-        milestoneId: values.milestoneId
+        milestoneId: values.milestoneId,
+        checklist: values.checklist
       });
       setAdding(null);
       toast({ title: "Задача создана", tone: "success" });

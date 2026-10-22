@@ -48,7 +48,8 @@ export function SubtaskList({
       priority: "normal",
       recurrence: null,
       dependencyIds: [],
-      parentId: parent.id
+      parentId: parent.id,
+      checklist: []
     });
     setTitle("");
     toast({ title: "Подзадача создана", tone: "success" });

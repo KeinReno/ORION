@@ -623,7 +623,7 @@ export function CalendarPanel(): React.ReactElement {
             onCancel={() => setQuick(null)}
             onSubmit={async (title, whenIso) => {
               try {
-                if (quick === "task") await createTask.mutateAsync({ title, description: "", priority: "normal", dueAt: whenIso });
+                if (quick === "task") await createTask.mutateAsync({ title, description: "", priority: "normal", dueAt: whenIso, checklist: [] });
                 else await createNote.mutateAsync({ title, body: "", tags: [], eventAt: whenIso });
                 setQuick(null);
                 toast({ title: quick === "task" ? "Задача создана" : "Заметка создана", tone: "success" });

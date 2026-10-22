@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listKindSchema, listItemSchema, listSchema } from "./list";
-import { taskPrioritySchema, taskStatusSchema } from "./task";
+import { taskChecklistSchema, taskPrioritySchema, taskStatusSchema } from "./task";
 
 /**
  * ТЗ-06 / ADR-0016 — контракт гибридной синхронизации. Не путать с `sync.ts` (резервные копии WebDAV).
@@ -149,7 +149,8 @@ const TASK_FIELDS = {
   dueAt: isoDate.nullable(),
   startAt: isoDate.nullable(),
   estimatedMinutes: z.number().int().min(0).max(10_000_000).nullable(),
-  sortOrder: z.number().int().min(-1_000_000_000).max(1_000_000_000)
+  sortOrder: z.number().int().min(-1_000_000_000).max(1_000_000_000),
+  checklist: taskChecklistSchema
 };
 
 /** Поля, которые клиент вправе менять офлайн. Всё остальное (проект, исполнитель, повтор…) — только онлайн. */

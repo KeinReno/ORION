@@ -68,7 +68,7 @@ export function OverviewPanel(): React.ReactElement {
     const title = captureTitle.trim();
     if (!title || !captureWsId) return;
     try {
-      await createTask.mutateAsync({ title, description: "", priority: "normal" });
+      await createTask.mutateAsync({ title, description: "", priority: "normal", checklist: [] });
       setCaptureTitle("");
       toast({ title: "Задача добавлена", tone: "success" });
     } catch (err) {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EVENT_REMINDER_LIMIT, reminderOffsetSchema } from "./event";
 import { updateNoteInputSchema } from "./note";
 import { updateTaskInputSchema } from "./task";
 
@@ -38,7 +39,7 @@ export const agentEventCreateSchema = z
     startAt: z.string().datetime(),
     endAt: z.string().datetime(),
     allDay: z.boolean().default(false),
-    reminders: z.array(z.number().int().min(0).max(40_320)).max(5).default([]),
+    reminders: z.array(reminderOffsetSchema).max(EVENT_REMINDER_LIMIT).default([]),
     projectId: z.string().nullable().optional()
   })
   .refine((e) => new Date(e.endAt).getTime() > new Date(e.startAt).getTime(), {
@@ -54,7 +55,7 @@ export const agentEventPatchSchema = z.object({
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
   allDay: z.boolean().optional(),
-  reminders: z.array(z.number().int().min(0).max(40_320)).max(5).optional(),
+  reminders: z.array(reminderOffsetSchema).max(EVENT_REMINDER_LIMIT).optional(),
   projectId: z.string().nullable().optional()
 });
 export type AgentEventPatch = z.infer<typeof agentEventPatchSchema>;

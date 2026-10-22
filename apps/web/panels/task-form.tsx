@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiError } from "@orion/core";
-import type { Milestone, Project, Task, TaskPriority, TaskRecurrence, TaskStatus, WorkspaceMember } from "@orion/shared-types";
+import type { Milestone, Project, Task, TaskChecklistItem, TaskPriority, TaskRecurrence, TaskStatus, WorkspaceMember } from "@orion/shared-types";
 import { Button, Input, Select, Textarea } from "@orion/ui";
 import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -16,6 +16,7 @@ import {
   TASK_STATUS_ORDER
 } from "../lib/task-labels";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
+import { TaskChecklist } from "./tasks/task-checklist";
 
 /**
  * The task create/edit form — deliberately split out of TasksPanel.tsx
@@ -57,6 +58,7 @@ export interface TaskFormValues {
   /** Planned minutes — "план" side of план/факт (факт — учёт времени). */
   estimatedMinutes: number | null;
   milestoneId: string | null;
+  checklist: TaskChecklistItem[];
 }
 
 export function TaskForm({
@@ -106,6 +108,7 @@ export function TaskForm({
 }): React.ReactElement {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [checklist, setChecklist] = useState<TaskChecklistItem[]>(initial?.checklist ?? []);
   useUnsavedDraft(title.trim() !== (initial?.title ?? "").trim() || description.trim() !== (initial?.description ?? "").trim());
   const [dueAt, setDueAt] = useState(toDatetimeLocal(initial?.dueAt ?? defaultDueAt ?? null));
   const [projectId, setProjectId] = useState(initial?.projectId ?? defaultProjectId ?? "");
@@ -164,6 +167,7 @@ export function TaskForm({
           startAt: fromDatetimeLocal(startAt),
           estimatedMinutes: hours !== null && Number.isFinite(hours) ? Math.round(hours * 60) : null,
           milestoneId: effectiveMilestoneId || null,
+          checklist: checklist.filter((item) => item.title.trim()).map((item) => ({ ...item, title: item.title.trim() })),
           ...(members ? { assigneeId: assigneeId || null } : {})
         });
       } catch (error) {
@@ -181,6 +185,7 @@ export function TaskForm({
         value={description}
         onChange={(e) => setDescription(e.target.value)}
       />
+      <TaskChecklist items={checklist} onChange={setChecklist} />
       <div className="grid gap-3 sm:grid-cols-3">
         {planning ? <planning.StartAt variant="form" value={startAt} onChange={setStartAt} /> : null}
         <label className="flex flex-col gap-1 text-label text-subtle-foreground">

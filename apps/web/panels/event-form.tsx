@@ -271,7 +271,10 @@ export function EventForm({
       </div>
 
       <ExtensionSlot name="calendar.event.recurrence" props={{ value: recurrence, onChange: setRecurrence }} />
-      <ExtensionSlot name="calendar.event.reminders" props={{ value: reminders, onChange: setReminders }} />
+      <ExtensionSlot
+        name="calendar.event.reminders"
+        props={{ value: reminders, onChange: setReminders, startAt: allDay ? dateInputToUtcIso(startDate) : start, allDay }}
+      />
 
       <div className="mt-1 flex items-center justify-between gap-2">
         {onDelete ? (

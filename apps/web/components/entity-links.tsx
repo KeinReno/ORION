@@ -95,7 +95,7 @@ export function EntityLinksSection({
         kind: "related_to",
         entity:
           creatingKind === "task"
-            ? { type: "task", input: { title, description: newBody.trim(), priority: "normal" } }
+            ? { type: "task", input: { title, description: newBody.trim(), priority: "normal", checklist: [] } }
             : { type: "note", input: { title, body: newBody, tags: [] } }
       });
       setCreatingKind(null);

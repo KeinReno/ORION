@@ -27,6 +27,7 @@ function task(id: string, patch: Partial<Task> = {}): Task {
     startAt: null,
     estimatedMinutes: null,
     milestoneId: null,
+    checklist: [],
     createdAt: at(1),
     updatedAt: at(1),
     ...patch

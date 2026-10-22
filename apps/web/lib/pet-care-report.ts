@@ -5,7 +5,8 @@ import {
   PET_APPETITE_LABELS,
   PET_DAY_STATUS_META,
   PET_SEVERITY_LABELS,
-  PET_STOOL_LABELS,
+  PET_AMOUNT_LABELS,
+  formatPetStool,
   PET_TIME_LABELS,
   PET_WATER_LABELS,
   petSymptomLabel,
@@ -27,7 +28,12 @@ function csv(rows: Array<Array<string | number>>): string {
 }
 
 export function symptomsLine(day: Pick<PetCareDayLog, "symptoms">): string {
-  return day.symptoms.map((item) => `${petSymptomLabel(item.id)}${item.count > 1 ? ` ×${item.count}` : ""}`).join(", ");
+  return day.symptoms
+    .map((item) => {
+      const amount = item.amount && item.amount !== "normal" ? `, ${PET_AMOUNT_LABELS[item.amount].toLowerCase()}` : "";
+      return `${petSymptomLabel(item.id)}${item.count > 1 ? ` ×${item.count}` : ""}${amount}`;
+    })
+    .join(", ");
 }
 
 export function petDaysToCsv(days: readonly PetCareDayLog[]): string {
@@ -37,7 +43,7 @@ export function petDaysToCsv(days: readonly PetCareDayLog[]): string {
     PET_DAY_STATUS_META[day.status].label,
     PET_APPETITE_LABELS[day.appetite],
     PET_ACTIVITY_LABELS[day.activity],
-    PET_STOOL_LABELS[day.stool],
+    formatPetStool(day),
     PET_WATER_LABELS[day.water],
     day.vomitingCount,
     day.weightKg ?? "",
@@ -79,7 +85,7 @@ export function petReportHtml(pet: PetCarePet, days: readonly PetCareDayLog[], f
     .map((day) => {
       const status = PET_DAY_STATUS_META[day.status];
       const tail = [symptomsLine(day), day.meds, day.note].filter(Boolean).join(" · ");
-      return `<tr><td>${day.day}</td><td><span class="dot" style="background:${status.color}"></span>${escapeHtml(status.label)}</td><td>${day.vomitingCount || ""}</td><td>${escapeHtml(PET_STOOL_LABELS[day.stool])}</td><td>${escapeHtml(PET_APPETITE_LABELS[day.appetite])}</td><td>${day.weightKg ?? ""}</td><td>${escapeHtml(tail)}</td></tr>`;
+      return `<tr><td>${day.day}</td><td><span class="dot" style="background:${status.color}"></span>${escapeHtml(status.label)}</td><td>${day.vomitingCount || ""}</td><td>${escapeHtml(formatPetStool(day))}</td><td>${escapeHtml(PET_APPETITE_LABELS[day.appetite])}</td><td>${day.weightKg ?? ""}</td><td>${escapeHtml(tail)}</td></tr>`;
     })
     .join("");
   const symptomItems = stats.symptomFreq.map((item) => `<li>${escapeHtml(item.label)} — ${item.count} ${daysWord(item.count)}</li>`).join("");

@@ -602,6 +602,8 @@ model Task {
   /// `Project.hourlyRate`, v0.19).
   estimatedMinutes Int?
   milestoneId      String?
+  /// Checklist / checkup items: [{ id, title, done }]. A repeated task copies them unchecked.
+  checklist        Json     @default("[]")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -3466,8 +3468,10 @@ model PetCareDay {
   temperature   Float?
   meds          String   @default("")
   note          String   @default("")
-  /// [{ id, severity, count, time, note }] — справочник симптомов живёт в контракте модуля.
+  /// [{ id, severity, count, time, note, amount }] — справочник симптомов живёт в контракте модуля.
   symptoms      Json     @default("[]")
+  /// Походы «по-большому» за день: [{ consistency, amount }]. Пусто — смотрим колонку `stool`.
+  stoolVisits   Json     @default("[]")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
