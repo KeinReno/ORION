@@ -8,7 +8,13 @@
 
 ## Что в master
 
-### Android: отдельная ветка alpha, 21.10.2026
+### Android: отдельная ветка alpha, 22.10.2026
+
+Alpha.16 на Android-ветке (0.1.15/code16): чек-листы внутри задач на существующем
+`parentId` — добавление, переименование, выполнение, каскадное удаление и прогресс,
+локально и в синхронизируемой копии. Focused unit/API, workspace typecheck/lint,
+architecture/plugin, browser smoke и Android build/lint/JVM PASS; физическая
+установка на OPPO/LAN NOT RUN. [RELEASE_ALPHA16](android/RELEASE_ALPHA16.md).
 
 Alpha.15 на Android-ветке (0.1.14/code15): безопасный lazy Markdown preview,
 сортировки задач/заметок, начало и плановые минуты задачи через существующий SyncOp.
