@@ -324,7 +324,7 @@ export function KnowledgeItemEditor({
         </div>
       </div>
       <aside className="order-2 min-w-0 space-y-4 [@container(min-width:1100px)]:row-span-2 rounded-xl border border-ui-border p-4">
-        <label className="block space-y-1 text-caption text-ui-muted">
+        <label className="flex flex-col gap-2 text-caption text-ui-muted">
           Статус
           <Select value={draft.status} onChange={(event) => edit({ status: event.target.value as KnowledgeStatus })}>
             {KNOWLEDGE_STATUSES.map((status) => (
@@ -345,7 +345,7 @@ export function KnowledgeItemEditor({
             </Button>
           </div>
         </div>
-        <label className="block space-y-1 text-caption text-ui-muted">
+        <label className="flex flex-col gap-2 text-caption text-ui-muted">
           Тип
           <Select value={draft.kind} onChange={(event) => edit({ kind: event.target.value as KnowledgeKind })}>
             {KNOWLEDGE_KINDS.map((kind) => (
@@ -355,7 +355,7 @@ export function KnowledgeItemEditor({
             ))}
           </Select>
         </label>
-        <label className="block space-y-1 text-caption text-ui-muted">
+        <label className="flex flex-col gap-2 text-caption text-ui-muted">
           Раздел
           <Select value={draft.categoryId ?? ""} onChange={(event) => edit({ categoryId: event.target.value || null })}>
             <option value="">Без раздела</option>
@@ -375,7 +375,7 @@ export function KnowledgeItemEditor({
               ))}
           </Select>
         </label>
-        <label className="block space-y-1 text-caption text-ui-muted">
+        <label className="flex flex-col gap-2 text-caption text-ui-muted">
           Теги
           <Input value={draft.tags} placeholder="через запятую" onChange={(event) => edit({ tags: event.target.value })} />
         </label>
