@@ -16,7 +16,7 @@ try {
         if (plugin === "OrionLan") return { paired: false, node: null, user: null, address: "", port: 4443 };
         if (plugin === "OrionMotion") return { reduced: false };
         if (plugin === "OrionDepth") { if (method === "start") { window.__starts++; if (window.__depthError) throw new Error("sensor failure"); return { available: window.__depthAvailable !== false }; } if (method === "stop") window.__stops++; return {}; }
-        if (plugin === "OrionUpdates") return { installedVersion: "0.1.15", installedCode: 16, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
+        if (plugin === "OrionUpdates") return { installedVersion: "0.1.16", installedCode: 17, lastChecked: Date.now(), lastAttempt: Date.now(), available: false, ready: false, manifest: null, wifi: false };
         return {};
       },
     };
