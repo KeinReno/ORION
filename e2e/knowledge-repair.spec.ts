@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { apiUrl, register, signIn } from "./support";
+import { apiUrl, disableAllPlugins, register, signIn } from "./support";
 
 test("knowledge preserves failed edits and fits a narrow panel", async ({ page, request }) => {
   const account = await register(request, "knowledge-repair");
@@ -28,6 +28,9 @@ test("knowledge preserves failed edits and fits a narrow panel", async ({ page, 
   await page.unroute("**/knowledge/items/*");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Сохранено" })).toBeVisible();
+  await page.getByRole("button", { name: "Закрыть", exact: true }).first().click();
+  await expect(page.getByText("Не удалось сохранить материал")).toBeHidden();
+  await expect(page.getByText("Сначала сохраните материал")).toBeHidden({ timeout: 15000 });
   expect(listReads).toEqual([]);
   await page.setViewportSize({ width: 600, height: 900 });
   await expect(page.getByRole("button", { name: "← К списку материалов" })).toBeVisible();
@@ -40,6 +43,7 @@ test("knowledge preserves failed edits and fits a narrow panel", async ({ page, 
 
 test("knowledge keeps source text, backlinks and revision conflicts", async ({ request }) => {
   const account = await register(request, "knowledge-contract");
+  await disableAllPlugins(request, account);
   const headers = { Authorization: `Bearer ${account.accessToken}` };
   const base = `${apiUrl()}/workspaces/${account.workspaceId}/knowledge`;
   const create = async (title: string) => {
