@@ -1,6 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 import { createDeviceTrustMiddleware } from "./device-trust.middleware";
 import { LanService } from "./lan.service";
+import { createPhoneStatic, phoneDistDir } from "./phone-static";
 import { createRemoteProxy } from "./remote-proxy";
 
 /**
@@ -14,6 +15,8 @@ export function configureLan(app: INestApplication): void {
   } catch {
     return; // приложение собрано без LanModule (узкие тесты)
   }
+  // Страница телефона — до проверки устройства: токена у него ещё нет, он как раз за ним и пришёл.
+  app.use(createPhoneStatic(phoneDistDir()));
   if (lan.active) app.use(createDeviceTrustMiddleware(lan.devices));
   app.use(
     createRemoteProxy({

@@ -1,6 +1,6 @@
 {
   "module": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "surface": [
       "calendar",
       "chat-archive",
@@ -11,6 +11,7 @@
       "health",
       "home",
       "inventory",
+      "knowledge",
       "lists",
       "markets",
       "notes",
@@ -189,7 +190,7 @@
     ]
   },
   "permission": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "surface": [
       "calendar.event.create",
       "calendar.event.delete",
@@ -233,6 +234,10 @@
       "inventory.item.delete",
       "inventory.item.read",
       "inventory.item.update",
+      "knowledge.item.create",
+      "knowledge.item.delete",
+      "knowledge.item.read",
+      "knowledge.item.update",
       "lists.list.create",
       "lists.list.delete",
       "lists.list.read",

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import * as argon2 from "argon2";
+import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -26,7 +27,7 @@ import { passwordScore } from "../auth/auth.service";
 import { PrismaService } from "../common/prisma.service";
 import { DeviceStore } from "./device-store";
 import { firewallState, openFirewall, closeFirewall } from "./firewall";
-import { mergeDiscovered, scanSubnet } from "./lan-scan";
+import { discoveryInterfaces, mergeDiscovered, scanSubnet, subnetCandidates, tailscalePeerAddresses } from "./lan-scan";
 import { discoverNodes, MdnsAdvertiser } from "./mdns";
 import {
   clearClientBinding,
@@ -304,11 +305,15 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Поиск хостов в домашней сети: mDNS по всем реальным адаптерам и, одновременно, перебор своей подсети по TCP (его не
-   * режут ни роутер, ни брандмауэр). Себя не показываем.
+   * Поиск других ORION: mDNS и перебор подсети на домашнем адаптере и на VPN, плюс пиры Tailscale
+   * (у них маска /32, перебор подсети их не видит). Себя не показываем.
    */
   async discover(): Promise<LanDiscoveredNode[]> {
-    const [mdns, scanned] = await Promise.all([discoverNodes(), scanSubnet([LAN_DEFAULT_PORT, this.config.port])]);
+    const candidates = [...new Set([...subnetCandidates(discoveryInterfaces()), ...(await tailscalePeers())])];
+    const [mdns, scanned] = await Promise.all([
+      discoverNodes(),
+      scanSubnet([LAN_DEFAULT_PORT, this.config.port], { candidates })
+    ]);
     return mergeDiscovered(mdns, scanned).filter((node) => node.nodeId !== this.config.nodeId);
   }
 
@@ -441,6 +446,20 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
     }
     return { mode: this.config.mode, paired, link, apiPath: this.config.mode === "client" ? LAN_REMOTE_PREFIX : "" };
   }
+}
+
+/** Пиры Tailscale, если программа установлена. Нет её или она не ответила — пусто, поиск по подсети от этого не зависит. */
+function tailscalePeers(): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile("tailscale", ["status", "--json"], { timeout: 1500, windowsHide: true, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
+      if (error || !stdout) return resolve([]);
+      try {
+        resolve(tailscalePeerAddresses(JSON.parse(stdout)));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
 }
 
 /** A Russian reason for a LAN listener that did not open, with what to do about it. */

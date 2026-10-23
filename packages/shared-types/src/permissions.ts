@@ -19,6 +19,7 @@ export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 const CORE_PRIMARY_RESOURCE: Record<(typeof CORE_MODULE_IDS)[number], string> = {
   tasks: "task",
   notes: "note",
+  knowledge: "item",
   calendar: "event",
   documents: "document",
   projects: "project",

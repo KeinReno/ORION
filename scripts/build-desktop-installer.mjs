@@ -2,7 +2,7 @@
 // Run on Windows: builds the static web app and a self-contained NSIS package.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,6 +44,19 @@ writeFileSync(join(stage, 'build.json'), JSON.stringify({ tag: buildTag, commit,
 console.log(`Build tag: ${buildTag || '(не задана — обновления сочтут версию неизвестной)'} @ ${commit}`);
 // Agent Manual (TZ-02): shipped beside the runtime so the «Подключить агента» wizard can show its real path.
 cpSync(join(root, 'docs', 'AGENT_MANUAL.md'), join(stage, 'AGENT_MANUAL.md'));
+// Страница телефона отдаётся самим API (GET /phone). Экспорт Next лежит либо в out/, либо в .next-desktop/.
+const webExport = [join(root, 'apps', 'web', 'out'), join(root, 'apps', 'web', '.next-desktop')].find(
+  (dir) => existsSync(join(dir, 'phone.html')) || existsSync(join(dir, 'phone', 'index.html'))
+);
+if (!webExport) throw new Error('В экспорте веб-клиента нет phone.html — телефон не сможет открыть страницу узла');
+const skipExportDir = new Set(['cache', 'server', 'types', 'diagnostics', 'trace', 'standalone']);
+cpSync(webExport, join(stage, 'web'), {
+  recursive: true,
+  filter: (src) => {
+    const top = relative(webExport, src).split(/[\\/]/)[0];
+    return !top || !skipExportDir.has(top);
+  }
+});
 const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js'];
 for (const name of mustExist) if (!existsSync(join(stage, name))) throw new Error(`Missing bundled runtime file: ${name}`);
 const total = (directory) => readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => sum + (item.isDirectory() ? total(join(directory, item.name)) : statSync(join(directory, item.name)).size), 0);

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { lanPairingCodeInput } from "@orion/shared-types";
+import { lanPairingCodeInput, pairingCodeFromDigest } from "@orion/shared-types";
 
 /**
  * Код сопоставления. Хост считает его из отпечатка СВОЕГО сертификата, клиент — из сертификата, который
@@ -9,7 +9,7 @@ import { lanPairingCodeInput } from "@orion/shared-types";
  */
 export function computePairingCode(clientNonce: string, serverNonce: string, fingerprint: string): string {
   const digest = createHmac("sha256", "orion-lan-pairing").update(lanPairingCodeInput(clientNonce, serverNonce, fingerprint)).digest();
-  return String(digest.readUInt32BE(0) % 1_000_000).padStart(6, "0");
+  return pairingCodeFromDigest(digest);
 }
 
 export function codesEqual(a: string, b: string): boolean {

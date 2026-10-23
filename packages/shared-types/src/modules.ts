@@ -11,6 +11,7 @@ import { GENERATED_MODULE_CATALOG, GENERATED_MODULE_IDS } from "./modules-ext/re
 export const CORE_MODULE_IDS = [
   "tasks",
   "notes",
+  "knowledge",
   "calendar",
   "documents",
   "projects",
@@ -189,6 +190,20 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     optionalDependencies: ["documents", "projects"],
     disableBehavior: "Панель и API скрываются. Заметки и ревизии сохраняются.",
     panelId: "notes",
+    defaultEnabled: true
+  },
+  {
+    id: "knowledge",
+    kind: "base",
+    required: false,
+    label: "База знаний",
+    summary: "Материалы со статусом, источниками и связями. Это не заметки.",
+    owns: "Разделы, материалы, источники и связи между материалами.",
+    livesWithout: "Работает без заметок, документов и задач.",
+    provides: ["Панель «База знаний»", "Разделы", "Источники отдельно от текста", "Связи между материалами"],
+    optionalDependencies: ["notes", "documents"],
+    disableBehavior: "Панель и API скрываются. Материалы, источники и связи сохраняются.",
+    panelId: "knowledge",
     defaultEnabled: true
   },
   {

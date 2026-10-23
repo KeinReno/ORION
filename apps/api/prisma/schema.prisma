@@ -309,6 +309,10 @@ model Workspace {
   petCareDays    PetCareDay[]
   petCareEvents  PetCareEvent[]
   // </module-registry:workspace-relations>
+  knowledgeCategories KnowledgeCategory[]
+  knowledgeItems      KnowledgeItem[]
+  knowledgeSources    KnowledgeSource[]
+  knowledgeRelations  KnowledgeRelation[]
 }
 
 model Project {
@@ -3502,3 +3506,90 @@ model PetCareEvent {
   @@map("pet_care_events")
 }
 // </module-registry:models>
+
+/// Раздел базы знаний. parentId — строка без внешнего ключа: снимок вставляет
+/// строки пакетом, а самоссылка в том же пакете ломает вставку.
+model KnowledgeCategory {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  parentId    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     KnowledgeItem[]
+
+  @@index([workspaceId])
+  @@map("knowledge_categories")
+}
+
+/// Материал базы знаний. Это не заметка: у материала есть статус, видимость
+/// и источники, которые хранятся отдельно от текста.
+model KnowledgeItem {
+  id          String   @id @default(uuid())
+  workspaceId String
+  categoryId  String?
+  title       String
+  summary     String   @default("")
+  body        String   @default("")
+  /// captured | draft | review | approved | published | archived
+  status      String   @default("captured")
+  /// private — видит только автор; workspace — все участники.
+  visibility  String   @default("workspace")
+  tags        String[] @default([])
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  sources   KnowledgeSource[]
+  fromRelations KnowledgeRelation[] @relation("KnowledgeRelationFrom")
+  toRelations   KnowledgeRelation[] @relation("KnowledgeRelationTo")
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@map("knowledge_items")
+}
+
+/// Откуда взят материал. Текст источника не смешивается с редакционным телом.
+model KnowledgeSource {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  itemId       String
+  /// url | note | document | manual | other
+  type         String   @default("manual")
+  sourceUrl    String   @default("")
+  sourceTitle  String   @default("")
+  sourceAuthor String   @default("")
+  originalText String   @default("")
+  capturedAt   DateTime @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  item      KnowledgeItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([itemId])
+  @@map("knowledge_sources")
+}
+
+/// Связь между двумя материалами одного пространства.
+model KnowledgeRelation {
+  id          String @id @default(uuid())
+  workspaceId String
+  fromId      String
+  toId        String
+  /// related | expands | contradicts | duplicate_of | derived_from | part_of
+  kind        String @default("related")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  from      KnowledgeItem @relation("KnowledgeRelationFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to        KnowledgeItem @relation("KnowledgeRelationTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([fromId])
+  @@index([toId])
+  @@map("knowledge_relations")
+}

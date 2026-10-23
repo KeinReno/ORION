@@ -8,7 +8,17 @@ export function isLoopbackAddress(address: string | undefined): boolean {
 }
 
 /** Пути, доступные без доверия: сама визитка узла, заявка на подключение и проба живости. */
-const OPEN_PATHS = [/^\/lan\/info\/?$/, /^\/lan\/pair\/request\/?$/, /^\/lan\/pair\/status\/[^/]+\/?$/, /^\/system\/health\/?$/];
+const OPEN_PATHS = [
+  /^\/lan\/info\/?$/,
+  /^\/lan\/pair\/request\/?$/,
+  /^\/lan\/pair\/status\/[^/]+\/?$/,
+  /^\/system\/health\/?$/,
+  // Страница телефона и её скрипты: до подтверждения устройства токена ещё нет.
+  /^\/phone(?:\.html)?\/?$/,
+  /^\/_next\//,
+  /^\/favicon\.ico$/,
+  /^\/kaiden-\d+\.png$/
+];
 
 export function isOpenLanPath(urlPath: string): boolean {
   return OPEN_PATHS.some((pattern) => pattern.test(urlPath));

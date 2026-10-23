@@ -11,8 +11,14 @@ import { observeCertificate, pinnedJson } from "./pinned-request";
  * ней указан: чужой сервис на порту 4443 или подделка визитки не проходят. Дальше сопряжение всё равно закрепляет сертификат.
  */
 
-/** Адаптеры виртуальных машин, контейнеров и VPN: домашних устройств там нет, а перебор их подсетей — лишние секунды. */
-const VIRTUAL_ADAPTER = /vethernet|hyper-v|wsl|virtualbox|vmware|vbox|docker|podman|br-|veth|utun|tun|tap|zerotier|tailscale|wireguard|hamachi|radmin|npcap|loopback/i;
+/** Виртуальные машины и контейнеры: домашних устройств и телефона там нет. */
+const HYPERVISOR_ADAPTER = /vethernet|hyper-v|wsl|virtualbox|vmware|vbox|docker|podman|br-|veth|npcap|loopback/i;
+
+/**
+ * Сети, которые сами по себе соединяют компьютеры: Tailscale, WireGuard, ZeroTier, Hamachi, Radmin.
+ * Домашний Wi-Fi их не видит, зато телефон «в той же сети через VPN» сидит именно здесь.
+ */
+const OVERLAY_ADAPTER = /utun|tun|tap|zerotier|tailscale|wireguard|hamachi|radmin/i;
 
 export interface LanInterface {
   name: string;
@@ -20,17 +26,36 @@ export interface LanInterface {
   netmask: string;
 }
 
-/** Реальные IPv4-адаптеры этой машины (без loopback, link-local и виртуальных). */
-export function physicalInterfaces(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): LanInterface[] {
+function interfacesMatching(
+  pattern: RegExp | null,
+  interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>
+): LanInterface[] {
   const result: LanInterface[] = [];
   for (const [name, list] of Object.entries(interfaces)) {
-    if (VIRTUAL_ADAPTER.test(name)) continue;
+    if (HYPERVISOR_ADAPTER.test(name)) continue;
+    if (pattern && !pattern.test(name)) continue;
+    if (!pattern && OVERLAY_ADAPTER.test(name)) continue;
     for (const item of list ?? []) {
       if (item.family !== "IPv4" || item.internal || item.address.startsWith("169.254.")) continue;
       result.push({ name, address: item.address, netmask: item.netmask });
     }
   }
   return result;
+}
+
+/** Домашние IPv4-адаптеры (без loopback, link-local, гипервизоров и VPN). Через них объявляем узел в квартире. */
+export function physicalInterfaces(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): LanInterface[] {
+  return interfacesMatching(null, interfaces);
+}
+
+/** VPN и похожие сети, где телефон и компьютер могут видеть друг друга без общего Wi-Fi. */
+export function overlayInterfaces(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): LanInterface[] {
+  return interfacesMatching(OVERLAY_ADAPTER, interfaces);
+}
+
+/** Куда смотреть, когда ищем другой ORION: дом и VPN. */
+export function discoveryInterfaces(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): LanInterface[] {
+  return [...physicalInterfaces(interfaces), ...overlayInterfaces(interfaces)];
 }
 
 /** Основной домашний адрес: сначала 192.168.x.x, потом 10.x, потом 172.16–31.x — через него объявляем узел по mDNS. */
@@ -103,6 +128,26 @@ export async function scanSubnet(
   }
   await Promise.all(Array.from({ length: Math.min(options.concurrency ?? 64, jobs.length) }, () => worker()));
   return [...found.values()];
+}
+
+/**
+ * Адреса других устройств в Tailscale. У интерфейса часто маска /32, поэтому перебор подсети их не видит,
+ * а multicast через Tailscale не ходит. `tailscale status --json`: у каждого Peer поле `TailscaleIPs`.
+ */
+export function tailscalePeerAddresses(status: unknown): string[] {
+  if (!status || typeof status !== "object") return [];
+  const peer = (status as { Peer?: unknown }).Peer;
+  const peers = Array.isArray(peer) ? peer : peer && typeof peer === "object" ? Object.values(peer as Record<string, unknown>) : [];
+  const ips: string[] = [];
+  for (const item of peers) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { Online?: boolean; TailscaleIPs?: unknown };
+    if (row.Online === false) continue;
+    for (const ip of Array.isArray(row.TailscaleIPs) ? row.TailscaleIPs : []) {
+      if (typeof ip === "string" && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) ips.push(ip);
+    }
+  }
+  return [...new Set(ips)];
 }
 
 /** mDNS-находки главнее (у них адрес, который узел объявил сам); перебор дополняет тем, что мультикаст не донёс. */

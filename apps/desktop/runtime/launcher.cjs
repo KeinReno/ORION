@@ -145,6 +145,7 @@ async function main() {
     ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
     // Обновления программы (apps/api/src/updates): метка сборки, каталог установки и способ штатно остановить PostgreSQL.
     ORION_BUILD_TAG: buildTag(), ORION_INSTALL_DIR: path.resolve(runtime, '..'),
+    ORION_WEB_DIST: path.join(runtime, 'web'),
     ORION_PG_CTL: executable('pg_ctl'), ORION_PG_CLUSTER: cluster,
   };
   superviseApi(baseEnv);

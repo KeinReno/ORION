@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { physicalInterfaces } from "./lan-scan";
+import { overlayInterfaces, physicalInterfaces } from "./lan-scan";
 import { LAN_DEFAULT_PORT, type LanLoginPolicy, type LanMode } from "@orion/shared-types";
 
 /**
@@ -92,15 +92,7 @@ export function clearClientBinding(dir = nodeDir()): void {
   fs.rmSync(path.join(dir, "lan-client.json"), { force: true });
 }
 
-/** Не-loopback IPv4-адреса машины (для объявления и PUBLIC_API_URL). */
-/** IPv4 addresses of this computer, home adapters first (what the user should type on another device). */
+/** Домашние адреса, затем VPN. Их показываем на другом устройстве и кладём в сертификат нового хоста. */
 export function lanAddresses(): string[] {
-  const home = physicalInterfaces().map((item) => item.address);
-  const result: string[] = [...home];
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const item of list ?? []) {
-      if (item.family === "IPv4" && !item.internal && !item.address.startsWith("169.254.") && !result.includes(item.address)) result.push(item.address);
-    }
-  }
-  return result;
+  return [...new Set([...physicalInterfaces(), ...overlayInterfaces()].map((item) => item.address))];
 }

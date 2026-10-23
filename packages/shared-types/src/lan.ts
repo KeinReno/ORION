@@ -148,6 +148,12 @@ export function lanPairingCodeInput(clientNonce: string, serverNonce: string, fi
   return `orion-pair/v1|${clientNonce}|${serverNonce}|${fingerprint.replace(/:/g, "").toLowerCase()}`;
 }
 
+/** Первые 4 байта HMAC-SHA256 (big-endian) → 6 цифр. Сам HMAC считается там, где есть криптография. */
+export function pairingCodeFromDigest(digest: Uint8Array): string {
+  const value = (((digest[0] ?? 0) << 24) | ((digest[1] ?? 0) << 16) | ((digest[2] ?? 0) << 8) | (digest[3] ?? 0)) >>> 0;
+  return String(value % 1_000_000).padStart(6, "0");
+}
+
 export const lanSetLoginPolicyInputSchema = z.object({
   loginPolicy: lanLoginPolicySchema,
   /** При переходе на `strict`: пароли для аккаунтов с PIN (userId → пароль). */

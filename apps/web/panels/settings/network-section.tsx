@@ -237,8 +237,21 @@ function HostSection(): React.ReactElement {
           <Badge>{data.mdns ? "виден по mDNS" : "только по адресу"}</Badge>
         </div>
         <p className="text-label text-muted-foreground">
-          Адрес для подключения: {data.addresses.length ? data.addresses.map((address) => `${address}:${data.port}`).join(", ") : `порт ${data.port}`}
+          Телефон в этой же сети или в том же VPN открывает одну из ссылок. Браузер предупредит о сертификате — это сертификат этого компьютера, его отпечаток ниже.
         </p>
+        {data.active && data.addresses.length > 0 ? (
+          <ul className="space-y-1">
+            {data.addresses.map((address) => (
+              <li key={address} className="break-all font-mono text-2xs text-subtle-foreground">
+                https://{address}:{data.port}/phone
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-label text-muted-foreground">
+            Адрес для подключения: {data.addresses.length ? data.addresses.map((address) => `${address}:${data.port}`).join(", ") : `порт ${data.port}`}
+          </p>
+        )}
         <p className="break-all font-mono text-2xs text-subtle-foreground">Отпечаток сертификата: {data.fingerprint}</p>
         {data.error ? (
           <p role="alert" className="text-label text-destructive">

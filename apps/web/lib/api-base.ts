@@ -6,12 +6,19 @@ interface ApiBaseContext {
   /** `process.env.NEXT_PUBLIC_API_URL` — inlined by Next at build time. */
   envUrl: string | undefined;
   /** `window.location` in a browser; `null` during SSR/prerender, where nothing is fetched. */
-  location: { protocol: string; hostname: string } | null;
+  location: { protocol: string; hostname: string; pathname?: string; origin?: string } | null;
   production: boolean;
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1", "tauri.localhost"]);
-const isLoopbackHost = (host: string): boolean => LOOPBACK_HOSTS.has(host.toLowerCase()) || /^127\./.test(host) || host === "0.0.0.0";
+export const isLoopbackHost = (host: string): boolean => LOOPBACK_HOSTS.has(host.toLowerCase()) || /^127\./.test(host) || host === "0.0.0.0";
+
+/** Телефонная страница, открытая с самого узла, говорит с этим узлом, а не с localhost телефона. */
+function phoneSameOrigin(location: { pathname?: string; origin?: string }): string | null {
+  const path = location.pathname ?? "";
+  if (path !== "/phone" && path !== "/phone.html" && !path.startsWith("/phone/")) return null;
+  return location.origin?.replace(/\/+$/, "") || null;
+}
 
 /**
  * The localhost fallback is only right when the page itself is served from this
@@ -38,6 +45,8 @@ export function resolveApiBaseUrl({ envUrl, location, production }: ApiBaseConte
   }
   if (!production || !location) return LOCAL_API_URL;
   if (isLoopbackHost(location.hostname) || location.protocol === "tauri:") return LOCAL_API_URL;
+  const sameOrigin = phoneSameOrigin(location);
+  if (sameOrigin) return sameOrigin;
   throw new Error(
     "NEXT_PUBLIC_API_URL не задан: веб-клиент не знает адрес ORION API. Задайте его при сборке (см. docs/DEPLOYMENT_READINESS.md)."
   );

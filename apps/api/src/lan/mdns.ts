@@ -1,7 +1,7 @@
 import { Logger } from "@nestjs/common";
 import { Bonjour, type Service } from "bonjour-service";
 import { LAN_PROTOCOL_VERSION, LAN_SERVICE_TYPE, type LanDiscoveredNode } from "@orion/shared-types";
-import { physicalInterfaces, primaryLanAddress } from "./lan-scan";
+import { discoveryInterfaces, overlayInterfaces, primaryLanAddress } from "./lan-scan";
 
 export interface Advertisement {
   name: string;
@@ -35,7 +35,8 @@ export class MdnsAdvertiser {
 
   start(ad: Advertisement): void {
     this.stop();
-    this.bonjour = bonjourOn(primaryLanAddress());
+    // Сначала дом. Если домашнего адаптера нет (компьютер только в VPN) — объявляем в VPN.
+    this.bonjour = bonjourOn(primaryLanAddress() ?? primaryLanAddress(overlayInterfaces()));
     this.service = this.bonjour.publish({
       name: ad.name,
       type: LAN_SERVICE_TYPE,
@@ -68,7 +69,7 @@ export class MdnsAdvertiser {
 export function discoverNodes(timeoutMs = 3000): Promise<LanDiscoveredNode[]> {
   return new Promise((resolve) => {
     const found = new Map<string, LanDiscoveredNode>();
-    const addresses = physicalInterfaces().map((item) => item.address);
+    const addresses = discoveryInterfaces().map((item) => item.address);
     const instances: Bonjour[] = [];
     for (const address of addresses.length > 0 ? addresses : [null]) {
       try {

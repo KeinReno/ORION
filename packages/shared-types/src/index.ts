@@ -53,6 +53,7 @@ export * from "./search";
 export * from "./resources";
 export * from "./time";
 export * from "./habit";
+export * from "./knowledge";
 export * from "./list";
 export * from "./hybrid-sync";
 export * from "./hybrid-sync-merge";

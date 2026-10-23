@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { mergeDiscovered, physicalInterfaces, primaryLanAddress, probeCard, scanSubnet, subnetCandidates } from "./lan-scan";
+import { discoveryInterfaces, mergeDiscovered, overlayInterfaces, physicalInterfaces, primaryLanAddress, probeCard, scanSubnet, subnetCandidates, tailscalePeerAddresses } from "./lan-scan";
 import { loadOrIssueHostCertificate } from "./self-signed-cert";
 
 const nic = (address: string, netmask = "255.255.255.0", internal = false): os.NetworkInterfaceInfo =>
@@ -21,6 +21,17 @@ describe("LAN subnet scan", () => {
       Ethernet: [nic("169.254.10.2", "255.255.0.0"), nic("10.0.0.7")]
     });
     expect(interfaces.map((item) => item.address)).toEqual(["192.168.1.23", "10.0.0.7"]);
+    expect(overlayInterfaces({
+      "Беспроводная сеть": [nic("192.168.1.23")],
+      "vEthernet (WSL)": [nic("172.28.0.1")],
+      Tailscale: [nic("100.64.0.5", "255.255.255.255")],
+      WireGuard: [nic("10.8.0.2")]
+    }).map((item) => item.address)).toEqual(["100.64.0.5", "10.8.0.2"]);
+    expect(discoveryInterfaces({
+      Ethernet: [nic("192.168.0.4")],
+      Tailscale: [nic("100.64.0.5", "255.255.255.255")],
+      "vEthernet (WSL)": [nic("172.28.0.1")]
+    }).map((item) => item.address)).toEqual(["192.168.0.4", "100.64.0.5"]);
     expect(primaryLanAddress(interfaces)).toBe("192.168.1.23");
     expect(primaryLanAddress([{ name: "e", address: "10.0.0.7", netmask: "255.255.255.0" }])).toBe("10.0.0.7");
     expect(primaryLanAddress([])).toBeNull();
@@ -55,6 +66,16 @@ describe("LAN subnet scan", () => {
     });
     expect(seen).toHaveLength(6);
     expect(nodes).toEqual([{ protocol: 1, nodeId: "host-a", name: "Дом", fingerprint: "AA", address: "192.168.1.3", port: 4443 }]);
+  });
+
+  it("reads online Tailscale peer IPv4 addresses and skips the offline ones", () => {
+    expect(tailscalePeerAddresses({
+      Peer: {
+        a: { Online: true, TailscaleIPs: ["100.64.0.8", "fd7a:115c::8"] },
+        b: { Online: false, TailscaleIPs: ["100.64.0.9"] }
+      }
+    })).toEqual(["100.64.0.8"]);
+    expect(tailscalePeerAddresses(null)).toEqual([]);
   });
 
   it("prefers what mDNS announced over the sweep", () => {
