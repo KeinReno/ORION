@@ -1,5 +1,6 @@
 "use client";
 
+import { useUnsavedDraft } from "../../lib/unsaved-drafts";
 import { ApiError } from "@orion/core";
 import {
   useAddKnowledgeRelation,
@@ -26,7 +27,7 @@ import {
   type KnowledgeStatus,
   type KnowledgeVisibility
 } from "@orion/shared-types";
-import { Button, Input, MarkdownEditor, Select, Textarea, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, Input, MarkdownEditor, Select, Textarea, useToast } from "@orion/ui";
 import { useEffect, useRef, useState } from "react";
 
 const STATUS_LABEL: Record<KnowledgeStatus, string> = {
@@ -103,13 +104,15 @@ export function KnowledgeItemEditor({
   itemId,
   items,
   categories,
-  onClosed
+  onClosed,
+  onDirtyChange
 }: {
   workspaceId: string;
   itemId: string;
   items: KnowledgeItem[];
   categories: KnowledgeCategory[];
   onClosed: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const detail = useKnowledgeItem(workspaceId, itemId);
   const update = useUpdateKnowledgeItem(workspaceId);
@@ -117,9 +120,14 @@ export function KnowledgeItemEditor({
   const deleteSource = useDeleteKnowledgeSource(workspaceId);
   const { toast } = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [conflict, setConflict] = useState<KnowledgeItemDetail | null>(null);
   const draftRef = useRef<Draft | null>(null);
   const dirty = useRef(false);
+  const [unsaved, setUnsaved] = useState(false);
+  useUnsavedDraft(unsaved);
+  useEffect(() => { onDirtyChange(unsaved); }, [unsaved, onDirtyChange]);
+  const saveRef = useRef<() => Promise<void>>(async () => {});
   const saving = useRef(false);
   const queued = useRef(false);
   draftRef.current = draft;
@@ -135,6 +143,7 @@ export function KnowledgeItemEditor({
 
   function edit(patch: Partial<Draft>) {
     dirty.current = true;
+    setUnsaved(true);
     setDraft((current) => (current ? { ...current, ...patch } : current));
   }
 
@@ -146,6 +155,7 @@ export function KnowledgeItemEditor({
       return;
     }
     saving.current = true;
+    dirty.current = false;
     const tags = snapshot.tags
       .split(",")
       .map((tag) => tag.trim())
@@ -167,8 +177,8 @@ export function KnowledgeItemEditor({
         }
       });
       setConflict(null);
-      setDraft((current) => {
-        if (!current || current.id !== saved.id) return fromDetail(saved);
+      const current = draftRef.current;
+      if (current && current.id === saved.id) {
         const changed =
           current.title !== snapshot.title ||
           current.summary !== snapshot.summary ||
@@ -178,9 +188,13 @@ export function KnowledgeItemEditor({
           current.visibility !== snapshot.visibility ||
           current.kind !== snapshot.kind ||
           current.categoryId !== snapshot.categoryId;
-        return changed ? { ...current, revision: saved.revision } : fromDetail(saved);
-      });
+        setUnsaved(changed);
+        const next = changed ? { ...current, revision: saved.revision } : fromDetail(saved);
+        draftRef.current = next;
+        setDraft(next);
+      }
     } catch (error) {
+      queued.current = false;
       const current = conflictOf(error);
       if (current) setConflict(current);
       else {
@@ -194,16 +208,17 @@ export function KnowledgeItemEditor({
       saving.current = false;
       if (queued.current) {
         queued.current = false;
-        void save();
+        void saveRef.current();
       }
     }
   }
+  saveRef.current = save;
 
   useEffect(() => {
     if (!dirty.current || conflict) return;
     const timer = window.setTimeout(() => {
       dirty.current = false;
-      void save();
+      void saveRef.current();
     }, 700);
     return () => window.clearTimeout(timer);
   }, [draft, conflict]);
@@ -220,8 +235,21 @@ export function KnowledgeItemEditor({
 
   const item = detail.data;
   return (
-    <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)_16rem]">
-      <aside className="space-y-3">
+    <div className="grid min-w-0 gap-4 [@container(min-width:1100px)]:grid-cols-[minmax(0,1fr)_16rem]">
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Удалить материал навсегда?"
+        description="Текст, источники и связи будут удалены. Восстановить их нельзя."
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => {
+          if (remove.isPending) return;
+          void remove.mutateAsync(item.id).then(onClosed).catch(() => {
+            toast({ title: "Не удалось удалить материал", tone: "danger" });
+            setConfirmDelete(false);
+          });
+        }}
+      />
+      <aside className="min-w-0 order-3 space-y-3 rounded-xl border border-ui-border p-4">
         <h2 className="text-body text-ui-primary">Источник</h2>
         {item.sources.map((source) => (
           <div key={source.id} className="space-y-1 rounded-lg border border-ui-border p-3 text-caption text-ui-muted">
@@ -231,14 +259,14 @@ export function KnowledgeItemEditor({
             </div>
             {source.sourceUrl ? <div className="break-all">{source.sourceUrl}</div> : null}
             {source.originalText ? <div className="whitespace-pre-wrap">{source.originalText}</div> : null}
-            <Button variant="ghost" onClick={() => deleteSource.mutate(source.id)}>
+            <Button variant="ghost" onClick={() => deleteSource.mutate(source.id, { onError: () => toast({ title: "Не удалось убрать источник", tone: "danger" }) })}>
               Убрать источник
             </Button>
           </div>
         ))}
-        <SourceForm workspaceId={workspaceId} itemId={item.id} />
+        <details className="text-body text-ui-muted"><summary className="cursor-pointer py-2 text-ui-primary">Добавить источник</summary><SourceForm workspaceId={workspaceId} itemId={item.id} /></details>
       </aside>
-      <div className="min-w-0 space-y-3">
+      <div className="order-1 min-w-0 space-y-4 rounded-xl border border-ui-border p-4">
         {conflict ? (
           <div className="space-y-2 rounded-lg border border-ui-border p-3">
             <p className="text-body text-ui-primary">Материал сохранился в другой версии. Ваш текст на месте.</p>
@@ -248,6 +276,7 @@ export function KnowledgeItemEditor({
                   setDraft(fromDetail(conflict));
                   setConflict(null);
                   dirty.current = false;
+                  setUnsaved(false);
                 }}
               >
                 Загрузить версию сервера
@@ -258,7 +287,7 @@ export function KnowledgeItemEditor({
                   setDraft((current) => (current ? { ...current, revision: conflict.revision } : current));
                   setConflict(null);
                   dirty.current = true;
-                  window.setTimeout(() => void save(), 0);
+
                 }}
               >
                 Сохранить мою поверх
@@ -267,10 +296,12 @@ export function KnowledgeItemEditor({
           </div>
         ) : null}
         <Input value={draft.title} onChange={(event) => edit({ title: event.target.value })} aria-label="Название" />
-        <Textarea value={draft.summary} rows={2} placeholder="Кратко, своими словами" onChange={(event) => edit({ summary: event.target.value })} />
+        <Textarea aria-label="Краткое содержание" value={draft.summary} rows={2} placeholder="Кратко, своими словами" onChange={(event) => edit({ summary: event.target.value })} />
         <MarkdownEditor value={draft.body} onChange={(body) => edit({ body })} onSave={() => void save()} placeholder="Редакционный текст" />
         <Relations item={item} items={items} workspaceId={workspaceId} />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button disabled={!unsaved || update.isPending || Boolean(conflict)} onClick={() => void save()}>Сохранить</Button>
+          <span role="status" className="text-caption text-ui-muted">{update.isPending ? "Сохраняю…" : unsaved ? "Есть несохранённые изменения" : "Сохранено"}</span>
           {item.status === "archived" ? (
             <Button variant="outline" onClick={() => edit({ status: "draft" })}>
               Вернуть из архива
@@ -284,7 +315,7 @@ export function KnowledgeItemEditor({
             <Button
               variant="danger"
               onClick={() => {
-                void remove.mutateAsync(item.id).then(onClosed);
+                setConfirmDelete(true);
               }}
             >
               Удалить навсегда
@@ -292,7 +323,7 @@ export function KnowledgeItemEditor({
           ) : null}
         </div>
       </div>
-      <aside className="space-y-3">
+      <aside className="order-2 min-w-0 space-y-4 [@container(min-width:1100px)]:row-span-2 rounded-xl border border-ui-border p-4">
         <label className="block space-y-1 text-caption text-ui-muted">
           Статус
           <Select value={draft.status} onChange={(event) => edit({ status: event.target.value as KnowledgeStatus })}>
@@ -305,7 +336,7 @@ export function KnowledgeItemEditor({
         </label>
         <div className="space-y-1 text-caption text-ui-muted">
           Видимость
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant={draft.visibility === "private" ? "primary" : "outline"} onClick={() => edit({ visibility: "private" })}>
               Только я
             </Button>
@@ -403,6 +434,7 @@ function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: stri
       <Input value={title} placeholder="Название источника" onChange={(event) => setTitle(event.target.value)} />
       <Textarea value={text} rows={4} placeholder="Исходный текст" onChange={(event) => setText(event.target.value)} />
       <Button
+        disabled={addSource.isPending}
         onClick={() => {
           void addSource
             .mutateAsync({
@@ -434,6 +466,7 @@ function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: stri
 function Relations({ item, items, workspaceId }: { item: KnowledgeItemDetail; items: KnowledgeItem[]; workspaceId: string }) {
   const addRelation = useAddKnowledgeRelation(workspaceId);
   const deleteRelation = useDeleteKnowledgeRelation(workspaceId);
+  const { toast } = useToast();
   const [toId, setToId] = useState("");
   const [kind, setKind] = useState<KnowledgeRelationKind>("related");
   return (
@@ -444,7 +477,7 @@ function Relations({ item, items, workspaceId }: { item: KnowledgeItemDetail; it
           <span>
             {RELATION_LABEL[relation.kind]} · {relation.peerTitle}
           </span>
-          <Button variant="ghost" onClick={() => deleteRelation.mutate(relation.id)}>
+          <Button variant="ghost" onClick={() => deleteRelation.mutate(relation.id, { onError: () => toast({ title: "Не удалось убрать связь", tone: "danger" }) })}>
             Убрать связь
           </Button>
         </div>
@@ -455,7 +488,7 @@ function Relations({ item, items, workspaceId }: { item: KnowledgeItemDetail; it
           {relation.peerTitle} · {RELATION_LABEL[relation.kind]}
         </div>
       ))}
-      <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
+      <div className="flex flex-wrap gap-2 [&>select]:min-w-0 [&>select]:flex-1">
         <Select value={toId} onChange={(event) => setToId(event.target.value)} aria-label="Другой материал">
           <option value="">Другой материал</option>
           {items
@@ -474,10 +507,10 @@ function Relations({ item, items, workspaceId }: { item: KnowledgeItemDetail; it
           ))}
         </Select>
         <Button
-          disabled={!toId}
+          disabled={!toId || addRelation.isPending}
           onClick={() => {
             if (!toId) return;
-            void addRelation.mutateAsync({ itemId: item.id, input: { toId, kind } }).then(() => setToId(""));
+            void addRelation.mutateAsync({ itemId: item.id, input: { toId, kind } }).then(() => setToId("")).catch(() => toast({ title: "Не удалось добавить связь", tone: "danger" }));
           }}
         >
           Связать

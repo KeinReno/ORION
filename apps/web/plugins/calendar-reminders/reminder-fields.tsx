@@ -5,7 +5,7 @@ import { IconButton, Input } from "@orion/ui";
 import { X } from "lucide-react";
 import { useState } from "react";
 import type { EventRemindersSlotProps } from "../../lib/extensions/contracts";
-import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/format";
+import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/extensions/host-api";
 
 const REMINDER_PRESETS: { minutes: number; label: string }[] = [
   { minutes: 0, label: "в момент" },

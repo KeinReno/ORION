@@ -2,7 +2,7 @@
 
 import { useCreateKnowledgeCategory, useCreateKnowledgeItem, useDeleteKnowledgeCategory, useKnowledgeCategories, useKnowledgeItems, useUpdateKnowledgeItem } from "@orion/core-react";
 import { isKnowledgeInbox, type KnowledgeCategory, type KnowledgeItem, type KnowledgeStatus } from "@orion/shared-types";
-import { Button, EmptyState, Input, PanelBody, PanelHeader, PanelShell, SegmentedControl, useDebouncedValue } from "@orion/ui";
+import { Button, EmptyState, Input, PanelBody, PanelHeader, PanelShell, SegmentedControl, useDebouncedValue, useToast } from "@orion/ui";
 import { useMemo, useState } from "react";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { KnowledgeItemEditor } from "./knowledge/item-editor";
@@ -20,8 +20,11 @@ const STATUS_LABEL: Record<KnowledgeStatus, string> = {
 
 export function KnowledgePanel() {
   const { workspace } = useActiveWorkspace();
+  const { toast } = useToast();
+  const reportError = (error: unknown) => toast({ title: "Не удалось выполнить действие", description: error instanceof Error ? error.message : "Попробуйте ещё раз.", tone: "danger" });
   const workspaceId = workspace?.id;
   const [view, setView] = useState<View>("library");
+  const [editorDirty, setEditorDirty] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState<string | "all">("all");
@@ -52,14 +55,23 @@ export function KnowledgePanel() {
     return (
       <PanelShell>
         <PanelHeader title="База знаний" />
-        <PanelBody>
+        <PanelBody className="[container-type:inline-size]">
           <EmptyState title="Нет пространства" description="Выберите пространство, чтобы открыть базу знаний." />
         </PanelBody>
       </PanelShell>
     );
   }
 
+  function selectItem(id: string | null) {
+    if (editorDirty) {
+      toast({ title: "Сначала сохраните материал", description: "В открытом материале есть несохранённые изменения.", tone: "default" });
+      return;
+    }
+    setSelectedId(id);
+  }
+
   function create(name: string) {
+    if (editorDirty) { selectItem(null); return; }
     const next = name.trim();
     if (!next) return;
     void createItem
@@ -68,7 +80,7 @@ export function KnowledgePanel() {
         setTitle("");
         setView("inbox");
         setSelectedId(item.id);
-      });
+      }).catch(reportError);
   }
 
   return (
@@ -88,7 +100,7 @@ export function KnowledgePanel() {
           />
         }
       />
-      <PanelBody>
+      <PanelBody className="[container-type:inline-size]">
         {items.isError ? (
           <EmptyState
             tone="danger"
@@ -97,8 +109,8 @@ export function KnowledgePanel() {
             action={<Button onClick={() => void items.refetch()}>Повторить</Button>}
           />
         ) : (
-          <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
-            <aside className="flex min-h-0 flex-col gap-3">
+          <div className="grid h-full min-h-0 grid-cols-1 gap-4 [@container(min-width:800px)]:grid-cols-[18rem_minmax(0,1fr)]">
+            <aside className={`flex min-h-0 flex-col gap-3 ${selectedId ? "[@container(max-width:799px)]:hidden" : ""}`}>
               <form
                 className="flex gap-2"
                 onSubmit={(event) => {
@@ -107,7 +119,7 @@ export function KnowledgePanel() {
                 }}
               >
                 <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Новый материал" aria-label="Название нового материала" />
-                <Button type="submit" disabled={!title.trim()}>
+                <Button type="submit" disabled={!title.trim() || createItem.isPending}>
                   Создать
                 </Button>
               </form>
@@ -140,7 +152,7 @@ export function KnowledgePanel() {
                   const name = sectionName.trim();
                   if (!name) return;
                   const parentId = categoryId === "all" ? null : parentForNewSection(categoryId, categories.data ?? []);
-                  void createCategory.mutateAsync({ name, parentId }).then(() => setSectionName(""));
+                  void createCategory.mutateAsync({ name, parentId }).then(() => setSectionName("")).catch(reportError);
                 }}
               >
                 <Input
@@ -149,13 +161,13 @@ export function KnowledgePanel() {
                   placeholder={categoryId === "all" ? "Новый раздел" : "Подраздел"}
                   aria-label="Название раздела"
                 />
-                <Button type="submit" variant="outline" disabled={!sectionName.trim()}>
+                <Button type="submit" variant="outline" disabled={!sectionName.trim() || createCategory.isPending}>
                   Раздел
                 </Button>
               </form>
               <div className="flex flex-wrap gap-2">
                 {categoryId !== "all" ? (
-                  <Button variant="ghost" onClick={() => void deleteCategory.mutateAsync(categoryId).then(() => setCategoryId("all"))}>
+                  <Button variant="ghost" onClick={() => void deleteCategory.mutateAsync(categoryId).then(() => setCategoryId("all")).catch(reportError)}>
                     Удалить раздел
                   </Button>
                 ) : null}
@@ -185,7 +197,7 @@ export function KnowledgePanel() {
                     key={item.id}
                     item={item}
                     selected={selectedId === item.id}
-                    onOpen={() => setSelectedId(item.id)}
+                    onOpen={() => selectItem(item.id)}
                     onAccept={
                       view === "inbox"
                         ? () => updateItem.mutate({ itemId: item.id, input: { status: "approved", expectedRevision: item.revision } })
@@ -200,14 +212,17 @@ export function KnowledgePanel() {
                 ))}
               </div>
             </aside>
-            <section className="min-h-0 overflow-auto">
+            <section className={`min-h-0 min-w-0 overflow-auto ${!selectedId ? "[@container(max-width:799px)]:hidden" : ""}`}>
+              {selectedId ? <Button variant="ghost" className="mb-3 [@container(min-width:800px)]:hidden" onClick={() => selectItem(null)}>← К списку материалов</Button> : null}
               {selectedId ? (
                 <KnowledgeItemEditor
+                  key={`${workspaceId}:${selectedId}`}
+                  onDirtyChange={setEditorDirty}
                   workspaceId={workspaceId}
                   itemId={selectedId}
                   items={inbox.data ?? items.data ?? []}
                   categories={categories.data ?? []}
-                  onClosed={() => setSelectedId(null)}
+                  onClosed={() => { setSelectedId(null); setEditorDirty(false); }}
                 />
               ) : (
                 <EmptyState title="Выберите материал" description="Слева — список. Источник открытого материала остаётся отдельно от текста." />
@@ -238,6 +253,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`rounded-full px-3 py-1 text-caption ${active ? "bg-ui-tint/15 text-ui-primary" : "text-ui-muted hover:bg-ui-tint/5"}`}
     >
       {children}
@@ -260,7 +276,7 @@ function ItemRow({
 }) {
   return (
     <div className={`rounded-lg px-3 py-2 ${selected ? "bg-ui-tint/10" : "hover:bg-ui-tint/5"}`}>
-      <button type="button" onClick={onOpen} className="w-full text-left">
+      <button type="button" onClick={onOpen} aria-current={selected ? "true" : undefined} className="w-full rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <div className="truncate text-body text-ui-primary">{item.title}</div>
         <div className="truncate text-caption text-ui-muted">{STATUS_LABEL[item.status]}</div>
       </button>

@@ -1,3 +1,5 @@
+import { readKnowledgeSourceTitle as readNoteTitle } from "../notes/public";
+import { readKnowledgeSourceTitle as readDocumentTitle } from "../documents/public";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type {
@@ -232,15 +234,15 @@ export class KnowledgeService {
       let sourceTitle = input.sourceTitle ?? "";
       if (type === "note") {
         if (!input.noteId) throw new BadRequestException("Укажите заметку");
-        const note = await tx.note.findFirst({ where: { id: input.noteId, workspaceId, deletedAt: null } });
-        if (!note) throw new BadRequestException("Заметка не найдена в этом пространстве");
-        if (!sourceTitle) sourceTitle = note.title;
+        const note = await readNoteTitle(tx, workspaceId, input.noteId);
+        if (note === null) throw new BadRequestException("Заметка не найдена в этом пространстве");
+        if (!sourceTitle) sourceTitle = note;
       }
       if (type === "document") {
         if (!input.documentId) throw new BadRequestException("Укажите документ");
-        const document = await tx.document.findFirst({ where: { id: input.documentId, workspaceId, deletedAt: null, kind: "file" } });
-        if (!document) throw new BadRequestException("Документ не найден в этом пространстве");
-        if (!sourceTitle) sourceTitle = document.name;
+        const document = await readDocumentTitle(tx, workspaceId, input.documentId);
+        if (document === null) throw new BadRequestException("Документ не найден в этом пространстве");
+        if (!sourceTitle) sourceTitle = document;
       }
       const row = await tx.knowledgeSource.create({
         data: {

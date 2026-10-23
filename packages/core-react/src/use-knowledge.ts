@@ -90,11 +90,28 @@ export function useCreateKnowledgeItem(workspaceId: string) {
 
 export function useUpdateKnowledgeItem(workspaceId: string) {
   const { api } = useCore();
-  const invalidate = useInvalidateKnowledge();
+  const client = useQueryClient();
   return useMutation({
     mutationFn: (args: { itemId: string; input: UpdateKnowledgeItemInput }) =>
       api.updateKnowledgeItem(workspaceId, args.itemId, args.input),
-    onSuccess: () => invalidate(workspaceId)
+    onSuccess: (item) => {
+      // The mutation already returns the complete detail. Do not fetch every open editor
+      // and the unchanged category tree again on each autosave.
+      client.setQueryData(["knowledge-item", workspaceId, item.id], item);
+      for (const query of client.getQueryCache().findAll({ queryKey: ["knowledge-items", workspaceId] })) {
+        const [, , includeArchived, search] = query.queryKey;
+        if (search) {
+          void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
+          continue;
+        }
+        client.setQueryData<KnowledgeItem[]>(query.queryKey, (rows) => {
+          if (!rows) return rows;
+          const next = rows.filter((row) => row.id !== item.id);
+          if (includeArchived || item.status !== "archived") next.push(item);
+          return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        });
+      }
+    }
   });
 }
 

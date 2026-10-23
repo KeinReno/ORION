@@ -47,6 +47,7 @@ export const MODEL_OWNERS = new Map([
   ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),
   ...owned("tasks", "Task TaskComment TaskActivity TaskDependency SavedTaskView"),
   ...owned("captures", "Capture"),
+  ...owned("knowledge", "KnowledgeCategory KnowledgeItem KnowledgeSource KnowledgeRelation"),
   ...owned("time", "TimeEntry"),
   ...owned("habits", "Habit HabitEntry"),
   ...owned("lists", "List ListItem"),
