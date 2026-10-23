@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { DepthCard } from "./depth-card";
 import { useEffect, useState } from "react";
 import { Check, Copy, Download, Link2, RefreshCw, ShieldCheck } from "lucide-react";
@@ -19,6 +20,8 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
   address: string; port: string; setAddress: (value: string) => void; setPort: (value: string) => void;
   saveProfile: () => void; backup: () => void; busy: boolean;
 }) {
+  const discover = connection.discover;
+  useEffect(() => { if (Capacitor.isNativePlatform()) void discover(); }, [discover]);
   const [account, setAccount] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,9 +44,29 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
     </section></DepthCard>
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     {connection.message && <p className="notice" role="status">{connection.message}</p>}
+    <DepthCard><section className="settings-section">
+      <h2>Устройства в локальной сети</h2>
+      <p>ПК по кабелю и телефон по Wi-Fi могут быть в одной сети роутера. На ПК включите «Хост LAN».</p>
+      <button disabled={blocked} onClick={() => void connection.discover()}><RefreshCw size={18} />{connection.busy ? "Подождите…" : "Найти Orion в сети"}</button>
+      {connection.nodes.length > 0 && <ul className="workspace-list">{connection.nodes.map((node) => <li key={node.nodeId + node.address + node.port}>
+        <div><strong>{node.name || "Orion"}</strong><p className="helper">{node.address}:{node.port} · ID: {node.nodeId}</p></div>
+        <button disabled={blocked || Boolean(state?.paired && state.node?.nodeId !== node.nodeId)} onClick={() => {
+          setAddress(node.address); setPort(String(node.port));
+          if (state?.paired) void connection.reconnect(node.address,node.port); else void connection.begin(node.address,node.port);
+        }}>{state?.paired && state.node?.nodeId === node.nodeId ? "Проверить доверенный ПК" : "Запросить доступ"}</button>
+      </li>)}</ul>}
+      {connection.searched && !connection.nodes.length && <p role="status">Orion не найден. Это не доказывает, что компьютер выключен: VPN, гостевая сеть или роутер могут блокировать поиск.</p>}
+      <p className="helper">В VPN разрешите локальную сеть. Если поиск блокируется, используйте адрес ниже. Найденное устройство получит доступ только после подтверждения на ПК.</p>
+      {state?.paired && <details><summary>Изменился адрес доверенного компьютера</summary>
+        <label>Новый адрес<input value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+        <label>Новый порт<input type="number" min="1" max="65535" value={port} onChange={(event) => setPort(event.target.value)} /></label>
+        <button disabled={blocked || !address.trim() || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535} onClick={() => void connection.reconnect(address,Number(port))}>Проверить сертификат и обновить адрес</button>
+        <p className="helper">Сертификат и ID должны совпасть с сохранёнными. Повторное разрешение не требуется; смена сертификата требует нового сопряжения.</p>
+      </details>}
+    </section></DepthCard>
     {!state?.paired ? <DepthCard><section className="settings-section">
       <h2>Подключить компьютер</h2>
-      <p>В Orion на ПК включите «Хост LAN». Введите его адрес и порт. Телефон и ПК должны находиться в одной сети.</p>
+      <p>В Orion на ПК включите «Хост LAN». Выберите найденный компьютер выше или введите адрес и порт. Телефон и ПК должны находиться в одной сети.</p>
       <form onSubmit={(e) => { e.preventDefault(); saveProfile(); }}>
         <label>Адрес компьютера<input value={address} placeholder="192.168.1.20" autoCapitalize="none" autoCorrect="off" onChange={(e) => setAddress(e.target.value)} /></label>
         <label>Порт<input type="number" inputMode="numeric" min="1" max="65535" value={port} onChange={(e) => setPort(e.target.value)} /></label>

@@ -1,3 +1,6 @@
+<!-- Android branch alpha.19 (23.10.2026): native NSD, pinned remembered-host
+readdressing, desktop LAN identity/guidance. See android/LAN_DISCOVERY_ALPHA19.md.
+Hardware OPPO/Windows/VPN acceptance and new Windows installer pending. -->
 <!-- Android branch update 23.10.2026: alpha.18, 0.1.17/code18.
 Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->

@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { z } from "zod";
 import { accountPublicSchema, lanNodeCardSchema, sessionUserSchema, workspaceSchema,
+  lanDiscoveredNodeSchema,
   replicaSnapshotSchema, replicaPullSchema, pushSyncOpsResultSchema, syncModeStateSchema } from "@orion/shared-types";
 import type { SyncTransport } from "@orion/core";
 
@@ -12,6 +13,8 @@ export type LanState = z.infer<typeof lanStateSchema>;
 export type Pairing = { code: string; expiresAt: string; node: z.infer<typeof lanNodeCardSchema>; status: string };
 interface LanNative {
   getState(): Promise<LanState>;
+  discover(): Promise<{ nodes: unknown[] }>;
+  reconnect(input: { address: string; port: number }): Promise<LanState>;
   beginPairing(input: { address: string; port: number }): Promise<Pairing>;
   pollPairing(): Promise<{ status: string }>;
   accounts(): Promise<{ status: number; body: unknown }>;
@@ -35,6 +38,8 @@ export async function lanRequest<T>(method: "GET" | "POST", path: string, schema
   return schema.parse(response.body);
 }
 export const lan = {
+  async discover() { requireAndroid(); return z.array(lanDiscoveredNodeSchema).max(32).parse((await native.discover()).nodes); },
+  async reconnect(address: string, port: number) { requireAndroid(); return lanStateSchema.parse(await native.reconnect({ address, port })); },
   async state(): Promise<LanState> {
     if (!Capacitor.isNativePlatform()) return { paired: false, node: null, user: null, address: "", port: 4443 };
     return lanStateSchema.parse(await native.getState());

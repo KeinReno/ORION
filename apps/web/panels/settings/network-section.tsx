@@ -216,7 +216,7 @@ function HostSection(): React.ReactElement {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-body font-medium">{data.name}</span>
           <Badge>{data.active ? "работает" : "ждёт перезапуска"}</Badge>
-          <Badge>{data.mdns ? "виден по mDNS" : "только по адресу"}</Badge>
+          <Badge>{data.mdns ? "объявление mDNS включено" : "только по адресу"}</Badge>
         </div>
         <p className="text-label text-muted-foreground">
           Адрес для подключения: {data.addresses.length ? data.addresses.map((address) => `${address}:${data.port}`).join(", ") : `порт ${data.port}`}
@@ -238,6 +238,9 @@ function HostSection(): React.ReactElement {
             </Button>
           </div>
         ) : null}
+        <p className="break-all font-mono text-2xs text-subtle-foreground">ID компьютера: {data.nodeId}</p>
+        <p className="text-label text-muted-foreground">В Orion на телефоне откройте «Связь» → «Найти Orion в сети». Кабель на ПК и Wi-Fi на телефоне подходят, если роутер разрешает обмен. При VPN разрешите локальную сеть; гостевая сеть может изолировать устройства. Если поиск не работает, введите адрес выше вручную.</p>
+        <p className="text-label text-muted-foreground">Первое подключение требует вашего подтверждения кодом. Разрешение запоминается; смена IP не означает новое устройство. Отозвать доступ можно ниже.</p>
         <HostPolicy current={data.loginPolicy} />
         <div>
           <Button size="sm" variant="outline" onClick={() => void onDisable()} disabled={disable.isPending}>Выключить хост LAN</Button>
@@ -384,6 +387,7 @@ function Devices(): React.ReactElement {
         <Card key={device.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
           <div>
             <p className="text-body">{device.name}</p>
+            <p className="break-all font-mono text-2xs text-subtle-foreground">ID доверия: {device.id}</p>
             <p className="text-2xs text-subtle-foreground">
               Подключено {shortDateTime(device.createdAt)} · {device.lastSeenAt ? `активно ${shortDateTime(device.lastSeenAt)}` : "ещё не заходило"}
               {device.lastAddress ? ` · ${device.lastAddress}` : ""}

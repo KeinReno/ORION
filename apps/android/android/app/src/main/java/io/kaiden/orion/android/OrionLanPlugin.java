@@ -47,6 +47,29 @@ public class OrionLanPlugin extends Plugin {
         view.put("port", binding == null ? 4443 : binding.getInt("port"));
         return view;
     }
+    @PluginMethod public void discover(PluginCall call) { new LanDiscovery(getContext(), call).start(); }
+    @PluginMethod public void reconnect(PluginCall call) {
+        run(call, () -> {
+            JSONObject saved = binding();
+            String address = call.getString("address", ""); int port = call.getInt("port",4443);
+            JSONObject probe = new JSONObject().put("address",address).put("port",port).put("certificate",saved.getString("certificate"));
+            // No device token/JWT is sent until the pinned TLS identity has been checked.
+            Response info = request(probe,"GET","/lan/info",null,false,null);
+            if (info.status != 200 || !LanIdentity.sameNode(saved.getJSONObject("node").getString("nodeId"),info.object().getString("nodeId"),info.object().getInt("protocol")))
+                throw new Exception("Different node identity");
+            JSONObject candidate = new JSONObject(saved.toString()).put("address",address).put("port",port);
+            Response trust = request(candidate,"GET","/auth/accounts",null,false,null);
+            String trustCode = trust.body instanceof JSONObject ? ((JSONObject) trust.body).optString("code","") : "";
+            if ("device_revoked".equals(trustCode) || "device_untrusted".equals(trustCode)) {
+                call.reject("Доступ телефона отозван или не подтверждён на ПК. Запросите новое разрешение."); return;
+            }
+            if (trust.status != 200 && trust.status != 403) throw new Exception("Host unavailable");
+            // Strict login policy may forbid account enumeration (403) even for trusted devices.
+            saved.put("address",address).put("port",port); vault.save(saved);
+            call.resolve(state(saved));
+        });
+    }
+
     @PluginMethod public void getState(PluginCall call) { run(call, () -> call.resolve(state(vault.read()))); }
 
     private static final class Response {
@@ -130,7 +153,7 @@ public class OrionLanPlugin extends Plugin {
             byte[] nonce = new byte[24]; new SecureRandom().nextBytes(nonce);
             String clientNonce = Base64.encodeToString(nonce, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
             Response response = request(target, "POST", "/lan/pair/request",
-                new JSONObject().put("deviceName", "KAIDEN Orion Android").put("clientNonce", clientNonce), false, null);
+                new JSONObject().put("deviceName", (android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL).substring(0, Math.min(80, (android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL).length()))).put("clientNonce", clientNonce), false, null);
             if (response.status != 200 && response.status != 201) { call.reject("Компьютер отклонил заявку. Повторите позже."); return; }
             JSONObject created = response.object();
             target.put("node", node).put("requestId", created.getString("requestId")).put("clientNonce", clientNonce)

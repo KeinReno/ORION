@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MobileRemoteClient, type MobileRepository, type MobileSnapshot } from "@orion/mobile-core";
-import type { Workspace, AccountPublic } from "@orion/shared-types";
+import type { LanDiscoveredNode, Workspace, AccountPublic } from "@orion/shared-types";
 import { lan, nativeSyncTransport, type LanState, type Pairing } from "./lan";
 import { replicaIO } from "./storage";
 
 export function useLan(repository: MobileRepository | null, publish: (data: MobileSnapshot) => void) {
+  const [nodes, setNodes] = useState<LanDiscoveredNode[]>([]);
+  const [searched, setSearched] = useState(false);
   const [state, setState] = useState<LanState | null>(null);
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [accounts, setAccounts] = useState<AccountPublic[]>([]);
@@ -48,6 +50,17 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
     catch (e) { setError(e instanceof Error ? e.message : "Не удалось выполнить действие. Повторите."); }
     finally { working.current = false; setBusy(false); }
   }, []);
+  const discover = useCallback(() => run(async () => {
+    setNodes([]); setSearched(false);
+    const found = await lan.discover(); setNodes(found); setSearched(true);
+    // Only remembered identity may reconnect automatically. Native code verifies the saved TLS pin.
+    const saved = await lan.state();
+    const matching = saved.paired && saved.node ? found.find((node) => node.nodeId === saved.node!.nodeId && node.fingerprint === saved.node!.fingerprint) : null;
+    if (matching) { setState(await lan.reconnect(matching.address, matching.port)); setMessage("Доверенный компьютер найден. Его сертификат проверен; адрес обновлён."); }
+  }), [run]);
+  const reconnect = (address: string, port: number) => run(async () => {
+    setState(await lan.reconnect(address, port)); setMessage("Сертификат и ID сохранённого компьютера проверены. Адрес обновлён.");
+  });
   const begin = (address: string, port: number) => run(async () => {
     setPairing(await lan.begin(address, port));
   });
@@ -120,6 +133,6 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
     setMessage(keepMine ? "Ваша правка снова в очереди. Синхронизируйте её с компьютером." : "Оставлена версия компьютера.");
   });
   const reloadWorkspaces = () => run(async () => { setWorkspaces(await lan.workspaces()); });
-  return { state, pairing, accounts, workspaces, client, busy, error, message, begin, poll, login, connect, sync,
+  return { nodes, searched, discover, reconnect, state, pairing, accounts, workspaces, client, busy, error, message, begin, poll, login, connect, sync,
     importLocal, switchSpace, disconnect, resolveConflict, reloadWorkspaces };
 }
