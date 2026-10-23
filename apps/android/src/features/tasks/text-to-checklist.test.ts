@@ -27,3 +27,9 @@ describe("text to checklist", () => {
     expect(extractChecklist("- Раз", 198).items).toHaveLength(1);
   });
 });
+
+it("keeps fenced code examples out of extracted checklist steps", () => {
+ const source="Вводная\n\n```md\n- пример\n```\n\n- дело\n";
+ const result=extractChecklist(source); expect(result.items).toEqual([{title:"дело",done:false}]);
+ expect(result.body).toBe("Вводная\n\n```md\n- пример\n```");
+});

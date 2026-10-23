@@ -13,10 +13,18 @@ const CHECKBOX = /^\[([ xX])\]\s*(.*)$/;
  */
 export function extractChecklist(source: string, existingCount = 0): ExtractedChecklist {
   const lines = source.split(/\r?\n/);
-  const explicit = lines.some((line) => LIST_LINE.test(line) || CHECKBOX.test(line.trim()));
+  // Fenced examples are content, never checklist instructions.
+  const fenced = new Set<number>(); let fence: string | null = null;
+  lines.forEach((line, index) => {
+    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) { fenced.add(index); if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = null; }
+    else if (marker) { fence = marker; fenced.add(index); }
+  });
+  const explicit = lines.some((line, index) => !fenced.has(index) && (LIST_LINE.test(line) || CHECKBOX.test(line.trim())));
   const used = new Set<number>();
   const items: ChecklistSeed[] = [];
   lines.forEach((line, index) => {
+    if (fenced.has(index)) return;
     const list = LIST_LINE.exec(line);
     if (explicit && !list && !CHECKBOX.test(line.trim())) return;
     if (!explicit && !line.trim()) return;
@@ -34,6 +42,6 @@ export function extractChecklist(source: string, existingCount = 0): ExtractedCh
   if (existingCount + items.length > MAX_CHECKLIST_ITEMS) {
     throw new Error(`В чек-листе не больше ${MAX_CHECKLIST_ITEMS} пунктов. Сократите список.`);
   }
-  const body = explicit ? lines.filter((_, index) => !used.has(index)).join("\n").trim() : "";
+  const body = lines.filter((_, index) => !used.has(index)).join("\n").trim();
   return { items, body };
 }

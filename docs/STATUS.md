@@ -1,3 +1,6 @@
+<!-- Android branch update 23.10.2026: alpha.18, 0.1.17/code18.
+Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
+See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 19 октября 2026
 
 > **Статус документа:** оперативная сводка по коммитам по 19.10.2026 (PR #44 включительно); для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.

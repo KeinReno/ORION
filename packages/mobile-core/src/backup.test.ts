@@ -155,3 +155,37 @@ describe("portable backup restore", () => {
     expect(repo.snapshot()).toEqual(before);
   });
 });
+
+describe("restore regression audit", () => {
+  it("retains drafts for a new list and a new item", async () => {
+    const source = await MobileRepository.open(new Disk());
+    const listId = crypto.randomUUID();
+    await source.saveListDraft("phone", {kind:"list",id:listId,parentId:null,text:"Ещё не создан"});
+    const target = await MobileRepository.open(new Disk());
+    await target.restoreBackup(createPortableBackup(source.snapshot()), "merge");
+    expect(target.snapshot().listDrafts.phone?.id).toBe(listId);
+    await source.mutateList({entity:"list",kind:"create",id:listId,fields:{name:"Список"}});
+    const itemId = crypto.randomUUID();
+    await source.saveListDraft("phone", {kind:"item",id:itemId,parentId:listId,text:"Новый пункт"});
+    const other = await MobileRepository.open(new Disk());
+    await other.restoreBackup(createPortableBackup(source.snapshot()), "replace");
+    expect(other.snapshot().listDrafts.phone?.id).toBe(itemId);
+  });
+  it("credits the receiving account when restoring a transfer", async () => {
+    const source=await MobileRepository.open(new Disk()); await source.saveFinanceEntry(expense(source,"Перевод"));
+    const value=JSON.parse(createPortableBackup(source.snapshot())); const finance=value.local.finance;
+    const transaction=finance.transactions[0]; transaction.type="transfer"; transaction.toAccountId=finance.accounts[1].id;
+    for (const line of transaction.lines) line.categoryId=null;
+    for (const mode of ["merge","replace"] as const) {
+      const target=await MobileRepository.open(new Disk()); await target.restoreBackup(JSON.stringify(value),mode);
+      const restored=target.snapshot().finance!;
+      expect(restored.accounts.find(a=>a.id===transaction.accountId)?.balance).toBe(-transaction.totalAmount);
+      expect(restored.accounts.find(a=>a.id===transaction.toAccountId)?.balance).toBe(transaction.totalAmount);
+    }
+  });
+  it("rejects duplicate notes instead of silently collapsing records", async () => {
+    const source = await MobileRepository.open(new Disk()); await source.saveEntry(draft("Заметка"));
+    const backup = JSON.parse(createPortableBackup(source.snapshot())); backup.local.notes.push(backup.local.notes[0]);
+    expect(inspectPortableBackup(JSON.stringify(backup)).ok).toBe(false);
+  });
+});

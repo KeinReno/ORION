@@ -123,6 +123,7 @@ function parsePortableBackup(raw: string): PortableBackup {
   const parsed = portableBackupSchema.safeParse(value);
   if (!parsed.success) throw new Error("Файл не похож на резервную копию Orion или создан другой версией приложения.");
   const backup = parsed.data;
+  unique(backup.local.notes.map((note) => note.id), "заметок");
   checkTasks(backup.local.tasks);
   checkLists(backup.local.lists);
   checkFinance(backup.local.finance);
@@ -158,9 +159,9 @@ function usableDraft(draft: Draft | null, tasks: readonly Task[], notes: readonl
 }
 function usableListDraft(draft: MobileListDraft | undefined, lists: readonly List[]): MobileListDraft | undefined {
   if (!draft) return undefined;
-  if (draft.kind === "list") return lists.some((list) => list.id === draft.id) ? draft : undefined;
+  if (draft.kind === "list") return draft;
   const parent = lists.find((list) => list.id === draft.parentId);
-  return parent?.items.some((item) => item.id === draft.id) ? draft : undefined;
+  return parent ? draft : undefined;
 }
 function usableFinanceDraft(draft: FinanceDraft | null, finance: MobileFinance): FinanceDraft | null {
   if (!draft) return null;
@@ -171,8 +172,9 @@ function usableFinanceDraft(draft: FinanceDraft | null, finance: MobileFinance):
 function recomputeBalances(finance: MobileFinance) {
   for (const account of finance.accounts) {
     account.balance = account.startingBalance + finance.transactions
-      .filter((entry) => entry.accountId === account.id)
-      .reduce((sum, entry) => sum + (entry.type === "income" ? entry.totalAmount : -entry.totalAmount), 0);
+      .reduce((sum, entry) => sum
+        + (entry.accountId === account.id ? (entry.type === "income" ? entry.totalAmount : -entry.totalAmount) : 0)
+        + (entry.type === "transfer" && entry.toAccountId === account.id ? entry.totalAmount : 0), 0);
   }
 }
 function restoredFinance(workspaceId: string, source: MobileFinance, draft: FinanceDraft | null): MobileFinance {
@@ -250,6 +252,7 @@ export function applyPortableRestore(next: MobileSnapshot, raw: string, mode: Re
     throw new Error("Копия повреждена: пункт чек-листа ссылается на отсутствующую задачу.");
   }
   next.tasks = [...next.tasks, ...addedTasks];
+  checkTasks(next.tasks); // Existing ids can change the meaning of imported parent links.
   next.notes = [...next.notes, ...addedNotes];
   next.lists = [...next.lists, ...addedLists];
   result.tasks = addedTasks.length; result.notes = addedNotes.length;
@@ -283,6 +286,10 @@ export function applyPortableRestore(next: MobileSnapshot, raw: string, mode: Re
     result.financeAccounts = addedAccounts.length;
     result.financeCategories = addedCategories.length;
     result.financeTransactions = addedTransactions.length;
+  }
+  if (!next.listDrafts.phone) {
+    const draft = usableListDraft(source.listDrafts.phone, next.lists);
+    if (draft) { next.listDrafts.phone = draft; next.lastBackupSeq = null; }
   }
   if (result.tasks || result.notes || result.lists || result.financeAccounts || result.financeCategories || result.financeTransactions) {
     next.lastBackupSeq = null;
