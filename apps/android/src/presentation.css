@@ -66,6 +66,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .completed .check-button::before{background:var(--accent);border-color:var(--accent)}
 .check-button svg{position:relative;z-index:1}
 .gesture-root:has(input:focus,textarea:focus,select:focus) .quick-trigger{visibility:hidden}
+/* While a press is held for quick actions, native text selection must not start under it. */
+.gesture-root.quick-holding,.gesture-root.quick-holding *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 
 /* Depth uses whole card planes; fixed navigation and overlays stay flat. */
 .finance-context{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0 16px;border-bottom:1px solid var(--line)}
@@ -102,6 +104,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .settings-page>.depth-card+.depth-card .settings-section,.connection>.depth-card+.depth-card .settings-section{padding-top:24px}
 
 .depth-card-body{pointer-events:none}.depth-card-body :is(button,input,textarea,select,summary,label,a){pointer-events:auto}
+/* Read-only text that must stay selectable instead of starting quick actions. */
+.depth-card-body :is(.markdown-preview,.release-notes,.changed-fields){pointer-events:auto;user-select:text;-webkit-user-select:text}
 
 /* Give entries a visible card surface so the border, controls and text rotate together. */
 .task-row,.note-depth-row,.finance-entry{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 5px 14px rgb(var(--kaiden-bg-canvas)/.1)}
@@ -112,3 +116,15 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .entry-action-panel{padding:12px;display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line)}
 .entry-action-panel>p{width:100%;overflow-wrap:anywhere}.entry-action-panel .helper{margin:0 0 8px}.danger-action{color:var(--error)}
 .entry-menu-button{flex-shrink:0;padding:12px 8px;min-width:48px}
+
+/* Inline restore flow: preview before writing, explicit confirmation for replacement. */
+.restore-preview{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.restore-preview>p{margin:0 0 8px;font-size:.9rem;overflow-wrap:anywhere}
+.restore-preview .settings-facts{margin:8px 0 12px}
+.restore-preview .segments span{white-space:normal;text-align:center}
+.restore-preview>button{margin-top:12px}
+.restore-confirm{margin-top:14px;padding:14px;border:1px solid var(--error);border-radius:14px}
+.restore-confirm p{margin:0 0 8px;overflow-wrap:anywhere}
+.restore-confirm .update-actions{margin-top:12px;flex-wrap:wrap}
+
+.restore-file{overflow-wrap:anywhere;color:var(--muted)}

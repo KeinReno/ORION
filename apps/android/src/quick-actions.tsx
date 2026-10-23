@@ -12,7 +12,10 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const clearTimer = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = null; }, []);
-  const close = useCallback(() => { clearTimer(); tracking.current = null; setMenu(null); setSelected(null); }, [clearTimer]);
+  const close = useCallback(() => {
+    clearTimer(); tracking.current = null; root.current?.classList.remove("quick-holding");
+    setMenu(null); setSelected(null);
+  }, [clearTimer]);
   useEffect(() => { if (disabled) close(); }, [disabled, close]);
   function open(x: number, y: number, held = false) {
     setMenu({ held, x: Math.max(126, Math.min(innerWidth - 126, x)), y: Math.max(156, Math.min(innerHeight - 156, y)) });
@@ -20,9 +23,27 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
   }
   useEffect(() => {
     const stopPan = (event: TouchEvent) => { if (tracking.current?.active) event.preventDefault(); };
-    const element = root.current; element?.addEventListener("touchmove", stopPan, { passive: false });
-    return () => { if (timer.current) clearTimeout(timer.current); element?.removeEventListener("touchmove", stopPan); };
-  }, []);
+    // A release outside the gesture root must still drop the pending hold and its selection lock.
+    const releaseOutside = () => {
+      const current = tracking.current;
+      if (current && !current.active) { clearTimer(); tracking.current = null; }
+      root.current?.classList.remove("quick-holding");
+    };
+    const stopSelection = (event: Event) => { if (tracking.current) event.preventDefault(); };
+    const element = root.current;
+    element?.addEventListener("touchmove", stopPan, { passive: false });
+    document.addEventListener("selectstart", stopSelection);
+    window.addEventListener("pointerup", releaseOutside);
+    window.addEventListener("pointercancel", releaseOutside);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      element?.removeEventListener("touchmove", stopPan);
+      document.removeEventListener("selectstart", stopSelection);
+      window.removeEventListener("pointerup", releaseOutside);
+      window.removeEventListener("pointercancel", releaseOutside);
+      element?.classList.remove("quick-holding");
+    };
+  }, [clearTimer]);
   useEffect(() => {
     if (!menu) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -43,14 +64,17 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
       if (event.isPrimary) suppressUntil.current = 0;
       if (disabled || menu || !event.isPrimary || event.button !== 0) return;
       const target = event.target as HTMLElement;
-      if (!target.matches("main,section,div,ul") || target.closest("button,input,textarea,select,label,a,summary,[data-task-id],.navigation,.finance-details,.dictation")) return;
+      // Text surfaces keep native selection and their own context menu.
+      if (target.closest("button,a,summary,label,input,textarea,select,[contenteditable='true'],[data-task-id],.navigation,.finance-details,.dictation,.markdown-preview,.markdown-body,.release-notes,.changed-fields")) return;
       clearTimer();
-      const root = event.currentTarget;
+      const holder = event.currentTarget;
+      holder.classList.add("quick-holding");
       tracking.current = { x: event.clientX, y: event.clientY, id: event.pointerId, active: false, moved: false };
       timer.current = setTimeout(() => {
         if (!tracking.current) return;
         tracking.current.active = true;
-        try { root.setPointerCapture(event.pointerId); } catch { /* Pointer already ended. */ }
+        try { holder.setPointerCapture(event.pointerId); } catch { /* Pointer already ended. */ }
+        try { window.getSelection()?.removeAllRanges(); } catch { /* Selection is not exposed in this WebView. */ }
         open(event.clientX, event.clientY, true);
         navigator.vibrate?.(15);
       }, 420);
@@ -59,11 +83,15 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
       const current = tracking.current;
       if (!current || current.id !== event.pointerId) return;
       if (Math.hypot(event.clientX - current.x, event.clientY - current.y) > 10) current.moved = true;
-      if (!current.active) { if (current.moved) { clearTimer(); tracking.current = null; } return; }
+      if (!current.active) {
+        if (current.moved) { clearTimer(); tracking.current = null; event.currentTarget.classList.remove("quick-holding"); }
+        return;
+      }
       event.preventDefault(); setSelected(current.moved ? actionAt(event.clientX, event.clientY) : null);
     }}
     onPointerUp={(event) => {
       const current = tracking.current; clearTimer();
+      event.currentTarget.classList.remove("quick-holding");
       if (!current || current.id !== event.pointerId) return;
       tracking.current = null;
       if (!current.active) return;
@@ -77,6 +105,7 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
       // A child loses its implicit touch capture when the host takes explicit capture.
       if (event.target !== event.currentTarget || !tracking.current?.active || tracking.current.id !== event.pointerId) return;
       tracking.current = null; suppressUntil.current = Date.now() + 500;
+      event.currentTarget.classList.remove("quick-holding");
       setMenu((current) => current ? { ...current, held: false } : null); setSelected(null);
     }}
     onPointerCancel={(event) => {
@@ -84,8 +113,12 @@ export function QuickActions({ children, actions, disabled }: { children: ReactN
       clearTimer();
       if (tracking.current.active) { suppressUntil.current = Date.now() + 500; setMenu((current) => current ? { ...current, held: false } : null); setSelected(null); }
       tracking.current = null;
+      event.currentTarget.classList.remove("quick-holding");
     }}
-    onContextMenu={(event) => { if (tracking.current?.active || menu) event.preventDefault(); }}
+    onContextMenu={(event) => {
+      // A held press becomes quick actions; never let the native selection callout race it.
+      if (tracking.current || menu) event.preventDefault();
+    }}
     onClickCapture={(event) => { if (event.detail > 0 && Date.now() < suppressUntil.current) { suppressUntil.current = 0; event.preventDefault(); event.stopPropagation(); } }}>
     {children}
     <button ref={trigger} className="quick-trigger" aria-label="Быстрые действия" aria-haspopup="dialog" disabled={disabled} onClick={() => {
