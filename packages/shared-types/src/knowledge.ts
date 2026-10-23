@@ -10,6 +10,17 @@ export const KNOWLEDGE_STATUSES = ["captured", "draft", "review", "approved", "p
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export type KnowledgeStatus = z.infer<typeof knowledgeStatusSchema>;
 
+export const KNOWLEDGE_KINDS = ["method", "tool", "fact", "opinion", "link"] as const;
+export const knowledgeKindSchema = z.enum(KNOWLEDGE_KINDS);
+export type KnowledgeKind = z.infer<typeof knowledgeKindSchema>;
+
+/** Сырьё и то, что ещё ждёт решения. Остальные статусы — библиотека. */
+export const KNOWLEDGE_INBOX_STATUSES = ["captured", "review"] as const;
+
+export function isKnowledgeInbox(status: KnowledgeStatus): boolean {
+  return status === "captured" || status === "review";
+}
+
 export const KNOWLEDGE_VISIBILITIES = ["private", "workspace"] as const;
 export const knowledgeVisibilitySchema = z.enum(KNOWLEDGE_VISIBILITIES);
 export type KnowledgeVisibility = z.infer<typeof knowledgeVisibilitySchema>;
@@ -62,7 +73,9 @@ export const knowledgeItemSchema = z.object({
   body: z.string(),
   status: knowledgeStatusSchema,
   visibility: knowledgeVisibilitySchema,
+  kind: knowledgeKindSchema,
   tags: z.array(z.string()),
+  revision: z.number().int(),
   createdBy: z.string(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
@@ -78,6 +91,8 @@ export const knowledgeSourceSchema = z.object({
   sourceTitle: z.string(),
   sourceAuthor: z.string(),
   originalText: z.string(),
+  noteId: z.string().uuid().nullable(),
+  documentId: z.string().uuid().nullable(),
   capturedAt: z.string().datetime()
 });
 export type KnowledgeSource = z.infer<typeof knowledgeSourceSchema>;
@@ -91,9 +106,16 @@ export const knowledgeRelationSchema = z.object({
 });
 export type KnowledgeRelation = z.infer<typeof knowledgeRelationSchema>;
 
+export const knowledgeLinkSchema = knowledgeRelationSchema.extend({
+  peerId: z.string().uuid(),
+  peerTitle: z.string()
+});
+export type KnowledgeLink = z.infer<typeof knowledgeLinkSchema>;
+
 export const knowledgeItemDetailSchema = knowledgeItemSchema.extend({
   sources: z.array(knowledgeSourceSchema),
-  relations: z.array(knowledgeRelationSchema)
+  relations: z.array(knowledgeLinkSchema),
+  backlinks: z.array(knowledgeLinkSchema)
 });
 export type KnowledgeItemDetail = z.infer<typeof knowledgeItemDetailSchema>;
 
@@ -104,11 +126,14 @@ export const createKnowledgeItemInputSchema = z.object({
   categoryId: z.string().uuid().nullable().optional(),
   status: knowledgeStatusSchema.optional(),
   visibility: knowledgeVisibilitySchema.optional(),
+  kind: knowledgeKindSchema.optional(),
   tags: tagsSchema.optional()
 });
 export type CreateKnowledgeItemInput = z.infer<typeof createKnowledgeItemInputSchema>;
 
-export const updateKnowledgeItemInputSchema = createKnowledgeItemInputSchema.partial();
+export const updateKnowledgeItemInputSchema = createKnowledgeItemInputSchema.partial().extend({
+  expectedRevision: z.number().int().positive().optional()
+});
 export type UpdateKnowledgeItemInput = z.infer<typeof updateKnowledgeItemInputSchema>;
 
 export const createKnowledgeSourceInputSchema = z.object({
@@ -116,7 +141,9 @@ export const createKnowledgeSourceInputSchema = z.object({
   sourceUrl: z.string().trim().max(2_000).optional(),
   sourceTitle: z.string().trim().max(300).optional(),
   sourceAuthor: z.string().trim().max(200).optional(),
-  originalText: z.string().max(20_000).optional()
+  originalText: z.string().max(20_000).optional(),
+  noteId: z.string().uuid().nullable().optional(),
+  documentId: z.string().uuid().nullable().optional()
 });
 export type CreateKnowledgeSourceInput = z.infer<typeof createKnowledgeSourceInputSchema>;
 

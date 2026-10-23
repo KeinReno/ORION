@@ -66,9 +66,10 @@ export class KnowledgeController {
   listItems(
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
-    @Query("includeArchived") includeArchived?: string
+    @Query("includeArchived") includeArchived?: string,
+    @Query("q") q?: string
   ): Promise<KnowledgeItem[]> {
-    return this.knowledge.listItems(user.userId, workspaceId, includeArchived === "true");
+    return this.knowledge.listItems(user.userId, workspaceId, includeArchived === "true", q);
   }
 
   @Post("items")

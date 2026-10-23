@@ -3538,7 +3538,10 @@ model KnowledgeItem {
   status      String   @default("captured")
   /// private — видит только автор; workspace — все участники.
   visibility  String   @default("workspace")
+  /// method | tool | fact | opinion | link
+  kind        String   @default("fact")
   tags        String[] @default([])
+  revision    Int      @default(1)
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -3565,6 +3568,10 @@ model KnowledgeSource {
   sourceTitle  String   @default("")
   sourceAuthor String   @default("")
   originalText String   @default("")
+  /// Заметка или документ этого пространства, если источник оттуда. Без внешнего ключа:
+  /// удаление заметки не стирает след в базе знаний.
+  noteId       String?
+  documentId   String?
   capturedAt   DateTime @default(now())
 
   workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

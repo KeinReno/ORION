@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type {
   CreateKnowledgeCategoryInput,
@@ -8,6 +8,7 @@ import type {
   KnowledgeCategory,
   KnowledgeItem,
   KnowledgeItemDetail,
+  KnowledgeLink,
   KnowledgeRelation,
   KnowledgeSource,
   UpdateKnowledgeCategoryInput,
@@ -16,7 +17,11 @@ import type {
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
-const itemInclude = { sources: true, fromRelations: true } as const;
+const itemInclude = {
+  sources: true,
+  fromRelations: { include: { to: { select: { id: true, title: true } } } },
+  toRelations: { include: { from: { select: { id: true, title: true } } } }
+} as const;
 
 @Injectable()
 export class KnowledgeService {
@@ -39,7 +44,7 @@ export class KnowledgeService {
   createCategory(userId: string, workspaceId: string, input: CreateKnowledgeCategoryInput): Promise<KnowledgeCategory> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      if (input.parentId) await this.assertCategory(tx, workspaceId, input.parentId);
+      if (input.parentId) await this.assertParentCategory(tx, workspaceId, input.parentId);
       const row = await tx.knowledgeCategory.create({
         data: {
           workspaceId,
@@ -63,7 +68,7 @@ export class KnowledgeService {
       await this.assertCategory(tx, workspaceId, categoryId);
       if (input.parentId) {
         if (input.parentId === categoryId) throw new BadRequestException("Раздел не может быть родителем сам себе");
-        await this.assertCategory(tx, workspaceId, input.parentId);
+        await this.assertParentCategory(tx, workspaceId, input.parentId, categoryId);
       }
       const row = await tx.knowledgeCategory.update({
         where: { id: categoryId },
@@ -81,18 +86,55 @@ export class KnowledgeService {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertCategory(tx, workspaceId, categoryId);
+      const children = await tx.knowledgeCategory.count({ where: { workspaceId, parentId: categoryId } });
+      if (children > 0) throw new BadRequestException("Сначала уберите вложенные разделы");
       await tx.knowledgeCategory.delete({ where: { id: categoryId } });
     });
   }
 
-  listItems(userId: string, workspaceId: string, includeArchived: boolean): Promise<KnowledgeItem[]> {
+  listItems(userId: string, workspaceId: string, includeArchived: boolean, query?: string): Promise<KnowledgeItem[]> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const needle = query?.trim();
+      const text = needle
+        ? {
+            OR: [
+              { title: { contains: needle, mode: "insensitive" as const } },
+              { summary: { contains: needle, mode: "insensitive" as const } },
+              { body: { contains: needle, mode: "insensitive" as const } },
+              {
+                sources: {
+                  some: {
+                    OR: [
+                      { originalText: { contains: needle, mode: "insensitive" as const } },
+                      { sourceTitle: { contains: needle, mode: "insensitive" as const } },
+                      { sourceUrl: { contains: needle, mode: "insensitive" as const } }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        : {};
       const rows = await tx.knowledgeItem.findMany({
-        where: { workspaceId, ...(includeArchived ? {} : { status: { not: "archived" } }) },
+        where: { workspaceId, ...(includeArchived ? {} : { status: { not: "archived" } }), ...text },
         orderBy: { updatedAt: "desc" }
       });
-      return rows.map(toItem);
+      if (!needle) return rows.map(toItem);
+      const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+      const tagged = await tx.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`SELECT id FROM knowledge_items WHERE "workspaceId" = ${workspaceId} AND EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE tag ILIKE ${pattern} ESCAPE '\\')`
+      );
+      if (tagged.length === 0) return rows.map(toItem);
+      const seen = new Set(rows.map((row) => row.id));
+      const extra = await tx.knowledgeItem.findMany({
+        where: {
+          workspaceId,
+          id: { in: tagged.map((row) => row.id).filter((id) => !seen.has(id)) },
+          ...(includeArchived ? {} : { status: { not: "archived" } })
+        }
+      });
+      return [...rows, ...extra].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map(toItem);
     });
   }
 
@@ -118,6 +160,7 @@ export class KnowledgeService {
           categoryId: input.categoryId ?? null,
           status: input.status ?? "captured",
           visibility: input.visibility ?? "workspace",
+          kind: input.kind ?? "fact",
           tags: input.tags ?? [],
           createdBy: userId
         },
@@ -141,19 +184,23 @@ export class KnowledgeService {
         throw new ForbiddenException("Скрыть материал может только его автор");
       }
       if (input.categoryId) await this.assertCategory(tx, workspaceId, input.categoryId);
-      const row = await tx.knowledgeItem.update({
-        where: { id: itemId },
-        data: {
-          title: input.title,
-          summary: input.summary,
-          body: input.body,
-          categoryId: input.categoryId,
-          status: input.status,
-          visibility: input.visibility,
-          tags: input.tags
-        },
-        include: itemInclude
+      const expected = input.expectedRevision ?? current.revision;
+      const { expectedRevision: _ignored, ...patch } = input;
+      const written = await tx.knowledgeItem.updateMany({
+        where: { id: itemId, revision: expected },
+        data: { ...patch, revision: { increment: 1 } }
       });
+      if (written.count === 0) {
+        const fresh = await tx.knowledgeItem.findFirst({ where: { id: itemId, workspaceId }, include: itemInclude });
+        if (!fresh) throw new NotFoundException("Материал не найден");
+        throw new ConflictException({
+          code: "knowledge_revision_conflict",
+          message: "Материал сохранился в другой версии, пока вы его правили",
+          currentRevision: fresh.revision,
+          current: toDetail(fresh)
+        });
+      }
+      const row = await tx.knowledgeItem.findFirstOrThrow({ where: { id: itemId }, include: itemInclude });
       return toDetail(row);
     });
   }
@@ -181,15 +228,31 @@ export class KnowledgeService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const item = await tx.knowledgeItem.findFirst({ where: { id: itemId, workspaceId } });
       if (!item) throw new NotFoundException("Материал не найден");
+      const type = input.type ?? "manual";
+      let sourceTitle = input.sourceTitle ?? "";
+      if (type === "note") {
+        if (!input.noteId) throw new BadRequestException("Укажите заметку");
+        const note = await tx.note.findFirst({ where: { id: input.noteId, workspaceId, deletedAt: null } });
+        if (!note) throw new BadRequestException("Заметка не найдена в этом пространстве");
+        if (!sourceTitle) sourceTitle = note.title;
+      }
+      if (type === "document") {
+        if (!input.documentId) throw new BadRequestException("Укажите документ");
+        const document = await tx.document.findFirst({ where: { id: input.documentId, workspaceId, deletedAt: null, kind: "file" } });
+        if (!document) throw new BadRequestException("Документ не найден в этом пространстве");
+        if (!sourceTitle) sourceTitle = document.name;
+      }
       const row = await tx.knowledgeSource.create({
         data: {
           workspaceId,
           itemId,
-          type: input.type ?? "manual",
+          type,
           sourceUrl: input.sourceUrl ?? "",
-          sourceTitle: input.sourceTitle ?? "",
+          sourceTitle,
           sourceAuthor: input.sourceAuthor ?? "",
-          originalText: input.originalText ?? ""
+          originalText: input.originalText ?? "",
+          noteId: type === "note" ? input.noteId ?? null : null,
+          documentId: type === "document" ? input.documentId ?? null : null
         }
       });
       return toSource(row);
@@ -237,6 +300,22 @@ export class KnowledgeService {
     const row = await tx.knowledgeCategory.findFirst({ where: { id: categoryId, workspaceId } });
     if (!row) throw new BadRequestException("Раздел не найден в этом пространстве");
   }
+
+  /** Родитель раздела — только верхний уровень, чтобы дерево не ушло глубже двух. */
+  private async assertParentCategory(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    parentId: string,
+    categoryId?: string
+  ): Promise<void> {
+    const parent = await tx.knowledgeCategory.findFirst({ where: { id: parentId, workspaceId } });
+    if (!parent) throw new BadRequestException("Раздел не найден в этом пространстве");
+    if (parent.parentId) throw new BadRequestException("Вложенный раздел нельзя сделать родителем");
+    if (categoryId) {
+      const child = await tx.knowledgeCategory.findFirst({ where: { workspaceId, parentId: categoryId } });
+      if (child) throw new BadRequestException("У раздела уже есть вложенные — его нельзя вложить");
+    }
+  }
 }
 
 type CategoryRow = {
@@ -258,7 +337,9 @@ type ItemRow = {
   body: string;
   status: string;
   visibility: string;
+  kind: string;
   tags: string[];
+  revision: number;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -273,6 +354,8 @@ type SourceRow = {
   sourceTitle: string;
   sourceAuthor: string;
   originalText: string;
+  noteId: string | null;
+  documentId: string | null;
   capturedAt: Date;
 };
 
@@ -306,7 +389,9 @@ function toItem(row: ItemRow): KnowledgeItem {
     body: row.body,
     status: row.status as KnowledgeItem["status"],
     visibility: row.visibility as KnowledgeItem["visibility"],
+    kind: row.kind as KnowledgeItem["kind"],
     tags: row.tags,
+    revision: row.revision,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
@@ -323,6 +408,8 @@ function toSource(row: SourceRow): KnowledgeSource {
     sourceTitle: row.sourceTitle,
     sourceAuthor: row.sourceAuthor,
     originalText: row.originalText,
+    noteId: row.noteId,
+    documentId: row.documentId,
     capturedAt: row.capturedAt.toISOString()
   };
 }
@@ -337,6 +424,21 @@ function toRelation(row: RelationRow): KnowledgeRelation {
   };
 }
 
-function toDetail(row: ItemRow & { sources: SourceRow[]; fromRelations: RelationRow[] }): KnowledgeItemDetail {
-  return { ...toItem(row), sources: row.sources.map(toSource), relations: row.fromRelations.map(toRelation) };
+function toLink(row: RelationRow & { to?: { id: string; title: string }; from?: { id: string; title: string } }, peer: { id: string; title: string }): KnowledgeLink {
+  return { ...toRelation(row), peerId: peer.id, peerTitle: peer.title };
+}
+
+function toDetail(
+  row: ItemRow & {
+    sources: SourceRow[];
+    fromRelations: Array<RelationRow & { to: { id: string; title: string } }>;
+    toRelations: Array<RelationRow & { from: { id: string; title: string } }>;
+  }
+): KnowledgeItemDetail {
+  return {
+    ...toItem(row),
+    sources: row.sources.map(toSource),
+    relations: row.fromRelations.map((link) => toLink(link, link.to)),
+    backlinks: row.toRelations.map((link) => toLink(link, link.from))
+  };
 }

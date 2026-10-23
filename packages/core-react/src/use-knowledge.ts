@@ -23,11 +23,12 @@ export function useKnowledgeCategories(workspaceId: string | undefined) {
   });
 }
 
-export function useKnowledgeItems(workspaceId: string | undefined, includeArchived = false) {
+export function useKnowledgeItems(workspaceId: string | undefined, includeArchived = false, query = "") {
   const { api } = useCore();
+  const q = query.trim();
   return useQuery<KnowledgeItem[]>({
-    queryKey: ["knowledge-items", workspaceId, includeArchived],
-    queryFn: () => api.listKnowledgeItems(workspaceId as string, includeArchived),
+    queryKey: ["knowledge-items", workspaceId, includeArchived, q],
+    queryFn: () => api.listKnowledgeItems(workspaceId as string, includeArchived, q || undefined),
     enabled: Boolean(workspaceId)
   });
 }

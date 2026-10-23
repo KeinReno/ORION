@@ -2344,8 +2344,8 @@ export class ApiClient {
   async deleteKnowledgeCategory(workspaceId: string, categoryId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/knowledge/categories/${categoryId}`, undefined, z.unknown());
   }
-  listKnowledgeItems(workspaceId: string, includeArchived = false): Promise<KnowledgeItem[]> {
-    const query = buildQuery({ includeArchived: includeArchived ? "true" : undefined });
+  listKnowledgeItems(workspaceId: string, includeArchived = false, q?: string): Promise<KnowledgeItem[]> {
+    const query = buildQuery({ includeArchived: includeArchived ? "true" : undefined, q: q?.trim() || undefined });
     return this.request("GET", `/workspaces/${workspaceId}/knowledge/items${query}`, undefined, z.array(knowledgeItemSchema));
   }
   getKnowledgeItem(workspaceId: string, itemId: string): Promise<KnowledgeItemDetail> {
