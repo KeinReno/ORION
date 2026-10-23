@@ -102,6 +102,17 @@ h1{font-size:1.5rem;letter-spacing:-.02em}h2{font-size:1.125rem}.primary{font-we
 .markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
 .markdown-body :is(td,th) { border: 1px solid var(--line); padding: 8px; }
 
+.editor-text { margin: 18px 0; }
+.editor-text > label { display: block; font-size: .9rem; color: var(--muted); margin: 0 0 8px; }
+.editor-text textarea { margin-top: 0; }
+.format-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.format-bar button { min-width: 48px; min-height: 48px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
+.draft-checklist .draft-checklist-extract { margin: 12px 0 0; padding: 8px 0; min-height: 48px; justify-content: flex-start; background: none; color: var(--accent); font-size: .85rem; }
+.draft-checklist .helper { margin: 6px 0 0; }
+.draft-checklist .task-checklist-items input { flex: 1; width: 100%; min-width: 0; min-height: 48px; }
+.draft-checklist .completed input { color: var(--muted); text-decoration: line-through; }
+.draft-checklist-undo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: .85rem; color: var(--muted); min-width: 0; }
+.draft-checklist-undo button { padding: 8px; min-height: 48px; background: none; color: var(--accent); font-size: .85rem; }
 .task-checklist { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0; margin: 6px 0 18px; min-width: 0; }
 .task-checklist-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .task-checklist-heading h2 { font-size: 1rem; margin: 0; }

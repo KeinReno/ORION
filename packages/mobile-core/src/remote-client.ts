@@ -1,7 +1,7 @@
 import { prepareListMutation, type MobileListMutation } from "./mobile-lists";
 import { ReplicaEngine, type ReplicaState, type ReplicaStorage, type SyncTransport } from "@orion/core";
 import { parseMobileReplica, prepareLocalImport, remoteScopeKey, type MobileReplicaEnvelope, type RemoteScope } from "./mobile-replica";
-import { entryFields, type Draft } from "./mobile-models";
+import { draftSchema, entryFields, pendingChecklistItems, type Draft } from "./mobile-models";
 import type { MobileSnapshot } from "./index";
 
 export interface ReplicaIO {
@@ -66,11 +66,37 @@ export class MobileRemoteClient {
   }
   async saveEntry(draft: Draft): Promise<void> {
     if (!this.storage.envelope?.replica.included.includes(draft.kind)) throw new Error("Этот модуль недоступен в пространстве компьютера");
-    const id = draft.id ?? crypto.randomUUID();
-    const existing = this.engine.entities()[draft.kind][id];
-    const fields = entryFields(draft);
-    await this.write(() => this.engine.enqueue({ entity: draft.kind, entityId: id, kind: existing ? "patch" : "create", fields,
-      ...(existing ? { expectedRevision: draft.expectedRevision ?? this.revision(draft.kind, id) } : {}) }));
+    const parsed = draftSchema.parse(draft);
+    const id = parsed.id ?? crypto.randomUUID();
+    const fields = entryFields(parsed);
+    const staged = parsed.kind === "task" ? pendingChecklistItems(parsed.checklist) : [];
+    // Invalid rows are rejected before the parent is queued, so a failed save leaves no half-entry.
+    const seen = new Set<string>();
+    for (const item of staged) {
+      const current = this.engine.entities().task[item.id];
+      if (item.id === id || seen.has(item.id) || (current && current.parentId !== id)) {
+        throw new Error("Пункт чек-листа повторяет существующую запись. Удалите его и добавьте снова.");
+      }
+      seen.add(item.id);
+    }
+    await this.write(async () => {
+      const existing = this.engine.entities()[parsed.kind][id];
+      await this.engine.enqueue({ entity: parsed.kind, entityId: id, kind: existing ? "patch" : "create", fields,
+        ...(existing ? { expectedRevision: parsed.expectedRevision ?? this.revision(parsed.kind, id) } : {}) });
+      // Staged rows are queued after their parent. Stable row ids make a retry after a partial
+      // disk failure skip rows that already reached the queue instead of duplicating them.
+      for (const item of staged) {
+        const current = this.engine.entities().task[item.id];
+        if (current) {
+          if (current.parentId !== id) throw new Error("Пункт чек-листа повторяет существующую запись. Удалите его и добавьте снова.");
+          continue;
+        }
+        const siblings = Object.values(this.engine.entities().task).filter((task) => task.parentId === id);
+        const sortOrder = siblings.reduce((max, task) => Math.max(max, typeof task.sortOrder === "number" ? task.sortOrder : 0), 0) + 10;
+        await this.engine.enqueue({ entity: "task", entityId: item.id, kind: "create",
+          fields: { title: item.title, description: "", priority: "normal", parentId: id, sortOrder, ...(item.done ? { status: "done" } : {}) } });
+      }
+    });
   }
   async addTaskChecklistItem(parentId: string, title: string): Promise<void> {
     if (!this.hasModule("task")) throw new Error("Задачи недоступны в копии пространства");

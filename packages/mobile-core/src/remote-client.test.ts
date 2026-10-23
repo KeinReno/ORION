@@ -10,9 +10,16 @@ class LocalDisk implements SnapshotStorage {
   async write(raw: string) { this.raw = raw; }
 }
 class Copies implements ReplicaIO {
-  data = new Map<string, string>(); fail = false;
+  data = new Map<string, string>(); fail = false; failAfter: number | null = null;
   async read(key: string) { return this.data.get(key) ?? null; }
-  async write(key: string, raw: string) { if (this.fail) throw new Error("disk full"); this.data.set(key, raw); }
+  async write(key: string, raw: string) {
+    if (this.fail) throw new Error("disk full");
+    if (this.failAfter !== null) {
+      if (this.failAfter === 0) { this.failAfter = null; throw new Error("disk full"); }
+      this.failAfter -= 1;
+    }
+    this.data.set(key, raw);
+  }
   async clear(key: string) { this.data.delete(key); }
 }
 const scope: RemoteScope = { nodeId: "synthetic-node", fingerprint: "AA:BB", userId: "user", workspaceId: "ws" };
@@ -57,6 +64,34 @@ describe("Mobile remote replica and portable backup", () => {
 
     await restarted.deleteEntry("task", parentId); await restarted.sync(); await observer.sync();
     expect(observer.engine.tasks().filter((task) => task.id === parentId || task.parentId === parentId)).toEqual([]);
+  });
+
+  it("queues a staged checklist with its new task and finishes it safely after a partial write", async () => {
+    const io = new Copies(); const host = new MemoryHost();
+    const client = await MobileRemoteClient.create(scope, io, host); await client.sync();
+    const taskId = crypto.randomUUID();
+    const steps = [
+      { id: crypto.randomUUID(), title: " Документы ", done: true },
+      { id: crypto.randomUUID(), title: "Зарядка", done: false },
+    ];
+    const entry = { ...draft("Поездка"), kind: "task" as const, id: taskId, checklist: steps };
+    io.failAfter = 2;
+    await expect(client.saveEntry(entry)).rejects.toThrow("disk full");
+    expect(client.engine.entities().task[taskId]).toBeDefined();
+    expect(Object.values(client.engine.entities().task).filter((task) => task.parentId === taskId)).toHaveLength(1);
+
+    await client.saveEntry(entry);
+    const children = Object.values(client.engine.entities().task).filter((task) => task.parentId === taskId);
+    expect(children.map((task) => [task.id, task.title, task.status, task.sortOrder])).toEqual([
+      [steps[0].id, "Документы", "done", 10], [steps[1].id, "Зарядка", "todo", 20],
+    ]);
+    await client.sync(); host.nowMs += 1000;
+    const observer = await MobileRemoteClient.create(scope, new Copies(), host); await observer.sync();
+    expect(observer.engine.tasks().filter((task) => task.parentId === taskId).map((task) => task.id).sort()).toEqual(steps.map((step) => step.id).sort());
+
+    await observer.saveEntry({ ...entry, checklist: undefined });
+    await observer.sync(); await client.sync();
+    expect(client.engine.tasks().filter((task) => task.parentId === taskId)).toHaveLength(2);
   });
 
   it("converges offline lists across two replicas and rejects list scope contamination", async () => {

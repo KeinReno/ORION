@@ -10,7 +10,8 @@ export * from "./dictation";
 export * from "./backup";
 export * from "./mobile-replica";
 export * from "./remote-client";
-import { draftSchema, entryFields, type Draft } from "./mobile-models";
+import { draftSchema, entryFields, pendingChecklistItems, type Draft } from "./mobile-models";
+import { applyPortableRestore, type RestoreMode, type RestoreResult } from "./backup";
 import { applyOpLocally, emptyEntities, type ReplicaEntityMap } from "@orion/core";
 import {
   HlcClock, LAN_DEFAULT_PORT, normalizeOpFields, noteSchema, taskSchema,
@@ -105,16 +106,17 @@ export class MobileRepository {
 
   snapshot(): MobileSnapshot { return structuredClone(this.state); }
 
-  private transaction(change: (next: MobileSnapshot) => void): Promise<void> {
+  private transaction<T = void>(change: (next: MobileSnapshot) => T): Promise<T> {
     const run = this.tail.then(async () => {
       const next = structuredClone(this.state);
-      change(next);
+      const outcome = change(next);
       const raw = JSON.stringify(snapshotSchema.parse(next));
       if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
         throw new Error("Хранилище alpha заполнено. Данные сохранены; новую запись сохранить не удалось.");
       }
       await this.storage.write(raw);
       this.state = next;
+      return outcome;
     });
     this.tail = run.catch(() => undefined);
     return run;
@@ -191,6 +193,10 @@ export class MobileRepository {
       if (draft && ((clearDraft && draft.id === op.entityId) || (op.kind === "delete" && (draft.id === op.entityId || (op.entity === "list" && draft.parentId === op.entityId))))) delete next.listDrafts.phone;
     });
   }
+  /** Validates and applies a portable backup in one atomic local write. */
+  restoreBackup(raw: string, mode: RestoreMode): Promise<RestoreResult> {
+    return this.transaction((next) => applyPortableRestore(next, raw, mode));
+  }
   markBackup(sequence: number): Promise<void> {
     return this.transaction((next) => {
       if (!Number.isInteger(sequence) || sequence < 0 || sequence > next.deviceSeq) throw new Error("Некорректная версия копии");
@@ -211,7 +217,25 @@ export class MobileRepository {
     const parsed = draftSchema.parse(draft);
     return this.transaction((next) => {
       const fields = entryFields(parsed);
-      this.apply(next, parsed.kind, parsed.id, fields);
+      const parentId = this.apply(next, parsed.kind, parsed.id, fields);
+      if (parsed.kind === "task" && parsed.checklist?.length) {
+        const pending = pendingChecklistItems(parsed.checklist);
+        const ids = new Set<string>();
+        for (const item of pending) {
+          if (ids.has(item.id) || item.id === parentId || next.tasks.some((task) => task.id === item.id)) {
+            throw new Error("Пункт чек-листа повторяет существующую запись. Удалите его и добавьте снова.");
+          }
+          ids.add(item.id);
+        }
+        let sortOrder = next.tasks.filter((task) => task.parentId === parentId).reduce((max, task) => Math.max(max, task.sortOrder), 0);
+        for (const item of pending) {
+          sortOrder += 10;
+          this.apply(next, "task", null, {
+            title: item.title, description: "", priority: "normal", parentId, sortOrder,
+            ...(item.done ? { status: "done" } : {}),
+          }, false, item.id);
+        }
+      }
       next.draft = null;
     });
   }
@@ -239,10 +263,10 @@ export class MobileRepository {
     return clean;
   }
   setTaskDone(id: string, done: boolean): Promise<void> {
-    return this.transaction((next) => this.apply(next, "task", id, { status: done ? "done" : "todo" }));
+    return this.transaction((next) => { this.apply(next, "task", id, { status: done ? "done" : "todo" }); });
   }
   archiveNote(id: string, archived: boolean): Promise<void> {
-    return this.transaction((next) => this.apply(next, "note", id, { archivedAt: archived ? new Date().toISOString() : null }));
+    return this.transaction((next) => { this.apply(next, "note", id, { archivedAt: archived ? new Date().toISOString() : null }); });
   }
 
   deleteEntry(entity: "task" | "note", id: string): Promise<void> {
@@ -253,14 +277,14 @@ export class MobileRepository {
     });
   }
 
-  private apply(next: MobileSnapshot, entity: "task" | "note", id: string | null, fields: Record<string, unknown>, remove = false) {
+  private apply(next: MobileSnapshot, entity: "task" | "note", id: string | null, fields: Record<string, unknown>, remove = false, createId?: string): string {
     const existing: Task | Note | undefined = id
       ? (entity === "task" ? next.tasks : next.notes).find((item) => item.id === id) : undefined;
     if (id && !existing) throw new Error("Запись не найдена. Вернитесь к списку.");
     const clock = new HlcClock(next.deviceId, Date.now, next.clock);
     const op: SyncOp = syncOpSchema.parse({
       opId: crypto.randomUUID(), deviceId: next.deviceId, deviceSeq: next.deviceSeq + 1,
-      hlc: clock.now(), entity, entityId: id ?? crypto.randomUUID(),
+      hlc: clock.now(), entity, entityId: id ?? createId ?? crypto.randomUUID(),
       kind: remove ? "delete" : id ? "patch" : "create",
       fields: normalizeOpFields(entity, fields),
       ...(existing ? { expectedRevision: existing.revision } : {}),
@@ -276,5 +300,6 @@ export class MobileRepository {
     next.outbox.push(op);
     next.deviceSeq = op.deviceSeq;
     next.clock = clock.state();
+    return op.entityId;
   }
 }

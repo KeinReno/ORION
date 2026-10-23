@@ -2,6 +2,8 @@ package io.kaiden.orion.android;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -9,9 +11,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -67,5 +71,56 @@ public class OrionBackupPlugin extends Plugin {
             status.put("saved", true); call.resolve(status);
         } catch (Exception error) { call.reject("Резервная копия не записана полностью. Повторите экспорт."); }
         finally { temporary.delete(); }
+    }
+
+    private static final int MAX_BACKUP_BYTES = 24 * 1024 * 1024;
+
+    @PluginMethod
+    public void importBackup(PluginCall call) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] { "application/json", "text/plain", "application/octet-stream" });
+            startActivityForResult(call, intent, "backupSelected");
+        } catch (Exception error) {
+            call.reject("Не удалось открыть выбор файла. Повторите.");
+        }
+    }
+
+    @ActivityCallback
+    private void backupSelected(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSObject status = new JSObject();
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            status.put("cancelled", true);
+            call.resolve(status);
+            return;
+        }
+        try (InputStream input = getContext().getContentResolver().openInputStream(result.getData().getData())) {
+            if (input == null) throw new Exception();
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            byte[] buffer = new byte[65536];
+            int count; int total = 0;
+            while ((count = input.read(buffer)) != -1) {
+                total += count;
+                if (total > MAX_BACKUP_BYTES) throw new Exception();
+                bytes.write(buffer, 0, count);
+            }
+            String value = new String(bytes.toByteArray(), StandardCharsets.UTF_8);
+            JSONObject backup = new JSONObject(value);
+            if (!"kaiden-orion-android-backup".equals(backup.optString("format")) || backup.optInt("version") != 1) throw new Exception();
+            String name = null;
+            // The display name is cosmetic: a provider that refuses the query must not reject a valid backup.
+            try (Cursor cursor = getContext().getContentResolver().query(result.getData().getData(), new String[] { OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) name = cursor.getString(0);
+            } catch (Exception ignored) { name = null; }
+            status.put("cancelled", false);
+            status.put("value", value);
+            status.put("name", name == null ? JSONObject.NULL : name);
+            call.resolve(status);
+        } catch (Exception error) {
+            call.reject("Файл не похож на резервную копию Orion или больше 24 МБ.");
+        }
     }
 }

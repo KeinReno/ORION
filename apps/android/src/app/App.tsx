@@ -1,5 +1,8 @@
 import { EMPTY_TASK_FILTERS } from "../features/tasks/task-filters";
 import { TaskChecklist } from "../features/tasks/task-checklist";
+import { DraftChecklist } from "../features/tasks/draft-checklist";
+import { applyMarkdownFormat, type MarkdownFormat } from "../features/tasks/markdown-format";
+import { extractChecklist } from "../features/tasks/text-to-checklist";
 import { MarkdownPreview } from "../features/markdown-preview";
 import type { TaskSort, NoteSort } from "../features/view-order";
 import { EntryFields } from "../features/entry-fields";
@@ -18,7 +21,7 @@ import { DepthCard } from "../depth-card";
 import React, { useEffect, useRef, useState } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { MoreHorizontal, ArrowLeft, Plus, ListTodo, NotebookPen, Smartphone, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { MoreHorizontal, ArrowLeft, Bold, Heading2, Italic, List, ListTodo, NotebookPen, Plus, Quote, Smartphone, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { lanProfileSchema, createPortableBackup, appendDictation, type Draft } from "@orion/mobile-core";
 import { isTaskClosed, type Task, type Note } from "@orion/shared-types";
 import { QuickActions } from "../quick-actions";
@@ -65,6 +68,8 @@ export default function App() {
   const [address, setAddress] = useState("");
   const [port, setPort] = useState("4443");
   const heading = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const pendingSelection = useRef<{ start: number; end: number } | null>(null);
   const updates = useUpdates(data?.settings);
   const theme = data?.settings.theme ?? "system";
   const depth = useDepth(data?.settings.depthEffects ?? false, data?.settings.depthStrength ?? 60);
@@ -96,6 +101,13 @@ export default function App() {
   const activeSettingsPage = navigation.route.kind === "settings" ? navigation.route.page : undefined;
   useEffect(() => { heading.current?.focus(); }, [tab, activeSettingsPage, editor?.kind, editor?.id]);
   useEffect(() => {
+    const selection = pendingSelection.current;
+    if (!selection || !bodyRef.current) return;
+    pendingSelection.current = null;
+    bodyRef.current.focus({ preventScroll: true });
+    bodyRef.current.setSelectionRange(selection.start, selection.end);
+  }, [editor?.body]);
+  useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: light)");
     const apply = () => applyMobileTheme(theme, data?.settings.darkTheme ?? "kaiden-precision", media.matches);
     apply(); media.addEventListener("change", apply);
@@ -113,6 +125,29 @@ export default function App() {
     void save?.then(() => {
       draftWriteError.current = false; setData(repo.current!.snapshot()); setNotice("Черновик сохранён на телефоне");
     }).catch(() => { draftWriteError.current = true; setError("Черновик не записан на диск. Не закрывайте редактор; попробуйте сохранить ещё раз."); setNotice(""); }).finally(() => { draftWrites.current--; });
+  }
+  function formatBody(format: MarkdownFormat) {
+    if (!editor || editor.kind !== "task") return;
+    const area = bodyRef.current;
+    const result = applyMarkdownFormat({
+      value: editor.body,
+      start: area?.selectionStart ?? editor.body.length,
+      end: area?.selectionEnd ?? editor.body.length,
+    }, format);
+    if (result.value === editor.body) return;
+    pendingSelection.current = { start: result.start, end: result.end };
+    changeDraft({ ...editor, body: result.value });
+  }
+  function takeChecklistFromBody() {
+    if (!editor || editor.kind !== "task") return;
+    try {
+      const extracted = extractChecklist(editor.body, editor.checklist?.length ?? 0);
+      changeDraft({
+        ...editor, body: extracted.body,
+        checklist: [...(editor.checklist ?? []), ...extracted.items.map((item) => ({ ...item, id: crypto.randomUUID() }))],
+      });
+      setError("");
+    } catch (catchError) { setError(errorText(catchError)); }
   }
   function editTask(task: Task) {
     begin({ kind: "task", id: task.id, title: task.title, body: task.description, priority: task.priority, status: task.status, dueAt: task.dueAt, startAt: task.startAt, estimatedMinutesText: task.estimatedMinutes?.toString() ?? "",
@@ -205,16 +240,29 @@ export default function App() {
     <label>Название<input aria-label="Название" value={editor.title} maxLength={200} placeholder={editor.kind === "task" ? "Что нужно сделать?" : "О чём эта заметка?"}
       disabled={busy || dictating} onChange={(e) => changeDraft({ ...editor, title: e.target.value })} /></label>
     {!editor.title.trim() && <p className="helper">Добавьте название, чтобы сохранить запись.</p>}
-    <label>{editor.kind === "task" ? "Описание" : "Текст заметки"}
-      <textarea aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body} maxLength={20000} rows={12} disabled={busy || dictating}
+    <div className="editor-text">
+      <label htmlFor="editor-body">{editor.kind === "task" ? "Описание" : "Текст заметки"}</label>
+      {editor.kind === "task" && <div className="format-bar" role="toolbar" aria-label="Форматирование описания"
+        onMouseDown={(event) => event.preventDefault()}>
+        {([["bold", Bold, "Жирный текст"], ["italic", Italic, "Курсив"], ["heading", Heading2, "Заголовок"],
+          ["list", List, "Список"], ["quote", Quote, "Цитата"]] as const).map(([format, Icon, label]) =>
+          <button key={format} type="button" aria-label={label} title={label} disabled={busy || dictating}
+            onClick={() => formatBody(format)}><Icon size={18} /></button>)}
+      </div>}
+      <textarea ref={bodyRef} id="editor-body" aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body}
+        maxLength={20000} rows={12} disabled={busy || dictating}
         placeholder={editor.kind === "task" ? "Детали, которые пригодятся позже" : "Пишите свободно. Разметка Markdown сохранится."}
-        onChange={(e) => changeDraft({ ...editor, body: e.target.value })} /></label>
-    {editor.kind === "task" && <TaskChecklist parentId={editorTaskId} items={editorTaskId ? checklistByParent.get(editorTaskId) ?? [] : []} busy={busy || dictating}
-      remote={Boolean(remote)} nested={nestedCounts}
-      add={(title) => action((value) => remote ? remote.addTaskChecklistItem(editorTaskId!, title) : value.addTaskChecklistItem(editorTaskId!, title), remote ? "Пункт сохранён в копии. Синхронизируйте для отправки на ПК." : "Пункт добавлен")}
-      rename={(item, title) => action((value) => remote ? remote.renameTaskChecklistItem(item.id, title) : value.renameTaskChecklistItem(item.id, title), "Название пункта сохранено")}
-      toggle={(item) => action((value) => remote ? remote.setTaskDone(item.id, !isTaskClosed(item.status)) : value.setTaskDone(item.id, !isTaskClosed(item.status)), "Пункт чек-листа сохранён")}
-      remove={(item) => action((value) => remote ? remote.deleteEntry("task", item.id) : value.deleteEntry("task", item.id), remote ? "Удаление пункта сохранено в копии. Синхронизируйте для отправки на ПК." : "Пункт чек-листа удалён")} />}
+        onChange={(e) => changeDraft({ ...editor, body: e.target.value })} />
+    </div>
+    {editor.kind === "task" && (editorTaskId
+      ? <TaskChecklist parentId={editorTaskId} items={checklistByParent.get(editorTaskId) ?? []} busy={busy || dictating}
+        remote={Boolean(remote)} nested={nestedCounts}
+        add={(title) => action((value) => remote ? remote.addTaskChecklistItem(editorTaskId, title) : value.addTaskChecklistItem(editorTaskId, title), remote ? "Пункт сохранён в копии. Синхронизируйте для отправки на ПК." : "Пункт добавлен")}
+        rename={(item, title) => action((value) => remote ? remote.renameTaskChecklistItem(item.id, title) : value.renameTaskChecklistItem(item.id, title), "Название пункта сохранено")}
+        toggle={(item) => action((value) => remote ? remote.setTaskDone(item.id, !isTaskClosed(item.status)) : value.setTaskDone(item.id, !isTaskClosed(item.status)), "Пункт чек-листа сохранён")}
+        remove={(item) => action((value) => remote ? remote.deleteEntry("task", item.id) : value.deleteEntry("task", item.id), remote ? "Удаление пункта сохранено в копии. Синхронизируйте для отправки на ПК." : "Пункт чек-листа удалён")} />
+      : <DraftChecklist items={editor.checklist ?? []} busy={busy || dictating} canExtract={Boolean(editor.body.trim())}
+        change={(checklist) => changeDraft({ ...editor, checklist })} extract={takeChecklistFromBody} />)}
     {editor.kind === "task" && <fieldset disabled={busy || dictating}><legend>Приоритет</legend><div className="segments">
       {([["low", "Низкий"], ["normal", "Обычный"], ["high", "Высокий"]] as const).map(([value, label]) =>
         <label key={value}><input type="radio" name="priority" checked={editor.priority === value} onChange={() => changeDraft({ ...editor, priority: value })} /><span>{label}</span></label>)}
@@ -329,6 +377,8 @@ export default function App() {
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
       {navigation.route.kind === "settings" ? <SettingsCenter route={navigation.route} navigate={navigate} replace={(route) => navigate(route, true)}
         data={data} writes={settingWrites} updates={updates} depth={depth} backup={() => void backup()} backupBusy={busy} note={() => quickEntry("note")}
+        restore={{ repository: repo.current, onError: setError, onNotice: setNotice, onBusy: setBusy,
+          onRestored: () => setData(repo.current!.snapshot()) }}
         connection={{ paired: Boolean(connection.state?.paired), pending: remote?.engine.status().pending ?? 0, conflicts: remote?.engine.status().conflicts ?? 0 }} />
         : tab === "more" ? <MorePage modules={modules} navigate={navigate} />
         : tab === "connection" ? <ConnectionPage data={data} connection={connection} address={address} port={port}

@@ -1,5 +1,13 @@
 import { z } from "zod";
 import { taskStatusSchema, validateOpFields } from "@orion/shared-types";
+/** Checklist steps typed before a task exists; they become child tasks on save. */
+export const draftChecklistItemSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().max(200),
+  done: z.boolean().default(false),
+});
+export type DraftChecklistItem = z.infer<typeof draftChecklistItemSchema>;
+export const MAX_DRAFT_CHECKLIST_ITEMS = 200;
 export const draftSchema = z.object({
   kind: z.enum(["task", "note"]), id: z.string().uuid().nullable(),
   title: z.string().max(200), body: z.string().max(20_000),
@@ -10,8 +18,18 @@ export const draftSchema = z.object({
   pinnedAt: z.string().datetime().nullable().optional(),
   lastDictationId: z.string().uuid().optional(),
   expectedRevision: z.number().int().min(1).optional(),
+  checklist: z.array(draftChecklistItemSchema).max(MAX_DRAFT_CHECKLIST_ITEMS).optional(),
 });
 export type Draft = z.infer<typeof draftSchema>;
+
+/** Drops blank staged rows and validates titles before anything is durably written. */
+export function pendingChecklistItems(items: readonly DraftChecklistItem[] | undefined): DraftChecklistItem[] {
+  const pending = (items ?? []).map((item) => ({ ...item, title: item.title.trim() })).filter((item) => item.title);
+  for (const item of pending) {
+    if (item.title.length > 200) throw new Error("Название пункта длиннее 200 символов.");
+  }
+  return pending;
+}
 
 // Optional fields are omitted for legacy drafts: editing must not erase unknown metadata.
 export function entryFields(input: Draft): Record<string, unknown> {

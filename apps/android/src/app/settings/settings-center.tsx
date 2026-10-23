@@ -6,6 +6,7 @@ import { SETTINGS_PAGES, SETTINGS_FIELDS, searchSettings } from "./catalog";
 import { AppearanceSettings } from "./appearance";
 import { MotionSettings } from "./motion";
 import { UpdateSettings } from "./updates";
+import { RestoreSettings, type RestoreSettingsProps } from "./restore";
 import { RouteLink } from "../navigation/route-link";
 import type { AppRoute } from "../navigation/routes";
 import type { useSettingWrites } from "./use-setting-writes";
@@ -13,11 +14,12 @@ import type { useUpdates } from "../../use-updates";
 import { ANDROID_VERSION, ANDROID_VERSION_CODE, ANDROID_RELEASE_LABEL } from "../../updates";
 
 const storageKeys: Partial<Record<string, keyof MobileSettings>> = { theme: "theme", "dark-theme": "darkTheme", "depth-effects": "depthEffects", "depth-strength": "depthStrength", "auto-check-updates": "autoCheckUpdates", "download-updates-wifi": "downloadUpdatesOnWifi" };
-export function SettingsCenter({ route, navigate, replace, data, writes, updates, depth, backup, backupBusy, connection, note }: {
+export function SettingsCenter({ route, navigate, replace, data, writes, updates, depth, backup, backupBusy, connection, note, restore }: {
   route: Extract<AppRoute, { kind: "settings" }>; navigate: (route: AppRoute) => void; replace: (route: AppRoute) => void;
   data: MobileSnapshot; writes: ReturnType<typeof useSettingWrites>; updates: ReturnType<typeof useUpdates>;
   depth: { status: string }; backup: () => void; backupBusy: boolean;
   connection: { pending: number; conflicts: number; paired: boolean }; note: () => void;
+  restore: Omit<RestoreSettingsProps, "current" | "disabled">;
 }) {
   const settings = { ...data.settings, ...writes.drafts };
   const controls = { settings, pending: writes.pending, patch: writes.patch };
@@ -55,12 +57,16 @@ export function SettingsCenter({ route, navigate, replace, data, writes, updates
     {page.id === "appearance" && <AppearanceSettings {...controls} />}
     {page.id === "motion" && <MotionSettings {...controls} depth={depth} />}
     {page.id === "updates" && <UpdateSettings {...controls} updates={updates} />}
-    {page.id === "data" && <section className="settings-section" id="backup"><h2>Записи на телефоне</h2>
+    {page.id === "data" && <><section className="settings-section" id="backup"><h2>Записи на телефоне</h2>
       <dl className="settings-facts"><div><dt>Задачи</dt><dd>{data.tasks.length}</dd></div><div><dt>Заметки</dt><dd>{data.notes.length}</dd></div><div><dt>Списки</dt><dd>{data.lists.length}</dd></div><div><dt>Финансовые операции</dt><dd>{data.finance?.transactions.length ?? 0}</dd></div></dl>
       <p>Экспорт сохраняет локальные записи, черновики и содержимое открытой копии пространства ПК.</p>
-      <p className="helper">Файл не является полным образом приложения: настройки, пароли и ключи подключения не входят. Восстановление из файла в этой версии ещё не реализовано.</p>
+      <p className="helper">Файл не является полным образом приложения: настройки, пароли и ключи подключения не входят. Восстановление возвращает записи на телефон, но не настройки и не копию пространства ПК.</p>
       <button disabled={backupBusy} onClick={backup}><Download size={18} />Сохранить резервную копию</button>
-    </section>}
+    </section>
+      <RestoreSettings {...restore} disabled={backupBusy} current={{
+        tasks: data.tasks.length, notes: data.notes.length, lists: data.lists.length,
+        transactions: data.finance?.transactions.length ?? 0,
+      }} /></>}
     {page.id === "voice" && <section className="settings-section" id="dictation"><h2>Системная диктовка</h2>
       <p>В редакторе задачи или заметки нажмите «Надиктовать». Распознанный текст можно добавить в название или основной текст.</p>
       <p className="helper">Распознаёт системное приложение Android. Язык и работа без интернета зависят от установленного провайдера. Orion пока не сохраняет аудиофайл.</p>

@@ -75,6 +75,37 @@ describe("Android local repository", () => {
     expect(syncOpSchema.safeParse(restarted.snapshot().outbox.slice(-1)[0]).success).toBe(true);
   });
 
+  it("creates a task together with its staged checklist in one durable write", async () => {
+    const disk = new Disk(); const repo = await MobileRepository.open(disk);
+    const steps = [
+      { id: crypto.randomUUID(), title: "  Документы  ", done: true },
+      { id: crypto.randomUUID(), title: "Зарядка", done: false },
+      { id: crypto.randomUUID(), title: "   ", done: false },
+    ];
+    await repo.saveEntry({ ...draft("task", "Поездка"), checklist: steps });
+    const snapshot = repo.snapshot();
+    const parent = snapshot.tasks.find((task) => !task.parentId)!;
+    const children = snapshot.tasks.filter((task) => task.parentId === parent.id);
+    expect(children.map((task) => [task.id, task.title, task.status, task.sortOrder])).toEqual([
+      [steps[0].id, "Документы", "done", 10],
+      [steps[1].id, "Зарядка", "todo", 20],
+    ]);
+    expect(snapshot.outbox.slice(-3).map((op) => [op.kind, op.entityId])).toEqual([
+      ["create", parent.id], ["create", steps[0].id], ["create", steps[1].id],
+    ]);
+    expect(snapshot.draft).toBeNull();
+    const restarted = await MobileRepository.open(disk);
+    expect(restarted.snapshot().tasks).toHaveLength(3);
+
+    const beforeFailure = restarted.snapshot(); disk.fail = true;
+    await expect(restarted.saveEntry({ ...draft("task", "Не записалось"), checklist: [{ id: crypto.randomUUID(), title: "Пункт", done: false }] })).rejects.toThrow("disk full");
+    expect(restarted.snapshot()).toEqual(beforeFailure);
+    disk.fail = false;
+
+    await expect(restarted.saveEntry({ ...draft("task", "Дубль"), checklist: [{ id: parent.id, title: "Чужой id", done: false }] })).rejects.toThrow("повторяет существующую");
+    expect(restarted.snapshot().tasks).toHaveLength(3);
+  });
+
   it("deletes only the chosen entry atomically and retains unrelated drafts and valid delete operations", async () => {
     const disk = new Disk(); const repo = await MobileRepository.open(disk);
     await repo.saveEntry(draft("task", "Удалить")); await repo.saveEntry(draft("note", "Оставить"));
