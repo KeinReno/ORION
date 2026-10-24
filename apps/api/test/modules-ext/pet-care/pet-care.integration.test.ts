@@ -193,7 +193,7 @@ describe("Pet Care module connected by manifest", () => {
     const first = await call("PUT", url("2026-10-18"), { vomitingCount: 2, stool: "liquid", weightKg: 4.4, symptoms: [{ id: "vomiting", severity: "severe", count: 2, time: "night" }] });
     expect(first.status).toBe(200);
     expect(first.data).toMatchObject({ day: "2026-10-18", status: "bad", statusAuto: true, vomitingCount: 2, weightKg: 4.4, temperature: null });
-    expect(first.data.symptoms).toEqual([{ id: "vomiting", severity: "severe", count: 2, time: "night", note: "" }]);
+    expect(first.data.symptoms).toEqual([{ id: "vomiting", severity: "severe", count: 2, time: "night", note: "", amount: "normal" }]);
 
     // Повторное сохранение — та же строка, а не вторая; ручной статус уважается.
     const again = await call("PUT", url("2026-10-18"), { status: "good", statusAuto: false, note: "Всё прошло" });

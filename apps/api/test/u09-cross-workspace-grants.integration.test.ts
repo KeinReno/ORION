@@ -20,7 +20,7 @@ describe("U09 cross-workspace grants", () => {
   const emailPrefix = `u09-${runId}`;
 
   beforeAll(async () => {
-    app = await NestFactory.create(AppModule, { logger: false });
+    app = await NestFactory.create(AppModule, { logger: ["error"] });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
     const address = app.getHttpServer().address() as { port: number };
