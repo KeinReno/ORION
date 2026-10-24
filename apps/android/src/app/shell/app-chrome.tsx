@@ -2,10 +2,10 @@ import { Settings, Link2, Grid2X2, type LucideIcon } from "lucide-react";
 import { DepthCard } from "../../depth-card";
 
 export interface NavigationItem { id: string; label: string; icon: LucideIcon }
-export function AppHeader({ scope, updated, settings, connection }: { scope: string; updated: boolean; settings: () => void; connection: () => void }) {
+export function AppHeader({ scope, updated, settings, connection, indicator }: { scope: string; indicator: { tone: string; label: string }; updated: boolean; settings: () => void; connection: () => void }) {
   return <DepthCard elevation="base"><header className="brand"><img src="/kaiden-logo.png" alt="" width="34" height="34" />
     <span>KAIDEN <b>Orion</b></span>
-    <button className="local-label" aria-label="Связь" title="Связь с компьютером" onClick={connection}><Link2 size={16} /><span>{scope}</span></button>
+    <button className="local-label" aria-label="Связь" aria-describedby="connection-indicator-label" title={indicator.label} data-connection={indicator.tone} onClick={connection}><span className="connection-dot" aria-hidden="true" /><Link2 size={16} /><span>{scope}<small id="connection-indicator-label">{indicator.label}</small></span></button>
     <button className="icon-button settings-shortcut" aria-label="Настройки" onClick={settings}><Settings size={21} />{updated && <span className="update-dot" aria-label="Доступно обновление" />}</button>
   </header></DepthCard>;
 }

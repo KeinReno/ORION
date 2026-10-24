@@ -42,7 +42,7 @@ try {
   const handle = page.getByRole("button", { name: "Переместить задачу: " + before[0], exact: true });
   const grip = await handle.boundingBox(); const target = await page.locator("li[data-task-id]").last().boundingBox();
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height - 8, { steps: 8 }); await page.mouse.up();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2 + 10, { steps: 8 }); await page.mouse.up();
   await page.waitForFunction((title) => [...document.querySelectorAll(".task-row .entry-main strong")].at(-1)?.textContent === title, before[0]);
   const ordered = await names(); await page.reload(); await page.getByRole("button", { name: "Переместить задачу: " + ordered[0], exact: true }).waitFor(); assert.deepEqual(await names(), ordered);
   await page.getByRole("button", { name: "Переместить задачу: " + ordered[0], exact: true }).click();

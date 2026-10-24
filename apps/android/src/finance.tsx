@@ -1,5 +1,5 @@
 import { DepthCard } from "./depth-card";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2 } from "lucide-react";
 import { localDate, parseMoney, resolveFinanceDate, type FinanceDraft, type MobileFinance } from "@orion/mobile-core";
 import { useToday } from "./use-today";
@@ -9,6 +9,10 @@ const money = (amount: number) => new Intl.NumberFormat("ru-RU", { style: "curre
 function fresh(finance: MobileFinance, type: "expense" | "income" = "expense"): FinanceDraft {
   return { dateMode: "today", id: crypto.randomUUID(), type, amount: "", accountId: finance.lastAccountId ?? finance.accounts[0]!.id,
     categoryId: finance.categories.find((item) => item.kind === type)!.id, note: "", date: localDate() };
+}
+function FinanceDetails({ initialOpen, children }: { initialOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(initialOpen);
+  return <details className="finance-details" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>{children}</details>;
 }
 export function FinancePage({ finance, busy, saveDraft, save, remove, initialType }: {
   initialType?: "income" | "expense"; finance: MobileFinance; busy: boolean; saveDraft: (draft: FinanceDraft | null) => Promise<void>;
@@ -64,8 +68,8 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
         <div className="finance-categories" role="group" aria-labelledby="finance-category-label">{finance.categories.filter((item) => item.kind === draft.type && !item.archivedAt)
           .map((category) => <button key={category.id} type="button" aria-pressed={draft.categoryId === category.id}
             onClick={() => change({ ...draft, categoryId: category.id })}>{category.name}</button>)}</div>
-        <details key={draft.id} className="finance-details" open={Boolean(draft.note) || draft.date !== today || editing}><summary>Дата и комментарий · {draft.date === today ? "сегодня" : draft.date}</summary><label>Дата<input type="date" required value={draft.date} onChange={(event) => change({ ...draft, date: event.target.value, dateMode: "custom" })} /></label><button type="button" className="text-button" onClick={() => change({ ...draft, date: localDate(), dateMode: "today" })}>Сегодня</button>
-          <label>Комментарий <span>(необязательно)</span><input value={draft.note} maxLength={2000} placeholder="Например, обед" onChange={(event) => change({ ...draft, note: event.target.value })} /></label></details>
+        <FinanceDetails key={draft.id} initialOpen={Boolean(draft.note) || draft.date !== today || editing}><summary>Дата и комментарий · {draft.date === today ? "сегодня" : draft.date}</summary><label>Дата<input type="date" required value={draft.date} onChange={(event) => change({ ...draft, date: event.target.value, dateMode: "custom" })} /></label><button type="button" className="text-button" onClick={() => change({ ...draft, date: localDate(), dateMode: "today" })}>Сегодня</button>
+          <label>Комментарий <span>(необязательно)</span><input value={draft.note} maxLength={2000} placeholder="Например, обед" onChange={(event) => change({ ...draft, note: event.target.value })} /></label></FinanceDetails>
         <p id="finance-error" className="error" role="alert">{error}</p>
         <p className="helper" role="status">{draftStatus}</p>
         <button className="primary finance-save" disabled={!draft.amount.trim()}>{busy ? "Сохраняем…" : editing ? "Сохранить изменения" : draft.type === "expense" ? "Записать расход" : "Записать доход"}</button>

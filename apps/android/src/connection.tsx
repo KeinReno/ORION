@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { DepthCard } from "./depth-card";
-import { useEffect, useState } from "react";
-import { Check, Copy, Download, Link2, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, Download, Link2, RefreshCw, ShieldCheck, Monitor } from "lucide-react";
 import type { MobileSnapshot } from "@orion/mobile-core";
 import type { useLan } from "./use-lan";
 import { ANDROID_RELEASE_LABEL, ANDROID_VERSION } from "./updates";
@@ -22,6 +22,7 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
 }) {
   const discover = connection.discover;
   useEffect(() => { if (Capacitor.isNativePlatform()) void discover(); }, [discover]);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
   const [account, setAccount] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,21 +35,10 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
   const client = connection.client;
   const status = client?.engine.status();
   const blocked = busy || connection.busy;
+  const step = !state?.paired ? connection.pairing?.status === "pending" ? 2 : 1 : !state.user ? 3 : !client ? 4 : 5;
+  useEffect(() => { stepHeading.current?.focus(); }, [step]);
   useEffect(() => { if (state?.user) setPassword(""); }, [state?.user]);
-  return <section className="connection">
-    <DepthCard><section className="settings-section">
-      <h2>Резервная копия</h2>
-      <p>Сохраните задачи, заметки, финансы и черновики в JSON перед первым переносом на компьютер.</p>
-      <button onClick={backup} disabled={blocked}><Download size={18} />Сохранить резервную копию</button>
-      <p className="helper">{backupCurrent ? "Текущая версия записей телефона экспортирована." : "После изменения записей понадобится новая копия."}</p>
-    </section></DepthCard>
-    {state?.paired && <DepthCard><section className="settings-section"><h2>Состояние обмена</h2>
-      <p>{!state.user ? "1. Устройство сопряжено. Теперь войдите в аккаунт компьютера." : !client ? "2. Вход выполнен. Выберите пространство компьютера ниже." : data.remoteActive ? "3. Открыто пространство ПК. Обмен выполняется автоматически, пока Orion открыт." : "3. Пространство выбрано, но сейчас открыт отдельный раздел «На телефоне»."}</p>
-      <p className="helper">Сопряжение даёт доверие устройству. Обмениваются задачи, заметки и списки выбранного пространства ПК. Локальные записи телефона переносятся отдельно, с вашего согласия. Финансы пока не синхронизируются.</p>
-    </section></DepthCard>}
-    {connection.syncError && <p className="error" role="alert">{connection.syncError}</p>}
-    {connection.error && <p className="error" role="alert">{connection.error}</p>}
-    {connection.message && <p className="notice" role="status">{connection.message}</p>}
+  const discovery = <>
     <DepthCard><section className="settings-section">
       <h2>Устройства в локальной сети</h2>
       <p>ПК по кабелю и телефон по Wi-Fi могут быть в одной сети роутера. На ПК включите «Хост LAN».</p>
@@ -69,22 +59,37 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
         <p className="helper">Сертификат и ID должны совпасть с сохранёнными. Повторное разрешение не требуется; смена сертификата требует нового сопряжения.</p>
       </details>}
     </section></DepthCard>
+  </>;
+  return <section className="connection">
+    <section className="connection-overview" aria-label="Настройка синхронизации">
+      <Monitor size={28} aria-hidden="true" />
+      <div><p className="eyebrow">{step === 5 ? "Ваш компьютер" : `Подключение · шаг ${Math.min(step,4)} из 4`}</p>
+        <h2 ref={stepHeading} tabIndex={-1}>{["", "Найдём компьютер", "Разрешите подключение на ПК", "Войдите в аккаунт ПК", "Выберите пространство", "Обмен настроен"][step]}</h2>
+        <p>{step === 5 ? `${state?.node?.name ?? "Orion"} · ${data.remoteSelection?.workspaceName ?? "Пространство ПК"}` : "Выполните текущий шаг. Остальное Orion сохранит для следующего запуска."}</p>
+      </div>
+    </section>
+    {state?.paired && !state.user && <p className="helper">1. Устройство сопряжено. Теперь войдите в аккаунт компьютера.</p>}
+    {connection.syncError && <p className="error" role="alert">{connection.syncError}</p>}
+    {connection.error && <p className="error" role="alert">{connection.error}</p>}
+    {connection.message && <p className="notice" role="status">{connection.message}</p>}
+    {state?.paired ? <details className="connection-disclosure"><summary>Поиск и адрес компьютера</summary>{discovery}</details> : connection.pairing?.status !== "pending" ? <>{discovery}</> : null}
     {!state?.paired ? <DepthCard><section className="settings-section">
-      <h2>Подключить компьютер</h2>
-      <p>В Orion на ПК включите «Хост LAN». Выберите найденный компьютер выше или введите адрес и порт. Телефон и ПК должны находиться в одной сети.</p>
-      <form onSubmit={(e) => { e.preventDefault(); saveProfile(); }}>
+
+      {connection.pairing?.status !== "pending" && <details className="connection-disclosure"><summary>Компьютер не найден? Ввести адрес</summary>      <form onSubmit={(e) => { e.preventDefault(); saveProfile(); }}>
         <label>Адрес компьютера<input value={address} placeholder="192.168.1.20" autoCapitalize="none" autoCorrect="off" onChange={(e) => setAddress(e.target.value)} /></label>
         <label>Порт<input type="number" inputMode="numeric" min="1" max="65535" value={port} onChange={(e) => setPort(e.target.value)} /></label>
         <button disabled={blocked}>Сохранить профиль</button>
       </form>
+      <button className="primary" disabled={blocked || !address.trim() || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535}
+        onClick={() => void connection.begin(address, Number(port))}><Link2 size={18} />Запросить подключение</button>
+      </details>}
       {connection.pairing?.status === "pending" ? <div className="pair-code">
         <h3>Подтвердите телефон на ПК</h3>
         <p>Введите этот код в заявке на компьютере. Если он не принимается, не подтверждайте другое устройство.</p>
         <strong aria-label={"Код сопряжения " + connection.pairing.code.split("").join(" ")}>{connection.pairing.code}</strong>
         <p>{connection.pairing.node.name} · ожидаем подтверждения</p>
         <button disabled={blocked} onClick={() => void connection.poll()}><RefreshCw size={18} />Проверить подтверждение</button>
-      </div> : <button className="primary" disabled={blocked || !address.trim() || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535}
-        onClick={() => void connection.begin(address, Number(port))}><Link2 size={18} />Запросить подключение</button>}
+      </div> : null}
     </section></DepthCard> : <>
       <DepthCard><section className="settings-section"><h2><ShieldCheck size={20} /> {state.node?.name ?? "Компьютер подключён"}</h2>
         <p>Доверие к компьютеру закреплено его сертификатом.</p>
@@ -104,18 +109,27 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
           <button className="primary" disabled={blocked || !password || (!selectedAccount && !email.trim())}>Войти на компьютере</button>
         </form> : <>
           <p>Учётная запись: {state.user.name}</p>
-          <h3>Пространства компьютера</h3>
+          {client ? <details className="connection-disclosure"><summary>Изменить пространство</summary>          <h3>Пространства компьютера</h3>
           <p className="helper">Для офлайн-правок включите гибридный режим нужного пространства на ПК.</p>
           {connection.workspaces.length ? <ul className="workspace-list">{connection.workspaces.map((space) => <li key={space.id}>
             <button disabled={blocked} onClick={() => void connection.connect(space)}>
               <span>{space.name}<small>{space.isPersonal ? "Личное" : "Общее"} · {space.role === "owner" ? "Владелец" : space.role === "lead" ? "Руководитель" : "Участник"}</small></span>
               {data.remoteSelection?.workspaceId === space.id && <Check size={18} />}
             </button></li>)}</ul> : <p>Список пока не загружен или доступных пространств нет.</p>}
-          <button disabled={blocked} onClick={() => void connection.reloadWorkspaces()}>Обновить список пространств</button>
+          <button disabled={blocked} onClick={() => void connection.reloadWorkspaces()}>Обновить список пространств</button></details> : <>          <h3>Пространства компьютера</h3>
+          <p className="helper">Для офлайн-правок включите гибридный режим нужного пространства на ПК.</p>
+          {connection.workspaces.length ? <ul className="workspace-list">{connection.workspaces.map((space) => <li key={space.id}>
+            <button disabled={blocked} onClick={() => void connection.connect(space)}>
+              <span>{space.name}<small>{space.isPersonal ? "Личное" : "Общее"} · {space.role === "owner" ? "Владелец" : space.role === "lead" ? "Руководитель" : "Участник"}</small></span>
+              {data.remoteSelection?.workspaceId === space.id && <Check size={18} />}
+            </button></li>)}</ul> : <p>Список пока не загружен или доступных пространств нет.</p>}
+          <button disabled={blocked} onClick={() => void connection.reloadWorkspaces()}>Обновить список пространств</button></>}
+
         </>}
       </section></DepthCard>
       {client && data.remoteSelection && <DepthCard><section className="settings-section">
         <h2>{data.remoteSelection.workspaceName}</h2>
+        <p className="helper">Автоматический обмен: задачи, заметки и списки этого пространства. Финансы остаются на телефоне.</p>
         <div className="space-choice">
           <button aria-pressed={!data.remoteActive} disabled={blocked} onClick={() => void connection.switchSpace(false)}>На телефоне</button>
           <button aria-pressed={data.remoteActive} disabled={blocked} onClick={() => void connection.switchSpace(true)}>Пространство ПК</button>
@@ -124,14 +138,15 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
           : status?.phase === "syncing" ? "Обмениваемся изменениями…" : status?.asOf ? "Последний ответ ПК: " + new Date(status.asOf).toLocaleString("ru-RU") : "Копия ещё не подтверждена."}</p>
         <p className="helper">Автоматический обмен: при открытии, после правок и каждые 15 секунд, пока приложение активно. В фоне обмен не обещается.</p>
         <p className="helper">В очереди: {status?.pending ?? 0}. Конфликтов: {status?.conflicts ?? 0}.</p>
-        <button className="primary" disabled={blocked || status?.phase === "syncing"} onClick={() => void connection.sync()}><RefreshCw size={18} />Синхронизировать</button>
-        <h3>Скопировать записи телефона</h3>
+        <button disabled={blocked || status?.phase === "syncing"} onClick={() => void connection.sync()}><RefreshCw size={18} />Синхронизировать</button>
+        <details className="connection-disclosure"><summary>Перенести записи «На телефоне» ({data.tasks.length + data.notes.length})</summary>        <h3>Скопировать записи телефона</h3>
         <p>Задач: {data.tasks.length}. Заметок: {data.notes.length}. Оригиналы останутся в разделе «На телефоне».</p><p className="helper">Списки и финансы этим действием не копируются.</p>
         <label className="ack-row"><input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
           <span>Скопировать в «{data.remoteSelection.workspaceName}». Участники этого пространства смогут видеть копии согласно своим правам.</span></label>
-        {!backupCurrent && <p className="helper">Сначала сохраните актуальную резервную копию кнопкой выше.</p>}
+        {!backupCurrent && <button disabled={blocked} onClick={backup}><Download size={18} />Сохранить резервную копию</button>}
         <button disabled={blocked || !backupCurrent || !acknowledged || !(data.tasks.length + data.notes.length)}
           onClick={() => { void connection.importLocal(); setAcknowledged(false); }}><Copy size={18} />Скопировать записи в пространство</button>
+</details>
         {client.engine.conflicts().length > 0 && <div className="conflicts">
           <h3>Конфликты изменений</h3><p>Сравните свою правку с текущей записью. «Моя правка» применится поверх версии ПК после новой синхронизации.</p>
           {client.engine.conflicts().map((conflict) => <section key={conflict.opId}>
@@ -154,6 +169,13 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
         </div>}
       </section></DepthCard>
     </>}
-    <dl><div><dt>Локальные операции телефона</dt><dd>{data.outbox.length}</dd></div><div><dt>Версия</dt><dd>{ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</dd></div></dl>
+    <details className="connection-disclosure"><summary>Резервная копия и сведения</summary>    <DepthCard><section className="settings-section">
+      <h2>Резервная копия</h2>
+      <p>Сохраните задачи, заметки, финансы и черновики в JSON перед первым переносом на компьютер.</p>
+      <button onClick={backup} disabled={blocked}><Download size={18} />Сохранить резервную копию</button>
+      <p className="helper">{backupCurrent ? "Текущая версия записей телефона экспортирована." : "После изменения записей понадобится новая копия."}</p>
+    </section></DepthCard>
+
+    <dl><div><dt>Локальные операции телефона</dt><dd>{data.outbox.length}</dd></div><div><dt>Версия</dt><dd>{ANDROID_VERSION} · {ANDROID_RELEASE_LABEL}</dd></div></dl></details>
   </section>;
 }

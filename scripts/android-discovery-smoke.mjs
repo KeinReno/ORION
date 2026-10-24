@@ -41,6 +41,7 @@ try {
  await page.getByRole("button",{name:"Связь и обмен",exact:true}).click();
  await page.reload();await page.getByText("Доверенный компьютер найден. Его сертификат проверен; адрес обновлён.",{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem("address")),"192.168.1.99");assert.equal(await page.evaluate(()=>window.__begins),0,"remembered device needs no new approval");
+ await page.getByText("Поиск и адрес компьютера",{exact:true}).click();
  await page.evaluate(()=>{window.__reject=true;});await page.getByRole("button",{name:"Проверить доверенный ПК",exact:true}).click();await page.getByRole("alert").filter({hasText:"Сертификат изменился"}).waitFor();
  await page.evaluate(()=>{window.__empty=true;window.__reject=false;});await page.getByRole("button",{name:"Найти Orion в сети",exact:true}).click();await page.getByRole("status").filter({hasText:"Orion не найден"}).waitFor();
  assert.deepEqual(errors,[]);console.log("PASS: discovery without trust, explicit pairing approval, remembered identity readdressing, mismatch error, VPN/empty-state guidance; synthetic bridge only.");

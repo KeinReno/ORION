@@ -132,3 +132,40 @@ h1{font-size:1.5rem;letter-spacing:-.02em}h2{font-size:1.125rem}.primary{font-we
 .task-checklist-delete h3 { font-size: .95rem; margin: 0; overflow-wrap: anywhere; }
 .task-checklist-delete p { color: var(--muted); font-size: .85rem; margin: 8px 0 0; }
 @media(max-width:380px){.task-checklist-add{align-items:stretch;flex-direction:column}.task-checklist-add button{width:100%}.task-checklist-items li{gap:2px}}
+
+/* Alpha21: quieter chrome and progressive connection setup, existing KAIDEN tokens. */
+html { scroll-padding-top: 88px; scroll-padding-bottom: 112px; }
+input, textarea, select, button, summary { -webkit-tap-highlight-color: transparent; }
+select { font: inherit; color: var(--text); }
+button, summary { overflow-wrap: anywhere; }
+.connection-overview { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border: 1px solid var(--line); border-radius: 16px; margin-bottom: 20px; background: var(--raised); }
+.connection-overview > svg { flex-shrink: 0; color: var(--accent); }
+.connection-overview h2 { font-size: 1.2rem; line-height: 1.35; outline: none; }
+.connection-overview .eyebrow { color: var(--muted); font-size: .75rem; margin: 0 0 5px; }
+.connection-overview p { font-size: .85rem; }
+.connection-disclosure { border-bottom: 1px solid var(--line); margin: 8px 0 18px; min-width: 0; }
+.connection-disclosure > summary { min-height: 52px; padding: 14px 0; cursor: pointer; font-weight: 550; }
+.connection-disclosure[open] > summary { color: var(--accent); }
+.connection-disclosure .settings-section { padding: 12px 0 18px; border: 0; }
+.connection .workspace-list li { min-width: 0; }
+.connection .workspace-list li > div { min-width: 0; overflow-wrap: anywhere; }
+.connection .workspace-list li button { white-space: normal; }
+.connection .pair-code { border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--raised); }
+.brand .local-label { text-align: left; gap: 5px; min-width: 0; }
+.brand .local-label > svg { flex-shrink: 0; }
+.brand .local-label small { display: block; color: var(--muted); font-size: .62rem; line-height: 1.3; margin-top: 3px; }
+.connection-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; flex-shrink: 0; }
+[data-connection=ready] .connection-dot { background: rgb(var(--kaiden-status-success,100 180 140)); }
+[data-connection=attention] .connection-dot { background: var(--accent); }
+[data-connection=working] .connection-dot { background: var(--focus); }
+.replica-banner { align-items: flex-start; border: 1px solid var(--line); padding: 12px; border-radius: 12px; }
+.replica-banner p { font-size: .8rem; }
+.replica-banner button { font-size: .8rem; flex-shrink: 0; }
+.editor-bar { z-index: 30; }
+.editor :is(input,textarea,select,button), .connection :is(input,select,button) { scroll-margin-block: 100px; }
+.task-row .entry-main small { line-height: 1.6; }
+.task-checklist-items input { font-size: 1rem; }
+@media(max-width:400px) { .replica-banner { flex-direction: column; gap: 8px; } .replica-banner button { align-self: flex-start; } .connection .workspace-list li { flex-wrap: wrap; } .connection .workspace-list li > div { flex-basis: 100%; } .brand .local-label small { display: none; } }
+@media(max-height:520px) { .quick-trigger { bottom: 90px; width: 48px; height: 48px; } .editor textarea { min-height: 130px; } }
+
+.finance-context { flex-wrap: wrap; min-width: 0; gap: 8px; } .finance-context > * { min-width: 0; overflow-wrap: anywhere; } .finance-context > p { flex: 1 1 180px; }

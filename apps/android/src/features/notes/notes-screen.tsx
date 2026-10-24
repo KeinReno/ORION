@@ -23,7 +23,7 @@ export function NotesScreen({ sort, setSort, tag, setTag, pinned, setPinned, not
       <label>Тег заметок<select aria-label="Тег заметок" value={tag} onChange={(e) => setTag(e.target.value)}><option value="">Все теги</option>{tag && !tags.includes(tag) && <option value={tag}>{tag}</option>}{tags.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
       <label className="switch-row"><span>Только закреплённые</span><input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} /></label>
       {filtered && <button className="text-button" onClick={() => { setTag(""); setPinned(false); }}>Сбросить фильтры заметок</button>}
-      <p className="helper">Показано: {notes.length}. Закреплённые всегда первыми.</p>
+      <p className="helper" role="status">Показано: {notes.length}. Закреплённые всегда первыми.</p>
     </div></DepthCard>
     {available && <ul className="entries notes">{notes.map((note) => <li key={note.id}><DepthCard><div className="note-depth-row"><button className="entry-main" onClick={() => edit(note)}><strong>{note.pinnedAt && <Pin size={14} aria-label="Закреплена" />} {note.title}</strong><span className="excerpt">{note.summary || note.body || "Пока только название"}</span>{note.tags.length > 0 && <span className="note-tags">{note.tags.map((value) => "#" + value).join(" · ")}</span>}<small>{new Date(note.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</small></button>
       <button className="icon-button" aria-label={(archive ? "Вернуть из архива: " : "В архив: ") + note.title} disabled={busy} onClick={() => archiveNote(note)}>{archive ? <RotateCcw size={20} /> : <Archive size={20} />}</button>{menu(note)}

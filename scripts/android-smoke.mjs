@@ -45,12 +45,14 @@ try {
   await page.getByRole("button", { name: "Очистить поиск" }).click();
   await page.screenshot({ path: output + "/notes-dark.png", fullPage: true });
   await page.getByRole("button", { name: "Связь", exact: true }).click();
+  await page.getByText("Компьютер не найден? Ввести адрес", { exact: true }).click();
   await page.getByLabel("Адрес компьютера").fill("192.168.1.20");
   await page.getByLabel("Порт", { exact: true }).fill("4443");
   await page.getByRole("button", { name: "Сохранить профиль" }).click();
   await page.getByText("Профиль сохранён. Подключение пока не выполнялось.").waitFor();
   await page.reload();
   await page.getByRole("button", { name: "Связь", exact: true }).click();
+  if (!(await page.getByLabel("Адрес компьютера").isVisible())) await page.getByText("Компьютер не найден? Ввести адрес", { exact: true }).click();
   assert.equal(await page.getByLabel("Адрес компьютера").inputValue(), "192.168.1.20");
   await page.screenshot({ path: output + "/connection-dark.png", fullPage: true });
   await page.setViewportSize({ width: 320, height: 740 });

@@ -1,3 +1,6 @@
+<!-- Android branch alpha.21 (25.10.2026): progressive connection UI, truthful host
+indicator, finance disclosure/reflow and draft navigation feedback fixes.
+See android/RELEASE_ALPHA21.md; physical OPPO acceptance pending. -->
 <!-- Android alpha.20 (24.10.2026): scoped foreground sync driver and explicit
 pairing/login/workspace/local-only states. Desktop task/note query polling aligned.
 See android/SYNC_FOREGROUND_ALPHA20.md; physical LAN acceptance pending. -->

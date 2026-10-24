@@ -3,6 +3,7 @@ import { TaskChecklist } from "../features/tasks/task-checklist";
 import { DraftChecklist } from "../features/tasks/draft-checklist";
 import { applyMarkdownFormat, type MarkdownFormat } from "../features/tasks/markdown-format";
 import { extractChecklist } from "../features/tasks/text-to-checklist";
+import { connectionIndicator } from "../connection-indicator";
 import { SyncStatus } from "../sync-status";
 import { MarkdownPreview } from "../features/markdown-preview";
 import type { TaskSort, NoteSort } from "../features/view-order";
@@ -54,6 +55,8 @@ export default function App() {
   const tab = navigation.route.kind === "module" ? navigation.route.moduleId : navigation.route.kind;
   const setTab = (id: string) => navigate(id === "settings" || id === "connection" || id === "more" ? { kind: id } : { kind: "module", moduleId: id });
   const settingWrites = useSettingWrites(repo.current, setData);
+  const [, refreshClock] = useState(0);
+  useEffect(() => { const timer = setInterval(() => refreshClock(value => value + 1), 15_000); return () => clearInterval(timer); }, []);
   const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string } | null>(null);
   const [editor, setEditor] = useState<Draft | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
@@ -367,6 +370,7 @@ export default function App() {
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
   ]}><div className="shell"><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
+      indicator={connectionIndicator(Boolean(connection.state?.paired), Boolean(connection.state?.user), connection.client?.engine.status())}
       updated={Boolean(updates.state?.available)} settings={() => setTab("settings")} connection={() => setTab("connection")} />
     <main className="content">
       <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "settings" ? settingsPage?.label ?? "Настройки" : tab === "connection" ? "Связь с компьютером" : tab === "more" ? "Ещё" : activeModule?.label ?? "Раздел"}</h1>
@@ -390,7 +394,7 @@ export default function App() {
         : <ModuleOutlet definition={activeModule} scope={remote?.key ?? "phone"} />}
 
     </main>
-    <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); setError(""); setNotice(""); }} />
+    <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); }} />
   </div></QuickActions>;
 }
 

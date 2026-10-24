@@ -31,7 +31,7 @@ export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTask
       <label>Приоритет задач<select aria-label="Приоритет задач" value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}><option value="all">Любой</option><option value="high">Высокий</option><option value="normal">Обычный</option><option value="low">Низкий</option></select></label>
       <label>Срок задач<select aria-label="Срок задач" value={filters.due} onChange={(e) => setFilters({ ...filters, due: e.target.value })}><option value="all">Любой срок</option><option value="today">Сегодня</option><option value="overdue">Просроченные</option><option value="week">Ближайшие 7 дней</option><option value="none">Без срока</option></select></label>
       {filtered && <button className="text-button" onClick={() => setFilters({ ...EMPTY_TASK_FILTERS })}>Сбросить фильтры задач</button>}
-      <p className="helper">Показано: {tasks.length}. {filtered || sort !== "manual" ? "Для перестановки выберите порядок вручную, сбросьте фильтры и поиск." : ""}</p>
+      <p className="helper" role="status">Показано: {tasks.length}. {filtered || sort !== "manual" ? "Для перестановки выберите порядок вручную, сбросьте фильтры и поиск." : ""}</p>
     </div></DepthCard>
     {available && <TaskList tasks={tasks} disabled={busy || Boolean(query) || filtered || sort !== "manual"} reorder={reorder} actions={actions}>{(task) => <>
       <button className="check-button" aria-label={(isTaskClosed(task.status) ? "Вернуть в работу: " : "Завершить: ") + task.title} aria-pressed={isTaskClosed(task.status)} disabled={busy} onClick={() => done(task)}>{isTaskClosed(task.status) && <Check size={19} />}</button>
