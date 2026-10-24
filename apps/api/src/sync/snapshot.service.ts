@@ -155,6 +155,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // must never reactivate external access that has since been revoked —
   // see specGrants() below for why every restored row is force-revoked.
   specGrants("crossWorkspaceGrants", (tx) => tx.crossWorkspaceGrant),
+  specGrants("sharedPublications", (tx) => tx.sharedPublication),
+  spec("sharedPublicationPins", (tx) => tx.sharedPublicationPin),
+  spec("sharedPublicationOperations", (tx) => tx.sharedPublicationOperation),
   // G10: таблицы подключаемых модулей (порядок «родитель раньше ребёнка» задаёт манифест).
   ...GENERATED_SNAPSHOT_SPECS.map((item) => spec(item.key, item.delegate))
 ];
@@ -472,6 +475,8 @@ export class SnapshotService {
           : `Версия снапшота ${snapshot.version} не поддерживается (ожидалась ${SNAPSHOT_VERSION})`
       );
     }
+    // A source restore must not reactivate delegated writes against a restored revision.
+    await tx.$executeRaw`SELECT public.revoke_publications_from_source(${snapshot.workspaceId})`;
     // Очистка: от листьев к корню.
     for (const m of [...SNAPSHOT_MODELS].reverse()) {
       await m.clear(tx, snapshot.workspaceId);

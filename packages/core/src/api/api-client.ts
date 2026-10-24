@@ -1,3 +1,4 @@
+import { publicationPreviewSchema, sharedPublicationSchema, publicationCopySchema, type PublicationSource, type CreatePublication, type PublicationStatusInput } from "@orion/shared-types";
 import {
   SYNC_PROTOCOL_VERSION,
   pushSyncOpsResultSchema,
@@ -506,6 +507,8 @@ const AUTH_ENDPOINTS_WITHOUT_RETRY = new Set(["/auth/login", "/auth/register", "
  * and the Tauri webview alike).
  */
 export class ApiClient {
+  /** Namespace for local pending intents; never contains credentials. */
+  get serverIdentity(): string { return this.options.baseUrl; }
   /** Single-flight guard: concurrent 401s share one /auth/refresh call instead of racing each other. */
   private refreshPromise: Promise<string> | null = null;
 
@@ -2829,6 +2832,19 @@ export class ApiClient {
   activateLanClient(): Promise<void> {
     return this.request("POST", "/lan/client/activate", {}, z.void());
   }
+
+  previewPublicationRefresh(id: string) { return this.request("GET", `/publications/${encodeURIComponent(id)}/preview`, undefined, publicationPreviewSchema); }
+  refreshPublication(id: string, input: { expectedRevision: number; fingerprint: string }) { return this.request("PATCH", `/publications/${encodeURIComponent(id)}`, input, sharedPublicationSchema); }
+  previewPublication(source: PublicationSource) { return this.request("POST", "/publications/preview", source, publicationPreviewSchema); }
+  createPublication(input: CreatePublication) { return this.request("POST", "/publications", input, sharedPublicationSchema); }
+  listPublications(workspaceId: string) { return this.request("GET", `/publications?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, sharedPublicationSchema.array()); }
+  issuedPublications() { return this.request("GET", "/publications/issued", undefined, sharedPublicationSchema.array()); }
+  pinnedPublications(workspaceId: string) { return this.request("GET", `/publications/pinned?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, sharedPublicationSchema.array()); }
+  updatePublicationStatus(id: string, input: PublicationStatusInput) { return this.request("PATCH", `/publications/${encodeURIComponent(id)}/status`, input, sharedPublicationSchema); }
+  revokePublication(id: string) { return this.request("DELETE", `/publications/${encodeURIComponent(id)}`, undefined, z.object({ revoked: z.boolean() })); }
+  pinPublication(id: string, workspaceId: string) { return this.request("POST", `/publications/${encodeURIComponent(id)}/pin`, { workspaceId }, sharedPublicationSchema); }
+  unpinPublication(id: string, workspaceId: string) { return this.request("DELETE", `/publications/${encodeURIComponent(id)}/pin?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, z.object({ removed: z.boolean() })); }
+  copyPublication(id: string, workspaceId: string) { return this.request("POST", `/publications/${encodeURIComponent(id)}/copy`, { workspaceId }, publicationCopySchema); }
 
   /**
    * G5/G24: типизированный запрос для модулей, подключённых манифестом (`modules-ext/<id>/`): они ходят

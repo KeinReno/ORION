@@ -36,7 +36,7 @@ const PLAIN_USER_FIELDS: Record<string, string[]> = {
 };
 
 /** Модели, которые не переносятся даже если попали в файл (выдают доступ внешним людям). */
-const NEVER_IMPORTED = new Set(["CrossWorkspaceGrant"]);
+const NEVER_IMPORTED = new Set(["CrossWorkspaceGrant", "SharedPublication", "SharedPublicationPin", "SharedPublicationOperation"]);
 
 export interface RemapContext {
   newWorkspaceId: string;

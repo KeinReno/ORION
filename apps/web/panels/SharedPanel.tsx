@@ -4,6 +4,7 @@ import { useCore, useSharedObject, useSharedWithMe } from "@orion/core-react";
 import type { SharedGrantObjectType, SharedGrantSummary } from "@orion/shared-types";
 import { Badge, Button, EmptyState, MarkdownView, PanelBody, PanelHeader, PanelShell, Skeleton, useToast } from "@orion/ui";
 import { AlertCircle, Download, FileText, FolderKanban, Globe2, Receipt, StickyNote, type LucideIcon } from "lucide-react";
+import { PublicationsPane } from "./shared/PublicationsPane";
 import { useState } from "react";
 import { describeError } from "../lib/error-message";
 import { formatBytes } from "../lib/document-icons";
@@ -36,12 +37,19 @@ const TYPE_LABEL: Record<SharedGrantObjectType, string> = {
  */
 export function SharedPanel(): React.ReactElement {
   const { data: grants, isLoading, isError, error, refetch } = useSharedWithMe();
+  const [section, setSection] = useState<"publications" | "grants">("publications");
   const [openGrantId, setOpenGrantId] = useState<string | null>(null);
 
   return (
     <PanelShell>
       <PanelHeader icon={Globe2} title="Доступно мне" subtitle="Объекты, к которым вам предоставили доступ владельцы других пространств" />
       <PanelBody className="space-y-3">
+        <div className="flex flex-wrap gap-2" aria-label="Раздел обмена">
+          <Button variant={section === "publications" ? "primary" : "outline"} aria-pressed={section === "publications"} onClick={() => setSection("publications")}>Общие публикации</Button>
+          <Button variant={section === "grants" ? "primary" : "outline"} aria-pressed={section === "grants"} onClick={() => setSection("grants")}>Предоставленный доступ</Button>
+        </div>
+        {section === "publications" ? <PublicationsPane /> : <>
+
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -69,6 +77,7 @@ export function SharedPanel(): React.ReactElement {
             ))}
           </ul>
         )}
+        </>}
       </PanelBody>
 
       {openGrantId ? <SharedObjectViewer grantId={openGrantId} onClose={() => setOpenGrantId(null)} /> : null}
