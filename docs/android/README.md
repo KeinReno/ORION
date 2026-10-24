@@ -17,6 +17,8 @@ Alpha.13 реализует bundled shell, центр настроек и Lists.
 
 ## Действующие реализации и отчёты
 
+- [Alpha.20: автоматический обмен и области данных](SYNC_FOREGROUND_ALPHA20.md)
+
 - [Alpha.19: обнаружение LAN и сохранённая идентичность](LAN_DISCOVERY_ALPHA19.md)
 
 - [Alpha.18: проверка чек-листов и восстановления](RELEASE_ALPHA18.md)

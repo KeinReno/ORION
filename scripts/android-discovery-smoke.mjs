@@ -35,6 +35,10 @@ try {
  await page.getByRole("button",{name:"Запросить доступ",exact:true}).click();await page.getByText("123456",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Проверить подтверждение",exact:true}).click();
  await page.getByRole("heading",{name:"Домашний ПК",exact:true}).waitFor();
+ await page.getByText("1. Устройство сопряжено. Теперь войдите в аккаунт компьютера.",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Задачи",exact:true}).click();
+ await page.getByRole("status").filter({hasText:"Для обмена войдите в аккаунт ПК"}).waitFor();
+ await page.getByRole("button",{name:"Связь и обмен",exact:true}).click();
  await page.reload();await page.getByText("Доверенный компьютер найден. Его сертификат проверен; адрес обновлён.",{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem("address")),"192.168.1.99");assert.equal(await page.evaluate(()=>window.__begins),0,"remembered device needs no new approval");
  await page.evaluate(()=>{window.__reject=true;});await page.getByRole("button",{name:"Проверить доверенный ПК",exact:true}).click();await page.getByRole("alert").filter({hasText:"Сертификат изменился"}).waitFor();

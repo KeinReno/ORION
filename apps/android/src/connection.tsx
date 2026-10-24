@@ -42,6 +42,11 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
       <button onClick={backup} disabled={blocked}><Download size={18} />Сохранить резервную копию</button>
       <p className="helper">{backupCurrent ? "Текущая версия записей телефона экспортирована." : "После изменения записей понадобится новая копия."}</p>
     </section></DepthCard>
+    {state?.paired && <DepthCard><section className="settings-section"><h2>Состояние обмена</h2>
+      <p>{!state.user ? "1. Устройство сопряжено. Теперь войдите в аккаунт компьютера." : !client ? "2. Вход выполнен. Выберите пространство компьютера ниже." : data.remoteActive ? "3. Открыто пространство ПК. Обмен выполняется автоматически, пока Orion открыт." : "3. Пространство выбрано, но сейчас открыт отдельный раздел «На телефоне»."}</p>
+      <p className="helper">Сопряжение даёт доверие устройству. Обмениваются задачи, заметки и списки выбранного пространства ПК. Локальные записи телефона переносятся отдельно, с вашего согласия. Финансы пока не синхронизируются.</p>
+    </section></DepthCard>}
+    {connection.syncError && <p className="error" role="alert">{connection.syncError}</p>}
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     {connection.message && <p className="notice" role="status">{connection.message}</p>}
     <DepthCard><section className="settings-section">
@@ -117,6 +122,7 @@ export function ConnectionPage({ data, connection, address, port, setAddress, se
         </div>
         <p>{status?.phase === "offline" ? "Нет связи с компьютером. Правки сохраняются на телефоне."
           : status?.phase === "syncing" ? "Обмениваемся изменениями…" : status?.asOf ? "Последний ответ ПК: " + new Date(status.asOf).toLocaleString("ru-RU") : "Копия ещё не подтверждена."}</p>
+        <p className="helper">Автоматический обмен: при открытии, после правок и каждые 15 секунд, пока приложение активно. В фоне обмен не обещается.</p>
         <p className="helper">В очереди: {status?.pending ?? 0}. Конфликтов: {status?.conflicts ?? 0}.</p>
         <button className="primary" disabled={blocked || status?.phase === "syncing"} onClick={() => void connection.sync()}><RefreshCw size={18} />Синхронизировать</button>
         <h3>Скопировать записи телефона</h3>

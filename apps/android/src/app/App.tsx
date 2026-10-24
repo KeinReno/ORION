@@ -3,6 +3,7 @@ import { TaskChecklist } from "../features/tasks/task-checklist";
 import { DraftChecklist } from "../features/tasks/draft-checklist";
 import { applyMarkdownFormat, type MarkdownFormat } from "../features/tasks/markdown-format";
 import { extractChecklist } from "../features/tasks/text-to-checklist";
+import { SyncStatus } from "../sync-status";
 import { MarkdownPreview } from "../features/markdown-preview";
 import type { TaskSort, NoteSort } from "../features/view-order";
 import { EntryFields } from "../features/entry-fields";
@@ -372,8 +373,7 @@ export default function App() {
         <p>{tab === "tasks" && tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : activeModule?.summary ?? (tab === "settings" ? "Настройте Orion под себя." : tab === "more" ? "Все доступные разделы рядом." : "Ваше пространство — рядом, даже без сети.")}</p></div>
       {activeModule?.primary && <button className="primary" disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={20} /><span>{activeModule.primary.label}</span></button>}</div></DepthCard>
       {feedback}
-      {remote && tab !== "connection" && tab !== "finance" && <div className="replica-banner"><p>Копия пространства ПК · в очереди {remote.engine.status().pending} · конфликтов {remote.engine.status().conflicts}</p>
-        <button disabled={connection.busy} onClick={() => { setTab("connection"); void connection.sync(); }}>Синхронизировать</button></div>}
+      {tab !== "connection" && <SyncStatus connection={connection} remoteActive={Boolean(remote)} finance={tab === "finance"} localCount={data.tasks.length + data.notes.length} open={() => setTab("connection")} />}
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
       {navigation.route.kind === "settings" ? <SettingsCenter route={navigation.route} navigate={navigate} replace={(route) => navigate(route, true)}
         data={data} writes={settingWrites} updates={updates} depth={depth} backup={() => void backup()} backupBusy={busy} note={() => quickEntry("note")}

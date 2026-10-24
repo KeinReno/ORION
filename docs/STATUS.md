@@ -1,3 +1,6 @@
+<!-- Android alpha.20 (24.10.2026): scoped foreground sync driver and explicit
+pairing/login/workspace/local-only states. Desktop task/note query polling aligned.
+See android/SYNC_FOREGROUND_ALPHA20.md; physical LAN acceptance pending. -->
 <!-- Android branch alpha.19 (23.10.2026): native NSD, pinned remembered-host
 readdressing, desktop LAN identity/guidance. See android/LAN_DISCOVERY_ALPHA19.md.
 Hardware OPPO/Windows/VPN acceptance and new Windows installer pending. -->
