@@ -1,4 +1,5 @@
 button: Безопасность
+button: ВАША УЧЁТНАЯ ЗАПИСЬ
 button: Внешний вид
 button: Вынести вкладку «Профиль»
 button: Дата и время
@@ -9,10 +10,13 @@ button: О приложении
 button: Обновления
 button: Общее
 button: Плагины
+button: ПРОСТРАНСТВО «<workspace>»
 button: Профиль
 button: Расширения
 button: Сеть и устройства
+button: СПРАВКА
 button: Сферы и избранное
 button: Темы
 button: Уведомления
 button: Участники
+button: ЭТОТ КОМПЬЮТЕР

@@ -8,6 +8,9 @@ datasource db {
 }
 
 model User {
+  sharedPublications SharedPublication[]
+  sharedPublicationPins SharedPublicationPin[]
+  sharedPublicationOperations SharedPublicationOperation[]
   id                String            @id @default(uuid())
   syncDevices       SyncDevice[]
   /// Optional for local accounts — invite-by-email still needs it when used.
@@ -160,6 +163,9 @@ model UserPreference {
 }
 
 model Workspace {
+  sharedPublications SharedPublication[]
+  sharedPublicationPins SharedPublicationPin[]
+  sharedPublicationOperations SharedPublicationOperation[]
   id        String            @id @default(uuid())
   name      String
   /// Unguessable token for the read-only .ics subscription feed
@@ -3599,4 +3605,55 @@ model KnowledgeRelation {
   @@index([fromId])
   @@index([toId])
   @@map("knowledge_relations")
+}
+
+model SharedPublication {
+  id String @id @default(uuid())
+  workspaceId String
+  publisherId String
+  kind String
+  sourceWorkspaceId String
+  sourceId String
+  sourceRevision Int
+  content Json
+  includeText Boolean @default(false)
+  includeDueAt Boolean @default(false)
+  allowStatus Boolean @default(false)
+  revision Int @default(1)
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publisher User @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  pins SharedPublicationPin[]
+  operations SharedPublicationOperation[]
+  @@index([workspaceId, revokedAt])
+  @@map("shared_publications")
+}
+model SharedPublicationPin {
+  id String @id @default(uuid())
+  workspaceId String
+  userId String
+  publicationId String
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publication SharedPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  @@unique([userId, workspaceId, publicationId])
+  @@map("shared_publication_pins")
+}
+model SharedPublicationOperation {
+  id String @id
+  workspaceId String
+  publicationId String
+  actorId String
+  status String
+  expectedRevision Int
+  resultRevision Int
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publication SharedPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  @@index([publicationId, createdAt])
+  @@map("shared_publication_operations")
 }

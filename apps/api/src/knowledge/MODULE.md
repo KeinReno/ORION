@@ -4,6 +4,8 @@
 
 Работает без заметок, документов и задач.
 
+Публикация через `KnowledgePublicationAdapter` передаёт название и, по выбору автора, body как обычный текст. Summary, sources, attachments, categories и relations не передаются. Независимая копия создаётся как private/draft, чужое редактирование оригинала этим адаптером не поддерживается. Общий контракт и границы: [ADR-0024](../../../../docs/adr/ADR-0024-shared-publications.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

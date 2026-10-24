@@ -180,6 +180,7 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     const probes: Record<string, string> = {
       tasks: "/tasks",
       notes: "/notes",
+      knowledge: "/knowledge/items",
       calendar: "/events?from=2026-01-01T00:00:00.000Z&to=2026-02-01T00:00:00.000Z",
       documents: "/documents",
       projects: "/projects",

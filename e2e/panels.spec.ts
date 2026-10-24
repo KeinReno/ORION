@@ -79,6 +79,7 @@ async function actionInventory(page: Page): Promise<string> {
   const weekdays = /\b(понедельник|вторник|среда|среду|четверг|пятница|пятницу|суббота|субботу|воскресенье|пн|вт|ср|чт|пт|сб|вс)\b/giu;
   const normalized = names.map((line) =>
     line
+      .replace(/ПРОСТРАНСТВО «[^»]+»/gu, "ПРОСТРАНСТВО «<workspace>»")
       .replace(/\d+/g, "#")
       .replace(months, "<month>")
       .replace(weekdays, "<weekday>")
@@ -111,6 +112,13 @@ for (const profile of PROFILES) {
         await expect(page.getByText("Загрузка…", { exact: true })).toHaveCount(0, { timeout: 30_000 });
         await page.waitForLoadState("networkidle");
         await page.waitForTimeout(500);
+        if (panelId === "settings") {
+          // Scope groups now collapse; keep checking every section's action inventory.
+          const nav = page.getByRole("navigation", { name: "Разделы настроек", exact: true });
+          for (const group of await nav.locator("button[aria-expanded]").all()) {
+            if (await group.getAttribute("aria-expanded") === "false") await group.click();
+          }
+        }
         await expect(page.getByText("Не удаётся связаться с сервером.")).toHaveCount(0);
         await expect(page.getByText(/Неизвестная панель/)).toHaveCount(0);
 
