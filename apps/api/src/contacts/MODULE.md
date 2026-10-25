@@ -1,5 +1,10 @@
 # Contacts — записная книжка пространства
 
+Публичные `public/contact-references.ts` и `public/contact-references.module.ts` дают соседям только
+`existsTx(tx, workspaceId, contactId)`. Запрос выполняет собственный ContactReferenceReader в `.service.ts`;
+проверяются id/workspaceId и исходный RLS, выбирается только id. SDK-модуль не запускает Contacts CRUD/cron
+и не меняет доступность интерфейса. [ADR-0028](../../../../docs/adr/ADR-0028-contact-reference-reader.md).
+
 Перенос межмодульных ссылок при merge выполняется через публичный Core EntityReferenceRegistry в той же транзакции. Таблицу Capture обновляет её владелец; ошибка обработчика откатывает merge целиком (ADR-0026).
 
 Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `@RequireModule("contacts")`; the same `contacts` table «Дома» uses (`homeId` optional, deleting a home only drops the link).

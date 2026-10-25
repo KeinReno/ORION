@@ -13,10 +13,11 @@ import { HealthSummaryService } from "./health-summary.service";
 import { HealthSymptomsController } from "./health-symptoms.controller";
 import { HealthSymptomsService } from "./health-symptoms.service";
 import { HealthService } from "./health.service";
+import { ContactReferencesModule } from "../contacts/public/contact-references.module";
 
 /** «Здоровье» (ADR-0012): данные принадлежат человеку, а не пространству. */
 @Module({
-  imports: [AuthModule, WorkspacesModule, ModulesModule, AgentCoreModule],
+  imports: [AuthModule, WorkspacesModule, ModulesModule, AgentCoreModule, ContactReferencesModule],
   controllers: [HealthAgentController, HealthController, HealthMedicationsController, HealthMeasurementsController, HealthSymptomsController],
   providers: [HealthService, HealthMedicationsService, HealthMeasurementsService, HealthSymptomsService, HealthSummaryService]
 })

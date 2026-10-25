@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ContactReferences } from "../contacts/public/contact-references";
 import { Prisma, type HealthAppointment as AppointmentRow, type HealthPreventiveItem as PreventiveRow, type HealthSubject as SubjectRow } from "@prisma/client";
 import {
   healthAllergySchema,
@@ -45,7 +46,8 @@ type SubjectWithGrants = SubjectRow & { grants: Array<{ level: string }> };
 export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly contacts: ContactReferences
   ) {}
 
   // --------------------------------------------------------------- subjects
@@ -344,8 +346,7 @@ export class HealthService {
 
   private async assertContactTx(tx: Prisma.TransactionClient, workspaceId: string, contactId: string | null): Promise<void> {
     if (!contactId) return;
-    const contact = await tx.contact.findUnique({ where: { id: contactId }, select: { workspaceId: true } });
-    if (!contact || contact.workspaceId !== workspaceId) throw new BadRequestException("Контакт не найден в этом пространстве");
+    if (!await this.contacts.existsTx(tx, workspaceId, contactId)) throw new BadRequestException("Контакт не найден в этом пространстве");
   }
 }
 
