@@ -15,7 +15,8 @@ TaskIntegrationReader предоставляет только ссылку с pr
 Исключения: **21 → 19 файлов / 57 → 53 model entries**, service entries — 19. Focused: **19 passed**,
 в том числе Time + Calendar без полных TasksModule/ProjectsModule. Unit: **1476 passed**; typecheck,
 architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
-Полный integration и production build/browser выполняются отдельно.
+Production API/web build (54 страницы) и **46 Chromium** сценариев прошли; полный integration
+на пересозданной БД — **603 passed / 1 skipped**. Проверки выполнены локально; CI имеет известный billing-блок.
 [Контракт](platform-api/TASK_INTEGRATION_READER.md), [проверки](TIME_CALENDAR_CONTRACTS_2026-10-25.md).
 
 ## Пять потребителей → Projects: публичная проверка ссылки — 25.10.2026

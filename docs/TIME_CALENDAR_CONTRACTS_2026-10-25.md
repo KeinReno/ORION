@@ -1,6 +1,7 @@
 # Time и Calendar: публичные проекции Tasks / Projects
 
 База: master `5789e2b4ce22a24c31d34083a005d13727398d18` (PR #71).
+Код и тесты: `b4f033a` (последующие изменения этого этапа — только итоговая документация).
 Реализация: `codex/time-calendar-contracts`; [ADR-0030](adr/ADR-0030-task-integration-reader.md),
 [контракт](platform-api/TASK_INTEGRATION_READER.md). UI, schema, миграции и права не меняются.
 
@@ -28,7 +29,8 @@ Platform API **1.6.0**, capability map, snapshot и паспорта обнов�
 Windows/PowerShell. Отдельная PostgreSQL 16 на 127.0.0.1:5444; только синтетические
 orion_platform_integration / orion_platform_browser. Пользовательская БД не используется.
 
-Focused integration: **19 passed / 3 файла**, 21.51 с. Семь новых сценариев: timer/manual/update/null,
+Focused integration: **19 passed / 3 файла**, 21.51 с. Файлы: time-calendar-contracts,
+time-entries, task-time-bridge в apps/api/test/ (суффикс .integration.test.ts). Семь новых сценариев: timer/manual/update/null,
 невалидная замена без изменения записи и без лишних таймеров, чужой проект/задача при доступе к обоим
 пространствам, отказ постороннему до readers, выключенные соседи, ссылки событий, ICS поля и
 изоляция пространств, отсутствие задач без срока, отзыв/ротация токена, отключение Tasks и
@@ -43,7 +45,16 @@ PluginsModule для существующего PluginEnabledGuard Calendar. П�
 
 Полный unit: **1476 passed / 190 файлов**, 59.81 с. Typecheck passed; lint **0 ошибок /
 30 прежних предупреждений**. Architecture/registry/docs/map passed, snapshot/plugin contracts
-входят в unit. Полный integration и production build/browser: выполняются, итог будет дописан.
+входят в unit. Production API/web build: passed, **54 страницы**; compiled API содержит новый
+reader и Platform API 1.6.0. Chromium: **46 passed**, 1.7 мин — 42 сценария панелей
+default-full/plugins-off, 2 сценария открытия объектов календаря и 2 остановки таймера
+при закрытии задачи. Снимки действий не менялись. Полный integration на пересозданной БД:
+**603 passed / 1 skipped**, 107 passed-файлов, 404.14 с. Все семь новых сценариев входят
+в прогон. В логе нет 40P01/deadlock; искусственные HTTP 500 lifecycle rollback ожидаемы.
+Локальные логи: stage5-focused.log, stage5-unit.log, stage5-integration.log, stage5-browser.log,
+stage5-typecheck.log, stage5-lint.log (ignored). Браузер запущен через scripts/e2e-local.mjs
+для e2e/panels.spec.ts, e2e/task-time-bridge.spec.ts и e2e/calendar-object-opening.spec.ts;
+full integration — vitest.integration.config.mts после scripts/e2e-db.mjs.
 GitHub CI с учётом известного billing-блока не заменяет локальную проверку.
 
 ## Границы
