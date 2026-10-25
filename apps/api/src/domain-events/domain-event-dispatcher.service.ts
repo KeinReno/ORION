@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { DomainEventEnvelope, DomainEventType } from "@orion/shared-types";
 import { BackgroundJobsService } from "../common/background-jobs.service";
 import { PrismaService } from "../common/prisma.service";
@@ -67,9 +67,23 @@ export class DomainEventDispatcherService {
 
   private async fanOut(): Promise<number> {
     return this.prisma.asSystem(async (tx) => {
+      // Parent before child: workspace deletion holds the workspace row before
+      // cascading to events. Locking events first, then inserting deliveries
+      // (which need an FK key-share on workspace), inverted that order and could
+      // deadlock. Skip deleting/locked parents; their events remain undispatched
+      // for a later pass if the parent transaction rolls back.
+      const workspaces = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT w."id" FROM "workspaces" w
+        WHERE w."id" IN (
+          SELECT "workspaceId" FROM "domain_events" WHERE "dispatchedAt" IS NULL
+          ORDER BY "createdAt", "id" LIMIT ${FANOUT_BATCH}
+        )
+        ORDER BY w."id"
+        FOR KEY SHARE OF w SKIP LOCKED`;
+      if (!workspaces.length) return 0;
       const events = await tx.$queryRaw<Array<{ id: string; type: string; workspaceId: string }>>`
         SELECT "id", "type", "workspaceId" FROM "domain_events"
-        WHERE "dispatchedAt" IS NULL
+        WHERE "dispatchedAt" IS NULL AND "workspaceId" IN (${Prisma.join(workspaces.map((w) => w.id))})
         ORDER BY "createdAt", "id"
         LIMIT ${FANOUT_BATCH}
         FOR UPDATE SKIP LOCKED`;
