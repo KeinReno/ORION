@@ -6,26 +6,25 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
-## Пакеты обновлений desktop — 26.10.2026
+## Пакеты обновлений desktop — beta 23, 26.10.2026
 
-Реализован protocol 1 для совместного обновления UI/API без Rust/NSIS. Ed25519,
-пофайловые SHA-256, точная совместимость с shell base и Prisma schema/migrations;
-отдельные pending/trial/active/previous, подтверждение API health + React hydration,
-автоматический откат и перезагрузка trusted окон нативной оболочкой. Origin и IPC
-остаются прежними. Изменения БД, Node/PG, launcher или native требуют полного
-установщика; для старых клиентов сохранён прежний путь. Ключ подписи вне Git;
-в установщик попадает только public PEM. Сборка пакета — `build:desktop-stage` +
-`build:desktop-payload`. [Контракт и выпуск](DESKTOP_PAYLOAD_UPDATES.md),
-[ADR-0033](adr/ADR-0033-runtime-payload-updates.md).
+Protocol 1: UI/API обновляются без Rust/NSIS. Ed25519, пофайловые SHA-256,
+подписанные ссылки на неизменившиеся baseline-файлы; exact shell/native/runtime
+и Prisma compatibility. Отдельные pending/trial/active/previous, API health + React
+hydration, откат и native reload trusted окон при неудачном запуске. Origin/IPC
+сохранены. Смена БД, оболочки, Node/PG или launcher требует полного установщика.
 
-На этапе реализации focused: 35 passed, Rust: 3 passed, typecheck и architecture
-прошли. Финальная production/package и Windows install/update приёмка фиксируются
-отдельно после сборки; наличие механизма не означает проверенную личную установку.
-Дополнительно: подписанные ссылки на неизменившиеся baseline-файлы уменьшают передачу;
-проверяется fingerprint native/config/binaries/helpers. 32 focused после этих изменений;
-полный unit до них — 1497 passed. Chromium production parity — **43 passed**.
-Изолированный WebView2 smoke: **5 passed** (hydration, MIME, routes, IPC, native reload
-на rollback fixture без React). База и личный профиль в native smoke не использовались.
+**1499 unit / 191 files**, **43 Chromium**, **3 Rust**, **5 native WebView2 checks**
+прошли. Typecheck/architecture/contracts/map passed; lint — 0 errors / 30 warnings.
+Подписанный контрольный пакет на production-файлах: **660235 байт**, 10232
+записей, 10229 переиспользованы; signature/integrity/rollback/commit passed.
+Это синтетическая проверка, не публичная beta 24 и не installed update acceptance.
+
+Windows beta 23 из **45a514e**: **73961343 байт**, SHA-256
+7839370b376bf93941dd1290a6bf2092def266f5ce7142591d258c721548d28b. Архив/состав/import проверены; installer без Authenticode.
+Чистая установка и полный цикл обновления установленного приложения не подтверждены.
+[Релиз](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.23),
+[контракт/сборка](DESKTOP_PAYLOAD_UPDATES.md), [приёмка и ограничения](WINDOWS_BETA23_2026-10-26.md).
 
 ## Контрольная точка beta 22 — 25.10.2026
 
