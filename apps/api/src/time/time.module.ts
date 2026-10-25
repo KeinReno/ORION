@@ -1,3 +1,5 @@
+import { ProjectReferencesModule } from "../projects/public/project-references.module";
+import { TaskIntegrationReaderModule } from "../tasks/public/task-integration-reader.module";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { TimeAgentController } from "./time.agent.controller";
 import { Module } from "@nestjs/common";
@@ -11,7 +13,7 @@ import { TimeTaskClosureBridge } from "./time-task-closure.service";
 
 /** ORION v0.18 «Учёт времени» — one controller/service pair, like notes/ or tasks/. */
 @Module({
-  imports: [AuthModule, WorkspacesModule, AgentCoreModule, TaskClosureRegistryModule],
+  imports: [ProjectReferencesModule, TaskIntegrationReaderModule, AuthModule, WorkspacesModule, AgentCoreModule, TaskClosureRegistryModule],
   controllers: [TimeController, TimeAgentController],
   providers: [TimeProjectAggregates, TimeService, TimeTaskClosureBridge]
 })

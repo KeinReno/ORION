@@ -4,6 +4,8 @@
 
 Каждый метод сервиса начинается с проверки членства и идёт через `PrismaService.withUser`; ссылки на другие записи проверяются на принадлежность тому же пространству; ответы собираются `toDto`, а входы валидируются zod-схемами из `shared-types`.
 
+Ссылки задач и их projectId читает публичный `TaskIntegrationReader`; проекты проверяет `ProjectReferences`. Оба SDK сохраняют исходную транзакцию/RLS и не импортируют полные TasksModule/ProjectsModule. Авторизация, 404 и наследование проекта остаются у Time. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

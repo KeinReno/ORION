@@ -76,6 +76,8 @@
 
 ## Проверки ссылок между модулями
 
+- [TaskIntegrationReader](TASK_INTEGRATION_READER.md): Time/Calendar → Tasks (Integration 1.5.0, Platform 1.6.0).
+
 - [ProjectReferences](PROJECT_REFERENCES.md): Notes/Documents/Inbox/Inventory/Milestones → Projects (Integration 1.4.0, Platform 1.5.0).
 - [ContactReferences](CONTACT_REFERENCES.md): Health → Contacts.
 

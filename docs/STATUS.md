@@ -6,6 +6,18 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Time и Calendar → Tasks / Projects — 25.10.2026
+
+В `codex/time-calendar-contracts` Time и Calendar (EventsService) больше не читают Task/Project.
+TaskIntegrationReader предоставляет только ссылку с projectId и поля исходящего ICS; ProjectReferences
+проверяет проекты. Исходная транзакция/RLS, права, null, 404, наследование проекта, feed token и guards
+сохранены. SDK не импортируют полные доменные модули. ADR-0030; Integration API 1.5.0 / Platform API 1.6.0.
+Исключения: **21 → 19 файлов / 57 → 53 model entries**, service entries — 19. Focused: **19 passed**,
+в том числе Time + Calendar без полных TasksModule/ProjectsModule. Unit: **1476 passed**; typecheck,
+architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
+Полный integration и production build/browser выполняются отдельно.
+[Контракт](platform-api/TASK_INTEGRATION_READER.md), [проверки](TIME_CALENDAR_CONTRACTS_2026-10-25.md).
+
 ## Пять потребителей → Projects: публичная проверка ссылки — 25.10.2026
 
 В `codex/project-reference-contract` Notes, Documents, Inbox, Inventory и Milestones больше не читают

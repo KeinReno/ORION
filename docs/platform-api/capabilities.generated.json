@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.5.0",
+  "platformVersion": "1.6.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.3.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.4.0",
+    "integration": "1.5.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -2127,6 +2127,8 @@
     "apps/api/src/projects/public/project-references.module.ts",
     "apps/api/src/projects/public/project-references.ts",
     "apps/api/src/tasks/public/task-closure-registry.ts",
+    "apps/api/src/tasks/public/task-integration-reader.module.ts",
+    "apps/api/src/tasks/public/task-integration-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
     "apps/web/lib/extensions/host-api.ts",
     "apps/web/lib/extensions/places.ts",
@@ -2508,12 +2510,6 @@
         "tasks/tasks.service"
       ]
     },
-    "apps/api/src/events/events.service.ts": {
-      "models": [
-        "Project",
-        "Task"
-      ]
-    },
     "apps/api/src/finance/project-costs/project-costs.service.ts": {
       "models": [
         "Project"
@@ -2610,12 +2606,6 @@
       "models": [
         "Milestone",
         "Project"
-      ]
-    },
-    "apps/api/src/time/time.service.ts": {
-      "models": [
-        "Project",
-        "Task"
       ]
     }
   },
