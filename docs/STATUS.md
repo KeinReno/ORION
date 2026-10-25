@@ -6,6 +6,22 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Пакеты обновлений desktop — 26.10.2026
+
+Реализован protocol 1 для совместного обновления UI/API без Rust/NSIS. Ed25519,
+пофайловые SHA-256, точная совместимость с shell base и Prisma schema/migrations;
+отдельные pending/trial/active/previous, подтверждение API health + React hydration,
+автоматический откат и перезагрузка trusted окон нативной оболочкой. Origin и IPC
+остаются прежними. Изменения БД, Node/PG, launcher или native требуют полного
+установщика; для старых клиентов сохранён прежний путь. Ключ подписи вне Git;
+в установщик попадает только public PEM. Сборка пакета — `build:desktop-stage` +
+`build:desktop-payload`. [Контракт и выпуск](DESKTOP_PAYLOAD_UPDATES.md),
+[ADR-0033](adr/ADR-0033-runtime-payload-updates.md).
+
+На этапе реализации focused: 35 passed, Rust: 3 passed, typecheck и architecture
+прошли. Финальная production/package и Windows install/update приёмка фиксируются
+отдельно после сборки; наличие механизма не означает проверенную личную установку.
+
 ## Контрольная точка beta 22 — 25.10.2026
 
 Tasks использует публичные ProjectTaskLinks и MilestoneReferences вместо чужих моделей.

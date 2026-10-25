@@ -3,6 +3,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod browser;
+#[cfg_attr(debug_assertions, allow(dead_code))]
+mod payload_ui;
 #[cfg(debug_assertions)]
 mod browser_smoke;
 
@@ -69,7 +71,7 @@ fn start_local_runtime(app: &tauri::App) -> Result<(), String> {
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .spawn()
         .map_err(|e| e.to_string())?;
-    let deadline = Instant::now() + Duration::from_secs(180);
+    let deadline = Instant::now() + Duration::from_secs(360);
     while Instant::now() < deadline {
         if ready() {
             return Ok(());
@@ -132,7 +134,13 @@ fn open_orion_link(app: &tauri::AppHandle, url: &str) {
 static PENDING_LINK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(all(windows, not(debug_assertions)))]
+    let builder = builder.register_asynchronous_uri_scheme_protocol("tauri", |ctx, request, responder| {
+        let app = ctx.app_handle().clone();
+        tauri::async_runtime::spawn_blocking(move || responder.respond(payload_ui::respond(&app, request)));
+    });
+    builder
         .invoke_handler(tauri::generate_handler![browser::browser_open, browser::browser_control])
         .on_page_load(|webview, payload| {
             #[cfg(debug_assertions)]
@@ -176,6 +184,9 @@ fn main() {
                 show_startup_error(&message);
                 return Err(std::io::Error::other(message).into());
             }
+            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?.build()?;
+            #[cfg(all(windows, not(debug_assertions)))]
+            payload_ui::watch_selection(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

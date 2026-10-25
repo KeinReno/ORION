@@ -22,7 +22,7 @@ if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Win
 if (!existsSync(pgPackage)) throw new Error('Embedded PostgreSQL Windows package is missing. Run pnpm install first.');
 if (!existsSync(process.execPath)) throw new Error('Node runtime is missing');
 runPnpm(['--filter', '@orion/api', 'build']);
-runPnpm(['build:desktop-export'], { ...process.env, NEXT_PUBLIC_API_URL: 'http://localhost:4000' });
+runPnpm(['build:desktop-export'], { ...process.env, NEXT_PUBLIC_API_URL: 'http://localhost:4000', NEXT_PUBLIC_ORION_BUILD_TAG: process.env.ORION_BUILD_TAG || '' });
 const expected = resolve(root, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime');
 if (resolve(stage) !== expected) throw new Error('Refusing to remove unexpected stage path');
 rmSync(stage, { recursive: true, force: true });
@@ -37,6 +37,12 @@ cpSync(process.execPath, join(stage, 'node.exe'));
 cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'launcher.cjs'), join(stage, 'launcher.cjs'));
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'ascii-path.cjs'), join(stage, 'ascii-path.cjs'));
+cpSync(join(root, 'apps', 'desktop', 'runtime', 'payload.cjs'), join(stage, 'payload.cjs'));
+if (process.env.ORION_UPDATE_PUBLIC_KEY_FILE) {
+  cpSync(process.env.ORION_UPDATE_PUBLIC_KEY_FILE, join(stage, 'update-public-key.pem'));
+} else if (existsSync(join(root, 'apps', 'desktop', 'runtime', 'update-public-key.pem'))) {
+  cpSync(join(root, 'apps', 'desktop', 'runtime', 'update-public-key.pem'), join(stage, 'update-public-key.pem'));
+}
 // Метка сборки для проверки обновлений: ORION_BUILD_TAG=v0.1.0-windows-beta.3 pnpm build:desktop-installer (должна совпадать с тегом релиза).
 const buildTag = process.env.ORION_BUILD_TAG || '';
 const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
@@ -61,4 +67,4 @@ const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.e
 for (const name of mustExist) if (!existsSync(join(stage, name))) throw new Error(`Missing bundled runtime file: ${name}`);
 const total = (directory) => readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => sum + (item.isDirectory() ? total(join(directory, item.name)) : statSync(join(directory, item.name)).size), 0);
 console.log(`Runtime ready: ${(total(stage) / 1024 / 1024).toFixed(1)} MiB`);
-runPnpm(['--filter', '@orion/desktop', 'tauri:build']);
+if (!process.argv.includes('--stage-only')) runPnpm(['--filter', '@orion/desktop', 'tauri:build']);

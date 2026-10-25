@@ -1,4 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
+import { gzipSync } from "node:zlib";
 import fs from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -17,6 +19,29 @@ let releases: Array<Record<string, unknown>>;
 let assetBody: Buffer;
 let seenAuth: string[];
 let dir: string;
+
+function payloadFixture(): Buffer {
+  const runtime = path.join(dir, "shell-runtime");
+  const put = (name: string, bytes: string | Buffer): void => { const file = path.join(runtime, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, bytes); };
+  const keys = generateKeyPairSync("ed25519");
+  put("update-public-key.pem", keys.publicKey.export({ type: "spki", format: "pem" }));
+  put("payload.cjs", fs.readFileSync(path.join(process.cwd(), "apps/desktop/runtime/payload.cjs")));
+  put("build.json", JSON.stringify({ tag: "v0.1.0-windows-beta.2" }));
+  put("api/prisma/schema.prisma", "// fixture schema");
+  const library = createRequire(path.join(process.cwd(), "package.json"))(path.join(runtime, "payload.cjs")) as { baseInfo: (root: string) => Record<string, unknown> };
+  const contents: Record<string, string> = {
+    "api/dist/main.js": "// no process is started", "api/package.json": "{}",
+    "api/prisma/schema.prisma": "// fixture schema", "web/index.html": "<html>fixture</html>",
+    "build.json": JSON.stringify({ tag: "v0.1.0-windows-beta.3" })
+  };
+  const files = Object.entries(contents).map(([name, bytes]) => ({ path: name, size: Buffer.byteLength(bytes), sha256: createHash("sha256").update(bytes).digest("hex") }));
+  const manifest = Buffer.from(JSON.stringify({ ...library.baseInfo(runtime), tag: "v0.1.0-windows-beta.3", files }));
+  const envelope = Buffer.from(JSON.stringify({ manifest: manifest.toString("base64"), signature: sign(null, manifest, keys.privateKey).toString("base64") }));
+  const length = Buffer.alloc(4); length.writeUInt32BE(envelope.length);
+  process.env.ORION_SHELL_RUNTIME = runtime;
+  process.env.ORION_SHELL_BASE_TAG = "v0.1.0-windows-beta.2";
+  return gzipSync(Buffer.concat([Buffer.from("ORION-PAYLOAD-1\n"), length, envelope, ...Object.values(contents).map(s => Buffer.from(s))]));
+}
 
 function release(tag: string, over: Record<string, unknown> = {}) {
   return {
@@ -62,6 +87,8 @@ beforeEach(() => {
   process.env.SYNC_SECRET = randomBytes(32).toString("base64");
   process.env.ORION_BUILD_TAG = "v0.1.0-windows-beta.2";
   delete process.env.ORION_INSTALL_DIR;
+  delete process.env.ORION_SHELL_RUNTIME;
+  delete process.env.ORION_SHELL_BASE_TAG;
   releases = [release("v0.1.0-windows-beta.3"), release("v0.1.0-windows-beta.2")];
   assetBody = INSTALLER;
   seenAuth = [];
@@ -71,6 +98,9 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
   delete process.env.ORION_NODE_DIR;
   delete process.env.ORION_BUILD_TAG;
+  delete process.env.ORION_SHELL_RUNTIME;
+  delete process.env.ORION_SHELL_BASE_TAG;
+  delete process.env.ORION_PAYLOAD_ACK_FILE;
 });
 
 function configured(): UpdateService {
@@ -80,6 +110,39 @@ function configured(): UpdateService {
 }
 
 describe("UpdateService", () => {
+  it("выбирает совместимый лёгкий пакет без установщика и проверяет его подпись до ready", async () => {
+    assetBody = payloadFixture();
+    releases = [release("v0.1.0-windows-beta.3", { body: "small update", assets: [{ id: 7, name: "ORION_app_v0.1.0-windows-beta.2.orion.gz", size: assetBody.length }] })];
+    const service = configured();
+    expect((await service.check()).latest?.kind).toBe("payload");
+    expect((await service.download()).state).toBe("ready");
+    expect(fs.readdirSync(path.join(dir, "app-updates/versions"))).toHaveLength(1);
+    expect(fs.existsSync(path.join(dir, "app-updates/state.json"))).toBe(false);
+  });
+
+  it("повреждённый лёгкий пакет не становится ready и не меняет выбранную версию", async () => {
+    assetBody = payloadFixture();
+    assetBody[assetBody.length - 20] ^= 1;
+    releases = [release("v0.1.0-windows-beta.3", { assets: [{ id: 7, name: "ORION_app_v0.1.0-windows-beta.2.orion.gz", size: assetBody.length }] })];
+    const service = configured(); await service.check();
+    await expect(service.download()).rejects.toThrow();
+    expect(service.getStatus().state).toBe("error");
+    expect(fs.readdirSync(path.join(dir, "app-updates/versions"))).toHaveLength(0);
+  });
+
+  it("старый клиент игнорирует лёгкие релизы и выбирает полный установщик", async () => {
+    releases.unshift(release("v0.1.0-windows-beta.4", { assets: [{ id: 8, name: "ORION_app_v0.1.0-windows-beta.2.orion.gz", size: 100 }] }));
+    expect((await configured().check()).latest).toMatchObject({ tag: "v0.1.0-windows-beta.3", kind: "installer" });
+  });
+
+  it("готовность интерфейса подтверждается только для запущенной версии", () => {
+    const service = configured();
+    process.env.ORION_PAYLOAD_ACK_FILE = path.join(dir, "ack");
+    expect(service.acknowledgeUi("different").accepted).toBe(false);
+    expect(fs.existsSync(path.join(dir, "ack"))).toBe(false);
+    fs.writeFileSync(path.join(dir, "ack"), "");
+    expect(service.acknowledgeUi("v0.1.0-windows-beta.2").accepted).toBe(true);
+  });
   it("без токена проверка отказывает, а токен не возвращается и хранится зашифрованным", async () => {
     const service = new UpdateService();
     await expect(service.check()).rejects.toThrow("Токен GitHub не задан");
@@ -136,14 +199,20 @@ describe("UpdateService", () => {
 
   it("применить нельзя без скачанного файла и вне установленной программы", async () => {
     const service = configured();
-    expect(() => service.apply()).toThrow("ещё не скачано");
+    await expect(service.apply()).rejects.toThrow("ещё не скачано");
     await service.check();
     await service.download();
-    expect(() => service.apply()).toThrow("только в установленной версии");
+    await expect(service.apply()).rejects.toThrow("только в установленной версии");
   });
 });
 
 describe("скрипт замены", () => {
+  it("для проверенного пакета перезапускает приложение без запуска установщика", () => {
+    const script = buildApplyScript({ installer: null, appExe: "C:\\ORION\\orion-desktop.exe", installDir: "C:\\ORION", logFile: "C:\\update.log" });
+    expect(script).not.toContain("/S");
+    expect(script).not.toContain("$installer");
+    expect(script).toContain("Start-Process -FilePath 'C:\\ORION\\orion-desktop.exe'");
+  });
   it("останавливает окно, базу и сервисы, ставит установщик тихо и запускает программу; кавычки в путях экранированы", () => {
     const script = buildApplyScript({
       installer: "C:\\Users\\O'Brien\\up\\ORION_setup.exe",

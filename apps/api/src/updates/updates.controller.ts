@@ -61,7 +61,14 @@ export class UpdatesController {
   @UseGuards(JsonBodyGuard)
   @Post("apply")
   @HttpCode(202)
-  apply(): { started: true } {
+  apply(): Promise<{ started: true }> {
     return this.updates.apply();
+  }
+
+  @UseGuards(JsonBodyGuard)
+  @Post("ui-ready")
+  @HttpCode(200)
+  uiReady(@Body() body: { tag?: unknown }): { accepted: boolean } {
+    return this.updates.acknowledgeUi(typeof body?.tag === "string" ? body.tag : "");
   }
 }

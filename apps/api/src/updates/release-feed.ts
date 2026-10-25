@@ -46,9 +46,14 @@ export function pickInstallerAsset(release: Pick<GithubRelease, "assets">): Gith
   return release.assets.find((asset) => /-setup\.exe$/i.test(asset.name)) ?? null;
 }
 
+export function pickPayloadAsset(release: Pick<GithubRelease, "assets">, baseTag?: string): GithubAsset | null {
+  if (!baseTag || !parseTag(baseTag)) return null;
+  return release.assets.find(asset => asset.name === `ORION_app_${baseTag}.orion.gz`) ?? null;
+}
+
 /** Самый новый опубликованный релиз с разбираемой меткой и установщиком; черновики пропускаются. */
-export function pickLatestRelease(releases: readonly GithubRelease[], allowPrerelease = true): GithubRelease | null {
-  const usable = releases.filter((r) => !r.draft && (allowPrerelease || !r.prerelease) && parseTag(r.tag_name) && pickInstallerAsset(r));
+export function pickLatestRelease(releases: readonly GithubRelease[], allowPrerelease = true, baseTag?: string): GithubRelease | null {
+  const usable = releases.filter((r) => !r.draft && (allowPrerelease || !r.prerelease) && parseTag(r.tag_name) && (pickInstallerAsset(r) || pickPayloadAsset(r, baseTag)));
   usable.sort((a, b) => compareTags(b.tag_name, a.tag_name));
   return usable[0] ?? null;
 }
