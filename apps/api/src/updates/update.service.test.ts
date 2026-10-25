@@ -27,6 +27,7 @@ function payloadFixture(): Buffer {
   put("update-public-key.pem", keys.publicKey.export({ type: "spki", format: "pem" }));
   put("payload.cjs", fs.readFileSync(path.join(process.cwd(), "apps/desktop/runtime/payload.cjs")));
   put("build.json", JSON.stringify({ tag: "v0.1.0-windows-beta.2" }));
+  put("shell-contract.json", '{"protocol":1,"nativeHash":"fixture","runtimeHash":"fixture"}');
   put("api/prisma/schema.prisma", "// fixture schema");
   const library = createRequire(path.join(process.cwd(), "package.json"))(path.join(runtime, "payload.cjs")) as { baseInfo: (root: string) => Record<string, unknown> };
   const contents: Record<string, string> = {

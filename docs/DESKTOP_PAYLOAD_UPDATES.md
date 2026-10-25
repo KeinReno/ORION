@@ -15,7 +15,10 @@ Prisma files and build metadata. It excludes Tauri, the launcher, Node/PostgreSQ
 and all user data. The immutable launcher remains the trust boundary.
 
 New payloads require the exact installed shell base tag, Windows x64 and the
-exact Prisma schema/migration fingerprint. A schema/native/runtime change needs
+exact Prisma schema/migration fingerprint and native/runtime contract hash.
+Staging fingerprints native source/config and immutable binaries/helpers; the
+packer rejects changed fingerprints instead of trusting a manually chosen base tag.
+A schema/native/runtime change needs
 a full installer. A full installer changes the base and invalidates old payload
 selections. Public-key rotation also needs a full installer.
 
@@ -98,3 +101,24 @@ signed update, a deliberately broken candidate with automatic recovery, an
 interruption/relaunch, multiple/detached windows and preservation of real login
 state on an isolated disposable profile. Never use a personal database for this
 rehearsal.
+
+The signed manifest lists every file. Unchanged files carry `source: "base"` and
+are copied from the immutable baseline into the candidate; their signed hashes
+are checked again during copying. Only changed/new file bytes cross the network.
+No hard links, edits to the baseline or dependency on intermediate patches are
+used. Tampered baseline files fail preparation. Thus any active patch on the same
+shell baseline can receive the next package directly.
+
+Native UI-only rehearsal (debug build; fake API, separate `com.orion.payload-smoke`
+profile; no database or deep-link registration):
+
+```powershell
+$smokeConfig = (Resolve-Path scripts/payload-ui-smoke.config.json).Path
+corepack pnpm --filter @orion/desktop exec tauri build --debug --no-bundle --config $smokeConfig
+node scripts/native-payload-ui-smoke.mjs
+```
+
+The harness checks actual WebView2 hydration, JS module MIME, static routes,
+trusted native IPC and native reload after switching to a rollback fixture that
+has no React code. It reports to `tmp/payload-native-ui.json` and terminates only
+its own process. This is not a database/update/NSIS acceptance rehearsal.

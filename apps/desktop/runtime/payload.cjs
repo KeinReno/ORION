@@ -42,7 +42,8 @@ function databaseHash(runtime) {
 function baseInfo(runtime) {
   const build = JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8'));
   if (!tagOk(build.tag)) throw new Error('Shell base tag missing');
-  return { protocol: 1, platform: 'win32-x64', baseTag: build.tag, databaseHash: databaseHash(runtime) };
+  return { protocol: 1, platform: 'win32-x64', baseTag: build.tag,
+    shellHash: sha(fs.readFileSync(path.join(runtime, 'shell-contract.json'))), databaseHash: databaseHash(runtime) };
 }
 
 function readManifest(envelopeBytes, runtime) {
@@ -59,7 +60,7 @@ function readManifest(envelopeBytes, runtime) {
   for (const file of manifest.files) {
     safePath(file.path);
     const folded = file.path.toLowerCase();
-    if (names.has(folded) || !Number.isSafeInteger(file.size) || file.size < 0 || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('Invalid file entry');
+    if (names.has(folded) || !Number.isSafeInteger(file.size) || file.size < 0 || !/^[a-f0-9]{64}$/.test(file.sha256) || (file.source !== undefined && file.source !== 'base')) throw new Error('Invalid file entry');
     names.add(folded); total += file.size;
     if (total > MAX_BYTES) throw new Error('Payload exceeds size limit');
   }
@@ -103,7 +104,21 @@ async function prepare(file, runtime, data, expectedTag) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       const fd = fs.openSync(target, 'wx'); const hash = createHash('sha256'); let left = entry.size;
       try {
-        while (left) { const chunk = await take(Math.min(left, 64 * 1024)); fs.writeSync(fd, chunk); hash.update(chunk); left -= chunk.length; }
+        if (entry.source === 'base') {
+          const source = path.join(runtime, ...entry.path.split('/'));
+          if (!fs.realpathSync(source).startsWith(fs.realpathSync(runtime) + path.sep) || fs.statSync(source).size !== entry.size) throw new Error('Base file is missing or changed');
+          const sourceFd = fs.openSync(source, 'r');
+          try {
+            const chunk = Buffer.alloc(64 * 1024);
+            while (left) {
+              const count = fs.readSync(sourceFd, chunk, 0, Math.min(left, chunk.length));
+              if (!count) throw new Error('Truncated base file');
+              const bytes = chunk.subarray(0, count); fs.writeSync(fd, bytes); hash.update(bytes); left -= count;
+            }
+          } finally { fs.closeSync(sourceFd); }
+        } else {
+          while (left) { const chunk = await take(Math.min(left, 64 * 1024)); fs.writeSync(fd, chunk); hash.update(chunk); left -= chunk.length; }
+        }
       } finally { fs.closeSync(fd); }
       if (hash.digest('hex') !== entry.sha256) throw new Error(`File integrity failure: ${entry.path}`);
     }

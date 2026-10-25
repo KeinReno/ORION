@@ -1,0 +1,7 @@
+{
+  "identifier": "com.orion.payload-smoke",
+  "build": { "devUrl": null },
+  "app": {
+    "windows": [{ "label": "main", "create": false, "visible": false, "url": "login", "title": "ORION payload UI smoke", "width": 1280, "height": 800 }]
+  }
+}

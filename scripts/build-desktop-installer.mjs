@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeShellContract } from './runtime-shell-contract.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stage = join(root, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime');
@@ -65,6 +66,7 @@ cpSync(webExport, join(stage, 'web'), {
 });
 const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js'];
 for (const name of mustExist) if (!existsSync(join(stage, name))) throw new Error(`Missing bundled runtime file: ${name}`);
+writeShellContract(root, stage);
 const total = (directory) => readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => sum + (item.isDirectory() ? total(join(directory, item.name)) : statSync(join(directory, item.name)).size), 0);
 console.log(`Runtime ready: ${(total(stage) / 1024 / 1024).toFixed(1)} MiB`);
 if (!process.argv.includes('--stage-only')) runPnpm(['--filter', '@orion/desktop', 'tauri:build']);

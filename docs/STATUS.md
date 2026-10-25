@@ -21,6 +21,11 @@
 На этапе реализации focused: 35 passed, Rust: 3 passed, typecheck и architecture
 прошли. Финальная production/package и Windows install/update приёмка фиксируются
 отдельно после сборки; наличие механизма не означает проверенную личную установку.
+Дополнительно: подписанные ссылки на неизменившиеся baseline-файлы уменьшают передачу;
+проверяется fingerprint native/config/binaries/helpers. 32 focused после этих изменений;
+полный unit до них — 1497 passed. Chromium production parity — **43 passed**.
+Изолированный WebView2 smoke: **5 passed** (hydration, MIME, routes, IPC, native reload
+на rollback fixture без React). База и личный профиль в native smoke не использовались.
 
 ## Контрольная точка beta 22 — 25.10.2026
 

@@ -12,7 +12,13 @@ each file has a length and SHA-256. Reject links, ambiguous Windows paths,
 duplicates, trailing data and oversized containers. Trust keys come only from the
 installed runtime, never the feed or downloaded payload.
 
+Unchanged baseline files are signed references (`source: "base"`), copied and
+hashed into a fresh candidate without transfer or hard links. Changed files are
+embedded in order. All target files remain covered by the signed manifest.
+
 Payloads require an exact shell base tag and exact Prisma schema/migration hash.
+The native/config/binary/helper fingerprint must also match, so a native change
+cannot accidentally be published as an application-only package.
 Schema changes require the full installer in this version; no implicit migration
 rollback. Node/PostgreSQL/launcher/native changes also require an installer.
 

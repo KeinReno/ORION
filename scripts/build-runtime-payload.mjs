@@ -12,6 +12,7 @@ import payload from '../apps/desktop/runtime/payload.cjs';
 
 export async function packRuntime(stage, baseRuntime, output, privateKeyFile) {
   const base = payload.baseInfo(baseRuntime);
+  if (payload.baseInfo(stage).shellHash !== base.shellHash) throw new Error('Native/runtime contract changed: use full installer');
   if (payload.databaseHash(stage) !== base.databaseHash) throw new Error('Database changed: use full installer');
   const build = JSON.parse(fs.readFileSync(path.join(stage, 'build.json'), 'utf8'));
   const key = createPrivateKey(fs.readFileSync(privateKeyFile));
@@ -24,7 +25,10 @@ export async function packRuntime(stage, baseRuntime, output, privateKeyFile) {
     payload.safePath(name);
     const hash = createHash('sha256'); let size = 0;
     for await (const chunk of fs.createReadStream(path.join(stage, name))) { hash.update(chunk); size += chunk.length; }
-    files.push({ path: name, size, sha256: hash.digest('hex') });
+    const sha256 = hash.digest('hex');
+    const baseline = path.join(baseRuntime, name);
+    const reuse = fs.existsSync(baseline) && fs.statSync(baseline).isFile() && fs.statSync(baseline).size === size && payload.sha(fs.readFileSync(baseline)) === sha256;
+    files.push({ path: name, size, sha256, ...(reuse ? { source: 'base' } : {}) });
   }
   const manifest = Buffer.from(JSON.stringify({ ...base, tag: build.tag, commit: build.commit, files }));
   const envelope = Buffer.from(JSON.stringify({ manifest: manifest.toString('base64'), signature: sign(null, manifest, key).toString('base64') }));
@@ -34,14 +38,14 @@ export async function packRuntime(stage, baseRuntime, output, privateKeyFile) {
   const length = Buffer.alloc(4); length.writeUInt32BE(envelope.length);
   async function* content() {
     yield payload.MAGIC; yield length; yield envelope;
-    for (const file of files) yield* fs.createReadStream(path.join(stage, file.path));
+    for (const file of files) if (file.source !== 'base') yield* fs.createReadStream(path.join(stage, file.path));
   }
   fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
   try {
     await pipeline(Readable.from(content()), createGzip({ level: 6 }), fs.createWriteStream(`${output}.part`, { flags: 'wx' }));
     fs.renameSync(`${output}.part`, output);
   } catch (e) { fs.rmSync(`${output}.part`, { force: true }); throw e; }
-  return { tag: build.tag, files: files.length, bytes: fs.statSync(output).size };
+  return { tag: build.tag, files: files.length, reusedFiles: files.filter(f => f.source === 'base').length, bytes: fs.statSync(output).size };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [stage, base, output] = process.argv.slice(2);

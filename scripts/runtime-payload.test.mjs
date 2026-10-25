@@ -19,6 +19,7 @@ beforeEach(() => {
   fs.writeFileSync(keyFile, keys.privateKey.export({ type: 'pkcs8', format: 'pem' }));
   put(base, 'update-public-key.pem', keys.publicKey.export({ type: 'spki', format: 'pem' }));
   for (const root of [base, stage]) {
+    put(root, 'shell-contract.json', '{"protocol":1,"nativeHash":"fixture","runtimeHash":"fixture"}');
     put(root, 'build.json', JSON.stringify({ tag: root === base ? baseTag : tag, commit: 'fixture' }));
     put(root, 'api/package.json', '{}'); put(root, 'api/dist/main.js', 'console.log("fixture")');
     put(root, 'api/prisma/schema.prisma', '// unchanged schema');
@@ -63,6 +64,18 @@ describe('signed application payload', () => {
     await expect(payload.prepare(result.file, base, data, tag)).rejects.toThrow('incompatible');
     put(base, 'update-public-key.pem', generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }));
     await expect(payload.prepare(result.file, base, data, tag)).rejects.toThrow('signature');
+  });
+  it('requires a full installer after native/runtime contract changes', async () => {
+    put(stage, 'shell-contract.json', '{"protocol":1,"nativeHash":"changed"}');
+    await expect(packRuntime(stage, base, path.join(dir, 'native.gz'), keyFile)).rejects.toThrow('Native/runtime contract changed');
+  });
+  it('reuses unchanged baseline files, but refuses altered baseline content', async () => {
+    const first = await prepared();
+    const envelope = JSON.parse(fs.readFileSync(path.join(payload.versionRoot(data, first.id), 'signed-manifest.json'), 'utf8'));
+    const manifest = JSON.parse(Buffer.from(envelope.manifest, 'base64'));
+    expect(manifest.files.find(f => f.path === 'api/dist/main.js').source).toBe('base');
+    put(base, 'api/dist/main.js', 'altered baseline');
+    await expect(payload.prepare(first.file, base, data, tag)).rejects.toThrow('Base file');
   });
   it('rejects tampering, missing files and unexpected files before selection', async () => {
     const result = await prepared();
