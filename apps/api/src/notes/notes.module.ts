@@ -1,3 +1,4 @@
+import { ProjectReferencesModule } from "../projects/public/project-references.module";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { DocumentsModule } from "../documents/documents.module";
@@ -18,7 +19,7 @@ import { NotesProjectAggregates } from "./notes-project-aggregates";
  * keys. One-way dependency (documents never imports notes), so no cycle.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, DocumentsModule, SearchRegistryModule, InboxRegistryModule],
+  imports: [ProjectReferencesModule, AuthModule, WorkspacesModule, DocumentsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [NotesController],
   providers: [NotesProjectAggregates, NotesService, NoteTrashPurgeService, NoteAttachmentsService, NotesSearchProvider, NoteInboxTarget],
   exports: [NotesService]

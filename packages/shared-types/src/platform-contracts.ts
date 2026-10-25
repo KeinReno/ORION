@@ -32,7 +32,7 @@ export const PLATFORM_CONTRACT_VERSIONS: Readonly<Record<ContractId, string>> = 
   theme: "1.0.0",
   surface: "1.0.0",
   permission: "1.3.0",
-  integration: "1.3.0",
+  integration: "1.4.0",
   agentGateway: "1.0.0"
 };
 
