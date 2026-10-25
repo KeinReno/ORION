@@ -10,7 +10,11 @@
 
 Tasks использует публичные ProjectTaskLinks и MilestoneReferences вместо чужих моделей.
 ADR-0032; Integration API 1.7.0 / Platform API 1.8.0. Исключения: **17 файлов / 50 model entries /
-19 service entries**. Focused: 18 passed; полная локальная приёмка и Windows beta 22 готовятся.
+19 service entries**. Focused: 18 passed; unit: 1476 passed; integration: **616 passed / 1 skipped**;
+Chromium: **56 passed** после отдельной пересборки стенда. Typecheck/lint/architecture/contracts прошли;
+Кандидат Windows beta 22 собран из 81e4007 и проверен как NSIS-архив: **73 899 690 байт**,
+SHA-256 53266aeaa2f5d7d3d626830f9fc6df360cb8b91283ebb1d41fbe2b06d4c0db60.
+[Релиз beta 22](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.22).
 Арка не закончена: Goals и остальные мосты остаются следующей очередью.
 [Контракты](platform-api/TASK_PLANNING_LINKS.md), [выпуск и продолжение](WINDOWS_BETA22_2026-10-25.md).
 
