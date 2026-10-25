@@ -8,6 +8,8 @@
 
 Работает без проектов — привязка к проекту необязательна.
 
+Ссылки проектов в операциях и шаблонах проверяет `ProjectReferences`; валюту для затрат читает `ProjectFinanceReader`. Оба Projects SDK используют исходную транзакцию/RLS, без полного ProjectsModule. Ошибки 400 и денежные расчёты остаются в Finance. [Контракт](../../../../docs/platform-api/PROJECT_FINANCE_READER.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

@@ -26,3 +26,7 @@ Goals и другие оставшиеся consumers мигрируются от
 Time и Calendar также используют ProjectReferences с Integration API 1.5.0 / Platform API 1.6.0;
 [правила наследования и ICS](TASK_INTEGRATION_READER.md). Их ссылки на архивные/выключенные проекты
 сохраняют прежнюю допустимость; авторизация и 404 остаются в потребителях.
+
+Finance использует ProjectReferences для операций и шаблонов с Integration API 1.6.0 / Platform API 1.7.0;
+[валюта проекта и ошибки Finance](PROJECT_FINANCE_READER.md). Прежние HTTP 400, null и допустимость
+архивных/выключенных Projects сохраняются у потребителя.

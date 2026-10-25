@@ -12,6 +12,8 @@ describe("generated platform capability map", () => {
     expect(map.publicContracts).toContain("apps/api/src/tasks/public/task-closure-registry.ts");
     expect(map.publicContracts).toContain("apps/api/src/tasks/public/task-integration-reader.ts");
     expect(map.publicContracts).toContain("apps/api/src/tasks/public/task-integration-reader.module.ts");
+    expect(map.publicContracts).toContain("apps/api/src/projects/public/project-finance-reader.ts");
+    expect(map.publicContracts).toContain("apps/api/src/projects/public/project-finance-reader.module.ts");
     expect(map.publicContracts).toContain("apps/api/src/projects/public/project-references.ts");
     expect(map.publicContracts).toContain("apps/api/src/projects/public/project-references.module.ts");
     expect(map.publicContracts).toContain("apps/api/src/contacts/public/contact-references.ts");

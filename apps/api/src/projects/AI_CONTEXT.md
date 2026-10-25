@@ -6,6 +6,8 @@
 
 Публичная проверка ссылки: `ProjectReferences` / `ProjectReferencesModule` в `public/`; возвращает boolean в исходной транзакции/RLS, без загрузки ProjectsModule. Контракт и политика потребителей: [PROJECT_REFERENCES](../../../../docs/platform-api/PROJECT_REFERENCES.md). Milestones использует тот же контракт; его HTTP остаётся за guard Projects.
 
+Публичный `ProjectFinanceReader` / `ProjectFinanceReaderModule` в `public/` предоставляет Finance только валюту существующего проекта в исходной транзакции/RLS. Без загрузки полного ProjectsModule. [Контракт](../../../../docs/platform-api/PROJECT_FINANCE_READER.md).
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

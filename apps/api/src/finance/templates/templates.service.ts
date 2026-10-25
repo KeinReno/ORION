@@ -1,3 +1,4 @@
+import { ProjectReferences } from "../../projects/public/project-references";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type { CreateFinanceTemplateInput, FinanceTemplate, UpdateFinanceTemplateInput } from "@orion/shared-types";
@@ -15,6 +16,7 @@ const MAX_TEMPLATES = 100;
 @Injectable()
 export class TemplatesService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -79,7 +81,7 @@ export class TemplatesService {
     if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
     if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
     if (input.categoryId) await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
-    if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId);
+    if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
   }
 
   private async assertOwnedTx(tx: Prisma.TransactionClient, workspaceId: string, templateId: string): Promise<void> {

@@ -1,3 +1,4 @@
+import type { ProjectReferences } from "../projects/public/project-references";
 import { BadRequestException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { primaryAccountCurrency } from "@orion/shared-types";
@@ -42,10 +43,10 @@ export async function assertCategoryInWorkspace(
 export async function assertProjectInWorkspace(
   tx: Prisma.TransactionClient,
   workspaceId: string,
-  projectId: string
+  projectId: string,
+  projects: ProjectReferences
 ): Promise<void> {
-  const project = await tx.project.findUnique({ where: { id: projectId } });
-  if (!project || project.workspaceId !== workspaceId) {
+  if (!(await projects.existsTx(tx, workspaceId, projectId))) {
     throw new BadRequestException("Проект не найден в этом рабочем пространстве");
   }
 }

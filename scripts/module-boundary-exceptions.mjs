@@ -10,7 +10,6 @@ export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/ai/agent-tokens.service.ts": { models: ["Event","Note","Project","Task"] },
   "apps/api/src/ai/agent-undo.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
   "apps/api/src/captures/captures.service.ts": { models: ["Account","Contact","FinanceObligation","Goal","Home","Project","Task"], services: ["tasks/tasks.service"] },
-  "apps/api/src/finance/project-costs/project-costs.service.ts": { models: ["Project"] },
   "apps/api/src/goals/goals.service.ts": { models: ["Milestone","Project","Task"], services: ["projects/projects.service"] },
   "apps/api/src/home-utilities/home-utilities.service.ts": { models: ["Home","Meter"] },
   "apps/api/src/home/home.service.ts": { models: ["Contact","FinanceObligation","InventoryItem","List","Task","TaskActivity","TaskComment"] },
