@@ -103,6 +103,12 @@ export interface ComponentMetadata {
   version: string;
   requires?: Partial<Pick<ComponentManifest["requires"], "platform" | "modules" | "moduleVersions" | "contracts">>;
 }
+export interface ComponentIncompatibleError {
+  code: "component_incompatible";
+  componentId: string;
+  message: string;
+  problems: string[];
+}
 
 function parseVersion(value: string): [number, number, number] {
   const [major = 0, minor = 0, patch = 0] = value.split(".").map(Number);
@@ -124,7 +130,7 @@ export function satisfiesVersionRange(range: string, version: string): boolean {
   if (compareVersions(actual, base) < 0) return false;
   if (range.startsWith("~")) return actual[0] === base[0] && actual[1] === base[1];
   if (range.startsWith("^")) {
-    // Для 0.x каретка фиксирует минорную часть (как в npm).
+    // Before 1.0 caret fixes the first nonzero part; ^0.0.x fixes patch.
     if (base[0] > 0) return actual[0] === base[0];
     if (base[1] > 0) return actual[0] === 0 && actual[1] === base[1];
     return actual[0] === 0 && actual[1] === 0 && actual[2] === base[2];

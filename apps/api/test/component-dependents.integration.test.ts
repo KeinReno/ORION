@@ -227,6 +227,14 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     expect(rejected.data.code).toBe("component_incompatible");
     expect((await get("/plugins")).data).toEqual(before);
     expect((await setModule("habits", true)).status).toBe(200);
+    const manifest = COMPONENT_MANIFESTS.find(m => m.id === plugin.id)!;
+    const original = manifest.requires;
+    try {
+      manifest.requires = { ...original, contracts: { plugin: "^99.0.0" } };
+      const incompatible = await setPlugin(plugin.id, true);
+      expect(incompatible.status).toBe(409);
+      expect(incompatible.data.code).toBe("component_incompatible");
+    } finally { manifest.requires = original; }
     expect((await setPlugin(plugin.id, true)).status).toBe(200);
   });
 

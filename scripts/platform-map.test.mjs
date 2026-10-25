@@ -8,6 +8,7 @@ describe("generated platform capability map", () => {
     const map = await buildPlatformMap();
     expect(map.dataOwnership.modules.PetCarePet).toBe("modules-ext/pet-care");
     expect(map.registryEntryPoints).toContain("apps/api/src/common/entity-reference-registry.ts");
+    expect(map.publicContracts).toContain("packages/shared-types/src/component-manifest.ts");
     expect(map.uiSlots).toContain("tasks.views");
     const source = JSON.parse(readFileSync(new URL("../apps/api/src/modules-ext/pet-care/module.manifest.json", import.meta.url), "utf8"));
     expect(map.components.find(c => c.id === "pet-care").version).toBe(source.version);

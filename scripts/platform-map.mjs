@@ -18,7 +18,12 @@ export async function buildPlatformMap() {
   const result = buildSync({ entryPoints: [join(root, "packages/shared-types/src/index.ts")], bundle: true, write: false, format: "esm", platform: "node", target: "node22" });
   const contracts = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].contents).toString("base64")}`);
   const source = [...files(join(root, "apps/api/src")), ...files(join(root, "apps/web/lib/extensions"))].map(f => slash(relative(root, f))).filter(f => f.endsWith(".ts") && !f.endsWith(".test.ts")).sort();
-  const publicContracts = source.filter(f => f.includes("/public/") || f.startsWith("apps/web/lib/extensions/"));
+  const sharedIndex = "packages/shared-types/src/index.ts";
+  const sharedExports = [...readFileSync(join(root, sharedIndex), "utf8").matchAll(/from\s+"\.\/([^"]+)"/g)].map(m => {
+    const base = `packages/shared-types/src/${m[1]}`;
+    return existsSync(join(root, `${base}.ts`)) ? `${base}.ts` : `${base}/index.ts`;
+  }).filter(p => existsSync(join(root, p)));
+  const publicContracts = [...new Set([sharedIndex, ...sharedExports, ...source.filter(f => f.includes("/public/") || f.startsWith("apps/web/lib/extensions/"))])].sort();
   const registryEntryPoints = source.filter(f => /registry[^/]*\.ts$/.test(f));
   const passports = files(join(root, "apps/api/src")).filter(f => f.endsWith("/MODULE.md") || f.endsWith("\\MODULE.md") || f.endsWith("/AI_CONTEXT.md") || f.endsWith("\\AI_CONTEXT.md")).map(f => slash(relative(root, f))).sort();
   const moduleSources = Object.fromEntries(passports.filter(p => p.endsWith("/MODULE.md")).flatMap(p => {
@@ -46,7 +51,7 @@ export async function buildPlatformMap() {
     events: { types: contracts.DOMAIN_EVENT_TYPES, subscriptions: contracts.DOMAIN_EVENT_SUBSCRIPTIONS },
     permissions: contracts.PERMISSION_IDS,
     passports,
-    commands: Object.fromEntries(Object.entries(scripts).filter(([name]) => /^(create:module|orion-ext|module-registry|module-docs|platform-map|architecture-check|plugin-contract-check|typecheck|lint|test|db:generate)/.test(name))),
+    commands: Object.fromEntries(Object.entries(scripts).filter(([name]) => /^(create:module|orion-ext|module-registry|module-docs|platform-map|architecture-check|plugin-contract-check|typecheck|lint|test|build|db:generate)/.test(name))),
     boundaryExceptions: MODULE_BOUNDARY_EXCEPTIONS,
     boundaryCheckLimits: ["Prisma delegates in *.service.ts; receiver names tx/trx/db/client/prisma", "Raw SQL and arbitrary aliases require manual review", "Public contract paths are discovery entries, not permission grants"],
     governingDocuments: ["AGENTS.md", "ORION_CONSTITUTION.md", "docs/PLATFORM.md", "docs/STATUS.md", "docs/AI_REFACTOR_MIGRATION_MAP.md"]

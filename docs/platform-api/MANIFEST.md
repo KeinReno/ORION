@@ -27,7 +27,7 @@
 производное представление. Версия и необязательный requires подключаемого компонента сохраняются из source JSON через GENERATED_MODULE_METADATA / GENERATED_PLUGIN_METADATA. Для встроенных компонентов без source metadata остаются defaults `1.0.0` / `^1.0.0`.
 
 - Модуль: `optionalModules` = `optionalDependencies`, `contributions.panels` = `[panelId]`.
-- Плагин: `requires.modules` = `[extendsModuleId]`.
+- Плагин: `requires.modules` включает `extendsModuleId` и дополнительные обязательные модули из source metadata.
 - `permissions` модуля = его разрешения из реестра; у встроенных плагинов этот список пока пуст.
 - `events` выводятся из каталога доменных событий и подписок; у подключаемых модулей `migrations` берутся из `GENERATED_MODULE_MIGRATIONS`. `apiRoutes` в производном представлении не заполнены.
 - `contributions.slots` у плагинов пусто: слоты известны только веб-реестру
