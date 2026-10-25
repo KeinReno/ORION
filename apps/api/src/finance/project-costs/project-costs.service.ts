@@ -1,15 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import { ProjectFinanceReader } from "../../projects/public/project-finance-reader";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type { CategoryBreakdownEntry, ProjectCostTotals, ProjectCosts } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
-import { assertProjectInWorkspace } from "../finance-refs.util";
 
 type MoneyType = "income" | "expense";
 
 @Injectable()
 export class ProjectCostsService {
   constructor(
+    private readonly projects: ProjectFinanceReader,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -26,17 +27,15 @@ export class ProjectCostsService {
   async costs(userId: string, workspaceId: string, projectId: string): Promise<ProjectCosts> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await assertProjectInWorkspace(tx, workspaceId, projectId);
+      const project = await this.projects.currencyTx(tx, workspaceId, projectId);
+      if (!project) throw new BadRequestException("Проект не найден в этом рабочем пространстве");
 
       const moneyTypes: MoneyType[] = ["income", "expense"];
-      const [project, accounts] = await Promise.all([
-        tx.project.findUnique({ where: { id: projectId }, select: { currency: true } }),
-        tx.transaction.findMany({
-          where: { workspaceId, projectId, type: { in: moneyTypes } },
-          distinct: ["accountId"],
-          select: { account: { select: { currency: true } } }
-        })
-      ]);
+      const accounts = await tx.transaction.findMany({
+        where: { workspaceId, projectId, type: { in: moneyTypes } },
+        distinct: ["accountId"],
+        select: { account: { select: { currency: true } } }
+      });
       const currencies = [...new Set(accounts.map((row) => row.account.currency))].sort();
 
       const byCurrency: ProjectCostTotals[] = [];

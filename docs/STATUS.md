@@ -6,6 +6,18 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Finance → Projects: ссылки и валюта — 25.10.2026
+
+В `codex/finance-project-contract` Finance не читает Project напрямую. Операции и шаблоны используют
+ProjectReferences; затраты — ProjectFinanceReader ({currency} либо null) в исходной транзакции/RLS.
+Прямой запрос удалён также из finance-refs.util.ts. Права, 400, null, архив/отключение Projects и
+расчёты валют сохранены. SDK не импортируют полный ProjectsModule. ADR-0031; Integration API 1.6.0 /
+Platform API 1.7.0. Исключения: **19 → 18 файлов / 53 → 52 model entries**, service entries — 19.
+Focused: **17 passed**, в том числе Finance без полного ProjectsModule. Unit: **1476 passed**;
+typecheck, architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
+Полный integration и production build/browser выполняются отдельно.
+[Контракт](platform-api/PROJECT_FINANCE_READER.md), [проверки](FINANCE_PROJECT_CONTRACT_2026-10-25.md).
+
 ## Time и Calendar → Tasks / Projects — 25.10.2026
 
 В `codex/time-calendar-contracts` Time и Calendar (EventsService) больше не читают Task/Project.

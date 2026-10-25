@@ -1,3 +1,5 @@
+import { ProjectReferencesModule } from "../projects/public/project-references.module";
+import { ProjectFinanceReaderModule } from "../projects/public/project-finance-reader.module";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { FinanceAgentController } from "./finance.agent.controller";
 import { Module } from "@nestjs/common";
@@ -51,7 +53,7 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
  * for no reason.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
+  imports: [ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
   controllers: [
     FinanceAgentController,
     AccountsController,
