@@ -1,6 +1,7 @@
 # Finance → Projects: ссылки и валюта проекта
 
 База: master `7a2590461426717df5f5dd85f35d2d6f0184f3f3` (PR #72).
+Код и тесты: `2872fc5`; последующие изменения этого этапа — только итоговая документация.
 Реализация: `codex/finance-project-contract`; [ADR-0031](adr/ADR-0031-project-finance-reader.md),
 [контракт](platform-api/PROJECT_FINANCE_READER.md). UI, schema, миграции и права не меняются.
 
@@ -40,8 +41,13 @@ Projects HTTP даёт 404. SDK и таблица Project остаются. От
 
 Unit: **1476 passed / 190 файлов**, 80.92 с. Typecheck passed; lint — **0 ошибок / 30 прежних
 предупреждений**. Architecture/registry/docs/map passed; snapshot/plugin contracts входят в unit.
-Production API/web build прошёл (54 страницы). Новые 2 Chromium сценария валют/отключённого
-плагина прошли с первого запуска; полный прогон панелей и integration ещё выполняются.
+Production API/web build прошёл (54 страницы), compiled API содержит currency reader и Platform API 1.7.0.
+Chromium: **44 passed**, 1.6 мин — 42 панели default-full/plugins-off и 2 новых сценария:
+переключение USD/RUB, загрузка после reload, скрытая вкладка при отключённых плагинах с сохранёнными
+операциями. Снимки действий не менялись. Все целевые сценарии прошли с первого запуска.
+Полный integration на пересозданной БД: **610 passed / 1 skipped**, 108 passed-файлов,
+579.16 с. Все семь новых сценариев входят в прогон. В логе нет 40P01/deadlock;
+искусственные HTTP 500 lifecycle rollback ожидаемы.
 Локальные логи stage6-*.log ignored; команды — vitest.integration.config.mts после e2e-db.mjs;
 browser — e2e-local.mjs для panels.spec.ts и finance-project-contract.spec.ts.
 GitHub CI имеет известный billing-блок; приёмка этого этапа локальная.

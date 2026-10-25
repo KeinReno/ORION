@@ -15,7 +15,8 @@ ProjectReferences; затраты — ProjectFinanceReader ({currency} либо 
 Platform API 1.7.0. Исключения: **19 → 18 файлов / 53 → 52 model entries**, service entries — 19.
 Focused: **17 passed**, в том числе Finance без полного ProjectsModule. Unit: **1476 passed**;
 typecheck, architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
-Полный integration и production build/browser выполняются отдельно.
+Production API/web build (54 страницы) и **44 Chromium** сценария прошли; полный integration
+на пересозданной БД — **610 passed / 1 skipped**. Приёмка локальная; CI имеет известный billing-блок.
 [Контракт](platform-api/PROJECT_FINANCE_READER.md), [проверки](FINANCE_PROJECT_CONTRACT_2026-10-25.md).
 
 ## Time и Calendar → Tasks / Projects — 25.10.2026
