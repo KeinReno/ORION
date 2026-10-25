@@ -1,0 +1,2568 @@
+{
+  "schemaVersion": "1.0.0",
+  "meaning": "Declarations generated from code, not runtime acceptance or test results",
+  "platformVersion": "1.2.0",
+  "contractVersions": {
+    "module": "1.3.0",
+    "plugin": "1.3.0",
+    "event": "1.0.0",
+    "storage": "1.0.0",
+    "workspace": "1.0.0",
+    "theme": "1.0.0",
+    "surface": "1.0.0",
+    "permission": "1.3.0",
+    "integration": "1.1.0",
+    "agentGateway": "1.0.0"
+  },
+  "components": [
+    {
+      "id": "chat-archive",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Архив чатов",
+      "description": "Разговоры с ИИ-агентами (Claude Code, Codex) в исходном виде: каждая строка транскрипта без изменений, чтение, поиск и выгрузка оригинала.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": []
+      },
+      "permissions": [
+        "chat-archive.conversation.read",
+        "chat-archive.conversation.create",
+        "chat-archive.conversation.update",
+        "chat-archive.conversation.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "chat-archive"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [
+        "20261020222504_chat_archive"
+      ],
+      "sourceDirectory": "apps/api/src/modules-ext/chat-archive",
+      "dataModels": [
+        "ChatArchiveConversation",
+        "ChatArchiveLine"
+      ]
+    },
+    {
+      "id": "pet-care",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Питомцы",
+      "description": "Карточки питомцев, журнал ухода и дневник самочувствия: симптомы по дням, события, статистика, отчёт для ветеринара.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": []
+      },
+      "permissions": [
+        "pet-care.pet.read",
+        "pet-care.pet.create",
+        "pet-care.pet.update",
+        "pet-care.pet.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "pet-care"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [
+        "20261018120000_pet_care",
+        "20261019150000_pet_care_wellbeing",
+        "20261020200000_pet_care_weight"
+      ],
+      "sourceDirectory": "apps/api/src/modules-ext/pet-care",
+      "dataModels": [
+        "PetCareDay",
+        "PetCareEntry",
+        "PetCareEvent",
+        "PetCarePet"
+      ]
+    },
+    {
+      "id": "opportunities",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Возможности",
+      "description": "Вакансии и заказы: условия, статусы и история работы.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": []
+      },
+      "permissions": [
+        "opportunities.opportunity.read",
+        "opportunities.opportunity.create",
+        "opportunities.opportunity.update",
+        "opportunities.opportunity.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "opportunities"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/opportunities",
+      "dataModels": [
+        "Opportunity",
+        "OpportunityAssessment",
+        "OpportunityAttempt",
+        "OpportunityBudget",
+        "OpportunityCapture",
+        "OpportunityConnection",
+        "OpportunityDraft",
+        "OpportunityFact",
+        "OpportunityGrant",
+        "OpportunityHistory",
+        "OpportunityImport",
+        "OpportunityManagerAction",
+        "OpportunityMaterial",
+        "OpportunityPolicy",
+        "OpportunityProfile",
+        "OpportunityTrack"
+      ]
+    },
+    {
+      "id": "tasks",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Задачи",
+      "description": "Списки, доска и сроки.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "projects",
+          "calendar",
+          "time"
+        ]
+      },
+      "permissions": [
+        "tasks.task.read",
+        "tasks.task.create",
+        "tasks.task.update",
+        "tasks.task.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "tasks"
+        ]
+      },
+      "events": {
+        "publishes": [
+          "tasks.task.closed"
+        ],
+        "subscribes": [
+          "tasks.task.closed"
+        ]
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/tasks",
+      "dataModels": [
+        "SavedTaskView",
+        "Task",
+        "TaskActivity",
+        "TaskComment",
+        "TaskDependency"
+      ]
+    },
+    {
+      "id": "notes",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Заметки",
+      "description": "Текстовые заметки, шаблоны и история правок.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "documents",
+          "projects"
+        ]
+      },
+      "permissions": [
+        "notes.note.read",
+        "notes.note.create",
+        "notes.note.update",
+        "notes.note.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "notes"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/notes",
+      "dataModels": [
+        "Note",
+        "NoteAttachment",
+        "NoteLink",
+        "NoteRevision"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "База знаний",
+      "description": "Материалы со статусом, источниками и связями. Это не заметки.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "notes",
+          "documents"
+        ]
+      },
+      "permissions": [
+        "knowledge.item.read",
+        "knowledge.item.create",
+        "knowledge.item.update",
+        "knowledge.item.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "knowledge"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/knowledge",
+      "dataModels": [
+        "KnowledgeCategory",
+        "KnowledgeItem",
+        "KnowledgeRelation",
+        "KnowledgeSource"
+      ]
+    },
+    {
+      "id": "calendar",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Календарь",
+      "description": "События, напоминания и внешние ICS-фиды.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks",
+          "projects"
+        ]
+      },
+      "permissions": [
+        "calendar.event.read",
+        "calendar.event.create",
+        "calendar.event.update",
+        "calendar.event.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "calendar"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/events",
+      "dataModels": [
+        "CalendarConnection",
+        "Event",
+        "EventOverride",
+        "SentReminder"
+      ]
+    },
+    {
+      "id": "documents",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Документы",
+      "description": "Файлы и папки рабочего пространства.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "notes",
+          "projects"
+        ]
+      },
+      "permissions": [
+        "documents.document.read",
+        "documents.document.create",
+        "documents.document.update",
+        "documents.document.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "documents"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/documents",
+      "dataModels": [
+        "Document",
+        "DocumentAnnotation",
+        "DocumentVersion"
+      ]
+    },
+    {
+      "id": "projects",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Проекты",
+      "description": "Контейнер работы: сроки, бюджет, ставка.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks",
+          "notes",
+          "calendar",
+          "documents",
+          "time",
+          "finance"
+        ]
+      },
+      "permissions": [
+        "projects.project.read",
+        "projects.project.create",
+        "projects.project.update",
+        "projects.project.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "projects"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/projects",
+      "dataModels": [
+        "Project",
+        "ProjectStatusUpdate"
+      ]
+    },
+    {
+      "id": "time",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Время",
+      "description": "Таймер и записи затраченного времени.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks",
+          "projects"
+        ]
+      },
+      "permissions": [
+        "time.entry.read",
+        "time.entry.create",
+        "time.entry.update",
+        "time.entry.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "time"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/time",
+      "dataModels": [
+        "TimeEntry"
+      ]
+    },
+    {
+      "id": "finance",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Финансы",
+      "description": "Счета, операции, бюджеты и отчёты.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "projects"
+        ]
+      },
+      "permissions": [
+        "finance.transaction.read",
+        "finance.transaction.create",
+        "finance.transaction.update",
+        "finance.transaction.delete",
+        "finance.draft.propose"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "finance"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/finance",
+      "dataModels": [
+        "Account",
+        "Budget",
+        "CategoryRule",
+        "FinanceCategory",
+        "FinanceDraft",
+        "FinanceExchangeRate",
+        "FinanceObligation",
+        "FinanceSettlement",
+        "FinanceSplit",
+        "FinanceSplitShare",
+        "FinanceTemplate",
+        "InvestmentTrade",
+        "RecurringTransaction",
+        "SavingsGoal",
+        "Transaction",
+        "TransactionLine"
+      ]
+    },
+    {
+      "id": "habits",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Привычки",
+      "description": "Повторяющиеся привычки и отметки по дням.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": []
+      },
+      "permissions": [
+        "habits.habit.read",
+        "habits.habit.create",
+        "habits.habit.update",
+        "habits.habit.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "habits"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/habits",
+      "dataModels": [
+        "Habit",
+        "HabitEntry"
+      ]
+    },
+    {
+      "id": "lists",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Списки",
+      "description": "Лёгкие чек-листы: покупки, дела, сборы — что угодно с галочками, общие для всего пространства.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": []
+      },
+      "permissions": [
+        "lists.list.read",
+        "lists.list.create",
+        "lists.list.update",
+        "lists.list.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "lists"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/lists",
+      "dataModels": [
+        "List",
+        "ListItem"
+      ]
+    },
+    {
+      "id": "inventory",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Склад",
+      "description": "Номенклатура, остатки и движения.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "projects"
+        ]
+      },
+      "permissions": [
+        "inventory.item.read",
+        "inventory.item.create",
+        "inventory.item.update",
+        "inventory.item.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "inventory"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/inventory",
+      "dataModels": [
+        "InventoryItem",
+        "InventoryMovement"
+      ]
+    },
+    {
+      "id": "markets",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Рынки",
+      "description": "Список наблюдения и журнал сделок из Compass; графики и стратегии остаются в Compass.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "finance"
+        ]
+      },
+      "permissions": [
+        "markets.trade.read",
+        "markets.trade.create",
+        "markets.trade.update",
+        "markets.trade.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "markets"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/markets",
+      "dataModels": [
+        "MarketWatchItem"
+      ]
+    },
+    {
+      "id": "home",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Дом",
+      "description": "Квартира, дом, дача, машина: что купить, что платить, какие дела, показания счётчиков — в одном месте.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks",
+          "lists",
+          "inventory",
+          "finance"
+        ]
+      },
+      "permissions": [
+        "home.item.read",
+        "home.item.create",
+        "home.item.update",
+        "home.item.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "home"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/home",
+      "dataModels": [
+        "Home",
+        "Meter",
+        "MeterReading"
+      ]
+    },
+    {
+      "id": "contacts",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Контакты",
+      "description": "Записная книжка: люди и организации, несколько телефонов и почт, теги, дни рождения, журнал общения, связи с задачами и проектами, напоминания.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "home"
+        ]
+      },
+      "permissions": [
+        "contacts.contact.read",
+        "contacts.contact.create",
+        "contacts.contact.update",
+        "contacts.contact.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window",
+        "widget"
+      ],
+      "contributions": {
+        "panels": [
+          "contacts"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/contacts",
+      "dataModels": [
+        "Contact",
+        "ContactInteraction",
+        "ContactRelation"
+      ]
+    },
+    {
+      "id": "health",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Здоровье",
+      "description": "Личный журнал здоровья: визиты к врачам, профилактика, аллергии — у каждого человека своё, чужим не видно.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "contacts"
+        ]
+      },
+      "permissions": [
+        "health.record.read",
+        "health.record.create",
+        "health.record.update",
+        "health.record.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "health"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/health",
+      "dataModels": [
+        "HealthAppointment",
+        "HealthGrant",
+        "HealthIntake",
+        "HealthMeasurement",
+        "HealthMedication",
+        "HealthPreventiveItem",
+        "HealthSubject",
+        "HealthSymptom",
+        "HealthTarget"
+      ]
+    },
+    {
+      "id": "home-utilities",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Коммуналка",
+      "description": "Помесячные начисления по квартире и калькулятор электричества.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "home"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/home-utilities",
+      "dataModels": []
+    },
+    {
+      "id": "opportunities-profiles",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Профили кандидатов",
+      "description": "Люди, команды, подтверждённые факты и версии материалов.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "opportunities"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/opportunities-profiles",
+      "dataModels": []
+    },
+    {
+      "id": "opportunities-hh-import",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Импорт архива HH",
+      "description": "Предварительный просмотр вакансий, резюме и исторических откликов.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "opportunities"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/opportunities-hh-import",
+      "dataModels": []
+    },
+    {
+      "id": "opportunities-assistant",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Ассистент по откликам",
+      "description": "Оценка соответствия профилю с основаниями и редактируемые черновики. Без внешней отправки.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "opportunities"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/opportunities-assistant",
+      "dataModels": []
+    },
+    {
+      "id": "opportunities-execution",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Управляемая отправка HH",
+      "description": "Подключение аккаунта, согласование конкретного отклика и сверка результата. Отправляет только согласованное содержимое.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "opportunities"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/opportunities-execution",
+      "dataModels": []
+    },
+    {
+      "id": "opportunities-manager",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "ИИ-менеджер откликов",
+      "description": "Ограниченная автономность по явной политике: лимиты, срок, пауза и отчёт. Каждая отправка всё равно проходит проверки исполнителя.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "opportunities"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/opportunities-manager",
+      "dataModels": []
+    },
+    {
+      "id": "team",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Команда",
+      "description": "Назначение задач участникам, роль «тимлид» и фильтр «Мои задачи».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": null,
+      "dataModels": []
+    },
+    {
+      "id": "finance-budgeting",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Бюджеты",
+      "description": "Месячные лимиты по категориям расходов и контроль «потрачено из лимита».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-budgeting",
+      "dataModels": []
+    },
+    {
+      "id": "finance-goals",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Цели накоплений",
+      "description": "Цели с суммой и сроком, привязанные к счёту, и прогресс к ним.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-goals",
+      "dataModels": []
+    },
+    {
+      "id": "finance-recurring",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Повторяющиеся платежи",
+      "description": "Правила регулярных платежей и доходов, которые создают операции по расписанию.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-recurring",
+      "dataModels": []
+    },
+    {
+      "id": "finance-reports",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Отчёты по финансам",
+      "description": "Доходы и расходы по месяцам, чистый капитал, расходы по категориям.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-reports",
+      "dataModels": []
+    },
+    {
+      "id": "tasks-saved-views",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Сохранённые виды задач",
+      "description": "Именованные наборы фильтров (поиск, проект) одним нажатием в шапке панели задач.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/tasks-saved-views",
+      "dataModels": []
+    },
+    {
+      "id": "documents-history",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "История версий файлов",
+      "description": "Список прежних версий файла с загрузкой и восстановлением.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "documents"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/documents-history",
+      "dataModels": []
+    },
+    {
+      "id": "documents-resources",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Файлы в контекстной панели",
+      "description": "Вкладка «Ресурсы» правой панели: файлы, связанные с выбранным объектом или разделом.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "documents"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [
+        "side"
+      ],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/documents-resources",
+      "dataModels": []
+    },
+    {
+      "id": "documents-office",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Редакторы документов и таблиц",
+      "description": "Создание и правка файлов Word (DOCX) и Excel (XLSX) прямо в приложении.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "documents"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/documents-office",
+      "dataModels": []
+    },
+    {
+      "id": "notes-history",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "История версий заметок",
+      "description": "Прежние версии заметки, отличия от текущей и откат.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "notes"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/notes-history",
+      "dataModels": []
+    },
+    {
+      "id": "time-insights",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Итоги и динамика времени",
+      "description": "Часы за сегодня, 7 дней и всё время, разрез «мои / команда», время по проектам и графики динамики.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "time"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/time-insights",
+      "dataModels": []
+    },
+    {
+      "id": "time-billing",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Стоимость времени",
+      "description": "Перевод часов в деньги по ставке проекта: итоговая стоимость, по проектам и у каждой записи.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "time"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/time-billing",
+      "dataModels": []
+    },
+    {
+      "id": "calendar-external",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Внешние календари",
+      "description": "Подписка на чужие ICS-календари (только чтение) и ссылка на экспорт календаря ORION.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "calendar"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/calendar-external",
+      "dataModels": []
+    },
+    {
+      "id": "tasks-comments",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Комментарии к задачам",
+      "description": "Обсуждение задачи: комментарии с Markdown, правка и удаление своих, уведомление исполнителю.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/tasks-comments",
+      "dataModels": []
+    },
+    {
+      "id": "tasks-kanban",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Доска задач",
+      "description": "Вид «Доска»: колонки рядом, перетаскивание карточек между колонками.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": null,
+      "dataModels": []
+    },
+    {
+      "id": "notes-daily",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Ежедневные заметки",
+      "description": "Кнопка «Сегодня»: открывает или создаёт заметку на сегодняшний день.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "notes"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/notes-daily",
+      "dataModels": []
+    },
+    {
+      "id": "notes-templates",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Шаблоны заметок",
+      "description": "Заметки-шаблоны: отдельный список «Шаблоны», создание заметки из шаблона, команда «Сделать шаблоном».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "notes"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/notes-templates",
+      "dataModels": []
+    },
+    {
+      "id": "tasks-recurrence",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Повторяющиеся задачи",
+      "description": "Поля «Повтор» и «Каждые N» в задаче и значок повтора на карточке.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/tasks-recurrence",
+      "dataModels": []
+    },
+    {
+      "id": "tasks-planning",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Планирование задач",
+      "description": "Подзадачи, зависимости между задачами, плановое начало, оценка в часах и ручной порядок карточек.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/tasks-planning",
+      "dataModels": []
+    },
+    {
+      "id": "projects-planning",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "План проекта",
+      "description": "Вехи и план проекта: таймлайн, дорожная карта, календарь и диаграмма Ганта, лента вех в обзоре.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "projects"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/projects-planning",
+      "dataModels": []
+    },
+    {
+      "id": "projects-ideas",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Идеи",
+      "description": "Короткие мысли, закреплённые за проектом: новая фича, направление, то, что не хочется забыть. Из идеи можно сделать задачу этого проекта.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "projects"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": null,
+      "dataModels": []
+    },
+    {
+      "id": "projects-problems",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Проблемы",
+      "description": "То, что не нравится в проекте, найденные баги и то, что нужно поправить — рядом с проектом, пока из записи не сделана задача.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "projects"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": null,
+      "dataModels": []
+    },
+    {
+      "id": "calendar-widget",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Календарь в сайдбаре",
+      "description": "Компактный месяц в боковом меню: точки отмечают дни с событиями и задачами со сроком; клик открывает календарь.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "calendar"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [
+        "widget"
+      ],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/calendar-widget",
+      "dataModels": []
+    },
+    {
+      "id": "projects-goals",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Глобальные цели",
+      "description": "Цель объединяет несколько планов — проектов — с весами; прогресс считается по задачам этих проектов, а не вводится руками.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "projects"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/projects-goals",
+      "dataModels": []
+    },
+    {
+      "id": "inventory-alerts",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Низкий остаток",
+      "description": "Порог остатка по позиции, карточка «Низкий остаток», значок на позиции и подсказка «ниже порога».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "inventory"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/inventory-alerts",
+      "dataModels": []
+    },
+    {
+      "id": "calendar-recurrence",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Повторяющиеся события",
+      "description": "Раздел «Повтор» в форме события: ежедневно, по дням недели, ежемесячно, ежегодно, до даты или N раз.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "calendar"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/calendar-recurrence",
+      "dataModels": []
+    },
+    {
+      "id": "calendar-reminders",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Напоминания о событиях",
+      "description": "Раздел «Напоминания» в форме события: уведомление за N минут до начала.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "calendar"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/calendar-reminders",
+      "dataModels": []
+    },
+    {
+      "id": "finance-quick-entry",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Быстрая запись операций",
+      "description": "Строка над операциями: «-500 хлеб #еда @вчера» → черновик, который вы подтверждаете (счёт, расход/доход, категория).",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-quick-entry",
+      "dataModels": []
+    },
+    {
+      "id": "finance-import",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Импорт операций из CSV",
+      "description": "Загрузка банковской выписки или выгрузки FinControl в выбранный счёт: проверка без записи, пропуск повторов, отчёт об ошибках.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-import",
+      "dataModels": []
+    },
+    {
+      "id": "finance-obligations",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Обязательства",
+      "description": "Долги, кредиты, коммунальные платежи и подписки: план платежей и кнопка «Оплатить», которая записывает настоящую операцию.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-obligations",
+      "dataModels": []
+    },
+    {
+      "id": "finance-forecast",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Прогноз остатка",
+      "description": "Куда идёт остаток: средний месяц вашей истории, коридор от худшего до лучшего и плановые платежи отдельно — с описанием метода.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-forecast",
+      "dataModels": []
+    },
+    {
+      "id": "inventory-costing",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Себестоимость склада",
+      "description": "Цена прихода и средняя себестоимость позиции — в карточке и в окне позиции.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "inventory"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/inventory-costing",
+      "dataModels": []
+    },
+    {
+      "id": "lists-inventory",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Покупки → Склад",
+      "description": "Связь списка покупок со складом: пункт списка привязывается к позиции склада, «Куплено» записывает приход, а позицию с низким остатком можно одним действием отправить в список покупок. Работает, когда включены и «Списки», и «Склад».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "lists"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/lists-inventory",
+      "dataModels": []
+    },
+    {
+      "id": "lists-finance",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Покупки → Финансы",
+      "description": "Купленные пункты списка одним действием записываются расходом: сумма по ценам пунктов или с чека, счёт и категория. Пункт, по которому расход уже записан, повторно не записывается. Работает, когда включены и «Списки», и «Финансы».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "lists"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/lists-finance",
+      "dataModels": []
+    },
+    {
+      "id": "finance-project-costs",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Затраты проекта",
+      "description": "Вкладка «Затраты» в проекте: сколько потрачено и получено по операциям проекта, расходы по категориям. Работает, когда включены «Финансы» и «Проекты».",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-project-costs",
+      "dataModels": []
+    },
+    {
+      "id": "finance-net-worth",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Капитал",
+      "description": "Вкладка «Капитал»: счета минус долги плюс то, что должны вам — по каждой валюте отдельно, распределение по видам счетов и динамика остатка за год.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-net-worth",
+      "dataModels": []
+    },
+    {
+      "id": "finance-transfer-match",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Сопоставление переводов",
+      "description": "Находит расход на одном счёте и доход на другом, которые на деле один перевод между вашими счетами (после импорта двух выписок), и по кнопке заменяет их одним переводом.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-transfer-match",
+      "dataModels": []
+    },
+    {
+      "id": "finance-templates",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Шаблоны операций",
+      "description": "Заготовки для операций, которые повторяются без расписания («обед», «заправка»): счёт, категория, сумма и заметка уже заполнены, остаётся нажать и подтвердить.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-templates",
+      "dataModels": []
+    },
+    {
+      "id": "finance-split",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Общие расходы",
+      "description": "Кто за что заплатил и кто кому должен: делите общий расход между участниками пространства, смотрите баланс и записывайте взаиморасчёты. Счета и их остатки не меняются.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-split",
+      "dataModels": []
+    },
+    {
+      "id": "finance-exchange-rates",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Курсы валют",
+      "description": "Курсы, которые вы вводите сами (по дням), и пересчёт «Капитала» в одну валюту. Внешнего источника нет: каждую цифру можно объяснить курсом и датой.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-exchange-rates",
+      "dataModels": []
+    },
+    {
+      "id": "finance-ai-drafts",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Черновики от ИИ",
+      "description": "Внешний ИИ-агент (с разрешением «finance:draft») присылает операцию, прочитанную с чека, как ЧЕРНОВИК. Вы видите предпросмотр, правите любое поле и сами подтверждаете — без вашего решения ничего не записывается.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/finance-ai-drafts",
+      "dataModels": []
+    },
+    {
+      "id": "habits-insights",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Аналитика привычек",
+      "description": "Неделя по каждой привычке и 12-недельная карта активности рядом с ежедневным списком.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "habits"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins-ext/habits-insights",
+      "dataModels": []
+    }
+  ],
+  "dataOwnership": {
+    "core": [
+      "CrossWorkspaceGrant",
+      "DomainEvent",
+      "DomainEventDelivery",
+      "EntityLink",
+      "EntityReminder",
+      "Notification",
+      "RefreshToken",
+      "SyncChange",
+      "SyncDevice",
+      "SyncEntityStamp",
+      "SyncOp",
+      "SyncRemote",
+      "SyncRestoreOperation",
+      "User",
+      "UserPreference",
+      "Workspace",
+      "WorkspaceInvite",
+      "WorkspaceMember"
+    ],
+    "modules": {
+      "Account": "finance",
+      "AgentAuditEntry": "ai",
+      "AgentCapture": "ai",
+      "AgentMessage": "ai",
+      "AgentProposal": "ai",
+      "AgentTask": "ai",
+      "AgentToken": "ai",
+      "AssistantConversation": "ai",
+      "AssistantKey": "ai",
+      "Budget": "finance",
+      "CalendarConnection": "events",
+      "Capture": "captures",
+      "CategoryRule": "finance",
+      "ChatArchiveConversation": "modules-ext/chat-archive",
+      "ChatArchiveLine": "modules-ext/chat-archive",
+      "Contact": "contacts",
+      "ContactInteraction": "contacts",
+      "ContactRelation": "contacts",
+      "Document": "documents",
+      "DocumentAnnotation": "documents",
+      "DocumentVersion": "documents",
+      "Event": "events",
+      "EventOverride": "events",
+      "ExtensionRecord": "extensions",
+      "ExtensionSecret": "extensions",
+      "FinanceCategory": "finance",
+      "FinanceDraft": "finance",
+      "FinanceExchangeRate": "finance",
+      "FinanceObligation": "finance",
+      "FinanceSettlement": "finance",
+      "FinanceSplit": "finance",
+      "FinanceSplitShare": "finance",
+      "FinanceTemplate": "finance",
+      "Goal": "goals",
+      "GoalPlan": "goals",
+      "Habit": "habits",
+      "HabitEntry": "habits",
+      "HealthAppointment": "health",
+      "HealthGrant": "health",
+      "HealthIntake": "health",
+      "HealthMeasurement": "health",
+      "HealthMedication": "health",
+      "HealthPreventiveItem": "health",
+      "HealthSubject": "health",
+      "HealthSymptom": "health",
+      "HealthTarget": "health",
+      "Home": "home",
+      "HomeElectricityTariff": "home-utilities",
+      "HomeUtilityMonth": "home-utilities",
+      "HomeUtilityPayment": "home-utilities",
+      "InboxItem": "inbox",
+      "InventoryItem": "inventory",
+      "InventoryMovement": "inventory",
+      "InvestmentTrade": "finance",
+      "KnowledgeCategory": "knowledge",
+      "KnowledgeItem": "knowledge",
+      "KnowledgeRelation": "knowledge",
+      "KnowledgeSource": "knowledge",
+      "List": "lists",
+      "ListItem": "lists",
+      "MarketWatchItem": "markets",
+      "Meter": "home",
+      "MeterReading": "home",
+      "Milestone": "milestones",
+      "MilestoneDependency": "milestones",
+      "Note": "notes",
+      "NoteAttachment": "notes",
+      "NoteLink": "notes",
+      "NoteRevision": "notes",
+      "Opportunity": "opportunities",
+      "OpportunityAssessment": "opportunities",
+      "OpportunityAttempt": "opportunities",
+      "OpportunityBudget": "opportunities",
+      "OpportunityCapture": "opportunities",
+      "OpportunityConnection": "opportunities",
+      "OpportunityDraft": "opportunities",
+      "OpportunityFact": "opportunities",
+      "OpportunityGrant": "opportunities",
+      "OpportunityHistory": "opportunities",
+      "OpportunityImport": "opportunities",
+      "OpportunityManagerAction": "opportunities",
+      "OpportunityMaterial": "opportunities",
+      "OpportunityPolicy": "opportunities",
+      "OpportunityProfile": "opportunities",
+      "OpportunityTrack": "opportunities",
+      "PetCareDay": "modules-ext/pet-care",
+      "PetCareEntry": "modules-ext/pet-care",
+      "PetCareEvent": "modules-ext/pet-care",
+      "PetCarePet": "modules-ext/pet-care",
+      "Project": "projects",
+      "ProjectStatusUpdate": "projects",
+      "RecurringTransaction": "finance",
+      "SavedTaskView": "tasks",
+      "SavingsGoal": "finance",
+      "SentReminder": "events",
+      "SharedPublication": "shared",
+      "SharedPublicationOperation": "shared",
+      "SharedPublicationPin": "shared",
+      "Task": "tasks",
+      "TaskActivity": "tasks",
+      "TaskComment": "tasks",
+      "TaskDependency": "tasks",
+      "TimeEntry": "time",
+      "Transaction": "finance",
+      "TransactionLine": "finance"
+    }
+  },
+  "coreDirectories": [
+    "auth",
+    "common",
+    "domain-events",
+    "lan",
+    "mcp",
+    "modules",
+    "notifications",
+    "ops",
+    "plugins",
+    "settings",
+    "shared",
+    "storage",
+    "sync",
+    "system",
+    "users",
+    "workspaces"
+  ],
+  "publicContracts": [
+    "apps/api/src/finance/public/expense-reader.ts",
+    "apps/api/src/finance/public/expense-writer.ts",
+    "apps/web/lib/extensions/contracts.ts",
+    "apps/web/lib/extensions/host-api.ts",
+    "apps/web/lib/extensions/places.ts",
+    "apps/web/lib/extensions/registry.ts",
+    "apps/web/lib/extensions/runtime/loader.ts",
+    "apps/web/lib/extensions/runtime/sdk.ts",
+    "apps/web/lib/extensions/slot-boundary.ts"
+  ],
+  "registryEntryPoints": [
+    "apps/api/src/common/entity-reference-registry.ts",
+    "apps/api/src/inbox/inbox-registry.module.ts",
+    "apps/api/src/inbox/inbox-target.registry.ts",
+    "apps/api/src/lan/pairing-registry.ts",
+    "apps/api/src/opportunities-execution/authority-registry.ts",
+    "apps/api/src/search/entity-registry.ts",
+    "apps/api/src/search/search-provider.registry.ts",
+    "apps/api/src/search/search-registry.module.ts",
+    "apps/api/src/shared/publication-registry.ts",
+    "apps/api/src/sync/snapshot-registry.ts",
+    "apps/web/lib/extensions/registry.ts"
+  ],
+  "uiSlots": [
+    "calendar.event.recurrence",
+    "calendar.event.reminders",
+    "calendar.toolbar",
+    "dashboard.finance",
+    "documents.create",
+    "documents.editor",
+    "documents.history",
+    "finance.summary",
+    "finance.tabs",
+    "finance.transactions.top",
+    "habits.detail",
+    "habits.insights",
+    "home.object.overview.cards",
+    "home.object.tabs",
+    "inventory.alerts",
+    "inventory.costing",
+    "inventory.item.actions",
+    "lists.actions",
+    "lists.item",
+    "lists.item.mark",
+    "notes.filters",
+    "notes.header.actions",
+    "notes.header.actions.end",
+    "notes.history",
+    "notes.templates",
+    "opportunities.details.sections",
+    "opportunities.views",
+    "projects.overview.plan",
+    "projects.overview.side",
+    "projects.tabs",
+    "shell.context.resources",
+    "shell.sidebar.widgets",
+    "tasks.detail.tabs",
+    "tasks.planning",
+    "tasks.recurrence",
+    "tasks.views",
+    "tasks.views.bar",
+    "time.billing",
+    "time.insights"
+  ],
+  "events": {
+    "types": [
+      "tasks.task.closed"
+    ],
+    "subscriptions": [
+      {
+        "id": "tasks.notify-assignee-on-close",
+        "componentId": "tasks",
+        "types": [
+          "tasks.task.closed"
+        ]
+      }
+    ]
+  },
+  "permissions": [
+    "tasks.task.read",
+    "tasks.task.create",
+    "tasks.task.update",
+    "tasks.task.delete",
+    "notes.note.read",
+    "notes.note.create",
+    "notes.note.update",
+    "notes.note.delete",
+    "knowledge.item.read",
+    "knowledge.item.create",
+    "knowledge.item.update",
+    "knowledge.item.delete",
+    "calendar.event.read",
+    "calendar.event.create",
+    "calendar.event.update",
+    "calendar.event.delete",
+    "documents.document.read",
+    "documents.document.create",
+    "documents.document.update",
+    "documents.document.delete",
+    "projects.project.read",
+    "projects.project.create",
+    "projects.project.update",
+    "projects.project.delete",
+    "time.entry.read",
+    "time.entry.create",
+    "time.entry.update",
+    "time.entry.delete",
+    "finance.transaction.read",
+    "finance.transaction.create",
+    "finance.transaction.update",
+    "finance.transaction.delete",
+    "habits.habit.read",
+    "habits.habit.create",
+    "habits.habit.update",
+    "habits.habit.delete",
+    "lists.list.read",
+    "lists.list.create",
+    "lists.list.update",
+    "lists.list.delete",
+    "inventory.item.read",
+    "inventory.item.create",
+    "inventory.item.update",
+    "inventory.item.delete",
+    "markets.trade.read",
+    "markets.trade.create",
+    "markets.trade.update",
+    "markets.trade.delete",
+    "opportunities.opportunity.read",
+    "opportunities.opportunity.create",
+    "opportunities.opportunity.update",
+    "opportunities.opportunity.delete",
+    "home.item.read",
+    "home.item.create",
+    "home.item.update",
+    "home.item.delete",
+    "contacts.contact.read",
+    "contacts.contact.create",
+    "contacts.contact.update",
+    "contacts.contact.delete",
+    "health.record.read",
+    "health.record.create",
+    "health.record.update",
+    "health.record.delete",
+    "chat-archive.conversation.read",
+    "chat-archive.conversation.create",
+    "chat-archive.conversation.update",
+    "chat-archive.conversation.delete",
+    "pet-care.pet.read",
+    "pet-care.pet.create",
+    "pet-care.pet.update",
+    "pet-care.pet.delete",
+    "finance.draft.propose",
+    "core.link.create",
+    "core.link.delete",
+    "core.agent_message.create",
+    "core.agent_job.create",
+    "core.agent_job.update"
+  ],
+  "passports": [
+    "apps/api/src/captures/MODULE.md",
+    "apps/api/src/contacts/AI_CONTEXT.md",
+    "apps/api/src/contacts/MODULE.md",
+    "apps/api/src/documents/AI_CONTEXT.md",
+    "apps/api/src/documents/MODULE.md",
+    "apps/api/src/events/AI_CONTEXT.md",
+    "apps/api/src/events/MODULE.md",
+    "apps/api/src/finance/AI_CONTEXT.md",
+    "apps/api/src/finance/MODULE.md",
+    "apps/api/src/habits/AI_CONTEXT.md",
+    "apps/api/src/habits/MODULE.md",
+    "apps/api/src/health/AI_CONTEXT.md",
+    "apps/api/src/health/MODULE.md",
+    "apps/api/src/home/AI_CONTEXT.md",
+    "apps/api/src/home/MODULE.md",
+    "apps/api/src/inventory/AI_CONTEXT.md",
+    "apps/api/src/inventory/MODULE.md",
+    "apps/api/src/knowledge/AI_CONTEXT.md",
+    "apps/api/src/knowledge/MODULE.md",
+    "apps/api/src/lists/AI_CONTEXT.md",
+    "apps/api/src/lists/MODULE.md",
+    "apps/api/src/markets/AI_CONTEXT.md",
+    "apps/api/src/markets/MODULE.md",
+    "apps/api/src/modules-ext/chat-archive/AI_CONTEXT.md",
+    "apps/api/src/modules-ext/chat-archive/MODULE.md",
+    "apps/api/src/modules-ext/pet-care/AI_CONTEXT.md",
+    "apps/api/src/modules-ext/pet-care/MODULE.md",
+    "apps/api/src/notes/AI_CONTEXT.md",
+    "apps/api/src/notes/MODULE.md",
+    "apps/api/src/opportunities-assistant/AI_CONTEXT.md",
+    "apps/api/src/opportunities-assistant/MODULE.md",
+    "apps/api/src/opportunities-execution/AI_CONTEXT.md",
+    "apps/api/src/opportunities-execution/MODULE.md",
+    "apps/api/src/opportunities-hh-import/AI_CONTEXT.md",
+    "apps/api/src/opportunities-hh-import/MODULE.md",
+    "apps/api/src/opportunities-manager/AI_CONTEXT.md",
+    "apps/api/src/opportunities-manager/MODULE.md",
+    "apps/api/src/opportunities-profiles/AI_CONTEXT.md",
+    "apps/api/src/opportunities-profiles/MODULE.md",
+    "apps/api/src/opportunities/AI_CONTEXT.md",
+    "apps/api/src/opportunities/MODULE.md",
+    "apps/api/src/projects/AI_CONTEXT.md",
+    "apps/api/src/projects/MODULE.md",
+    "apps/api/src/tasks/AI_CONTEXT.md",
+    "apps/api/src/tasks/MODULE.md",
+    "apps/api/src/time/AI_CONTEXT.md",
+    "apps/api/src/time/MODULE.md"
+  ],
+  "commands": {
+    "typecheck": "corepack pnpm -r --if-present run typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "node scripts/e2e-local.mjs",
+    "architecture-check": "node scripts/architecture-check.mjs",
+    "module-docs": "node scripts/module-docs.mjs",
+    "module-docs:check": "node scripts/module-docs.mjs --check",
+    "module-registry": "node scripts/module-registry.mjs",
+    "platform-map": "node scripts/platform-map.mjs",
+    "platform-map:check": "node scripts/platform-map.mjs --check",
+    "create:module": "node scripts/create-module.mjs",
+    "orion-ext": "node scripts/orion-ext.mjs",
+    "plugin-contract-check": "vitest run apps/web/lib/extensions/registry.test.ts",
+    "db:generate": "corepack pnpm --filter @orion/api prisma:generate"
+  },
+  "boundaryExceptions": {
+    "apps/api/src/activity/activity.service.ts": {
+      "models": [
+        "AgentAuditEntry",
+        "TaskActivity",
+        "TaskComment"
+      ]
+    },
+    "apps/api/src/ai/agent-gateway.service.ts": {
+      "models": [
+        "Event",
+        "InboxItem",
+        "Note",
+        "Project",
+        "Task",
+        "TaskActivity"
+      ],
+      "services": [
+        "events/events.service",
+        "inbox/inbox.service",
+        "notes/notes.service",
+        "search/search.service",
+        "tasks/tasks.service"
+      ]
+    },
+    "apps/api/src/ai/agent-jobs.service.ts": {
+      "models": [
+        "Event",
+        "Note",
+        "Task"
+      ],
+      "services": [
+        "events/events.service",
+        "notes/notes.service",
+        "tasks/tasks.service"
+      ]
+    },
+    "apps/api/src/ai/agent-tokens.service.ts": {
+      "models": [
+        "Event",
+        "Note",
+        "Project",
+        "Task"
+      ]
+    },
+    "apps/api/src/ai/agent-undo.service.ts": {
+      "services": [
+        "notes/notes.service",
+        "tasks/tasks.service"
+      ]
+    },
+    "apps/api/src/captures/captures.service.ts": {
+      "models": [
+        "Account",
+        "Contact",
+        "FinanceObligation",
+        "Goal",
+        "Home",
+        "Project",
+        "Task"
+      ],
+      "services": [
+        "tasks/tasks.service"
+      ]
+    },
+    "apps/api/src/documents/documents.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/events/events.service.ts": {
+      "models": [
+        "Project",
+        "Task"
+      ]
+    },
+    "apps/api/src/finance/project-costs/project-costs.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/goals/goals.service.ts": {
+      "models": [
+        "Milestone",
+        "Project",
+        "Task"
+      ],
+      "services": [
+        "projects/projects.service"
+      ]
+    },
+    "apps/api/src/health/health.service.ts": {
+      "models": [
+        "Contact"
+      ]
+    },
+    "apps/api/src/home-utilities/home-utilities.service.ts": {
+      "models": [
+        "Home",
+        "Meter"
+      ]
+    },
+    "apps/api/src/home/home.service.ts": {
+      "models": [
+        "Contact",
+        "FinanceObligation",
+        "InventoryItem",
+        "List",
+        "Task",
+        "TaskActivity",
+        "TaskComment"
+      ]
+    },
+    "apps/api/src/inbox/inbox.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/inventory/inventory.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/lists-finance/lists-finance.service.ts": {
+      "models": [
+        "List",
+        "ListItem"
+      ],
+      "services": [
+        "lists/lists.service"
+      ]
+    },
+    "apps/api/src/lists-inventory/lists-inventory.service.ts": {
+      "models": [
+        "InventoryItem",
+        "InventoryMovement",
+        "List",
+        "ListItem"
+      ],
+      "services": [
+        "inventory/inventory.service",
+        "lists/lists.service"
+      ]
+    },
+    "apps/api/src/lists/lists.service.ts": {
+      "models": [
+        "InventoryItem",
+        "InventoryMovement",
+        "Transaction"
+      ]
+    },
+    "apps/api/src/markets/markets.service.ts": {
+      "models": [
+        "FinanceCategory",
+        "InvestmentTrade",
+        "Transaction"
+      ]
+    },
+    "apps/api/src/milestones/milestones.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/notes/note-attachments.service.ts": {
+      "models": [
+        "Document"
+      ],
+      "services": [
+        "documents/documents.service"
+      ]
+    },
+    "apps/api/src/notes/notes.service.ts": {
+      "models": [
+        "Project"
+      ]
+    },
+    "apps/api/src/overview/overview.service.ts": {
+      "models": [
+        "Account",
+        "Task"
+      ]
+    },
+    "apps/api/src/projects/project-captures.service.ts": {
+      "services": [
+        "captures/captures.service"
+      ]
+    },
+    "apps/api/src/search/search.service.ts": {
+      "services": [
+        "notes/notes.service",
+        "tasks/tasks.service"
+      ]
+    },
+    "apps/api/src/tasks/tasks.service.ts": {
+      "models": [
+        "Milestone",
+        "Project",
+        "TimeEntry"
+      ]
+    },
+    "apps/api/src/time/time.service.ts": {
+      "models": [
+        "Project",
+        "Task"
+      ]
+    }
+  },
+  "boundaryCheckLimits": [
+    "Prisma delegates in *.service.ts; receiver names tx/trx/db/client/prisma",
+    "Raw SQL and arbitrary aliases require manual review",
+    "Public contract paths are discovery entries, not permission grants"
+  ],
+  "governingDocuments": [
+    "AGENTS.md",
+    "ORION_CONSTITUTION.md",
+    "docs/PLATFORM.md",
+    "docs/STATUS.md",
+    "docs/AI_REFACTOR_MIGRATION_MAP.md"
+  ]
+}

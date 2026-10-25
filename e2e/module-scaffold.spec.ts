@@ -1,0 +1,36 @@
+import { expect, test } from "@playwright/test";
+import { apiUrl, disableAllPlugins, register, signIn } from "./support";
+
+test("generated module: UI and API retain isolated data with plugins and module toggled", async ({ page, request }) => {
+  const id = process.env.ORION_SCAFFOLD_MODULE;
+  test.skip(!id, "Run only in the isolated generated-module checkout; no fixture module is shipped");
+  const account = await register(request, "scaffold");
+  const foreign = await register(request, "scaffold-foreign");
+  const headers = { Authorization: `Bearer ${account.accessToken}` };
+  const base = `${apiUrl()}/workspaces/${account.workspaceId}/${id}/items`;
+  await signIn(page, account);
+  await page.goto(`/panel/${id}?workspaceId=${account.workspaceId}`);
+  await page.getByLabel("Название новой записи").fill("Создано через интерфейс");
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  await expect(page.getByText("Создано через интерфейс", { exact: true })).toBeVisible();
+  const list = await request.get(base, { headers });
+  expect(list.status()).toBe(200);
+  const [item] = await list.json();
+  expect(item.title).toBe("Создано через интерфейс");
+  expect((await request.patch(`${base}/${item.id}`, { headers, data: { title: "Обновлено через API", note: "Сохранить" } })).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByText("Обновлено через API", { exact: true })).toBeVisible();
+  expect([403, 404]).toContain((await request.get(base, { headers: { Authorization: `Bearer ${foreign.accessToken}` } })).status());
+  await disableAllPlugins(request, account);
+  await page.reload();
+  await expect(page.getByText("Обновлено через API", { exact: true })).toBeVisible();
+  const toggle = `${apiUrl()}/workspaces/${account.workspaceId}/modules/${id}`;
+  expect((await request.patch(toggle, { headers, data: { enabled: false } })).status()).toBe(200);
+  expect((await request.get(base, { headers })).status()).toBe(409);
+  expect((await request.patch(toggle, { headers, data: { enabled: true } })).status()).toBe(200);
+  await page.reload();
+  await expect(page.getByText("Обновлено через API", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Удалить Обновлено через API", exact: true }).click();
+  await expect(page.getByText("Обновлено через API", { exact: true })).toHaveCount(0);
+  expect(await (await request.get(base, { headers })).json()).toEqual([]);
+});

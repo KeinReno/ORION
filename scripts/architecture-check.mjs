@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registryViolations } from "./module-registry.mjs";
-import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir } from "./module-ownership.mjs";
+import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir, moduleOfPath } from "./module-ownership.mjs";
 import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -265,7 +265,7 @@ export function moduleBoundaryUsages(projectRoot = root) {
     if (!/\.service\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
     const dir = relative(apiSrc, file).split(sep)[0];
     if (CORE_MODULE_DIRS.has(dir)) continue;
-    const self = moduleOfDir(dir);
+    const self = moduleOfPath(relative(apiSrc, file));
     const models = new Set();
     const services = new Set();
     (function visit(node) {
@@ -281,7 +281,7 @@ export function moduleBoundaryUsages(projectRoot = root) {
     for (const specifier of importSpecifiers(file)) {
       if (!specifier.value.startsWith(".") || !/\.service$/.test(specifier.value)) continue;
       const target = relative(apiSrc, resolve(dirname(file), specifier.value)).split(sep);
-      if (target[0] === ".." || CORE_MODULE_DIRS.has(target[0]) || moduleOfDir(target[0]) === self) continue;
+      if (target[0] === ".." || CORE_MODULE_DIRS.has(target[0]) || moduleOfPath(target.join("/")) === self) continue;
       services.add(target.join("/"));
     }
     if (models.size || services.size) usages.set(relative(projectRoot, file).split(sep).join("/"), { models, services });

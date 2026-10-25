@@ -71,3 +71,9 @@ export const MODEL_OWNERS = new Map([
 export function moduleOfDir(dir) {
   return MODULE_GROUPS.get(dir) ?? dir;
 }
+
+/** API-relative path; manifest modules have independent ownership below modules-ext. */
+export function moduleOfPath(path) {
+  const parts = path.replaceAll("\\", "/").split("/");
+  return parts[0] === "modules-ext" && parts[1] ? `modules-ext/${parts[1]}` : moduleOfDir(parts[0]);
+}
