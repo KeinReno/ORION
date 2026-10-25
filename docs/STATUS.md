@@ -6,6 +6,14 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Контрольная точка beta 22 — 25.10.2026
+
+Tasks использует публичные ProjectTaskLinks и MilestoneReferences вместо чужих моделей.
+ADR-0032; Integration API 1.7.0 / Platform API 1.8.0. Исключения: **17 файлов / 50 model entries /
+19 service entries**. Focused: 18 passed; полная локальная приёмка и Windows beta 22 готовятся.
+Арка не закончена: Goals и остальные мосты остаются следующей очередью.
+[Контракты](platform-api/TASK_PLANNING_LINKS.md), [выпуск и продолжение](WINDOWS_BETA22_2026-10-25.md).
+
 ## Finance → Projects: ссылки и валюта — 25.10.2026
 
 В `codex/finance-project-contract` Finance не читает Project напрямую. Операции и шаблоны используют

@@ -1,3 +1,5 @@
+import { ProjectTaskLinksModule } from "../projects/public/project-task-links.module";
+import { MilestoneReferencesModule } from "../milestones/public/milestone-references.module";
 import { TasksPublicationAdapter } from "./tasks-publication.adapter";
 import { PublicationRegistryModule } from "../shared/publication-registry";
 import { Module } from "@nestjs/common";
@@ -17,7 +19,7 @@ import { TaskClosedNotifier } from "./task-closed-notifier";
 import { TaskClosureRegistryModule } from "./public/task-closure-registry";
 
 @Module({
-  imports: [TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
+  imports: [ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [TasksController],
   providers: [TasksPublicationAdapter, TasksProjectAggregates, TasksService, TaskCommentsService, TaskActivityService, TaskClosedNotifier, TasksSearchProvider, TaskInboxTarget],
   exports: [TasksService]

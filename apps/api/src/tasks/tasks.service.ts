@@ -1,3 +1,5 @@
+import { ProjectTaskLinks } from "../projects/public/project-task-links";
+import { MilestoneReferences } from "../milestones/public/milestone-references";
 import { assertHomeInWorkspace } from "../home/home-refs.util";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 // Value import, not `import type`: `Prisma.DbNull` / `Prisma.InputJsonValue` are
@@ -30,6 +32,8 @@ type TaskModel = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 @Injectable()
 export class TasksService {
   constructor(
+    private readonly projectLinks: ProjectTaskLinks,
+    private readonly milestoneReferences: MilestoneReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly events: DomainEventBus,
@@ -391,14 +395,13 @@ export class TasksService {
 
   private async resolveProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId?: string | null, projectTag?: string | null) {
     if (projectId) {
-      const project = await tx.project.findUnique({ where: { id: projectId } });
-      if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+      const project = await this.projectLinks.byIdTx(tx, workspaceId, projectId);
+      if (!project) throw new NotFoundException("Проект не найден");
       return project;
     }
     const name = projectTag?.trim();
     if (!name) return null;
-    const existing = await tx.project.findFirst({ where: { workspaceId, name: { equals: name, mode: "insensitive" } } });
-    return existing ?? tx.project.create({ data: { workspaceId, name } });
+    return this.projectLinks.findOrCreateByNameTx(tx, workspaceId, name);
   }
 
   /** A task's milestone must belong to the *same project* as the task — grouping a task under another project's phase would make the Gantt lie about which project owns that plan. */
@@ -408,8 +411,8 @@ export class TasksService {
     milestoneId: string,
     taskProjectId: string | null
   ): Promise<void> {
-    const milestone = await tx.milestone.findUnique({ where: { id: milestoneId } });
-    if (!milestone || milestone.workspaceId !== workspaceId) throw new NotFoundException("Веха не найдена");
+    const milestone = await this.milestoneReferences.findTx(tx, workspaceId, milestoneId);
+    if (!milestone) throw new NotFoundException("Веха не найдена");
     if (!taskProjectId || milestone.projectId !== taskProjectId) {
       throw new BadRequestException("Веха должна принадлежать тому же проекту, что и задача");
     }

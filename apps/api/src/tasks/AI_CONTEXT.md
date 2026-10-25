@@ -6,6 +6,8 @@
 
 Публичный `TaskIntegrationReader` / `TaskIntegrationReaderModule` в `public/` предоставляет проекции ссылки задачи для Time и сроков для ICS Calendar. Запросы остаются у Tasks, в исходной транзакции/RLS, без загрузки полного TasksModule. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
 
+Tasks использует публичные `ProjectTaskLinks` и `MilestoneReferences` для проектов и вех. Команда создания проекта остаётся в исходной транзакции задачи; SDK не загружают полные соседние модули. [Контракт](../../../../docs/platform-api/TASK_PLANNING_LINKS.md).
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 
