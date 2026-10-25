@@ -10,6 +10,8 @@
 
 Публичный `ProjectFinanceReader` / `ProjectFinanceReaderModule` в `public/` предоставляет Finance только валюту существующего проекта в исходной транзакции/RLS. Без загрузки полного ProjectsModule. [Контракт](../../../../docs/platform-api/PROJECT_FINANCE_READER.md).
 
+Tasks использует публичные `ProjectTaskLinks` и `MilestoneReferences` для проектов и вех. Команда создания проекта остаётся в исходной транзакции задачи; SDK не загружают полные соседние модули. [Контракт](../../../../docs/platform-api/TASK_PLANNING_LINKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

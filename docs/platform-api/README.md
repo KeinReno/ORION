@@ -76,6 +76,8 @@
 
 ## Проверки ссылок между модулями
 
+- [Task planning links](TASK_PLANNING_LINKS.md): Tasks → Projects/Milestones (Integration 1.7.0, Platform 1.8.0).
+
 - [ProjectFinanceReader](PROJECT_FINANCE_READER.md): Finance → Projects (Integration 1.6.0, Platform 1.7.0).
 
 - [TaskIntegrationReader](TASK_INTEGRATION_READER.md): Time/Calendar → Tasks (Integration 1.5.0, Platform 1.6.0).
