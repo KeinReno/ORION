@@ -162,7 +162,12 @@ function queue(runtime, data, id) {
   atomic(stateFile(data), { ...state, pending: id });
 }
 function select(runtime, data) {
-  const state = readState(data);
+  let state = readState(data);
+  const baseId = sha(fs.readFileSync(path.join(runtime, 'build.json')));
+  // A full installer deliberately replaces the baseline. Old selections are
+  // incompatible, not a failed trial of the newly installed version.
+  if (state.baseId && state.baseId !== baseId) state = {};
+  state.baseId = baseId;
   // A trial that did not acknowledge UI readiness never becomes the active version.
   if (state.trial) { state.failed = state.trial; delete state.trial; delete state.pending; }
   if (state.pending) { state.trial = state.pending; delete state.pending; }

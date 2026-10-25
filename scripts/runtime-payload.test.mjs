@@ -121,5 +121,6 @@ describe('signed application payload', () => {
     const first = await prepared(); payload.queue(base, data, first.id); payload.select(base, data); payload.settle(data, true);
     put(base, 'build.json', JSON.stringify({ tag: 'v0.1.0-windows-beta.25' }));
     expect(payload.select(base, data)).toMatchObject({ root: base, trial: false });
+    expect(payload.readState(data).failed).toBeUndefined();
   });
 });
