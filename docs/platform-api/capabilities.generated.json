@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.3.0",
+  "platformVersion": "1.4.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.3.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.2.0",
+    "integration": "1.3.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -2120,6 +2120,8 @@
     "workspaces"
   ],
   "publicContracts": [
+    "apps/api/src/contacts/public/contact-references.module.ts",
+    "apps/api/src/contacts/public/contact-references.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/tasks/public/task-closure-registry.ts",
@@ -2528,11 +2530,6 @@
       ],
       "services": [
         "projects/projects.service"
-      ]
-    },
-    "apps/api/src/health/health.service.ts": {
-      "models": [
-        "Contact"
       ]
     },
     "apps/api/src/home-utilities/home-utilities.service.ts": {

@@ -14,7 +14,6 @@ export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/events/events.service.ts": { models: ["Project","Task"] },
   "apps/api/src/finance/project-costs/project-costs.service.ts": { models: ["Project"] },
   "apps/api/src/goals/goals.service.ts": { models: ["Milestone","Project","Task"], services: ["projects/projects.service"] },
-  "apps/api/src/health/health.service.ts": { models: ["Contact"] },
   "apps/api/src/home-utilities/home-utilities.service.ts": { models: ["Home","Meter"] },
   "apps/api/src/home/home.service.ts": { models: ["Contact","FinanceObligation","InventoryItem","List","Task","TaskActivity","TaskComment"] },
   "apps/api/src/inbox/inbox.service.ts": { models: ["Project"] },

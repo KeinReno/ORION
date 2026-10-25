@@ -6,6 +6,19 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Health → Contacts: проверка ссылки врача — 25.10.2026
+
+В `codex/health-contact-contract` HealthService больше не читает Contact напрямую. Публичный ContactReferences
+передаёт проверку владельцу Contacts, возвращает только boolean и сохраняет исходную транзакцию/RLS. Права на
+медицинские данные проверяются до вызова. Архивные/выключенные контакты сохраняют прежнюю семантику ссылок;
+Contacts CRUD остаётся за guard. SDK не импортирует ContactsModule/ContactsService. ADR-0028; Integration API
+1.3.0 / Platform API 1.4.0. Health удалён из exceptions: **26 файлов / 62 model entries / 19 service entries**.
+Focused Health + Contacts: 29 passed; полный unit: 1476 passed; production Chromium: 47 passed (панели
+default-full/plugins-off, контакты и выбор врача). Полный integration на пересозданной тестовой БД:
+**587 passed / 1 skipped**, включая все шесть новых сценариев и явный случай удалённого врача.
+Typecheck, production API/web build (54 страницы), architecture/registry/docs/map passed; lint — 0 ошибок /
+30 прежних предупреждений. [Контракт](platform-api/CONTACT_REFERENCES.md), [проверки](HEALTH_CONTACT_CONTRACT_2026-10-25.md).
+
 ## Tasks → Time: следующий перенос границы — 25.10.2026
 
 В `codex/reference-moves-stage2` TasksService больше не обращается к TimeEntry. Публичный

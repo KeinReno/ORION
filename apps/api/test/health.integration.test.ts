@@ -1,9 +1,17 @@
-import type { INestApplication } from "@nestjs/common";
+import { Module, type INestApplication, type ModuleMetadata } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { SchedulerRegistry } from "@nestjs/schedule";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
+import { ContactsModule } from "../src/contacts/contacts.module";
+import { ContactsService } from "../src/contacts/contacts.service";
+import { ContactReferences } from "../src/contacts/public/contact-references";
+
+class WithoutContactsApp {}
+const appImports = Reflect.getMetadata("imports", AppModule) as NonNullable<ModuleMetadata["imports"]>;
+Module({ imports: appImports.filter((entry) => entry !== ContactsModule) })(WithoutContactsApp);
 
 interface Session {
   accessToken: string;
@@ -413,6 +421,108 @@ describe("Module Health", () => {
     expect((await request(`${base}/symptoms/${open.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(404);
   });
 
+  it("doctor references preserve create/change/clear and reject a missing replacement atomically", async () => {
+    const { alice, ws } = await setup("doctor-crud");
+    const subject = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const first = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Первый врач" } });
+    const second = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Второй врач" } });
+    const base = `${ws}/health/subjects/${subject.data.id}/appointments`;
+    const created = await request<{ id: string; doctorContactId: string | null }>(base, { method: "POST", token: alice.accessToken, body: { title: "Визит", at: "2026-11-01T09:00:00Z", doctorContactId: first.data.id } });
+    expect(created.status).toBe(201);
+    expect(created.data.doctorContactId).toBe(first.data.id);
+    const changed = await request<{ doctorContactId: string | null }>(`${base}/${created.data.id}`, { method: "PATCH", token: alice.accessToken, body: { doctorContactId: second.data.id } });
+    expect(changed.status).toBe(200);
+    expect(changed.data.doctorContactId).toBe(second.data.id);
+    const before = await prisma.asSystem((tx) => tx.healthAppointment.findUniqueOrThrow({ where: { id: created.data.id } }));
+    const invalid = await request<{ message: string }>(`${base}/${created.data.id}`, { method: "PATCH", token: alice.accessToken, body: { title: "Must roll back", doctorContactId: "00000000-0000-4000-8000-000000000000" } });
+    expect(invalid.status).toBe(400);
+    expect(invalid.data.message).toBe("Контакт не найден в этом пространстве");
+    expect(await prisma.asSystem((tx) => tx.healthAppointment.findUniqueOrThrow({ where: { id: created.data.id } }))).toEqual(before);
+    const cleared = await request<{ doctorContactId: string | null }>(`${base}/${created.data.id}`, { method: "PATCH", token: alice.accessToken, body: { doctorContactId: null } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.data.doctorContactId).toBeNull();
+    expect((await request(`${ws}/contacts/${first.data.id}`, { method: "DELETE", token: alice.accessToken })).status).toBe(204);
+    expect((await request(base, { method: "POST", token: alice.accessToken, body: { title: "Удалённый врач", at: "2026-11-01T09:00:00Z", doctorContactId: first.data.id } })).status).toBe(400);
+  });
+
+  it("rejects a doctor from another workspace even when the caller can read both workspaces", async () => {
+    const { alice, bob, ws } = await setup("doctor-two-spaces");
+    await prisma.asSystem((tx) => tx.workspace.update({ where: { id: bob.workspaceId }, data: { isPersonal: false } }));
+    const invite = await request<{ acceptUrl: string }>(`/workspaces/${bob.workspaceId}/invites`, { method: "POST", token: bob.accessToken, body: { email: alice.email } });
+    const token = new URL(invite.data.acceptUrl).searchParams.get("token")!;
+    expect((await request(`/invites/${token}/accept`, { method: "POST", token: alice.accessToken })).status).toBe(201);
+    const contact = await request<{ id: string }>(`/workspaces/${bob.workspaceId}/contacts`, { method: "POST", token: bob.accessToken, body: { name: "Врач другого пространства" } });
+    expect(contact.status).toBe(201);
+    expect(await prisma.withUser(alice.user.id, (tx) => tx.contact.count({ where: { id: contact.data.id } }))).toBe(1);
+    const subject = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    expect((await request(`${ws}/health/subjects/${subject.data.id}/appointments`, { method: "POST", token: alice.accessToken, body: { title: "Визит", at: "2026-11-01T09:00:00Z", doctorContactId: contact.data.id } })).status).toBe(400);
+  });
+
+  it("archived contacts remain valid references while Contacts CRUD is disabled", async () => {
+    const { alice, ws } = await setup("doctor-off");
+    const contact = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Архивный врач" } });
+    expect((await request(`${ws}/contacts/${contact.data.id}`, { method: "PATCH", token: alice.accessToken, body: { archived: true } })).status).toBe(200);
+    expect((await request(`${ws}/modules/contacts`, { method: "PATCH", token: alice.accessToken, body: { enabled: false } })).status).toBe(200);
+    expect((await request(`${ws}/contacts`, { method: "GET", token: alice.accessToken })).status).toBe(409);
+    const subject = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const visit = await request<{ doctorContactId: string }>(`${ws}/health/subjects/${subject.data.id}/appointments`, { method: "POST", token: alice.accessToken, body: { title: "Визит", at: "2026-11-01T09:00:00Z", doctorContactId: contact.data.id } });
+    expect(visit.status).toBe(201);
+    expect(visit.data.doctorContactId).toBe(contact.data.id);
+    expect(await prisma.asSystem((tx) => tx.contact.count({ where: { id: contact.data.id, archivedAt: { not: null } } }))).toBe(1);
+  });
+
+  it("the public reader retains RLS and sees uncommitted rows only through the caller's transaction", async () => {
+    const { alice, ws } = await setup("doctor-tx");
+    const stranger = await register("doctor-tx-stranger");
+    const refs = app.get(ContactReferences);
+    const contact = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Врач" } });
+    expect(await prisma.withUser(stranger.user.id, (tx) => refs.existsTx(tx, alice.workspaceId, contact.data.id))).toBe(false);
+    expect(await prisma.withUser(alice.user.id, (tx) => refs.existsTx(tx, alice.workspaceId, contact.data.id))).toBe(true);
+    const rollback = new Error("rollback reference transaction");
+    let rolledId = "";
+    await expect(prisma.withUser(alice.user.id, async (tx) => {
+      const pending = await tx.contact.create({ data: { workspaceId: alice.workspaceId, name: "Ещё не сохранён" } });
+      rolledId = pending.id;
+      expect(await refs.existsTx(tx, alice.workspaceId, pending.id)).toBe(true);
+      throw rollback;
+    })).rejects.toBe(rollback);
+    expect(await prisma.asSystem((tx) => tx.contact.count({ where: { id: rolledId } }))).toBe(0);
+  });
+
+  it("medical access is checked before consulting the contact reader", async () => {
+    const { alice, bob, ws } = await setup("doctor-access");
+    const subject = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const contact = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Врач" } });
+    const base = `${ws}/health/subjects/${subject.data.id}`;
+    const spy = vi.spyOn(app.get(ContactReferences), "existsTx");
+    try {
+      const body = { title: "Визит", at: "2026-11-01T09:00:00Z", doctorContactId: contact.data.id };
+      expect((await request(`${base}/appointments`, { method: "POST", token: bob.accessToken, body })).status).toBe(404);
+      expect(spy).not.toHaveBeenCalled();
+      await request(`${base}/grants/${bob.user.id}`, { method: "PUT", token: alice.accessToken, body: { level: "read" } });
+      expect((await request(`${base}/appointments`, { method: "POST", token: bob.accessToken, body })).status).toBe(403);
+      expect(spy).not.toHaveBeenCalled();
+    } finally { spy.mockRestore(); }
+  });
+
+  it("Health works with ContactsModule physically absent and only the reference SDK present", async () => {
+    const { alice, ws } = await setup("doctor-absent");
+    const subject = await request<Subject>(`${ws}/health/subjects`, { method: "POST", token: alice.accessToken, body: { kind: "member", name: "Анна" } });
+    const contact = await request<{ id: string }>(`${ws}/contacts`, { method: "POST", token: alice.accessToken, body: { name: "Сохранённый врач" } });
+    const host = await NestFactory.create(WithoutContactsApp, { logger: false });
+    try {
+      configureApp(host);
+      await host.listen(0, "127.0.0.1");
+      for (const job of host.get(SchedulerRegistry).getCronJobs().values()) job.stop();
+      expect(() => host.get(ContactsService)).toThrow();
+      const origin = `http://127.0.0.1:${(host.getHttpServer().address() as { port: number }).port}`;
+      expect((await request(`${ws}/contacts`, { method: "GET", token: alice.accessToken }, origin)).status).toBe(404);
+      const visit = await request<{ doctorContactId: string }>(`${ws}/health/subjects/${subject.data.id}/appointments`, { method: "POST", token: alice.accessToken, body: { title: "Визит", at: "2026-11-01T09:00:00Z", doctorContactId: contact.data.id } }, origin);
+      expect(visit.status).toBe(201);
+      expect(visit.data.doctorContactId).toBe(contact.data.id);
+    } finally { await host.close(); }
+  });
+
   async function register(name: string): Promise<Session> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string; user: { id: string } }>("/auth/register", {
@@ -424,8 +534,8 @@ describe("Module Health", () => {
     return { accessToken: response.data.accessToken, user: { ...response.data.user, name }, email, workspaceId: workspaces.data[0].id };
   }
 
-  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown }): Promise<{ status: number; data: T }> {
-    const response = await fetch(`${baseUrl}${path}`, {
+  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown }, origin = baseUrl): Promise<{ status: number; data: T }> {
+    const response = await fetch(`${origin}${path}`, {
       method: options.method,
       headers: { "Content-Type": "application/json", ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },
       body: options.body === undefined ? undefined : JSON.stringify(options.body)
