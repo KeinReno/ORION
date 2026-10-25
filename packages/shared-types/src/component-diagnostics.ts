@@ -1,5 +1,5 @@
 import type { ComponentDataState, ComponentDataStatus } from "./component-data";
-import { PLATFORM_API_VERSION, satisfiesVersionRange, type ComponentManifest } from "./component-manifest";
+import { componentCompatibilityProblems, type ComponentManifest } from "./component-manifest";
 import type { BackgroundJobStatus } from "./settings";
 
 /**
@@ -11,7 +11,7 @@ export interface ComponentDiagnosticsRow {
   kind: ComponentManifest["kind"];
   title: string;
   version: string;
-  /** `requires.platform` удовлетворён текущей платформой. */
+  /** Platform, contracts and declared dependency versions are compatible (workspace enablement is checked separately). */
   compatible: boolean;
   /** Жёсткие зависимости (id модулей). */
   requires: string[];
@@ -32,17 +32,15 @@ export function buildComponentDiagnostics(
 ): ComponentDiagnosticsRow[] {
   const dataById = new Map(dataStatuses.map((item) => [item.componentId, item]));
   const rows = manifests.map((manifest): ComponentDiagnosticsRow => {
-    const platformOk = satisfiesVersionRange(manifest.requires.platform, PLATFORM_API_VERSION);
-    // Сверка `requires.contracts` (G2) добавится вместе с PR версий контрактов.
-    const compatible = platformOk;
+    const compatibility = componentCompatibilityProblems(manifest.id, new Set(manifests.filter(m => m.kind === "module").map(m => m.id)), manifests);
+    const compatible = compatibility.length === 0;
     const data = dataById.get(manifest.id);
     const ownJobs = jobs.filter((job) => job.componentId === manifest.id);
     const jobFailures = ownJobs.reduce((sum, job) => sum + job.failures, 0);
     const lastJobError = ownJobs.find((job) => job.lastError)?.lastError ?? null;
     const dependents = manifests.filter((other) => other.requires.modules.includes(manifest.id)).map((other) => other.id);
 
-    const problems: string[] = [];
-    if (!platformOk) problems.push(`Нужна платформа ${manifest.requires.platform}, установлена ${PLATFORM_API_VERSION}`);
+    const problems: string[] = [...compatibility];
     if (data?.state === "pending") problems.push(`Не применены миграции: ${data.pending.join(", ")}`);
     if (data?.state === "failed") problems.push(`Миграция не завершена: ${data.failed.join(", ")}`);
     if (data?.state === "unknown") problems.push("Состояние миграций неизвестно");

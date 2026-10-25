@@ -5,6 +5,7 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
 import { ContactRemindersService } from "../src/contacts/contact-reminders.service";
+import { EntityReferenceRegistry } from "../src/common/entity-reference-registry";
 
 /**
  * Module «Контакты»: universal contacts over the table «Дом» already uses —
@@ -337,6 +338,29 @@ describe("Contacts module", () => {
     });
     expect(forced.data).toEqual({ created: 1, skipped: 0 });
     expect((await call("POST", "/contacts/import", { items: [] })).status).toBe(400);
+  });
+
+  it("moves capture anchors through their owner and rolls back the entire merge on a hook failure", async () => {
+    const a = await setup("reference-move-a");
+    const b = await setup("reference-move-b");
+    const keep = await a.call<{ id: string }>("POST", "/contacts", { name: "Основной" });
+    const source = await a.call<{ id: string }>("POST", "/contacts", { name: "Дубликат" });
+    const other = await b.call<{ id: string }>("POST", "/contacts", { name: "Чужой" });
+    const anchor = await a.call<{ id: string }>("POST", "/captures", { kind: "note", title: "Сохранить ссылку", anchorType: "contact", anchorId: source.data.id });
+    const foreign = await b.call<{ id: string }>("POST", "/captures", { kind: "note", title: "Чужая ссылка", anchorType: "contact", anchorId: other.data.id });
+    expect(anchor.status).toBe(201);
+    expect(foreign.status).toBe(201);
+    const references = app.get(EntityReferenceRegistry);
+    references.register("test-failure", async () => { throw new Error("Synthetic reference move failure"); });
+    try {
+      expect((await a.call("POST", `/contacts/${keep.data.id}/merge`, { sourceIds: [source.data.id] })).status).toBe(500);
+      expect((await a.call("GET", `/contacts/${source.data.id}`)).status).toBe(200);
+      expect((await a.call<Array<{ id: string; anchorId: string }>>("GET", "/captures")).data).toContainEqual(expect.objectContaining({ id: anchor.data.id, anchorId: source.data.id }));
+    } finally { references.unregister("test-failure"); }
+    expect((await a.call("POST", `/contacts/${keep.data.id}/merge`, { sourceIds: [source.data.id] })).status).toBe(200);
+    expect((await a.call("GET", `/contacts/${source.data.id}`)).status).toBe(404);
+    expect((await a.call<Array<{ id: string; anchorId: string }>>("GET", "/captures")).data).toContainEqual(expect.objectContaining({ id: anchor.data.id, anchorId: keep.data.id }));
+    expect((await b.call<Array<{ id: string; anchorId: string }>>("GET", "/captures")).data).toContainEqual(expect.objectContaining({ id: foreign.data.id, anchorId: other.data.id }));
   });
 
   it("merges contacts: data, journal, relations, links and reminders move to the survivor", async () => {

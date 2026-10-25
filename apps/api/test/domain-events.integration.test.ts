@@ -1,5 +1,6 @@
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { SchedulerRegistry } from "@nestjs/schedule";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
@@ -31,6 +32,9 @@ describe("Domain event bus (outbox)", () => {
     app = await NestFactory.create(AppModule, { logger: false });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
+    // These tests drive the dispatcher explicitly. A wall-clock cron between
+    // publishing and taking the parent lock would make the lock-order case race.
+    for (const job of app.get(SchedulerRegistry).getCronJobs().values()) job.stop();
     baseUrl = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
     prisma = app.get(PrismaService);
     bus = app.get(DomainEventBus);
@@ -183,6 +187,49 @@ describe("Domain event bus (outbox)", () => {
         bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", payload: payload("t6") })
       )
     ).rejects.toThrow();
+  });
+
+  it("fan-out skips a locked parent before locking events, and resumes after rollback", async () => {
+    const alice = await register("parent-lock");
+    const bob = await register("unlocked-parent");
+    const id = await prisma.withUser(alice.userId, (tx) =>
+      bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", payload: payload("locked-parent") })
+    );
+    const availableId = await prisma.withUser(bob.userId, (tx) =>
+      bus.publishTx(tx, { workspaceId: bob.workspaceId, type: "tasks.task.closed", payload: payload("available-parent") })
+    );
+    const rollback = new Error("rollback workspace deletion");
+    await expect(prisma.asSystem(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "workspaces" WHERE "id" = ${alice.workspaceId} FOR UPDATE`;
+      // A second connection must finish without waiting for the parent lock.
+      // Previously it locked the event, then waited on the delivery's parent FK;
+      // cascading deletion here could then wait on that very event (40P01).
+      await dispatcher.runOnce();
+      expect((await deliveryFor(availableId)).status).toBe("done");
+      expect(await tx.domainEventDelivery.count({ where: { eventId: id } })).toBe(0);
+      expect((await tx.domainEvent.findUniqueOrThrow({ where: { id } })).dispatchedAt).toBeNull();
+      await tx.workspace.delete({ where: { id: alice.workspaceId } });
+      throw rollback;
+    })).rejects.toBe(rollback);
+
+    await Promise.all([dispatcher.runOnce(), dispatcher.runOnce()]);
+    expect((await deliveryFor(id)).status).toBe("done");
+    expect(await prisma.asSystem((tx) => tx.domainEventDelivery.count({ where: { eventId: id } }))).toBe(1);
+  });
+
+  it("workspace deletion can commit while fan-out skips its locked parent", async () => {
+    const alice = await register("parent-delete");
+    const id = await prisma.withUser(alice.userId, (tx) =>
+      bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", payload: payload("deleted-parent") })
+    );
+    await prisma.asSystem(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "workspaces" WHERE "id" = ${alice.workspaceId} FOR UPDATE`;
+      await dispatcher.runOnce();
+      await tx.workspace.delete({ where: { id: alice.workspaceId } });
+    });
+    await dispatcher.runOnce();
+    expect(await prisma.asSystem((tx) => tx.domainEvent.count({ where: { id } }))).toBe(0);
+    expect(await prisma.asSystem((tx) => tx.domainEventDelivery.count({ where: { eventId: id } }))).toBe(0);
   });
 
   async function closedNotifications(s: Session, workspaceId: string) {

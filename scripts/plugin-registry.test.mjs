@@ -47,6 +47,13 @@ function addPlugin(m = manifest(), name = "fixture-plugin") {
 
 const problems = () => collectAll(root).errors.join("\n");
 
+it("preserves plugin source metadata instead of substituting the host version", () => {
+  addPlugin(manifest({ version: "3.2.1", requires: { platform: "^1.0.0", modules: ["habits"], contracts: { plugin: "^1.0.0" } } }));
+  expect(problems()).toBe("");
+  writeRegistry(root);
+  expect(readFileSync(join(root, "packages/shared-types/src/plugins-ext/registry.generated.ts"), "utf8")).toContain('"version": "3.2.1"');
+});
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "plugin-registry-"));
   put("apps/api/prisma/schema.prisma", "// <module-registry:workspace-relations>\n// </module-registry:workspace-relations>\n// <module-registry:models>\n// </module-registry:models>\n");

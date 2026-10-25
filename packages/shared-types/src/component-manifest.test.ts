@@ -5,6 +5,7 @@ import {
   SURFACE_IDS,
   buildComponentManifests,
   componentManifestSchema,
+  componentCompatibilityProblems,
   satisfiesVersionRange,
   unsatisfiedContracts
 } from "./component-manifest";
@@ -65,6 +66,16 @@ describe("component manifests", () => {
 });
 
 describe("satisfiesVersionRange", () => {
+  it.each([
+    ["^0.0.3", "0.0.3", true], ["^0.0.3", "0.0.4", false], ["^0.0.3", "0.1.0", false],
+    ["^0.2.3", "0.2.9", true], ["^0.2.3", "0.3.0", false], ["^0.2.3", "0.2.2", false],
+    ["^1.2.3", "1.9.0", true], ["^1.2.3", "2.0.0", false],
+    ["~0.0.3", "0.0.4", true], ["0.0.3", "0.0.4", false], [">=0.0.3", "2.0.0", true],
+    ["^01.0.0", "1.0.0", false], ["^1.0.0", "1.00.0", false],
+    ["^1.0.0", "9007199254740993.0.0", false]
+  ])("%s vs %s is %s", (range, version, result) => {
+    expect(satisfiesVersionRange(range, version)).toBe(result);
+  });
   it("handles caret, tilde, >= and exact ranges", () => {
     expect(satisfiesVersionRange("^1.0.0", "1.4.2")).toBe(true);
     expect(satisfiesVersionRange("^1.2.0", "1.1.9")).toBe(false);
@@ -76,6 +87,25 @@ describe("satisfiesVersionRange", () => {
     expect(satisfiesVersionRange("1.0.0", "1.0.0")).toBe(true);
     expect(satisfiesVersionRange("1.0.0", "1.0.1")).toBe(false);
     expect(satisfiesVersionRange("latest", "1.0.0")).toBe(false);
+  });
+});
+
+describe("component activation compatibility", () => {
+  const base = COMPONENT_MANIFESTS.find(m => m.id === "tasks")!;
+  const dependency = { ...base, id: "dep", version: "0.0.3", requires: { ...base.requires, modules: [] } };
+  const subject = { ...base, id: "subject", requires: { ...base.requires, modules: ["dep"], moduleVersions: { dep: "^0.0.3" } } };
+  it("accepts active compatible dependencies; optional neighbors do not gate activation", () => {
+    expect(componentCompatibilityProblems("subject", new Set(["dep"]), [subject, dependency])).toEqual([]);
+  });
+  it("rejects missing, disabled and mismatched mandatory dependencies", () => {
+    expect(componentCompatibilityProblems("subject", new Set(), [subject, dependency]).join()).toContain("включите модуль dep");
+    expect(componentCompatibilityProblems("subject", new Set(["dep"]), [subject]).join()).toContain("не зарегистрирован");
+    expect(componentCompatibilityProblems("subject", new Set(["dep"]), [subject, { ...dependency, version: "0.0.4" }]).join()).toContain("установлен 0.0.4");
+  });
+  it("checks transitive platform/contract compatibility and cycles", () => {
+    expect(componentCompatibilityProblems("subject", new Set(["dep"]), [subject, { ...dependency, requires: { ...dependency.requires, platform: "^99.0.0" } }]).join()).toContain("нужна платформа");
+    expect(componentCompatibilityProblems("subject", new Set(["dep"]), [subject, { ...dependency, requires: { ...dependency.requires, contracts: { event: "^99.0.0" } } }]).join()).toContain("несовместимый контракт");
+    expect(componentCompatibilityProblems("subject", new Set(["dep", "subject"]), [subject, { ...dependency, requires: { ...dependency.requires, modules: ["subject"] } }]).join()).toContain("Цикл");
   });
 });
 

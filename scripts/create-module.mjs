@@ -776,10 +776,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const result = createModule({ id: args.id, label: args.label, dryRun: args.dryRun });
     if (args.dryRun) {
       console.log(`Будет создано (--dry-run, ничего не записано):\n${[...result.files, ...result.generated].map((file) => `  ${file}`).join("\n")}`);
-      console.log("Затем: scripts/module-registry.mjs (генерируемые файлы, область схемы) и scripts/module-docs.mjs (AI_CONTEXT.md и блок MODULE.md).");
+      console.log("Затем: scripts/module-registry.mjs (генерируемые файлы, область схемы), scripts/module-docs.mjs (AI_CONTEXT.md и блок MODULE.md) и scripts/platform-map.mjs (карта возможностей).");
     } else {
       writeRegistry(defaultRoot);
       execFileSync(process.execPath, [join(defaultRoot, "scripts/module-docs.mjs")], { cwd: defaultRoot, stdio: "inherit" });
+      execFileSync(process.execPath, [join(defaultRoot, "scripts/platform-map.mjs")], { cwd: defaultRoot, stdio: "inherit" });
       console.log(`Модуль ${args.id} создан:\n${[...result.files, ...result.generated].map((file) => `  ${file}`).join("\n")}`);
       console.log("\nДальше: pnpm db:generate, правка заготовки под предметную область, проверки приёмки — docs/DEV_KIT.md.");
     }

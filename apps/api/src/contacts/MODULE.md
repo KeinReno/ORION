@@ -1,5 +1,7 @@
 # Contacts — записная книжка пространства
 
+Перенос межмодульных ссылок при merge выполняется через публичный Core EntityReferenceRegistry в той же транзакции. Таблицу Capture обновляет её владелец; ошибка обработчика откатывает merge целиком (ADR-0026).
+
 Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `@RequireModule("contacts")`; the same `contacts` table «Дома» uses (`homeId` optional, deleting a home only drops the link).
 
 **Data.** `kind` (person/organization), `organization`, `role`, labelled `phones`/`emails`/`links` (JSON arrays), `address`, `birthday` (`@db.Date`, year 1904 = «год неизвестен»), `tags`, `favorite`, `contactEveryDays`, `lastContactedAt`, `archivedAt`. `phone`/`email` stay as the *primary* value (first of the list) because «Дом» reads and writes them: `fieldsFromInput` keeps the two in sync, a lone primary write replaces the list, «Дом»'s own PATCH resets `phones`. Archived contacts stay in the list response (the client filters), stay in backups, and are hidden from a home's overview.

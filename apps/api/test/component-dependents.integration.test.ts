@@ -1,7 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MODULE_CATALOG, PLUGIN_CATALOG, enabledHardDependents } from "@orion/shared-types";
+import { COMPONENT_MANIFESTS, MODULE_CATALOG, PLUGIN_CATALOG, enabledHardDependents } from "@orion/shared-types";
 import { AppModule } from "../src/app.module";
 import { GENERATED_MODULE_PROBES } from "../src/modules-ext/data.generated";
 import { CapabilityLifecycle } from "../src/common/capability-lifecycle";
@@ -173,6 +173,69 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
       lifecycle.unregisterComponent("contacts");
       lifecycle.unregisterComponent(plugin.id);
     }
+  });
+
+  it("rejects incompatible activation before hooks/state writes and preserves disabled data", async () => {
+    const { ws, token, setModule, get } = await setup();
+    const pet = await request<{ id: string }>(`/workspaces/${ws}/pet-care/pets`, { method: "POST", token, body: { name: "Сохранится", species: "cat" } });
+    expect(pet.status).toBe(201);
+    expect((await setModule("pet-care", false)).status).toBe(200);
+    const manifest = COMPONENT_MANIFESTS.find(m => m.id === "pet-care")!;
+    const original = manifest.requires;
+    let calls = 0;
+    const lifecycle = app.get(CapabilityLifecycle);
+    lifecycle.registerComponent("pet-care", { onEnable: async () => { calls++; } });
+    try {
+      const member = await setup();
+      const who = await request<{ id: string }>("/auth/me", { method: "GET", token: member.token });
+      await prisma.asSystem(tx => tx.workspaceMember.create({ data: { workspaceId: ws, userId: who.data.id, role: "member" } }));
+      manifest.requires = { ...original, platform: "^99.0.0" };
+      expect((await request(`/workspaces/${ws}/modules/pet-care`, { method: "PATCH", token: member.token, body: { enabled: true } })).status).toBe(403);
+      for (const requires of [
+        { ...original, platform: "^99.0.0" },
+        { ...original, contracts: { event: "^99.0.0" } },
+        { ...original, modules: ["notes"], moduleVersions: { notes: "^99.0.0" } },
+        { ...original, modules: ["missing-module"] }
+      ]) {
+        manifest.requires = requires;
+        const rejected = await setModule("pet-care", true);
+        expect(rejected.status).toBe(409);
+        expect(rejected.data.code).toBe("component_incompatible");
+        expect((await get("/modules")).data.find((m: { id: string }) => m.id === "pet-care").enabled).toBe(false);
+        expect(calls).toBe(0);
+      }
+      manifest.requires = original;
+      expect((await setModule("pet-care", true)).status).toBe(200);
+      expect(calls).toBe(1);
+      expect((await get("/pet-care/pets")).data).toContainEqual(expect.objectContaining({ id: pet.data.id }));
+      manifest.requires = { ...original, platform: "^99.0.0" };
+      expect((await get("/pet-care/pets")).status).toBe(409); // default/already-on does not bypass compatibility
+      expect((await setModule("pet-care", false)).status).toBe(200);
+    } finally {
+      manifest.requires = original;
+      lifecycle.unregisterComponent("pet-care");
+    }
+  });
+
+  it("requires an enabled compatible host before enabling a plugin, without changing its override", async () => {
+    const { setModule, setPlugin, get } = await setup();
+    const plugin = PLUGIN_CATALOG.find(p => p.extendsModuleId === "habits")!;
+    expect((await setModule("habits", false, true)).status).toBe(200);
+    const before = (await get("/plugins")).data;
+    const rejected = await setPlugin(plugin.id, true);
+    expect(rejected.status).toBe(409);
+    expect(rejected.data.code).toBe("component_incompatible");
+    expect((await get("/plugins")).data).toEqual(before);
+    expect((await setModule("habits", true)).status).toBe(200);
+    const manifest = COMPONENT_MANIFESTS.find(m => m.id === plugin.id)!;
+    const original = manifest.requires;
+    try {
+      manifest.requires = { ...original, contracts: { plugin: "^99.0.0" } };
+      const incompatible = await setPlugin(plugin.id, true);
+      expect(incompatible.status).toBe(409);
+      expect(incompatible.data.code).toBe("component_incompatible");
+    } finally { manifest.requires = original; }
+    expect((await setPlugin(plugin.id, true)).status).toBe(200);
   });
 
   it("matrix: switching off any optional module leaves every other enabled module's API answering", async () => {

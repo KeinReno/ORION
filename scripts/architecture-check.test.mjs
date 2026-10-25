@@ -162,6 +162,25 @@ describe("module boundary rule", () => {
   const NOTES = "apps/api/src/notes/notes.service.ts";
   const tasksUse = 'export class S { run(tx) { return tx.task.findMany({}); } }\n';
 
+  it("separates manifest modules while allowing their own model and public contracts", () => {
+    const root = fixture();
+    const file = "apps/api/src/modules-ext/chat-archive/archive.service.ts";
+    put(root, file, 'import { X } from "../pet-care/public/reader"; export class S { a(tx) { tx.chatArchiveConversation.findMany(); tx.workspaceMember.count(); } }');
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+    put(root, file, 'import { PetCareService } from "../pet-care/pet-care.service"; export class S { a(tx) { return tx.petCarePet.findMany(); } }');
+    expect(moduleBoundaryViolations(root, {})).toEqual([
+      expect.stringContaining("чужую модель PetCarePet"),
+      expect.stringContaining("импортирует сервис другого модуля modules-ext/pet-care/pet-care.service")
+    ]);
+  });
+
+  it("checks generated modules against base modules in both directions", () => {
+    const root = fixture();
+    put(root, NOTES, 'export class S { a(tx) { return tx.petCareDay.findMany(); } }');
+    put(root, "apps/api/src/modules-ext/pet-care/reader.service.ts", tasksUse);
+    expect(moduleBoundaryViolations(root, {})).toHaveLength(2);
+  });
+
   it("allows a service to use its own models and core models", () => {
     const root = fixture();
     put(root, NOTES, "export class S { run(tx) { tx.note.create({}); tx.workspaceMember.findFirst({}); tx.entityLink.deleteMany({}); } }\n");

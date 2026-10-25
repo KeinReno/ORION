@@ -7,6 +7,13 @@ export const GENERATED_PLUGIN_IDS = [
   "habits-insights"
 ] as const;
 
+import type { ComponentMetadata } from "../component-manifest";
+export const GENERATED_PLUGIN_METADATA: Record<string, ComponentMetadata> = {
+  "habits-insights": {
+    "version": "1.0.0"
+  }
+};
+
 /** Форма записи каталога (структурно совпадает с `PluginManifest`; тип задан здесь, чтобы не зациклить plugins.ts). */
 export interface GeneratedPluginCatalogEntry {
   id: (typeof GENERATED_PLUGIN_IDS)[number];

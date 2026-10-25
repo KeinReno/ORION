@@ -82,7 +82,7 @@ describe("create-module: скелет проходит проверки плат
     expect(moduleBoundaryViolations(root, {})).toEqual([]);
     expect(architectureViolations(root)).toEqual([]);
     // Владелец новой модели записан в генерируемую карту владельцев (она нужна правилу границ).
-    expect(readFileSync(join(root, "scripts/module-ownership.generated.mjs"), "utf8")).toMatch(/"PlantsItem",\s+"modules-ext"/);
+    expect(readFileSync(join(root, "scripts/module-ownership.generated.mjs"), "utf8")).toMatch(/"PlantsItem",\s+"modules-ext\/plants"/);
 
     // Изменились только каталоги модуля, генерируемые файлы, область схемы и копия миграции; файлов ядра — ни одного.
     const changed = changedSince(before);

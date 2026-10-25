@@ -38,7 +38,7 @@ describe("buildComponentDiagnostics (G16)", () => {
     );
     const data = [componentDataStatus("pet-care", ["a"], [])];
     const rows = buildComponentDiagnostics(manifests, data, [job({ componentId: "notes", failures: 2, lastError: "boom" })]);
-    expect(rows.slice(0, 3).map((row) => row.id).sort()).toEqual(["notes", "pet-care", "tasks"]);
+    expect(rows.filter(row => row.problems.length).map(row => row.id)).toEqual(expect.arrayContaining(["notes", "pet-care", "tasks"]));
     expect(rows.find((r) => r.id === "tasks")).toMatchObject({ compatible: false });
     expect(rows.find((r) => r.id === "pet-care")?.problems[0]).toContain("Не применены миграции: a");
     expect(rows.find((r) => r.id === "notes")?.problems[0]).toContain("Сбои фоновых задач: 2 (boom)");

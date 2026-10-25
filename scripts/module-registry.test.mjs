@@ -93,6 +93,22 @@ function addFixtureModule(m = manifest(), name = "fixture-mod") {
   put(`packages/shared-types/src/modules-ext/${name}/index.ts`, "export {};\n");
 }
 
+describe("source component metadata", () => {
+  it("preserves the declared version and compatibility requirements", () => {
+    addFixtureModule(manifest({ version: "2.4.1", requires: { platform: "^1.0.0", modules: ["tasks"], moduleVersions: { tasks: "^1.0.0" }, contracts: { event: "^1.0.0" } } }));
+    const result = collectModules(root);
+    expect(result.errors).toEqual([]);
+    const generated = renderOutputs(result.modules, root).get("packages/shared-types/src/modules-ext/registry.generated.ts");
+    expect(generated).toContain('"version": "2.4.1"');
+    expect(generated).toContain('"moduleVersions"');
+  });
+  it("rejects malformed requirements before writing output", () => {
+    addFixtureModule(manifest({ requires: { platform: "latest", modules: ["tasks"], moduleVersions: { notes: "^1.0.0" } } }));
+    expect(collectModules(root).errors.join()).toContain("requires.platform");
+    expect(collectModules(root).errors.join()).toContain("requires.moduleVersions.notes");
+  });
+});
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "module-registry-"));
   put("apps/api/prisma/schema.prisma", SCHEMA);

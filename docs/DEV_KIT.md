@@ -1,5 +1,7 @@
 # Комплект разработчика ORION (G15, сценарий Б)
 
+Перед реализацией найдите существующие возможности через `pnpm platform-map --component <id>`; [индекс для агентов](platform-api/CAPABILITY_MAP.md) генерируется из кода. После изменения манифеста/контрактов выполните `pnpm module-registry`, `pnpm module-docs`, `pnpm platform-map` и соответствующие `--check`.
+
 Как добавить в платформу **свой модуль**, не правя файлы ядра. Опирается на подключение модуля манифестом
 ([`platform-api/MODULE_REGISTRY.md`](platform-api/MODULE_REGISTRY.md), G5/G10); образец полного модуля —
 `apps/api/src/modules-ext/pet-care/`.
@@ -24,7 +26,7 @@ pnpm db:generate                                          # Prisma-клиент 
 2. **отказывается перезаписывать**: если любой из четырёх каталогов модуля уже есть, не пишет ничего и объясняет почему;
 3. создаёт файлы (таблица ниже) в раскладке образца;
 4. запускает `scripts/module-registry.mjs` (генерируемые файлы, область схемы, копия миграции) и
-   `scripts/module-docs.mjs` (`AI_CONTEXT.md` и генерируемый блок `MODULE.md`).
+   `scripts/module-docs.mjs` (`AI_CONTEXT.md` и генерируемый блок `MODULE.md`), затем `scripts/platform-map.mjs` (машиночитаемая карта).
 
 Метка миграции — текущее время UTC, но не раньше последней существующей миграции (иначе Prisma применит её не в том порядке).
 
