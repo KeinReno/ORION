@@ -15,6 +15,8 @@ TimeEntry и не импортирует Time. Пустой registry допус�
 
 Публикация задачи через `TasksPublicationAdapter` передаёт только название, выбранный текст, статус и выбранный срок. Делегированное изменение статуса использует `TasksService.updateTx` с ревизией оригинала; скрытые связи, исполнители и зависимости не выдаются получателю. Общий контракт и границы: [ADR-0024](../../../../docs/adr/ADR-0024-shared-publications.md).
 
+Публичный `TaskIntegrationReader` / `TaskIntegrationReaderModule` в `public/` предоставляет проекции ссылки задачи для Time и сроков для ICS Calendar. Запросы остаются у Tasks, в исходной транзакции/RLS, без загрузки полного TasksModule. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

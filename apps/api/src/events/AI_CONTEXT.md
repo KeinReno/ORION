@@ -4,6 +4,8 @@
 
 Каждый метод сервиса начинается с проверки членства и идёт через `PrismaService.withUser`; ссылки на другие записи проверяются на принадлежность тому же пространству; ответы собираются `toDto`, а входы валидируются zod-схемами из `shared-types`.
 
+Ссылку проекта проверяет `ProjectReferences`; сроки задач для исходящего ICS читает `TaskIntegrationReader` в исходной транзакции. Проверки feed token и включённости остаются у Calendar. SDK не импортируют полные TasksModule/ProjectsModule. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

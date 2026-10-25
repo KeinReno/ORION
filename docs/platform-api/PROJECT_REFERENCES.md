@@ -22,3 +22,7 @@ ProjectsModule. Это не обещание удаления таблиц ил�
 Goals и другие оставшиеся consumers мигрируются отдельно. Схема, UI и данные не меняются.
 
 Контракт виден агентам через pnpm platform-map; декларация API не означает runtime permission.
+
+Time и Calendar также используют ProjectReferences с Integration API 1.5.0 / Platform API 1.6.0;
+[правила наследования и ICS](TASK_INTEGRATION_READER.md). Их ссылки на архивные/выключенные проекты
+сохраняют прежнюю допустимость; авторизация и 404 остаются в потребителях.
