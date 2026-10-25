@@ -22,13 +22,19 @@ for (const pluginsOff of [false, true]) {
     expect(response.ok()).toBe(true);
     expect((await response.json()).status).toBe("done");
     // No sleep/polling the asynchronous outbox: already stopped at command commit.
-    expect(await (await request.get(`${workspaceUrl}/time/running`, { headers })).json()).toBeNull();
+    const running = await request.get(`${workspaceUrl}/time/running`, { headers });
+    expect(running.ok()).toBe(true);
+    // Nest returns an empty 200 body for null; ApiClient treats it as null too.
+    const runningBody = await running.text();
+    expect(runningBody ? JSON.parse(runningBody) : null).toBeNull();
     const entriesResponse = await request.get(`${workspaceUrl}/time`, { headers });
     expect(entriesResponse.ok()).toBe(true);
     const entries = await entriesResponse.json();
     const rows = Array.isArray(entries) ? entries : entries.items;
     expect(rows.find((row: { id: string }) => row.id === entry.id)).toMatchObject({ taskId: task.id, running: false });
     await page.goto(`/panel/time?workspaceId=${account.workspaceId}`);
-    await expect(page.getByText(task.title, { exact: true }).first()).toBeVisible();
+    const title = page.locator("p", { hasText: task.title });
+    await expect(title).toHaveText(task.title);
+    await expect(title).toBeVisible();
   });
 }

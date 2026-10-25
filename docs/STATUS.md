@@ -13,7 +13,11 @@ TaskClosureRegistry передаёт синхронную остановку т�
 ошибка откатывает всю команду, пустой registry допускается. UI, schema, права и outbox-подписки не меняются.
 Погашено одно model-исключение: 64 → 63; файлов остаётся 27, service-исключений 19. Новый handler входит
 в проверяемые `.service.ts`. Integration API 1.2.0 / Platform API 1.3.0, карта и snapshot обновлены.
-Focused integration: 8 passed; полный unit: 1476 passed. Полная integration/browser-приёмка выполняется.
+Focused integration: 8 passed; полный unit: **1476 passed**; полный integration на пересозданной тестовой БД:
+**581 passed / 1 skipped**. Production API/web build (54 страницы), typecheck, architecture/registry/docs/map
+passed; lint — 0 ошибок / 30 прежних предупреждений. Браузер: 43 сценария панелей/публикаций и отдельный
+финальный повтор 2 новых task/timer сценариев — passed (всего 45 различных). Снимки действий не менялись.
+GitHub CI не стартует из-за billing; подробности оснастки и границы проверки сохранены в отчёте.
 [Контракт](platform-api/TASK_CLOSURE.md), [проверки и ограничения](TASK_TIME_BRIDGE_2026-10-25.md).
 В опубликованный установщик beta 21 этот этап не входит.
 
