@@ -2433,6 +2433,8 @@
     "build": "corepack pnpm -r build",
     "build:desktop-export": "corepack pnpm --filter @orion/web build:desktop",
     "build:desktop-installer": "node scripts/build-desktop-installer.mjs",
+    "build:desktop-stage": "node scripts/build-desktop-installer.mjs --stage-only",
+    "build:desktop-payload": "node scripts/build-runtime-payload.mjs",
     "typecheck": "corepack pnpm -r --if-present run typecheck",
     "lint": "eslint .",
     "test": "vitest run",
