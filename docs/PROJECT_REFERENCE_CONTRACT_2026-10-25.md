@@ -46,8 +46,13 @@ passed; plugin contracts и snapshot входят в полный unit. Сним
 Production API/web build: passed, **54 страницы**. Chromium: **44 passed**, 1.6 мин —
 42 сценария панелей default-full/plugins-off и 2 пути project → task → linked note → project
 с сохранением связи после правки. Compiled API содержит новый reader и Platform API 1.5.0.
-Полный integration: результат будет дописан после завершения.
-GitHub CI учитывается отдельно от локальных прогонов.
+Полный integration на пересозданной БД: **596 passed / 1 skipped**, 106 passed-файлов,
+397.36 с. Все девять новых сценариев входят в прогон. В логе нет 40P01/deadlock;
+искусственные HTTP 500 из lifecycle rollback тестов ожидаемы.
+GitHub CI на кодовом commit `261f39c2df09fd0b610650ff6cb51208245546fe`: run 40208670582,
+quality check 121215006261 завершился до выполнения шагов (steps: []). Annotation: recent account
+payments have failed or spending limit needs to be increased. Это инфраструктурный блок, не green CI;
+локальные проверки учитываются отдельно.
 
 ## Границы проверки
 

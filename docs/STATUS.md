@@ -16,7 +16,7 @@ Platform API 1.5.0. Исключения сокращены: **26 → 21 фай�
 Focused integration: **22 passed** (в том числе запуск пяти потребителей без полного ProjectsModule).
 Полный unit: **1476 passed**; typecheck, architecture/registry/docs/map passed; lint — 0 ошибок /
 30 прежних предупреждений. Production API/web build (54 страницы) и **44 Chromium** сценария прошли;
-полный integration ещё проверяется.
+полный integration на пересозданной БД — **596 passed / 1 skipped**. GitHub CI не стартует из-за billing.
 [Контракт](platform-api/PROJECT_REFERENCES.md), [проверки и границы](PROJECT_REFERENCE_CONTRACT_2026-10-25.md).
 В опубликованный установщик beta 21 этот этап не входит.
 
