@@ -15,11 +15,12 @@ import type {
   TaskViewFilters,
   UpdateTaskInput
 } from "@orion/shared-types";
-import { isModuleEnabled, isPluginEnabled, isTaskClosed, taskChecklistItemSchema } from "@orion/shared-types";
+import { isPluginEnabled, isTaskClosed, taskChecklistItemSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { assertAssigneeInWorkspace } from "./task-refs.util";
+import { TaskClosureRegistry } from "./public/task-closure-registry";
 
 const taskInclude = {
   dependsOn: { include: { dependsOn: { select: { status: true } } } }
@@ -31,7 +32,8 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly events: DomainEventBus
+    private readonly events: DomainEventBus,
+    private readonly closures: TaskClosureRegistry
   ) {}
 
   async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean): Promise<Task[]> {
@@ -229,28 +231,11 @@ export class TasksService {
 
       if (datesChanged) await cascadeRescheduleTx(tx, taskId);
 
-      // Bridge: closing a task stops its running timer so "сделать" doesn't
-      // leave a stopwatch ticking in the background. Skipped when Time is off.
+      // Optional neighbors own their synchronous consequences (ADR-0027).
       const closedNow =
         input.status !== undefined && isTaskClosed(input.status) && !isTaskClosed(current.status);
       if (closedNow) {
-        const workspace = await tx.workspace.findUnique({
-          where: { id: workspaceId },
-          select: { disabledModules: true }
-        });
-        if (isModuleEnabled(workspace?.disabledModules, "time")) {
-          const running = await tx.timeEntry.findFirst({
-            where: { workspaceId, taskId, endedAt: null }
-          });
-          if (running) {
-            const endedAt = new Date();
-            const safeEnd =
-              endedAt.getTime() <= running.startedAt.getTime()
-                ? new Date(running.startedAt.getTime() + 1000)
-                : endedAt;
-            await tx.timeEntry.update({ where: { id: running.id }, data: { endedAt: safeEnd } });
-          }
-        }
+        await this.closures.closeTx(tx, { workspaceId, taskId });
       }
 
       // Event API (ADR-0019): the outbox row is written in this very transaction, so a rolled-back update (revision

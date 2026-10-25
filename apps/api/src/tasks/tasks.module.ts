@@ -14,9 +14,10 @@ import { TasksSearchProvider } from "./tasks-search.provider";
 import { TaskInboxTarget } from "./tasks-inbox.target";
 import { TasksProjectAggregates } from "./tasks-project-aggregates";
 import { TaskClosedNotifier } from "./task-closed-notifier";
+import { TaskClosureRegistryModule } from "./public/task-closure-registry";
 
 @Module({
-  imports: [PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
+  imports: [TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [TasksController],
   providers: [TasksPublicationAdapter, TasksProjectAggregates, TasksService, TaskCommentsService, TaskActivityService, TaskClosedNotifier, TasksSearchProvider, TaskInboxTarget],
   exports: [TasksService]
