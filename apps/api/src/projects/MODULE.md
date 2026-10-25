@@ -6,6 +6,8 @@
 
 Работает без задач, финансов и учёта времени — связанные показатели просто не показываются.
 
+Публичная проверка ссылки: `ProjectReferences` / `ProjectReferencesModule` в `public/`; возвращает boolean в исходной транзакции/RLS, без загрузки ProjectsModule. Контракт и политика потребителей: [PROJECT_REFERENCES](../../../../docs/platform-api/PROJECT_REFERENCES.md). Milestones использует тот же контракт; его HTTP остаётся за guard Projects.
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

@@ -74,6 +74,11 @@
 - Журнал изменений контрактов (changelog) и пометки `deprecated`.
 - Проверка `requires.platform` при старте API и в менеджере компонентов (рантайм манифесты не читает).
 
+## Проверки ссылок между модулями
+
+- [ProjectReferences](PROJECT_REFERENCES.md): Notes/Documents/Inbox/Inventory/Milestones → Projects (Integration 1.4.0, Platform 1.5.0).
+- [ContactReferences](CONTACT_REFERENCES.md): Health → Contacts.
+
 ## Зависимости и жизненный цикл компонентов
 
 Выключение с включёнными жёсткими зависимыми требует подтверждения (409 `component_has_dependents`, повтор с `confirm: true`), обязательный компонент не выключается (409 `component_required`); хуки `ComponentLifecycle.onEnable/onDisable` выполняются в транзакции переключения. Подробности — [`MANIFEST.md`](MANIFEST.md).

@@ -6,6 +6,20 @@
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
 
+## Пять потребителей → Projects: публичная проверка ссылки — 25.10.2026
+
+В `codex/project-reference-contract` Notes, Documents, Inbox, Inventory и Milestones больше не читают
+Project напрямую. `ProjectReferences` возвращает boolean в исходной транзакции/RLS; SDK независим
+от ProjectsModule/ProjectsService. Права, null и прежние ошибки остаются у потребителей; Inbox сохраняет
+проверку включённости Projects, HTTP Milestones остаётся за guard. ADR-0029; Integration API 1.4.0 /
+Platform API 1.5.0. Исключения сокращены: **26 → 21 файл / 62 → 57 model entries**, service entries — 19.
+Focused integration: **22 passed** (в том числе запуск пяти потребителей без полного ProjectsModule).
+Полный unit: **1476 passed**; typecheck, architecture/registry/docs/map passed; lint — 0 ошибок /
+30 прежних предупреждений. Production API/web build (54 страницы) и **44 Chromium** сценария прошли;
+полный integration ещё проверяется.
+[Контракт](platform-api/PROJECT_REFERENCES.md), [проверки и границы](PROJECT_REFERENCE_CONTRACT_2026-10-25.md).
+В опубликованный установщик beta 21 этот этап не входит.
+
 ## Health → Contacts: проверка ссылки врача — 25.10.2026
 
 В `codex/health-contact-contract` HealthService больше не читает Contact напрямую. Публичный ContactReferences

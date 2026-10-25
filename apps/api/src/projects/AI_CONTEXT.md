@@ -4,6 +4,8 @@
 
 Каждый метод сервиса начинается с проверки членства и идёт через `PrismaService.withUser`; ссылки на другие записи проверяются на принадлежность тому же пространству; ответы собираются `toDto`, а входы валидируются zod-схемами из `shared-types`.
 
+Публичная проверка ссылки: `ProjectReferences` / `ProjectReferencesModule` в `public/`; возвращает boolean в исходной транзакции/RLS, без загрузки ProjectsModule. Контракт и политика потребителей: [PROJECT_REFERENCES](../../../../docs/platform-api/PROJECT_REFERENCES.md). Milestones использует тот же контракт; его HTTP остаётся за guard Projects.
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

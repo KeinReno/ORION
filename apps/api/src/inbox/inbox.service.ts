@@ -1,3 +1,4 @@
+import { ProjectReferences } from "../projects/public/project-references";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
@@ -15,6 +16,7 @@ import { WorkspacesService } from "../workspaces/workspaces.service";
 @Injectable()
 export class InboxService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
@@ -184,8 +186,7 @@ export class InboxService {
   ): Promise<void> {
     if (!projectId) return;
     await this.modules.assertEnabledTx(tx, userId, workspaceId, "projects");
-    const project = await tx.project.findUnique({ where: { id: projectId } });
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 }
 

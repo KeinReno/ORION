@@ -1,3 +1,4 @@
+import { ProjectReferences } from "../projects/public/project-references";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Note as DbNote, NoteRevision as DbNoteRevision, Prisma } from "@prisma/client";
 import {
@@ -29,6 +30,7 @@ const REVISION_MIN_GAP_MS = 3 * 60 * 1000;
 @Injectable()
 export class NotesService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -473,8 +475,7 @@ export class NotesService {
 
   private async assertProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string | null): Promise<void> {
     if (!projectId) return;
-    const project = await tx.project.findUnique({ where: { id: projectId } });
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 
   /** Version history for a note, newest first (no bodies — see `getRevision`). */

@@ -1,3 +1,4 @@
+import { ProjectReferences } from "../projects/public/project-references";
 import { createHash } from "node:crypto";
 import type { Readable } from "node:stream";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
@@ -57,6 +58,7 @@ const VERSIONS_DIR = ".versions";
 @Injectable()
 export class DocumentsService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter
@@ -723,8 +725,7 @@ export class DocumentsService {
    * member of two workspaces can't file a document into the other one's project.
    */
   private async assertProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string): Promise<void> {
-    const project = await tx.project.findUnique({ where: { id: projectId } });
-    if (!project || project.workspaceId !== workspaceId) {
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) {
       throw new NotFoundException("Проект не найден");
     }
   }
