@@ -9,6 +9,11 @@
 
 ## Индекс контрактов
 
+Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md) и
+[синхронное закрытие задачи](TASK_CLOSURE.md). Последний реализован по ADR-0027:
+Integration API 1.2.0, Platform API 1.3.0. Историческая строка Integration API ниже
+описывает исходный срез, до появления этих контрактов.
+
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|
 | Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md), [MODULE_REGISTRY.md](MODULE_REGISTRY.md) |

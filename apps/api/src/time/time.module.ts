@@ -6,11 +6,13 @@ import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { TimeController } from "./time.controller";
 import { TimeService } from "./time.service";
 import { TimeProjectAggregates } from "./time-project-aggregates";
+import { TaskClosureRegistryModule } from "../tasks/public/task-closure-registry";
+import { TimeTaskClosureBridge } from "./time-task-closure.service";
 
 /** ORION v0.18 «Учёт времени» — one controller/service pair, like notes/ or tasks/. */
 @Module({
-  imports: [AuthModule, WorkspacesModule, AgentCoreModule],
+  imports: [AuthModule, WorkspacesModule, AgentCoreModule, TaskClosureRegistryModule],
   controllers: [TimeController, TimeAgentController],
-  providers: [TimeProjectAggregates, TimeService]
+  providers: [TimeProjectAggregates, TimeService, TimeTaskClosureBridge]
 })
 export class TimeModule {}

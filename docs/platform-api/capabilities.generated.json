@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.2.0",
+  "platformVersion": "1.3.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.3.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.1.0",
+    "integration": "1.2.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -2122,6 +2122,7 @@
   "publicContracts": [
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/tasks/public/task-closure-registry.ts",
     "apps/web/lib/extensions/contracts.ts",
     "apps/web/lib/extensions/host-api.ts",
     "apps/web/lib/extensions/places.ts",
@@ -2229,6 +2230,7 @@
     "apps/api/src/search/search-registry.module.ts",
     "apps/api/src/shared/publication-registry.ts",
     "apps/api/src/sync/snapshot-registry.ts",
+    "apps/api/src/tasks/public/task-closure-registry.ts",
     "apps/web/lib/extensions/registry.ts"
   ],
   "uiSlots": [
@@ -2633,8 +2635,7 @@
     "apps/api/src/tasks/tasks.service.ts": {
       "models": [
         "Milestone",
-        "Project",
-        "TimeEntry"
+        "Project"
       ]
     },
     "apps/api/src/time/time.service.ts": {
