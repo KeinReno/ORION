@@ -195,3 +195,18 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:max(env(safe-a
 .replica-banner p { font-size:.78rem; line-height:1.5; overflow-wrap:anywhere; }
 .replica-banner .helper { font-size:.7rem; margin:4px 0 0; }
 .replica-banner .icon-button { min-width:44px; width:44px; min-height:44px; padding:10px; align-self:center; }
+
+/* Reachable search and capture/history transitions, without changing list data. */
+.module-search { gap:8px; padding-right:4px; }
+.module-search input { min-width:0; }
+.module-search input::-webkit-search-cancel-button { -webkit-appearance:none; }
+.module-search .search-clear { flex:0 0 48px; width:48px; min-height:48px; padding:12px; background:transparent; color:var(--muted); }
+.finance-section-link { display:flex; justify-content:flex-start; }
+.finance-section-link .text-button { gap:8px; font-size:.85rem; }
+.finance-month-picker { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
+#finance-history-title { scroll-margin-top:calc(24px + max(env(safe-area-inset-top),var(--safe-area-inset-top,0px))); }
+.finance-history-warning { padding:16px; margin:8px 0 16px; background:var(--raised); border-radius:14px; }
+.finance-history-warning p { color:var(--text); line-height:1.5; margin-bottom:12px; }
+
+.finance-types { display:flex; flex-wrap:wrap; gap:4px; }
+.finance-types button { flex:1 1 8rem; overflow-wrap:normal; }

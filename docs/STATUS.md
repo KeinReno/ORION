@@ -1,4 +1,12 @@
 <!-- Android branch alpha.23 (26.10.2026): compare only replica identity fields;
+
+Android branch alpha.27: общий доступный cancel поиска задач/заметок,
+восстановление из пустой выдачи, переходы ввод/история финансов, текущий месяц,
+видимое предупреждение при незавершённом черновике. 99 профильных tests,
+11 contracts,11 JVM, scoped lint/typecheck, architecture,3 browser smoke и
+Android Gradle checks PASS. [Отчёт](android/RELEASE_ALPHA27.md).
+APK0.1.26/code27 совместим с alpha.26. Физический OPPO smoke НЕ выполнялся;
+финансы остаются локальными. Десктоп и живые данные этим UI-срезом не менялись.
 workspaceName metadata no longer rejects valid copy as offline. Physical task
 phone→installed PC→phone/reload/delete PASS; see android/SYNC_LIVE_ALPHA23.md. -->
 <!-- Android branch alpha.22 (26.10.2026): compact task/note filters, readable
@@ -25,7 +33,7 @@ CAS для простых RUB income/expense. Старый hybrid protocol1 не
 architecture/contracts/docs/map и production builds прошли.
 [Серверный отчёт и границы](android/FINANCE_SERVER_V1.md),
 [публичный контракт](platform-api/FINANCE_DEVICE_REPLICATION.md).
-На рабочий профиль этот код не установлен; Android alpha.26 пока хранит финансы
+На рабочий профиль этот код не установлен; Android alpha.27 пока хранит финансы
 локально. Negotiation/cache/outbox/UI и физический финансовый обмен — следующий срез.
 
 Android branch alpha.26: foreground recovery ищет только прежний доверенный узел

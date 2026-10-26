@@ -1,6 +1,6 @@
 import { DepthCard } from "./depth-card";
-import { useState, type ReactNode } from "react";
-import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowDownLeft, ArrowUpRight, ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
 import { localDate, parseMoney, resolveFinanceDate, type FinanceDraft, type MobileFinance } from "@orion/mobile-core";
 import { useToday } from "./use-today";
 import type { Transaction } from "@orion/shared-types";
@@ -19,6 +19,13 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
   save: (draft: FinanceDraft) => Promise<boolean>; remove: (id: string) => Promise<boolean>;
 }) {
   const today = useToday();
+  const historyTitle = useRef<HTMLHeadingElement>(null);
+  const amountInput = useRef<HTMLInputElement>(null);
+  const [historyError, setHistoryError] = useState("");
+  const historyWarning = useRef<HTMLDivElement>(null);
+  function showHistoryWarning() { historyWarning.current?.focus(); historyWarning.current?.scrollIntoView({ block: "center" }); }
+  useEffect(() => { if (historyError) showHistoryWarning(); }, [historyError]);
+  function goToAmount() { amountInput.current?.focus(); amountInput.current?.scrollIntoView({ block: "center" }); }
   const [storedDraft, setDraft] = useState(() => finance.draft ?? fresh(finance, initialType));
   const draft = resolveFinanceDate(storedDraft);
   const [chosenMonth, setMonth] = useState<string | null>(null);
@@ -28,26 +35,27 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
   const [deleting, setDeleting] = useState<string | null>(null);
   const editing = finance.transactions.some((item) => item.id === draft.id);
   function change(next: FinanceDraft) {
-    setDraft(next); setError(""); setDraftStatus("Сохраняем черновик…");
+    setDraft(next); setError(""); setHistoryError(""); setDraftStatus("Сохраняем черновик…");
     void saveDraft(next).then(() => setDraftStatus("Черновик сохранён на телефоне")).catch(() => {
       setDraftStatus(""); setError("Черновик не записан. Не закрывайте форму; попробуйте сохранить операцию.");
     });
   }
   async function reset() {
-    try { await saveDraft(null); setDraft(fresh(finance)); setDraftStatus(""); setError(""); }
+    try { await saveDraft(null); setDraft(fresh(finance)); setDraftStatus(""); setError(""); setHistoryError(""); }
     catch { setError("Не удалось отменить черновик. Повторите попытку."); }
   }
   function edit(entry: Transaction) {
-    if (draft.amount || draft.note || finance.draft) { setError("Сначала сохраните текущую операцию или нажмите «Отменить ввод»."); return; }
+    if (draft.amount || draft.note || finance.draft) { setHistoryError("В форме осталась незавершённая операция. Сохраните её или отмените ввод, чтобы открыть другую."); showHistoryWarning(); return; }
     const next: FinanceDraft = { dateMode: "custom", id: entry.id, type: entry.type === "income" ? "income" : "expense", amount: (entry.totalAmount / 100).toFixed(2).replace(".", ","),
       accountId: entry.accountId, categoryId: entry.lines[0]!.categoryId!, note: entry.note, date: localDate(new Date(entry.occurredAt)) };
-    change(next); document.getElementById("finance-amount")?.focus();
+    change(next); goToAmount();
   }
   const entries = finance.transactions.filter((entry) => localDate(new Date(entry.occurredAt)).startsWith(month))
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt));
   const total = (type: string) => entries.filter((entry) => entry.type === type).reduce((sum, entry) => sum + entry.totalAmount, 0);
   return <section className="finance">
     <DepthCard><div className="finance-context"><strong>На телефоне <span>RUB</span></strong><p>В резервной копии · без синхронизации с ПК</p></div></DepthCard>
+    <div className="finance-section-link"><button type="button" className="text-button" onClick={() => { historyTitle.current?.focus(); historyTitle.current?.scrollIntoView({ block: "start" }); }}><ArrowDown size={18} aria-hidden="true" />К истории операций</button></div>
     <DepthCard><form className="finance-form" onSubmit={async (event) => {
       event.preventDefault(); if (busy) return;
       try { parseMoney(draft.amount); } catch (cause) { setError((cause as Error).message); return; }
@@ -59,7 +67,7 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
           onClick={() => change({ ...draft, type, categoryId: finance.categories.find((item) => item.kind === type)!.id })}>
           {type === "expense" ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}{type === "expense" ? "Расход" : "Доход"}</button>)}</div>
         <label htmlFor="finance-amount">Сумма, ₽</label>
-        <input id="finance-amount" className="finance-amount" inputMode="decimal" autoComplete="off" placeholder="0,00" maxLength={30}
+        <input ref={amountInput} id="finance-amount" className="finance-amount" inputMode="decimal" autoComplete="off" placeholder="0,00" maxLength={30}
           value={draft.amount} onChange={(event) => change({ ...draft, amount: event.target.value })} aria-describedby="finance-error" aria-invalid={Boolean(error)} />
 
         <label htmlFor="finance-account">Счёт</label>
@@ -78,10 +86,12 @@ export function FinancePage({ finance, busy, saveDraft, save, remove, initialTyp
       </fieldset>
     </form></DepthCard>
     <section className="finance-history" aria-labelledby="finance-history-title">
-      <DepthCard><div className="finance-history-heading"><div><h2 id="finance-history-title">Операции за месяц</h2><p className="helper">{entries.length} операций</p></div>
-      <label className="sr-only" htmlFor="finance-month">Месяц операций</label><input id="finance-month" type="month" required value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} /></div></DepthCard>
+      <DepthCard><div className="finance-history-heading"><div><h2 ref={historyTitle} tabIndex={-1} id="finance-history-title">Операции за месяц</h2><p className="helper">{entries.length} операций</p></div>
+      <div className="finance-month-picker"><label className="sr-only" htmlFor="finance-month">Месяц операций</label><input id="finance-month" type="month" required value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} />{month !== today.slice(0, 7) && <button type="button" className="text-button" onClick={() => setMonth(null)}>Текущий месяц</button>}</div></div></DepthCard>
+      <div className="finance-section-link"><button type="button" className="text-button" onClick={goToAmount}><ArrowUp size={18} aria-hidden="true" />К вводу операции</button></div>
+      {historyError && <div ref={historyWarning} tabIndex={-1} className="finance-history-warning"><p role="alert">{historyError}</p><button type="button" onClick={goToAmount}>Перейти к черновику</button></div>}
       <DepthCard><dl className="finance-totals"><div><dt>Расходы</dt><dd>{money(total("expense"))}</dd></div><div><dt>Доходы</dt><dd>{money(total("income"))}</dd></div><div className="finance-net"><dt>Разница за месяц</dt><dd>{money(total("income") - total("expense"))}</dd></div></dl></DepthCard>
-      {!entries.length ? <p className="finance-empty">За этот месяц записей пока нет. Добавьте первую операцию выше.</p> : <ul className="entries finance-entries">{entries.map((entry) => <li key={entry.id}>
+      {!entries.length ? <p className="finance-empty">{month === today.slice(0, 7) ? "За этот месяц записей пока нет. Добавьте первую операцию выше." : "За выбранный месяц записей нет. Выберите другой месяц или вернитесь к текущему."}</p> : <ul className="entries finance-entries">{entries.map((entry) => <li key={entry.id}>
         <DepthCard><div className="finance-entry"><button className="entry-main" aria-label={"Изменить операцию: " + (entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name)} disabled={busy} onClick={() => edit(entry)}>
           <strong>{entry.note || finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name}</strong>
           <small>{new Date(entry.occurredAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} · {finance.accounts.find((item) => item.id === entry.accountId)?.name} · {finance.categories.find((item) => item.id === entry.lines[0]?.categoryId)?.name}</small>
