@@ -117,6 +117,35 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
     }
   }
 
+  it("observed writes remain editable when another device clock is ahead", async () => {
+    const s = await hybridSetup("clock-skew");
+    const transport = new HttpTransport(s.token, s.ws);
+    const phone = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws, now: () => Date.now() + 80_000 });
+    const pc = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws });
+    await phone.sync();
+    await pc.sync();
+    const listId = randomUUID();
+    const itemId = randomUUID();
+    await phone.enqueue({ entity: "list", entityId: listId, kind: "create", fields: { name: "Clock test" } });
+    await phone.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "create", fields: { label: "Phone item", checked: true } });
+    await phone.sync();
+    await pc.sync();
+    expect(pc.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(true);
+    await pc.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "patch", fields: { checked: false } });
+    await pc.sync();
+    expect(pc.conflicts()).toEqual([]);
+    await phone.sync();
+    expect(phone.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(false);
+    // A fresh installation must learn the same causal clock from a snapshot.
+    const fresh = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws });
+    await fresh.sync();
+    await fresh.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "patch", fields: { checked: true } });
+    await fresh.sync();
+    expect(fresh.conflicts()).toEqual([]);
+    await phone.sync();
+    expect(phone.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(true);
+  });
+
   it("пространство не в гибриде: снимок и приём отвечают 409, режим меняет только владелец", async () => {
     const s = await setup("mode");
     const before = await s.call<{ code: string }>("GET", `/sync/replica?protocol=1`);

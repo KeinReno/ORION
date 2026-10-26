@@ -7,7 +7,7 @@ import {
   Injectable,
   NotFoundException
 } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   LIST_ITEMS_MAX,
   SYNC_ENTITY_TYPES,
@@ -176,7 +176,7 @@ export class HybridSyncService {
           asOf: new Date(nowMs).toISOString(),
           // Всё, что зафиксировано до xmin, уже в данных; строки с xid >= xmin доставятся повторно (идемпотентно).
           cursor: encodeCursor({ x, i: "0", t: nowMs }),
-          serverHlc: serverHlc(nowMs),
+          serverHlc: await this.observedHlcTx(tx, workspaceId, included, nowMs),
           included,
           entities
         };
@@ -219,11 +219,27 @@ export class HybridSyncService {
         protocol: SYNC_PROTOCOL_VERSION,
         asOf: new Date(nowMs).toISOString(),
         cursor: last ? encodeCursor({ x: last.xid, i: last.id, t: nowMs }) : encodeCursor({ ...cursor, t: nowMs }),
-        serverHlc: serverHlc(nowMs),
+        serverHlc: await this.observedHlcTx(tx, workspaceId, included, nowMs),
         hasMore,
         changes
       };
     });
+  }
+
+  /** Return a causal watermark, including accepted device clocks ahead of physical host time.
+   * Otherwise a client can read a field and immediately lose its next edit as "older".
+   * Keep the query in the caller's RLS transaction and limit it to included modules.
+   */
+  private async observedHlcTx(tx: Tx, workspaceId: string, included: SyncEntityType[], nowMs: number): Promise<string> {
+    const physical = serverHlc(nowMs);
+    if (!included.length) return physical;
+    const [row] = await tx.$queryRaw<Array<{ hlc: string | null }>>`
+      SELECT max(field.value COLLATE "C") AS hlc
+      FROM "sync_entity_stamps" AS stamp
+      CROSS JOIN LATERAL jsonb_each_text(stamp."stamps") AS field(key, value)
+      WHERE stamp."workspaceId" = ${workspaceId}
+        AND stamp."entityType" IN (${Prisma.join(included)})`;
+    return row?.hlc && parseHlc(row.hlc) && row.hlc > physical ? row.hlc : physical;
   }
 
   /** Текущее состояние тронутых сущностей; нет строки (или она не для копии) — `doc: null`. */
