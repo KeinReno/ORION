@@ -2147,8 +2147,12 @@
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/inventory/public/inventory-references.module.ts",
     "apps/api/src/inventory/public/inventory-references.ts",
+    "apps/api/src/inventory/public/inventory-shopping-commands.module.ts",
+    "apps/api/src/inventory/public/inventory-shopping-commands.ts",
     "apps/api/src/lists/public/list-expense-commands.module.ts",
     "apps/api/src/lists/public/list-expense-commands.ts",
+    "apps/api/src/lists/public/list-shopping-commands.module.ts",
+    "apps/api/src/lists/public/list-shopping-commands.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
@@ -2534,18 +2538,6 @@
         "Task",
         "TaskActivity",
         "TaskComment"
-      ]
-    },
-    "apps/api/src/lists-inventory/lists-inventory.service.ts": {
-      "models": [
-        "InventoryItem",
-        "InventoryMovement",
-        "List",
-        "ListItem"
-      ],
-      "services": [
-        "inventory/inventory.service",
-        "lists/lists.service"
       ]
     }
   },

@@ -91,3 +91,12 @@ read/write контракты без полного FinanceModule. Реализ�
 Проверено после исправления ошибки имени Nest-модуля при переносе: API typecheck,
 architecture-check, focused ESLint; Lists + Home integration — 18 сценариев,
 включая гонку записи одного расхода. Модульная ошибка не попала в итоговый этап.
+
+## Этап 11 — Lists Inventory: 5 → 4
+
+ListShoppingCommands владеет пунктами/отметками, InventoryShoppingCommands —
+остатками, блокировкой позиции и приходом через прежний InventoryService.
+Bridge сохраняет порядок блокировок, повторную покупку без второго прихода,
+расчёт пополнения и уведомление после commit. Полные ListsModule/InventoryModule
+для SDK не загружаются. Проверено: architecture-check, API typecheck, focused
+ESLint; Lists Inventory + Inventory concurrency — 7 сценариев.
