@@ -29,3 +29,11 @@ TaskOverviewReader и FinanceOverviewReader возвращают DTO-проек�
 проверку доступных модулей, membership задачи, валюты и устранение дублей.
 Баланс вычисляется прежним finance helper внутри владельца данных.
 Проверено: architecture-check, API typecheck, focused ESLint, Overview integration (2).
+
+## Этап 4 — Markets: 14 → 13
+
+InvestmentJournal реализован в Finance, текущем владельце InvestmentTrade.
+Журнал, импорт и атомарная запись комиссии перенесены без изменения правил:
+только реальные сделки, явное подтверждение суммы, без повторного списания.
+Markets сохраняет свои API и watchlist; FinanceModule целиком не загружается.
+Проверено: architecture-check, API typecheck, focused ESLint, Markets integration (6).

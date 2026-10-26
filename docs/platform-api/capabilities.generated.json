@@ -2126,6 +2126,8 @@
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/finance/public/finance-overview-reader.module.ts",
     "apps/api/src/finance/public/finance-overview-reader.ts",
+    "apps/api/src/finance/public/investment-journal.module.ts",
+    "apps/api/src/finance/public/investment-journal.ts",
     "apps/api/src/home/public/home-utility-references.module.ts",
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
@@ -2566,13 +2568,6 @@
       "models": [
         "InventoryItem",
         "InventoryMovement",
-        "Transaction"
-      ]
-    },
-    "apps/api/src/markets/markets.service.ts": {
-      "models": [
-        "FinanceCategory",
-        "InvestmentTrade",
         "Transaction"
       ]
     },

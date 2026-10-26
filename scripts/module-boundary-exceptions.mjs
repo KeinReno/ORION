@@ -14,7 +14,6 @@ export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/lists-finance/lists-finance.service.ts": { models: ["List","ListItem"], services: ["lists/lists.service"] },
   "apps/api/src/lists-inventory/lists-inventory.service.ts": { models: ["InventoryItem","InventoryMovement","List","ListItem"], services: ["inventory/inventory.service","lists/lists.service"] },
   "apps/api/src/lists/lists.service.ts": { models: ["InventoryItem","InventoryMovement","Transaction"] },
-  "apps/api/src/markets/markets.service.ts": { models: ["FinanceCategory","InvestmentTrade","Transaction"] },
   "apps/api/src/notes/note-attachments.service.ts": { models: ["Document"], services: ["documents/documents.service"] },
   "apps/api/src/projects/project-captures.service.ts": { services: ["captures/captures.service"] },
   "apps/api/src/search/search.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
