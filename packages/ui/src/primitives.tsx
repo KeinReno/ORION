@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { motion, type Transition } from "framer-motion";
 import { AlertCircle, Check, TriangleAlert, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useRef, useState } from "react";
 import { useMotionSpring } from "./motion-level";
 import type {
   ButtonHTMLAttributes,
@@ -154,9 +154,10 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>): React.React
   );
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): React.ReactElement {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(props, ref) {
   return (
     <textarea
+      ref={ref}
       {...props}
       className={clsx(
         "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
@@ -165,7 +166,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>): Re
       )}
     />
   );
-}
+});
 
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>): React.ReactElement {
   return (

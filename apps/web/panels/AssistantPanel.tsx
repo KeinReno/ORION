@@ -19,8 +19,8 @@ import {
   type AssistantEngineStatus,
   type AssistantStoredMessage
 } from "@orion/shared-types";
-import { Button, CallChip, Card, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Select, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
-import { Bot, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Send, Trash2, TriangleAlert, X } from "lucide-react";
+import { Button, CallChip, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Select, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
+import { Bot, Check, Copy, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Send, Trash2, TriangleAlert, User, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
 import { attachmentFor, fitImages, imageForModel } from "../lib/assistant-attachments";
@@ -116,6 +116,7 @@ export function AssistantPanel(): React.ReactElement {
   const [dragOver, setDragOver] = useState(false);
   const upload = useUploadToAssistant(workspaceId);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const documentsOn = useEnabledModules().isEnabled("documents");
   const [useScreen, setUseScreen] = useState(true);
   const [view, setView] = useState(currentAssistantView);
@@ -141,6 +142,14 @@ export function AssistantPanel(): React.ReactElement {
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [conversation.data?.messages.length, pending, send.isPending]);
+
+  // The composer grows with the text instead of scrolling internally, up to a cap — then it scrolls.
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+  }, [draft]);
 
   function choose(id: string | null): void {
     setOpenId(id);
@@ -227,7 +236,7 @@ export function AssistantPanel(): React.ReactElement {
             <Button size="sm" variant="outline" className="w-full justify-start" onClick={() => choose(null)}>
               <MessageSquarePlus className="h-4 w-4" aria-hidden /> Новая беседа
             </Button>
-            <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto">
+            <ul className="orion-scroll max-h-[60vh] space-y-0.5 overflow-y-auto pr-0.5">
               {(conversations.data ?? []).map((item) => (
                 <li key={item.id} className="group flex items-center gap-1">
                   <button
@@ -235,10 +244,11 @@ export function AssistantPanel(): React.ReactElement {
                     onClick={() => choose(item.id)}
                     aria-current={item.id === openId ? "true" : undefined}
                     className={cx(
-                      "min-w-0 flex-1 rounded-md px-2 py-1.5 text-left hover:bg-card-hover",
+                      "relative min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-card-hover",
                       item.id === openId ? "bg-card-hover text-foreground" : "text-muted-foreground"
                     )}
                   >
+                    {item.id === openId ? <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" /> : null}
                     <span className="block truncate text-label">{item.title}</span>
                     <span className="block text-2xs text-subtle-foreground">{relativeTime(item.updatedAt)}</span>
                   </button>
@@ -264,7 +274,7 @@ export function AssistantPanel(): React.ReactElement {
           </aside>
 
           <section
-            className={cx("flex min-w-0 flex-col gap-3 rounded-xl", dragOver && "outline outline-2 outline-dashed outline-accent/60")}
+            className="relative flex min-w-0 flex-col gap-3 rounded-xl"
             aria-label="Беседа"
             onDragOver={(event) => {
               if (!documentsOn || !event.dataTransfer.types.includes("Files")) return;
@@ -279,7 +289,13 @@ export function AssistantPanel(): React.ReactElement {
               void attach([...event.dataTransfer.files]);
             }}
           >
-            <div className="flex-1 space-y-3" aria-live="polite">
+            {dragOver ? (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-accent/60 bg-background/90 text-accent-text">
+                <Paperclip className="h-5 w-5" aria-hidden />
+                <p className="text-sm font-medium">Отпустите, чтобы прикрепить</p>
+              </div>
+            ) : null}
+            <div className="flex-1 space-y-4" aria-live="polite">
               {messages.length === 0 && !pending ? (
                 <EmptyState
                   icon={Bot}
@@ -287,19 +303,25 @@ export function AssistantPanel(): React.ReactElement {
                   description="Например: «Что у меня горит на этой неделе?», «Разбей эту задачу на шаги» или «Сделай заметку по итогам встречи»."
                 />
               ) : (
-                messages.map((message, index) => <Line key={`${message.at}-${index}`} message={message} workspaceId={workspaceId} />)
+                messages.map((message, index) => <MessageRow key={`${message.at}-${index}`} message={message} workspaceId={workspaceId} />)
               )}
-              {pending ? <Line message={{ role: "user", content: pending, actions: [], at: "", truncated: false }} workspaceId={workspaceId} /> : null}
+              {pending ? <MessageRow message={{ role: "user", content: pending, actions: [], at: "", truncated: false }} workspaceId={workspaceId} /> : null}
               {send.isPending ? <LatticeLoader label={working ? `Ассистент ${describePresence(working)}` : "Ассистент думает"} /> : null}
               <div ref={endRef} />
             </div>
             {attached.length > 0 || uploading > 0 ? (
               <ul className="flex flex-wrap gap-1.5" aria-label="Прикреплённые файлы">
                 {attached.map((item) => (
-                  <li key={item.documentId} className="flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-2xs text-foreground">
-                    <FileText className="h-3 w-3 text-muted-foreground" aria-hidden />
+                  <li key={item.documentId} className="flex items-center gap-1.5 rounded-full border border-border bg-card py-0.5 pl-1 pr-2 text-2xs text-foreground">
+                    {item.image ? (
+                      <img src={`data:${item.image.mediaType};base64,${item.image.data}`} alt="" className="h-5 w-5 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-5 w-5 items-center justify-center text-muted-foreground">
+                        <FileText className="h-3 w-3" aria-hidden />
+                      </span>
+                    )}
                     <span className="max-w-[14rem] truncate">{item.name}</span>
-                    <IconButton label={`Убрать «${item.name}» из сообщения`} size="sm" onClick={() => setAttached((current) => current.filter((entry) => entry.documentId !== item.documentId))}>
+                    <IconButton label={`Убрать «${item.name}» из сообщения`} size="sm" className="h-4 w-4" onClick={() => setAttached((current) => current.filter((entry) => entry.documentId !== item.documentId))}>
                       <X className="h-3 w-3" />
                     </IconButton>
                   </li>
@@ -311,8 +333,8 @@ export function AssistantPanel(): React.ReactElement {
                 ) : null}
               </ul>
             ) : null}
-            <StarBorder active={send.isPending} className="rounded-xl">
-              <form onSubmit={(event) => void submit(event)} className="flex items-end gap-2 rounded-xl">
+            <StarBorder active={send.isPending} className="rounded-2xl">
+              <form onSubmit={(event) => void submit(event)} className="flex items-end gap-1.5 rounded-2xl border border-border bg-card p-1.5">
                 {documentsOn ? (
                   <>
                     <input
@@ -333,6 +355,7 @@ export function AssistantPanel(): React.ReactElement {
                 ) : null}
                 <Textarea
                   id={COMPOSER_ID}
+                  ref={composerRef}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => setView(currentAssistantView())}
@@ -348,9 +371,9 @@ export function AssistantPanel(): React.ReactElement {
                   }}
                   placeholder={documentsOn ? "Сообщение или файл — перетащите, вставьте или нажмите скрепку (Enter — отправить)" : "Сообщение ассистенту (Enter — отправить, Shift+Enter — перенос)"}
                   aria-label="Сообщение ассистенту"
-                  rows={2}
+                  rows={1}
                   maxLength={8000}
-                  className="flex-1"
+                  className="orion-scroll flex-1 resize-none border-0 bg-transparent px-1 py-1.5 focus:ring-0"
                 />
                 <Button type="submit" disabled={(!draft.trim() && attached.length === 0) || uploading > 0 || send.isPending || !workspaceId} aria-label="Отправить">
                   <Send className="h-4 w-4" aria-hidden />
@@ -399,49 +422,101 @@ export function AssistantPanel(): React.ReactElement {
   );
 }
 
-function Line({ message, workspaceId }: { message: AssistantStoredMessage; workspaceId: string | undefined }): React.ReactElement {
-  const mine = message.role === "user";
+/** `message.at` is "" for the local echo of a still-sending message — no timestamp to show yet. */
+function messageClock(at: string): string | null {
+  if (!at) return null;
+  return new Date(at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function CopyMessageButton({ text }: { text: string }): React.ReactElement {
+  const [copied, setCopied] = useState(false);
   return (
-    <Card className={mine ? "ml-8 space-y-1 py-2" : "mr-8 space-y-1 py-2"}>
-      <p className="text-label text-subtle-foreground">{mine ? "Вы" : message.engine && message.engine !== "anthropic" ? `Ассистент · ${ASSISTANT_ENGINE_LABEL[message.engine].replace(/ \(.*\)$/, "")}` : "Ассистент"}</p>
-      {mine ? (
-        message.content ? <p className="whitespace-pre-wrap text-sm text-foreground">{message.content}</p> : null
-      ) : (
-        <MarkdownView source={message.content} className="text-sm" onExternalLink={openInBrowser} />
-      )}
-      {message.attachments && message.attachments.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5 pt-1">
-          {message.attachments.map((item) => (
-            <li key={item.documentId}>
-              <button
-                type="button"
-                onClick={() => openEntity("document", item.documentId, item.name)}
-                className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-2xs text-foreground hover:bg-card-hover"
-                title="Открыть в «Документах»"
-              >
-                <FileText className="h-3 w-3 text-muted-foreground" aria-hidden />
-                <span className="max-w-[14rem] truncate">{item.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {message.truncated ? <p className="text-2xs text-warning">Ответ обрезан по длине — напишите «продолжи».</p> : null}
-      {message.actions.length > 0 ? (
-        <div className="grid gap-1.5 pt-1">
-          {message.actions.map((action, index) => (
-            <CallChip
-              key={index}
-              className="shadow-none"
-              status={action.ok ? "done" : "error"}
-              label={action.tool.replace(/^orion_/, "")}
-              sublabel={action.summary}
-            />
-          ))}
-          {message.actions.flatMap((action) => (action.proposalId ? [<ProposalDecision key={action.proposalId} workspaceId={workspaceId} proposalId={action.proposalId} />] : []))}
+    <IconButton
+      label="Скопировать ответ"
+      size="sm"
+      className={cx("absolute -top-2.5 right-2 bg-card opacity-0 shadow-sm transition-opacity group-hover:opacity-100", copied && "opacity-100")}
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+    </IconButton>
+  );
+}
+
+function MessageRow({ message, workspaceId }: { message: AssistantStoredMessage; workspaceId: string | undefined }): React.ReactElement {
+  const mine = message.role === "user";
+  const engineLabel = !mine && message.engine && message.engine !== "anthropic" ? ASSISTANT_ENGINE_LABEL[message.engine].replace(/ \(.*\)$/, "") : null;
+  const clock = messageClock(message.at);
+  return (
+    <div className={cx("flex items-start gap-2.5", mine && "flex-row-reverse")}>
+      <span
+        className={cx(
+          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+          mine ? "bg-white/[0.06] text-muted-foreground" : "bg-accent/15 text-accent-text"
+        )}
+        aria-hidden
+      >
+        {mine ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+      </span>
+      <div className={cx("flex min-w-0 max-w-[85%] flex-col gap-1.5 md:max-w-[75%]", mine && "items-end")}>
+        {(message.content || mine) && (
+          <div
+            className={cx(
+              "group relative min-w-0 rounded-2xl px-3.5 py-2.5 text-sm",
+              mine ? "rounded-tr-md bg-accent text-accent-foreground" : "rounded-tl-md border border-border bg-card text-foreground"
+            )}
+          >
+            {mine ? (
+              message.content ? <p className="whitespace-pre-wrap">{message.content}</p> : null
+            ) : (
+              <>
+                <MarkdownView source={message.content} className="text-sm" onExternalLink={openInBrowser} />
+                {message.content ? <CopyMessageButton text={message.content} /> : null}
+              </>
+            )}
+          </div>
+        )}
+        <div className={cx("flex items-center gap-1.5 px-1 text-2xs text-subtle-foreground", mine && "flex-row-reverse")}>
+          {engineLabel ? <span>{engineLabel}</span> : null}
+          {clock ? <span>{clock}</span> : null}
         </div>
-      ) : null}
-    </Card>
+        {message.attachments && message.attachments.length > 0 ? (
+          <ul className={cx("flex flex-wrap gap-1.5", mine && "justify-end")}>
+            {message.attachments.map((item) => (
+              <li key={item.documentId}>
+                <button
+                  type="button"
+                  onClick={() => openEntity("document", item.documentId, item.name)}
+                  className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-2xs text-foreground hover:bg-card-hover"
+                  title="Открыть в «Документах»"
+                >
+                  <FileText className="h-3 w-3 text-muted-foreground" aria-hidden />
+                  <span className="max-w-[14rem] truncate">{item.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {message.truncated ? <p className="text-2xs text-warning">Ответ обрезан по длине — напишите «продолжи».</p> : null}
+        {message.actions.length > 0 ? (
+          <div className="grid w-full gap-1.5">
+            {message.actions.map((action, index) => (
+              <CallChip
+                key={index}
+                className="shadow-none"
+                status={action.ok ? "done" : "error"}
+                label={action.tool.replace(/^orion_/, "")}
+                sublabel={action.summary}
+              />
+            ))}
+            {message.actions.flatMap((action) => (action.proposalId ? [<ProposalDecision key={action.proposalId} workspaceId={workspaceId} proposalId={action.proposalId} />] : []))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
