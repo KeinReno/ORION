@@ -150,6 +150,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   SyncOp: never("Журнал исходов операций самой синхронизации."),
   SyncEntityStamp: never("Штампы слияния самой синхронизации."),
   SyncDevice: never("Реестр устройств самой синхронизации."),
+  FinanceDeviceVersion: never("Локальные ревизии и tombstones отдельного Finance device channel; не сущность hybrid protocol1."),
+  FinanceDeviceReceipt: never("Привязанный к узлу/user/device журнал идемпотентности; не переносить на другой узел."),
   SyncRestoreOperation: never("Служебная строка восстановления."),
   OpportunityImport: never("Состояние фонового импорта выполняет узел."),
   NoteLink: never("Производное от тела заметки; пересчитывает узел."),

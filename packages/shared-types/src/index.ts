@@ -89,3 +89,5 @@ export * from "./component-dependencies";
 export * from "./modules-ext/registry.generated";
 
 export * from "./publication";
+
+export * from "./finance-device-sync";

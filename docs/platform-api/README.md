@@ -9,6 +9,10 @@
 
 ## Индекс контрактов
 
+Серверный канал финансов для устройств:
+[Finance device replication v1](FINANCE_DEVICE_REPLICATION.md) — отдельная
+capability/опциональный plugin, не расширение entity set старого hybrid protocol1.
+
 Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
 [синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
 Текущие версии: Integration API 1.8.0, Platform API 1.9.0. Историческая строка Integration API ниже

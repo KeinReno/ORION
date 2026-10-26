@@ -4,6 +4,14 @@
 владельца продолжить восстановление связи, затем двустороннюю синхронизацию
 финансов. Это проект следующего среза, не утверждение о работающей синхронизации.
 
+Обновление 26.10.2026: серверный срез реализован по
+[ADR-0035](../adr/ADR-0035-finance-device-replication.md) и
+[публичному SDK](../platform-api/FINANCE_DEVICE_REPLICATION.md). Первое чтение —
+полные bounded snapshots, incremental cursor отложен. Изменения/удаления
+отслеживаются отдельными DB revisions/tombstones. Android/UI и физическая
+финансовая синхронизация остаются следующими шагами; этот исходный proposal
+сохраняется как обоснование и не переопределяет более точный ADR/SDK.
+
 `NEW_EXTENSION_POINT_REQUIRED`: Finance не входит в текущий hybrid protocol1;
 нельзя включить деньги в hardcoded task/note merge или напрямую импортировать
 внутренний TransactionsService в Core Sync. До server code нужен принятый ADR

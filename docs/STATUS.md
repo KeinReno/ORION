@@ -18,6 +18,16 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch / Finance server v1: реализован отдельный default-off device-sync
+adapter через Finance public SDK, атомарные receipts, DB revisions/tombstones и
+CAS для простых RUB income/expense. Старый hybrid protocol1 не изменён. 1602 unit,
+46 scoped PostgreSQL/HTTP integration,2 Chromium Finance smoke, typecheck/lint,
+architecture/contracts/docs/map и production builds прошли.
+[Серверный отчёт и границы](android/FINANCE_SERVER_V1.md),
+[публичный контракт](platform-api/FINANCE_DEVICE_REPLICATION.md).
+На рабочий профиль этот код не установлен; Android alpha.26 пока хранит финансы
+локально. Negotiation/cache/outbox/UI и физический финансовый обмен — следующий срез.
+
 Android branch alpha.26: foreground recovery ищет только прежний доверенный узел
 после сетевого сбоя; native NSD API34+ сохраняет все пригодные IPv4, а не один
 адрес интерфейса. На OPPO автоматически восстановлен endpoint4444→4443 с прежним

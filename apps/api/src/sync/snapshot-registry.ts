@@ -152,6 +152,8 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "DocumentAnnotation", snapshotKey: "documentAnnotations", policy: "included", reason: "Аннотации/закладки поверх документа." },
   { model: "Account", snapshotKey: "financeAccounts", policy: "included", reason: "Счета финансового модуля." },
   { model: "FinanceCategory", snapshotKey: "financeCategories", policy: "included", reason: "Категории операций." },
+  { model: "FinanceDeviceVersion", snapshotKey: null, policy: "identity-excluded", reason: "Node-bound device CAS/tombstones; rebuilt by financial triggers, not portable content." },
+  { model: "FinanceDeviceReceipt", snapshotKey: null, policy: "identity-excluded", reason: "Node/user/device-bound replay ledger; retain on source node, never restore into another identity." },
   { model: "Transaction", snapshotKey: "financeTransactions", policy: "included", reason: "Финансовые операции." },
   { model: "TransactionLine", snapshotKey: "financeTransactionLines", policy: "included", reason: "Строки операций (денормализованный workspaceId, см. CLAUDE.md)." },
   { model: "Budget", snapshotKey: "financeBudgets", policy: "included", reason: "Бюджеты по категориям." },

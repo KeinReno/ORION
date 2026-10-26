@@ -503,6 +503,8 @@
         "Budget",
         "CategoryRule",
         "FinanceCategory",
+        "FinanceDeviceReceipt",
+        "FinanceDeviceVersion",
         "FinanceDraft",
         "FinanceExchangeRate",
         "FinanceObligation",
@@ -1660,6 +1662,30 @@
       "dataModels": []
     },
     {
+      "id": "finance-device-sync",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Обмен финансами с устройствами",
+      "description": "Обмен счетами и операциями с доверенными устройствами. Включать после обновления обоих клиентов.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "finance"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": null,
+      "dataModels": []
+    },
+    {
       "id": "finance-obligations",
       "kind": "plugin",
       "version": "1.0.0",
@@ -2020,6 +2046,8 @@
       "ExtensionRecord": "extensions",
       "ExtensionSecret": "extensions",
       "FinanceCategory": "finance",
+      "FinanceDeviceReceipt": "finance",
+      "FinanceDeviceVersion": "finance",
       "FinanceDraft": "finance",
       "FinanceExchangeRate": "finance",
       "FinanceObligation": "finance",
@@ -2137,6 +2165,8 @@
     "apps/api/src/events/public/event-operations.ts",
     "apps/api/src/finance/public/agent-draft-operations.module.ts",
     "apps/api/src/finance/public/agent-draft-operations.ts",
+    "apps/api/src/finance/public/device-replication.module.ts",
+    "apps/api/src/finance/public/device-replication.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/finance/public/expense.module.ts",
@@ -2152,6 +2182,7 @@
     "apps/api/src/finance/public/transaction-references.ts",
     "apps/api/src/goals/public/goal-references.module.ts",
     "apps/api/src/goals/public/goal-references.ts",
+    "apps/api/src/home-utilities/public/payment-references.module.ts",
     "apps/api/src/home/public/home-references.module.ts",
     "apps/api/src/home/public/home-references.ts",
     "apps/api/src/home/public/home-utility-references.module.ts",
@@ -2164,6 +2195,7 @@
     "apps/api/src/inventory/public/inventory-references.ts",
     "apps/api/src/inventory/public/inventory-shopping-commands.module.ts",
     "apps/api/src/inventory/public/inventory-shopping-commands.ts",
+    "apps/api/src/lists/public/expense-references.module.ts",
     "apps/api/src/lists/public/list-expense-commands.module.ts",
     "apps/api/src/lists/public/list-expense-commands.ts",
     "apps/api/src/lists/public/list-home-links.module.ts",
@@ -2237,6 +2269,7 @@
     "packages/shared-types/src/event.ts",
     "packages/shared-types/src/extensions.ts",
     "packages/shared-types/src/feedback.ts",
+    "packages/shared-types/src/finance-device-sync.ts",
     "packages/shared-types/src/finance-drafts.ts",
     "packages/shared-types/src/finance-exchange-rates.ts",
     "packages/shared-types/src/finance-obligations.ts",

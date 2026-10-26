@@ -12,7 +12,8 @@ export const MODULE_GROUPS = new Map([
   ["opportunities-hh-import", "opportunities"],
   ["opportunities-manager", "opportunities"],
   ["opportunities-profiles", "opportunities"],
-  ["opportunity-extensions", "opportunities"]
+  ["opportunity-extensions", "opportunities"],
+  ["finance-device-sync", "finance"]
 ]);
 
 /**
@@ -53,7 +54,7 @@ export const MODEL_OWNERS = new Map([
   ...owned("habits", "Habit HabitEntry"),
   ...owned("lists", "List ListItem"),
   ...owned("events", "Event CalendarConnection EventOverride SentReminder"),
-  ...owned("finance", "Account FinanceCategory Transaction TransactionLine Budget RecurringTransaction CategoryRule FinanceObligation InvestmentTrade SavingsGoal FinanceTemplate FinanceSplit FinanceSplitShare FinanceSettlement FinanceExchangeRate FinanceDraft"),
+  ...owned("finance", "Account FinanceCategory Transaction TransactionLine FinanceDeviceVersion FinanceDeviceReceipt Budget RecurringTransaction CategoryRule FinanceObligation InvestmentTrade SavingsGoal FinanceTemplate FinanceSplit FinanceSplitShare FinanceSettlement FinanceExchangeRate FinanceDraft"),
   ...owned("markets", "MarketWatchItem"),
   ...owned("documents", "Document DocumentVersion DocumentAnnotation"),
   ...owned("inbox", "InboxItem"),

@@ -48,6 +48,7 @@ export const CORE_PLUGIN_IDS = [
   "calendar-widget",
   "finance-quick-entry",
   "finance-import",
+  "finance-device-sync",
   "finance-obligations",
   "finance-forecast",
   "inventory-costing",
@@ -404,6 +405,15 @@ const CORE_PLUGIN_CATALOG: readonly PluginManifest[] = [
     provides: ["Вкладка «Импорт»"],
     disableBehavior: "Вкладка скрывается; уже импортированные операции остаются, повторный импорт того же файла по-прежнему не дублирует их.",
     defaultEnabled: true
+  },
+
+  {
+    id: "finance-device-sync", extendsModuleId: "finance",
+    label: "Обмен финансами с устройствами",
+    summary: "Обмен счетами и операциями с доверенными устройствами. Включать после обновления обоих клиентов.",
+    provides: ["Обмен финансовыми операциями с устройствами", "Защита от повторной записи и конфликтов"],
+    disableBehavior: "Обмен остановлен; счета, операции и квитанции повторов сохранены.",
+    defaultEnabled: false
   },
   {
     id: "finance-obligations",

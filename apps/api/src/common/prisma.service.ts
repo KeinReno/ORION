@@ -47,11 +47,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    * those tables become visible to normal request-serving code — forgetting
    * to route a query through here makes it see nothing, not everything.
    */
-  async withUser<T>(userId: string, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  async withUser<T>(userId: string, fn: (tx: Prisma.TransactionClient) => Promise<T>, options?: { isolationLevel: Prisma.TransactionIsolationLevel }): Promise<T> {
     return this.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${userId}, true)`;
       return fn(tx);
-    });
+    }, options);
   }
 
   /**

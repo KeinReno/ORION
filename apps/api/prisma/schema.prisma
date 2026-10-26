@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  financeDeviceReceipts FinanceDeviceReceipt[]
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
@@ -163,6 +164,8 @@ model UserPreference {
 }
 
 model Workspace {
+  financeDeviceVersions FinanceDeviceVersion[]
+  financeDeviceReceipts FinanceDeviceReceipt[]
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
@@ -3656,4 +3659,33 @@ model SharedPublicationOperation {
   actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
   @@index([publicationId, createdAt])
   @@map("shared_publication_operations")
+}
+
+model FinanceDeviceVersion {
+ workspaceId String
+ entityId String
+ accountId String
+ toAccountId String?
+ revision Int @default(1)
+ deleted Boolean @default(false)
+ updatedAt DateTime @default(now())
+ workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+ @@id([workspaceId, entityId])
+ @@map("finance_device_versions")
+}
+
+model FinanceDeviceReceipt {
+ workspaceId String
+ userId String
+ deviceId String
+ opId String
+ entityId String
+ accountId String
+ bodyHash String
+ result Json
+ createdAt DateTime @default(now())
+ workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+ user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ @@id([workspaceId, userId, deviceId, opId])
+ @@map("finance_device_receipts")
 }

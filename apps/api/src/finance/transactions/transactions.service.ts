@@ -99,45 +99,52 @@ export class TransactionsService {
 
   async create(userId: string, workspaceId: string, input: CreateTransactionInput): Promise<Transaction> {
     assertTransactionShape(input);
-    const { transaction, alerts } = await this.prisma.withUser(userId, async (tx) => {
+    const { transaction, alerts } = await this.prisma.withUser(userId, async tx => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await assertAccountInWorkspace(tx, workspaceId, input.accountId);
-      if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
-      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
-      for (const line of input.lines) {
-        if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);
-      }
-      const created = await tx.transaction.create({
-        data: {
-          workspaceId,
-          accountId: input.accountId,
-          toAccountId: input.toAccountId ?? null,
-          type: input.type,
-          note: input.note,
-          tags: input.tags ?? [],
-          // The contract has accepted `projectId` since v0.14 and the column
-          // exists, but the service dropped it on the floor — a set project
-          // never survived the write.
-          projectId: input.projectId ?? null,
-          occurredAt: input.occurredAt,
-          lines: {
-            create: input.lines.map((line) => ({ workspaceId, categoryId: line.categoryId ?? null, amount: line.amount }))
-          }
-        },
-        include: { lines: true }
-      });
-      // Budget check inside the same transaction; the Telegram text goes out
-      // only after the commit (see BudgetAlertsService).
-      const alerts = await this.budgetAlerts.evaluate(
-        tx,
-        workspaceId,
-        created.lines.map((line) => line.categoryId),
-        created.occurredAt
-      );
-      return { transaction: created, alerts };
+      return this.createTx(tx, workspaceId, input);
     });
     await this.budgetAlerts.deliver(alerts);
     return toDto(transaction);
+  }
+
+  /** Same domain operation in a caller-owned RLS transaction (Finance SDK only). */
+  async createTx(tx: Prisma.TransactionClient, workspaceId: string, input: CreateTransactionInput, entityId?: string) {
+    assertTransactionShape(input);
+    await assertAccountInWorkspace(tx, workspaceId, input.accountId);
+    if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
+    if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
+    for (const line of input.lines) {
+      if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);
+    }
+    const created = await tx.transaction.create({
+      data: {
+        ...(entityId ? { id: entityId } : {}),
+        workspaceId,
+        accountId: input.accountId,
+        toAccountId: input.toAccountId ?? null,
+        type: input.type,
+        note: input.note,
+        tags: input.tags ?? [],
+        // The contract has accepted `projectId` since v0.14 and the column
+        // exists, but the service dropped it on the floor — a set project
+        // never survived the write.
+        projectId: input.projectId ?? null,
+        occurredAt: input.occurredAt,
+        lines: {
+          create: input.lines.map((line) => ({ workspaceId, categoryId: line.categoryId ?? null, amount: line.amount }))
+        }
+      },
+      include: { lines: true }
+    });
+    // Budget check inside the same transaction; the Telegram text goes out
+    // only after the commit (see BudgetAlertsService).
+    const alerts = await this.budgetAlerts.evaluate(
+      tx,
+      workspaceId,
+      created.lines.map((line) => line.categoryId),
+      created.occurredAt
+    );
+    return { transaction: created, alerts };
   }
 
   /**
@@ -222,69 +229,68 @@ export class TransactionsService {
     });
   }
 
-  async update(
-    userId: string,
-    workspaceId: string,
-    transactionId: string,
-    input: UpdateTransactionInput
-  ): Promise<Transaction> {
-    const { transaction, alerts } = await this.prisma.withUser(userId, async (tx) => {
+  async update(userId: string, workspaceId: string, transactionId: string, input: UpdateTransactionInput): Promise<Transaction> {
+    const { transaction, alerts } = await this.prisma.withUser(userId, async tx => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const current = await this.assertOwnedTx(tx, workspaceId, transactionId);
-
-      // Validate the *merged* picture — a PATCH touching only `note` must not
-      // have to resend accountId/lines just to pass the transfer/split check.
-      assertTransactionShape({
-        accountId: input.accountId ?? current.accountId,
-        toAccountId: input.toAccountId !== undefined ? input.toAccountId : current.toAccountId,
-        type: input.type ?? (current.type as CreateTransactionInput["type"]),
-        lines: input.lines ?? current.lines
-      });
-
-      if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
-      if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
-      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
-      if (input.lines) {
-        for (const line of input.lines) {
-          if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);
-        }
-      }
-
-      if (input.lines) {
-        // Full replace, same idiom as Note.tags — simpler and safer than
-        // diffing which lines changed for what's at most a handful of rows.
-        await tx.transactionLine.deleteMany({ where: { transactionId } });
-      }
-
-      const updated = await tx.transaction.update({
-        where: { id: transactionId },
-        data: {
-          accountId: input.accountId,
-          toAccountId: input.toAccountId,
-          type: input.type,
-          note: input.note,
-          tags: input.tags,
-          projectId: input.projectId,
-          occurredAt: input.occurredAt,
-          lines: input.lines
-            ? { create: input.lines.map((line) => ({ workspaceId, categoryId: line.categoryId ?? null, amount: line.amount })) }
-            : undefined
-        },
-        include: { lines: true }
-      });
-      // Re-checked after every edit (not only when lines change): moving an
-      // operation into another month can push that month's budget over. The
-      // dedup key is per (budget, month), so an alert is never repeated.
-      const alerts = await this.budgetAlerts.evaluate(
-        tx,
-        workspaceId,
-        updated.lines.map((line) => line.categoryId),
-        updated.occurredAt
-      );
-      return { transaction: updated, alerts };
+      return this.updateTx(tx, workspaceId, transactionId, input);
     });
     await this.budgetAlerts.deliver(alerts);
     return toDto(transaction);
+  }
+
+  async updateTx(tx: Prisma.TransactionClient, workspaceId: string, transactionId: string, input: UpdateTransactionInput) {
+    const current = await this.assertOwnedTx(tx, workspaceId, transactionId);
+
+    // Validate the *merged* picture — a PATCH touching only `note` must not
+    // have to resend accountId/lines just to pass the transfer/split check.
+    assertTransactionShape({
+      accountId: input.accountId ?? current.accountId,
+      toAccountId: input.toAccountId !== undefined ? input.toAccountId : current.toAccountId,
+      type: input.type ?? (current.type as CreateTransactionInput["type"]),
+      lines: input.lines ?? current.lines
+    });
+
+    if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
+    if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
+    if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
+    if (input.lines) {
+      for (const line of input.lines) {
+        if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);
+      }
+    }
+
+    if (input.lines) {
+      // Full replace, same idiom as Note.tags — simpler and safer than
+      // diffing which lines changed for what's at most a handful of rows.
+      await tx.transactionLine.deleteMany({ where: { transactionId } });
+    }
+
+    const updated = await tx.transaction.update({
+      where: { id: transactionId },
+      data: {
+        accountId: input.accountId,
+        toAccountId: input.toAccountId,
+        type: input.type,
+        note: input.note,
+        tags: input.tags,
+        projectId: input.projectId,
+        occurredAt: input.occurredAt,
+        lines: input.lines
+          ? { create: input.lines.map((line) => ({ workspaceId, categoryId: line.categoryId ?? null, amount: line.amount })) }
+          : undefined
+      },
+      include: { lines: true }
+    });
+    // Re-checked after every edit (not only when lines change): moving an
+    // operation into another month can push that month's budget over. The
+    // dedup key is per (budget, month), so an alert is never repeated.
+    const alerts = await this.budgetAlerts.evaluate(
+      tx,
+      workspaceId,
+      updated.lines.map((line) => line.categoryId),
+      updated.occurredAt
+    );
+    return { transaction: updated, alerts };
   }
 
   async remove(userId: string, workspaceId: string, transactionId: string): Promise<void> {
@@ -326,7 +332,7 @@ type TransactionRow = {
   lines: { id: string; categoryId: string | null; amount: number }[];
 };
 
-function toDto(transaction: TransactionRow): Transaction {
+export function toDto(transaction: TransactionRow): Transaction {
   return {
     id: transaction.id,
     workspaceId: transaction.workspaceId,
