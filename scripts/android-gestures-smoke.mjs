@@ -37,6 +37,7 @@ try {
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
     await page.getByRole("button", { name: "Переместить задачу: " + title, exact: true }).waitFor();
   }
+  await page.setViewportSize({ width: 412, height: 1400 });
   const names = async () => page.locator(".task-row .entry-main strong").allTextContents();
   const before = await names();
   const handle = page.getByRole("button", { name: "Переместить задачу: " + before[0], exact: true });

@@ -128,3 +128,70 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .restore-confirm .update-actions{margin-top:12px;flex-wrap:wrap}
 
 .restore-file{overflow-wrap:anywhere;color:var(--muted)}
+
+/* Alpha.22: content first, compact view controls, and readable capture surfaces. */
+.view-presets { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 12px; }
+.view-presets button { flex:1 1 auto; min-height:44px; padding:8px 14px; border:1px solid var(--line); border-radius:24px; font-size:.85rem; }
+.view-presets button[aria-pressed=true] { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.view-options { border:1px solid var(--line); border-radius:16px; margin:0 0 8px; background:var(--raised); }
+.view-options > summary { display:flex; align-items:center; gap:10px; min-height:52px; padding:12px 16px; cursor:pointer; list-style:none; font-size:.85rem; }
+.view-options > summary::-webkit-details-marker { display:none; }
+.view-options > summary > span:not(.filter-count) { flex:1; }
+.view-options .disclosure-chevron { flex-shrink:0; transition:transform .18s ease; }
+.view-options[open] .disclosure-chevron { transform:rotate(180deg); }
+.filter-count { display:inline-flex; align-items:center; justify-content:center; min-width:24px; min-height:24px; border-radius:50%; color:var(--on-accent); background:var(--accent); font-size:.75rem; }
+.view-options .module-filters { border-top:1px solid var(--line); padding:16px; }
+.results-line { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; margin:12px 0; min-height:32px; }
+.results-line p { font-size:.75rem; }
+.results-line .text-button { font-size:.75rem; padding:6px 0; min-height:44px; }
+.task-list > li { margin-bottom:12px; border:0; padding:0; background:none; }
+.task-list .task-row { border-radius:18px; padding:14px; background:var(--raised); }
+.task-list .task-row { display:grid; grid-template-columns:48px minmax(0,1fr) 44px; gap:4px 8px; }
+.task-list .check-button { grid-column:1; grid-row:1; align-self:start; min-width:48px; }
+.task-list .entry-main { grid-column:2; grid-row:1; padding:4px 0 0; }
+.task-list .entry-menu-button { grid-column:3; grid-row:1; }
+.task-list .task-grip { grid-column:3; grid-row:2; justify-self:end; }
+.task-list :is(.entry-menu-button,.task-grip) { min-width:44px; width:44px; min-height:44px; padding:10px; background:transparent; }
+.task-row .entry-main strong,.note-depth-row .entry-main strong { font-size:1.02rem; line-height:1.4; letter-spacing:-.01em; }
+.task-row .entry-main .excerpt { margin:8px 0; }
+.entry-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.entry-badge { padding:4px 8px; border:1px solid var(--line); border-radius:8px; color:var(--muted); font-size:.7rem; line-height:1.5; }
+.entry-badge.important,.entry-badge.overdue { color:var(--accent); border-color:var(--accent); }
+.entries.notes > li { display:block; padding:0; border:0; margin-bottom:12px; background:none; }
+.notes .note-depth-row { padding:16px; border-radius:18px; background:var(--raised); }
+.note-depth-row { display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:4px 12px; }
+.note-depth-row .entry-main { grid-column:1; grid-row:1 / span 2; padding:2px 0 10px; }
+.note-depth-row .entry-menu-button { grid-column:2; grid-row:1; }
+.note-depth-row > .icon-button:not(.entry-menu-button) { grid-column:2; grid-row:2; }
+.note-depth-row .icon-button { width:44px; min-width:44px; min-height:44px; padding:10px; background:transparent; }
+.note-depth-row .excerpt { margin:10px 0; line-height:1.6; }
+.note-tags { color:var(--accent); font-size:.75rem; margin-bottom:8px; overflow-wrap:anywhere; }
+.finance-form { margin-top:18px; padding:18px; border:1px solid var(--line); border-radius:20px; background:var(--raised); }
+.finance-form fieldset { margin:0; padding:0; border:0; min-width:0; }
+.finance-form legend { margin-bottom:16px; color:var(--muted); font-size:.8rem; }
+.finance-types { padding:4px; background:var(--surface); border:1px solid var(--line); border-radius:16px; margin:0 0 20px; }
+.finance-types button { background:transparent; border:0; font-size:.85rem; }
+.finance-types button[aria-pressed=true] { background:var(--accent); color:var(--on-accent); }
+.finance-form .finance-amount { background:var(--surface); font-size:2.6rem; min-height:90px; border-color:var(--line); }
+.finance-categories button { background:var(--surface); border-radius:12px; }
+.finance-details { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding-bottom:8px; }
+.finance-details summary { color:var(--text); }
+.finance-history-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+.finance-history-heading h2 { margin-bottom:4px; }
+.finance-history-heading input { width:auto; max-width:100%; min-width:0; }
+.finance-totals { padding:0; background:none; }
+.finance-net { grid-column:1 / -1; padding-top:12px; border-top:1px solid var(--line); }
+.finance-net dd { color:var(--accent); }
+.finance-entries li { border-bottom:1px solid var(--line); padding:14px 0; }
+.finance-entry-amount.is-income { color:var(--accent); }
+@media(max-width:380px) { .finance-form { padding:14px; } .task-list .task-row { padding:12px 10px; } }
+@media(prefers-reduced-motion:reduce) { .view-options .disclosure-chevron { transition:none; } }
+
+/* Keep scrolled content behind Android's status/cutout area, not behind its icons. */
+body::before { content:""; position:fixed; inset:0 0 auto; height:max(env(safe-area-inset-top),var(--safe-area-inset-top,0px)); background:var(--surface); z-index:80; pointer-events:none; }
+.editor-bar { top:max(env(safe-area-inset-top),var(--safe-area-inset-top,0px)); }
+
+.replica-banner { display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:8px; align-items:center; padding:10px 12px; }
+.replica-banner p { font-size:.78rem; line-height:1.5; overflow-wrap:anywhere; }
+.replica-banner .helper { font-size:.7rem; margin:4px 0 0; }
+.replica-banner .icon-button { min-width:44px; width:44px; min-height:44px; padding:10px; align-self:center; }

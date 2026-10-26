@@ -20,8 +20,10 @@ try {
  };
  await create("Я задача","Низкий","2026-11-03T18:00"); await create("А задача","Высокий","2026-11-02T18:00");
  const titles=()=>page.locator(".task-row .entry-main strong").allTextContents();
+  if (!(await page.getByLabel("Порядок задач",{exact:true}).isVisible())) await page.getByLabel("Фильтры задач",{exact:true}).click();
  for(const order of ["title","due","priority"]) {await page.getByLabel("Порядок задач",{exact:true}).selectOption(order); assert.deepEqual(await titles(),["А задача","Я задача"]);}
  assert.equal(await page.getByRole("button",{name:"Переместить задачу: А задача",exact:true}).isDisabled(),true);
+  if (!(await page.getByLabel("Порядок задач",{exact:true}).isVisible())) await page.getByLabel("Фильтры задач",{exact:true}).click();
  await page.getByLabel("Порядок задач",{exact:true}).selectOption("manual");
  assert.equal(await page.getByRole("button",{name:"Переместить задачу: А задача",exact:true}).isEnabled(),true);
  await page.reload();
@@ -44,6 +46,7 @@ try {
   await page.getByText("Предпросмотр Markdown",{exact:true}).click(); assert.equal(await page.getByLabel("Текст заметки",{exact:true}).inputValue(),source);
   await page.getByRole("button",{name:"Сохранить",exact:true}).click(); await page.getByRole("heading",{name:"Заметки",exact:true}).waitFor();
  }
+  if (!(await page.getByLabel("Порядок заметок",{exact:true}).isVisible())) await page.getByLabel("Фильтры заметок",{exact:true}).click();
  await page.getByLabel("Порядок заметок",{exact:true}).selectOption("title"); assert.deepEqual((await page.locator(".notes .entry-main strong").allTextContents()).map(x=>x.trim()),["А заметка","Я заметка"]);
  await page.getByRole("button",{name:/Я заметка/}).filter({has:page.locator("strong")}).click(); await page.getByRole("switch",{name:"Закрепить заметку",exact:true}).check(); await page.getByRole("button",{name:"Сохранить",exact:true}).click();
  await page.locator(".notes > li").first().filter({hasText:"Я заметка"}).waitFor();

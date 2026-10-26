@@ -1,3 +1,6 @@
+<!-- Android branch alpha.22 (26.10.2026): compact task/note filters, readable
+Markdown excerpts, finance hierarchy and safe-area fix. Physical OPPO Android15
+upgrade/SQLite CRUD/keyboard PASS; LAN requires hybrid mode. See android/RELEASE_ALPHA22.md. -->
 <!-- Android branch alpha.21 (25.10.2026): progressive connection UI, truthful host
 indicator, finance disclosure/reflow and draft navigation feedback fixes.
 See android/RELEASE_ALPHA21.md; physical OPPO acceptance pending. -->

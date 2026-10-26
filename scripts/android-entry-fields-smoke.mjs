@@ -17,9 +17,11 @@ try {
   await page.getByRole("radio",{name:"Высокий",exact:true}).check();
   await page.getByRole("button",{name:"Сохранить",exact:true}).click();
   await page.locator(".task-row").filter({hasText:"Проверить срок"}).waitFor();
+  if (!(await page.getByLabel("Порядок задач",{exact:true}).isVisible())) await page.getByLabel("Фильтры задач",{exact:true}).click();
   await page.getByLabel("Срок задач",{exact:true}).selectOption("overdue");
   assert.equal(await page.locator(".task-row").count(),1);
   assert.equal(await page.getByRole("button",{name:"Переместить задачу: Проверить срок"}).isDisabled(),true);
+  if (!(await page.getByLabel("Порядок задач",{exact:true}).isVisible())) await page.getByLabel("Фильтры задач",{exact:true}).click();
   await page.getByLabel("Статус задач",{exact:true}).selectOption("done");
   await page.getByRole("heading",{name:"Ничего не найдено",exact:true}).waitFor();
   await page.getByRole("button",{name:"Сбросить фильтры задач",exact:true}).click();
@@ -45,6 +47,7 @@ try {
   await page.screenshot({path:out+"/note-editor.png",fullPage:true});
   await page.getByRole("button",{name:"Сохранить",exact:true}).click();
   await page.locator(".notes .excerpt").filter({hasText:"Коротко о главном"}).waitFor();
+  if (!(await page.getByLabel("Порядок заметок",{exact:true}).isVisible())) await page.getByLabel("Фильтры заметок",{exact:true}).click();
   await page.getByLabel("Тег заметок",{exact:true}).selectOption("идеи");
   await page.getByLabel("Только закреплённые",{exact:true}).check();
   assert.equal(await page.locator(".notes > li").count(),1);

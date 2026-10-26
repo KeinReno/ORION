@@ -37,7 +37,7 @@ try {
  await page.getByRole("heading",{name:"Домашний ПК",exact:true}).waitFor();
  await page.getByText("1. Устройство сопряжено. Теперь войдите в аккаунт компьютера.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Задачи",exact:true}).click();
- await page.getByRole("status").filter({hasText:"Для обмена войдите в аккаунт ПК"}).waitFor();
+ await page.getByRole("status").filter({hasText:"Связь с ПК: войдите в аккаунт"}).waitFor();
  await page.getByRole("button",{name:"Связь и обмен",exact:true}).click();
  await page.reload();await page.getByText("Доверенный компьютер найден. Его сертификат проверен; адрес обновлён.",{exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>localStorage.getItem("address")),"192.168.1.99");assert.equal(await page.evaluate(()=>window.__begins),0,"remembered device needs no new approval");
