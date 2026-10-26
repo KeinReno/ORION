@@ -146,6 +146,17 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
     expect(phone.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(true);
   });
 
+  it("causal watermark does not include another workspace's future stamps", async () => {
+    const own = await hybridSetup("clock-owner");
+    const foreign = await hybridSetup("clock-foreign");
+    const future = op(foreign.deviceId, { entity: "list", entityId: randomUUID(), kind: "create", fields: { name: "Private clock" } }, Date.now() + 3_600_000);
+    expect((await foreign.call<PushSyncOpsResult>("POST", "/sync/ops", { protocol: 1, deviceId: foreign.deviceId, ops: [future] })).data.results[0]?.outcome).toBe("applied");
+    const snapshot = (await own.call<ReplicaSnapshot>("GET", "/sync/replica?protocol=1")).data;
+    expect(snapshot.serverHlc < future.hlc).toBe(true);
+    expect(snapshot.entities.list).toHaveLength(0);
+    expect((await own.call("GET", `/sync/replica/changes?protocol=1&cursor=${encodeURIComponent(snapshot.cursor)}`)).status).toBe(200);
+  });
+
   it("пространство не в гибриде: снимок и приём отвечают 409, режим меняет только владелец", async () => {
     const s = await setup("mode");
     const before = await s.call<{ code: string }>("GET", `/sync/replica?protocol=1`);

@@ -18,6 +18,12 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch / Windows beta.25: workspace exchange link in network settings;
+causal HLC watermark fix for device clock skew;15 real PostgreSQL sync tests pass.
+Installer runtime boots on an isolated profile. Existing desktop restarted into
+a different node/profile; original phone connection and in-place installation
+are not accepted. See [scoped report](android/SYNC_WINDOWS_BETA25.md).
+
 
 > **Статус документа:** оперативная сводка с изменениями по 26.10.2026; для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.
 
