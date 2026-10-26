@@ -54,6 +54,8 @@ health=`ok`, database=`ok`, update tag=`v0.1.0-windows-beta.25`.
 
 Before updating, stopped the installed runtime and PostgreSQL (graceful INT)
 and saved a cold private database/config/trust copy outside the repository.
+This is a copy of the located profile; its identity has not been matched to the
+phone's remembered host, so it is not proof of a backup of that original host.
 After restarting the existing beta.23, Windows opened a green `KAIDEN` workspace
 and a local-mode node whose identity differs from the phone's remembered host
 and previous `Kaiden` workspace. The original connection has NOT been restored.
