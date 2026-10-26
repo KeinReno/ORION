@@ -140,3 +140,50 @@ Gateway читает проекты и ссылки через owner SDK; InboxA
 Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
 Gateway + Agent manager + AI bridge + Create-and-link — 36 сценариев.
 Финальная общая приёмка выполняется отдельно ниже.
+
+## Этап 16 — внутренние helper-импорты и итоговая проверка
+
+Удалён home-refs.util.ts: пять потребителей (Tasks, Lists, Inventory, Contacts,
+Finance Obligations) используют HomeReferences.assertTx. Ошибка 400, архивные
+ссылки, принадлежность пространству и исходный RLS сохранены. Проверка архитектуры
+теперь запрещает скрывать чужие delegate-запросы за непубличным helper-импортом.
+Явные public.ts/public-контракты владельцев и Core-only helpers остаются допустимы.
+31 тест checker, включая два новых негативных/позитивных сценария, прошёл.
+
+SDK-host интеграционный тест запускает команды/проекции без полных доменных
+модулей, контроллеров, cron и регистраций агрегатов; проверяет единый tx/rollback,
+двойное членство, RLS и приватные заметки.
+
+Браузерный Agent Manager приведён к текущему раскрываемому разделу настроек и
+точному тексту журнала (чтобы не спутать его с индикатором активности). Проверки
+согласования, применения, отмены и отзыва доступа сохранены; snapshots панелей
+не обновлялись.
+
+## Финальная приёмка, 26.10.2026
+
+- **Исключения: 17 → 0**, без изменения ownership map или расширения Core.
+- Unit: **191 файл, 1501 тест**, полный повторный прогон после изменений checker.
+- Integration: **110 файлов, 620 тестов; 1 прежний пропуск**, полный повторный
+  прогон после удаления helper. Изолированная БД orion_platform_integration на :5444.
+- Browser: **47 сценариев**, production API/web; все панели default-full и
+  plugins-off, Goals link/unlink, покупка/склад, расход/отмена очистки, агентское
+  предложение/подтверждение/журнал/undo/revoke. Изолированная orion_e2e, :4144/:3144.
+- Typecheck, production API + web build, architecture-check, plugin contracts
+  (включены в unit), contract snapshot, module-docs, platform-map — прошли.
+- ESLint: **0 ошибок, 30 существующих предупреждений** в полном прогоне;
+  новые/изменённые API, checker и browser test также проверены отдельно.
+- Схема БД, миграции, сохранённые данные и пользовательский дизайн не менялись.
+  Паспорта модулей, карта возможностей и индекс SDK актуализированы.
+- Platform API **1.9.0**, Integration API **1.8.0**.
+
+Воспроизведение: pnpm typecheck; pnpm lint; pnpm exec vitest run --maxWorkers=1
+--testTimeout=30000; pnpm exec vitest run --config vitest.integration.config.mts
+--maxWorkers=1 (DATABASE_URL/APP_DATABASE_URL только изолированной БД);
+pnpm architecture-check; pnpm module-docs:check; pnpm platform-map:check;
+node scripts/e2e-local.mjs e2e/panels.spec.ts e2e/project-goals-card.spec.ts
+e2e/lists.spec.ts e2e/lists-inventory.spec.ts e2e/agent-manager.spec.ts.
+
+Статический checker не разбирает произвольный SQL и неизвестные алиасы Prisma.
+Эти ограничения не использованы для переноса долга: реализации новых запросов
+находятся у владельцев в проверяемых .service.ts. Новая Windows-сборка/установка
+не входят в эту приёмку; проверены production API и браузерный веб-клиент.

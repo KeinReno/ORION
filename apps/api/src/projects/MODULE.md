@@ -14,6 +14,8 @@ Tasks использует публичные `ProjectTaskLinks` и `MilestoneRe
 
 Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneReader`: расчёт прогресса проектов остаётся каноническим, история и вехи читаются у владельцев. [Контракты](../../../../docs/platform-api/GOAL_PROJECTIONS.md).
 
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

@@ -10,6 +10,8 @@
 
 Ссылки проектов в операциях и шаблонах проверяет `ProjectReferences`; валюту для затрат читает `ProjectFinanceReader`. Оба Projects SDK используют исходную транзакцию/RLS, без полного ProjectsModule. Ошибки 400 и денежные расчёты остаются в Finance. [Контракт](../../../../docs/platform-api/PROJECT_FINANCE_READER.md).
 
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 
