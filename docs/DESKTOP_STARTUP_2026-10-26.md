@@ -66,3 +66,34 @@ beta23 эту правку доставить не может. Пользова�
 Этот отчёт не подтверждает установку нового NSIS, обновление личного профиля,
 полный реальный payload update/rollback, два физических ПК или Android. Известное
 ограничение GitHub Actions billing не заменяется утверждением об успешном CI.
+
+
+## Результат сборки и публикации
+
+[Windows beta24](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.24)
+опубликована 26.10.2026. Runtime source `4f705fa`; PR #77 merged в `a70c780`,
+деревья совпадают. Полный build: API, 54 static web pages, production deploy,
+Prisma generate, Rust release и NSIS — passed. Размер установщика **73964457 байт**;
+SHA-256 **fceff99093243270ae9bc53e34b7daf6fb6add2fb58cbcec48d77d0437523a35**.
+GitHub asset digest совпадает с локальным SHA-256. Authenticode: `NotSigned`.
+
+7-Zip проверил архив (11922 files / 413106835 uncompressed bytes). Из готового
+NSIS извлечены build.json, shell-contract.json, launcher.cjs и исполняемый файл:
+метаданные/контракт/launcher совпадают со staging, в release EXE есть встроенный
+экран запуска. В production runtime 143 миграции, `.env` отсутствуют. Сборщик
+payload корректно отклоняет обновление этого кода поверх immutable beta23 как
+требующее полного установщика.
+
+Комплектный Node/PG/API запущен отдельно от пользовательского ORION, с новым
+временным профилем, API 4144 и PG 55452. Health `status=ok`, `database=ok`,
+`updates/status.currentTag=v0.1.0-windows-beta.24`. Время до health **35529 мс**
+в условиях параллельной упаковки: подготовка ~2,4с, БД ~2,7с, миграции ~11,1с,
+сервер ~18,5с. Это первый запуск новой тестовой БД, не пользовательский benchmark.
+После проверки остановлены только собственные Node/API и PostgreSQL этого профиля.
+Отчёт ignored `tmp/beta24-runtime-smoke.json`.
+
+Повторный нативный payload UI fixture: **5 checks passed** (React hydration,
+ES module MIME, static route, trusted IPC, selection reload). Полный lint:
+0 errors / 30 прежних warnings. Native startup fixture: **2 passed**.
+GitHub Actions jobs 121458384819 / 121458287598 не стартовали: billing/spending.
+Ограничения установленного NSIS и реального payload update/rollback выше сохраняются.
