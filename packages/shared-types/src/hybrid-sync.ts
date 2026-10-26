@@ -146,6 +146,7 @@ const TASK_FIELDS = {
   description: z.string().max(20_000),
   status: taskStatusSchema,
   priority: taskPrioritySchema,
+  parentId: z.string().uuid().nullable(),
   dueAt: isoDate.nullable(),
   startAt: isoDate.nullable(),
   estimatedMinutes: z.number().int().min(0).max(10_000_000).nullable(),

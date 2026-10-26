@@ -17,6 +17,10 @@ export default tseslint.config(
       "**/src-tauri/gen/**",
       "**/src-tauri/resources/**",
       "**/generated/**",
+      // Capacitor copies bundled web/vendor assets here; source remains linted.
+      "apps/android/android/app/src/main/assets/**",
+      "apps/android/android/**/build/**",
+      "apps/android/android/capacitor-cordova-android-plugins/**",
       // Vendored pdf.js worker, copied into public/ by copy-pdf-worker.mjs.
       "apps/web/public/**",
       "**/*.config.js",

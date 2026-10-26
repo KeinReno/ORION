@@ -157,9 +157,11 @@ export class MemoryHost implements SyncTransport {
       fields: row?.fields ?? {},
       ...(row ? { revision: row.revision } : {})
     };
-    const parentRow = op.parentId ? this.rows.get(this.key("list", op.parentId)) : undefined;
-    const parent = op.parentId
-      ? { exists: Boolean(parentRow), deleted: !parentRow && this.tombstones.has(this.key("list", op.parentId)) }
+    const relationParentId = op.entity === "listItem" ? op.parentId : op.entity === "task" && typeof op.fields?.parentId === "string" ? op.fields.parentId : undefined;
+    const parentEntity = op.entity === "listItem" ? "list" : "task";
+    const parentRow = relationParentId ? this.rows.get(this.key(parentEntity, relationParentId)) : undefined;
+    const parent = relationParentId
+      ? { exists: Boolean(parentRow), deleted: !parentRow && this.tombstones.has(this.key(parentEntity, relationParentId)) }
       : null;
     const decision = decideOp(op, state, parent, this.nowMs);
     const result: SyncOpResult = {
@@ -169,17 +171,19 @@ export class MemoryHost implements SyncTransport {
       ...(decision.lost ? { lost: decision.lost } : {})
     };
     if (decision.create) {
+      const relationParentId = op.entity === "listItem" ? op.parentId ?? null : op.entity === "task" && typeof decision.create.parentId === "string" ? decision.create.parentId : null;
       this.rows.set(key, {
         fields: { ...decision.create },
         stamps: { ...(decision.stamps ?? {}) },
-        parentId: op.parentId ?? null,
+        parentId: relationParentId,
         createdAtMs: this.nowMs,
         updatedAtMs: this.nowMs,
         revision: 1
       });
-      this.touch(op.entity, op.entityId, op.parentId ?? null);
+      this.touch(op.entity, op.entityId, relationParentId);
     } else if (decision.set && row && Object.keys(decision.set).length > 0) {
       Object.assign(row.fields, decision.set);
+      if (op.entity === "task" && "parentId" in decision.set) row.parentId = typeof decision.set.parentId === "string" ? decision.set.parentId : null;
       Object.assign(row.stamps, decision.stamps);
       row.updatedAtMs = this.nowMs;
       row.revision += 1;
@@ -188,15 +192,8 @@ export class MemoryHost implements SyncTransport {
       this.rows.delete(key);
       this.tombstones.add(key);
       this.touch(op.entity, op.entityId, row.parentId);
-      if (op.entity === "list") {
-        for (const [childKey, child] of [...this.rows]) {
-          if (childKey.startsWith("listItem:") && child.parentId === op.entityId) {
-            this.rows.delete(childKey);
-            this.tombstones.add(childKey);
-            this.touch("listItem", childKey.slice("listItem:".length), op.entityId);
-          }
-        }
-      }
+      if (op.entity === "list") this.removeChildren("listItem", op.entityId);
+      if (op.entity === "task") this.removeChildren("task", op.entityId);
     }
     return result;
   }
@@ -224,6 +221,20 @@ export class MemoryHost implements SyncTransport {
     this.rows.delete(key);
     this.tombstones.add(key);
     this.touch(entity, id, row.parentId);
+    if (entity === "list") this.removeChildren("listItem", id);
+    if (entity === "task") this.removeChildren("task", id);
+  }
+
+  private removeChildren(entity: "listItem" | "task", parentId: string): void {
+    for (const [childKey, child] of [...this.rows]) {
+      if (childKey.startsWith(`${entity}:`) && child.parentId === parentId) {
+        const childId = childKey.slice(entity.length + 1);
+        this.rows.delete(childKey);
+        this.tombstones.add(childKey);
+        this.touch(entity, childId, parentId);
+        if (entity === "task") this.removeChildren("task", childId);
+      }
+    }
   }
 
   private touch(entity: SyncEntityType, id: string, parentId: string | null): void {

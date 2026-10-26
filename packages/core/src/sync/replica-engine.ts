@@ -94,6 +94,14 @@ function classify(error: unknown): ClassifiedError {
   return { kind: "other", message };
 }
 
+function removeTaskDescendants(tasks: ReplicaEntityMap["task"], parentId: string): void {
+  const children = Object.entries(tasks).filter(([, task]) => (task as { parentId?: string | null }).parentId === parentId);
+  for (const [id] of children) {
+    delete tasks[id];
+    removeTaskDescendants(tasks, id);
+  }
+}
+
 /**
  * Клиентская сторона гибридной синхронизации (ADR-0016). Хранит копию пространства и очередь операций,
  * отправляет их на авторитетный узел и подтягивает ленту изменений.
@@ -471,6 +479,7 @@ export class ReplicaEngine {
           if ((item as { listId?: string }).listId === change.id) delete state.entities.listItem[id];
         }
       }
+      if (change.entity === "task") removeTaskDescendants(state.entities.task, change.id);
       return;
     }
     const validated = this.validateDoc(change.entity, { ...change.doc, id: change.id });

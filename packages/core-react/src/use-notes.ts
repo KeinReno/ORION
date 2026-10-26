@@ -33,7 +33,9 @@ export function useNotes(
   const query = useQuery<Note[]>({
     queryKey: ["notes", workspaceId, view, templates ? "templates" : "notes", search ?? ""],
     queryFn: () => api.listNotes(workspaceId as string, search, view, templates),
-    enabled: Boolean(workspaceId) && !fromCopy
+    enabled: Boolean(workspaceId) && !fromCopy,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false
   });
   if (replica && fromCopy) {
     const notes = replica.engine

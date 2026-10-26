@@ -41,6 +41,7 @@ export function applyOpLocally(entities: ReplicaEntityMap, op: SyncOp, ctx: Over
         if ((item as { listId?: string }).listId === op.entityId) delete entities.listItem[id];
       }
     }
+    if (op.entity === "task") removeTaskDescendants(entities.task, op.entityId);
     return;
   }
   if (op.kind === "create") {
@@ -115,6 +116,14 @@ function defaultDoc(op: SyncOp, ctx: OverlayContext, stampIso: string): Record<s
     dependencyIds: [], blocked: false, assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: null, checklist: [],
     createdAt: stampIso, updatedAt: stampIso, ...fields
   };
+}
+
+function removeTaskDescendants(tasks: EntityDocs, parentId: string): void {
+  const children = Object.entries(tasks).filter(([, task]) => (task as { parentId?: string | null }).parentId === parentId);
+  for (const [id] of children) {
+    delete tasks[id];
+    removeTaskDescendants(tasks, id);
+  }
 }
 
 /** Копия + очередь поверх неё. Исходный `state.entities` не меняется. */

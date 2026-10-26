@@ -1,4 +1,58 @@
+<!-- Android branch alpha.23 (26.10.2026): compare only replica identity fields;
+workspaceName metadata no longer rejects valid copy as offline. Physical task
+phone→installed PC→phone/reload/delete PASS; see android/SYNC_LIVE_ALPHA23.md. -->
+<!-- Android branch alpha.22 (26.10.2026): compact task/note filters, readable
+Markdown excerpts, finance hierarchy and safe-area fix. Physical OPPO Android15
+upgrade/SQLite CRUD/keyboard PASS; LAN requires hybrid mode. See android/RELEASE_ALPHA22.md. -->
+<!-- Android branch alpha.21 (25.10.2026): progressive connection UI, truthful host
+indicator, finance disclosure/reflow and draft navigation feedback fixes.
+See android/RELEASE_ALPHA21.md; physical OPPO acceptance pending. -->
+<!-- Android alpha.20 (24.10.2026): scoped foreground sync driver and explicit
+pairing/login/workspace/local-only states. Desktop task/note query polling aligned.
+See android/SYNC_FOREGROUND_ALPHA20.md; physical LAN acceptance pending. -->
+<!-- Android branch alpha.19 (23.10.2026): native NSD, pinned remembered-host
+readdressing, desktop LAN identity/guidance. See android/LAN_DISCOVERY_ALPHA19.md.
+Hardware OPPO/Windows/VPN acceptance and new Windows installer pending. -->
+<!-- Android branch update 23.10.2026: alpha.18, 0.1.17/code18.
+Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
+See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
+
+Android branch alpha.26: foreground recovery ищет только прежний доверенный узел
+после сетевого сбоя; native NSD API34+ сохраняет все пригодные IPv4, а не один
+адрес интерфейса. На OPPO автоматически восстановлен endpoint4444→4443 с прежним
+snapshot/node/user. 120 профильных tests,11 JVM, typecheck/lint/contracts/docs/map,
+browser и Android Gradle checks прошли. [Отчёт](android/RELEASE_ALPHA26.md).
+Finance sync пока отсутствует; подготовлен
+[Extension Proposal](extensions/FINANCE_DEVICE_SYNC.md) для отдельного receipt/CAS
+канала без автоматической публикации локальных денег.
+
+Android branch alpha.25: wake при resume/online во время запроса больше не теряется;
+native active-state читается после регистрации listener с защитой от stale read.
+111 профильных тестов, typecheck/lint, architecture/contracts/docs/map, browser и
+Android Gradle checks прошли. На OPPO проверены реальный outage/restart сервера
+с доставкой одной queued заметки без дубля и блокировка/повторное открытие с
+восстановлением данных/привязки. Cleanup pending0/conflicts0. Подробности и границы:
+[Android alpha.25](android/RELEASE_ALPHA25.md).
+
+Android branch alpha.24: совместимое чтение старых задач без checklist в snapshot,
+replica и backup; индикатор свежего обмена независим от часов ПК; удаление общего
+списка после архива с защитой от concurrent unarchive. Физический OPPO upgrade
+сохранил данные; список phone→PC и checkbox PC→phone прошли автоматически;
+QA cleanup завершён pending0/conflicts0. 64 профильных теста после миграции,
+typecheck/lint, browser и Android Gradle checks прошли. Подробности и ограничения:
+[Android alpha.24](android/RELEASE_ALPHA24.md).
+
+Android branch / Windows beta.25: workspace exchange link in network settings;
+causal HLC watermark fix for device clock skew;15 real PostgreSQL sync tests pass.
+Installer runtime boots on an isolated profile. The MSIX profile mismatch was
+resolved; the obsolete virtualized profile was archived and the phone-linked
+Kaiden retained as the sole active workspace. Beta.25 files installed in the real
+installation; OPPO reconnected with existing trust and delivered its offline
+note once, then synthetic cleanup ended with pending0/conflicts0. See
+[recovery acceptance](android/PROFILE_CLEANUP_2026-10-26.md) and
+[earlier scoped report](android/SYNC_WINDOWS_BETA25.md).
+
 
 > **Статус документа:** оперативная сводка с изменениями по 26.10.2026; для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.
 
@@ -173,6 +227,63 @@ GitHub CI не стартует из-за billing; подробности осн
 Контракт: [ADR-0024](adr/ADR-0024-shared-publications.md). Проверки и ограничения: [отчёт первого этапа](SHARED_PUBLICATIONS_STAGE1.md). Это реализация для клиентов одного сервера; межузловой транспорт, общая модерация правок и Windows/Android-приёмка не заявляются завершёнными. Раздел ниже сохраняет историческое состояние master.
 
 ## Что в master
+
+### Android: отдельная ветка alpha, 23.10.2026
+
+Alpha.17 на Android-ветке (0.1.16/code17): восстановление задач, заметок, списков
+и финансов из переносимой копии с предпросмотром и режимами добавления/замены;
+чек-лист прямо при создании задачи с переносом строк описания; лёгкое
+Markdown-форматирование; исправлено одновременное выделение текста при долгом
+нажатии. 52 mobile-core + 9 task тестов, browser smoke, workspace checks и
+Android build/lint/JVM PASS; физическая установка на OPPO/LAN NOT RUN.
+[RELEASE_ALPHA17](android/RELEASE_ALPHA17.md).
+
+Alpha.16 на Android-ветке (0.1.15/code16): чек-листы внутри задач на существующем
+`parentId` — добавление, переименование, выполнение, каскадное удаление и прогресс,
+локально и в синхронизируемой копии. Focused unit/API, workspace typecheck/lint,
+architecture/plugin, browser smoke и Android build/lint/JVM PASS; физическая
+установка на OPPO/LAN NOT RUN. [RELEASE_ALPHA16](android/RELEASE_ALPHA16.md).
+
+Alpha.15 на Android-ветке (0.1.14/code15): безопасный lazy Markdown preview,
+сортировки задач/заметок, начало и плановые минуты задачи через существующий SyncOp.
+50 focused unit/12 browser scripts/11 plugin, workspace checks и Android builds/lint/JVM
+PASS; physical OPPO/LAN NOT RUN, tilt unchanged. [RELEASE_ALPHA15](android/RELEASE_ALPHA15.md).
+
+
+Alpha.14 на Android-ветке (0.1.13/code14): статусы/сроки задач и фильтры;
+summary/tags/pin заметок, независимый поиск. Optional draft fields без очистки
+legacy metadata; local/remote public SyncOp unchanged. 47 focused tests,
+11 browser scripts, 11 plugin, workspace typecheck/lint/architecture/module-docs
+и Android build/lint/JVM PASS. Физические OPPO/LAN NOT RUN, tilt не менялся.
+[Подробности alpha.14](android/RELEASE_ALPHA14.md).
+
+Alpha.13 на Android-ветке (0.1.12/code 13): bundled registry и typed routes,
+нижняя навигация с иконками, «Ещё», семь страниц настроек с поиском и независимыми
+записями полей; Lists с офлайн CRUD/черновиком/архивом и существующим SyncOp.
+44 focused unit, 11 plugin, 10 browser scripts, workspace typecheck/lint,
+architecture/module-docs и native build/lint/JVM PASS. OPPO/LAN физически NOT RUN.
+Полный dynamic SDK, остальные домены и media migration не реализованы.
+[Результаты alpha.13](android/RELEASE_ALPHA13.md),
+[архитектура](android/FRONTEND_ARCHITECTURE.md), [настройки](android/SETTINGS_SPEC.md).
+
+Alpha.12 на Android-ветке (0.1.11/code 12): явные действия edit/delete для task/note,
+durable delete через существующий протокол, цельная плоскость interactive cards,
+усиление depth до 28°/32px. 36 mobile-core и 11 plugin tests, 9 browser scripts,
+workspace typecheck/lint, architecture/module-docs и native build/lint/JVM PASS;
+физические OPPO sensor/UX и настоящий LAN exchange NOT RUN в этом сеансе.
+Подробности: [RELEASE_ALPHA12](android/RELEASE_ALPHA12.md).
+
+Alpha.2 (0.1.1/code 2): настройки темы, автоматическая проверка и
+необязательная загрузка по Wi-Fi, проверяемый APK и системная установка.
+Источник APK отдельно от приватных исходников, по разрешению владельца.
+[Результаты и ограничения](android/RELEASE_ALPHA2.md).
+
+Ветка `feature/android-foundation-20261021` добавляет самостоятельный клиент
+для OPPO Reno8 5G: задачи, заметки, черновик, нативное SQLite-хранилище,
+общие контракты операций и LAN-профиль подготовки. Серверные API, desktop
+и миграции не меняются. LAN-клиент реализован начиная с alpha.3; физический обмен требует отдельной приёмки.
+Документы и точные границы проверок: [Android](android/README.md),
+[релиз](android/RELEASE.md). Это сводка ветки, не утверждение о слиянии в master.
 
 Сведение всех копий 17.10 (PR #2): локальный master (LAN, личные и общие пространства, Agent Gateway, MCP, Agent Manager, гибридная синхронизация, здоровье, цели, финансы), редизайн KAIDEN (PR #1, [HANDOFF](KAIDEN_ORION_REDESIGN_2026/HANDOFF.md)), Opportunity Hub, перенесённые исправления 27.09 (PR #3), пробелы Agent Manager (PR #4). Подробности сведения — в истории этого файла (`git log docs/STATUS.md`).
 

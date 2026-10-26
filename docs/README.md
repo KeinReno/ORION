@@ -16,7 +16,7 @@
 | Гибридная синхронизация (локальные копии, очередь записи; списки → заметки и задачи) | [SYNC.md](SYNC.md), [ADR-0016](adr/ADR-0016-hybrid-sync-protocol.md), [tz/TZ-06-hybrid-sync.md](tz/TZ-06-hybrid-sync.md) |
 | Orion Link: LAN, WebDAV/S3, будущий собственный сервер (**спецификация, не готовый транспорт**) | [ORION_LINK_ARCHITECTURE.md](ORION_LINK_ARCHITECTURE.md) |
 | Orion Agent Hub: общие задачи и сообщения между подписочными агентами (**проект**) | [AGENT_HUB_ARCHITECTURE.md](AGENT_HUB_ARCHITECTURE.md) |
-| Orion Android: автономная работа OnePlus, темы, устройства и синхронизация (**план**) | [ANDROID_CLIENT_PLAN.md](ANDROID_CLIENT_PLAN.md) |
+| Orion Android: OPPO Reno8 5G, офлайн alpha задач/заметок; LAN пока подготовлен | [android/README.md](android/README.md), [план полного MVP](ANDROID_CLIENT_PLAN.md) |
 | Выход в закрытую бету | [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) |
 | Автономный Windows-установщик | [WINDOWS_INSTALLER.md](WINDOWS_INSTALLER.md) |
 | Подписанные пакеты UI/API, совместимость и откат | [DESKTOP_PAYLOAD_UPDATES.md](DESKTOP_PAYLOAD_UPDATES.md), [beta 23 acceptance](WINDOWS_BETA23_2026-10-26.md) |

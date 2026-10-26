@@ -34,6 +34,9 @@ for (const name of ['.env', '.env.example', '.data', 'apps', 'tmp', 'src', 'test
 }
 if (existsSync(join(api, '.env'))) throw new Error('Secret .env would be bundled');
 run(process.execPath, [join(api, 'node_modules', 'prisma', 'build', 'index.js'), 'generate', `--schema=${join(api, 'prisma', 'schema.prisma')}`], { ...process.env, DATABASE_URL: 'postgresql://placeholder:placeholder@127.0.0.1:5433/orion' });
+// Prisma's download cache is not runtime code. Its nested filenames can exceed
+// NSIS's Windows path limit in a long checkout; generated client/engines stay intact.
+rmSync(join(api, 'node_modules', '@prisma', 'engines', 'node_modules', '.cache'), { recursive: true, force: true });
 cpSync(process.execPath, join(stage, 'node.exe'));
 cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'launcher.cjs'), join(stage, 'launcher.cjs'));

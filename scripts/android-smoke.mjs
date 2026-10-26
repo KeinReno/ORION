@@ -1,0 +1,76 @@
+// Synthetic browser smoke for the shared mobile UI; not Android device acceptance.
+import { chromium } from "@playwright/test";
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+const output = process.env.ANDROID_SMOKE_OUTPUT || "test-results/android";
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+let page;
+try {
+  const context = await browser.newContext({ viewport: { width: 412, height: 915 }, colorScheme: "dark" });
+  page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(process.env.ANDROID_SMOKE_URL || "http://127.0.0.1:3180");
+  await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByLabel("Название", { exact: true }).fill("Проверить офлайн-записи");
+  await page.getByLabel("Описание", { exact: true }).fill("Закрыть приложение и вернуться к делу");
+  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await page.getByText("Проверить офлайн-записи", { exact: true }).waitFor();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Завершить: Проверить офлайн-записи" }).click();
+  await page.getByRole("button", { name: "Вернуть в работу: Проверить офлайн-записи" }).waitFor();
+  await context.setOffline(false);
+  await page.reload();
+  await page.getByRole("button", { name: "Вернуть в работу: Проверить офлайн-записи" }).waitFor();
+  await page.screenshot({ path: output + "/tasks-dark.png", fullPage: true });
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByLabel("Название", { exact: true }).fill("Мысль по дороге домой");
+  await page.getByLabel("Текст заметки", { exact: true }).fill("## Не потерять\nТекст **без изменений**, даже без интернета.");
+  await page.getByText("Черновик сохранён на телефоне", { exact: true }).waitFor();
+  await page.reload();
+  await page.getByRole("button", { name: /Продолжить черновик/ }).click();
+  assert.equal(await page.getByLabel("Текст заметки", { exact: true }).inputValue(), "## Не потерять\nТекст **без изменений**, даже без интернета.");
+  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  await page.getByRole("button", { name: "В архив: Мысль по дороге домой" }).click();
+  await page.getByRole("button", { name: "Архив", exact: true }).click();
+  await page.getByRole("button", { name: "Вернуть из архива: Мысль по дороге домой" }).click();
+  await page.getByRole("button", { name: "Все заметки", exact: true }).click();
+  await page.getByLabel("Поиск", { exact: true }).fill("не существует");
+  await page.getByText("Ничего не найдено", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Очистить поиск" }).click();
+  await page.screenshot({ path: output + "/notes-dark.png", fullPage: true });
+  await page.getByRole("button", { name: "Связь", exact: true }).click();
+  await page.getByText("Компьютер не найден? Ввести адрес", { exact: true }).click();
+  await page.getByLabel("Адрес компьютера").fill("192.168.1.20");
+  await page.getByLabel("Порт", { exact: true }).fill("4443");
+  await page.getByRole("button", { name: "Сохранить профиль" }).click();
+  await page.getByText("Профиль сохранён. Подключение пока не выполнялось.").waitFor();
+  await page.reload();
+  await page.getByRole("button", { name: "Связь", exact: true }).click();
+  if (!(await page.getByLabel("Адрес компьютера").isVisible())) await page.getByText("Компьютер не найден? Ввести адрес", { exact: true }).click();
+  assert.equal(await page.getByLabel("Адрес компьютера").inputValue(), "192.168.1.20");
+  await page.screenshot({ path: output + "/connection-dark.png", fullPage: true });
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: output + "/notes-light-320.png", fullPage: true });
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByLabel("Название", { exact: true }).fill("Черновик для возврата");
+  await page.getByRole("button", { name: "Назад к списку, оставить черновик" }).click();
+  await page.getByRole("button", { name: /Продолжить черновик/ }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log("PASS: create, offline completion, restart, draft recovery, Markdown preservation, archive/restore, search, LAN profile persistence, 320px layout, Back; no page errors.");
+  await context.close();
+} catch (error) {
+  if (page) {
+    console.error(await page.locator("body").innerText());
+    await page.screenshot({ path: output + "/failure.png", fullPage: true });
+  }
+  throw error;
+} finally { await browser.close(); }

@@ -4,7 +4,6 @@ import {
   parseHlc,
   syncFieldNames,
   SYNC_MAX_CLOCK_SKEW_MS,
-  type SyncEntityType,
   type SyncOp,
   type SyncOutcome,
   type SyncReason
@@ -74,7 +73,7 @@ export function decideOp(
   if (op.kind === "create") {
     if (state.deleted) return conflict("entity_deleted");
     if (state.exists) return { outcome: "duplicate", reason: "exists" };
-    if (requiresParent(op.entity)) {
+    if (requiresParent(op)) {
       if (!parent) return reject("parent_missing");
       if (parent.deleted) return conflict("parent_deleted");
       if (!parent.exists) return reject("parent_missing");
@@ -85,7 +84,7 @@ export function decideOp(
 
   // patch
   if (!state.exists) return state.deleted ? conflict("entity_deleted") : reject("entity_gone");
-  if (requiresParent(op.entity) && parent?.deleted) return conflict("parent_deleted");
+  if (requiresParent(op) && parent?.deleted) return conflict("parent_deleted");
 
   // Заметка: слияния нет, только CAS. Задача: CAS только если автор его запросил.
   if (op.entity === "note" && op.expectedRevision === undefined) return reject("invalid");
@@ -125,8 +124,8 @@ export function decideOp(
   return { outcome: "merged", set, stamps, lost };
 }
 
-function requiresParent(entity: SyncEntityType): boolean {
-  return entity === "listItem";
+function requiresParent(op: Pick<SyncOp, "entity" | "fields">): boolean {
+  return op.entity === "listItem" || (op.entity === "task" && typeof op.fields?.parentId === "string");
 }
 
 function stampAll(fields: Record<string, unknown>, hlc: string): Record<string, string> {

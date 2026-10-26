@@ -18,7 +18,8 @@ export function useTasks(workspaceId: string | undefined, search?: string, assig
     queryKey: ["tasks", workspaceId, search ?? "", assignedToMe ?? false],
     queryFn: () => api.listTasks(workspaceId as string, search, assignedToMe),
     enabled: Boolean(workspaceId) && !fromCopy,
-    refetchInterval: 60_000
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false
   });
   if (replica && fromCopy) return fromReplica(query, replica, replica.engine.tasks());
   return query;

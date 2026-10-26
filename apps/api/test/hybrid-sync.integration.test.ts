@@ -86,8 +86,8 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
   }
 
   async function getTask(call: Awaited<ReturnType<typeof setup>>["call"], id: string) {
-    const all = await call<Array<{ id: string; status: string; priority: string; completedAt: string | null }>>("GET", "/tasks");
-    return all.data.find((task) => task.id === id) as { id: string; status: string; priority: string; completedAt: string | null };
+    const all = await call<Array<{ id: string; parentId: string | null; status: string; priority: string; completedAt: string | null }>>("GET", "/tasks");
+    return all.data.find((task) => task.id === id) as { id: string; parentId: string | null; status: string; priority: string; completedAt: string | null };
   }
 
   let seq = 0;
@@ -116,6 +116,46 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
       return this.ok(request(`/workspaces/${this.ws}/sync/ops`, { method: "POST", token: this.token, body: input }));
     }
   }
+
+  it("observed writes remain editable when another device clock is ahead", async () => {
+    const s = await hybridSetup("clock-skew");
+    const transport = new HttpTransport(s.token, s.ws);
+    const phone = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws, now: () => Date.now() + 80_000 });
+    const pc = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws });
+    await phone.sync();
+    await pc.sync();
+    const listId = randomUUID();
+    const itemId = randomUUID();
+    await phone.enqueue({ entity: "list", entityId: listId, kind: "create", fields: { name: "Clock test" } });
+    await phone.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "create", fields: { label: "Phone item", checked: true } });
+    await phone.sync();
+    await pc.sync();
+    expect(pc.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(true);
+    await pc.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "patch", fields: { checked: false } });
+    await pc.sync();
+    expect(pc.conflicts()).toEqual([]);
+    await phone.sync();
+    expect(phone.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(false);
+    // A fresh installation must learn the same causal clock from a snapshot.
+    const fresh = new ReplicaEngine({ transport, storage: new MemoryReplicaStorage(), userId: "owner", workspaceId: s.ws });
+    await fresh.sync();
+    await fresh.enqueue({ entity: "listItem", entityId: itemId, parentId: listId, kind: "patch", fields: { checked: true } });
+    await fresh.sync();
+    expect(fresh.conflicts()).toEqual([]);
+    await phone.sync();
+    expect(phone.lists().lists.find(l => l.id === listId)?.items[0]?.checked).toBe(true);
+  });
+
+  it("causal watermark does not include another workspace's future stamps", async () => {
+    const own = await hybridSetup("clock-owner");
+    const foreign = await hybridSetup("clock-foreign");
+    const future = op(foreign.deviceId, { entity: "list", entityId: randomUUID(), kind: "create", fields: { name: "Private clock" } }, Date.now() + 3_600_000);
+    expect((await foreign.call<PushSyncOpsResult>("POST", "/sync/ops", { protocol: 1, deviceId: foreign.deviceId, ops: [future] })).data.results[0]?.outcome).toBe("applied");
+    const snapshot = (await own.call<ReplicaSnapshot>("GET", "/sync/replica?protocol=1")).data;
+    expect(snapshot.serverHlc < future.hlc).toBe(true);
+    expect(snapshot.entities.list).toHaveLength(0);
+    expect((await own.call("GET", `/sync/replica/changes?protocol=1&cursor=${encodeURIComponent(snapshot.cursor)}`)).status).toBe(200);
+  });
 
   it("пространство не в гибриде: снимок и приём отвечают 409, режим меняет только владелец", async () => {
     const s = await setup("mode");
@@ -395,6 +435,13 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
     expect(taskMade.data.results[0]?.outcome).toBe("applied");
     expect((await getTask(s.call, taskId))).toMatchObject({ status: "in_progress", priority: "low" });
 
+    const checklistId = randomUUID();
+    const checklistMade = await push([op(s.deviceId, { entity: "task", entityId: checklistId, kind: "create", fields: { title: "Проверить документы", parentId: taskId } }, t0 + 1)]);
+    expect(checklistMade.data.results[0]?.outcome).toBe("applied");
+    expect(await getTask(s.call, checklistId)).toMatchObject({ parentId: taskId, status: "todo" });
+    const missingParent = await push([op(s.deviceId, { entity: "task", entityId: randomUUID(), kind: "create", fields: { title: "Сирота", parentId: randomUUID() } }, t0 + 2)]);
+    expect(missingParent.data.results[0]).toMatchObject({ outcome: "rejected", reason: "parent_missing" });
+
     const done = await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "patch", fields: { status: "done" } }, t0 + 100)]);
     expect(done.data.results[0]?.outcome).toBe("applied");
     const afterDone = (await getTask(s.call, taskId));
@@ -416,6 +463,7 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
 
     await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "delete" })]);
     expect(await getTask(s.call, taskId)).toBeUndefined();
+    expect(await getTask(s.call, checklistId)).toBeUndefined();
     const late = await push([op(s.deviceId, { entity: "task", entityId: taskId, kind: "patch", fields: { title: "позже" } }, t0 + 900)]);
     expect(late.data.results[0]).toMatchObject({ outcome: "conflict", reason: "entity_deleted" });
   });
