@@ -42,7 +42,7 @@ function owned(owner, models) {
 export const MODEL_OWNERS = new Map([
   // G5/G10: модели модулей, подключённых манифестом, вносит генератор (scripts/module-registry.mjs).
   ...GENERATED_MODEL_OWNERS,
-  ...owned("shared", "SharedPublication SharedPublicationPin SharedPublicationOperation"),
+  ...owned("shared", "SharedPublication SharedPublicationPin SharedPublicationOperation PublicationRule"),
   ...owned("projects", "Project ProjectStatusUpdate"),
   ...owned("milestones", "Milestone MilestoneDependency"),
   ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),

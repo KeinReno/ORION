@@ -154,6 +154,7 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   OpportunityImport: never("Состояние фонового импорта выполняет узел."),
   NoteLink: never("Производное от тела заметки; пересчитывает узел."),
   CalendarConnection: never("Внешние фиды тянет узел (SSRF-заслон), клиент их не правит офлайн."),
+  PublicationRule: never("Правила раскрытия данных действуют только на авторитетном узле; restore всегда останавливает, ADR-0035."),
   SharedPublication: never("Публикации обслуживает авторитетный узел, ADR-0024."),
   SharedPublicationPin: never("Личные закрепления публикаций, ADR-0024."),
   SharedPublicationOperation: never("Журнал полномочий публикаций, ADR-0024."),

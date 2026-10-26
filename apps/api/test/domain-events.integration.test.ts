@@ -1,7 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { SchedulerRegistry } from "@nestjs/schedule";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
@@ -39,7 +39,19 @@ describe("Domain event bus (outbox)", () => {
     prisma = app.get(PrismaService);
     bus = app.get(DomainEventBus);
     dispatcher = app.get(DomainEventDispatcherService);
-  });
+    await drainReadyBacklog();
+  }, 120000);
+
+  beforeEach(async () => { await drainReadyBacklog(); }, 120000);
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  async function drainReadyBacklog() {
+    // Every Tasks write now produces an event. These single-batch worker tests
+    // must start behind unrelated fixture backlog, not assume a globally empty DB.
+    const backlog = await prisma.asSystem(async tx => (await tx.domainEvent.count({ where: { dispatchedAt: null } })) +
+      (await tx.domainEventDelivery.count({ where: { status: "pending", nextAttemptAt: { lte: new Date() } } })));
+    for (let pass = 0; pass <= Math.ceil(backlog / 100) + 1; pass++) await dispatcher.runOnce();
+  }
 
   afterAll(async () => {
     vi.restoreAllMocks();
@@ -116,9 +128,9 @@ describe("Domain event bus (outbox)", () => {
     // The actor never notifies themself.
     expect(await closedNotifications(alice, alice.workspaceId)).toHaveLength(0);
 
-    // Re-closing is not a transition: no second event.
+    // Re-closing is not a closed transition: no second closed event (changed still records the write).
     await request(`/workspaces/${alice.workspaceId}/tasks/${task.data.id}`, { method: "PATCH", token: alice.accessToken, body: { status: "done" } });
-    expect(await prisma.asSystem((tx) => tx.domainEvent.count({ where: { workspaceId: alice.workspaceId } }))).toBe(1);
+    expect(await prisma.asSystem((tx) => tx.domainEvent.count({ where: { workspaceId: alice.workspaceId, type: "tasks.task.closed" } }))).toBe(1);
 
     // Force a redelivery of the very same event: the handler runs again, the notification is not duplicated.
     await prisma.asSystem((tx) =>
@@ -148,10 +160,18 @@ describe("Domain event bus (outbox)", () => {
   it("a failing handler is retried with backoff and ends up failed after the attempt limit; publishing is unaffected", async () => {
     const alice = await register("alice-fail");
     const real = bus.subscriberById(SUBSCRIBER_ID)!;
-    vi.spyOn(bus, "subscriberById").mockReturnValue({ ...real, handle: async () => { throw new Error("handler down"); } });
+    const lookup = bus.subscriberById.bind(bus);
+    let failingEventId: string | null = null;
+    vi.spyOn(bus, "subscriberById").mockImplementation(subscriberId => subscriberId === SUBSCRIBER_ID
+      ? { ...real, handle: async (event, tx) => {
+          if (event.id === failingEventId) throw new Error("handler down");
+          await real.handle(event, tx);
+        } }
+      : lookup(subscriberId));
     const id = await prisma.withUser(alice.userId, (tx) =>
       bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", actorId: alice.userId, payload: payload("t4") })
     );
+    failingEventId = id;
     await dispatcher.runOnce();
     let delivery = await deliveryFor(id);
     expect(delivery).toMatchObject({ status: "pending", attempts: 1, lastError: "handler down" });

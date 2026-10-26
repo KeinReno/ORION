@@ -21,6 +21,12 @@ Tasks использует публичные `ProjectTaskLinks` и `MilestoneRe
 
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
+Автопубликация Tasks использует тот же PublicationRegistry: `ruleCandidates` фильтрует
+источник и формирует только разрешённую проекцию. Shared не запрашивает Task/Project.
+`TasksService` пишет `tasks.task.changed` в transactional outbox при create/update/delete
+и создании повторяющейся задачи. Периодическая сверка покрывает изменения вне сервиса.
+Контракт: [правила публикации](../../../../docs/platform-api/PUBLICATION_RULES.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 
@@ -33,7 +39,7 @@ Tasks использует публичные `ProjectTaskLinks` и `MilestoneRe
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `projects`, `calendar`, `time` |
 | Права (permissions) | `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete` |
-| События | публикует: `tasks.task.closed`; слушает: `tasks.task.closed` |
+| События | публикует: `tasks.task.changed`, `tasks.task.closed`; слушает: `tasks.task.changed`, `tasks.task.closed` |
 | Панели веба | `tasks` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/tasks` |

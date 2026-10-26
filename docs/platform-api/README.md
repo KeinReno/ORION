@@ -9,9 +9,11 @@
 
 ## Индекс контрактов
 
+[Правила публикации Tasks](PUBLICATION_RULES.md): явное согласие на будущие записи, предпросмотр, outbox, отзыв и безопасный restore (ADR-0035).
+
 Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
 [синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
-Текущие версии: Integration API 1.8.0, Platform API 1.9.0. Историческая строка Integration API ниже
+Текущие версии: Integration API 1.9.0, Platform API 1.10.0, Event API 1.1.0. Историческая строка Integration API ниже
 описывает исходный срез, до появления этих контрактов.
 
 Завершение оставшихся 17 межмодульных исключений: [Owner SDKs](MODULE_BOUNDARY_SDKS.md),

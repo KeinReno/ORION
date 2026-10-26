@@ -22,6 +22,7 @@ export interface DomainEventDefinition {
 }
 
 export const DOMAIN_EVENT_CATALOG = {
+  "tasks.task.changed": { version: 1, publisher: "tasks", payload: z.object({ id: z.string().min(1) }).strict() },
   "tasks.task.closed": { version: 1, publisher: "tasks", payload: tasksTaskClosedPayloadSchema }
 } as const satisfies Record<string, DomainEventDefinition>;
 
@@ -70,6 +71,7 @@ export interface DomainEventSubscription {
 }
 
 export const DOMAIN_EVENT_SUBSCRIPTIONS = [
+  { id: "tasks.publish-selected-tasks", componentId: "tasks", types: ["tasks.task.changed"] },
   { id: "tasks.notify-assignee-on-close", componentId: "tasks", types: ["tasks.task.closed"] }
 ] as const satisfies readonly DomainEventSubscription[];
 

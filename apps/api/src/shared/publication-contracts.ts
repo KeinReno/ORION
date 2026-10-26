@@ -1,11 +1,13 @@
 import type { Prisma } from "@prisma/client";
-import type { PublicationContent, PublicationKind, PublicationSource, TaskStatus } from "@orion/shared-types";
+import type { PublicationContent, PublicationKind, PublicationSource, PublicationRuleConfig, TaskStatus } from "@orion/shared-types";
 
 /** Registered by domain modules; no concrete module imports in the publication host. */
 export interface PublicationAdapter {
   kind: PublicationKind;
   read(tx: Prisma.TransactionClient, source: PublicationSource): Promise<{ content: PublicationContent; revision: number }>;
   copy(tx: Prisma.TransactionClient, userId: string, workspaceId: string, content: PublicationContent): Promise<string>;
+  /** Owner-scoped source filtering; the host never queries a concrete module table. */
+  ruleCandidates?(tx: Prisma.TransactionClient, config: PublicationRuleConfig, sourceId?: string): Promise<Array<{ sourceId: string; revision: number; content: PublicationContent }>>;
   changeStatus?(tx: Prisma.TransactionClient, publisherId: string, source: PublicationSource, revision: number, status: TaskStatus, actorLabel: string): Promise<number>;
 }
 
