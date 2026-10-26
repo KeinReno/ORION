@@ -39,7 +39,7 @@ import { nextListId } from "../lib/list-nav";
 import { DUE_BUCKET_LABEL, dueBucket, type DueBucket } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
-import { useFocusedTaskId, useTasksFilterRequest, useTasksProjectSignal } from "../lib/panel-bus";
+import { useTaskFocusRequest, useTasksFilterRequest, useTasksProjectSignal } from "../lib/panel-bus";
 import { usePublishResourceContext } from "../lib/resource-context-store";
 import {
   TASK_PRIORITY_LABEL,
@@ -241,13 +241,16 @@ export function TasksPanel(): React.ReactElement {
   // panels/tasks/subtasks.tsx, чтобы доска осталась про раскладку.
   const { dragOverKey, setDragOverKey, dropOnTask, moveToNeighbor } = useTaskReorder(tasks, updateTask.mutate);
 
-  const focusedTaskId = useFocusedTaskId();
+  // `request` (not request?.id) in the deps: a fresh nonce on every focusTask() call is what lets
+  // focusing the same task a second time in a row keep opening it instead of silently no-oping.
+  const taskFocusRequest = useTaskFocusRequest();
+  const focusedTaskId = taskFocusRequest?.id ?? null;
   useEffect(() => {
-    if (focusedTaskId) {
-      setEditingId(focusedTaskId);
-      setSelectedId(focusedTaskId);
+    if (taskFocusRequest) {
+      setEditingId(taskFocusRequest.id);
+      setSelectedId(taskFocusRequest.id);
     }
-  }, [focusedTaskId, setEditingId]);
+  }, [taskFocusRequest, setEditingId]);
 
   const projectSignal = useTasksProjectSignal();
   useEffect(() => {

@@ -63,7 +63,7 @@ import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { projectColor, relativeTime } from "../lib/format";
 import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
-import { openPanel, useFocusedNoteId } from "../lib/panel-bus";
+import { openPanel, useNoteFocusRequest } from "../lib/panel-bus";
 import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { detachPanelToWindow } from "../lib/panel-window";
 import { nextListId } from "../lib/list-nav";
@@ -148,9 +148,11 @@ export function NotesPanel(): React.ReactElement {
     if (!projectsOn) setProjectFilter(null);
   }, [projectsOn]);
 
-  const focusedNoteId = useFocusedNoteId();
+  // `noteFocusRequest` (not its id) in the deps: a fresh nonce on every focusNote() call is what lets
+  // focusing the same note a second time in a row keep selecting it instead of silently no-oping.
+  const noteFocusRequest = useNoteFocusRequest();
   useEffect(() => {
-    if (!focusedNoteId) return;
+    if (!noteFocusRequest) return;
     requestLeave(() => {
       setView("active");
       setTemplatesView(false);
@@ -158,9 +160,9 @@ export function NotesPanel(): React.ReactElement {
       setTagFilters([]);
       setProjectFilter(null);
       setPinnedOnly(false);
-      setSelectedId(focusedNoteId);
+      setSelectedId(noteFocusRequest.id);
     });
-  }, [focusedNoteId, requestLeave]);
+  }, [noteFocusRequest, requestLeave]);
 
   function toggleTagFilter(tag: string): void {
     setTagFilters((cur) => (cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]));

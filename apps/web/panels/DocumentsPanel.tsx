@@ -64,7 +64,7 @@ import { DocThumbnail } from "./documents/thumbnail";
 import type { DocumentCreateAction } from "../lib/extensions/contracts";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
-import { useFocusedDocumentId } from "../lib/panel-bus";
+import { useDocumentFocusRequest } from "../lib/panel-bus";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { useViewState } from "../lib/use-view-state";
 import { documentsViewStateSchema } from "@orion/shared-types";
@@ -129,10 +129,12 @@ export function DocumentsPanel(): React.ReactElement {
   // U02: "связанные записи" elsewhere (a task/note/transaction) jump here via
   // focusDocument(id) (apps/web/lib/panel-bus.ts) — open its preview Sheet the
   // same way a row click does, not a second navigation mechanism.
-  const focusedDocumentId = useFocusedDocumentId();
+  // `documentFocusRequest` (not its id) in the deps: a fresh nonce on every focusDocument() call is
+  // what lets focusing the same document a second time in a row keep opening it instead of no-oping.
+  const documentFocusRequest = useDocumentFocusRequest();
   useEffect(() => {
-    if (focusedDocumentId) selectFile(focusedDocumentId);
-  }, [focusedDocumentId, selectFile]);
+    if (documentFocusRequest) selectFile(documentFocusRequest.id);
+  }, [documentFocusRequest, selectFile]);
   const [sort, setSort] = useState<SortKey>("name");
   const [layout, setLayout] = useState<Layout>("list");
   const [groupFilter, setGroupFilter] = useState<DocGroup | null>(null);
