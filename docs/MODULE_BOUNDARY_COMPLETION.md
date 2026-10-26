@@ -100,3 +100,13 @@ Bridge сохраняет порядок блокировок, повторну�
 расчёт пополнения и уведомление после commit. Полные ListsModule/InventoryModule
 для SDK не загружаются. Проверено: architecture-check, API typecheck, focused
 ESLint; Lists Inventory + Inventory concurrency — 7 сценариев.
+
+## Этап 12 — Home: 4 → 3
+
+Home получает привязанные записи и команды переноса от Tasks, Lists, Inventory,
+Finance; Contacts владеет CRUD домашних контактов. TaskJournalReader отдаёт ленту,
+TaskTimeReader — время для вклада участников, без чужого relation include в Tasks.
+Сохранены ограничения модулей, пределы выборок, архивы, отвязка только от данного
+дома, телефон/phones, расчёт вклада и отслеживаемое время. Схема не менялась.
+Проверено: architecture-check, API typecheck после уточнения TaskStatus в контракте,
+ESLint всего API (0 ошибок, прежнее предупреждение Knowledge), Home integration (7).
