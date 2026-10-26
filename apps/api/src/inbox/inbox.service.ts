@@ -112,7 +112,8 @@ export class InboxService {
       const inbox = await tx.inboxItem.findUnique({ where: { id: itemId } });
       if (!inbox || inbox.workspaceId !== workspaceId) throw new NotFoundException("Запись Inbox не найдена");
       if (inbox.processedAt) return inbox;
-      await this.assertProjectTx(tx, userId, workspaceId, input.projectId ?? inbox.projectId);
+      const resolvedProjectId = input.projectId === undefined ? inbox.projectId : input.projectId;
+      await this.assertProjectTx(tx, userId, workspaceId, resolvedProjectId);
 
       // Claim first, create the target second. The predicate below is the
       // actual concurrency barrier — the preceding `findUnique` above is
@@ -137,7 +138,7 @@ export class InboxService {
         inbox,
         input.kind,
         input.dueAt === undefined ? inbox.dueAt : input.dueAt,
-        input.projectId === undefined ? inbox.projectId : input.projectId
+        resolvedProjectId
       );
       return tx.inboxItem.update({
         where: { id: itemId },
