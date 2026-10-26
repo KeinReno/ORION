@@ -1,7 +1,13 @@
 // Browser-only evidence for mobile settings; native APK installation is separate.
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+const source = await readFile("apps/android/src/updates.ts", "utf8");
+const currentVersion = /ANDROID_VERSION = "([^"]+)"/.exec(source)?.[1];
+const currentCode = Number(/ANDROID_VERSION_CODE = (\d+)/.exec(source)?.[1]);
+if (!currentVersion || !currentCode) throw new Error("Cannot read current Android version");
+const versionParts = currentVersion.split("."); versionParts[2] = String(Number(versionParts[2]) + 1);
+const nextVersion = versionParts.join(".");
 const output = process.env.ANDROID_SMOKE_OUTPUT || "test-results/android-alpha2";
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
@@ -17,9 +23,9 @@ try {
   await page.route("https://raw.githubusercontent.com/KeinReno/ORION-Android-Releases/main/android-update.json", async (route) => {
     requests++;
     if (mode === "offline") { await route.abort("failed"); return; }
-    const code = mode === "new" ? 24 : 23;
-    const version = mode === "new" ? "0.1.23" : "0.1.22";
-    const tag = mode === "new" ? "v0.1.23-android-alpha.24" : "v0.1.22-android-alpha.23";
+    const code = mode === "new" ? currentCode + 1 : currentCode;
+    const version = mode === "new" ? nextVersion : currentVersion;
+    const tag = `v${version}-android-alpha.${code}`;
     await route.fulfill({ contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({
       schemaVersion: 1, applicationId: "io.kaiden.orion.android",
       versionCode: code, versionName: version, tag,
@@ -34,7 +40,7 @@ try {
   await page.getByRole("heading", { name: "Задачи", exact: true }).waitFor();
   await page.getByRole("button", { name: /Настройки/ }).click();
   await page.getByRole("link", { name: /Обновления/ }).click();
-  await page.getByText("Доступна версия 0.1.23", { exact: true }).waitFor();
+  await page.getByText("Доступна версия " + nextVersion, { exact: true }).waitFor();
   assert.equal(requests, 1);
   await page.getByText("Что изменилось", { exact: true }).click();
   await page.getByText("Тестовый будущий релиз. Проверка описания обновлений.", { exact: true }).waitFor();

@@ -33,6 +33,18 @@ async function createSource(): Promise<string> {
   return createPortableBackup(repo.snapshot());
 }
 
+it("reads legacy backup tasks with absent checklists without changing other backup data", async () => {
+  const raw = await createSource();
+  const legacy = JSON.parse(raw);
+  for (const task of legacy.local.tasks) delete task.checklist;
+  const inspection = inspectPortableBackup(JSON.stringify(legacy));
+  expect(inspection.ok).toBe(true);
+  if (!inspection.ok) throw new Error(inspection.error);
+  expect(inspection.backup.local.tasks.every(task => task.checklist.length === 0)).toBe(true);
+  expect(inspection.backup.local.notes).toEqual(legacy.local.notes);
+  expect(inspection.backup.local.finance).toEqual(legacy.local.finance);
+});
+
 async function createTarget(): Promise<{ repo: MobileRepository; disk: Disk }> {
   const disk = new Disk(); const repo = await MobileRepository.open(disk);
   await repo.patchSettings({ theme: "dark", depthStrength: 87 });

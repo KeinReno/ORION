@@ -18,6 +18,14 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch alpha.24: совместимое чтение старых задач без checklist в snapshot,
+replica и backup; индикатор свежего обмена независим от часов ПК; удаление общего
+списка после архива с защитой от concurrent unarchive. Физический OPPO upgrade
+сохранил данные; список phone→PC и checkbox PC→phone прошли автоматически;
+QA cleanup завершён pending0/conflicts0. 64 профильных теста после миграции,
+typecheck/lint, browser и Android Gradle checks прошли. Подробности и ограничения:
+[Android alpha.24](android/RELEASE_ALPHA24.md).
+
 Android branch / Windows beta.25: workspace exchange link in network settings;
 causal HLC watermark fix for device clock skew;15 real PostgreSQL sync tests pass.
 Installer runtime boots on an isolated profile. The MSIX profile mismatch was

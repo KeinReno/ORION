@@ -13,6 +13,25 @@ const draft = (kind: "task" | "note", title = "Запись"): Draft => ({
 });
 
 describe("Android local repository", () => {
+  it("opens legacy tasks without checklists while preserving identity, content and queued operations", async () => {
+    const disk = new Disk(); const original = await MobileRepository.open(disk);
+    await original.saveEntry(draft("task", "Legacy task"));
+    await original.saveEntry(draft("note", "Retained note"));
+    const before = original.snapshot();
+    const legacy = JSON.parse(disk.raw!);
+    delete legacy.tasks[0].checklist;
+    disk.raw = JSON.stringify(legacy);
+    const reopened = await MobileRepository.open(disk);
+    expect(reopened.snapshot()).toEqual(before);
+    await reopened.saveDraft(draft("task", "Retained draft"));
+    expect((await MobileRepository.open(disk)).snapshot()).toEqual(reopened.snapshot());
+    const malformed = JSON.parse(disk.raw!);
+    malformed.tasks[0].checklist = null;
+    disk.raw = JSON.stringify(malformed);
+    const rawBefore = disk.raw;
+    await expect(MobileRepository.open(disk)).rejects.toThrow();
+    expect(disk.raw).toBe(rawBefore);
+  });
   it("keeps task planning fields durable and validates minutes without discarding drafts", async () => {
     const disk = new Disk(); const repo = await MobileRepository.open(disk);
     await repo.saveEntry({ ...draft("task"), startAt: "2026-11-01T12:00:00.000Z", estimatedMinutesText: "45" });

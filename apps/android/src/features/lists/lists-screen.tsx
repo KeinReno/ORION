@@ -18,6 +18,7 @@ export function ListsScreen({ lists, initialDraft, busy, available, canItems, re
   const [deleting, setDeleting] = useState<{ list: List; itemId?: string; label: string } | null>(null);
   const selected = lists.find((list) => list.id === selectedId);
   const disabled = busy || savingDraft;
+  const deleteNeedsArchive = Boolean(remote && deleting && !deleting.itemId && !lists.find(list => list.id === deleting.list.id)?.archivedAt);
   async function change(next: MobileListDraft) {
     setDraft(next); setError("");
     try { await saveDraft(next); } catch { setError("Черновик не записан на диск. Не закрывайте приложение и повторите сохранение."); }
@@ -48,7 +49,8 @@ export function ListsScreen({ lists, initialDraft, busy, available, canItems, re
         <h2>{selected.name}</h2><p className="helper">Отмечено {selected.items.filter((item) => item.checked).length} из {selected.items.length}</p>
         <div className="list-actions"><button disabled={disabled || selected.isTemplate} onClick={() => begin("list", null, selected.id, selected.name)}><Pencil size={18} />Изменить список</button>
           <button disabled={disabled || selected.isTemplate} onClick={() => void mutate({ entity: "list", kind: "patch", id: selected.id, fields: { archivedAt: selected.archivedAt ? null : new Date().toISOString() } })}>{selected.archivedAt ? <RotateCcw size={18} /> : <Archive size={18} />}{selected.archivedAt ? "Вернуть из архива" : "В архив"}</button>
-          <button disabled={disabled || selected.isTemplate} onClick={() => setDeleting({ list: selected, label: selected.name })}><Trash2 size={18} />Удалить список…</button></div>
+          <button disabled={disabled || selected.isTemplate || (remote && !selected.archivedAt)} aria-describedby={remote && !selected.archivedAt ? "list-delete-archive-help" : undefined} onClick={() => setDeleting({ list: selected, label: selected.name })}><Trash2 size={18} />Удалить список…</button></div>
+        {remote && !selected.archivedAt && <p id="list-delete-archive-help" className="helper">Чтобы удалить список компьютера, сначала нажмите «В архив». Из архива его можно вернуть или удалить окончательно.</p>}
         {!selected.isTemplate && canItems && <button className="primary" disabled={disabled} onClick={() => begin("item", selected.id)}><Plus size={18} />Добавить пункт</button>}
         {selected.isTemplate && <p className="helper">Шаблон можно просмотреть. Создание списка из шаблона пока доступно на компьютере.</p>}
         {!canItems && <p className="helper">Пункты недоступны для изменения в этой копии.</p>}
@@ -71,7 +73,9 @@ export function ListsScreen({ lists, initialDraft, busy, available, canItems, re
     </>}
     {deleting && <section className="list-delete" role="region" aria-label="Подтверждение удаления"><h2>Удалить {deleting.itemId ? "пункт" : "список"} «{deleting.label}»?</h2>
       <p>{deleting.itemId ? "Будет удалён только этот пункт." : `Будет удалён список и ${deleting.list.items.length} пунктов.`} {remote ? "Изменение отправится при синхронизации." : "Отмены удаления в этой версии нет."}</p>
-      <div className="list-actions"><button className="danger-action" disabled={disabled} onClick={async () => {
+      {deleteNeedsArchive && <p role="alert">Список больше не в архиве. Закройте подтверждение и сначала уберите его в архив.</p>}
+      <div className="list-actions"><button className="danger-action" disabled={disabled || deleteNeedsArchive} onClick={async () => {
+        if (deleteNeedsArchive) return;
         if (await mutate({ entity: deleting.itemId ? "listItem" : "list", kind: "delete", id: deleting.itemId ?? deleting.list.id, ...(deleting.itemId ? { parentId: deleting.list.id } : {}) })) {
           if (draft && (draft.id === (deleting.itemId ?? deleting.list.id) || (!deleting.itemId && draft.parentId === deleting.list.id))) setDraft(null);
           if (!deleting.itemId) select(); setDeleting(null);

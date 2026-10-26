@@ -29,6 +29,22 @@ async function connected(io = new Copies(), host = new MemoryHost()) {
   return { client, io, host };
 }
 describe("Mobile remote replica and portable backup", () => {
+  it("opens a legacy cached task without losing queued edits or its scope", async () => {
+    const { client, io, host } = await connected();
+    await client.saveEntry({ ...draft("Legacy cached task"), kind: "task" });
+    await client.sync();
+    await client.saveEntry({ ...draft("Queued legacy edit"), kind: "task", id: client.engine.tasks()[0].id });
+    const before = JSON.parse(io.data.get(client.key)!);
+    const task = Object.values(before.replica.entities.task)[0] as Record<string, unknown>;
+    delete task.checklist;
+    io.data.set(client.key, JSON.stringify(before));
+    const reopened = await MobileRemoteClient.create(scope, io, host);
+    expect(reopened.engine.tasks()[0].checklist).toEqual([]);
+    expect(reopened.engine.status().pending).toBe(before.replica.pending.length);
+    await reopened.sync();
+    expect(reopened.engine.status().pending).toBe(0);
+    expect(reopened.engine.tasks()).toHaveLength(1);
+  });
   it("accepts workspace selection metadata while retaining strict identity isolation", async () => {
     const io = new Copies(); const host = new MemoryHost();
     const selected = { ...scope, workspaceName: "Kaiden" };

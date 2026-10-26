@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { LIST_ITEMS_MAX, listSchema, noteSchema, taskSchema, type List, type Note, type Task } from "@orion/shared-types";
+import { LIST_ITEMS_MAX, listSchema, noteSchema, type List, type Note, type Task } from "@orion/shared-types";
+import { persistedTaskSchema } from "./persisted-task";
 import { createMobileFinance, mobileFinanceSchema, type FinanceDraft, type MobileFinance } from "./mobile-finance";
 import { draftSchema, type Draft } from "./mobile-models";
 import { mobileListDraftSchema, type MobileListDraft } from "./mobile-lists";
@@ -9,10 +10,10 @@ export const portableBackupSchema = z.object({
   format: z.literal("kaiden-orion-android-backup"),
   version: z.literal(1),
   createdAt: z.string().datetime(),
-  local: z.object({ finance: mobileFinanceSchema.nullable().default(null), lists: z.array(listSchema).default([]), listDrafts: z.record(mobileListDraftSchema).default({}), tasks: z.array(taskSchema), notes: z.array(noteSchema), draft: draftSchema.nullable(), remoteDrafts: z.record(draftSchema) }),
+  local: z.object({ finance: mobileFinanceSchema.nullable().default(null), lists: z.array(listSchema).default([]), listDrafts: z.record(mobileListDraftSchema).default({}), tasks: z.array(persistedTaskSchema), notes: z.array(noteSchema), draft: draftSchema.nullable(), remoteDrafts: z.record(draftSchema) }),
   remote: z.object({
     nodeId: z.string(), workspaceId: z.string(), workspaceName: z.string(),
-    tasks: z.array(taskSchema), notes: z.array(noteSchema), lists: z.array(listSchema).default([]),
+    tasks: z.array(persistedTaskSchema), notes: z.array(noteSchema), lists: z.array(listSchema).default([]),
     conflicts: z.array(z.object({ entity: z.string(), entityId: z.string(), fields: z.record(z.unknown()).optional(), lost: z.record(z.unknown()).optional(), outcome: z.string() })).default([]),
   }).nullable(),
 });

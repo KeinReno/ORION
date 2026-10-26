@@ -370,7 +370,7 @@ export default function App() {
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
   ]}><div className="shell"><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
-      indicator={connectionIndicator(Boolean(connection.state?.paired), Boolean(connection.state?.user), connection.client?.engine.status())}
+      indicator={connectionIndicator(Boolean(connection.state?.paired), Boolean(connection.state?.user), connection.client?.engine.status(), connection.confirmedAt)}
       updated={Boolean(updates.state?.available)} settings={() => setTab("settings")} connection={() => setTab("connection")} />
     <main className="content">
       <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "settings" ? settingsPage?.label ?? "Настройки" : tab === "connection" ? "Связь с компьютером" : tab === "more" ? "Ещё" : activeModule?.label ?? "Раздел"}</h1>

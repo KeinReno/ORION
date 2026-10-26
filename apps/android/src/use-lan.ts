@@ -15,6 +15,7 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
   const [accounts, setAccounts] = useState<AccountPublic[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [client, setClient] = useState<MobileRemoteClient | null>(null);
+  const [confirmation, setConfirmation] = useState<{ client: MobileRemoteClient; at: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [syncError, setSyncError] = useState("");
@@ -25,7 +26,18 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
   const [driverEpoch, setDriverEpoch] = useState(0);
   const publishRef = useRef(publish); publishRef.current = publish;
   const current = useRef(client); current.current = client;
-  useEffect(() => client?.engine.subscribe(() => redraw((value) => value + 1)), [client]);
+  useEffect(() => {
+    if (!client) return;
+    let previousPhase = client.engine.status().phase;
+    return client.engine.subscribe(() => {
+      const status = client.engine.status();
+      if (previousPhase === "syncing" && status.phase === "idle" && status.hasCopy) {
+        setConfirmation({ client, at: performance.now() });
+      }
+      previousPhase = status.phase;
+      redraw((value) => value + 1);
+    });
+  }, [client]);
 
   useEffect(() => {
     if (!client) return;
@@ -110,6 +122,7 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
     await selected.sync();
     if (!selected.engine.hasCopy()) throw new Error(selected.engine.status().message ?? "Не удалось загрузить пространство");
     await repository.setRemote(selection, true); publishRef.current(repository.snapshot()); setClient(selected);
+    if (selected.engine.status().phase === "idle") setConfirmation({ client: selected, at: performance.now() });
     setMessage(selected.engine.status().phase === "idle" ? "Пространство ПК открыто. Задачи, заметки и списки обмениваются автоматически, пока Orion открыт." : "Открыта сохранённая копия. Подтверждения от ПК пока нет — проверьте статус обмена.");
   });
   const sync = () => run(async () => {
@@ -153,6 +166,7 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
     setMessage(keepMine ? "Ваша правка снова в очереди. Отправим автоматически, пока Orion открыт." : "Оставлена версия компьютера.");
   });
   const reloadWorkspaces = () => run(async () => { setWorkspaces(await lan.workspaces()); });
-  return { syncError, nodes, searched, discover, reconnect, state, pairing, accounts, workspaces, client, busy, error, message, begin, poll, login, connect, sync,
+  const confirmedAt = client && confirmation?.client === client ? confirmation.at : null;
+  return { confirmedAt, syncError, nodes, searched, discover, reconnect, state, pairing, accounts, workspaces, client, busy, error, message, begin, poll, login, connect, sync,
     importLocal, switchSpace, disconnect, resolveConflict, reloadWorkspaces };
 }

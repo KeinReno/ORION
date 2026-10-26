@@ -2,6 +2,7 @@ import { listSchema } from "@orion/shared-types";
 import { mobileListDraftSchema, prepareListMutation, projectMobileListOp, type MobileListDraft, type MobileListMutation } from "./mobile-lists";
 export * from "./mobile-lists";
 import { z } from "zod";
+import { persistedTaskSchema } from "./persisted-task";
 export * from "./android-updates";
 export * from "./mobile-finance";
 import { mobileFinanceSchema, createMobileFinance, financeDraftSchema, applyFinanceEntry, type FinanceDraft } from "./mobile-finance";
@@ -52,7 +53,7 @@ const snapshotSchema = z.object({
   workspaceId: z.string().uuid(), deviceId: z.string().uuid(),
   deviceSeq: z.number().int().nonnegative(),
   clock: z.object({ wallMs: z.number().int().nonnegative(), counter: z.number().int().nonnegative() }),
-  tasks: z.array(taskSchema), notes: z.array(noteSchema),
+  tasks: z.array(persistedTaskSchema), notes: z.array(noteSchema),
   lists: z.array(listSchema).default([]), listDrafts: z.record(mobileListDraftSchema).default({}),
   outbox: z.array(syncOpSchema),
   draft: draftSchema.nullable(),
