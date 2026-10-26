@@ -25,6 +25,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { describeError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
 import { deactivateClient, fetchClientStatus, forgetNodeBinding } from "../../lib/lan-local";
+import { openPanel } from "../../lib/panel-bus";
+import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { writeNodeMark } from "../../lib/node-mode";
 
 const LINK_LABEL: Record<LanClientStatus["link"], string> = {
@@ -39,6 +41,7 @@ const LINK_LABEL: Record<LanClientStatus["link"], string> = {
  * у локального API напрямую (в режиме клиента ApiClient смотрит на чужой узел), а управление хостом идёт через ApiClient.
  */
 export function NetworkSettings(): React.ReactElement {
+  const { workspace } = useActiveWorkspace();
   const [status, setStatus] = useState<LanClientStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +66,15 @@ export function NetworkSettings(): React.ReactElement {
 
   if (error) return <p className="text-label text-danger">{error}</p>;
   if (!status) return <p className="text-label text-muted-foreground">Загрузка…</p>;
-  return status.mode === "client" ? <ClientActive status={status} /> : <LocalOrHost status={status} onChanged={() => void refresh()} />;
+  return <div className="space-y-6">
+    {workspace?.role === "owner" && <Card className="space-y-3 p-4">
+      <h3 className="text-body font-medium">Данные между телефоном и компьютером</h3>
+      <p className="text-label text-muted-foreground">Сопряжение разрешает подключение устройства. Для обмена задачами, заметками и списками включите гибридный режим пространства «{workspace.name}», затем выберите его на телефоне.</p>
+      <Button size="sm" variant="outline" onClick={() => openPanel("sync")}>Режим пространства и обмен</Button>
+      <p className="text-label text-muted-foreground">Откроется раздел «Резервные копии», блок «Режим пространства и устройства». Локальные записи телефона переносятся отдельно.</p>
+    </Card>}
+    {status.mode === "client" ? <ClientActive status={status} /> : <LocalOrHost status={status} onChanged={() => void refresh()} />}
+  </div>;
 }
 
 function ClientActive({ status }: { status: LanClientStatus }): React.ReactElement {
