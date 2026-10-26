@@ -1,3 +1,6 @@
+<!-- Android branch alpha.23 (26.10.2026): compare only replica identity fields;
+workspaceName metadata no longer rejects valid copy as offline. Physical task
+phone→installed PC→phone/reload/delete PASS; see android/SYNC_LIVE_ALPHA23.md. -->
 <!-- Android branch alpha.22 (26.10.2026): compact task/note filters, readable
 Markdown excerpts, finance hierarchy and safe-area fix. Physical OPPO Android15
 upgrade/SQLite CRUD/keyboard PASS; LAN requires hybrid mode. See android/RELEASE_ALPHA22.md. -->

@@ -16,11 +16,13 @@ const replicaSchema = z.object({
   clock: z.object({ wallMs: z.number().int().nonnegative(), counter: z.number().int().nonnegative() }),
   deviceSeq: z.number().int().nonnegative(),
 });
+// Display metadata (for example workspaceName) is not part of replica identity.
+const SCOPE_KEYS = ["nodeId", "fingerprint", "userId", "workspaceId"] as const;
 const scopeSchema = z.object({ nodeId: z.string(), fingerprint: z.string(), userId: z.string(), workspaceId: z.string() });
 export interface MobileReplicaEnvelope { version: 1; scope: RemoteScope; replica: ReplicaState; imported: Record<string, true> }
 export function parseMobileReplica(raw: string, scope: RemoteScope): MobileReplicaEnvelope {
   const parsed = z.object({ version: z.literal(1), scope: scopeSchema, replica: replicaSchema, imported: z.record(z.literal(true)) }).parse(JSON.parse(raw));
-  if (Object.keys(scope).some((key) => parsed.scope[key as keyof RemoteScope] !== scope[key as keyof RemoteScope])
+  if (SCOPE_KEYS.some((key) => parsed.scope[key] !== scope[key])
     || parsed.replica.userId !== scope.userId || parsed.replica.workspaceId !== scope.workspaceId) throw new Error("Копия принадлежит другому пространству");
   if ([...Object.values(parsed.replica.entities.note), ...Object.values(parsed.replica.entities.task)].some((doc) => doc.workspaceId !== scope.workspaceId))
     throw new Error("В копии обнаружены записи другого пространства");
@@ -47,7 +49,7 @@ export async function prepareLocalImport(envelope: MobileReplicaEnvelope, source
   const next = structuredClone(envelope);
   const state = next.replica;
   if (state.userId !== scope.userId || state.workspaceId !== scope.workspaceId
-    || Object.keys(scope).some((key) => next.scope[key as keyof RemoteScope] !== scope[key as keyof RemoteScope])) throw new Error("Неверное пространство для переноса");
+    || SCOPE_KEYS.some((key) => next.scope[key] !== scope[key])) throw new Error("Неверное пространство для переноса");
   const clock = new HlcClock(state.deviceId, Date.now, state.clock);
   let count = 0;
   const inputs = [

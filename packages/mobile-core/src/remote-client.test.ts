@@ -29,6 +29,26 @@ async function connected(io = new Copies(), host = new MemoryHost()) {
   return { client, io, host };
 }
 describe("Mobile remote replica and portable backup", () => {
+  it("accepts workspace selection metadata while retaining strict identity isolation", async () => {
+    const io = new Copies(); const host = new MemoryHost();
+    const selected = { ...scope, workspaceName: "Kaiden" };
+    const phone = await MobileRemoteClient.create(selected, io, host); await phone.sync();
+    expect(phone.engine.status().phase).toBe("idle");
+    expect(phone.engine.hasCopy()).toBe(true);
+    await phone.saveEntry(draft("Metadata must not block exchange")); await phone.sync();
+    const renamed = { ...selected, workspaceName: "Renamed" };
+    const reopened = await MobileRemoteClient.create(renamed, io, host); await reopened.sync();
+    expect(reopened.engine.notes()).toHaveLength(1);
+    expect(parseMobileReplica(io.data.get(phone.key)!, selected).scope).toEqual(scope);
+    expect(() => parseMobileReplica(io.data.get(phone.key)!, { ...selected, userId: "another-user" })).toThrow();
+    const local = await MobileRepository.open(new LocalDisk());
+    await local.saveEntry({ ...draft("Import with selection metadata"), id: null });
+    await local.markBackup(local.snapshot().deviceSeq);
+    const envelope = parseMobileReplica(io.data.get(phone.key)!, selected);
+    expect((await prepareLocalImport(envelope, local.snapshot(), selected)).count).toBe(1);
+
+  });
+
   it("converges extended task/note fields without clearing them on legacy edits", async () => {
     const { client, io, host } = await connected();
     const note = { ...draft("Теги"), summary: "Кратко", tagsText: "mobile, идеи", pinnedAt: "2026-10-21T10:00:00.000Z" };
