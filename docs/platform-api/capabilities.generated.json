@@ -2120,16 +2120,24 @@
     "workspaces"
   ],
   "publicContracts": [
+    "apps/api/src/captures/public/capture-operations.module.ts",
+    "apps/api/src/captures/public/capture-operations.ts",
     "apps/api/src/contacts/public/contact-references.module.ts",
     "apps/api/src/contacts/public/contact-references.ts",
     "apps/api/src/documents/public/document-attachment-store.module.ts",
     "apps/api/src/documents/public/document-attachment-store.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/finance/public/finance-anchor-references.module.ts",
+    "apps/api/src/finance/public/finance-anchor-references.ts",
     "apps/api/src/finance/public/finance-overview-reader.module.ts",
     "apps/api/src/finance/public/finance-overview-reader.ts",
     "apps/api/src/finance/public/investment-journal.module.ts",
     "apps/api/src/finance/public/investment-journal.ts",
+    "apps/api/src/goals/public/goal-references.module.ts",
+    "apps/api/src/goals/public/goal-references.ts",
+    "apps/api/src/home/public/home-references.module.ts",
+    "apps/api/src/home/public/home-references.ts",
     "apps/api/src/home/public/home-utility-references.module.ts",
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
@@ -2513,17 +2521,6 @@
         "Task"
       ]
     },
-    "apps/api/src/captures/captures.service.ts": {
-      "models": [
-        "Account",
-        "Contact",
-        "FinanceObligation",
-        "Goal",
-        "Home",
-        "Project",
-        "Task"
-      ]
-    },
     "apps/api/src/home/home.service.ts": {
       "models": [
         "Contact",
@@ -2561,11 +2558,6 @@
         "InventoryItem",
         "InventoryMovement",
         "Transaction"
-      ]
-    },
-    "apps/api/src/projects/project-captures.service.ts": {
-      "services": [
-        "captures/captures.service"
       ]
     }
   },

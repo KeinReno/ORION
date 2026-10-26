@@ -57,3 +57,12 @@ TaskOperations и NoteOperations задают публичные CRUD-коман
 сократились, но их чтение ещё предстоит перенести.
 Проверено: architecture-check, API typecheck, focused ESLint; integration:
 create-and-link, agent-manager, agent-gateway, captures — 32 сценария.
+
+## Этап 7 — Captures / Project captures: 10 → 8
+
+Все семь типов якорей проверяются через SDK владельцев: Projects, Tasks, Goals,
+Home, Finance, Contacts. Сохраняются порядок проверки existence/module, архивные
+ссылки, 404 и исходный tx. CaptureOperations обслуживает старые проектные маршруты
+без загрузки полного CapturesModule/TasksModule в Projects.
+Проверено: architecture-check, API typecheck, focused ESLint;
+Captures + Project captures + Goals integration — 16 сценариев.
