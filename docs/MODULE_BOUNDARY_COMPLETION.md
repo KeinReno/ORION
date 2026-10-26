@@ -46,3 +46,14 @@ Prisma include. Отвязка не удаляет файл; повторная 
 корзина и отключение Documents сохраняют прежние правила. Notes не загружает
 полный DocumentsModule и его cron. Проверено: architecture-check, API typecheck,
 focused ESLint, API/RLS integration (23, включая вложения и выключение Documents).
+
+## Этап 6 — Search / Agent undo: 12 → 10
+
+TaskOperations и NoteOperations задают публичные CRUD-команды и создание в
+исходной транзакции. Общий implementation используется доменом и SDK, без
+повторной регистрации lifecycle-провайдеров. Search, Captures и AI используют
+контракты; создание task agent journal перенесено в Tasks.createFromAgentTx.
+Полностью удалены исключения Search и AgentUndo; зависимости других AI-сервисов
+сократились, но их чтение ещё предстоит перенести.
+Проверено: architecture-check, API typecheck, focused ESLint; integration:
+create-and-link, agent-manager, agent-gateway, captures — 32 сценария.

@@ -2136,6 +2136,8 @@
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
     "apps/api/src/milestones/public/milestone-references.ts",
+    "apps/api/src/notes/public/note-operations.module.ts",
+    "apps/api/src/notes/public/note-operations.ts",
     "apps/api/src/projects/public/project-catalog.module.ts",
     "apps/api/src/projects/public/project-catalog.ts",
     "apps/api/src/projects/public/project-finance-reader.module.ts",
@@ -2149,6 +2151,8 @@
     "apps/api/src/tasks/public/task-closure-registry.ts",
     "apps/api/src/tasks/public/task-integration-reader.module.ts",
     "apps/api/src/tasks/public/task-integration-reader.ts",
+    "apps/api/src/tasks/public/task-operations.module.ts",
+    "apps/api/src/tasks/public/task-operations.ts",
     "apps/api/src/tasks/public/task-overview-reader.module.ts",
     "apps/api/src/tasks/public/task-overview-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
@@ -2483,15 +2487,12 @@
         "InboxItem",
         "Note",
         "Project",
-        "Task",
-        "TaskActivity"
+        "Task"
       ],
       "services": [
         "events/events.service",
         "inbox/inbox.service",
-        "notes/notes.service",
-        "search/search.service",
-        "tasks/tasks.service"
+        "search/search.service"
       ]
     },
     "apps/api/src/ai/agent-jobs.service.ts": {
@@ -2501,9 +2502,7 @@
         "Task"
       ],
       "services": [
-        "events/events.service",
-        "notes/notes.service",
-        "tasks/tasks.service"
+        "events/events.service"
       ]
     },
     "apps/api/src/ai/agent-tokens.service.ts": {
@@ -2512,12 +2511,6 @@
         "Note",
         "Project",
         "Task"
-      ]
-    },
-    "apps/api/src/ai/agent-undo.service.ts": {
-      "services": [
-        "notes/notes.service",
-        "tasks/tasks.service"
       ]
     },
     "apps/api/src/captures/captures.service.ts": {
@@ -2529,9 +2522,6 @@
         "Home",
         "Project",
         "Task"
-      ],
-      "services": [
-        "tasks/tasks.service"
       ]
     },
     "apps/api/src/home/home.service.ts": {
@@ -2576,12 +2566,6 @@
     "apps/api/src/projects/project-captures.service.ts": {
       "services": [
         "captures/captures.service"
-      ]
-    },
-    "apps/api/src/search/search.service.ts": {
-      "services": [
-        "notes/notes.service",
-        "tasks/tasks.service"
       ]
     }
   },

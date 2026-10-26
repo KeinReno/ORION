@@ -34,9 +34,9 @@ import { PrismaService } from "../common/prisma.service";
 import { EventsService } from "../events/events.service";
 import { InboxService } from "../inbox/inbox.service";
 import { ModulesService } from "../modules/modules.service";
-import { NotesService } from "../notes/notes.service";
+import { NoteOperations } from "../notes/public/note-operations";
 import { SearchService } from "../search/search.service";
-import { TasksService } from "../tasks/tasks.service";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import type { AgentContext } from "./agent-tokens.service";
 import { resolveAiRateLimit } from "./rate-limiter";
@@ -87,8 +87,8 @@ export class AgentGatewayService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TasksService,
-    private readonly notes: NotesService,
+    private readonly tasks: TaskOperations,
+    private readonly notes: NoteOperations,
     private readonly events: EventsService,
     private readonly inbox: InboxService,
     private readonly search: SearchService
@@ -299,8 +299,7 @@ export class AgentGatewayService {
         ...(projectId ? {} : { projectTag: plan.projectTag ?? null })
       });
       if (!parsed.success) throw new BadRequestException(parsed.error.issues.map((issue) => issue.message));
-      const task = await this.tasks.createTx(tx, userId, workspaceId, parsed.data);
-      await tx.taskActivity.create({ data: { workspaceId, taskId: task.id, actorId: userId, field: "created", toValue: task.title, agentName: label } });
+      const task = await this.tasks.createFromAgentTx(tx, userId, workspaceId, parsed.data, label);
       return { kind: "task", id: task.id };
     }
 

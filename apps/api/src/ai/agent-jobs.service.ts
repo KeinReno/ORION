@@ -20,8 +20,8 @@ import {
 import { z } from "zod";
 import { PrismaService } from "../common/prisma.service";
 import { EventsService } from "../events/events.service";
-import { NotesService } from "../notes/notes.service";
-import { TasksService } from "../tasks/tasks.service";
+import { NoteOperations } from "../notes/public/note-operations";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { buildProposalDiff, patchFields, type DiffKind } from "./agent-diff";
 import { AgentModuleProposalsService, proposalDto, type ProposalRow } from "./agent-module-proposals.service";
@@ -39,8 +39,8 @@ export class AgentJobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly tasks: TasksService,
-    private readonly notes: NotesService,
+    private readonly tasks: TaskOperations,
+    private readonly notes: NoteOperations,
     private readonly events: EventsService,
     private readonly moduleProposals: AgentModuleProposalsService
   ) {}

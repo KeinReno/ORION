@@ -90,6 +90,13 @@ export class TasksService {
     return toDto(task);
   }
 
+  /** Agent capture uses the same transaction for the task and its creation journal. */
+  async createFromAgentTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, agentName: string) {
+    const task = await this.createTx(tx, userId, workspaceId, input);
+    await tx.taskActivity.create({ data: { workspaceId, taskId: task.id, actorId: userId, field: "created", toValue: task.title, agentName } });
+    return { id: task.id };
+  }
+
   /**
    * The body of `create()`, minus the `withUser` wrap — pulled out so
    * `SearchService.createAndLink` (U03 Часть 1) can run it inside the SAME

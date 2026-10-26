@@ -5,15 +5,13 @@
 // (projects), позже события G3 и провайдеры Search/Inbox/Overview (G19).
 export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/activity/activity.service.ts": { models: ["AgentAuditEntry","TaskActivity","TaskComment"] },
-  "apps/api/src/ai/agent-gateway.service.ts": { models: ["Event","InboxItem","Note","Project","Task","TaskActivity"], services: ["events/events.service","inbox/inbox.service","notes/notes.service","search/search.service","tasks/tasks.service"] },
-  "apps/api/src/ai/agent-jobs.service.ts": { models: ["Event","Note","Task"], services: ["events/events.service","notes/notes.service","tasks/tasks.service"] },
+  "apps/api/src/ai/agent-gateway.service.ts": { models: ["Event","InboxItem","Note","Project","Task"], services: ["events/events.service","inbox/inbox.service","search/search.service"] },
+  "apps/api/src/ai/agent-jobs.service.ts": { models: ["Event","Note","Task"], services: ["events/events.service"] },
   "apps/api/src/ai/agent-tokens.service.ts": { models: ["Event","Note","Project","Task"] },
-  "apps/api/src/ai/agent-undo.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
-  "apps/api/src/captures/captures.service.ts": { models: ["Account","Contact","FinanceObligation","Goal","Home","Project","Task"], services: ["tasks/tasks.service"] },
+  "apps/api/src/captures/captures.service.ts": { models: ["Account","Contact","FinanceObligation","Goal","Home","Project","Task"] },
   "apps/api/src/home/home.service.ts": { models: ["Contact","FinanceObligation","InventoryItem","List","Task","TaskActivity","TaskComment"] },
   "apps/api/src/lists-finance/lists-finance.service.ts": { models: ["List","ListItem"], services: ["lists/lists.service"] },
   "apps/api/src/lists-inventory/lists-inventory.service.ts": { models: ["InventoryItem","InventoryMovement","List","ListItem"], services: ["inventory/inventory.service","lists/lists.service"] },
   "apps/api/src/lists/lists.service.ts": { models: ["InventoryItem","InventoryMovement","Transaction"] },
   "apps/api/src/projects/project-captures.service.ts": { services: ["captures/captures.service"] },
-  "apps/api/src/search/search.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
 };

@@ -12,7 +12,7 @@ import {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
-import { TasksService } from "../tasks/tasks.service";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 /** Where a capture hangs. `null` anchor = a free-floating thought. */
@@ -59,7 +59,7 @@ export class CapturesService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TasksService
+    private readonly tasks: TaskOperations
   ) {}
 
   async list(userId: string, workspaceId: string, query: ListCapturesQuery): Promise<Capture[]> {
