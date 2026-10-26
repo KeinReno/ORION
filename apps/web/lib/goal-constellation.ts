@@ -5,7 +5,8 @@ import {
   type Goal,
   type GoalMilestone,
   type GoalNextTask,
-  type GoalPace
+  type GoalPace,
+  type Task
 } from "@orion/shared-types";
 
 /**
@@ -33,12 +34,13 @@ export interface Star {
   /** Goal id for a goal; `${goalId}:${planId}` for a plan; `${goalId}:${planId}:${milestoneId}` for a milestone. */
   id: string;
   /** A milestone is a waypoint on a plan's branch; the earliest step is lowest in the drawing. */
-  kind: "goal" | "plan" | "milestone";
+  kind: "goal" | "plan" | "milestone" | "task";
   /** The goal this star is (goal) or belongs to (plan / milestone). */
   goalId: string;
   planId: string | null;
   projectId: string | null;
   milestoneId: string | null;
+  taskId: string | null;
   label: string;
   parentId: string | null;
   depth: number;
@@ -122,6 +124,7 @@ interface Item {
   planId: string | null;
   projectId: string | null;
   milestoneId: string | null;
+  taskId: string | null;
   label: string;
   progress: number | null;
   state: StarState;
@@ -139,7 +142,22 @@ function milestoneProgress(m: GoalMilestone): number | null {
 }
 
 /** The milestone chain of a plan, nested so each waypoint hangs on the previous one (a path, not a fan). Returns its head. */
-function milestoneChain(goal: Goal, plan: Goal["plans"][number], live: boolean, now: Date): Item[] {
+function taskItem(goal: Goal, plan: Goal["plans"][number], task: Task, now: Date): Item {
+  const done = task.status === "done" || task.status === "canceled";
+  const overdue = !done && task.dueAt !== null && new Date(task.dueAt).getTime() < now.getTime();
+  return {
+    id: `${goal.id}:${plan.id}:task:${task.id}`,
+    kind: "task", goalId: goal.id, planId: plan.id, projectId: plan.projectId,
+    milestoneId: task.milestoneId, taskId: task.id, label: task.title,
+    progress: done ? 100 : 0,
+    state: done ? "done" : task.status === "in_progress" ? "lit" : "dim",
+    dueAt: task.dueAt, weight: 1,
+    facts: { ...NO_FACTS, blocked: task.blocked ? 1 : 0, overdue: overdue ? 1 : 0, ready: !done && !task.blocked, frontier: plan.nextTask?.id === task.id },
+    children: [], leaves: 1
+  };
+}
+
+function milestoneChain(goal: Goal, plan: Goal["plans"][number], live: boolean, now: Date, tasks: ReadonlyArray<Task>): Item[] {
   const shown = milestoneWindow(plan.milestones);
   const firstOpen = shown.find((m) => m.status !== "done");
   const items = shown.map<Item>((m) => {
@@ -152,17 +170,19 @@ function milestoneChain(goal: Goal, plan: Goal["plans"][number], live: boolean, 
       planId: plan.id,
       projectId: plan.projectId,
       milestoneId: m.id,
+      taskId: null,
       label: m.title,
       progress,
       state: starState(progress, goal.status === "dropped" ? "dropped" : "active"),
       dueAt: m.dueAt,
       weight: 1,
       facts: { ...NO_FACTS, overdue: late ? 1 : 0, frontier: live && m === firstOpen },
-      children: [],
+      children: tasks.filter((task) => task.milestoneId === m.id).map((task) => taskItem(goal, plan, task, now)),
       leaves: 1
     };
   });
-  for (let i = items.length - 1; i > 0; i -= 1) items[i]!.children = [items[i - 1]!];
+  for (let i = items.length - 1; i > 0; i -= 1) items[i]!.children.unshift(items[i - 1]!);
+  for (const item of items) item.leaves = Math.max(1, item.children.reduce((sum, child) => sum + child.leaves, 0));
   return items.slice(-1);
 }
 
@@ -172,7 +192,7 @@ function hasPulse(item: Item): boolean {
 }
 
 /** Items below a goal: its plans first, then sub-goals. Cycles / depth in bad data cannot hang the walk. */
-function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, seen: Set<string>, now: Date, usage: Map<string, Set<string>>): Item {
+function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, seen: Set<string>, now: Date, usage: Map<string, Set<string>>, tasks: ReadonlyArray<Task>): Item {
   seen.add(goal.id);
   const goalLive = goal.status === "active";
   const children: Item[] = goal.plans.map((plan) => {
@@ -180,7 +200,10 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
     const open = plan.tasks - plan.closed > 0;
     const idle = plan.lastActivityAt === null ? 0 : now.getTime() - new Date(plan.lastActivityAt).getTime();
     const ready = goalLive && plan.nextTask !== null && state !== "done";
-    const chain = milestoneChain(goal, plan, goalLive && state !== "done", now);
+    const projectTasks = tasks.filter((task) => task.projectId === plan.projectId);
+    const chain = milestoneChain(goal, plan, goalLive && state !== "done", now, projectTasks);
+    const shownMilestones = new Set(milestoneWindow(plan.milestones).map((milestone) => milestone.id));
+    const directTasks = projectTasks.filter((task) => !task.milestoneId || !shownMilestones.has(task.milestoneId)).map((task) => taskItem(goal, plan, task, now));
     return {
       id: `${goal.id}:${plan.id}`,
       kind: "plan" as const,
@@ -188,6 +211,7 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
       planId: plan.id,
       projectId: plan.projectId,
       milestoneId: null,
+      taskId: null,
       label: plan.projectName,
       progress: plan.progress,
       state,
@@ -205,12 +229,12 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
         pace: NO_PACE,
         sharedWith: [...(usage.get(plan.projectId) ?? [])].filter((id) => id !== goal.id)
       },
-      children: chain,
-      leaves: 1
+      children: [...chain, ...directTasks],
+      leaves: Math.max(1, [...chain, ...directTasks].reduce((sum, child) => sum + child.leaves, 0))
     };
   });
   for (const sub of byParent.get(goal.id) ?? []) {
-    if (!seen.has(sub.id)) children.push(buildItem(sub, byParent, sub.subWeight, seen, now, usage));
+    if (!seen.has(sub.id)) children.push(buildItem(sub, byParent, sub.subWeight, seen, now, usage, tasks));
   }
   return {
     id: goal.id,
@@ -219,6 +243,7 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
     planId: null,
     projectId: null,
     milestoneId: null,
+    taskId: null,
     label: goal.title,
     progress: goal.progress,
     state: starState(goal.progress, goal.status),
@@ -235,7 +260,7 @@ function buildItem(goal: Goal, byParent: Map<string, Goal[]>, weight: number, se
  * root, so nothing silently disappears). Branches are laid out as a vertical tree:
  * the result is at the top, current work sits below it, and each parent is centred over its leaves.
  */
-export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new Date()): Constellation[] {
+export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new Date(), tasks: ReadonlyArray<Task> = []): Constellation[] {
   const ids = new Set(goals.map((g) => g.id));
   const byParent = new Map<string, Goal[]>();
   const roots: Goal[] = [];
@@ -251,7 +276,7 @@ export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new 
   for (const goal of goals) {
     for (const plan of goal.plans) usage.set(plan.projectId, (usage.get(plan.projectId) ?? new Set()).add(goal.id));
   }
-  return roots.map((root) => layout(buildItem(root, byParent, 1, new Set(), now, usage)));
+  return roots.map((root) => layout(buildItem(root, byParent, 1, new Set(), now, usage, tasks)));
 }
 
 function layout(root: Item): Constellation {
@@ -276,12 +301,13 @@ function layout(root: Item): Constellation {
       planId: item.planId,
       projectId: item.projectId,
       milestoneId: item.milestoneId,
+      taskId: item.taskId,
       label: item.label,
       parentId: parent?.id ?? null,
       depth,
       x,
       y,
-      r: item.kind === "goal" ? (depth === 0 ? 13 : 9) : item.kind === "milestone" ? 5 : 5 + share * 4,
+      r: item.kind === "goal" ? (depth === 0 ? 13 : 9) : item.kind === "milestone" ? 5 : item.kind === "task" ? 4.5 : 5 + share * 4,
       progress: item.progress,
       state: item.state,
       dueAt: item.dueAt,
@@ -388,6 +414,26 @@ export function starAt(stars: ReadonlyArray<Star>, x: number, y: number, slack =
     }
   }
   return best;
+}
+
+/** Suggest a clear location for keyboard/toolbar creation. A direct canvas click keeps its exact position. */
+export function suggestCanvasPoint(stars: ReadonlyArray<Star>, parent: Star): { x: number; y: number } {
+  const x = Math.min(460, Math.max(100, parent.x));
+  const y = Math.min(350, Math.max(210, parent.y + 95));
+  const candidates = [
+    { x, y }, { x: Math.max(100, x - 180), y }, { x: Math.min(460, x + 180), y },
+    { x: 100, y: 245 }, { x: 460, y: 245 }, { x: 280, y: 350 },
+    { x: 100, y: 350 }, { x: 460, y: 350 }
+  ];
+  const clear = (candidate: { x: number; y: number }, star: Star): boolean =>
+    Math.hypot(candidate.x - star.x, candidate.y - star.y) >= 82 &&
+    !(Math.abs(candidate.y - star.y) < 38 && Math.abs(candidate.x - star.x) < 155);
+  return candidates.find((candidate) => stars.every((star) => clear(candidate, star))) ??
+    candidates.reduce((best, candidate) => {
+      const score = Math.min(...stars.map((star) => Math.hypot(candidate.x - star.x, candidate.y - star.y)));
+      const bestScore = Math.min(...stars.map((star) => Math.hypot(best.x - star.x, best.y - star.y)));
+      return score > bestScore ? candidate : best;
+    });
 }
 
 /** Neighbour for keyboard travel: up = parent, down = first child, left/right = previous/next sibling. */

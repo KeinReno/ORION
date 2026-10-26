@@ -3,6 +3,7 @@ import type { Goal as GoalRow, GoalPlan as PlanRow, Prisma } from "@prisma/clien
 import {
   GOAL_MAX_DEPTH,
   checkGoalParent,
+  goalCriteriaSchema,
   goalProgress,
   goalTreeProgress,
   goalStatusSchema,
@@ -90,6 +91,7 @@ export class GoalsService {
           workspaceId,
           title: input.title,
           description: input.description,
+          successCriteria: input.successCriteria as Prisma.InputJsonValue,
           dueAt: input.dueAt ?? null,
           parentId,
           subWeight: input.subWeight
@@ -112,6 +114,8 @@ export class GoalsService {
           ...(input.subWeight !== undefined ? { subWeight: input.subWeight } : {}),
           ...(input.title !== undefined ? { title: input.title } : {}),
           ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.successCriteria !== undefined ? { successCriteria: input.successCriteria as Prisma.InputJsonValue } : {}),
+          ...(input.review !== undefined ? { reviewWins: input.review.wins, reviewBlockers: input.review.blockers, reviewNext: input.review.next, reviewedAt: new Date() } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.dueAt !== undefined ? { dueAt: input.dueAt } : {})
         },
@@ -288,6 +292,8 @@ export class GoalsService {
         workspaceId: row.workspaceId,
         title: row.title,
         description: row.description,
+        successCriteria: goalCriteriaSchema.catch([]).parse(row.successCriteria),
+        lastReview: row.reviewedAt ? { wins: row.reviewWins, blockers: row.reviewBlockers, next: row.reviewNext, at: row.reviewedAt.toISOString() } : null,
         status: goalStatusSchema.catch("active").parse(row.status),
         dueAt: row.dueAt?.toISOString() ?? null,
         parentId: row.parentId,

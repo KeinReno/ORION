@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import type { OpportunitiesViewSlotProps, OpportunitiesDetailsSlotProps } from "../lib/extensions/contracts";
-import type { HomeObjectTabSlotProps, ProjectOverviewSideSlotProps } from "../lib/extensions/contracts";
+import type { HomeObjectTabSlotProps, ProjectOverviewSideSlotProps, ProjectBoardGroupedSlotProps } from "../lib/extensions/contracts";
 import type { FinanceTabSlotProps, TasksViewsBarSlotProps, DocumentsHistorySlotProps, DocumentsEditorSlotProps, DocumentsCreateSlotProps, NotesHistorySlotProps, TimeBillingSlotProps, TimeInsightsSlotProps, CalendarToolbarSlotProps, TaskDetailTabSlotProps, TasksViewSlotProps, NotesHeaderActionSlotProps, NotesFilterSlotProps, NotesTemplatePickerSlotProps, NotesTemplatesSlotProps, FinanceSummarySlotProps, DashboardFinanceSlotProps, TasksRecurrenceSlotProps, TasksPlanningSlotProps, ProjectTabSlotProps, ProjectOverviewPlanSlotProps, InventoryAlertsSlotProps, InventoryCostingSlotProps, InventoryItemActionsSlotProps, ListsItemSlotProps, ListsActionsSlotProps, ListsItemMarkSlotProps, EventRecurrenceSlotProps, EventRemindersSlotProps, FinanceTransactionsTopSlotProps, SidebarWidgetSlotProps, ResourcesSlotProps } from "../lib/extensions/contracts";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ComponentType } from "react";
@@ -165,6 +165,8 @@ contribute("projects.tabs", { pluginId: "projects-planning", component: ProjectP
 contribute("projects.overview.plan", { pluginId: "projects-planning", component: ProjectOverviewPlan, order: 10 });
 const ProjectGoalCard = dynamic<ProjectOverviewSideSlotProps>(() => import("./projects-goals/project-goal-card").then((m) => m.ProjectGoalCard), { ssr: false });
 contribute("projects.overview.side", { pluginId: "projects-goals", component: ProjectGoalCard, order: 10 });
+const GroupedProjectBoard = dynamic<ProjectBoardGroupedSlotProps>(() => import("./projects-goals/grouped-project-board").then((m) => m.GroupedProjectBoard), { ssr: false });
+contribute("projects.board.grouped", { pluginId: "projects-goals", component: GroupedProjectBoard });
 
 const ProjectIdeasTab = dynamic<ProjectTabSlotProps>(() => import("./project-captures/ideas-tab").then((m) => m.ProjectIdeasTab), { ssr: false });
 const ProjectProblemsTab = dynamic<ProjectTabSlotProps>(() => import("./project-captures/problems-tab").then((m) => m.ProjectProblemsTab), { ssr: false });

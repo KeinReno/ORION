@@ -285,6 +285,13 @@ export interface ProjectOverviewSideSlotProps {
   projectName: string;
 }
 
+/** projects.board.grouped — an optional alternate board over the host's already filtered projects. */
+export interface ProjectBoardGroupedSlotProps {
+  workspaceId: string | undefined;
+  projects: ReadonlyArray<Project>;
+  onOpenProject: (project: Project) => void;
+}
+
 /**
  * inventory.alerts — the low-stock threshold. Draws nothing by itself: `meta.api` holds the presentational
  * parts the host places (summary card, item badge, hint, threshold field). The host still colours the
@@ -434,6 +441,7 @@ export interface SlotContracts {
   "projects.tabs": ProjectTabSlotProps;
   "projects.overview.plan": ProjectOverviewPlanSlotProps;
   "projects.overview.side": ProjectOverviewSideSlotProps;
+  "projects.board.grouped": ProjectBoardGroupedSlotProps;
   "inventory.alerts": InventoryAlertsSlotProps;
   "inventory.costing": InventoryCostingSlotProps;
   "inventory.item.actions": InventoryItemActionsSlotProps;
@@ -512,6 +520,7 @@ export const CORE_SLOT_NAMES = [
   "projects.tabs",
   "projects.overview.plan",
   "projects.overview.side",
+  "projects.board.grouped",
   "inventory.alerts",
   "inventory.costing",
   "inventory.item.actions",

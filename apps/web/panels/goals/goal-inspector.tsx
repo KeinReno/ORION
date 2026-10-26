@@ -5,11 +5,12 @@ import {
   useCreateProjectGoal,
   useRemoveProjectGoalPlan,
   useStartTimer,
+  useUpdateMilestone,
   useUpdateProjectGoal,
   useUpdateProjectGoalPlan,
   useUpdateTask
 } from "@orion/core-react";
-import { GOAL_STATUS_LABEL, checkGoalParent, goalPace, goalStatusSchema, type Goal, type GoalStatus, type Project } from "@orion/shared-types";
+import { GOAL_STATUS_LABEL, checkGoalParent, goalPace, goalStatusSchema, type Goal, type GoalStatus, type Milestone, type Project, type Task } from "@orion/shared-types";
 import { Badge, Button, Card, Input, Select, Textarea, useToast } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListTree, Play, Check, Trash2, X } from "lucide-react";
@@ -59,6 +60,8 @@ export interface GoalInspectorProps {
   star: Star;
   goals: ReadonlyArray<Goal>;
   projects: ReadonlyArray<Project>;
+  tasks: ReadonlyArray<Task>;
+  milestones: ReadonlyArray<Milestone>;
   onSelect: (id: string) => void;
   onDeleteGoal: (goal: Goal) => void;
   onShowInList: (goalId: string) => void;
@@ -72,7 +75,7 @@ export interface GoalInspectorProps {
  * Everything you can do with the selected star, without leaving the sky: edit the goal,
  * grow it (sub-goal / plan), tune weights, and act on a plan's next task (start timer / done).
  */
-export function GoalInspector({ workspaceId, star, goals, projects, onSelect, onDeleteGoal, onShowInList, onOpenGoal, visibleLinkIds, onToggleVisible }: GoalInspectorProps): React.ReactElement {
+export function GoalInspector({ workspaceId, star, goals, projects, tasks, milestones, onSelect, onDeleteGoal, onShowInList, onOpenGoal, visibleLinkIds, onToggleVisible }: GoalInspectorProps): React.ReactElement {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isEnabled } = useEnabledModules();
@@ -82,6 +85,7 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
   const updatePlan = useUpdateProjectGoalPlan(workspaceId);
   const removePlan = useRemoveProjectGoalPlan(workspaceId);
   const updateTask = useUpdateTask(workspaceId);
+  const updateMilestone = useUpdateMilestone(workspaceId);
   const startTimer = useStartTimer(workspaceId);
   const [subTitle, setSubTitle] = useState("");
 
@@ -91,6 +95,25 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
   const fail = (message: string) => (error: unknown) => toast({ title: message, description: describeError(error), tone: "danger" });
   const refreshGoals = (): void => void queryClient.invalidateQueries({ queryKey: ["goals", workspaceId] });
   const plan = star.planId ? goal.plans.find((p) => p.id === star.planId) : undefined;
+
+  if (star.kind === "task") {
+    const task = tasks.find((item) => item.id === star.taskId);
+    if (!task || !plan) return <Card className="p-4 text-label text-subtle-foreground">Задача уже изменилась — выберите другую звезду.</Card>;
+    const done = task.status === "done" || task.status === "canceled";
+    return <Card className="space-y-3 p-4" aria-label={`Задача ${task.title}`}>
+      <p className="text-sm font-medium">{task.title}</p>
+      <p className="text-label text-subtle-foreground">Задача проекта «{plan.projectName}» · {done ? "завершена" : task.status === "in_progress" ? "в работе" : "ожидает"}</p>
+      {task.dueAt ? <Badge tone={star.overdue ? "danger" : "neutral"}>{star.overdue ? "Просрочено · " : "До "}{shortDate(task.dueAt)}</Badge> : null}
+      {task.blocked ? <Badge tone="warning">Ждёт другие задачи</Badge> : null}
+      {task.dependencyIds.length > 0 ? <div className="space-y-1.5"><p className="text-2xs text-subtle-foreground">Ждёт завершения</p>{task.dependencyIds.map((id) => <div key={id} className="flex items-center justify-between gap-2 text-label"><span>{tasks.find((item) => item.id === id)?.title ?? "Другая задача"}</span><Button type="button" size="sm" variant="ghost" aria-label={`Убрать зависимость от задачи ${tasks.find((item) => item.id === id)?.title ?? ""}`} onClick={() => updateTask.mutate({ taskId: task.id, input: { dependencyIds: task.dependencyIds.filter((item) => item !== id) } }, { onSuccess: refreshGoals, onError: fail("Не удалось убрать зависимость") })}><X className="h-3.5 w-3.5" /></Button></div>)}</div> : null}
+      {task.milestoneId ? <div className="flex items-center justify-between gap-2 text-label"><span>Веха: {milestones.find((item) => item.id === task.milestoneId)?.title ?? "этап проекта"}</span><Button type="button" size="sm" variant="ghost" onClick={() => updateTask.mutate({ taskId: task.id, input: { milestoneId: null } }, { onSuccess: refreshGoals, onError: fail("Не удалось убрать из вехи") })}>Убрать из вехи</Button></div> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={updateTask.isPending} onClick={() => updateTask.mutate({ taskId: task.id, input: { status: done ? "todo" : "done" } }, { onSuccess: refreshGoals, onError: fail("Не удалось изменить задачу") })}>{done ? "Вернуть в работу" : "Готово"}</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => openProject(plan.projectId, plan.projectName)}>Открыть проект</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => onSelect(`${goal.id}:${plan.id}`)}>К проекту</Button>
+      </div>
+    </Card>;
+  }
 
   if (star.kind === "milestone") {
     const milestone = plan?.milestones.find((m) => m.id === star.milestoneId);
@@ -107,6 +130,7 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
           {milestone.dueAt ? <Badge tone={late ? "danger" : "neutral"}>{late ? "просрочена · " : "до "}{shortDate(milestone.dueAt)}</Badge> : null}
           {star.frontier ? <Badge tone="accent">сейчас здесь</Badge> : null}
         </div>
+        {milestones.find((item) => item.id === star.milestoneId)?.dependencyIds.map((id) => <div key={id} className="flex items-center justify-between gap-2 text-label"><span>Ждёт: {milestones.find((item) => item.id === id)?.title ?? "другую веху"}</span><Button type="button" size="sm" variant="ghost" aria-label={`Убрать зависимость вехи ${milestones.find((item) => item.id === id)?.title ?? ""}`} onClick={() => { const current = milestones.find((item) => item.id === star.milestoneId); if (current) updateMilestone.mutate({ milestoneId: current.id, input: { dependencyIds: current.dependencyIds.filter((item) => item !== id) } }, { onError: fail("Не удалось убрать зависимость вехи") }); }}><X className="h-3.5 w-3.5" /></Button></div>)}
         <p className="text-2xs text-subtle-foreground">
           {plan.milestones.length > 4 ? `На карте показаны 4 из ${plan.milestones.length} вех — ближайшие к текущей.` : "Первая веха ниже, следующие ведут вверх к результату."}
         </p>
@@ -273,7 +297,7 @@ export function GoalInspector({ workspaceId, star, goals, projects, onSelect, on
   async function addSub(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const created = await createGoal.mutateAsync({ title: subTitle, description: "", parentId: goal!.id, subWeight: 1 });
+      const created = await createGoal.mutateAsync({ title: subTitle, description: "", successCriteria: [], parentId: goal!.id, subWeight: 1 });
       setSubTitle("");
       onSelect(created.id);
     } catch (error) {

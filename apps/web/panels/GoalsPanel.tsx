@@ -27,7 +27,7 @@ import {
   Skeleton,
   useToast
 } from "@orion/ui";
-import { Flag, List, ListTree, Sparkles, Trash2, X } from "lucide-react";
+import { Flag, ListTree, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ConstellationView } from "./goals/constellation-view";
 import { describeError } from "../lib/error-message";
@@ -72,14 +72,17 @@ export function GoalsPanel(): React.ReactElement {
   const [pendingDelete, setPendingDelete] = useState<Goal | null>(null);
   const [subFor, setSubFor] = useState<string | null>(null);
   const [subTitle, setSubTitle] = useState("");
-  const [view, setView] = useState<"list" | "sky">("list");
+  const [view, setView] = useState<"list" | "sky">("sky");
+  const [requestedGoalId, setRequestedGoalId] = useState<string | null>(null);
   const focusedGoalId = useFocusedGoalId();
 
   useEffect(() => {
+    if (focusedGoalId) setRequestedGoalId(focusedGoalId);
+  }, [focusedGoalId]);
+
+  useEffect(() => {
     if (!focusedGoalId || !goals?.some((goal) => goal.id === focusedGoalId)) return;
-    setView("list");
-    const frame = requestAnimationFrame(() => document.getElementById(`goal-${focusedGoalId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
-    return () => cancelAnimationFrame(frame);
+    setView("sky");
   }, [focusedGoalId, goals]);
 
   function showInList(goalId: string): void {
@@ -100,8 +103,10 @@ export function GoalsPanel(): React.ReactElement {
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      await create.mutateAsync({ title, description: "", subWeight: 1 });
+      const goal = await create.mutateAsync({ title: title.trim(), description: "", successCriteria: [], subWeight: 1 });
       setTitle("");
+      setView("sky");
+      setRequestedGoalId(goal.id);
     } catch (error) {
       fail("Не удалось создать цель", error);
     }
@@ -110,7 +115,7 @@ export function GoalsPanel(): React.ReactElement {
   async function submitSub(event: FormEvent, parentId: string): Promise<void> {
     event.preventDefault();
     try {
-      await create.mutateAsync({ title: subTitle, description: "", parentId, subWeight: 1 });
+      await create.mutateAsync({ title: subTitle, description: "", successCriteria: [], parentId, subWeight: 1 });
       setSubTitle("");
       setSubFor(null);
     } catch (error) {
@@ -346,8 +351,8 @@ export function GoalsPanel(): React.ReactElement {
             onChange={setView}
             size="sm"
             options={[
-              { value: "list", label: <List className="h-3.5 w-3.5" />, ariaLabel: "Списком" },
-              { value: "sky", label: <Sparkles className="h-3.5 w-3.5" />, ariaLabel: "Созвездиями" }
+              { value: "sky", label: "Созвездия" },
+              { value: "list", label: "Список" }
             ]}
           />
         </div>
@@ -365,6 +370,8 @@ export function GoalsPanel(): React.ReactElement {
             workspaceId={workspaceId}
             goals={allGoals}
             projects={projects ?? []}
+            focusedGoalId={requestedGoalId}
+            onFocusApplied={(goalId) => setRequestedGoalId((current) => current === goalId ? null : current)}
             onShowInList={showInList}
             onDeleteGoal={setPendingDelete}
           />

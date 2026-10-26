@@ -24,6 +24,8 @@ const goal = (id: string, patch: Partial<Goal> = {}): Goal => ({
   workspaceId: "ws",
   title: id,
   description: "",
+  successCriteria: [],
+  lastReview: null,
   status: "achieved",
   dueAt: null,
   parentId: null,

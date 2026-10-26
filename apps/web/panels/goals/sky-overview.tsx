@@ -2,9 +2,10 @@
 
 import type { Goal } from "@orion/shared-types";
 import { Badge } from "@orion/ui";
-import { Sparkles, Trophy } from "lucide-react";
+import { ArrowUpRight, FolderKanban, Sparkles, Trophy } from "lucide-react";
 import { shortDate } from "../../lib/format";
 import { skyHealth, type Constellation, type SkyHealth } from "../../lib/goal-constellation";
+import { openProject } from "../../lib/panel-bus";
 import { SkyCanvas } from "./sky-canvas";
 import styles from "./sky-canvas.module.css";
 
@@ -30,31 +31,37 @@ function SkyTile({
 }): React.ReactElement {
   const health = skyHealth(constellation);
   const root = constellation.stars.find((s) => s.id === constellation.rootId)!;
+  const plans = constellation.stars.filter((star) => star.kind === "plan");
   const badge = HEALTH_BADGE[health.tone];
   return (
+    <article className={styles.atlasTile} data-health={health.tone}>
     <button
       type="button"
       onClick={() => onOpen(constellation.rootId)}
       aria-label={`Открыть созвездие «${root.label}»`}
-      className="group space-y-2 rounded-xl text-left transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 motion-reduce:transform-none"
+      className={styles.atlasOpen}
     >
+      <div className={styles.atlasMap}>
+      <div className={styles.atlasMapTop} aria-hidden><span>ORION / ЦЕЛЬ</span><span>✦ СОЗВЕЗДИЕ</span></div>
       {constellation.stars.length === 1 ? (
-        <div className={`relative flex h-32 items-center justify-center overflow-hidden rounded-xl border border-accent/20 ${styles.sky}`}>
-          <div className="absolute h-16 w-16 rounded-full bg-accent/10 blur-2xl" aria-hidden />
-          <Sparkles className="relative h-7 w-7 text-accent transition-transform duration-300 ease-out group-hover:scale-110 motion-reduce:transform-none" aria-hidden />
-          <span className="absolute bottom-3 text-2xs text-subtle-foreground">Откройте и задайте первый шаг</span>
+        <div className={styles.atlasEmptyMap}>
+          <Sparkles className="h-8 w-8" strokeWidth={1} aria-hidden />
+          <span>Откройте и задайте первый шаг</span>
         </div>
-      ) : <SkyCanvas constellation={constellation} goals={goals} lens="progress" selectedId={null} mode="mini" />}
-      <div className="flex items-center gap-2 px-1">
+      ) : <SkyCanvas constellation={constellation} goals={goals} lens="progress" selectedId={health.next?.id ?? null} mode="mini" />}
+      <span className={styles.atlasExplore} aria-hidden>Исследовать <ArrowUpRight size={13} /></span>
+      </div>
+      <div className={styles.atlasBody}>
+      <div className={styles.atlasTitle}>
         {trophy ? <Trophy className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden /> : null}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{root.label}</span>
-        <span className="font-mono text-label tabular-nums text-muted-foreground">{root.progress === null ? "—" : `${root.progress}%`}</span>
+        <span className={styles.atlasName}>{root.label}</span>
+        <span className={styles.atlasPercent}>{root.progress === null ? "—" : `${root.progress}%`}</span>
       </div>
       {trophy ? (
-        <p className="px-1 text-2xs text-subtle-foreground">Достигнута · последнее изменение {goal ? shortDate(goal.updatedAt) : ""}</p>
+        <p className={styles.atlasSummary}>Достигнута · последнее изменение {goal ? shortDate(goal.updatedAt) : ""}</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-1.5 px-1">
+          <div className={styles.atlasBadges}>
             <Badge tone={badge.tone}>{badge.label}</Badge>
             {health.overdue > 0 ? <Badge tone="danger">просрочено: {health.overdue}</Badge> : null}
             {health.blocked > 0 ? <Badge tone="warning">ждёт: {health.blocked}</Badge> : null}
@@ -65,17 +72,33 @@ function SkyTile({
             {root.dueAt ? <span className="text-2xs text-subtle-foreground">до {shortDate(root.dueAt)}</span> : null}
           </div>
           {health.next?.nextTask ? (
-            <p className="truncate px-1 text-2xs text-subtle-foreground">
+            <p className={styles.atlasSummary}>
               Дальше: {health.next.nextTask.title} <span className="opacity-70">· {health.next.label}</span>
             </p>
-          ) : null}
+          ) : <p className={styles.atlasSummary}>{plans.length === 0 ? "Добавьте проект или подцель, чтобы появился маршрут." : "Выберите проект и задайте следующий шаг."}</p>}
         </>
       )}
+      </div>
     </button>
+    {plans.length > 0 && !trophy ? (
+      <div className={styles.atlasProjects} aria-label={`Проекты цели «${root.label}»`}>
+        <span className={styles.atlasProjectsHeading}>ПРОЕКТЫ НА МАРШРУТЕ</span>
+        {plans.slice(0, 3).map((plan) => (
+          <button key={plan.id} type="button" className={styles.atlasProject} onClick={() => plan.projectId && openProject(plan.projectId, plan.label)}>
+            <FolderKanban size={13} aria-hidden />
+            <span title={plan.label}>{plan.label}</span>
+            <small>{plan.progress === null ? "—" : `${plan.progress}%`}</small>
+            <ArrowUpRight size={13} aria-hidden />
+          </button>
+        ))}
+        {plans.length > 3 ? <span className={styles.atlasMore}>Ещё {plans.length - 3} на карте</span> : null}
+      </div>
+    ) : null}
+    </article>
   );
 }
 
-const GRID = "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(20rem,1fr))]";
+const GRID = styles.atlasGrid;
 
 /**
  * Level 1 of the sky. Active goals first; achieved goals move to the «Небосвод достижений» below
@@ -100,11 +123,12 @@ export function SkyOverview({
   const moving = healths.filter((h) => h.tone === "ok").length;
 
   return (
-    <div className="space-y-6">
+    <div className={styles.atlasOverview}>
       <div className="space-y-4">
-        <p className="text-label text-muted-foreground">
-          {active.length} {active.length === 1 ? "созвездие" : "созвездий"} в работе · на ходу: {moving} · требуют внимания: {attention}. Нажмите на созвездие, чтобы войти в него.
-        </p>
+        <div className={styles.atlasIntro}>
+          <div><span className={styles.atlasEyebrow}>АТЛАС ВАШИХ РЕЗУЛЬТАТОВ</span><h2>Ваши созвездия</h2><p>Каждый маршрут ведёт от проектов и шагов к результату.</p></div>
+          <div className={styles.atlasCount}><strong>{active.length}</strong><span>в работе</span><small>{attention > 0 ? `${attention} требуют внимания` : `${moving} в движении`}</small></div>
+        </div>
         {active.length === 0 ? <p className="text-label text-subtle-foreground">Активных целей нет.</p> : null}
         <div className={GRID}>
           {active.map((c) => (

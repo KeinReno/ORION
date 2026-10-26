@@ -1,4 +1,4 @@
-import type { Goal, GoalMilestone } from "@orion/shared-types";
+import type { Goal, GoalMilestone, Task } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import {
   CONSTELLATION_H,
@@ -10,6 +10,7 @@ import {
   skyHealth,
   starAt,
   starState,
+  suggestCanvasPoint,
   validParents
 } from "./goal-constellation";
 
@@ -21,6 +22,8 @@ function goal(id: string, patch: Partial<Goal> = {}): Goal {
     workspaceId: "ws",
     title: id,
     description: "",
+    successCriteria: [],
+    lastReview: null,
     status: "active",
     dueAt: null,
     parentId: null,
@@ -124,6 +127,32 @@ describe("buildConstellations", () => {
   it("gives heavier plans bigger stars", () => {
     const stars = buildConstellations([goal("a", { plans: [plan("1", 10, 9), plan("2", 10, 1)] })])[0]!.stars;
     expect(stars.find((s) => s.id === "a:1")!.r).toBeGreaterThan(stars.find((s) => s.id === "a:2")!.r);
+  });
+
+  it("places a real project task under its milestone and keeps the goal progress from the server", () => {
+    const milestone = { id: "m1", title: "Первый этап", status: "planned" as const, dueAt: null, tasks: 1, closed: 0 };
+    const task: Task = {
+      id: "t1", revision: 1, workspaceId: "ws", projectId: "p-1", parentId: null,
+      title: "Разметить грядки", description: "", status: "todo", priority: "normal", dueAt: null,
+      projectTag: null, recurrence: null, completedAt: null, sortOrder: 0, dependencyIds: [], blocked: false,
+      assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: "m1", checklist: [],
+      createdAt: NOW.toISOString(), updatedAt: NOW.toISOString()
+    };
+    const constellation = buildConstellations([goal("garden", { plans: [plan("1", 0, 1, { milestones: [milestone] })], progress: 0 })], NOW, [task])[0]!;
+    const milestoneStar = constellation.stars.find((star) => star.milestoneId === "m1" && star.kind === "milestone")!;
+    const taskStar = constellation.stars.find((star) => star.taskId === "t1")!;
+    expect(taskStar.parentId).toBe(milestoneStar.id);
+    expect(taskStar.kind).toBe("task");
+    expect(constellation.stars.find((star) => star.id === "garden")?.progress).toBe(0);
+  });
+
+  it("suggests a new location away from existing stars and their labels", () => {
+    const constellation = buildConstellations([goal("garden", { plans: [plan("1", 0)] })], NOW)[0]!;
+    const planStar = constellation.stars.find((star) => star.kind === "plan")!;
+    const first = suggestCanvasPoint(constellation.stars, planStar);
+    const occupied = { ...planStar, id: "occupied", x: first.x, y: first.y };
+    const second = suggestCanvasPoint([...constellation.stars, occupied], occupied);
+    expect(Math.hypot(first.x - second.x, first.y - second.y)).toBeGreaterThan(80);
   });
 });
 

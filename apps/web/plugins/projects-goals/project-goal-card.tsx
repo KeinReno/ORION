@@ -6,7 +6,7 @@ import { Button, Card, IconButton, Select, useToast } from "@orion/ui";
 import { Flag, X } from "lucide-react";
 import { useState } from "react";
 import type { ProjectOverviewSideSlotProps } from "../../lib/extensions/contracts";
-import { describeAuthError, Meter, openEntity, openPanel } from "../../lib/extensions/host-api";
+import { describeAuthError, Meter, openEntity, openPanel, openProjectTask } from "../../lib/extensions/host-api";
 
 /**
  * «Цели» on a project's overview (plugin projects-goals): which goals this project is a plan of, how far each goal is
@@ -70,6 +70,11 @@ export function ProjectGoalCard({ workspaceId, projectId }: ProjectOverviewSideS
                 {goal.plans.length > 1 ? `вклад проекта — ${plan.weight} из ${totalWeight} по весу, ещё проектов: ${goal.plans.length - 1}` : "единственный проект этой цели"}
                 {goal.status !== "active" ? ` · ${goal.status === "achieved" ? "цель достигнута" : "цель отложена"}` : ""}
               </p>
+              {goal.status === "active" && plan.nextTask ? (
+                <button type="button" onClick={() => openProjectTask(projectId, plan.nextTask!.id, plan.nextTask!.title)} className="block max-w-full truncate text-left text-label text-accent hover:underline">
+                  Дальше: {plan.nextTask.title}
+                </button>
+              ) : null}
             </li>
           );
         })}

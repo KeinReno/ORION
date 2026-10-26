@@ -2,7 +2,7 @@
 
 import type { EntityLink, Goal } from "@orion/shared-types";
 import { Minus, Plus, Scan } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   CONSTELLATION_H,
   CONSTELLATION_W,
@@ -29,23 +29,24 @@ export const STATE_LABEL: Record<StarState, string> = {
   dropped: "отменено"
 };
 
-/** Unknown is a hollow dashed ring: "we do not know" must not look like zero or like done. */
-function starClasses(state: StarState): string {
+/** Shape identifies the entity, fill identifies progress. Unknown stays hollow. */
+function starClasses(state: StarState, kind: Star["kind"]): string {
+  const family = kind === "goal" ? styles.starGoal : kind === "plan" ? styles.starPlan : kind === "task" ? styles.starTask : styles.starMilestone;
   switch (state) {
     case "done":
-      return "fill-accent stroke-accent";
+      return `${family} ${styles.starDone}`;
     case "lit":
-      return "fill-accent/60 stroke-accent";
+      return `${family} ${styles.starLit}`;
     case "dim":
-      return "fill-muted stroke-border";
+      return `${family} ${styles.starDim}`;
     case "unknown":
-      return "fill-transparent stroke-subtle-foreground";
+      return `${family} ${styles.starUnknown}`;
     case "dropped":
-      return "fill-muted/50 stroke-border";
+      return `${family} ${styles.starDropped}`;
   }
 }
 
-export const KIND_LABEL = { goal: "Цель", plan: "План", milestone: "Веха" } as const;
+export const KIND_LABEL = { goal: "Цель", plan: "План", milestone: "Веха", task: "Задача" } as const;
 
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 4;
@@ -72,7 +73,7 @@ function PaceRing({ star }: { star: Star }): React.ReactElement {
   const radius = star.r + 5;
   const circumference = 2 * Math.PI * radius;
   const elapsed = star.pace.elapsed ?? 0;
-  const tone = star.pace.state === "late" ? "stroke-destructive" : star.pace.state === "behind" ? "stroke-warning" : star.pace.state === "unknown" ? "stroke-subtle-foreground" : "stroke-accent";
+  const tone = star.pace.state === "late" ? "stroke-destructive" : star.pace.state === "behind" ? "stroke-warning" : star.pace.state === "unknown" ? "stroke-subtle-foreground" : styles.paceOnTrack;
   return (
     <g transform={`rotate(-90 ${star.x} ${star.y})`} pointerEvents="none">
       <circle cx={star.x} cy={star.y} r={radius} fill="none" className="stroke-border" strokeWidth={1.25} opacity={0.6} />
@@ -100,6 +101,7 @@ export interface SkyCanvasProps {
   /** mini = a non-interactive thumbnail for the overview. */
   mode: "mini" | "full";
   onSelect?: (id: string) => void;
+  onActivate?: (id: string) => void;
   /** A goal star was dropped onto another goal star. */
   onReparent?: (goalId: string, parentId: string) => void;
   /** A project from the tray was dropped onto a goal star. */
@@ -107,6 +109,11 @@ export interface SkyCanvasProps {
   /** Arrange mode (or Shift held): a drag moves the star itself; the new position is reported here. */
   arrange?: boolean;
   onPin?: (starId: string, x: number, y: number) => void;
+  dependencyLinks?: ReadonlyArray<{ from: string; to: string }>;
+  /** A short primary click on free space clears the selection. */
+  onCanvasPrimaryClick?: () => void;
+  /** Secondary click opens creation at a point, optionally scoped to the star under the pointer. */
+  onCanvasContextMenu?: (x: number, y: number, screenX: number, screenY: number, starId: string | null) => void;
 }
 
 /**
@@ -114,7 +121,7 @@ export interface SkyCanvasProps {
  * (`buildConstellations`); this only draws it and turns pointer / keyboard input into
  * select / pan / zoom / drop callbacks. Editing itself is the caller's job.
  */
-export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onReparent, onDropProject, arrange = false, onPin }: SkyCanvasProps): React.ReactElement {
+export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onActivate, onReparent, onDropProject, arrange = false, onPin, dependencyLinks = [], onCanvasPrimaryClick, onCanvasContextMenu }: SkyCanvasProps): React.ReactElement {
   const full = mode === "full";
   const glowId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -193,7 +200,6 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
       starId,
       moved: false
     };
-    svgRef.current?.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: ReactPointerEvent<SVGSVGElement>): void {
@@ -202,6 +208,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
     const dx = event.clientX - gesture.startClientX;
     const dy = event.clientY - gesture.startClientY;
     if (!gesture.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+    if (!gesture.moved) svgRef.current?.setPointerCapture(event.pointerId);
     gesture.moved = true;
     if (gesture.kind === "pin" && gesture.starId) {
       const p = toLayout(event.clientX, event.clientY);
@@ -224,7 +231,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
     const gesture = gestureRef.current;
     gestureRef.current = null;
     if (!gesture) return;
-    svgRef.current?.releasePointerCapture(event.pointerId);
+    if (svgRef.current?.hasPointerCapture(event.pointerId)) svgRef.current.releasePointerCapture(event.pointerId);
     if (gesture.kind === "pin" && gesture.moved && gesture.starId) {
       const placed = draft;
       setDraft(null);
@@ -239,6 +246,18 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
       return;
     }
     if (!gesture.moved && gesture.starId) onSelect?.(gesture.starId);
+    else if (!gesture.moved) onCanvasPrimaryClick?.();
+  }
+
+  function onContextMenu(event: ReactMouseEvent<SVGSVGElement>): void {
+    if (!full || !onCanvasContextMenu) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = toLayout(event.clientX, event.clientY);
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!point || !rect) return;
+    const starId = (event.target as Element).closest("[data-star]")?.getAttribute("data-star") ?? null;
+    onCanvasContextMenu(point.x, point.y, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height, starId);
   }
 
   function focusStar(id: string): void {
@@ -299,17 +318,23 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
         viewBox={`0 0 ${CONSTELLATION_W} ${CONSTELLATION_H}`}
         role="group"
         aria-label={`Созвездие ${byId.get(constellation.rootId)?.label ?? ""}`}
-        className={`block h-auto w-full text-accent ${full ? `${styles.fullMap} ${dragging ? "cursor-grabbing touch-pan-y" : "cursor-grab touch-pan-y"}` : `pointer-events-none ${styles.miniMap}`}`}
+        className={`block h-auto w-full ${styles.atlasInk} ${full ? `${styles.fullMap} ${dragging ? "cursor-grabbing touch-pan-y" : "cursor-grab touch-pan-y"}` : `pointer-events-none ${styles.miniMap}`}`}
         style={{ aspectRatio: `${CONSTELLATION_W} / ${CONSTELLATION_H}` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onContextMenu={onContextMenu}
+        onDoubleClick={(event) => {
+          const starId = (event.target as Element).closest("[data-star]")?.getAttribute("data-star");
+          if (starId) { event.preventDefault(); onActivate?.(starId); }
+        }}
+        onPointerCancel={() => { gestureRef.current = null; setDraft(null); setDragging(null); setHoverDrop(null); }}
       >
         <defs>
           <filter id={glowId} x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="3.5" />
           </filter>
+          <marker id={`${glowId}-dependency-arrow`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 1 1 L 7 4 L 1 7" fill="none" stroke="#c39857" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></marker>
         </defs>
 
         {dust.map((d, i) => (
@@ -346,6 +371,15 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                 {full && route && !faded ? <path d={curve} fill="none" className={`stroke-foreground ${styles.routeFlow}`} strokeWidth={1.1} strokeDasharray="2 10" strokeLinecap="round" opacity={0.65} pointerEvents="none" /> : null}
               </g>
             );
+          })}
+
+          {dependencyLinks.map((link) => {
+            const from = byId.get(link.from);
+            const to = byId.get(link.to);
+            if (!from || !to) return null;
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2 - 20;
+            return <path key={`dependency-${link.from}-${link.to}`} d={`M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`} fill="none" className="stroke-warning" strokeWidth={1.4} strokeDasharray="4 4" markerEnd={`url(#${glowId}-dependency-arrow)`} opacity={0.72} pointerEvents="none" aria-hidden />;
           })}
 
           {prerequisites.map((link) => {
@@ -408,7 +442,16 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                     transform={`rotate(45 ${star.x} ${star.y})`}
                     strokeWidth={1.5}
                     strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${styles.nodeCore} ${starClasses(star.state)}`}
+                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
+                  />
+                ) : star.kind === "task" ? (
+                  <rect x={star.x - star.r} y={star.y - star.r} width={star.r * 2} height={star.r * 2} rx={2} strokeWidth={1.5} className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`} />
+                ) : star.kind === "goal" ? (
+                  <path
+                    d={`M ${star.x} ${star.y - star.r * 1.5} L ${star.x + star.r * 0.34} ${star.y - star.r * 0.34} L ${star.x + star.r * 1.5} ${star.y} L ${star.x + star.r * 0.34} ${star.y + star.r * 0.34} L ${star.x} ${star.y + star.r * 1.5} L ${star.x - star.r * 0.34} ${star.y + star.r * 0.34} L ${star.x - star.r * 1.5} ${star.y} L ${star.x - star.r * 0.34} ${star.y - star.r * 0.34} Z`}
+                    strokeWidth={1.3}
+                    strokeLinejoin="round"
+                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
                   />
                 ) : (
                   <circle
@@ -417,15 +460,16 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                     r={star.r}
                     strokeWidth={1.5}
                     strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${styles.nodeCore} ${starClasses(star.state)}`}
+                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
                   />
                 )}
+                {star.kind === "plan" ? <circle cx={star.x} cy={star.y} r={star.r + 3.5} fill="none" className={styles.planOrbit} strokeWidth={0.8} opacity={0.6} pointerEvents="none" /> : null}
                 {lit ? <circle cx={star.x - star.r * 0.2} cy={star.y - star.r * 0.2} r={Math.max(1.3, star.r * 0.16)} className="fill-foreground" opacity={0.86} pointerEvents="none" /> : null}
                 {star.sharedWith.length > 0 ? <circle cx={star.x + star.r * 0.85} cy={star.y + star.r * 0.85} r={2.6} className="fill-foreground stroke-background" strokeWidth={1} /> : null}
                 {star.overdue > 0 ? <circle cx={star.x + star.r * 0.8} cy={star.y - star.r * 0.8} r={3} className="fill-destructive" /> : null}
                 {star.blocked > 0 ? <circle cx={star.x - star.r * 0.8} cy={star.y - star.r * 0.8} r={3} className="fill-warning" /> : null}
                 {label ? (
-                  <text x={star.x} y={star.y + star.r + 18} textAnchor="middle" className={`pointer-events-none text-[13px] ${styles.starLabel} ${hot.has(star.id) || star.depth === 0 ? "fill-foreground" : "fill-subtle-foreground"}`}>
+                  <text x={star.x} y={star.y + star.r + 19} textAnchor="middle" className={`pointer-events-none ${star.kind === "goal" ? "text-[15px]" : "text-[13px]"} ${styles.starLabel} ${hot.has(star.id) || star.depth === 0 ? "fill-foreground" : "fill-subtle-foreground"}`}>
                     {label}
                   </text>
                 ) : null}

@@ -45,6 +45,7 @@ import { ProjectListHeader, ProjectRow } from "./projects/project-row";
 import { DueChip, NextLine } from "./projects/project-vitals";
 import { nextActionByProject, pluralDays, projectsNeedingAttention, reportFreshness, type ProjectNextAction } from "../lib/project-status";
 import { ProjectAttentionBand } from "./projects/project-attention";
+import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 /**
  * «Проекты» (v0.14) — a project is what a task's free-form `projectTag` grew
@@ -85,6 +86,9 @@ export function ProjectsPanel(): React.ReactElement {
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null);
   const [sort, setSort] = useState<ProjectBoardSort>("lifecycle");
   const [layout, setLayout] = useState<BoardLayout>("list");
+  const [boardMode, setBoardMode] = useState<"all" | "goals">("all");
+  const hasGoalGrouping = useSlotContributions("projects.board.grouped").length > 0;
+  const groupedByGoal = !archived && hasGoalGrouping && boardMode === "goals";
   // Read after mount: the first paint must match the server-rendered markup.
   useEffect(() => setLayout(loadLayout()), []);
   function chooseLayout(next: BoardLayout): void {
@@ -233,7 +237,7 @@ export function ProjectsPanel(): React.ReactElement {
           </option>
         ))}
       </Select>
-      <SegmentedControl<BoardLayout>
+      {!groupedByGoal ? <SegmentedControl<BoardLayout>
         value={layout}
         onChange={chooseLayout}
         size="sm"
@@ -242,7 +246,7 @@ export function ProjectsPanel(): React.ReactElement {
           { value: "list", label: "Список" },
           { value: "cards", label: "Карточки" }
         ]}
-      />
+      /> : null}
       <SegmentedControl<"active" | "archive">
         value={archived ? "archive" : "active"}
         onChange={(value) => {
@@ -299,6 +303,15 @@ export function ProjectsPanel(): React.ReactElement {
               </FilterChip>
             ))}
           </div>
+        ) : null}
+        {hasGoalGrouping && !archived ? (
+          <SegmentedControl<"all" | "goals">
+            value={boardMode}
+            onChange={setBoardMode}
+            size="sm"
+            aria-label="Группировка проектов"
+            options={[{ value: "all", label: "Все проекты" }, { value: "goals", label: "По целям" }]}
+          />
         ) : null}
         {/* Wide: the view controls sit inline. Narrow: one disclosure, so the list starts above the fold. */}
         <div className="ml-auto hidden items-center gap-2 sm:flex">{viewControls}</div>
@@ -377,7 +390,9 @@ export function ProjectsPanel(): React.ReactElement {
                 }
               />
             ) : (
-              layout === "list" ? (
+              groupedByGoal && !archived ? (
+                <ExtensionSlot name="projects.board.grouped" props={{ workspaceId, projects: list, onOpenProject: (project) => openProject(project.id, project.name) }} />
+              ) : layout === "list" ? (
                 <div className="rounded-xl border border-border bg-card/40 py-2">
                   <ProjectListHeader />
                   <ul className="flex flex-col divide-y divide-border/60">

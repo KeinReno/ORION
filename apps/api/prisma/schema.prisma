@@ -2127,6 +2127,12 @@ model Goal {
   workspaceId String
   title       String
   description String    @default("")
+  /// Explicit outcome checks, independent of task-derived progress.
+  successCriteria Json @default("[]")
+  reviewWins     String   @default("")
+  reviewBlockers String   @default("")
+  reviewNext     String   @default("")
+  reviewedAt     DateTime?
   /// "active" | "achieved" | "dropped"
   status      String    @default("active")
   dueAt       DateTime?

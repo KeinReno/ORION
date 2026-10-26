@@ -9,6 +9,21 @@ import { isTaskClosed, taskPrioritySchema, taskStatusSchema, type TaskPriority, 
 export const goalStatusSchema = z.enum(["active", "achieved", "dropped"]);
 export type GoalStatus = z.infer<typeof goalStatusSchema>;
 
+export const goalCriterionSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().trim().min(1).max(240),
+  met: z.boolean()
+});
+export const goalCriteriaSchema = z.array(goalCriterionSchema).max(12);
+export type GoalCriterion = z.infer<typeof goalCriterionSchema>;
+
+export const goalReviewInputSchema = z.object({
+  wins: z.string().trim().max(2000),
+  blockers: z.string().trim().max(2000),
+  next: z.string().trim().max(2000)
+});
+export type GoalReviewInput = z.infer<typeof goalReviewInputSchema>;
+
 export const GOAL_STATUS_LABEL: Record<GoalStatus, string> = {
   active: "В работе",
   achieved: "Достигнута",
@@ -65,6 +80,8 @@ export const goalSchema = z.object({
   workspaceId: z.string(),
   title: z.string(),
   description: z.string(),
+  successCriteria: goalCriteriaSchema,
+  lastReview: goalReviewInputSchema.extend({ at: z.string() }).nullable(),
   status: goalStatusSchema,
   dueAt: z.string().nullable(),
   /** Parent goal; null = top-level. Depth is capped at GOAL_MAX_DEPTH. */
@@ -88,6 +105,7 @@ export type Goal = z.infer<typeof goalSchema>;
 export const createGoalInputSchema = z.object({
   title: z.string().trim().min(1, "Название обязательно").max(200),
   description: z.string().max(20_000).default(""),
+  successCriteria: goalCriteriaSchema.default([]),
   dueAt: z.string().datetime().nullable().optional(),
   parentId: z.string().min(1).nullable().optional(),
   subWeight: z.number().int().min(1).max(100).default(1)
@@ -97,6 +115,8 @@ export type CreateGoalInput = z.infer<typeof createGoalInputSchema>;
 export const updateGoalInputSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().max(20_000).optional(),
+  successCriteria: goalCriteriaSchema.optional(),
+  review: goalReviewInputSchema.optional(),
   status: goalStatusSchema.optional(),
   dueAt: z.string().datetime().nullable().optional(),
   /** null = make top-level. */
