@@ -21,7 +21,10 @@ import {
   type UpdateGoalPlanInput
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
-import { ProjectsService } from "../projects/projects.service";
+import { ProjectCatalog } from "../projects/public/project-catalog";
+import { ProjectReferences } from "../projects/public/project-references";
+import { GoalTaskReader } from "../tasks/public/goal-task-reader";
+import { GoalMilestoneReader } from "../milestones/public/goal-milestone-reader";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 type GoalWithPlans = GoalRow & { plans: PlanRow[] };
@@ -36,7 +39,10 @@ export class GoalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly projects: ProjectsService
+    private readonly projects: ProjectCatalog,
+    private readonly projectReferences: ProjectReferences,
+    private readonly tasks: GoalTaskReader,
+    private readonly milestones: GoalMilestoneReader
   ) {}
 
   async list(userId: string, workspaceId: string): Promise<Goal[]> {
@@ -59,10 +65,7 @@ export class GoalsService {
       const plans = await tx.goalPlan.findMany({ where: { workspaceId }, select: { projectId: true } });
       const projectIds = [...new Set(plans.map((p) => p.projectId))];
       if (projectIds.length === 0) return [];
-      return tx.task.findMany({
-        where: { workspaceId, projectId: { in: projectIds } },
-        select: { projectId: true, status: true, createdAt: true, completedAt: true, updatedAt: true }
-      });
+      return this.tasks.historyTx(tx, workspaceId, projectIds);
     });
     const byProject = new Map<string, Array<{ createdAt: Date; closedAt: Date | null }>>();
     for (const task of tasks) {
@@ -131,8 +134,8 @@ export class GoalsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertGoalTx(tx, workspaceId, goalId);
       // The project must be in THIS workspace: a member of two spaces sees both, RLS would not stop a mix-up.
-      const project = await tx.project.findUnique({ where: { id: input.projectId } });
-      if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+      const exists = await this.projectReferences.existsTx(tx, workspaceId, input.projectId);
+      if (!exists) throw new NotFoundException("Проект не найден");
       const existing = await tx.goalPlan.findUnique({ where: { goalId_projectId: { goalId, projectId: input.projectId } } });
       if (existing) throw new ConflictException("Этот проект уже входит в цель");
       await tx.goalPlan.create({ data: { workspaceId, goalId, projectId: input.projectId, weight: input.weight } });
@@ -206,31 +209,13 @@ export class GoalsService {
       projectIds.length === 0
         ? []
         : await this.prisma.withUser(userId, (tx) =>
-            tx.task.findMany({
-              where: { workspaceId, projectId: { in: projectIds } },
-              select: {
-                id: true,
-                projectId: true,
-                milestoneId: true,
-                title: true,
-                status: true,
-                priority: true,
-                dueAt: true,
-                sortOrder: true,
-                updatedAt: true,
-                dependsOn: { select: { dependsOn: { select: { status: true } } } }
-              }
-            })
+            this.tasks.plansTx(tx, workspaceId, projectIds)
           );
     const milestoneRows =
       projectIds.length === 0
         ? []
         : await this.prisma.withUser(userId, (tx) =>
-            tx.milestone.findMany({
-              where: { workspaceId, projectId: { in: projectIds } },
-              orderBy: [{ order: "asc" }, { dueAt: "asc" }, { createdAt: "asc" }],
-              select: { id: true, projectId: true, title: true, status: true, dueAt: true }
-            })
+            this.milestones.plansTx(tx, workspaceId, projectIds)
           );
     const milestonesByProject = new Map<string, Goal["plans"][number]["milestones"]>();
     for (const m of milestoneRows) {

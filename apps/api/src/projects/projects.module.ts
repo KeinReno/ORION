@@ -11,14 +11,14 @@ import { ProjectIdeasController, ProjectProblemsController } from "./project-cap
 import { ProjectUpdatesController } from "./project-updates.controller";
 import { ProjectUpdatesService } from "./project-updates.service";
 import { ProjectsController } from "./projects.controller";
-import { ProjectsService } from "./projects.service";
+import { ProjectCatalogModule } from "./public/project-catalog.module";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { ProjectsSearchProvider } from "./projects-search.provider";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, TasksModule, CapturesModule, SearchRegistryModule, AgentCoreModule],
+  imports: [ProjectCatalogModule, AuthModule, WorkspacesModule, NotificationsModule, TasksModule, CapturesModule, SearchRegistryModule, AgentCoreModule],
   controllers: [ProjectsAgentController, ProjectsController, ProjectUpdatesController, ProjectIdeasController, ProjectProblemsController],
-  providers: [ProjectsService, ProjectUpdatesService, ProjectCapturesService, ProjectsSearchProvider],
-  exports: [ProjectsService]
+  providers: [ProjectUpdatesService, ProjectCapturesService, ProjectsSearchProvider],
+  exports: [ProjectCatalogModule]
 })
 export class ProjectsModule {}
