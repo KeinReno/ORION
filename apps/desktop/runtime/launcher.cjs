@@ -31,6 +31,10 @@ const configPath = path.join(data, 'local-runtime.json');
 const pgPort = Number(process.env.ORION_DESKTOP_PG_PORT || 55432);
 const apiPort = Number(process.env.ORION_DESKTOP_API_PORT || 4000);
 
+function startupPhase(phase) {
+  payload.atomic(path.join(requestedData, 'startup-state.json'), { phase });
+}
+
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   fs.mkdirSync(requestedData, { recursive: true });
@@ -135,13 +139,16 @@ async function main() {
     log(`Каталог PostgreSQL содержит не-ASCII символы; копия бинарников: ${pgPlan.dir}`);
     mirrorPgDir(path.join(runtime, 'postgres'), pgPlan.dir, appVersion);
   }
+  startupPhase('preparing');
   selectApplication();
   for (const file of [process.execPath, executable('initdb'), executable('pg_ctl'), path.join(api, 'dist', 'main.js')]) {
     if (!fs.existsSync(file)) throw new Error(`Installer is incomplete: ${file}`);
   }
   const config = loadConfig();
+  startupPhase('database');
   await startPostgres(config);
   await provision(config);
+  startupPhase('migrations');
   await migrate(config);
   const baseEnv = {
     ...process.env,
@@ -160,6 +167,7 @@ async function main() {
     ORION_SHELL_BASE_TAG: JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8')).tag,
     ORION_PG_CTL: executable('pg_ctl'), ORION_PG_CLUSTER: cluster,
   };
+  startupPhase('server');
   superviseApi(baseEnv);
 }
 

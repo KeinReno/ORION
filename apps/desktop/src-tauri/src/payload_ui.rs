@@ -18,7 +18,7 @@ fn file_path(root: &Path, uri: &str) -> Option<PathBuf> {
     Some(canonical)
 }
 
-fn csp(html: &str) -> String {
+pub(crate) fn csp(html: &str) -> String {
     // Next's inline bootstrap varies with each export. Hash the actual signed HTML,
     // never reuse hashes from the UI embedded in the old executable.
     let mut scripts = String::new();
@@ -28,7 +28,9 @@ fn csp(html: &str) -> String {
         let Some(open) = rest.find('>') else { break; };
         rest = &rest[open + 1..];
         let Some(close) = rest.find("</script>") else { break; };
-        let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(&rest.as_bytes()[..close]));
+        // HTML parsing normalizes CRLF/CR to LF before CSP checks inline scripts.
+        let script = rest[..close].replace("\r\n", "\n").replace('\r', "\n");
+        let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(script.as_bytes()));
         scripts.push_str(&format!(" 'sha256-{hash}'"));
         rest = &rest[close + 9..];
     }
@@ -36,6 +38,7 @@ fn csp(html: &str) -> String {
 }
 
 pub fn respond(app: &tauri::AppHandle, request: http::Request<Vec<u8>>) -> http::Response<Vec<u8>> {
+    if let Some(response) = super::startup::respond(app, &request) { return response; }
     let result = (|| {
         if !matches!(request.method().as_str(), "GET" | "HEAD") { return None; }
         let marker = app.path().app_local_data_dir().ok()?.join("app-runtime.json");
@@ -97,5 +100,11 @@ mod tests {
         for uri in ["/%2e%2e/private", "/%5cprivate", "/C:/secret", "/%00"] {
             assert!(file_path(Path::new("."), uri).is_none());
         }
+    }
+    #[test]
+    fn script_hashes_match_html_newline_normalization() {
+        let policy = csp("<script>first();\r\nsecond();\rthird();</script>");
+        let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(b"first();\nsecond();\nthird();"));
+        assert!(policy.contains(&hash));
     }
 }

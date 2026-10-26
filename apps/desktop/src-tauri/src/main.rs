@@ -3,12 +3,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod browser;
+mod startup;
 #[cfg_attr(debug_assertions, allow(dead_code))]
 mod payload_ui;
 #[cfg(debug_assertions)]
 mod browser_smoke;
 #[cfg(debug_assertions)]
 mod payload_ui_smoke;
+#[cfg(debug_assertions)]
+mod startup_smoke;
 
 #[cfg(all(windows, not(debug_assertions)))]
 fn ready() -> bool {
@@ -34,7 +37,7 @@ fn ready() -> bool {
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
-fn start_local_runtime(app: &tauri::App) -> Result<(), String> {
+fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
     use std::fs::{self, OpenOptions};
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
@@ -58,6 +61,8 @@ fn start_local_runtime(app: &tauri::App) -> Result<(), String> {
     }
     let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let phase_file = data_dir.join("startup-state.json");
+    let _ = fs::remove_file(&phase_file);
     let log_file = data_dir.join("launcher.log");
     let log = OpenOptions::new()
         .create(true)
@@ -75,6 +80,7 @@ fn start_local_runtime(app: &tauri::App) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let deadline = Instant::now() + Duration::from_secs(360);
     while Instant::now() < deadline {
+        startup::update_phase(app, &phase_file);
         if ready() {
             return Ok(());
         }
@@ -87,29 +93,9 @@ fn start_local_runtime(app: &tauri::App) -> Result<(), String> {
         thread::sleep(Duration::from_millis(500));
     }
     Err(format!(
-        "Локальный сервер не запустился за 180 секунд. Журнал: {}",
+        "Локальный сервер не запустился за 360 секунд. Журнал: {}",
         log_file.display()
     ))
-}
-
-#[cfg(all(windows, not(debug_assertions)))]
-fn show_startup_error(message: &str) {
-    #[link(name = "user32")]
-    extern "system" {
-        fn MessageBoxW(hwnd: isize, text: *const u16, caption: *const u16, kind: u32) -> i32;
-    }
-    use std::os::windows::ffi::OsStrExt;
-    let text: Vec<u16> = std::ffi::OsStr::new(message)
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    let caption: Vec<u16> = std::ffi::OsStr::new("ORION не запустился")
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    unsafe {
-        MessageBoxW(0, text.as_ptr(), caption.as_ptr(), 0x10);
-    }
 }
 
 /// `orion://open?type=note&id=…&workspace=…` (a link an AI agent handed to the person) → the web client's `/open`
@@ -120,6 +106,10 @@ fn open_orion_link(app: &tauri::AppHandle, url: &str) {
     let Some(query) = url.strip_prefix("orion://open?") else {
         return;
     };
+    if !startup::ready(app) {
+        if let Ok(mut pending) = PENDING_LINK.lock() { *pending = Some(url.to_owned()); }
+        return;
+    }
     if let Some(webview) = app.get_webview("main") {
         let window = webview.window();
         // serde_json quotes and escapes the string, so the query cannot break out of the JS literal.
@@ -143,21 +133,25 @@ fn main() {
         tauri::async_runtime::spawn_blocking(move || responder.respond(payload_ui::respond(&app, request)));
     });
     #[cfg(debug_assertions)]
-    let builder = if payload_ui_smoke::enabled() {
+    let builder = if payload_ui_smoke::enabled() || startup::smoke_enabled() {
         builder.register_asynchronous_uri_scheme_protocol("tauri", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
             tauri::async_runtime::spawn_blocking(move || responder.respond(payload_ui::respond(&app, request)));
         })
     } else { builder };
     builder
+        .manage(startup::State::default())
         .invoke_handler(tauri::generate_handler![browser::browser_open, browser::browser_control])
         .on_page_load(|webview, payload| {
             #[cfg(debug_assertions)]
             browser_smoke::loaded(webview, &payload);
             #[cfg(debug_assertions)]
             payload_ui_smoke::loaded(webview, &payload);
+            #[cfg(debug_assertions)]
+            startup_smoke::loaded(webview, &payload);
             if webview.label().starts_with("browser-") { return; }
-            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+                && !payload.url().path().starts_with(startup::PATH) {
                 let pending = PENDING_LINK.lock().ok().and_then(|mut slot| slot.take());
                 if let Some(url) = pending {
                     open_orion_link(tauri::Manager::app_handle(webview), &url);
@@ -187,22 +181,49 @@ fn main() {
             });
             // The installer registers the scheme; in a dev build register it at run time.
             #[cfg(all(windows, debug_assertions))]
-            if std::env::var_os("ORION_BROWSER_SMOKE").is_none() && !payload_ui_smoke::enabled() {
+            if std::env::var_os("ORION_BROWSER_SMOKE").is_none() && !payload_ui_smoke::enabled() && !startup::smoke_enabled() {
                 let _ = app.deep_link().register_all();
-            }
-            #[cfg(all(windows, not(debug_assertions)))]
-            if let Err(message) = start_local_runtime(app) {
-                show_startup_error(&message);
-                return Err(std::io::Error::other(message).into());
             }
             #[cfg(debug_assertions)]
             payload_ui_smoke::setup(app)?;
-            let window = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?;
+            #[cfg(debug_assertions)]
+            startup_smoke::setup(app)?;
+            let mut config = app.config().app.windows[0].clone();
+            #[cfg(all(windows, not(debug_assertions)))]
+            { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
+            #[cfg(debug_assertions)]
+            if startup::smoke_enabled() { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
+            let window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
             #[cfg(debug_assertions)]
             let window = if payload_ui_smoke::enabled() { window.initialization_script(payload_ui_smoke::FAKE_API) } else { window };
             window.build()?;
             #[cfg(all(windows, not(debug_assertions)))]
-            payload_ui::watch_selection(app.handle().clone());
+            {
+                let handle = app.handle().clone();
+                // setup must return immediately so Windows can paint and process input.
+                std::thread::spawn(move || match start_local_runtime(&handle) {
+                    Ok(()) => {
+                        startup::set(&handle, "ready", None);
+                        payload_ui::watch_selection(handle);
+                    }
+                    Err(message) => startup::set(&handle, "error", Some(message)),
+                });
+            }
+            #[cfg(debug_assertions)]
+            if startup::smoke_enabled() {
+                if app.config().identifier != "com.orion.startup-smoke" { return Err("Isolated startup identifier required".into()); }
+                let handle=app.handle().clone();
+                std::thread::spawn(move || {
+                    for phase in ["database", "migrations", "server"] {
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        startup::set(&handle, phase, None);
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    if std::env::var("ORION_STARTUP_SMOKE").as_deref() == Ok("error") {
+                        startup::set(&handle, "error", Some("Контрольная ошибка: локальный сервер недоступен. Данные не изменялись.".into()));
+                    } else { startup::set(&handle, "ready", None); }
+                });
+            } else { startup::set(app.handle(), "ready", None); }
             #[cfg(debug_assertions)]
             if payload_ui_smoke::enabled() { payload_ui::watch_selection(app.handle().clone()); }
             Ok(())

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Запуск ORION</title>
+<style>
+:root{color-scheme:dark;font-family:"Segoe UI",sans-serif;background:#16171a;color:#edece8;--gold:#c9a86a}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:40px}
+main{width:min(440px,100%)}.identity{display:flex;align-items:center;gap:20px;margin-bottom:54px}
+img{width:72px;height:72px;object-fit:contain}h1{font-size:36px;font-weight:500;letter-spacing:.12em;margin:0} .identity p{color:#beb9af;font-size:13px;margin:8px 0 0}
+h2{font-weight:500;font-size:21px;line-height:1.4;margin:0 0 14px;text-wrap:balance}
+.track{height:2px;overflow:hidden;background:#34322c;margin:24px 0}.track span{display:block;width:28%;height:100%;background:var(--gold);animation:travel 2s ease-in-out infinite}
+p{font-size:14px;line-height:1.65;color:#beb9af;margin:0}.time{margin-top:24px;color:#c9a86a;font-variant-numeric:tabular-nums}
+#error{white-space:pre-wrap;overflow-wrap:anywhere;color:#efb3a8;margin-top:18px}button{font:inherit;border:1px solid #736342;color:#edece8;background:#28251e;border-radius:8px;padding:10px 16px;margin-top:20px;cursor:pointer}
+button:hover{background:#393124}button:focus-visible{outline:2px solid var(--gold);outline-offset:4px}[hidden]{display:none!important}
+::selection{background:#c9a86a;color:#16171a}@keyframes travel{0%{transform:translateX(-110%)}100%{transform:translateX(470%)}}
+@media(prefers-reduced-motion:reduce){.track span{animation:none;width:100%;opacity:.6}}@media(max-width:500px){body{padding:28px}.identity{margin-bottom:36px}h1{font-size:30px}}
+</style></head><body><main aria-busy="true" id="main">
+<div class="identity"><img src="/__orion_startup/logo.png" alt="" width="72" height="72"><div><h1>ORION</h1><p>Локальная рабочая среда</p></div></div>
+<h2 id="stage" role="status" aria-live="polite">Готовим рабочую среду</h2>
+<div class="track" aria-hidden="true"><span></span></div>
+<p id="hint">Запускаем локальные службы на этом компьютере.</p><p class="time" id="time"></p>
+<p id="error" role="alert" hidden></p><button id="retry" hidden>Проверить состояние ещё раз</button>
+</main><script>
+(() => {
+  const started=performance.now();let stopped=false,failures=0;
+  const labels={preparing:'Готовим рабочую среду',database:'Подключаем базу данных',migrations:'Проверяем структуру данных',server:'Запускаем локальный сервер',ready:'Открываем ORION'};
+  const main=document.getElementById('main'),stage=document.getElementById('stage'),hint=document.getElementById('hint'),error=document.getElementById('error'),retry=document.getElementById('retry');
+  const tick=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);document.getElementById('time').textContent=`${seconds} с`;if(seconds>=20&&!stopped)hint.textContent='Запуск занимает больше времени. При первом запуске и после обновления подготовка данных может длиться дольше.';},1000);
+  function fail(message,canCheck=false){stopped=true;main.setAttribute('aria-busy','false');stage.textContent='Не удалось запустить ORION';error.textContent=message;error.hidden=false;retry.hidden=!canCheck;hint.textContent='Закройте приложение и запустите его снова. Если ошибка повторится, проверьте журнал запуска по указанному пути.';document.querySelector('.track').hidden=true;clearInterval(tick);}
+  async function poll(){try{const response=await fetch('/__orion_startup/status',{cache:'no-store',signal:AbortSignal.timeout(4000)});if(!response.ok)throw Error('status');const state=await response.json();failures=0;if(state.phase==='error'){fail(state.error||'Закройте приложение и запустите его снова.');return;}const label=labels[state.phase]||labels.preparing;if(stage.textContent!==label)stage.textContent=label;if(state.phase==='ready'){main.setAttribute('aria-busy','false');location.replace('/');return;}}catch{if(++failures>=10){fail('Не удаётся получить состояние оболочки.',true);return;}}if(!stopped)setTimeout(poll,500);}
+  retry.addEventListener('click',()=>location.reload());poll();
+})();
+</script></body></html>
