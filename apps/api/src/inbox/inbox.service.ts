@@ -1,3 +1,5 @@
+import { InboxAgentOperations } from "./public/inbox-agent-operations";
+import { ProjectReferences } from "../projects/public/project-references";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
@@ -15,10 +17,12 @@ import { WorkspacesService } from "../workspaces/workspaces.service";
 @Injectable()
 export class InboxService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly targets: InboxTargetRegistry
+    private readonly targets: InboxTargetRegistry,
+    private readonly agentOperations: InboxAgentOperations
   ) {}
 
   /**
@@ -51,18 +55,7 @@ export class InboxService {
     workspaceId: string,
     input: { title: string; body: string; dueAt: string | null; projectId: string | null; agentName: string }
   ): Promise<{ id: string }> {
-    const row = await tx.inboxItem.create({
-      data: {
-        workspaceId,
-        title: input.title,
-        body: input.body,
-        kind: "inbox",
-        dueAt: input.dueAt ? new Date(input.dueAt) : null,
-        projectId: input.projectId,
-        createdByAgent: input.agentName
-      }
-    });
-    return { id: row.id };
+    return this.agentOperations.createFromAgentTx(tx, workspaceId, input);
   }
 
   async capture(userId: string, workspaceId: string, input: CaptureInboxInput): Promise<InboxItem> {
@@ -184,8 +177,7 @@ export class InboxService {
   ): Promise<void> {
     if (!projectId) return;
     await this.modules.assertEnabledTx(tx, userId, workspaceId, "projects");
-    const project = await tx.project.findUnique({ where: { id: projectId } });
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 }
 

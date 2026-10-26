@@ -1,3 +1,5 @@
+import { ProjectReferences } from "../projects/public/project-references";
+import { TaskIntegrationReader } from "../tasks/public/task-integration-reader";
 import { randomBytes } from "node:crypto";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
@@ -24,6 +26,8 @@ const DAY_MS = 86_400_000;
 @Injectable()
 export class EventsService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
+    private readonly taskReader: TaskIntegrationReader,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -98,7 +102,7 @@ export class EventsService {
    */
   async createTx(tx: Prisma.TransactionClient, workspaceId: string, input: CreateEventInput) {
     const { startAt, endAt } = normaliseRange(input.startAt, input.endAt, input.allDay);
-    await assertProjectTx(tx, workspaceId, input.projectId ?? null);
+    await this.assertProjectTx(tx, workspaceId, input.projectId ?? null);
     return tx.event.create({
       data: {
         workspaceId,
@@ -141,7 +145,7 @@ export class EventsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const master = await this.loadOwned(tx, workspaceId, masterId);
       if (master.readOnly) throw new BadRequestException("Внешнее событие доступно только для чтения");
-      if (input.projectId !== undefined) await assertProjectTx(tx, workspaceId, input.projectId);
+      if (input.projectId !== undefined) await this.assertProjectTx(tx, workspaceId, input.projectId);
 
       if (!master.recurrence || scope === "all") {
         const data = buildUpdateData(input, master);
@@ -276,9 +280,7 @@ export class EventsService {
       });
       const tasks = workspace.disabledModules.includes("tasks")
         ? []
-        : await tx.task.findMany({
-            where: { workspaceId: workspace.id, dueAt: { not: null } }
-          });
+        : await this.taskReader.datedTx(tx, workspace.id);
 
       const entries: ICalEntry[] = [];
       for (const ev of events) {
@@ -325,6 +327,11 @@ export class EventsService {
 
       return { name: `ORION — ${workspace.name}`, body: buildICal(`ORION — ${workspace.name}`, entries) };
     });
+  }
+
+  private async assertProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string | null): Promise<void> {
+    if (!projectId) return;
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 
   /** The subscription URL + token for the settings UI. Mints a token on first read. */
@@ -475,12 +482,6 @@ function toDto(event: EventModel): Event {
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString()
   };
-}
-
-async function assertProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string | null): Promise<void> {
-  if (!projectId) return;
-  const project = await tx.project.findUnique({ where: { id: projectId } });
-  if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
 }
 
 /** A virtual event for one occurrence of a recurring master, overrides applied. */

@@ -78,13 +78,13 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
-import { EventsService } from "../events/events.service";
-import { FinanceDraftsService } from "../finance/drafts/finance-drafts.service";
+import { EventOperations } from "../events/public/event-operations";
+import { AgentDraftOperations } from "../finance/public/agent-draft-operations";
 import { PluginsService } from "../plugins/plugins.service";
 import { ModulesService } from "../modules/modules.service";
-import { NotesService } from "../notes/notes.service";
-import { ProjectsService } from "../projects/projects.service";
-import { TasksService } from "../tasks/tasks.service";
+import { NoteOperations } from "../notes/public/note-operations";
+import { ProjectCatalog } from "../projects/public/project-catalog";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { RequirePermission } from "../common/require-permission";
 import { AgentTokenGuard, type AgentRequest } from "./agent-token.guard";
 import { AgentJobsService } from "./agent-jobs.service";
@@ -224,11 +224,11 @@ export class AiController {
     private readonly tokens: AgentTokensService,
     private readonly jobs: AgentJobsService,
     private readonly modules: ModulesService,
-    private readonly tasks: TasksService,
-    private readonly notes: NotesService,
-    private readonly projects: ProjectsService,
-    private readonly events: EventsService,
-    private readonly financeDrafts: FinanceDraftsService,
+    private readonly tasks: TaskOperations,
+    private readonly notes: NoteOperations,
+    private readonly projects: ProjectCatalog,
+    private readonly events: EventOperations,
+    private readonly financeDrafts: AgentDraftOperations,
     private readonly plugins: PluginsService
   ) {}
 

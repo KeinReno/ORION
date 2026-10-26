@@ -1,3 +1,5 @@
+import { ProjectReferences } from "../projects/public/project-references";
+import { TaskIntegrationReader } from "../tasks/public/task-integration-reader";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
@@ -52,6 +54,8 @@ const MAX_PAGE_SIZE = 200;
 @Injectable()
 export class TimeService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
+    private readonly taskReader: TaskIntegrationReader,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -337,8 +341,8 @@ export class TimeService {
   /** A task link must be a task of this workspace (a user can be a member of several). */
   private async resolveTaskTx(tx: Prisma.TransactionClient, workspaceId: string, taskId: string | null) {
     if (!taskId) return null;
-    const task = await tx.task.findUnique({ where: { id: taskId }, select: { id: true, workspaceId: true, projectId: true } });
-    if (!task || task.workspaceId !== workspaceId) throw new NotFoundException("Задача не найдена");
+    const task = await this.taskReader.referenceTx(tx, workspaceId, taskId);
+    if (!task) throw new NotFoundException("Задача не найдена");
     return task;
   }
 
@@ -351,9 +355,8 @@ export class TimeService {
   ): Promise<string | null> {
     const candidate = projectId ?? inherited;
     if (!candidate) return null;
-    const project = await tx.project.findUnique({ where: { id: candidate }, select: { id: true, workspaceId: true } });
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
-    return project.id;
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, candidate))) throw new NotFoundException("Проект не найден");
+    return candidate;
   }
 }
 

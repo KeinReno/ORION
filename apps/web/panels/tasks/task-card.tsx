@@ -148,6 +148,11 @@ export function TaskCard({
         <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100" onClick={(event) => event.stopPropagation()} role="presentation"><DropdownMenu trigger={({ toggle }) => <IconButton label="Действия" size="sm" onClick={toggle}><MoreHorizontal className="h-4 w-4" /></IconButton>} items={items} /></div>
       </div>
       {task.description ? <p className="line-clamp-2 text-label text-muted-foreground">{task.description}</p> : null}
+      {(task.checklist?.length ?? 0) > 0 ? (
+        <p className="text-micro text-subtle-foreground">
+          Чек-лист {task.checklist.filter((item) => item.done).length}/{task.checklist.length}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-1.5">
         {/*
          * Only "в работе" and "отменена" get a mark here — "todo" and "done"

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Providers } from "../lib/providers";
+import { RuntimeReady } from "../lib/runtime-ready";
 import "@orion/ui/src/theme.css";
 import "./globals.css";
 
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
     <html lang="ru">
       <body>
         <Providers>{children}</Providers>
+        <RuntimeReady />
       </body>
     </html>
   );

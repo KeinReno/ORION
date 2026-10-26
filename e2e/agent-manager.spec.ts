@@ -9,7 +9,9 @@ import { apiUrl, register, signIn } from "./support";
 async function openAgents(page: Page, workspaceId: string): Promise<void> {
   await page.goto(`/dashboard?workspaceId=${workspaceId}`);
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
+  const settings = page.getByRole("navigation", { name: "Разделы настроек" });
+  await settings.getByRole("button", { name: /^Пространство «/ }).click();
+  await settings.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
 }
 
 test("помощник предлагает правку: превью → подтверждение → журнал → отмена создания → отозвать все", async ({ page, request }) => {
@@ -37,7 +39,7 @@ test("помощник предлагает правку: превью → по�
   // The token list shows the mode; the proposal shows what changes.
   await expect(page.getByLabel("Режим: Claude E2E")).toHaveValue("assistant");
   const proposals = page.getByRole("region", { name: "Запросы агентов" });
-  await expect(proposals.getByText("Изменить задачу «Исходная задача»")).toBeVisible();
+  await expect(proposals.getByText(/изменить задачу «Исходная задача»/i)).toBeVisible();
   await expect(proposals.getByRole("cell", { name: "Исходная задача" })).toBeVisible();
   await expect(proposals.getByRole("cell", { name: "Новое название" })).toBeVisible();
   await proposals.getByRole("button", { name: "Подтвердить", exact: true }).click();
@@ -51,7 +53,7 @@ test("помощник предлагает правку: превью → по�
   await expect(page.getByText("Создал заметку «Заметка агента»")).toBeVisible();
   await page.getByLabel("Результат").selectOption("proposed");
   await expect(page.getByText("Создал заметку «Заметка агента»")).toHaveCount(0);
-  await expect(page.getByText(/Предложил: изменить задачу/)).toBeVisible();
+  await expect(page.getByText("Предложил: изменить задачу «Исходная задача»", { exact: true })).toBeVisible();
   await page.getByLabel("Результат").selectOption("");
 
   // Undo a creation: the note lands in the trash, it is not hard-deleted.

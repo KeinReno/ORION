@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { AgentAuditEntry } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
-import { NotesService } from "../notes/notes.service";
-import { TasksService } from "../tasks/tasks.service";
+import { NoteOperations } from "../notes/public/note-operations";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { auditDto } from "./agent-tokens.service";
 
@@ -16,8 +16,8 @@ export class AgentUndoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly notes: NotesService,
-    private readonly tasks: TasksService
+    private readonly notes: NoteOperations,
+    private readonly tasks: TaskOperations
   ) {}
 
   async undoCreation(userId: string, workspaceId: string, entryId: string): Promise<AgentAuditEntry> {

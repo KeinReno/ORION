@@ -7,7 +7,7 @@ import type {
   ProjectCaptureKind,
   UpdateProjectCaptureInput
 } from "@orion/shared-types";
-import { CapturesService, type CaptureScope } from "../captures/captures.service";
+import { CaptureOperations, type CaptureScope } from "../captures/public/capture-operations";
 
 /**
  * The «Идеи» / «Проблемы» routes of a project, kept as they were. Since the
@@ -17,7 +17,7 @@ import { CapturesService, type CaptureScope } from "../captures/captures.service
  */
 @Injectable()
 export class ProjectCapturesService {
-  constructor(private readonly captures: CapturesService) {}
+  constructor(private readonly captures: CaptureOperations) {}
 
   async list(userId: string, workspaceId: string, projectId: string, kind: ProjectCaptureKind): Promise<ProjectCapture[]> {
     const rows = await this.captures.list(userId, workspaceId, { anchorType: "project", anchorId: projectId, kind });

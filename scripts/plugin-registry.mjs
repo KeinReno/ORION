@@ -18,6 +18,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { COMPONENT_VERSION_RE, requirementErrors } from "./component-requirements.mjs";
 
 export const PLUGIN_MANIFEST_FILE = "plugin.manifest.json";
 
@@ -132,7 +133,8 @@ export function collectPlugins(root, moduleIds) {
       if (modules.has(id)) fail(`id "${id}" занят модулем`);
       if (seen.has(id)) fail(`id "${id}" уже объявлен другим манифестом`);
     }
-    if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+$/.test(manifest.version)) fail("version должен быть semver");
+    if (typeof manifest.version !== "string" || !COMPONENT_VERSION_RE.test(manifest.version)) fail("version должен быть semver");
+    for (const error of requirementErrors(manifest.requires)) fail(error);
     if (typeof manifest.extends !== "string" || !modules.has(manifest.extends)) {
       fail(`extends "${manifest.extends}" — id модуля, который плагин расширяет (ядро или подключённый манифестом)`);
     }
@@ -238,6 +240,8 @@ export function renderPluginOutputs(plugins) {
       `import type { OrionModuleId } from "../modules";\n\n` +
       `/** Идентификаторы плагинов, подключённых манифестом; ядро дописывает их в закрытый \`z.enum\` (plugins.ts). */\n` +
       `export const GENERATED_PLUGIN_IDS = ${json(plugins.map((p) => p.id))} as const;\n\n` +
+      `import type { ComponentMetadata } from "../component-manifest";\n` +
+      `export const GENERATED_PLUGIN_METADATA: Record<string, ComponentMetadata> = ${json(Object.fromEntries(plugins.map(p => [p.id, { version: p.manifest.version, ...(p.manifest.requires ? { requires: p.manifest.requires } : {}) }])))};\n\n` +
       `/** Форма записи каталога (структурно совпадает с \`PluginManifest\`; тип задан здесь, чтобы не зациклить plugins.ts). */\n` +
       `export interface GeneratedPluginCatalogEntry {\n  id: (typeof GENERATED_PLUGIN_IDS)[number];\n  extendsModuleId: OrionModuleId;\n  label: string;\n  summary: string;\n  provides: string[];\n  disableBehavior: string;\n  defaultEnabled: boolean;\n}\n\n` +
       `/** Записи каталога плагинов; \`PLUGIN_CATALOG\` добавляет их к встроенным. */\n` +

@@ -13,8 +13,8 @@ import type {
 import { canonicalizeEndpoints, isPluginEnabled, isRelationPairAllowed } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
-import { NotesService } from "../notes/notes.service";
-import { TasksService } from "../tasks/tasks.service";
+import { NoteOperations } from "../notes/public/note-operations";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { ENTITY_REGISTRY } from "./entity-registry";
 import { SEARCH_PROVIDER_LIMIT } from "./search-provider";
@@ -35,8 +35,8 @@ export class SearchService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TasksService,
-    private readonly notes: NotesService,
+    private readonly tasks: TaskOperations,
+    private readonly notes: NoteOperations,
     private readonly providers: SearchProviderRegistry
   ) {}
 

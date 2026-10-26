@@ -19,6 +19,7 @@ import { SettingsModule } from "./settings/settings.module";
 import { SystemModule } from "./system/system.module";
 import { LanModule } from "./lan/lan.module";
 import { UpdatesModule } from "./updates/updates.module";
+import { FeedbackModule } from "./feedback/feedback.module";
 import { ExtensionsModule } from "./extensions/extensions.module";
 import { CapturesModule } from "./captures/captures.module";
 import { ProjectsModule } from "./projects/projects.module";
@@ -26,6 +27,7 @@ import { SearchModule } from "./search/search.module";
 import { InboxModule } from "./inbox/inbox.module";
 import { TimeModule } from "./time/time.module";
 import { HabitsModule } from "./habits/habits.module";
+import { KnowledgeModule } from "./knowledge/knowledge.module";
 import { ListsModule } from "./lists/lists.module";
 import { MarketsModule } from "./markets/markets.module";
 import { InventoryModule } from "./inventory/inventory.module";
@@ -76,6 +78,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     SystemModule,
     LanModule,
     UpdatesModule,
+    FeedbackModule,
     ExtensionsModule,
     ProjectsModule,
     CapturesModule,
@@ -83,6 +86,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     SearchModule,
     TimeModule,
     HabitsModule,
+    KnowledgeModule,
     ListsModule,
     OpportunitiesModule,
     OpportunityExtensionsModule,

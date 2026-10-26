@@ -34,6 +34,7 @@ export * from "./use-task-views";
 export * from "./use-calendar-connections";
 export * from "./use-time";
 export * from "./use-habits";
+export * from "./use-knowledge";
 export * from "./use-lists";
 export * from "./use-inventory";
 export * from "./use-lists-inventory";

@@ -24,6 +24,7 @@ import {
   Settings,
   Share2,
   ShieldCheck,
+  Library,
   StickyNote,
   Target,
   Timer,
@@ -86,6 +87,7 @@ const LazyGoalsPanel = dynamic(() => import("../panels/GoalsPanel").then((module
 const LazyTasksPanel = dynamic(() => import("../panels/TasksPanel").then((module) => module.TasksPanel), { ssr: false });
 const LazyCalendarPanel = dynamic(() => import("../panels/CalendarPanel").then((module) => module.CalendarPanel), { ssr: false });
 const LazyNotesPanel = dynamic(() => import("../panels/NotesPanel").then((module) => module.NotesPanel), { ssr: false });
+const LazyKnowledgePanel = dynamic(() => import("../panels/KnowledgePanel").then((module) => module.KnowledgePanel), { ssr: false });
 const LazyProjectsPanel = dynamic(() => import("../panels/ProjectsPanel").then((module) => module.ProjectsPanel), { ssr: false });
 const LazyProjectWorkspacePanel = dynamic(
   () => import("../panels/ProjectWorkspacePanel").then((module) => module.ProjectWorkspacePanel),
@@ -120,6 +122,7 @@ const DashboardPanel: FunctionComponent<PanelComponentProps> = (props) => create
 const TasksPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTasksPanel as ComponentType<PanelComponentProps>, props);
 const CalendarPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyCalendarPanel as ComponentType<PanelComponentProps>, props);
 const NotesPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNotesPanel as ComponentType<PanelComponentProps>, props);
+const KnowledgePanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyKnowledgePanel as ComponentType<PanelComponentProps>, props);
 const ProjectsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyProjectsPanel as ComponentType<PanelComponentProps>, props);
 const TaskDetailPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyTaskDetailPanel, props);
 const NoteWindowPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyNoteWindowPanel, props);
@@ -172,6 +175,7 @@ const panelEntries: PanelEntry[] = [
   { id: "tasks", label: "Задачи", icon: ListTodo, component: TasksPanel, moduleId: "tasks", group: "Работа" },
   { id: "calendar", label: "Календарь", icon: CalendarDays, component: CalendarPanel, moduleId: "calendar", group: "Работа" },
   { id: "notes", label: "Заметки", icon: StickyNote, component: NotesPanel, moduleId: "notes", group: "Работа" },
+  { id: "knowledge", label: "База знаний", icon: Library, component: KnowledgePanel, moduleId: "knowledge", group: "Работа" },
   { id: "projects", label: "Проекты", icon: FolderKanban, component: ProjectsPanel, moduleId: "projects", group: "Работа" },
   { id: "home", label: "Дом", icon: HomeIcon, component: HomePanel, moduleId: "home", group: "Семья и дом" },
   { id: "health", label: "Здоровье", icon: HeartPulse, component: HealthPanel, moduleId: "health", group: "Семья и дом" },

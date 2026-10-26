@@ -84,6 +84,10 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("financeCategories", (tx) => tx.financeCategory),
   spec("calendarConnections", (tx) => tx.calendarConnection),
   spec("habits", (tx) => tx.habit),
+  spec("knowledgeCategories", (tx) => tx.knowledgeCategory),
+  spec("knowledgeItems", (tx) => tx.knowledgeItem),
+  spec("knowledgeSources", (tx) => tx.knowledgeSource),
+  spec("knowledgeRelations", (tx) => tx.knowledgeRelation),
   spec("lists", (tx) => tx.list),
   spec("savedTaskViews", (tx) => tx.savedTaskView),
   spec("inboxItems", (tx) => tx.inboxItem),
@@ -151,6 +155,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // must never reactivate external access that has since been revoked —
   // see specGrants() below for why every restored row is force-revoked.
   specGrants("crossWorkspaceGrants", (tx) => tx.crossWorkspaceGrant),
+  specGrants("sharedPublications", (tx) => tx.sharedPublication),
+  spec("sharedPublicationPins", (tx) => tx.sharedPublicationPin),
+  spec("sharedPublicationOperations", (tx) => tx.sharedPublicationOperation),
   // G10: таблицы подключаемых модулей (порядок «родитель раньше ребёнка» задаёт манифест).
   ...GENERATED_SNAPSHOT_SPECS.map((item) => spec(item.key, item.delegate))
 ];
@@ -468,6 +475,8 @@ export class SnapshotService {
           : `Версия снапшота ${snapshot.version} не поддерживается (ожидалась ${SNAPSHOT_VERSION})`
       );
     }
+    // A source restore must not reactivate delegated writes against a restored revision.
+    await tx.$executeRaw`SELECT public.revoke_publications_from_source(${snapshot.workspaceId})`;
     // Очистка: от листьев к корню.
     for (const m of [...SNAPSHOT_MODELS].reverse()) {
       await m.clear(tx, snapshot.workspaceId);

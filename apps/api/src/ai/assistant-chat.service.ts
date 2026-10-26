@@ -346,6 +346,7 @@ export class AssistantChatService {
       thinking();
       const answer = await askCli(engine, binary, mcp, prompt, { ORION_AGENT_TOKEN: created.secret, ORION_API_URL: apiUrl });
       const actions = await this.actionsOfToken(userId, workspaceId, created.id, startedAt);
+      if (answer.detail) this.logger.warn(`${ASSISTANT_ENGINE_LABEL[engine]}: ${answer.failed ?? "сбой"} (${answer.detail})`);
       if (answer.failed && !answer.reply) throw new HttpException(answer.failed, HttpStatus.BAD_GATEWAY);
       const reply = answer.reply || "Готово.";
       return { reply: answer.failed ? `${reply}\n\n_${answer.failed}_` : reply, actions, inputTokens: 0, outputTokens: 0, truncated: Boolean(answer.failed) };

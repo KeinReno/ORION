@@ -22,6 +22,14 @@ describe("resolveApiBaseUrl", () => {
     }
   });
 
+  it("uses the node that served the phone page", () => {
+    expect(resolveApiBaseUrl({
+      envUrl: undefined,
+      location: { protocol: "https:", hostname: "100.64.0.5", pathname: "/phone", origin: "https://100.64.0.5:4443" },
+      production: true
+    })).toBe("https://100.64.0.5:4443");
+  });
+
   it("refuses to guess in a production browser on a remote host", () => {
     expect(() => resolveApiBaseUrl({ envUrl: undefined, location: remote, production: true })).toThrow(/NEXT_PUBLIC_API_URL/);
     expect(() => resolveApiBaseUrl({ envUrl: "  ", location: remote, production: true })).toThrow(/NEXT_PUBLIC_API_URL/);

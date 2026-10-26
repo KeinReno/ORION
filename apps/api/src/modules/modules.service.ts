@@ -16,6 +16,7 @@ import {
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { CapabilityLifecycle } from "../common/capability-lifecycle";
+import { assertComponentCompatible } from "../common/component-compatibility";
 
 @Injectable()
 export class ModulesService {
@@ -80,6 +81,7 @@ export class ModulesService {
       const current = new Set(disabled);
       if (enabled) current.delete(moduleId);
       else current.add(moduleId);
+      if (enabled) assertComponentCompatible(moduleId, new Set(MODULE_CATALOG.filter(m => !current.has(m.id)).map(m => m.id)));
 
       await tx.workspace.update({
         where: { id: workspaceId },
@@ -160,6 +162,7 @@ export class ModulesService {
         throw new ForbiddenException(`Модуль «${label}» доступен только владельцу и тимлиду`);
       }
     }
+    assertComponentCompatible(moduleId, new Set(MODULE_CATALOG.filter(m => !disabled.includes(m.id)).map(m => m.id)));
   }
 
   async enabledSetTx(tx: Prisma.TransactionClient, workspaceId: string): Promise<Set<OrionModuleId>> {

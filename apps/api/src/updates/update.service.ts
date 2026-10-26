@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +16,7 @@ import {
 import { nodeDir, writeJsonAtomic } from "../lan/node-config";
 import { openSecret, sealSecret } from "../sync/sync-crypto";
 import { buildApplyScript } from "./apply-script";
-import { compareTags, extractSha256, pickInstallerAsset, pickLatestRelease, type GithubRelease } from "./release-feed";
+import { compareTags, extractSha256, pickInstallerAsset, pickPayloadAsset, pickLatestRelease, type GithubRelease } from "./release-feed";
 
 interface StoredConfig {
   repo: string;
@@ -32,9 +33,10 @@ function githubApi(): string {
 }
 
 /**
- * Обновления программы с GitHub Releases (приватный репозиторий, доступ по токену владельца). Схема: проверка → скачивание
- * установщика с проверкой размера и SHA-256 из описания релиза → по подтверждению отдельный скрипт останавливает программу,
- * ставит новый установщик поверх и запускает её снова. Токен хранится зашифрованным (`sealSecret`) и наружу не отдаётся.
+ * GitHub Releases: prefer a signed application payload compatible with the immutable shell;
+ * retain the full-installer path for old hosts and native/schema changes. Payload verification
+ * and selection belong to the shell verifier, outside the replaceable application.
+ * Credentials stay encrypted with sealSecret and are never returned.
  */
 @Injectable()
 export class UpdateService implements OnModuleInit, OnModuleDestroy {
@@ -47,7 +49,26 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     error: null,
     lastCheckedAt: null
   };
-  private downloaded: { tag: string; file: string } | null = null;
+  private downloaded: { tag: string; file: string; payloadId?: string } | null = null;
+
+  private payloadBase(): string | undefined {
+    const runtime = process.env.ORION_SHELL_RUNTIME;
+    if (!runtime || !fs.existsSync(path.join(runtime, "update-public-key.pem"))) return undefined;
+    return process.env.ORION_SHELL_BASE_TAG || undefined;
+  }
+
+  private async payloadCommand(command: string, ...args: string[]): Promise<string> {
+    const runtime = process.env.ORION_SHELL_RUNTIME;
+    if (!runtime || !this.payloadBase()) throw new BadRequestException("Для пакетов обновлений нужна новая полная установка ORION");
+    const { stdout } = await promisify(execFile)(process.execPath, [path.join(runtime, "payload.cjs"), command, runtime, nodeDir(), ...args], { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 });
+    return stdout;
+  }
+
+  acknowledgeUi(tag: string): { accepted: boolean } {
+    const marker = process.env.ORION_PAYLOAD_ACK_FILE;
+    if (marker && fs.existsSync(marker) && tag === this.currentTag()) { fs.writeFileSync(marker, tag, { flag: "w" }); return { accepted: true }; }
+    return { accepted: false };
+  }
 
   onModuleInit(): void {
     const first = setTimeout(() => void this.autoCheck(), FIRST_CHECK_DELAY_MS);
@@ -80,6 +101,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   }
 
   setConfig(input: SetAppUpdateConfigInput): AppUpdateConfig {
+    if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Дождитесь завершения текущего обновления");
     const current = this.readConfig();
     let tokenEnc = current.tokenEnc;
     if (input.token === null) tokenEnc = null;
@@ -123,7 +145,8 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       currentVersion: process.env.APP_VERSION ?? "0.0.0",
       configured: this.token() !== null,
       canApply: process.platform === "win32" && this.installDir() !== null,
-      ...this.status
+      ...this.status,
+      error: this.status.error || process.env.ORION_PAYLOAD_FAILURE || null
     };
   }
 
@@ -146,7 +169,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   async check(): Promise<AppUpdateStatus> {
     const token = this.token();
     if (!token) this.fail("Токен GitHub не задан: добавьте его в настройках обновлений");
-    if (this.status.state === "downloading" || this.status.state === "applying") throw new ConflictException("Сейчас идёт скачивание или установка обновления");
+    if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Сейчас идёт проверка, скачивание или установка обновления");
     const repo = this.readConfig().repo;
     this.status = { ...this.status, state: "checking", error: null };
     let releases: GithubRelease[];
@@ -163,20 +186,23 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       if (error instanceof BadRequestException) throw error;
       this.fail("Не удалось связаться с GitHub — проверьте подключение к интернету");
     }
-    const latest = pickLatestRelease(releases);
+    const latest = pickLatestRelease(releases, true, this.payloadBase());
     const lastCheckedAt = new Date().toISOString();
     if (!latest) {
       this.status = { state: "up_to_date", latest: null, progress: 0, error: null, lastCheckedAt };
       return this.getStatus();
     }
-    const asset = pickInstallerAsset(latest)!;
+    const payloadAsset = pickPayloadAsset(latest, this.payloadBase());
+    const asset = payloadAsset ?? pickInstallerAsset(latest)!;
     const info: AppUpdateRelease = {
       tag: latest.tag_name,
       name: latest.name ?? latest.tag_name,
       notes: latest.body ?? "",
       publishedAt: latest.published_at,
       sizeBytes: asset.size,
-      sha256: extractSha256(latest.body)
+      kind: payloadAsset ? "payload" : "installer",
+      assetName: asset.name,
+      sha256: payloadAsset ? null : extractSha256(latest.body)
     };
     const current = this.currentTag();
     // Сборка без метки (старая установка) не знает своей версии — предлагаем самую новую.
@@ -192,25 +218,31 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     if (!latest || (this.status.state !== "available" && this.status.state !== "error" && this.status.state !== "ready")) {
       throw new ConflictException("Сначала проверьте наличие обновления");
     }
-    if (!latest.sha256) this.fail("В описании релиза нет контрольной суммы SHA-256 — установщик не будет применён");
+    if (latest.kind !== "payload" && !latest.sha256) this.fail("В описании релиза нет контрольной суммы SHA-256 — установщик не будет применён");
     const token = this.token();
     if (!token) this.fail("Токен GitHub не задан");
     const repo = this.readConfig().repo;
     const dir = path.join(nodeDir(), "updates", latest.tag.replace(/[^0-9A-Za-z._-]/g, "_"));
     fs.mkdirSync(dir, { recursive: true });
     this.status = { ...this.status, state: "downloading", progress: 0, error: null };
+    this.downloaded = null;
+    let downloadPath: string | null = null;
     try {
       const releases = await fetch(`${githubApi()}/repos/${repo}/releases/tags/${encodeURIComponent(latest.tag)}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "orion-desktop-updater" },
         signal: AbortSignal.timeout(20_000)
       });
       if (!releases.ok) this.fail(`GitHub ответил ошибкой (код ${releases.status})`);
-      const asset = pickInstallerAsset((await releases.json()) as GithubRelease);
+      const release = (await releases.json()) as GithubRelease;
+      const asset = latest.kind === "payload" ? pickPayloadAsset(release, this.payloadBase()) : pickInstallerAsset(release);
       if (!asset) this.fail("В релизе нет установщика");
+      if (asset.name !== latest.assetName || asset.size !== latest.sizeBytes || asset.size > 512 * 1024 * 1024) this.fail("Файл релиза изменился или превышает лимит — проверьте обновления заново");
       const file = path.join(dir, asset.name.replace(/[^0-9A-Za-z._-]/g, "_"));
+      downloadPath = file;
       const response = await fetch(`${githubApi()}/repos/${repo}/releases/assets/${asset.id}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/octet-stream", "User-Agent": "orion-desktop-updater" },
-        redirect: "follow"
+        redirect: "follow",
+        signal: AbortSignal.timeout(10 * 60_000)
       });
       if (!response.ok || !response.body) this.fail(`Не удалось скачать установщик (код ${response.status})`);
       const hash = createHash("sha256");
@@ -219,6 +251,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       source.on("data", (chunk: Buffer) => {
         hash.update(chunk);
         received += chunk.length;
+        if (received > asset.size) source.destroy(new Error("Размер скачивания превышен"));
         this.status = { ...this.status, progress: Math.min(1, received / Math.max(1, asset.size)) };
       });
       await pipeline(source, fs.createWriteStream(`${file}.part`));
@@ -226,14 +259,16 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         fs.rmSync(`${file}.part`, { force: true });
         this.fail(`Скачано ${received} байт вместо ${asset.size}: файл повреждён, повторите`);
       }
-      if (hash.digest("hex") !== latest.sha256) {
+      if (latest.kind !== "payload" && hash.digest("hex") !== latest.sha256) {
         fs.rmSync(`${file}.part`, { force: true });
         this.fail("Контрольная сумма скачанного установщика не совпала — файл отвергнут");
       }
       fs.renameSync(`${file}.part`, file);
-      this.downloaded = { tag: latest.tag, file };
+      const prepared = latest.kind === "payload" ? JSON.parse(await this.payloadCommand("prepare", file, latest.tag)) as { id: string } : null;
+      this.downloaded = { tag: latest.tag, file, ...(prepared ? { payloadId: prepared.id } : {}) };
       this.status = { ...this.status, state: "ready", progress: 1, error: null };
     } catch (error) {
+      if (downloadPath) { fs.rmSync(`${downloadPath}.part`, { force: true }); fs.rmSync(downloadPath, { force: true }); }
       if (this.status.state !== "error") {
         this.status = { ...this.status, state: "error", progress: 0, error: "Не удалось скачать обновление" };
         this.logger.warn(`Скачивание обновления: ${error instanceof Error ? error.message : String(error)}`);
@@ -245,34 +280,38 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ── применение ──────────────────────────────────────────────────────────────────────────────
-  apply(): { started: true } {
+  async apply(): Promise<{ started: true }> {
     const status = this.getStatus();
     const installDir = this.installDir();
     if (status.state !== "ready" || !this.downloaded) throw new ConflictException("Обновление ещё не скачано");
     if (process.platform !== "win32" || !installDir) throw new ConflictException("Автоматическое применение доступно только в установленной версии для Windows");
-    const dir = path.dirname(this.downloaded.file);
-    const scriptPath = path.join(dir, "apply-update.ps1");
-    const script = buildApplyScript({
-      installer: this.downloaded.file,
-      appExe: path.join(installDir, "orion-desktop.exe"),
-      installDir,
-      pgCtl: process.env.ORION_PG_CTL?.trim() || null,
-      cluster: process.env.ORION_PG_CLUSTER?.trim() || null,
-      logFile: path.join(dir, "apply-update.log")
-    });
-    // BOM — чтобы PowerShell 5.1 прочитал кириллицу в путях как UTF-8.
-    fs.writeFileSync(scriptPath, String.fromCharCode(0xfeff) + script, "utf8");
-    // Запуск через `cmd /c start /B`: PowerShell, запущенный напрямую с `detached`, тихо завершается, не выполнив скрипт, а
-    // запущенный без `detached` умирает вместе с родителем (проверено на установленной программе). Через `start` скрипт
-    // становится независимым процессом и переживает остановку API.
-    const child = spawn("cmd.exe", ["/c", "start", "", "/B", "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true
-    });
-    child.unref();
     this.status = { ...this.status, state: "applying" };
-    this.logger.warn(`Запущено применение обновления ${this.downloaded.tag}`);
-    return { started: true };
+    try {
+      if (this.downloaded.payloadId) await this.payloadCommand("queue", this.downloaded.payloadId);
+      const dir = path.dirname(this.downloaded.file);
+      const scriptPath = path.join(dir, "apply-update.ps1");
+      const script = buildApplyScript({
+        installer: this.downloaded.payloadId ? null : this.downloaded.file,
+        appExe: path.join(installDir, "orion-desktop.exe"),
+        installDir,
+        pgCtl: process.env.ORION_PG_CTL?.trim() || null,
+        cluster: process.env.ORION_PG_CLUSTER?.trim() || null,
+        logFile: path.join(dir, "apply-update.log")
+      });
+      // BOM — чтобы PowerShell 5.1 прочитал кириллицу в путях как UTF-8.
+      fs.writeFileSync(scriptPath, String.fromCharCode(0xfeff) + script, "utf8");
+      // Запуск через `cmd /c start /B`: PowerShell, запущенный напрямую с `detached`, тихо завершается, не выполнив скрипт, а
+      // запущенный без `detached` умирает вместе с родителем (проверено на установленной программе). Через `start` скрипт
+      // становится независимым процессом и переживает остановку API.
+      const child = spawn("cmd.exe", ["/c", "start", "", "/B", "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true
+      });
+      child.unref();
+      this.status = { ...this.status, state: "applying" };
+      this.logger.warn(`Запущено применение обновления ${this.downloaded.tag}`);
+      return { started: true };
+    } catch (error) { this.status = { ...this.status, state: "error", error: "Не удалось подготовить перезапуск" }; throw error; }
   }
 }

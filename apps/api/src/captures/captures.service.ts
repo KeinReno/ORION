@@ -4,7 +4,6 @@ import {
   effectiveCaptureSeverity,
   type Capture,
   type CaptureAnchorType,
-  type CaptureKind,
   type CreateCaptureInput,
   type ListCapturesQuery,
   type OrionModuleId,
@@ -12,26 +11,20 @@ import {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
-import { TasksService } from "../tasks/tasks.service";
+import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
-/** Where a capture hangs. `null` anchor = a free-floating thought. */
-export interface CaptureAnchor {
-  type: CaptureAnchorType;
-  id: string;
-}
+import type { CaptureAnchor, CaptureScope } from "./public/capture-operations";
+export type { CaptureAnchor, CaptureScope } from "./public/capture-operations";
+import { ProjectReferences } from "../projects/public/project-references";
+import { TaskIntegrationReader } from "../tasks/public/task-integration-reader";
+import { GoalReferences } from "../goals/public/goal-references";
+import { HomeReferences } from "../home/public/home-references";
+import { FinanceAnchorReferences } from "../finance/public/finance-anchor-references";
+import { ContactReferences } from "../contacts/public/contact-references";
 
-type Finder = (tx: Prisma.TransactionClient, id: string) => Promise<{ workspaceId: string } | null>;
-
-/** One lookup per anchor type; every one answers "does this row exist, and in which workspace". */
-const ANCHOR_FINDERS: Record<CaptureAnchorType, { label: string; find: Finder }> = {
-  project: { label: "Проект", find: (tx, id) => tx.project.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  task: { label: "Задача", find: (tx, id) => tx.task.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  goal: { label: "Цель", find: (tx, id) => tx.goal.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  home: { label: "Дом", find: (tx, id) => tx.home.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  account: { label: "Счёт", find: (tx, id) => tx.account.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  obligation: { label: "Обязательство", find: (tx, id) => tx.financeObligation.findUnique({ where: { id }, select: { workspaceId: true } }) },
-  contact: { label: "Контакт", find: (tx, id) => tx.contact.findUnique({ where: { id }, select: { workspaceId: true } }) }
+const ANCHOR_LABELS: Record<CaptureAnchorType, string> = {
+  project: "Проект", task: "Задача", goal: "Цель", home: "Дом", account: "Счёт", obligation: "Обязательство", contact: "Контакт"
 };
 
 /** The module a host object belongs to — a capture cannot hang on an object whose module is off. */
@@ -59,7 +52,13 @@ export class CapturesService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TasksService
+    private readonly tasks: TaskOperations,
+    private readonly projects: ProjectReferences,
+    private readonly taskReferences: TaskIntegrationReader,
+    private readonly goals: GoalReferences,
+    private readonly homes: HomeReferences,
+    private readonly financeReferences: FinanceAnchorReferences,
+    private readonly contacts: ContactReferences
   ) {}
 
   async list(userId: string, workspaceId: string, query: ListCapturesQuery): Promise<Capture[]> {
@@ -164,6 +163,7 @@ export class CapturesService {
         title: current.title,
         description: current.body,
         priority: "normal",
+        checklist: [],
         ...(current.anchorType === "project" ? { projectId: current.anchorId as string } : {}),
         ...(current.anchorType === "home" ? { homeId: current.anchorId as string } : {}),
         ...(current.anchorType === "task" ? { parentId: current.anchorId as string } : {})
@@ -175,9 +175,20 @@ export class CapturesService {
 
   /** The anchor must exist and live in THIS workspace — RLS alone would let a two-workspace user mix them. */
   async assertAnchorTx(tx: Prisma.TransactionClient, workspaceId: string, anchor: CaptureAnchor): Promise<void> {
-    const entry = ANCHOR_FINDERS[anchor.type];
-    const found = await entry.find(tx, anchor.id);
-    if (!found || found.workspaceId !== workspaceId) throw new NotFoundException(`${entry.label} не найден`);
+    const exists = await this.anchorExistsTx(tx, workspaceId, anchor);
+    if (!exists) throw new NotFoundException(`${ANCHOR_LABELS[anchor.type]} не найден`);
+  }
+
+  private async anchorExistsTx(tx: Prisma.TransactionClient, workspaceId: string, anchor: CaptureAnchor): Promise<boolean> {
+    switch (anchor.type) {
+      case "project": return this.projects.existsTx(tx, workspaceId, anchor.id);
+      case "task": return !!await this.taskReferences.referenceTx(tx, workspaceId, anchor.id);
+      case "goal": return this.goals.existsTx(tx, workspaceId, anchor.id);
+      case "home": return this.homes.existsTx(tx, workspaceId, anchor.id);
+      case "account": return this.financeReferences.accountTx(tx, workspaceId, anchor.id);
+      case "obligation": return this.financeReferences.obligationTx(tx, workspaceId, anchor.id);
+      case "contact": return this.contacts.existsTx(tx, workspaceId, anchor.id);
+    }
   }
 
   private async assertAnchorModuleTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, anchor: CaptureAnchor): Promise<void> {
@@ -190,15 +201,6 @@ export class CapturesService {
     if (!row || row.workspaceId !== workspaceId) throw new NotFoundException("Запись не найдена");
     return row;
   }
-}
-
-/**
- * Legacy project routes address a capture as "an idea / problem of THIS project";
- * a capture of another kind or anchor is simply not found there.
- */
-export interface CaptureScope {
-  kind?: CaptureKind;
-  anchor?: CaptureAnchor;
 }
 
 function assertScope(row: CaptureRow, scope: CaptureScope): void {

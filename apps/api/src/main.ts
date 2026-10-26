@@ -44,14 +44,21 @@ async function bootstrap(): Promise<void> {
     // «Хост LAN»: тот же Express-приложение ещё и по TLS на LAN-интерфейсе. Loopback-HTTP выше остаётся для окна
     // ORION этого же ПК и проверки готовности лаунчера; PostgreSQL отсюда не затрагивается и слушает только 127.0.0.1.
     if (mode !== "server") throw new Error("ORION_LAN_HOST=1 требует ORION_MODE=server: режим хоста обязан включать серверные защиты.");
-    const { key, cert, port: lanPort } = app.get(LanService).tlsCredentials();
+    const lan = app.get(LanService);
+    const { key, cert, port: lanPort } = lan.tlsCredentials();
     const lanHost = process.env.ORION_LAN_BIND?.trim() || "0.0.0.0";
-    await new Promise<void>((resolve, reject) => {
-      const server = https.createServer({ key, cert, minVersion: "TLSv1.2" }, app.getHttpAdapter().getInstance());
-      server.once("error", reject);
-      server.listen(lanPort, lanHost, () => resolve());
-    });
-    console.log(`[orion-api] LAN host listening on https://${lanHost}:${lanPort}`);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const server = https.createServer({ key, cert, minVersion: "TLSv1.2" }, app.getHttpAdapter().getInstance());
+        server.once("error", reject);
+        server.listen(lanPort, lanHost, () => resolve());
+      });
+      console.log(`[orion-api] LAN host listening on https://${lanHost}:${lanPort}`);
+    } catch (error) {
+      // A taken port used to kill the whole API and, the mode being saved, every later start too: the window of this
+      // computer showed «Локальный сервер ORION не отвечает» for good. Now only the LAN side is off, and it says why.
+      console.error(`[orion-api] ${lan.reportListenFailure(error)}`);
+    }
   }
 }
 

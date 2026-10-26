@@ -3,9 +3,9 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CONTRACT_IDS,
+  CORE_MODULE_IDS,
   type ContractId,
   DOMAIN_EVENT_TYPES,
-  MODULE_CATALOG,
   PERMISSION_IDS,
   PLATFORM_CONTRACT_VERSIONS,
   SURFACE_IDS,
@@ -48,15 +48,17 @@ function hostApiExports(): string[] {
 
 function currentSurfaces(): Record<ContractId, string[]> {
   const sorted = (items: readonly string[]) => [...new Set(items)].sort();
+  const hostModules = new Set<string>(["core", ...CORE_MODULE_IDS]);
   return {
-    module: sorted(MODULE_CATALOG.map((m) => m.id)),
+    // Installed contributions own their versions; adding one must not bump the host contract.
+    module: sorted(CORE_MODULE_IDS),
     plugin: sorted([...slotNames().map((s) => `slot:${s}`), ...hostApiExports().map((e) => `host:${e}`)]),
     event: sorted(DOMAIN_EVENT_TYPES),
     storage: [],
     workspace: [],
     theme: sorted(Object.keys(themeDocumentSchema.shape.colors.shape)),
     surface: sorted(SURFACE_IDS),
-    permission: sorted(PERMISSION_IDS),
+    permission: sorted(PERMISSION_IDS.filter(id => hostModules.has(id.split(".")[0]!))),
     integration: [],
     agentGateway: []
   };

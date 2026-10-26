@@ -7,6 +7,16 @@ export const GENERATED_MODULE_IDS = [
   "pet-care"
 ] as const;
 
+import type { ComponentMetadata } from "../component-manifest";
+export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = {
+  "chat-archive": {
+    "version": "1.0.0"
+  },
+  "pet-care": {
+    "version": "1.0.0"
+  }
+};
+
 /** Форма записи каталога (структурно совпадает с `ModuleManifest`; тип задан здесь, чтобы не зациклить modules.ts). */
 export interface GeneratedModuleCatalogEntry {
   id: (typeof GENERATED_MODULE_IDS)[number];

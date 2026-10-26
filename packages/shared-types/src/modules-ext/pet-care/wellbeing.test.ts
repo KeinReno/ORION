@@ -36,6 +36,7 @@ describe("pet day arithmetic", () => {
 describe("computePetDayStatus", () => {
   it("is good when everything is fine or unrecorded", () => {
     expect(computePetDayStatus({ ...facts, appetite: "normal", activity: "normal", stool: "normal", water: "normal" })).toBe("good");
+    expect(computePetDayStatus({ ...facts, appetite: "much", activity: "high", stool: "normal", water: "normal" })).toBe("good");
     expect(computePetDayStatus(facts)).toBe("good");
   });
 
@@ -56,6 +57,23 @@ describe("computePetDayStatus", () => {
     expect(computePetDayStatus({ ...facts, appetite: "refused", activity: "very_low" })).toBe("critical");
     expect(computePetDayStatus({ ...facts, symptoms: [{ id: "breathing", severity: "mild" }] })).toBe("critical");
     expect(computePetDayStatus({ ...facts, symptoms: [{ id: "other", severity: "critical" }] })).toBe("critical");
+    expect(computePetDayStatus({ ...facts, water: "much" })).toBe("watch");
+    expect(computePetDayStatus({
+      ...facts,
+      stoolVisits: [
+        { consistency: "normal" },
+        { consistency: "normal" },
+        { consistency: "normal" }
+      ]
+    })).toBe("watch");
+    expect(computePetDayStatus({ ...facts, stoolVisits: [{ consistency: "blood" }, { consistency: "normal" }] })).toBe("critical");
+    expect(computePetDayStatus({
+      ...facts,
+      symptoms: [
+        { id: "sneezing", severity: "mild", amount: "much" },
+        { id: "coughing", severity: "mild", amount: "much" }
+      ]
+    })).toBe("bad");
   });
 });
 
@@ -116,7 +134,7 @@ describe("day input schema", () => {
     expect(upsertPetCareDayInputSchema.safeParse({ symptoms: [{ id: "vomiting" }, { id: "vomiting" }] }).success).toBe(false);
     expect(upsertPetCareDayInputSchema.safeParse({ temperature: 12 }).success).toBe(false);
     expect(upsertPetCareDayInputSchema.safeParse({ appetite: "huge" }).success).toBe(false);
-    expect(upsertPetCareDayInputSchema.parse({ symptoms: [{ id: "vomiting" }] }).symptoms[0]).toEqual({ id: "vomiting", severity: "moderate", count: 1, time: "", note: "" });
+    expect(upsertPetCareDayInputSchema.parse({ symptoms: [{ id: "vomiting" }] }).symptoms[0]).toEqual({ id: "vomiting", severity: "moderate", count: 1, time: "", note: "", amount: "normal" });
   });
 
   it("limits the requested window", () => {
@@ -148,7 +166,7 @@ describe("parseMurhpBackup", () => {
     expect(parsed.days.map((d) => d.day)).toEqual(["2026-10-01", "2026-10-02"]);
     const first = parsed.days[0]!.input;
     expect(first).toMatchObject({ status: "bad", statusAuto: false, appetite: "reduced", activity: "", stool: "liquid", vomitingCount: 2, weightKg: 5, temperature: 38.6, meds: "церукал" });
-    expect(first.symptoms).toEqual([{ id: "vomiting", severity: "severe", count: 2, time: "night", note: "" }]);
+    expect(first.symptoms).toEqual([{ id: "vomiting", severity: "severe", count: 2, time: "night", note: "", amount: "normal" }]);
     expect(parsed.days[1]!.input).toMatchObject({ vomitingCount: 0, weightKg: null, statusAuto: true });
     expect(parsed.events).toEqual([
       { day: "2026-10-01", type: "food_change", title: "Новый корм", note: "" },
@@ -179,13 +197,14 @@ describe("mergePetDay (agent notes)", () => {
     appetite: "reduced" as const,
     activity: "" as const,
     stool: "" as const,
+    stoolVisits: [],
     water: "" as const,
     vomitingCount: 1,
     weightKg: 4.2,
     temperature: null,
     meds: "",
     note: "Утром вялый",
-    symptoms: [{ id: "vomiting", label: "Рвота", category: "gi" as const, severity: "mild" as const, count: 1, time: "morning" as const, note: "" }],
+    symptoms: [{ id: "vomiting", severity: "mild" as const, count: 1, time: "morning" as const, note: "", amount: "normal" as const }],
     createdAt: "",
     updatedAt: ""
   };
@@ -194,7 +213,7 @@ describe("mergePetDay (agent notes)", () => {
     const merged = mergePetDay(existing, {
       vomitingCount: 2,
       note: "Вечером снова рвало",
-      symptoms: [{ id: "vomiting", severity: "moderate", count: 2, time: "evening", note: "" }, { id: "lethargy", severity: "mild", count: 1, time: "", note: "" }]
+      symptoms: [{ id: "vomiting", severity: "moderate", count: 2, time: "evening", note: "", amount: "normal" }, { id: "lethargy", severity: "mild", count: 1, time: "", note: "", amount: "normal" }]
     });
     expect(merged).toMatchObject({ appetite: "reduced", vomitingCount: 2, weightKg: 4.2, status: "bad", statusAuto: false, note: "Утром вялый\nВечером снова рвало" });
     expect(merged.symptoms.map((item) => [item.id, item.severity, item.count])).toEqual([

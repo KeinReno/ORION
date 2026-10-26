@@ -1,6 +1,6 @@
 "use client";
 
-import { PET_APPETITE_LABELS, PET_DAY_STATUS_META, PET_STOOL_LABELS, addPetDays, computePetStats, petPlural, type PetCarePet } from "@orion/shared-types";
+import { PET_APPETITE_LABELS, PET_DAY_STATUS_META, addPetDays, computePetStats, formatPetStool, petPlural, type PetCarePet } from "@orion/shared-types";
 import { Button, Card, Input, Skeleton } from "@orion/ui";
 import { FileDown, FileText } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -108,7 +108,7 @@ export function PetReportTab({ workspaceId, pet }: { workspaceId: string; pet: P
                         {PET_DAY_STATUS_META[day.status].label}
                       </td>
                       <td>{day.vomitingCount || ""}</td>
-                      <td>{PET_STOOL_LABELS[day.stool]}</td>
+                      <td>{formatPetStool(day)}</td>
                       <td>{PET_APPETITE_LABELS[day.appetite]}</td>
                       <td className="whitespace-nowrap">{day.weightKg != null ? `${day.weightKg} кг` : ""}</td>
                       <td>{[symptomsLine(day), day.meds, day.note].filter(Boolean).join(" · ")}</td>

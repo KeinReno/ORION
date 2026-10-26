@@ -21,6 +21,7 @@ function task(partial: Partial<Task> & Pick<Task, "id" | "title" | "status">): T
     startAt: null,
     estimatedMinutes: null,
     milestoneId: null,
+    checklist: [],
     createdAt: "2026-09-15T08:00:00.000Z",
     updatedAt: "2026-09-15T08:00:00.000Z",
     ...partial

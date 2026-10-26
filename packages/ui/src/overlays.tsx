@@ -149,6 +149,18 @@ function useMotionDuration(full: number): number {
   return reduce ? 0 : full;
 }
 
+/** Only the overlay shell owns dismissal. Content layout animations (for example a
+ * segmented control's shared pill) must not hold its enclosing presence open.
+ * A nested, non-propagating boundary keeps content alive for the shell's exit,
+ * then unmounts it with the shell, without waiting for unrelated layout exits. */
+function OverlayContents({ children }: { children: ReactNode }): React.ReactElement {
+  return (
+    <AnimatePresence>
+      <Fragment key="content">{children}</Fragment>
+    </AnimatePresence>
+  );
+}
+
 /* ------------------------------------------------------------------ Modal */
 
 type ModalSize = "sm" | "md" | "lg";
@@ -239,16 +251,18 @@ export function Modal({
               size === "lg" && "max-w-2xl"
             )}
           >
-            {title ? (
-              <div className="border-b border-ui-overlay-border px-5 py-3.5">
-                <h2 id={labelId} className="text-sm font-semibold text-ui-primary">
-                  {title}
-                </h2>
-                {description ? <p className="mt-0.5 text-xs text-ui-secondary">{description}</p> : null}
-              </div>
-            ) : null}
-            <div className="px-5 py-4">{children}</div>
-            {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
+            <OverlayContents>
+              {title ? (
+                <div className="border-b border-ui-overlay-border px-5 py-3.5">
+                  <h2 id={labelId} className="text-sm font-semibold text-ui-primary">
+                    {title}
+                  </h2>
+                  {description ? <p className="mt-0.5 text-xs text-ui-secondary">{description}</p> : null}
+                </div>
+              ) : null}
+              <div className="px-5 py-4">{children}</div>
+              {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
+            </OverlayContents>
           </motion.div>
         </motion.div>
       ) : null}
@@ -332,20 +346,22 @@ export function Sheet({
             style={{ width }}
             className="relative z-10 flex h-full max-w-[92vw] flex-col border-l border-ui-overlay-border bg-ui-overlay/90 shadow-2xl shadow-black/50 outline-none backdrop-blur-xl"
           >
-            {title ? (
-              <div className="flex items-center justify-between border-b border-ui-overlay-border px-5 py-3.5">
-                <h2 id={labelId} className="text-sm font-semibold text-ui-primary">{title}</h2>
-                <IconButton label="Закрыть" size="sm" onClick={onClose}>
-                  <X className="h-4 w-4" />
-                </IconButton>
-              </div>
-            ) : null}
-            {bare ? (
-              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-            ) : (
-              <div className="orion-scroll flex-1 overflow-y-auto px-5 py-4">{children}</div>
-            )}
-            {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
+            <OverlayContents>
+              {title ? (
+                <div className="flex items-center justify-between border-b border-ui-overlay-border px-5 py-3.5">
+                  <h2 id={labelId} className="text-sm font-semibold text-ui-primary">{title}</h2>
+                  <IconButton label="Закрыть" size="sm" onClick={onClose}>
+                    <X className="h-4 w-4" />
+                  </IconButton>
+                </div>
+              ) : null}
+              {bare ? (
+                <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              ) : (
+                <div className="orion-scroll flex-1 overflow-y-auto px-5 py-4">{children}</div>
+              )}
+              {footer ? <div className="flex justify-end gap-2 border-t border-ui-overlay-border px-5 py-3.5">{footer}</div> : null}
+            </OverlayContents>
           </motion.div>
         </motion.div>
       ) : null}

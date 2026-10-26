@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { effectiveDataDir, effectivePgDir, ensurePrivateDir, mirrorPgDir } = require('./ascii-path.cjs');
+const payload = require('./payload.cjs');
 
 // Tauri's Windows resource_dir can use the \\?\ extended path prefix.
 // PostgreSQL initdb looks for postgres.exe beside itself and fails when that
@@ -15,7 +16,9 @@ const ordinaryWindowsPath = value => process.platform === 'win32'
   ? value.replace(/^[\\/]{2}\?[\\/](?=[A-Za-z]:)/, '')
   : value;
 const runtime = ordinaryWindowsPath(path.resolve(__dirname, '..', 'runtime'));
-const api = path.join(runtime, 'api');
+let appRoot = runtime;
+let api = path.join(appRoot, 'api');
+let selection = null;
 // Кириллица в пути ломает initdb (см. ascii-path.cjs): журналы остаются там, где их ждёт оболочка, а база и бинарники
 // PostgreSQL при не-ASCII пути переезжают в `%ProgramData%\ORION`.
 const requestedData = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ORION'));
@@ -27,6 +30,10 @@ const cluster = path.join(data, 'postgres');
 const configPath = path.join(data, 'local-runtime.json');
 const pgPort = Number(process.env.ORION_DESKTOP_PG_PORT || 55432);
 const apiPort = Number(process.env.ORION_DESKTOP_API_PORT || 4000);
+
+function startupPhase(phase) {
+  payload.atomic(path.join(requestedData, 'startup-state.json'), { phase });
+}
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -114,7 +121,13 @@ async function migrate(config) {
 
 // Метка сборки (`v0.1.0-windows-beta.3`) кладёт в runtime/build.json скрипт сборки установщика; без неё версия неизвестна.
 function buildTag() {
-  try { return JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8')).tag || ''; } catch { return ''; }
+  try { return JSON.parse(fs.readFileSync(path.join(appRoot, 'build.json'), 'utf8')).tag || ''; } catch { return ''; }
+}
+
+function selectApplication() {
+  selection = payload.select(runtime, data);
+  appRoot = selection.root; api = path.join(appRoot, 'api');
+  payload.atomic(path.join(requestedData, 'app-runtime.json'), { web: path.join(appRoot, 'web'), tag: buildTag() });
 }
 
 async function main() {
@@ -126,12 +139,16 @@ async function main() {
     log(`Каталог PostgreSQL содержит не-ASCII символы; копия бинарников: ${pgPlan.dir}`);
     mirrorPgDir(path.join(runtime, 'postgres'), pgPlan.dir, appVersion);
   }
+  startupPhase('preparing');
+  selectApplication();
   for (const file of [process.execPath, executable('initdb'), executable('pg_ctl'), path.join(api, 'dist', 'main.js')]) {
     if (!fs.existsSync(file)) throw new Error(`Installer is incomplete: ${file}`);
   }
   const config = loadConfig();
+  startupPhase('database');
   await startPostgres(config);
   await provision(config);
+  startupPhase('migrations');
   await migrate(config);
   const baseEnv = {
     ...process.env,
@@ -145,8 +162,12 @@ async function main() {
     ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
     // Обновления программы (apps/api/src/updates): метка сборки, каталог установки и способ штатно остановить PostgreSQL.
     ORION_BUILD_TAG: buildTag(), ORION_INSTALL_DIR: path.resolve(runtime, '..'),
+    ORION_WEB_DIST: path.join(appRoot, 'web'),
+    ORION_SHELL_RUNTIME: runtime,
+    ORION_SHELL_BASE_TAG: JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8')).tag,
     ORION_PG_CTL: executable('pg_ctl'), ORION_PG_CLUSTER: cluster,
   };
+  startupPhase('server');
   superviseApi(baseEnv);
 }
 
@@ -165,10 +186,10 @@ function homeLanAddress() {
   return pick ? pick.item : null;
 }
 
-function lanEnv() {
+function lanEnv(forceLocal) {
   let node = null;
   try { node = JSON.parse(fs.readFileSync(path.join(data, 'lan-node.json'), 'utf8')); } catch { /* файла нет — «Локальный» */ }
-  if (!node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
+  if (forceLocal || !node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
   const port = Number.isInteger(node.port) ? node.port : 4443;
   const address = homeLanAddress();
   return {
@@ -178,19 +199,84 @@ function lanEnv() {
   };
 }
 
-function superviseApi(baseEnv) {
-  const mode = lanEnv();
-  const env = { ...baseEnv, ...mode };
-  log(`Starting ORION API on 127.0.0.1:${apiPort} (${mode.ORION_LAN_HOST ? 'LAN host' : 'local'})`);
+// The first line of the API's own error that says what went wrong («Конфигурация ORION_MODE=server небезопасна…»).
+function failureReason(output) {
+  const colors = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+  const lines = output.split(/\r?\n/).map(line => line.replace(colors, '').trim()).filter(Boolean);
+  let at = lines.findIndex(line => /^Error: /.test(line));
+  if (at < 0) at = lines.findIndex(line => /небезопасна|не удалось|EADDRINUSE|EACCES/i.test(line));
+  if (at < 0) return (lines[lines.length - 1] || 'неизвестная ошибка').slice(0, 400);
+  // «…запуск остановлен:» lists the problems on the next lines («- APP_DATABASE_URL …»): keep them.
+  const details = [];
+  for (let next = at + 1; next < lines.length && lines[next].startsWith('- '); next += 1) details.push(lines[next]);
+  return [lines[at].replace(/^Error: /, ''), ...details].join(' ').slice(0, 400);
+}
+
+// `hostFailed`: the API did not start as «Хост LAN» — run it as «Локальный» once so this computer keeps working, and
+// tell the settings why (ORION_LAN_HOST_FAILED → «Сеть и устройства»). Without this a failed host start left the window
+// at «Локальный сервер ORION не отвечает» on every launch, the mode being saved.
+function superviseApi(baseEnv, hostFailed) {
+  const mode = lanEnv(Boolean(hostFailed));
+  const ack = path.join(data, 'app-updates', `ui-ready-${randomBytes(16).toString('hex')}`);
+  const trial = Boolean(selection?.trial);
+  if (trial) fs.writeFileSync(ack, '', { flag: 'wx' });
+  const env = { ...baseEnv, ORION_BUILD_TAG: buildTag(), ORION_WEB_DIST: path.join(appRoot, 'web'),
+    ORION_PAYLOAD_FAILURE: payload.readState(data).failed ? 'Обновление не прошло проверку запуска. Восстановлена предыдущая версия приложения.' : '',
+    ...(trial ? { ORION_PAYLOAD_ACK_FILE: ack } : {}), ...mode, ...(hostFailed ? { ORION_LAN_HOST_FAILED: `«Хост LAN» не запустился: ${hostFailed}` } : {}) };
+  log(`Starting ORION API on 127.0.0.1:${apiPort} (${mode.ORION_LAN_HOST ? 'LAN host' : hostFailed ? 'local after a failed LAN host start' : 'local'})`);
   const child = spawn(process.execPath, [path.join(api, 'dist', 'main.js')], { cwd: api, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let errors = '';
+  let healthyTrial = false;
+  let checking = false;
+  let timer = null;
+  if (trial) {
+    const deadline = Date.now() + 150_000;
+    timer = setInterval(async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        if (fs.existsSync(ack) && fs.readFileSync(ack, 'utf8') === buildTag()) {
+          const response = await fetch(`http://127.0.0.1:${apiPort}/system/health`, { signal: AbortSignal.timeout(2000) });
+          const health = await response.json();
+          if (response.ok && health.database === 'ok') {
+            payload.settle(data, true); healthyTrial = true; selection.trial = false;
+            clearInterval(timer); fs.rmSync(ack, { force: true }); log('Application payload committed: API and UI ready');
+          }
+        }
+      } catch { /* Keep the previous selection until both checks succeed. */ }
+      finally { checking = false; }
+      if (!healthyTrial && Date.now() > deadline) { clearInterval(timer); child.kill(); }
+    }, 1000);
+  }
   child.stdout.on('data', chunk => log(chunk.toString().trimEnd()));
-  child.stderr.on('data', chunk => log(chunk.toString().trimEnd()));
+  child.stderr.on('data', chunk => { const text = chunk.toString(); if (errors.length < 20000) errors += text; log(text.trimEnd()); });
   child.on('error', error => { log(`API failed: ${error.message}`); process.exitCode = 1; });
   child.on('exit', code => {
+    if (timer) clearInterval(timer);
+    fs.rmSync(ack, { force: true });
+    if (trial && !healthyTrial) {
+      log('Application payload failed readiness; restoring previous application');
+      payload.settle(data, false); selectApplication();
+      setTimeout(() => superviseApi(baseEnv, hostFailed), 500); return;
+    }
     // 75 — API просит применить новый режим узла (Хост LAN ⇄ Локальный): перечитываем lan-node.json и поднимаем заново.
     if (code === 75) { log('API restarting to apply node mode'); setTimeout(() => superviseApi(baseEnv), 500); return; }
+    if (mode.ORION_LAN_HOST && !hostFailed) {
+      const reason = failureReason(errors);
+      log(`API exited (${code}) as LAN host: ${reason}; starting as local`);
+      setTimeout(() => superviseApi(baseEnv, reason), 500);
+      return;
+    }
     log(`API exited (${code})`); process.exitCode = code || 1;
   });
 }
 
-main().catch(error => { log(`Startup failed: ${error.message}`); process.exitCode = 1; });
+main().catch(async error => {
+  log(`Startup failed: ${error.message}`);
+  if (selection?.trial) {
+    payload.settle(data, false); selection.trial = false;
+    log('Restoring previous application after startup failure');
+    try { await main(); return; } catch (fallback) { log(`Fallback failed: ${fallback.message}`); }
+  }
+  process.exitCode = 1;
+});

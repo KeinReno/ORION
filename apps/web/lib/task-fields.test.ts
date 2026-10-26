@@ -17,6 +17,7 @@ function task(overrides: Partial<Task> = {}): Task {
     projectTag: null,
     parentId: null,
     milestoneId: null,
+    checklist: [],
     assigneeId: null,
     recurrence: null,
     dependencyIds: ["b", "a"],

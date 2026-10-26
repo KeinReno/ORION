@@ -1,0 +1,7 @@
+{
+  "identifier": "com.orion.startup-smoke",
+  "build": { "devUrl": null },
+  "app": {
+    "windows": [{ "label": "main", "create": false, "title": "ORION — проверка запуска", "width": 1000, "height": 700 }]
+  }
+}

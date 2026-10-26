@@ -1,35 +1,4 @@
-// G4: ВРЕМЕННЫЕ исключения из правила межмодульных границ (architecture-check, moduleBoundaryViolations).
-// Каждая запись — существующий долг: сервис файла сегодня трогает чужую таблицу или импортирует чужой сервис.
-// Список может ТОЛЬКО сокращаться: новая запись допустима лишь вместе с ADR; запись, которой в коде больше нет
-// (долг погашен), обязана быть удалена — иначе проверка падает как «устарела». Закрытие — провайдеры агрегатов
-// (projects), позже события G3 и провайдеры Search/Inbox/Overview (G19).
-export const MODULE_BOUNDARY_EXCEPTIONS = {
-  "apps/api/src/activity/activity.service.ts": { models: ["AgentAuditEntry","TaskActivity","TaskComment"] },
-  "apps/api/src/ai/agent-gateway.service.ts": { models: ["Event","InboxItem","Note","Project","Task","TaskActivity"], services: ["events/events.service","inbox/inbox.service","notes/notes.service","search/search.service","tasks/tasks.service"] },
-  "apps/api/src/ai/agent-jobs.service.ts": { models: ["Event","Note","Task"], services: ["events/events.service","notes/notes.service","tasks/tasks.service"] },
-  "apps/api/src/ai/agent-tokens.service.ts": { models: ["Event","Note","Project","Task"] },
-  "apps/api/src/ai/agent-undo.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
-  "apps/api/src/captures/captures.service.ts": { models: ["Account","Contact","FinanceObligation","Goal","Home","Project","Task"], services: ["tasks/tasks.service"] },
-  "apps/api/src/contacts/contacts.service.ts": { models: ["Capture"] },
-  "apps/api/src/documents/documents.service.ts": { models: ["Project"] },
-  "apps/api/src/events/events.service.ts": { models: ["Project","Task"] },
-  "apps/api/src/finance/project-costs/project-costs.service.ts": { models: ["Project"] },
-  "apps/api/src/goals/goals.service.ts": { models: ["Milestone","Project","Task"], services: ["projects/projects.service"] },
-  "apps/api/src/health/health.service.ts": { models: ["Contact"] },
-  "apps/api/src/home-utilities/home-utilities.service.ts": { models: ["Home","Meter"] },
-  "apps/api/src/home/home.service.ts": { models: ["Contact","FinanceObligation","InventoryItem","List","Task","TaskActivity","TaskComment"] },
-  "apps/api/src/inbox/inbox.service.ts": { models: ["Project"] },
-  "apps/api/src/inventory/inventory.service.ts": { models: ["Project"] },
-  "apps/api/src/lists-finance/lists-finance.service.ts": { models: ["List","ListItem"], services: ["lists/lists.service"] },
-  "apps/api/src/lists-inventory/lists-inventory.service.ts": { models: ["InventoryItem","InventoryMovement","List","ListItem"], services: ["inventory/inventory.service","lists/lists.service"] },
-  "apps/api/src/lists/lists.service.ts": { models: ["InventoryItem","InventoryMovement","Transaction"] },
-  "apps/api/src/markets/markets.service.ts": { models: ["FinanceCategory","InvestmentTrade","Transaction"] },
-  "apps/api/src/milestones/milestones.service.ts": { models: ["Project"] },
-  "apps/api/src/notes/note-attachments.service.ts": { models: ["Document"], services: ["documents/documents.service"] },
-  "apps/api/src/notes/notes.service.ts": { models: ["Project"] },
-  "apps/api/src/overview/overview.service.ts": { models: ["Account","Task"] },
-  "apps/api/src/projects/project-captures.service.ts": { services: ["captures/captures.service"] },
-  "apps/api/src/search/search.service.ts": { services: ["notes/notes.service","tasks/tasks.service"] },
-  "apps/api/src/tasks/tasks.service.ts": { models: ["Milestone","Project","TimeEntry"] },
-  "apps/api/src/time/time.service.ts": { models: ["Project","Task"] }
-};
+// G4 / ADR-0034: all 17 legacy service exceptions have been retired.
+// Kept as an empty compatibility export for the checker. A new cross-domain
+// query belongs behind an owner contract, not in this list.
+export const MODULE_BOUNDARY_EXCEPTIONS = {};

@@ -37,15 +37,35 @@ export const petTimeOfDaySchema = z.enum(PET_TIMES_OF_DAY);
 export type PetTimeOfDay = z.infer<typeof petTimeOfDaySchema>;
 export const PET_TIME_LABELS: Record<PetTimeOfDay, string> = { "": "—", morning: "Утро", day: "День", evening: "Вечер", night: "Ночь" };
 
-export const PET_APPETITES = ["", "normal", "reduced", "picky", "refused"] as const;
+export const PET_APPETITES = ["", "normal", "much", "reduced", "picky", "refused"] as const;
 export const petAppetiteSchema = z.enum(PET_APPETITES);
 export type PetAppetite = z.infer<typeof petAppetiteSchema>;
-export const PET_APPETITE_LABELS: Record<PetAppetite, string> = { "": "—", normal: "Как обычно", reduced: "Ест меньше", picky: "Избирательно", refused: "Отказ от еды" };
+export const PET_APPETITE_LABELS: Record<PetAppetite, string> = {
+  "": "—",
+  normal: "Как обычно",
+  much: "Ест много",
+  reduced: "Ест меньше",
+  picky: "Избирательно",
+  refused: "Отказ от еды"
+};
 
-export const PET_ACTIVITIES = ["", "normal", "low", "very_low", "restless"] as const;
+export const PET_ACTIVITIES = ["", "normal", "high", "low", "very_low", "restless"] as const;
 export const petActivitySchema = z.enum(PET_ACTIVITIES);
 export type PetActivity = z.infer<typeof petActivitySchema>;
-export const PET_ACTIVITY_LABELS: Record<PetActivity, string> = { "": "—", normal: "Обычная", low: "Сниженная", very_low: "Очень вялый", restless: "Беспокойный" };
+export const PET_ACTIVITY_LABELS: Record<PetActivity, string> = {
+  "": "—",
+  normal: "Обычная",
+  high: "Очень активный",
+  low: "Сниженная",
+  very_low: "Очень вялый",
+  restless: "Беспокойный"
+};
+
+/** Объём: мало → обычно → много. Стоит на походах в лоток и на симптомах. */
+export const PET_AMOUNTS = ["little", "normal", "much"] as const;
+export const petAmountSchema = z.enum(PET_AMOUNTS);
+export type PetAmount = z.infer<typeof petAmountSchema>;
+export const PET_AMOUNT_LABELS: Record<PetAmount, string> = { little: "Мало", normal: "Обычно", much: "Много" };
 
 export const PET_STOOLS = ["", "none", "normal", "soft", "liquid", "constipation", "blood", "mucus"] as const;
 export const petStoolSchema = z.enum(PET_STOOLS);
@@ -61,10 +81,47 @@ export const PET_STOOL_LABELS: Record<PetStool, string> = {
   mucus: "Со слизью"
 };
 
-export const PET_WATERS = ["", "normal", "reduced", "none"] as const;
+export const PET_WATERS = ["", "normal", "much", "reduced", "none"] as const;
 export const petWaterSchema = z.enum(PET_WATERS);
 export type PetWater = z.infer<typeof petWaterSchema>;
-export const PET_WATER_LABELS: Record<PetWater, string> = { "": "—", normal: "Пьёт обычно", reduced: "Пьёт мало", none: "Не пьёт" };
+export const PET_WATER_LABELS: Record<PetWater, string> = { "": "—", normal: "Пьёт обычно", much: "Пьёт много", reduced: "Пьёт мало", none: "Не пьёт" };
+
+/** Консистенция одного похода «по-большому» — без «не отмечено» и «не было». */
+export const PET_STOOL_CONSISTENCIES = ["normal", "soft", "liquid", "constipation", "blood", "mucus"] as const;
+export const petStoolConsistencySchema = z.enum(PET_STOOL_CONSISTENCIES);
+export type PetStoolConsistency = z.infer<typeof petStoolConsistencySchema>;
+
+export const PET_STOOL_VISITS_MAX = 24;
+export const petStoolVisitSchema = z.object({
+  consistency: petStoolConsistencySchema,
+  amount: petAmountSchema
+});
+export type PetStoolVisit = z.infer<typeof petStoolVisitSchema>;
+export const petStoolVisitInputSchema = z.object({
+  consistency: petStoolConsistencySchema,
+  amount: petAmountSchema.default("normal")
+});
+
+const STOOL_RANK: Record<PetStoolConsistency, number> = { blood: 6, liquid: 5, mucus: 4, soft: 3, constipation: 2, normal: 1 };
+
+/** Самая тревожная консистенция среди походов. Пустой список — «не отмечено». */
+export function summarizePetStool(visits: readonly { consistency: PetStoolConsistency }[]): PetStool {
+  if (visits.length === 0) return "";
+  let best: PetStoolConsistency = visits[0]!.consistency;
+  for (const visit of visits) {
+    if (STOOL_RANK[visit.consistency] > STOOL_RANK[best]) best = visit.consistency;
+  }
+  return best;
+}
+
+/** Текст для отчёта: «3 раза: мягкий, много; нормальный, обычно» либо прежняя одна отметка. */
+export function formatPetStool(day: { stool: PetStool; stoolVisits?: readonly PetStoolVisit[] }): string {
+  const visits = day.stoolVisits ?? [];
+  if (visits.length === 0) return PET_STOOL_LABELS[day.stool];
+  const head = `${visits.length} ${petPlural(visits.length, "раз", "раза", "раз")}`;
+  const body = visits.map((visit) => `${PET_STOOL_LABELS[visit.consistency].toLowerCase()}, ${PET_AMOUNT_LABELS[visit.amount].toLowerCase()}`).join("; ");
+  return `${head}: ${body}`;
+}
 
 export type PetSymptomCategory = "gi" | "behavior" | "respiratory" | "urinary" | "general";
 
@@ -144,7 +201,9 @@ export const petDaySymptomSchema = z.object({
   severity: petSeveritySchema,
   count: z.number().int().min(1).max(99),
   time: petTimeOfDaySchema,
-  note: z.string().max(500)
+  note: z.string().max(500),
+  /** Мало / обычно / много — отдельно от выраженности. */
+  amount: petAmountSchema
 });
 export type PetDaySymptom = z.infer<typeof petDaySymptomSchema>;
 
@@ -154,7 +213,8 @@ export const petDaySymptomInputSchema = z.object({
   severity: petSeveritySchema.default("moderate"),
   count: z.number().int().min(1).max(99).default(1),
   time: petTimeOfDaySchema.default(""),
-  note: z.string().max(500).default("")
+  note: z.string().max(500).default(""),
+  amount: petAmountSchema.default("normal")
 });
 
 export const petCareDayLogSchema = z.object({
@@ -168,6 +228,8 @@ export const petCareDayLogSchema = z.object({
   appetite: petAppetiteSchema,
   activity: petActivitySchema,
   stool: petStoolSchema,
+  /** Каждый поход «по-большому». Пустой список — день описан одной отметкой `stool`. */
+  stoolVisits: z.array(petStoolVisitSchema).max(PET_STOOL_VISITS_MAX),
   water: petWaterSchema,
   vomitingCount: z.number().int(),
   weightKg: z.number().nullable(),
@@ -188,6 +250,7 @@ export const upsertPetCareDayInputSchema = z
     appetite: petAppetiteSchema.default(""),
     activity: petActivitySchema.default(""),
     stool: petStoolSchema.default(""),
+    stoolVisits: z.array(petStoolVisitInputSchema).max(PET_STOOL_VISITS_MAX).default([]),
     water: petWaterSchema.default(""),
     vomitingCount: z.number().int().min(0).max(99).default(0),
     weightKg: z.number().min(0.01).max(200).nullable().default(null),
@@ -273,9 +336,23 @@ export interface PetDayFacts {
   appetite: PetAppetite;
   activity: PetActivity;
   stool: PetStool;
+  /** Походы за день. Если они есть, статус смотрит на них, а не на одну отметку `stool`. */
+  stoolVisits?: ReadonlyArray<{ consistency: PetStoolConsistency }>;
   water: PetWater;
   vomitingCount: number;
-  symptoms: ReadonlyArray<{ id: string; severity: PetSeverity }>;
+  symptoms: ReadonlyArray<{ id: string; severity: PetSeverity; amount?: PetAmount }>;
+}
+
+function symptomRank(item: { severity: PetSeverity; amount?: PetAmount }): number {
+  const rank = SEVERITY_RANK[item.severity] ?? 0;
+  return item.amount === "much" ? Math.min(4, rank + 1) : rank;
+}
+
+/** Консистенция для расчётов: худший из походов, иначе одна отметка дня. */
+export function stoolOf(day: PetDayFacts): PetStool {
+  const visits = day.stoolVisits;
+  if (!visits || visits.length === 0) return day.stool;
+  return summarizePetStool(visits);
 }
 
 export interface PetDayRecord extends PetDayFacts {
@@ -288,13 +365,15 @@ export interface PetDayRecord extends PetDayFacts {
 /** Состояние дня по данным: критические сигналы → «Очень плохо», плохие → «Плохо», любые отметки → «Есть нюансы». */
 export function computePetDayStatus(day: PetDayFacts): PetDayStatus {
   const { symptoms } = day;
-  const maxSeverity = symptoms.reduce((max, item) => Math.max(max, SEVERITY_RANK[item.severity] ?? 0), 0);
-  const moderateOrWorse = symptoms.filter((item) => (SEVERITY_RANK[item.severity] ?? 0) >= 2).length;
+  const stool = stoolOf(day);
+  const visits = day.stoolVisits?.length ?? 0;
+  const maxSeverity = symptoms.reduce((max, item) => Math.max(max, symptomRank(item)), 0);
+  const moderateOrWorse = symptoms.filter((item) => symptomRank(item) >= 2).length;
   const criticalSymptom = maxSeverity >= 4 || symptoms.some((item) => SYMPTOM_BY_ID.get(item.id)?.critical);
 
   if (
     criticalSymptom ||
-    day.stool === "blood" ||
+    stool === "blood" ||
     day.vomitingCount >= 4 ||
     day.water === "none" ||
     (day.appetite === "refused" && day.activity === "very_low")
@@ -304,7 +383,7 @@ export function computePetDayStatus(day: PetDayFacts): PetDayStatus {
 
   if (
     day.vomitingCount >= 2 ||
-    day.stool === "liquid" ||
+    stool === "liquid" ||
     day.appetite === "refused" ||
     day.activity === "very_low" ||
     maxSeverity >= 3 ||
@@ -315,14 +394,16 @@ export function computePetDayStatus(day: PetDayFacts): PetDayStatus {
 
   if (
     day.vomitingCount === 1 ||
-    day.stool === "soft" ||
-    day.stool === "constipation" ||
-    day.stool === "mucus" ||
+    stool === "soft" ||
+    stool === "constipation" ||
+    stool === "mucus" ||
+    visits >= 3 ||
     day.appetite === "reduced" ||
     day.appetite === "picky" ||
     day.activity === "low" ||
     day.activity === "restless" ||
     day.water === "reduced" ||
+    day.water === "much" ||
     symptoms.length > 0
   ) {
     return "watch";
@@ -330,9 +411,9 @@ export function computePetDayStatus(day: PetDayFacts): PetDayStatus {
 
   const allClear =
     day.vomitingCount === 0 &&
-    (day.appetite === "" || day.appetite === "normal") &&
-    (day.activity === "" || day.activity === "normal") &&
-    (day.stool === "" || day.stool === "none" || day.stool === "normal") &&
+    (day.appetite === "" || day.appetite === "normal" || day.appetite === "much") &&
+    (day.activity === "" || day.activity === "normal" || day.activity === "high") &&
+    (stool === "" || stool === "none" || stool === "normal") &&
     (day.water === "" || day.water === "normal");
   return allClear ? "good" : "normal";
 }
@@ -568,7 +649,8 @@ export function parseMurhpBackup(backup: { days: unknown[]; events: unknown[]; c
         severity: asChoice(petSeveritySchema, symptom.severity, "moderate"),
         count: Math.min(99, Math.max(1, Math.trunc(asNumber(symptom.count, 1, 99) ?? 1))),
         time: asChoice(petTimeOfDaySchema, symptom.time, ""),
-        note: asText(symptom.note, 500)
+        note: asText(symptom.note, 500),
+        amount: asChoice(petAmountSchema, symptom.amount, "normal")
       });
     }
     days.set(row.date, {
@@ -577,6 +659,7 @@ export function parseMurhpBackup(backup: { days: unknown[]; events: unknown[]; c
       appetite: asChoice(petAppetiteSchema, row.appetite, ""),
       activity: asChoice(petActivitySchema, row.activity, ""),
       stool: asChoice(petStoolSchema, row.stool, ""),
+      stoolVisits: [],
       water: asChoice(petWaterSchema, row.water, ""),
       vomitingCount: Math.trunc(asNumber(row.vomitingCount, 0, 99) ?? 0),
       weightKg: asNumber(row.weightKg, 0.01, 200),
@@ -625,6 +708,7 @@ export const agentPetDayPatchSchema = z.object({
   appetite: petAppetiteSchema.optional(),
   activity: petActivitySchema.optional(),
   stool: petStoolSchema.optional(),
+  stoolVisits: z.array(petStoolVisitInputSchema).max(PET_STOOL_VISITS_MAX).optional(),
   water: petWaterSchema.optional(),
   vomitingCount: z.number().int().min(0).max(99).optional(),
   weightKg: z.number().min(0.01).max(200).nullable().optional(),
@@ -651,13 +735,14 @@ export function mergePetDay(existing: PetCareDayLog | null, patch: AgentPetDayPa
           appetite: existing.appetite,
           activity: existing.activity,
           stool: existing.stool,
+          stoolVisits: existing.stoolVisits,
           water: existing.water,
           vomitingCount: existing.vomitingCount,
           weightKg: existing.weightKg,
           temperature: existing.temperature,
           meds: existing.meds,
           note: existing.note,
-          symptoms: existing.symptoms.map(({ id, severity, count, time, note }) => ({ id, severity, count, time, note }))
+          symptoms: existing.symptoms.map(({ id, severity, count, time, note, amount }) => ({ id, severity, count, time, note, amount }))
         }
       : {}
   );

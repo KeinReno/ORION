@@ -89,7 +89,12 @@ export const lanHostStatusSchema = z.object({
   supervised: z.boolean(),
   mdns: z.boolean(),
   firewall: z.enum(["unsupported", "missing", "present"]),
-  loginPolicy: lanLoginPolicySchema
+  loginPolicy: lanLoginPolicySchema,
+  /**
+   * Why the host is not working although it is switched on: the LAN port could not be opened (taken by another program)
+   * or the API did not start in host mode and the launcher brought it back as «Локальный». `null` — no problem.
+   */
+  error: z.string().nullable()
 });
 export type LanHostStatus = z.infer<typeof lanHostStatusSchema>;
 
@@ -100,7 +105,9 @@ export const lanEnableHostInputSchema = z.object({
   /** Владелец подтвердил, что понимает последствия (предупреждение показано). */
   acknowledged: z.literal(true),
   /** Политика входа; по умолчанию домашняя. При `strict` аккаунтам с PIN нужны пароли (`passwords`). */
-  loginPolicy: lanLoginPolicySchema.default("home")
+  loginPolicy: lanLoginPolicySchema.default("home"),
+  /** HTTPS-порт хоста в сети; не задан — прежний (по умолчанию 4443). Другой — если этот занят другой программой. */
+  port: z.number().int().min(1024).max(65535).optional()
 });
 export type LanEnableHostInput = z.infer<typeof lanEnableHostInputSchema>;
 
@@ -139,6 +146,12 @@ export const LAN_REMOTE_PREFIX = "/_remote";
 /** Шестизначный код сопоставления (SAS): оба конца считают его из одних и тех же величин, включая сертификат. */
 export function lanPairingCodeInput(clientNonce: string, serverNonce: string, fingerprint: string): string {
   return `orion-pair/v1|${clientNonce}|${serverNonce}|${fingerprint.replace(/:/g, "").toLowerCase()}`;
+}
+
+/** Первые 4 байта HMAC-SHA256 (big-endian) → 6 цифр. Сам HMAC считается там, где есть криптография. */
+export function pairingCodeFromDigest(digest: Uint8Array): string {
+  const value = (((digest[0] ?? 0) << 24) | ((digest[1] ?? 0) << 16) | ((digest[2] ?? 0) << 8) | (digest[3] ?? 0)) >>> 0;
+  return String(value % 1_000_000).padStart(6, "0");
 }
 
 export const lanSetLoginPolicyInputSchema = z.object({

@@ -1,3 +1,4 @@
+import { ProjectReferences } from "../../projects/public/project-references";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -48,6 +49,7 @@ export interface TransactionFilters {
 @Injectable()
 export class TransactionsService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly budgetAlerts: BudgetAlertsService
@@ -101,7 +103,7 @@ export class TransactionsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await assertAccountInWorkspace(tx, workspaceId, input.accountId);
       if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
-      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId);
+      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
       for (const line of input.lines) {
         if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);
       }
@@ -241,7 +243,7 @@ export class TransactionsService {
 
       if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
       if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
-      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId);
+      if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
       if (input.lines) {
         for (const line of input.lines) {
           if (line.categoryId) await assertCategoryInWorkspace(tx, workspaceId, line.categoryId);

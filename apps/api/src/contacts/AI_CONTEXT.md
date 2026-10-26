@@ -8,6 +8,8 @@ Merge and bulk operations are single transactions; do not split them. Notificati
 
 Do not add CRM fields (pipeline, deal value) here — that is a separate optional extension. Do not add a UI library; the panel uses `@orion/ui` primitives only.
 
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

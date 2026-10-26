@@ -94,7 +94,7 @@ export function UpdatesSettings(): React.ReactElement {
         {s.latest && (s.state === "available" || s.state === "ready" || s.state === "downloading") ? (
           <div className="space-y-1 pt-1">
             <p className="text-xs text-muted-foreground">
-              {s.latest.name} · {formatSize(s.latest.sizeBytes)}
+              {s.latest.name} · {s.latest.kind === "payload" ? "пакет приложения" : "полный установщик"} · {formatSize(s.latest.sizeBytes)}
               {s.latest.publishedAt ? ` · ${new Date(s.latest.publishedAt).toLocaleDateString("ru-RU")}` : ""}
             </p>
             {s.latest.notes ? <p className="whitespace-pre-wrap text-xs text-muted-foreground">{s.latest.notes.slice(0, 600)}</p> : null}

@@ -1,0 +1,48 @@
+{
+  "fileCount": 20,
+  "manualCoreFiles": [],
+  "files": [
+    "apps/api/prisma/migrations/20261025083814_platform_probe/migration.sql",
+    "apps/api/prisma/schema.prisma",
+    "apps/api/src/modules-ext/data.generated.ts",
+    "apps/api/src/modules-ext/modules.generated.ts",
+    "apps/api/src/modules-ext/platform-probe/AI_CONTEXT.md",
+    "apps/api/src/modules-ext/platform-probe/MODULE.md",
+    "apps/api/src/modules-ext/platform-probe/module.manifest.json",
+    "apps/api/src/modules-ext/platform-probe/platform-probe.controller.ts",
+    "apps/api/src/modules-ext/platform-probe/platform-probe.module.ts",
+    "apps/api/src/modules-ext/platform-probe/platform-probe.service.ts",
+    "apps/api/src/modules-ext/platform-probe/prisma/migration.sql",
+    "apps/api/src/modules-ext/platform-probe/prisma/models.prisma",
+    "apps/api/test/modules-ext/platform-probe/platform-probe.integration.test.ts",
+    "apps/web/modules-ext/panels.generated.ts",
+    "apps/web/modules-ext/platform-probe/PlatformProbePanel.tsx",
+    "apps/web/modules-ext/platform-probe/use-platform-probe.ts",
+    "docs/platform-api/capabilities.generated.json",
+    "packages/shared-types/src/modules-ext/platform-probe/index.ts",
+    "packages/shared-types/src/modules-ext/registry.generated.ts",
+    "scripts/module-ownership.generated.mjs"
+  ],
+  "baseCommit": "1ec8c237b355eceec3dd8ad11e5657ea336963c8",
+  "fixtureCommit": "50e0c41",
+  "fixtureModule": {
+    "id": "platform-probe",
+    "version": "2.4.1"
+  },
+  "validation": {
+    "typecheck": "passed",
+    "generatedHttpAndRls": {
+      "passed": 7
+    },
+    "hostContractsAndMap": {
+      "passed": 3
+    },
+    "productionBuild": "passed",
+    "chromium": {
+      "passed": 1
+    }
+  },
+  "manualSourceEdits": [
+    "apps/api/src/modules-ext/platform-probe/module.manifest.json: own version and requirements only"
+  ]
+}

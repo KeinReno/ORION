@@ -107,9 +107,12 @@ export class EventReminderService {
     event: EventWithRelations,
     now: number
   ): Generator<{ occurrenceStart: Date; actualStart: Date; offset: number }> {
-    const maxOffsetMs = Math.max(...event.reminders) * 60_000;
-    const windowStart = new Date(now - EventReminderService.LATE_GRACE_MS);
-    const windowEnd = new Date(now + maxOffsetMs + 60_000);
+    if (event.reminders.length === 0) return;
+    // Positive offset = before the start, negative = after (a chosen clock time).
+    const latestAfterMs = Math.max(0, ...event.reminders.map((offset) => -offset)) * 60_000;
+    const earliestBeforeMs = Math.max(0, ...event.reminders) * 60_000;
+    const windowStart = new Date(now - EventReminderService.LATE_GRACE_MS - latestAfterMs);
+    const windowEnd = new Date(now + earliestBeforeMs + 60_000);
 
     const originalStarts: Date[] = event.recurrence
       ? expandRecurrence(recurrenceSpecSchema.parse(event.recurrence), event.startAt, windowStart, windowEnd)
@@ -124,25 +127,29 @@ export class EventReminderService {
       const ovr = overrideByStart.get(occurrenceStart.getTime());
       if (ovr?.canceled) continue;
       const actualStart = ovr?.startAt ?? occurrenceStart;
-      if (actualStart.getTime() < now - EventReminderService.LATE_GRACE_MS) continue;
       for (const offset of event.reminders) {
         const fireAt = actualStart.getTime() - offset * 60_000;
         if (fireAt > now) continue;
         if (sent.has(`${occurrenceStart.getTime()}:${offset}`)) continue;
+        // Before the start: still deliver until an hour after the event began.
+        // After the start: only within an hour of the chosen clock time.
+        if (offset >= 0) {
+          if (actualStart.getTime() < now - EventReminderService.LATE_GRACE_MS) continue;
+        } else if (fireAt < now - EventReminderService.LATE_GRACE_MS) continue;
         yield { occurrenceStart, actualStart, offset };
       }
     }
   }
 
   private compose(event: EventWithRelations, start: Date, offsetMinutes: number): string {
+    const span = (minutes: number): string =>
+      minutes % 1440 === 0 ? `${minutes / 1440} дн.` : minutes % 60 === 0 ? `${minutes / 60} ч.` : `${minutes} мин.`;
     const when =
       offsetMinutes === 0
         ? "сейчас"
-        : offsetMinutes % 1440 === 0
-          ? `через ${offsetMinutes / 1440} дн.`
-          : offsetMinutes % 60 === 0
-            ? `через ${offsetMinutes / 60} ч.`
-            : `через ${offsetMinutes} мин.`;
+        : offsetMinutes > 0
+          ? `через ${span(offsetMinutes)}`
+          : `спустя ${span(-offsetMinutes)}`;
     const at = event.allDay
       ? start.toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" })
       : start.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });

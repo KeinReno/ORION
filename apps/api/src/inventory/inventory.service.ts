@@ -1,4 +1,5 @@
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { ProjectReferences } from "../projects/public/project-references";
+import { HomeReferences } from "../home/public/home-references";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type {
@@ -30,6 +31,8 @@ interface ItemTotals {
 @Injectable()
 export class InventoryService {
   constructor(
+    private readonly homes: HomeReferences,
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly alerts: InventoryAlertsService
@@ -52,7 +55,7 @@ export class InventoryService {
     const item = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.projectId) await this.assertProjectTx(tx, workspaceId, input.projectId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       return tx.inventoryItem.create({
         data: {
           workspaceId,
@@ -184,8 +187,7 @@ export class InventoryService {
   }
 
   private async assertProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string): Promise<void> {
-    const project = await tx.project.findUnique({ where: { id: projectId } });
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 }
 

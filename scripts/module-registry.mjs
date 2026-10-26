@@ -34,6 +34,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { COMPONENT_VERSION_RE, requirementErrors } from "./component-requirements.mjs";
 import { PLUGIN_GENERATED_FILES, PLUGIN_MANIFEST_FILE, PLUGIN_PATHS, allowedPathsForPlugins, collectPlugins, renderPluginOutputs } from "./plugin-registry.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -153,7 +154,8 @@ export function collectModules(root = defaultRoot) {
       if (core.has(id)) fail(`id "${id}" занят модулем ядра`);
       if (seenIds.has(id)) fail(`id "${id}" уже объявлен другим манифестом`);
     }
-    if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+$/.test(manifest.version)) fail("version должен быть semver");
+    if (typeof manifest.version !== "string" || !COMPONENT_VERSION_RE.test(manifest.version)) fail("version должен быть semver");
+    for (const error of requirementErrors(manifest.requires)) fail(error);
 
     const catalog = manifest.catalog ?? {};
     for (const field of CATALOG_STRING_FIELDS) {
@@ -350,6 +352,8 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
     HEADER +
       `\n/** Идентификаторы модулей, подключённых манифестом; ядро дописывает их в закрытый \`z.enum\` (modules.ts). */\n` +
       `export const GENERATED_MODULE_IDS = ${json(ids)} as const;\n\n` +
+      `import type { ComponentMetadata } from "../component-manifest";\n` +
+      `export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = ${json(Object.fromEntries(modules.map(m => [m.id, { version: m.manifest.version, ...(m.manifest.requires ? { requires: m.manifest.requires } : {}) }])))};\n\n` +
       `/** Форма записи каталога (структурно совпадает с \`ModuleManifest\`; тип задан здесь, чтобы не зациклить modules.ts). */\n` +
       `export interface GeneratedModuleCatalogEntry {\n  id: (typeof GENERATED_MODULE_IDS)[number];\n  kind: "base" | "additional";\n  required: boolean;\n  label: string;\n  summary: string;\n  owns: string;\n  livesWithout: string;\n  provides: readonly string[];\n  optionalDependencies: readonly string[];\n  disableBehavior: string;\n  panelId: string;\n  defaultEnabled: boolean;\n}\n\n` +
       `/** Записи каталога модулей; \`MODULE_CATALOG\` добавляет их к встроенным. */\n` +
@@ -455,13 +459,12 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
       `];\n`
   );
 
-  // G4: владелец моделей — каталог apps/api/src/modules-ext (правило границ определяет модуль по первому
-  // сегменту пути под src/, поэтому подключаемые модули для него — один «модуль»; границы между ними не проверяются).
+  // Each manifest module owns its own subtree; siblings must not share an ownership identity.
   out.set(
     "scripts/module-ownership.generated.mjs",
     "// АВТОГЕНЕРИРУЕТСЯ scripts/module-registry.mjs — руками не править.\n" +
       "/** Модели подключаемых модулей -> каталог-владелец (см. module-ownership.mjs). */\n" +
-      `export const GENERATED_MODEL_OWNERS = ${json(allModels.map((item) => [item.model, "modules-ext"]))};\n`
+      `export const GENERATED_MODEL_OWNERS = ${json(modules.flatMap((m) => m.models.map((item) => [item.model, `modules-ext/${m.name}`])))};\n`
   );
 
   for (const m of modules) {

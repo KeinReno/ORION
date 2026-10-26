@@ -1,4 +1,6 @@
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { ProjectTaskLinks } from "../projects/public/project-task-links";
+import { MilestoneReferences } from "../milestones/public/milestone-references";
+import { HomeReferences } from "../home/public/home-references";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 // Value import, not `import type`: `Prisma.DbNull` / `Prisma.InputJsonValue` are
 // runtime values. Importing the namespace as a type only compiles the type
@@ -10,15 +12,17 @@ import type {
   CreateTaskInput,
   SavedTaskView,
   Task,
+  TaskChecklistItem,
   TaskRecurrence,
   TaskViewFilters,
   UpdateTaskInput
 } from "@orion/shared-types";
-import { isModuleEnabled, isPluginEnabled, isTaskClosed } from "@orion/shared-types";
+import { isPluginEnabled, isTaskClosed, taskChecklistItemSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { assertAssigneeInWorkspace } from "./task-refs.util";
+import { TaskClosureRegistry } from "./public/task-closure-registry";
 
 const taskInclude = {
   dependsOn: { include: { dependsOn: { select: { status: true } } } }
@@ -28,9 +32,13 @@ type TaskModel = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 @Injectable()
 export class TasksService {
   constructor(
+    private readonly homes: HomeReferences,
+    private readonly projectLinks: ProjectTaskLinks,
+    private readonly milestoneReferences: MilestoneReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly events: DomainEventBus
+    private readonly events: DomainEventBus,
+    private readonly closures: TaskClosureRegistry
   ) {}
 
   async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean): Promise<Task[]> {
@@ -83,6 +91,13 @@ export class TasksService {
     return toDto(task);
   }
 
+  /** Agent capture uses the same transaction for the task and its creation journal. */
+  async createFromAgentTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, agentName: string) {
+    const task = await this.createTx(tx, userId, workspaceId, input);
+    await tx.taskActivity.create({ data: { workspaceId, taskId: task.id, actorId: userId, field: "created", toValue: task.title, agentName } });
+    return { id: task.id };
+  }
+
   /**
    * The body of `create()`, minus the `withUser` wrap — pulled out so
    * `SearchService.createAndLink` (U03 Часть 1) can run it inside the SAME
@@ -99,7 +114,7 @@ export class TasksService {
     await this.assertDependenciesTx(tx, workspaceId, null, dependencyIds);
     if (input.assigneeId !== undefined) await this.assertAssigneeWriteTx(tx, userId, workspaceId, input.assigneeId);
     if (input.milestoneId) await this.assertMilestoneTx(tx, workspaceId, input.milestoneId, project?.id ?? null);
-    if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+    if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
     const created = await tx.task.create({
       data: {
         ...(clientId ? { id: clientId } : {}),
@@ -116,6 +131,7 @@ export class TasksService {
         estimatedMinutes: input.estimatedMinutes ?? null,
         milestoneId: input.milestoneId ?? null,
         homeId: input.homeId ?? null,
+        checklist: input.checklist as unknown as Prisma.InputJsonValue,
         recurrence: input.recurrence ? (input.recurrence as Prisma.InputJsonValue) : Prisma.DbNull
       }
     });
@@ -173,6 +189,7 @@ export class TasksService {
       }
       const datesChanged = input.startAt !== undefined || input.dueAt !== undefined;
       if (input.startAt !== undefined) data.startAt = input.startAt;
+      if (input.checklist !== undefined) data.checklist = input.checklist as unknown as Prisma.InputJsonValue;
 
       const firstCompletion = input.status === "done" && current.status !== "done";
       if (input.status !== undefined) {
@@ -226,28 +243,11 @@ export class TasksService {
 
       if (datesChanged) await cascadeRescheduleTx(tx, taskId);
 
-      // Bridge: closing a task stops its running timer so "сделать" doesn't
-      // leave a stopwatch ticking in the background. Skipped when Time is off.
+      // Optional neighbors own their synchronous consequences (ADR-0027).
       const closedNow =
         input.status !== undefined && isTaskClosed(input.status) && !isTaskClosed(current.status);
       if (closedNow) {
-        const workspace = await tx.workspace.findUnique({
-          where: { id: workspaceId },
-          select: { disabledModules: true }
-        });
-        if (isModuleEnabled(workspace?.disabledModules, "time")) {
-          const running = await tx.timeEntry.findFirst({
-            where: { workspaceId, taskId, endedAt: null }
-          });
-          if (running) {
-            const endedAt = new Date();
-            const safeEnd =
-              endedAt.getTime() <= running.startedAt.getTime()
-                ? new Date(running.startedAt.getTime() + 1000)
-                : endedAt;
-            await tx.timeEntry.update({ where: { id: running.id }, data: { endedAt: safeEnd } });
-          }
-        }
+        await this.closures.closeTx(tx, { workspaceId, taskId });
       }
 
       // Event API (ADR-0019): the outbox row is written in this very transaction, so a rolled-back update (revision
@@ -296,7 +296,8 @@ export class TasksService {
             projectTag: projectTouched ? (data.projectTag as string | null) : current.projectTag,
             recurrence: recurrence as Prisma.InputJsonValue,
             sortOrder: input.sortOrder ?? current.sortOrder,
-            assigneeId: input.assigneeId === undefined ? current.assigneeId : data.assigneeId as string | null
+            assigneeId: input.assigneeId === undefined ? current.assigneeId : data.assigneeId as string | null,
+            checklist: (input.checklist ?? readChecklist(current.checklist)).map((item) => ({ ...item, done: false })) as unknown as Prisma.InputJsonValue
           }
         });
         const dependencyIds = input.dependencyIds ?? current.dependsOn.map((dependency) => dependency.dependsOnTaskId);
@@ -402,14 +403,13 @@ export class TasksService {
 
   private async resolveProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId?: string | null, projectTag?: string | null) {
     if (projectId) {
-      const project = await tx.project.findUnique({ where: { id: projectId } });
-      if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
+      const project = await this.projectLinks.byIdTx(tx, workspaceId, projectId);
+      if (!project) throw new NotFoundException("Проект не найден");
       return project;
     }
     const name = projectTag?.trim();
     if (!name) return null;
-    const existing = await tx.project.findFirst({ where: { workspaceId, name: { equals: name, mode: "insensitive" } } });
-    return existing ?? tx.project.create({ data: { workspaceId, name } });
+    return this.projectLinks.findOrCreateByNameTx(tx, workspaceId, name);
   }
 
   /** A task's milestone must belong to the *same project* as the task — grouping a task under another project's phase would make the Gantt lie about which project owns that plan. */
@@ -419,8 +419,8 @@ export class TasksService {
     milestoneId: string,
     taskProjectId: string | null
   ): Promise<void> {
-    const milestone = await tx.milestone.findUnique({ where: { id: milestoneId } });
-    if (!milestone || milestone.workspaceId !== workspaceId) throw new NotFoundException("Веха не найдена");
+    const milestone = await this.milestoneReferences.findTx(tx, workspaceId, milestoneId);
+    if (!milestone) throw new NotFoundException("Веха не найдена");
     if (!taskProjectId || milestone.projectId !== taskProjectId) {
       throw new BadRequestException("Веха должна принадлежать тому же проекту, что и задача");
     }
@@ -495,6 +495,16 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+function readChecklist(value: Prisma.JsonValue | undefined): TaskChecklistItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: TaskChecklistItem[] = [];
+  for (const item of value) {
+    const parsed = taskChecklistItemSchema.safeParse(item);
+    if (parsed.success) items.push(parsed.data);
+  }
+  return items;
+}
+
 function toDto(task: TaskModel): Task {
   const dependencyIds = task.dependsOn.map((dependency) => dependency.dependsOnTaskId);
   return {
@@ -518,6 +528,7 @@ function toDto(task: TaskModel): Task {
     startAt: task.startAt?.toISOString() ?? null,
     estimatedMinutes: task.estimatedMinutes,
     milestoneId: task.milestoneId,
+    checklist: readChecklist(task.checklist),
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString()
   };

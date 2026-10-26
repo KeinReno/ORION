@@ -1,3 +1,5 @@
+import { ProjectReferencesModule } from "../projects/public/project-references.module";
+import { TaskIntegrationReaderModule } from "../tasks/public/task-integration-reader.module";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -5,7 +7,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
 import { EventsController } from "./events.controller";
 import { CalendarController } from "./calendar.controller";
 import { CalendarFeedController } from "./calendar-feed.controller";
-import { EventsService } from "./events.service";
+import { EventOperationsModule } from "./public/event-operations.module";
 import { EventReminderService } from "./event-reminder.service";
 import { CalendarConnectionsController } from "./calendar-connections.controller";
 import { CalendarConnectionsService } from "./calendar-connections.service";
@@ -16,9 +18,9 @@ import { EventInboxTarget } from "./events-inbox.target";
 import { EventsProjectAggregates } from "./events-project-aggregates";
 
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
+  imports: [EventOperationsModule, ProjectReferencesModule, TaskIntegrationReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [EventsController, CalendarController, CalendarFeedController, CalendarConnectionsController],
-  providers: [EventsProjectAggregates, EventsService, EventReminderService, CalendarConnectionsService, EventsSearchProvider, EventInboxTarget],
-  exports: [EventsService]
+  providers: [EventsProjectAggregates, EventReminderService, CalendarConnectionsService, EventsSearchProvider, EventInboxTarget],
+  exports: [EventOperationsModule]
 })
 export class EventsModule {}

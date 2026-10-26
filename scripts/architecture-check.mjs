@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { registryViolations } from "./module-registry.mjs";
-import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir } from "./module-ownership.mjs";
+import { CORE_MODELS, CORE_MODULE_DIRS, MODEL_OWNERS, moduleOfDir, moduleOfPath } from "./module-ownership.mjs";
 import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -265,7 +265,7 @@ export function moduleBoundaryUsages(projectRoot = root) {
     if (!/\.service\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
     const dir = relative(apiSrc, file).split(sep)[0];
     if (CORE_MODULE_DIRS.has(dir)) continue;
-    const self = moduleOfDir(dir);
+    const self = moduleOfPath(relative(apiSrc, file));
     const models = new Set();
     const services = new Set();
     (function visit(node) {
@@ -281,7 +281,7 @@ export function moduleBoundaryUsages(projectRoot = root) {
     for (const specifier of importSpecifiers(file)) {
       if (!specifier.value.startsWith(".") || !/\.service$/.test(specifier.value)) continue;
       const target = relative(apiSrc, resolve(dirname(file), specifier.value)).split(sep);
-      if (target[0] === ".." || CORE_MODULE_DIRS.has(target[0]) || moduleOfDir(target[0]) === self) continue;
+      if (target[0] === ".." || CORE_MODULE_DIRS.has(target[0]) || moduleOfPath(target.join("/")) === self) continue;
       services.add(target.join("/"));
     }
     if (models.size || services.size) usages.set(relative(projectRoot, file).split(sep).join("/"), { models, services });
@@ -297,6 +297,45 @@ export function ownershipMapViolations(projectRoot = root) {
   return models
     .filter((model) => !MODEL_OWNERS.has(model) && !CORE_MODELS.has(model))
     .map((model) => `scripts/module-ownership.mjs: модель ${model} из schema.prisma без владельца (добавьте в MODEL_OWNERS или CORE_MODELS)`);
+}
+
+/** Reject indirect foreign delegate access hidden in non-public helper imports.
+ * Public owner APIs (public.ts or public/) remain explicit supported boundaries.
+ * Like the direct rule, this checks known Prisma receivers, not arbitrary SQL. */
+export function foreignQueryHelperViolations(projectRoot = root) {
+  const apiSrc = join(projectRoot, "apps", "api", "src");
+  if (!existsSync(apiSrc)) return [];
+  const violations = [];
+  const queryModels = new Map();
+  for (const file of sourceFiles(apiSrc).filter(file => /\.service\.ts$/.test(file))) {
+    const selfPath = relative(apiSrc, file);
+    if (CORE_MODULE_DIRS.has(selfPath.split(sep)[0])) continue;
+    const self = moduleOfPath(selfPath);
+    for (const specifier of importSpecifiers(file)) {
+      if (!specifier.value.startsWith(".") || /\.service$/.test(specifier.value)) continue;
+      const base = resolve(dirname(file), specifier.value);
+      const target = [base + ".ts", join(base, "index.ts")].find(candidate => existsSync(candidate));
+      if (!target || !within(target, apiSrc)) continue;
+      const parts = relative(apiSrc, target).split(sep);
+      if (parts.includes("public") || parts.at(-1) === "public.ts" || CORE_MODULE_DIRS.has(parts[0]) || moduleOfPath(parts.join(sep)) === self) continue;
+      if (!queryModels.has(target)) {
+        const models = new Set();
+        (function visit(node) {
+          if (ts.isPropertyAccessExpression(node) && PRISMA_METHODS.has(node.name.text) && ts.isPropertyAccessExpression(node.expression) &&
+            isPrismaReceiver(node.expression.expression)) {
+            const model = DELEGATE_TO_MODEL.get(node.expression.name.text);
+            if (model && MODEL_OWNERS.has(model)) models.add(model);
+          }
+          ts.forEachChild(node, visit);
+        })(parseTs(target));
+        queryModels.set(target, models);
+      }
+      for (const model of queryModels.get(target)) if (moduleOfDir(MODEL_OWNERS.get(model)) !== self) {
+        violations.push(`${relative(projectRoot, file).split(sep).join("/")}:${specifier.line}: non-public helper ${specifier.value} queries foreign model ${model}; use an owner public contract`);
+      }
+    }
+  }
+  return violations;
 }
 
 export function moduleBoundaryViolations(projectRoot = root, exceptions = MODULE_BOUNDARY_EXCEPTIONS) {
@@ -327,7 +366,7 @@ export function moduleBoundaryViolations(projectRoot = root, exceptions = MODULE
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...ownershipMapViolations(), ...moduleBoundaryViolations(), ...registryViolations()];
+  const violations = [...architectureViolations(), ...colorViolations(), ...pluginCatalogViolations(), ...ownershipMapViolations(), ...moduleBoundaryViolations(), ...foreignQueryHelperViolations(), ...registryViolations()];
   if (violations.length) {
     console.error(violations.join("\n"));
     process.exitCode = 1;

@@ -1,5 +1,12 @@
 # Contacts — записная книжка пространства
 
+Публичные `public/contact-references.ts` и `public/contact-references.module.ts` дают соседям только
+`existsTx(tx, workspaceId, contactId)`. Запрос выполняет собственный ContactReferenceReader в `.service.ts`;
+проверяются id/workspaceId и исходный RLS, выбирается только id. SDK-модуль не запускает Contacts CRUD/cron
+и не меняет доступность интерфейса. [ADR-0028](../../../../docs/adr/ADR-0028-contact-reference-reader.md).
+
+Перенос межмодульных ссылок при merge выполняется через публичный Core EntityReferenceRegistry в той же транзакции. Таблицу Capture обновляет её владелец; ошибка обработчика откатывает merge целиком (ADR-0026).
+
 Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `@RequireModule("contacts")`; the same `contacts` table «Дома» uses (`homeId` optional, deleting a home only drops the link).
 
 **Data.** `kind` (person/organization), `organization`, `role`, labelled `phones`/`emails`/`links` (JSON arrays), `address`, `birthday` (`@db.Date`, year 1904 = «год неизвестен»), `tags`, `favorite`, `contactEveryDays`, `lastContactedAt`, `archivedAt`. `phone`/`email` stay as the *primary* value (first of the list) because «Дом» reads and writes them: `fieldsFromInput` keeps the two in sync, a lone primary write replaces the list, «Дом»'s own PATCH resets `phones`. Archived contacts stay in the list response (the client filters), stay in backups, and are hidden from a home's overview.
@@ -15,6 +22,8 @@ Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `
 **Backup.** `Contact`, `ContactInteraction`, `ContactRelation` are `included` in the snapshot registry (parents before children). RLS (ENABLE + FORCE + workspace policy) on all three tables.
 
 Tests: `packages/shared-types/src/contact.test.ts`, `apps/web/lib/contacts.test.ts`, `apps/web/lib/calendar-sources.test.ts`, `apps/api/test/contacts.integration.test.ts`, `e2e/contacts.spec.ts`. Not done: Google/phone sync (only file import), CRM funnel/deals (a separate optional extension per PRODUCT_DIRECTION), a per-user toggle for contact reminders.
+
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)

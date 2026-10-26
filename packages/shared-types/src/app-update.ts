@@ -12,6 +12,9 @@ export const appUpdateReleaseSchema = z.object({
   notes: z.string(),
   publishedAt: z.string().nullable(),
   sizeBytes: z.number().int(),
+  /** Protocol 1 application payload, or legacy full installer. Absent on old hosts. */
+  kind: z.enum(["installer", "payload"]).optional(),
+  assetName: z.string().optional(),
   /** Контрольная сумма установщика из описания релиза; без неё скачанный файл не применяется. */
   sha256: z.string().nullable()
 });

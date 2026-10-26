@@ -1,4 +1,4 @@
-import type { Task, TaskPriority, TaskRecurrence, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
+import type { Task, TaskChecklistItem, TaskPriority, TaskRecurrence, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
 import { fromDatetimeLocal, toDatetimeLocal } from "./format";
 
 /**
@@ -22,6 +22,7 @@ export interface Fields {
   assigneeId: string;
   estimatedHours: string;
   milestoneId: string;
+  checklist: TaskChecklistItem[];
 }
 
 export function fieldsFromTask(task: Task): Fields {
@@ -39,7 +40,8 @@ export function fieldsFromTask(task: Task): Fields {
     dependencyIds: [...task.dependencyIds].sort(),
     assigneeId: task.assigneeId ?? "",
     estimatedHours: task.estimatedMinutes !== null ? String(task.estimatedMinutes / 60) : "",
-    milestoneId: task.milestoneId ?? ""
+    milestoneId: task.milestoneId ?? "",
+    checklist: (task.checklist ?? []).map((item) => ({ ...item }))
   };
 }
 
@@ -73,5 +75,14 @@ export function buildPatch(prev: Fields, next: Fields, withAssignee: boolean): U
     patch.estimatedMinutes = hours !== null && Number.isFinite(hours) && hours >= 0 ? Math.round(hours * 60) : null;
   }
   if (next.milestoneId !== prev.milestoneId) patch.milestoneId = next.milestoneId || null;
+  const prevList = cleanChecklist(prev.checklist);
+  const nextList = cleanChecklist(next.checklist);
+  if (JSON.stringify(prevList) !== JSON.stringify(nextList)) patch.checklist = nextList;
   return patch;
+}
+
+function cleanChecklist(items: TaskChecklistItem[]): TaskChecklistItem[] {
+  return items
+    .map((item) => ({ id: item.id, title: item.title.trim(), done: item.done }))
+    .filter((item) => item.title.length > 0);
 }

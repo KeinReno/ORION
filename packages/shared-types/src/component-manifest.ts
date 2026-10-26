@@ -2,8 +2,8 @@ import { z } from "zod";
 import { MODULE_CATALOG } from "./modules";
 import { PLUGIN_CATALOG } from "./plugins";
 import { domainEventTypesPublishedBy, domainEventTypesSubscribedBy } from "./domain-events";
-import { GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
-import { GENERATED_PLUGIN_SURFACES } from "./plugins-ext/registry.generated";
+import { GENERATED_MODULE_METADATA, GENERATED_MODULE_MIGRATIONS } from "./modules-ext/registry.generated";
+import { GENERATED_PLUGIN_METADATA, GENERATED_PLUGIN_SURFACES } from "./plugins-ext/registry.generated";
 import { isRegisteredPermission, permissionsOfModule } from "./permissions";
 import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
 
@@ -14,11 +14,11 @@ import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
  */
 
 /** Версия публичного контракта платформы. Смена мажорной части = несовместимое изменение. */
-export const PLATFORM_API_VERSION = "1.1.0";
+export const PLATFORM_API_VERSION = "1.9.0";
 
-const SEMVER = /^\d+\.\d+\.\d+$/;
+const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 /** Поддерживаемые диапазоны: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`. */
-const SEMVER_RANGE = /^(?:\^|~|>=)?\d+\.\d+\.\d+$/;
+const SEMVER_RANGE = /^(?:\^|~|>=)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export const componentKindSchema = z.enum(["module", "plugin"]);
 export type ComponentKind = z.infer<typeof componentKindSchema>;
@@ -69,6 +69,7 @@ export const componentManifestSchema = z.object({
     platform: z.string().regex(SEMVER_RANGE, "ожидается диапазон вида ^1.0.0"),
     /** Жёсткие зависимости: без них компонент не работает. */
     modules: z.array(z.string()),
+    moduleVersions: z.record(z.string(), z.string().regex(SEMVER_RANGE)).optional(),
     /** Мягкие: компонент живёт без них, но использует, если они включены. */
     optionalModules: z.array(z.string()),
     /** Уточнение по контрактам платформы: `{ event: "^1.0.0" }`. Необязательно; ключи — только `CONTRACT_IDS`. */
@@ -98,6 +99,16 @@ export const componentManifestSchema = z.object({
   migrations: z.array(z.string())
 });
 export type ComponentManifest = z.infer<typeof componentManifestSchema>;
+export interface ComponentMetadata {
+  version: string;
+  requires?: Partial<Pick<ComponentManifest["requires"], "platform" | "modules" | "moduleVersions" | "contracts">>;
+}
+export interface ComponentIncompatibleError {
+  code: "component_incompatible";
+  componentId: string;
+  message: string;
+  problems: string[];
+}
 
 function parseVersion(value: string): [number, number, number] {
   const [major = 0, minor = 0, patch = 0] = value.split(".").map(Number);
@@ -114,12 +125,15 @@ export function satisfiesVersionRange(range: string, version: string): boolean {
   if (!SEMVER_RANGE.test(range) || !SEMVER.test(version)) return false;
   const base = parseVersion(range.replace(/^[\^~>=]+/, ""));
   const actual = parseVersion(version);
+  if (![...base, ...actual].every(Number.isSafeInteger)) return false;
   if (range.startsWith(">=")) return compareVersions(actual, base) >= 0;
   if (compareVersions(actual, base) < 0) return false;
   if (range.startsWith("~")) return actual[0] === base[0] && actual[1] === base[1];
   if (range.startsWith("^")) {
-    // Для 0.x каретка фиксирует минорную часть (как в npm).
-    return base[0] > 0 ? actual[0] === base[0] : actual[0] === 0 && actual[1] === base[1];
+    // Before 1.0 caret fixes the first nonzero part; ^0.0.x fixes patch.
+    if (base[0] > 0) return actual[0] === base[0];
+    if (base[1] > 0) return actual[0] === 0 && actual[1] === base[1];
+    return actual[0] === 0 && actual[1] === 0 && actual[2] === base[2];
   }
   return compareVersions(actual, base) === 0;
 }
@@ -142,10 +156,10 @@ export function buildComponentManifests(): ComponentManifest[] {
   const modules: ComponentManifest[] = MODULE_CATALOG.map((module) => ({
     id: module.id,
     kind: "module",
-    version: COMPONENT_VERSION,
+    version: GENERATED_MODULE_METADATA[module.id]?.version ?? COMPONENT_VERSION,
     title: module.label,
     description: module.summary,
-    requires: { platform: PLATFORM_RANGE, modules: [], optionalModules: [...module.optionalDependencies] },
+    requires: { platform: PLATFORM_RANGE, modules: [], ...GENERATED_MODULE_METADATA[module.id]?.requires, optionalModules: [...module.optionalDependencies] },
     permissions: permissionsOfModule(module.id),
     surfaces: [...SHELL_SURFACES, ...(DASHBOARD_WIDGET_MODULES.has(module.id) ? (["widget"] as const) : [])],
     contributions: { panels: [module.panelId] },
@@ -155,10 +169,10 @@ export function buildComponentManifests(): ComponentManifest[] {
   const plugins: ComponentManifest[] = PLUGIN_CATALOG.map((plugin) => ({
     id: plugin.id,
     kind: "plugin",
-    version: COMPONENT_VERSION,
+    version: GENERATED_PLUGIN_METADATA[plugin.id]?.version ?? COMPONENT_VERSION,
     title: plugin.label,
     description: plugin.summary,
-    requires: { platform: PLATFORM_RANGE, modules: [plugin.extendsModuleId], optionalModules: [] },
+    requires: { platform: PLATFORM_RANGE, ...GENERATED_PLUGIN_METADATA[plugin.id]?.requires, modules: [...new Set([plugin.extendsModuleId, ...(GENERATED_PLUGIN_METADATA[plugin.id]?.requires?.modules ?? [])])], optionalModules: [] },
     permissions: [],
     surfaces: [...(PLUGIN_SURFACES[plugin.id] ?? GENERATED_PLUGIN_SURFACES[plugin.id] ?? [])],
     // Слоты, в которые вносит вклад плагин, известны только веб-реестру (apps/web/plugins/index.ts);
@@ -171,3 +185,37 @@ export function buildComponentManifests(): ComponentManifest[] {
 }
 
 export const COMPONENT_MANIFESTS: readonly ComponentManifest[] = buildComponentManifests();
+
+/** Shared diagnostic policy; callers supply the transaction's effective enabled modules. */
+export function componentCompatibilityProblems(
+  id: string,
+  enabledModules: ReadonlySet<string>,
+  manifests: readonly ComponentManifest[] = COMPONENT_MANIFESTS
+): string[] {
+  const problems = new Set<string>();
+  const checked = new Set<string>();
+  const visit = (componentId: string, trail: string[]) => {
+    if (trail.includes(componentId)) { problems.add(`Цикл обязательных зависимостей: ${[...trail, componentId].join(" → ")}`); return; }
+    if (checked.has(componentId)) return;
+    const manifest = manifests.find(m => m.id === componentId);
+    if (!manifest) { problems.add(`Компонент ${componentId} не зарегистрирован`); return; }
+    const parsed = componentManifestSchema.safeParse(manifest);
+    if (!parsed.success) { problems.add(`Некорректный манифест ${componentId}`); return; }
+    if (!satisfiesVersionRange(manifest.requires.platform, PLATFORM_API_VERSION)) problems.add(`${componentId}: нужна платформа ${manifest.requires.platform}, установлена ${PLATFORM_API_VERSION}`);
+    for (const contract of unsatisfiedContracts(manifest)) problems.add(`${componentId}: несовместимый контракт ${contract}`);
+    for (const key of Object.keys(manifest.requires.moduleVersions ?? {})) {
+      if (!manifest.requires.modules.includes(key)) problems.add(`${componentId}: версия ${key} указана без обязательной зависимости`);
+    }
+    for (const dependency of manifest.requires.modules) {
+      const target = manifests.find(m => m.id === dependency && m.kind === "module");
+      if (!target) { problems.add(`${componentId}: модуль ${dependency} не зарегистрирован`); continue; }
+      if (!enabledModules.has(dependency)) problems.add(`${componentId}: включите модуль ${dependency}`);
+      const range = manifest.requires.moduleVersions?.[dependency];
+      if (range && !satisfiesVersionRange(range, target.version)) problems.add(`${componentId}: нужен ${dependency} ${range}, установлен ${target.version}`);
+      visit(dependency, [...trail, componentId]);
+    }
+    checked.add(componentId);
+  };
+  visit(id, []);
+  return [...problems];
+}

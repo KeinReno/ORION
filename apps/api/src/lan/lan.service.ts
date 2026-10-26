@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import * as argon2 from "argon2";
+import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -26,7 +27,7 @@ import { passwordScore } from "../auth/auth.service";
 import { PrismaService } from "../common/prisma.service";
 import { DeviceStore } from "./device-store";
 import { firewallState, openFirewall, closeFirewall } from "./firewall";
-import { mergeDiscovered, scanSubnet } from "./lan-scan";
+import { discoveryInterfaces, mergeDiscovered, scanSubnet, subnetCandidates, tailscalePeerAddresses } from "./lan-scan";
 import { discoverNodes, MdnsAdvertiser } from "./mdns";
 import {
   clearClientBinding,
@@ -69,8 +70,10 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger("lan");
   private readonly dir = nodeDir();
   private config: LanNodeConfig = loadNodeConfig(this.dir);
-  /** Режим применён к процессу (bind/TLS/доверие), а не только записан в настройках. */
-  readonly active = process.env.ORION_LAN_HOST === "1";
+  /** Режим применён к процессу (bind/TLS/доверие), а не только записан в настройках; сбрасывается, если порт не открылся. */
+  private listening = process.env.ORION_LAN_HOST === "1";
+  /** Why the host does not work (see `LanHostStatus.error`): set by main.ts or passed by the launcher after a failed start. */
+  private startError: string | null = process.env.ORION_LAN_HOST_FAILED?.trim() || null;
   readonly devices = new DeviceStore(this.dir);
   private cert: IssuedCertificate | null = null;
   private readonly mdns = new MdnsAdvertiser();
@@ -79,6 +82,22 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   readonly registry = new PairingRegistry(this.devices, () => this.cert?.fingerprint ?? "");
 
   constructor(private readonly prisma: PrismaService) {}
+
+  get active(): boolean {
+    return this.listening;
+  }
+
+  /**
+   * The HTTPS listener did not start (main.ts): the host stops advertising itself and says why, while the loopback API
+   * keeps serving this computer's window — a taken port must not take ORION down with it.
+   */
+  reportListenFailure(error: unknown): string {
+    this.listening = false;
+    this.mdns.stop();
+    this.startError = lanListenFailureMessage(error, this.config.port);
+    this.log.error(this.startError);
+    return this.startError;
+  }
 
   onModuleInit(): void {
     if (!this.active) return;
@@ -140,7 +159,8 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       supervised: process.env.ORION_SUPERVISED === "1",
       mdns: this.mdns.active,
       firewall: await firewallState(),
-      loginPolicy: this.config.loginPolicy
+      loginPolicy: this.config.loginPolicy,
+      error: this.config.mode === "host" ? this.startError : null
     };
   }
 
@@ -179,7 +199,14 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
       // Старые сессии аккаунта, у которого сменили способ входа, закрываем: пароль теперь известен администратору хоста.
       await this.prisma.refreshToken.updateMany({ where: { userId: account.userId, revokedAt: null }, data: { revokedAt: new Date() } });
     }
-    this.config = { ...this.config, name: input.name?.trim() || this.config.name, mode: "host", ownerUserId: this.config.ownerUserId ?? userId, loginPolicy: input.loginPolicy };
+    this.config = {
+      ...this.config,
+      name: input.name?.trim() || this.config.name,
+      mode: "host",
+      ownerUserId: this.config.ownerUserId ?? userId,
+      loginPolicy: input.loginPolicy,
+      port: input.port ?? this.config.port
+    };
     saveNodeConfig(this.config, this.dir);
     this.ensureCertificate();
     return { restarting: this.restart(), status: await this.hostStatus() };
@@ -278,11 +305,15 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Поиск хостов в домашней сети: mDNS по всем реальным адаптерам и, одновременно, перебор своей подсети по TCP (его не
-   * режут ни роутер, ни брандмауэр). Себя не показываем.
+   * Поиск других ORION: mDNS и перебор подсети на домашнем адаптере и на VPN, плюс пиры Tailscale
+   * (у них маска /32, перебор подсети их не видит). Себя не показываем.
    */
   async discover(): Promise<LanDiscoveredNode[]> {
-    const [mdns, scanned] = await Promise.all([discoverNodes(), scanSubnet([LAN_DEFAULT_PORT, this.config.port])]);
+    const candidates = [...new Set([...subnetCandidates(discoveryInterfaces()), ...(await tailscalePeers())])];
+    const [mdns, scanned] = await Promise.all([
+      discoverNodes(),
+      scanSubnet([LAN_DEFAULT_PORT, this.config.port], { candidates })
+    ]);
     return mergeDiscovered(mdns, scanned).filter((node) => node.nodeId !== this.config.nodeId);
   }
 
@@ -415,4 +446,28 @@ export class LanService implements OnModuleInit, OnModuleDestroy {
     }
     return { mode: this.config.mode, paired, link, apiPath: this.config.mode === "client" ? LAN_REMOTE_PREFIX : "" };
   }
+}
+
+/** Пиры Tailscale, если программа установлена. Нет её или она не ответила — пусто, поиск по подсети от этого не зависит. */
+function tailscalePeers(): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile("tailscale", ["status", "--json"], { timeout: 1500, windowsHide: true, maxBuffer: 2 * 1024 * 1024 }, (error, stdout) => {
+      if (error || !stdout) return resolve([]);
+      try {
+        resolve(tailscalePeerAddresses(JSON.parse(stdout)));
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+}
+
+/** A Russian reason for a LAN listener that did not open, with what to do about it. */
+export function lanListenFailureMessage(error: unknown, port: number): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === "EADDRINUSE") {
+    return `Порт ${port} занят другой программой на этом компьютере. Выключите «Хост LAN» и включите снова с другим портом (например, ${port === 4444 ? 4445 : 4444}).`;
+  }
+  if (code === "EACCES") return `Нет права открыть порт ${port}. Выберите порт выше 1024 или запустите ORION от имени пользователя с правами.`;
+  return `Не удалось открыть порт ${port} для сети: ${error instanceof Error ? error.message : String(error)}`;
 }

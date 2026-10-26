@@ -1,8 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
 import type { RecordListExpenseInput, RecordListExpenseResult } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { FinanceExpenseWriter } from "../finance/public/expense-writer";
-import { ITEMS_INCLUDE, toItemDto } from "../lists/lists.service";
+import { ListExpenseCommands } from "../lists/public/list-expense-commands";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
@@ -20,6 +20,7 @@ export class ListsFinanceService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
+    private readonly lists: ListExpenseCommands,
     private readonly writer: FinanceExpenseWriter
   ) {}
 
@@ -28,15 +29,7 @@ export class ListsFinanceService {
     const { result, alerts } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.modules.assertEnabledTx(tx, userId, workspaceId, "finance");
-      const list = await tx.list.findUnique({ where: { id: listId } });
-      if (!list || list.workspaceId !== workspaceId) throw new NotFoundException("Список не найден");
-
-      // Lock the entries first: a concurrent booking of the same entries waits here, then sees the transaction id.
-      await tx.$queryRaw`SELECT id FROM "list_items" WHERE id = ANY(${itemIds}::text[]) FOR UPDATE`;
-      const items = await tx.listItem.findMany({ where: { id: { in: itemIds } } });
-      if (items.length !== itemIds.length || items.some((item) => item.workspaceId !== workspaceId || item.listId !== listId)) {
-        throw new NotFoundException("Пункт списка не найден");
-      }
+      const { name, items } = await this.lists.lockSelectionTx(tx, workspaceId, listId, itemIds);
       if (items.some((item) => item.expenseTransactionId)) {
         throw new ConflictException("По части пунктов расход уже записан");
       }
@@ -55,24 +48,12 @@ export class ListsFinanceService {
         categoryId: input.categoryId ?? null,
         amountMinor,
         occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
-        note: (input.note?.trim() || `Покупки по списку «${list.name}»`).slice(0, 500),
+        note: (input.note?.trim() || `Покупки по списку «${name}»`).slice(0, 500),
         tags: ["списки"]
       });
 
-      const now = new Date();
-      for (const item of items) {
-        await tx.listItem.update({
-          where: { id: item.id },
-          data: {
-            expenseTransactionId: transactionId,
-            checked: true,
-            ...(item.checked ? {} : { checkedAt: now, checkedById: userId })
-          }
-        });
-      }
-      const fresh = await tx.list.findUniqueOrThrow({ where: { id: listId }, include: ITEMS_INCLUDE });
-      const booked = new Set(itemIds);
-      return { result: { transactionId, amountMinor, items: fresh.items.filter((item) => booked.has(item.id)).map(toItemDto) }, alerts };
+      const bookedItems = await this.lists.completeTx(tx, workspaceId, listId, userId, itemIds, transactionId);
+      return { result: { transactionId, amountMinor, items: bookedItems }, alerts };
     });
     await this.writer.deliver(alerts);
     return result;

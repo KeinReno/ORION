@@ -51,7 +51,7 @@ export function NetworkSettings(): React.ReactElement {
       const wantsClient = next.mode === "client" && next.paired;
       if (wantsClient) writeNodeMark({ mode: "client", nodeId: next.paired!.nodeId, name: next.paired!.name });
     } catch {
-      setError("Локальный сервер ORION не отвечает.");
+      setError("Локальный сервер ORION не отвечает. Если режим узла только что менялся, он перезапускается — подождите несколько секунд.");
     }
   }, []);
 
@@ -133,6 +133,7 @@ function HostSection(): React.ReactElement {
   const [name, setName] = useState("");
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [policy, setPolicy] = useState<LanLoginPolicy>("home");
+  const [port, setPort] = useState("");
 
   if (host.isLoading || !host.data) return <p className="text-label text-muted-foreground">Загрузка…</p>;
   const data = host.data;
@@ -140,7 +141,12 @@ function HostSection(): React.ReactElement {
   async function onEnable(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const result = await enable.mutateAsync({ acknowledged: true, name: name.trim() || undefined, passwords: policy === "strict" ? passwords : {}, loginPolicy: policy });
+      const chosenPort = port.trim() ? Number(port) : undefined;
+      if (chosenPort !== undefined && (!Number.isInteger(chosenPort) || chosenPort < 1024 || chosenPort > 65535)) {
+        toast({ title: "Порт — число от 1024 до 65535", tone: "danger" });
+        return;
+      }
+      const result = await enable.mutateAsync({ acknowledged: true, name: name.trim() || undefined, passwords: policy === "strict" ? passwords : {}, loginPolicy: policy, port: chosenPort });
       setConfirming(false);
       toast({
         title: result.restarting ? "Включаю «Хост LAN»…" : "Режим сохранён",
@@ -182,6 +188,18 @@ function HostSection(): React.ReactElement {
               </ul>
             </Card>
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={`Имя узла (по умолчанию ${data.name})`} maxLength={80} />
+            <label className="flex items-center gap-2 text-label">
+              <span className="shrink-0 text-muted-foreground">Порт в сети</span>
+              <Input
+                value={port}
+                onChange={(event) => setPort(event.target.value.replace(/[^0-9]/g, ""))}
+                inputMode="numeric"
+                placeholder={String(data.port)}
+                aria-label="Порт хоста в сети"
+                className="w-28"
+              />
+              <span className="text-2xs text-subtle-foreground">другой — если этот занят другой программой</span>
+            </label>
             <PolicyChoice value={policy} onChange={setPolicy} />
             {policy === "strict" && pinAccounts.data && pinAccounts.data.length > 0 ? (
               <div className="space-y-2">
@@ -215,14 +233,33 @@ function HostSection(): React.ReactElement {
       <Card className="space-y-2 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-body font-medium">{data.name}</span>
-          <Badge>{data.active ? "работает" : "ждёт перезапуска"}</Badge>
+          <Badge>{data.active ? "работает" : data.error ? "не запустился" : "ждёт перезапуска"}</Badge>
           <Badge>{data.mdns ? "объявление mDNS включено" : "только по адресу"}</Badge>
         </div>
         <p className="text-label text-muted-foreground">
-          Адрес для подключения: {data.addresses.length ? data.addresses.map((address) => `${address}:${data.port}`).join(", ") : `порт ${data.port}`}
+          Телефон в этой же сети или в том же VPN открывает одну из ссылок. Браузер предупредит о сертификате — это сертификат этого компьютера, его отпечаток ниже.
         </p>
+        {data.active && data.addresses.length > 0 ? (
+          <ul className="space-y-1">
+            {data.addresses.map((address) => (
+              <li key={address} className="break-all font-mono text-2xs text-subtle-foreground">
+                https://{address}:{data.port}/phone
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-label text-muted-foreground">
+            Адрес для подключения: {data.addresses.length ? data.addresses.map((address) => `${address}:${data.port}`).join(", ") : `порт ${data.port}`}
+          </p>
+        )}
         <p className="break-all font-mono text-2xs text-subtle-foreground">Отпечаток сертификата: {data.fingerprint}</p>
-        {!data.active ? <p className="text-label text-warning">Режим сохранён, но этот процесс API ещё не перезапущен — перезапустите ORION.</p> : null}
+        {data.error ? (
+          <p role="alert" className="text-label text-destructive">
+            {data.error} Этот компьютер работает как обычно; другие устройства подключиться пока не смогут.
+          </p>
+        ) : !data.active ? (
+          <p className="text-label text-warning">Режим сохранён, но этот процесс API ещё не перезапущен — перезапустите ORION.</p>
+        ) : null}
         {data.firewall === "missing" ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-label text-warning">Правила брандмауэра не созданы: другие устройства не смогут подключиться.</span>

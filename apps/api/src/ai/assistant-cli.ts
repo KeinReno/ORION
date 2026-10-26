@@ -21,7 +21,8 @@ import { clientConfigPath } from "./agent-client-install";
 export type CliEngine = Exclude<AssistantEngine, "anthropic">;
 
 export const CLI_MCP_SERVER = "orion_chat";
-const RUN_TIMEOUT_MS = 5 * 60_000;
+/** Under Node's own 5-minute request timeout: the user must get the reason, not a dropped connection. */
+const RUN_TIMEOUT_MS = 4 * 60_000;
 const OUTPUT_LIMIT = 200_000;
 export const CLI_TASK_FILE = "ORION_TASK.md";
 
@@ -124,9 +125,24 @@ export function codexArgs(mcp: McpLaunch, outFile: string, disableInstalledOrion
   ];
 }
 
-/** Cursor reads MCP servers from `.cursor/mcp.json` of its working folder; the prompt is a file there. */
-export function cursorArgs(): string[] {
-  return ["-p", "--approve-mcps", "--output-format", "text", `Read the file ${CLI_TASK_FILE} in the current folder and do exactly what it asks. Answer in Russian.`];
+/**
+ * Cursor reads MCP servers from `.cursor/mcp.json` of its working folder; the prompt is a file there. `--trust`: a fresh
+ * temporary folder is otherwise «untrusted» and Cursor waits for a yes nobody can give (the run hung until the timeout
+ * on a real machine). `--sandbox enabled`: in print mode Cursor may run shell commands — they stay sandboxed.
+ */
+export function cursorArgs(workspace: string): string[] {
+  return [
+    "-p",
+    "--trust",
+    "--approve-mcps",
+    "--sandbox",
+    "enabled",
+    "--workspace",
+    workspace,
+    "--output-format",
+    "text",
+    `Read the file ${CLI_TASK_FILE} in the current folder and do exactly what it asks. Answer in Russian.`
+  ];
 }
 
 export function cursorMcpJson(mcp: McpLaunch, env: Record<string, string>): string {
@@ -207,6 +223,8 @@ export function cliEnvironment(source: NodeJS.ProcessEnv, extra: Record<string, 
 export interface CliAnswer {
   reply: string;
   failed: string | null;
+  /** The tail of the program's own output when it failed — for the server log, never for the user. */
+  detail: string | null;
 }
 
 /**
@@ -227,12 +245,19 @@ export async function askCli(engine: CliEngine, binary: CliBinary, mcp: McpLaunc
       await fs.promises.mkdir(path.join(dir, ".cursor"));
       await fs.promises.writeFile(path.join(dir, ".cursor", "mcp.json"), cursorMcpJson(mcp, tokenEnv), "utf8");
       await fs.promises.writeFile(path.join(dir, CLI_TASK_FILE), prompt, "utf8");
-      run = await runCli(binary, cursorArgs(), { cwd: dir, env });
+      run = await runCli(binary, cursorArgs(dir), { cwd: dir, env });
       reply = run.stdout;
     }
-    if (run.timedOut) return { reply: reply.trim(), failed: "Программа не ответила за 5 минут — ответ прерван." };
-    if (run.code !== 0 && !reply.trim()) return { reply: "", failed: cliFailure(engine, run.stderr || run.stdout) };
-    return { reply: reply.trim(), failed: null };
+    const detail = `код ${run.code ?? "—"}; ${(run.stderr || run.stdout).trim().slice(-800)}`;
+    if (run.timedOut) {
+      return {
+        reply: reply.trim(),
+        failed: `${engine === "codex" ? "Codex" : "Cursor"} не ответил за 4 минуты — ответ прерван. Проверьте, что программа отвечает в терминале без вопросов (вход выполнен).`,
+        detail
+      };
+    }
+    if (run.code !== 0 && !reply.trim()) return { reply: "", failed: cliFailure(engine, run.stderr || run.stdout), detail };
+    return { reply: reply.trim(), failed: null, detail: null };
   } finally {
     await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }

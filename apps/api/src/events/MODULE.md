@@ -6,6 +6,10 @@
 
 Работает без задач и проектов.
 
+Ссылку проекта проверяет `ProjectReferences`; сроки задач для исходящего ICS читает `TaskIntegrationReader` в исходной транзакции. Проверки feed token и включённости остаются у Calendar. SDK не импортируют полные TasksModule/ProjectsModule. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
+
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

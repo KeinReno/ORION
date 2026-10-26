@@ -306,10 +306,13 @@ export interface EventRecurrenceSlotProps {
   onChange: (value: RecurrenceSpec | null) => void;
 }
 
-/** calendar.event.reminders — the «Напоминания» section of the event form (minutes before the start). */
+/** calendar.event.reminders — the «Напоминания» section of the event form. Offsets are minutes before `startAt` (negative = after). */
 export interface EventRemindersSlotProps {
   value: number[];
   onChange: (value: number[]) => void;
+  /** ISO start the offsets are measured from — the form's current begin time. */
+  startAt: string;
+  allDay: boolean;
 }
 
 /** finance.transactions.top — a block above the list of operations (the quick-entry line). */

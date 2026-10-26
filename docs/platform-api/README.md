@@ -9,6 +9,14 @@
 
 ## Индекс контрактов
 
+Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
+[синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
+Текущие версии: Integration API 1.8.0, Platform API 1.9.0. Историческая строка Integration API ниже
+описывает исходный срез, до появления этих контрактов.
+
+Завершение оставшихся 17 межмодульных исключений: [Owner SDKs](MODULE_BOUNDARY_SDKS.md),
+[проекции Goals](GOAL_PROJECTIONS.md), [проверки](../MODULE_BOUNDARY_COMPLETION.md).
+
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|
 | Module API | зафиксировано (как есть; манифест — производный) | `packages/shared-types/src/modules.ts` (`MODULE_CATALOG`, `ORION_MODULE_IDS`), `component-manifest.ts`, `apps/api/src/modules/` | [MANIFEST.md](MANIFEST.md), [MODULE_REGISTRY.md](MODULE_REGISTRY.md) |
@@ -68,6 +76,17 @@
 - Журнал изменений контрактов (changelog) и пометки `deprecated`; окно депрекации пока только политика.
 - Журнал изменений контрактов (changelog) и пометки `deprecated`.
 - Проверка `requires.platform` при старте API и в менеджере компонентов (рантайм манифесты не читает).
+
+## Проверки ссылок между модулями
+
+- [Task planning links](TASK_PLANNING_LINKS.md): Tasks → Projects/Milestones (Integration 1.7.0, Platform 1.8.0).
+
+- [ProjectFinanceReader](PROJECT_FINANCE_READER.md): Finance → Projects (Integration 1.6.0, Platform 1.7.0).
+
+- [TaskIntegrationReader](TASK_INTEGRATION_READER.md): Time/Calendar → Tasks (Integration 1.5.0, Platform 1.6.0).
+
+- [ProjectReferences](PROJECT_REFERENCES.md): Notes/Documents/Inbox/Inventory/Milestones → Projects (Integration 1.4.0, Platform 1.5.0).
+- [ContactReferences](CONTACT_REFERENCES.md): Health → Contacts.
 
 ## Зависимости и жизненный цикл компонентов
 

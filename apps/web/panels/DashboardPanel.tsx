@@ -257,7 +257,8 @@ function DashboardOverview(): React.ReactElement {
           description: "",
           dueAt: resolved.dueToday ? localDayDueAt(new Date()) : null,
           projectTag: resolved.projectTag ?? null,
-          priority: "normal"
+          priority: "normal",
+          checklist: []
         });
         toast({ title: "Задача добавлена", tone: "success" });
       } else if (resolved.kind === "note") {

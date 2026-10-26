@@ -17,6 +17,7 @@ import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { ModulesService } from "../modules/modules.service";
 import { CapabilityLifecycle } from "../common/capability-lifecycle";
+import { assertComponentCompatible } from "../common/component-compatibility";
 
 @Injectable()
 export class PluginsService {
@@ -63,6 +64,7 @@ export class PluginsService {
       // of always adding/removing the same way `disabledModules` does.
       await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${workspaceId} FOR UPDATE`;
       const enabledModulesNow = await this.modules.enabledSetTx(tx, workspaceId);
+      if (enabled) assertComponentCompatible(pluginId, enabledModulesNow);
       const current = new Set(await this.pluginOverridesTx(tx, workspaceId));
       if (!enabled && !confirm) {
         const disabledModules = [...new Set(MODULE_CATALOG.map((item) => item.id))].filter(
@@ -111,6 +113,7 @@ export class PluginsService {
     if (!isPluginEnabled(disabled, pluginId)) {
       throw new ConflictException(`Плагин «${label}» выключен в этом пространстве`);
     }
+    assertComponentCompatible(pluginId, await this.modules.enabledSetTx(tx, workspaceId));
   }
 
   private async pluginOverridesTx(tx: Prisma.TransactionClient, workspaceId: string): Promise<string[]> {

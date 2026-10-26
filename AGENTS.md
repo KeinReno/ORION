@@ -21,6 +21,8 @@ Read in this order:
 6. the target module's local `MODULE.md` and `AI_CONTEXT.md` when they exist
 7. the public contracts / SDK / extension points used by the task
 
+For discovery after the governing documents, use `pnpm platform-map --component <id>` or `docs/platform-api/capabilities.generated.json`. This generated index names owners, public paths and registries; it is not runtime acceptance or a permission grant. Regenerate with `pnpm platform-map`, verify with `pnpm platform-map:check`.
+
 For deployment work, also read `docs/DEPLOYMENT_READINESS.md`. For Compass
 Vertex or FinControl work, read `docs/INTEGRATIONS_COMPASS_FINCONTROL.md` and
 recheck the external source revision before copying behavior or data.

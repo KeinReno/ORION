@@ -12,6 +12,7 @@ export default tseslint.config(
       "**/.next-*/**",
       "**/out/**",
       "**/target/**",
+      "tmp/**", // Local build/extraction artifacts, never source code.
       "apps/compass-engine/**",
       "**/src-tauri/gen/**",
       "**/src-tauri/resources/**",

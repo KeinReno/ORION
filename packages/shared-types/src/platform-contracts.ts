@@ -24,15 +24,15 @@ export type ContractId = (typeof CONTRACT_IDS)[number];
  * `agentGateway` совпадает по смыслу с `AGENT_API_VERSION` (`/ai/v1`), но у того своя схема нумерации.
  */
 export const PLATFORM_CONTRACT_VERSIONS: Readonly<Record<ContractId, string>> = {
-  module: "1.1.0",
-  plugin: "1.2.0",
+  module: "1.3.0",
+  plugin: "1.3.0",
   event: "1.0.0",
   storage: "1.0.0",
   workspace: "1.0.0",
   theme: "1.0.0",
   surface: "1.0.0",
-  permission: "1.1.0",
-  integration: "1.0.0",
+  permission: "1.3.0",
+  integration: "1.8.0",
   agentGateway: "1.0.0"
 };
 

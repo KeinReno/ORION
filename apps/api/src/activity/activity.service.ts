@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { ActivityEntry } from "@orion/shared-types";
+import { TaskJournalReader } from "../tasks/public/task-journal-reader";
+import { AgentJournalReader } from "../ai/public/agent-journal-reader";
 import { PrismaService } from "../common/prisma.service";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
@@ -55,7 +57,9 @@ export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly modules: ModulesService
+    private readonly modules: ModulesService,
+    private readonly taskJournal: TaskJournalReader,
+    private readonly agentJournal: AgentJournalReader
   ) {}
 
   async feed(userId: string, workspaceId: string, limit = 40): Promise<ActivityEntry[]> {
@@ -65,20 +69,7 @@ export class ActivityService {
       const entries: ActivityEntry[] = [];
 
       if (accessible.has("tasks")) {
-        const [changes, comments] = await Promise.all([
-          tx.taskActivity.findMany({
-            where: { workspaceId },
-            orderBy: { createdAt: "desc" },
-            take: limit,
-            include: { task: { select: { id: true, title: true } }, actor: { select: { name: true } } }
-          }),
-          tx.taskComment.findMany({
-            where: { workspaceId },
-            orderBy: { createdAt: "desc" },
-            take: limit,
-            include: { task: { select: { id: true, title: true } }, author: { select: { name: true } } }
-          })
-        ]);
+        const { changes, comments } = await this.taskJournal.recentTx(tx, workspaceId, limit);
         for (const row of changes) {
           const summary =
             row.field === "created"
@@ -114,7 +105,7 @@ export class ActivityService {
         }
       }
 
-      const agentCalls = await tx.agentAuditEntry.findMany({ where: { workspaceId }, orderBy: { createdAt: "desc" }, take: limit });
+      const agentCalls = await this.agentJournal.recentTx(tx, workspaceId, limit);
       for (const row of agentCalls) {
         const verb = AGENT_ACTION_RU[row.action] ?? row.action;
         entries.push({

@@ -3,14 +3,18 @@
 import {
   PET_ACTIVITIES,
   PET_ACTIVITY_LABELS,
+  PET_AMOUNT_LABELS,
+  PET_AMOUNTS,
   PET_APPETITES,
   PET_APPETITE_LABELS,
   PET_DAY_STATUSES,
   PET_DAY_STATUS_META,
   PET_SEVERITIES,
   PET_SEVERITY_LABELS,
+  PET_STOOL_CONSISTENCIES,
   PET_STOOLS,
   PET_STOOL_LABELS,
+  PET_STOOL_VISITS_MAX,
   PET_SYMPTOM_CATALOG,
   PET_SYMPTOM_CATEGORY_LABELS,
   PET_SYMPTOM_CATEGORY_ORDER,
@@ -19,19 +23,23 @@ import {
   PET_WATERS,
   PET_WATER_LABELS,
   computePetDayStatus,
+  petPlural,
   petSymptomLabel,
+  summarizePetStool,
   type PetCareDayLog,
   type PetCarePet,
-  type PetDaySymptom
+  type PetDaySymptom,
+  type PetStoolConsistency,
+  type PetStoolVisit
 } from "@orion/shared-types";
 import { Button, ConfirmDialog, IconButton, Input, Select, Switch, Textarea, cx, useToast } from "@orion/ui";
-import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { describeError } from "../../lib/error-message";
 import { emptyPetDayDraft, formatPetDay, parseDecimalInput, petDayToDraft } from "../../lib/pet-care-days";
 import { useDeletePetCareDay, useSavePetCareDay } from "./use-pet-care";
 
-const NEW_SYMPTOM = { severity: "moderate", count: 1, time: "", note: "" } as const;
+const NEW_SYMPTOM = { severity: "moderate", count: 1, time: "", note: "", amount: "normal" } as const;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
   return (
@@ -84,6 +92,18 @@ export function PetDayForm({
   };
   const patchSymptom = (id: string, change: Partial<PetDaySymptom>): void => {
     patch({ symptoms: draft.symptoms.map((item) => (item.id === id ? { ...item, ...change } : item)) });
+  };
+
+  const setVisits = (stoolVisits: Array<{ consistency: PetStoolConsistency; amount?: PetStoolVisit["amount"] }>): void => {
+    const normalized = stoolVisits.map((visit) => ({ consistency: visit.consistency, amount: visit.amount ?? "normal" }));
+    patch({ stoolVisits: normalized, stool: normalized.length > 0 ? summarizePetStool(normalized) : "" });
+  };
+  const addVisit = (): void => {
+    const seeded = (PET_STOOL_CONSISTENCIES as readonly string[]).includes(draft.stool) ? (draft.stool as PetStoolConsistency) : "normal";
+    setVisits([...draft.stoolVisits, { consistency: seeded, amount: "normal" }]);
+  };
+  const patchVisit = (index: number, change: Partial<PetStoolVisit>): void => {
+    setVisits(draft.stoolVisits.map((visit, i) => (i === index ? { ...visit, ...change } : visit)));
   };
 
   const weight = parseDecimalInput(weightText);
@@ -204,12 +224,19 @@ export function PetDayForm({
           {draft.symptoms.length > 0 ? (
             <ul className="mt-3 space-y-2">
               {draft.symptoms.map((item) => (
-                <li key={item.id} className="grid grid-cols-2 gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_7rem_6rem_4.5rem_auto]">
+                <li key={item.id} className="grid grid-cols-2 gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_7rem_7rem_6rem_4.5rem_auto]">
                   <span className="col-span-2 self-center text-sm font-medium sm:col-span-1">{petSymptomLabel(item.id)}</span>
                   <Select className="w-full" value={item.severity} onChange={(event) => patchSymptom(item.id, { severity: event.target.value as PetDaySymptom["severity"] })} aria-label={`${petSymptomLabel(item.id)}: выраженность`}>
                     {PET_SEVERITIES.map((value) => (
                       <option key={value} value={value}>
                         {PET_SEVERITY_LABELS[value]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select className="w-full" value={item.amount} onChange={(event) => patchSymptom(item.id, { amount: event.target.value as PetDaySymptom["amount"] })} aria-label={`${petSymptomLabel(item.id)}: сколько`}>
+                    {PET_AMOUNTS.map((value) => (
+                      <option key={value} value={value}>
+                        {PET_AMOUNT_LABELS[value]}
                       </option>
                     ))}
                   </Select>
@@ -249,14 +276,18 @@ export function PetDayForm({
                 ))}
               </Select>
             </Field>
-            <Field label="Стул">
-              <Select className="w-full" value={draft.stool} onChange={(event) => patch({ stool: event.target.value as typeof draft.stool })}>
-                {PET_STOOLS.map((value) => (
-                  <option key={value} value={value}>
-                    {PET_STOOL_LABELS[value]}
-                  </option>
-                ))}
-              </Select>
+            <Field label={draft.stoolVisits.length > 0 ? `По-большому · ${draft.stoolVisits.length}` : "По-большому"}>
+              {draft.stoolVisits.length === 0 ? (
+                <Select className="w-full" value={draft.stool} onChange={(event) => patch({ stool: event.target.value as typeof draft.stool })}>
+                  {PET_STOOLS.map((value) => (
+                    <option key={value} value={value}>
+                      {PET_STOOL_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <p className="flex h-9 items-center text-sm">{petPlural(draft.stoolVisits.length, "поход", "похода", "походов")}</p>
+              )}
             </Field>
             <Field label="Активность">
               <Select className="w-full" value={draft.activity} onChange={(event) => patch({ activity: event.target.value as typeof draft.activity })}>
@@ -309,6 +340,42 @@ export function PetDayForm({
           {weightInvalid || temperatureInvalid ? (
             <p className="mt-1 text-xs text-destructive">{weightInvalid ? "Вес — число от 0,01 до 200 кг. " : ""}{temperatureInvalid ? "Температура — от 30 до 45 °C." : ""}</p>
           ) : null}
+          <div className="mt-3 space-y-2">
+            {draft.stoolVisits.map((visit, index) => (
+              <div key={index} className="grid grid-cols-[1fr_8rem_auto] gap-2">
+                <Select
+                  className="w-full"
+                  value={visit.consistency}
+                  aria-label={`Поход ${index + 1}: консистенция`}
+                  onChange={(event) => patchVisit(index, { consistency: event.target.value as PetStoolConsistency })}
+                >
+                  {PET_STOOL_CONSISTENCIES.map((value) => (
+                    <option key={value} value={value}>
+                      {PET_STOOL_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  className="w-full"
+                  value={visit.amount}
+                  aria-label={`Поход ${index + 1}: объём`}
+                  onChange={(event) => patchVisit(index, { amount: event.target.value as PetStoolVisit["amount"] })}
+                >
+                  {PET_AMOUNTS.map((value) => (
+                    <option key={value} value={value}>
+                      {PET_AMOUNT_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+                <IconButton label={`Убрать поход ${index + 1}`} tone="danger" onClick={() => setVisits(draft.stoolVisits.filter((_, i) => i !== index))}>
+                  <X className="h-4 w-4" />
+                </IconButton>
+              </div>
+            ))}
+            <Button type="button" variant="subtle" size="sm" disabled={draft.stoolVisits.length >= PET_STOOL_VISITS_MAX} onClick={addVisit}>
+              <Plus className="h-4 w-4" /> Добавить поход
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">

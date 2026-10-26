@@ -258,7 +258,7 @@ export class MemoryHost implements SyncTransport {
       return {
         id, workspaceId: "ws", projectId: null, parentId: null, title: "", description: "", status: "todo", priority: "normal",
         dueAt: null, projectTag: null, recurrence: null, completedAt: null, sortOrder: 0, dependencyIds: [], blocked: false,
-        assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: null, ...row.fields,
+        assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: null, checklist: [], ...row.fields,
         revision: row.revision, createdAt: iso(row.createdAtMs), updatedAt: iso(row.updatedAtMs)
       };
     }

@@ -13,12 +13,8 @@ import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { assertAccountInWorkspace, assertCategoryInWorkspace } from "../finance-refs.util";
 import { TransactionsService } from "../transactions/transactions.service";
 
-export interface DraftAuthor {
-  userId: string;
-  workspaceId: string;
-  tokenId: string;
-  tokenName: string;
-}
+import type { DraftAuthor } from "../public/agent-draft-operations";
+export type { DraftAuthor } from "../public/agent-draft-operations";
 
 /**
  * Operations PROPOSED by an agent that read a receipt. A draft is never money: it moves no balance and shows in no

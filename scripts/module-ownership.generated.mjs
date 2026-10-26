@@ -3,26 +3,26 @@
 export const GENERATED_MODEL_OWNERS = [
   [
     "ChatArchiveConversation",
-    "modules-ext"
+    "modules-ext/chat-archive"
   ],
   [
     "ChatArchiveLine",
-    "modules-ext"
+    "modules-ext/chat-archive"
   ],
   [
     "PetCarePet",
-    "modules-ext"
+    "modules-ext/pet-care"
   ],
   [
     "PetCareEntry",
-    "modules-ext"
+    "modules-ext/pet-care"
   ],
   [
     "PetCareDay",
-    "modules-ext"
+    "modules-ext/pet-care"
   ],
   [
     "PetCareEvent",
-    "modules-ext"
+    "modules-ext/pet-care"
   ]
 ];

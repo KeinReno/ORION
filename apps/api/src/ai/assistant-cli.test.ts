@@ -17,7 +17,8 @@ describe("assistant CLI engines", () => {
   });
 
   it("cursor: a fixed instruction on the command line, the server in the folder's mcp.json", () => {
-    expect(cursorArgs().slice(0, 4)).toEqual(["-p", "--approve-mcps", "--output-format", "text"]);
+    // `--trust`: without it Cursor waits for «trust this folder?» that nobody answers in a headless run.
+    expect(cursorArgs("/tmp/orion-cursor-1").slice(0, 9)).toEqual(["-p", "--trust", "--approve-mcps", "--sandbox", "enabled", "--workspace", "/tmp/orion-cursor-1", "--output-format", "text"]);
     expect(JSON.parse(cursorMcpJson(mcp, { ORION_AGENT_TOKEN: "t" }))).toEqual({ mcpServers: { orion_chat: { ...mcp, env: { ORION_AGENT_TOKEN: "t" } } } });
   });
 

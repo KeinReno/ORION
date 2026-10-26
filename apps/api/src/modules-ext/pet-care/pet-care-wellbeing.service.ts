@@ -8,16 +8,22 @@ import {
   petActivitySchema,
   petAppetiteSchema,
   petDayStatusSchema,
+  petAmountSchema,
   petDaySymptomSchema,
   petEventTypeSchema,
   petStoolSchema,
+  petStoolVisitSchema,
+  petTimeOfDaySchema,
   petWaterSchema,
+  summarizePetStool,
   type CreatePetCareEventInput,
   type ImportMurhpInput,
   type ImportMurhpResult,
   type PetCareDayLog,
   type PetCareEvent,
   type PetCareRangeQuery,
+  type PetDaySymptom,
+  type PetStoolVisit,
   type UpsertPetCareDayInput
 } from "@orion/shared-types";
 import { z } from "zod";
@@ -227,7 +233,8 @@ function dayColumns(input: UpsertPetCareDayInput) {
     statusAuto: input.statusAuto,
     appetite: input.appetite,
     activity: input.activity,
-    stool: input.stool,
+    stool: input.stoolVisits.length > 0 ? summarizePetStool(input.stoolVisits) : input.stool,
+    stoolVisits: input.stoolVisits as unknown as Prisma.InputJsonValue,
     water: input.water,
     vomitingCount: input.vomitingCount,
     weightKg: input.weightKg,
@@ -238,7 +245,36 @@ function dayColumns(input: UpsertPetCareDayInput) {
   };
 }
 
-const symptomsColumnSchema = z.array(petDaySymptomSchema).catch([]);
+/** Старые строки симптомов без `amount` читаются как «обычно», а не отбрасываются. */
+const storedSymptomSchema = z.object({
+  id: z.string().min(1),
+  severity: petDaySymptomSchema.shape.severity,
+  count: z.number().int(),
+  time: petTimeOfDaySchema,
+  note: z.string(),
+  amount: petAmountSchema.optional()
+});
+
+function readSymptoms(value: Prisma.JsonValue): PetDaySymptom[] {
+  if (!Array.isArray(value)) return [];
+  const symptoms: PetDaySymptom[] = [];
+  for (const item of value) {
+    const parsed = storedSymptomSchema.safeParse(item);
+    if (!parsed.success) continue;
+    symptoms.push({ ...parsed.data, amount: parsed.data.amount ?? "normal" });
+  }
+  return symptoms;
+}
+
+function readStoolVisits(value: Prisma.JsonValue): PetStoolVisit[] {
+  if (!Array.isArray(value)) return [];
+  const visits: PetStoolVisit[] = [];
+  for (const item of value) {
+    const parsed = petStoolVisitSchema.safeParse(item);
+    if (parsed.success) visits.push(parsed.data);
+  }
+  return visits;
+}
 
 function toDayDto(row: {
   id: string;
@@ -250,6 +286,7 @@ function toDayDto(row: {
   appetite: string;
   activity: string;
   stool: string;
+  stoolVisits: Prisma.JsonValue;
   water: string;
   vomitingCount: number;
   weightKg: number | null;
@@ -265,9 +302,10 @@ function toDayDto(row: {
     appetite: petAppetiteSchema.catch("").parse(row.appetite),
     activity: petActivitySchema.catch("").parse(row.activity),
     stool: petStoolSchema.catch("").parse(row.stool),
+    stoolVisits: readStoolVisits(row.stoolVisits),
     water: petWaterSchema.catch("").parse(row.water),
     vomitingCount: row.vomitingCount,
-    symptoms: symptomsColumnSchema.parse(row.symptoms)
+    symptoms: readSymptoms(row.symptoms)
   };
   return {
     id: row.id,

@@ -16,13 +16,163 @@ Hardware OPPO/Windows/VPN acceptance and new Windows installer pending. -->
 <!-- Android branch update 23.10.2026: alpha.18, 0.1.17/code18.
 Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
-# ORION — состояние на 19 октября 2026
+# ORION — состояние на 26 октября 2026
 
-> **Статус документа:** оперативная сводка по коммитам по 19.10.2026 (PR #44 включительно); для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.
+
+> **Статус документа:** оперативная сводка с изменениями по 26.10.2026; для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.
 
 > Направление и приоритеты задаёт [PLATFORM.md](PLATFORM.md) (KAIDEN Orion Platform 1.0). Этот файл — только факт: что в коде и что проверено.
 
 Единая точка входа: что лежит в master, что проверено на этой ревизии и что осталось. Отчёты по отдельным этапам — архив; при расхождении верен этот файл и проверка на текущем коммите.
+
+## Отзывчивый запуск Windows — 26.10.2026
+
+Ожидание локального runtime вынесено из Tauri setup в фоновый поток. Встроенный
+экран загрузки появляется до API/React, показывает этапы launcher и явную ошибку;
+переход в клиент — после health с готовой БД. Исправлена нормализация CRLF в CSP.
+1501 unit, 18 runtime payload, 5 Rust, typecheck/architecture/contracts и два
+синтетических native startup сценария прошли. Выпущена
+[Windows beta24](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.24):
+полный установщик 73964457 байт; архив, metadata/hash и комплектный runtime на
+изолированной БД проверены (health ok за ~35,5с). Это не замер личного профиля;
+установка нового NSIS и реальный payload update/rollback ещё требуют приёмки.
+[Реализация, проверки и границы](DESKTOP_STARTUP_2026-10-26.md).
+
+## Межмодульные границы — 26.10.2026
+
+Закрыты все **17** оставшихся service-исключений: Goals, Home, Activity, Overview,
+Markets, Notes attachments, Captures, списки/мосты и агентские операции. Запросы и
+команды перенесены в SDK владельцев с сохранением RLS, scope, транзакций, CAS и
+защиты от повторного списания/прихода. Старый helper дома удалён; architecture-check
+также обнаруживает чужие запросы за внутренними helper-импортами.
+
+Локально: **1501 unit**, **620 integration / 1 skip**, **47 browser** (default-full,
+plugins-off и рабочие сценарии), typecheck/lint/build/architecture/contracts/docs/map.
+Схема, данные и дизайн сохранены. Platform API 1.9.0 / Integration API 1.8.0.
+[Этапы и проверенные границы](MODULE_BOUNDARY_COMPLETION.md),
+[SDK для агентов и модулей](platform-api/MODULE_BOUNDARY_SDKS.md).
+
+## Пакеты обновлений desktop — beta 23, 26.10.2026
+
+Protocol 1: UI/API обновляются без Rust/NSIS. Ed25519, пофайловые SHA-256,
+подписанные ссылки на неизменившиеся baseline-файлы; exact shell/native/runtime
+и Prisma compatibility. Отдельные pending/trial/active/previous, API health + React
+hydration, откат и native reload trusted окон при неудачном запуске. Origin/IPC
+сохранены. Смена БД, оболочки, Node/PG или launcher требует полного установщика.
+
+**1499 unit / 191 files**, **43 Chromium**, **3 Rust**, **5 native WebView2 checks**
+прошли. Typecheck/architecture/contracts/map passed; lint — 0 errors / 30 warnings.
+Подписанный контрольный пакет на production-файлах: **660235 байт**, 10232
+записей, 10229 переиспользованы; signature/integrity/rollback/commit passed.
+Это синтетическая проверка, не публичная beta 24 и не installed update acceptance.
+
+Windows beta 23 из **45a514e**: **73961343 байт**, SHA-256
+7839370b376bf93941dd1290a6bf2092def266f5ce7142591d258c721548d28b. Архив/состав/import проверены; installer без Authenticode.
+Чистая установка и полный цикл обновления установленного приложения не подтверждены.
+[Релиз](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.23),
+[контракт/сборка](DESKTOP_PAYLOAD_UPDATES.md), [приёмка и ограничения](WINDOWS_BETA23_2026-10-26.md).
+
+## Контрольная точка beta 22 — 25.10.2026
+
+Tasks использует публичные ProjectTaskLinks и MilestoneReferences вместо чужих моделей.
+ADR-0032; Integration API 1.7.0 / Platform API 1.8.0. Исключения: **17 файлов / 50 model entries /
+19 service entries**. Focused: 18 passed; unit: 1476 passed; integration: **616 passed / 1 skipped**;
+Chromium: **56 passed** после отдельной пересборки стенда. Typecheck/lint/architecture/contracts прошли;
+Кандидат Windows beta 22 собран из 81e4007 и проверен как NSIS-архив: **73 899 690 байт**,
+SHA-256 53266aeaa2f5d7d3d626830f9fc6df360cb8b91283ebb1d41fbe2b06d4c0db60.
+[Релиз beta 22](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.22).
+Арка не закончена: Goals и остальные мосты остаются следующей очередью.
+[Контракты](platform-api/TASK_PLANNING_LINKS.md), [выпуск и продолжение](WINDOWS_BETA22_2026-10-25.md).
+
+## Finance → Projects: ссылки и валюта — 25.10.2026
+
+В `codex/finance-project-contract` Finance не читает Project напрямую. Операции и шаблоны используют
+ProjectReferences; затраты — ProjectFinanceReader ({currency} либо null) в исходной транзакции/RLS.
+Прямой запрос удалён также из finance-refs.util.ts. Права, 400, null, архив/отключение Projects и
+расчёты валют сохранены. SDK не импортируют полный ProjectsModule. ADR-0031; Integration API 1.6.0 /
+Platform API 1.7.0. Исключения: **19 → 18 файлов / 53 → 52 model entries**, service entries — 19.
+Focused: **17 passed**, в том числе Finance без полного ProjectsModule. Unit: **1476 passed**;
+typecheck, architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
+Production API/web build (54 страницы) и **44 Chromium** сценария прошли; полный integration
+на пересозданной БД — **610 passed / 1 skipped**. Приёмка локальная; CI имеет известный billing-блок.
+[Контракт](platform-api/PROJECT_FINANCE_READER.md), [проверки](FINANCE_PROJECT_CONTRACT_2026-10-25.md).
+
+## Time и Calendar → Tasks / Projects — 25.10.2026
+
+В `codex/time-calendar-contracts` Time и Calendar (EventsService) больше не читают Task/Project.
+TaskIntegrationReader предоставляет только ссылку с projectId и поля исходящего ICS; ProjectReferences
+проверяет проекты. Исходная транзакция/RLS, права, null, 404, наследование проекта, feed token и guards
+сохранены. SDK не импортируют полные доменные модули. ADR-0030; Integration API 1.5.0 / Platform API 1.6.0.
+Исключения: **21 → 19 файлов / 57 → 53 model entries**, service entries — 19. Focused: **19 passed**,
+в том числе Time + Calendar без полных TasksModule/ProjectsModule. Unit: **1476 passed**; typecheck,
+architecture/registry/docs/map passed; lint — 0 ошибок / 30 прежних предупреждений.
+Production API/web build (54 страницы) и **46 Chromium** сценариев прошли; полный integration
+на пересозданной БД — **603 passed / 1 skipped**. Проверки выполнены локально; CI имеет известный billing-блок.
+[Контракт](platform-api/TASK_INTEGRATION_READER.md), [проверки](TIME_CALENDAR_CONTRACTS_2026-10-25.md).
+
+## Пять потребителей → Projects: публичная проверка ссылки — 25.10.2026
+
+В `codex/project-reference-contract` Notes, Documents, Inbox, Inventory и Milestones больше не читают
+Project напрямую. `ProjectReferences` возвращает boolean в исходной транзакции/RLS; SDK независим
+от ProjectsModule/ProjectsService. Права, null и прежние ошибки остаются у потребителей; Inbox сохраняет
+проверку включённости Projects, HTTP Milestones остаётся за guard. ADR-0029; Integration API 1.4.0 /
+Platform API 1.5.0. Исключения сокращены: **26 → 21 файл / 62 → 57 model entries**, service entries — 19.
+Focused integration: **22 passed** (в том числе запуск пяти потребителей без полного ProjectsModule).
+Полный unit: **1476 passed**; typecheck, architecture/registry/docs/map passed; lint — 0 ошибок /
+30 прежних предупреждений. Production API/web build (54 страницы) и **44 Chromium** сценария прошли;
+полный integration на пересозданной БД — **596 passed / 1 skipped**. GitHub CI не стартует из-за billing.
+[Контракт](platform-api/PROJECT_REFERENCES.md), [проверки и границы](PROJECT_REFERENCE_CONTRACT_2026-10-25.md).
+В опубликованный установщик beta 21 этот этап не входит.
+
+## Health → Contacts: проверка ссылки врача — 25.10.2026
+
+В `codex/health-contact-contract` HealthService больше не читает Contact напрямую. Публичный ContactReferences
+передаёт проверку владельцу Contacts, возвращает только boolean и сохраняет исходную транзакцию/RLS. Права на
+медицинские данные проверяются до вызова. Архивные/выключенные контакты сохраняют прежнюю семантику ссылок;
+Contacts CRUD остаётся за guard. SDK не импортирует ContactsModule/ContactsService. ADR-0028; Integration API
+1.3.0 / Platform API 1.4.0. Health удалён из exceptions: **26 файлов / 62 model entries / 19 service entries**.
+Focused Health + Contacts: 29 passed; полный unit: 1476 passed; production Chromium: 47 passed (панели
+default-full/plugins-off, контакты и выбор врача). Полный integration на пересозданной тестовой БД:
+**587 passed / 1 skipped**, включая все шесть новых сценариев и явный случай удалённого врача.
+Typecheck, production API/web build (54 страницы), architecture/registry/docs/map passed; lint — 0 ошибок /
+30 прежних предупреждений. [Контракт](platform-api/CONTACT_REFERENCES.md), [проверки](HEALTH_CONTACT_CONTRACT_2026-10-25.md).
+
+## Tasks → Time: следующий перенос границы — 25.10.2026
+
+В `codex/reference-moves-stage2` TasksService больше не обращается к TimeEntry. Публичный
+TaskClosureRegistry передаёт синхронную остановку таймера владельцу Time в транзакции закрытия задачи;
+ошибка откатывает всю команду, пустой registry допускается. UI, schema, права и outbox-подписки не меняются.
+Погашено одно model-исключение: 64 → 63; файлов остаётся 27, service-исключений 19. Новый handler входит
+в проверяемые `.service.ts`. Integration API 1.2.0 / Platform API 1.3.0, карта и snapshot обновлены.
+Focused integration: 8 passed; полный unit: **1476 passed**; полный integration на пересозданной тестовой БД:
+**581 passed / 1 skipped**. Production API/web build (54 страницы), typecheck, architecture/registry/docs/map
+passed; lint — 0 ошибок / 30 прежних предупреждений. Браузер: 43 сценария панелей/публикаций и отдельный
+финальный повтор 2 новых task/timer сценариев — passed (всего 45 различных). Снимки действий не менялись.
+GitHub CI не стартует из-за billing; подробности оснастки и границы проверки сохранены в отчёте.
+[Контракт](platform-api/TASK_CLOSURE.md), [проверки и ограничения](TASK_TIME_BRIDGE_2026-10-25.md).
+В опубликованный установщик beta 21 этот этап не входит.
+
+## Укрепление платформы — 25.10.2026
+
+В `codex/platform-hardening` реализованы независимые границы modules-ext, сохранение source version/requires, проверка совместимости до включения и в guards, транзакционный перенос Capture anchors через владельца вместо прямой записи Contacts. Одно архитектурное исключение удалено. Карта возможностей генерируется из кода (`pnpm platform-map --component <id>`), CI/unit контролируют актуальность. Контракты: ADR-0025/0026.
+
+Полный эксперимент отдельного модуля прошёл: generator → Prisma/БД → API/RLS → production UI, 20 файлов / 0 ручных Core-правок. В продолжении исправлены удержание невидимой подложки Modal/Sheet внутренними layout-анимациями и обратный порядок блокировок fan-out/удаления пространства. Проверки: 1474 unit; полный integration **573 passed / 1 skipped**, deadlock не повторился; production API/web build и typecheck passed; lint — 0 ошибок / 30 прежних предупреждений. Chromium: **50 passed** (панели default-full/plugins-off, Knowledge, настройки и shell), затем **7 passed** (повтор контактов, Modal в двух режимах движения, публикации, питомцы); всего 54 различных сценария. Исходные отказы и проверка блокировок сохранены в [отчёте](PLATFORM_HARDENING_2026-10-25.md). GitHub CI не стартует из-за billing. В опубликованный установщик beta 21 этот последующий этап не входит.
+
+## Windows beta 21 опубликована — 25.10.2026
+
+[Скачать Windows beta 21](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.21), исходники `ecd7ac7`, PR #66 merged. NSIS собран и проверен как архив; скачанный с GitHub EXE совпал по SHA-256 с локальным. Чистая Windows/установленный runtime остаются непроверенными; CI на релизном commit не стартовал из-за ограничения оплаты.
+
+После диагностики обновлены тесты ответа дневника питомцев и матрица отключения модулей (добавлен Knowledge). Полный integration на отдельной БД: **568 passed, 1 skipped**, 104 passed-файла, 495.44 с; неожиданный HTTP 500 создания grant не повторился, первопричина исходного отказа не установлена. В его сценарии включён error logger. Typecheck, lint (0 ошибок / 30 прежних предупреждений), architecture/registry/docs и 11 plugin contracts прошли. Production API/web build и финальный Chromium-прогон **47/47** прошли (панели default-full/plugins-off, Knowledge, публикации, питомцы и настройки). Доказательства и границы упаковки фиксируются в [отчёте beta 21](WINDOWS_BETA21_2026-10-25.md). Платформенные исправления отложены до выпуска; исторический срез ниже сохраняется.
+
+## Диагностический срез 24.10.2026
+
+На `030c253` проведена [перепроверка платформенных тезисов](PLATFORM_DIAGNOSTIC_2026-10-24.md): 1451 unit passed, реестры и architecture-check passed, но найдены два воспроизводимых сбоя интеграционных проверок и слепая зона контроля границ между подключаемыми модулями. Полная интеграционная и установочная приёмка не закрыта. GitHub job не стартовал из-за ограничения оплаты/расходов, а не из-за исполнения тестов. Отчёт содержит доказательства, пределы проверки и очередь исправлений; это не завершение всех пяти направлений аудита и не выпуск beta.
+
+## Дополнение 24.10.2026: первый этап общих публикаций
+
+В ветке `codex/shared-publications-stage1` добавлены ручные публикации задач и Knowledge поверх существующих общих пространств: предварительный просмотр, ограниченный набор полей, личные закрепления и самостоятельные копии. Делегируется только статус задачи; операция атомарна с оригиналом и защищена ревизией/operationId. Отзыв, отключённые модули и восстановление источника не должны возвращать доступ. Старый механизм grants сохранён.
+
+Контракт: [ADR-0024](adr/ADR-0024-shared-publications.md). Проверки и ограничения: [отчёт первого этапа](SHARED_PUBLICATIONS_STAGE1.md). Это реализация для клиентов одного сервера; межузловой транспорт, общая модерация правок и Windows/Android-приёмка не заявляются завершёнными. Раздел ниже сохраняет историческое состояние master.
 
 ## Что в master
 

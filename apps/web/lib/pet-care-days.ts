@@ -97,6 +97,7 @@ export function emptyPetDayDraft(): PetDayDraft {
     appetite: "",
     activity: "",
     stool: "",
+    stoolVisits: [],
     water: "",
     vomitingCount: 0,
     weightKg: null,
@@ -114,13 +115,14 @@ export function petDayToDraft(day: PetCareDayLog): PetDayDraft {
     appetite: day.appetite,
     activity: day.activity,
     stool: day.stool,
+    stoolVisits: day.stoolVisits.map((visit) => ({ ...visit })),
     water: day.water,
     vomitingCount: day.vomitingCount,
     weightKg: day.weightKg,
     temperature: day.temperature,
     meds: day.meds,
     note: day.note,
-    symptoms: day.symptoms.map((item) => ({ ...item }))
+    symptoms: day.symptoms.map((item) => ({ ...item, amount: item.amount ?? "normal" }))
   };
 }
 

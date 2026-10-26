@@ -450,6 +450,7 @@ export function TasksPanel(): React.ReactElement {
       startAt: values.startAt,
       estimatedMinutes: values.estimatedMinutes,
       milestoneId: values.milestoneId,
+      checklist: values.checklist,
       ...(values.assigneeId !== undefined ? { assigneeId: values.assigneeId } : {})
     };
     await createTask.mutateAsync(input);

@@ -13,6 +13,9 @@ test("settings: grouped by who a change affects, search lands on the field, prof
   const nav = page.getByRole("navigation", { name: "Разделы настроек", exact: true });
   await expect(nav).toContainText("Ваша учётная запись");
   await expect(nav).toContainText("Этот компьютер");
+  for (const group of await nav.locator("button[aria-expanded]").all()) {
+    if (await group.getAttribute("aria-expanded") === "false") await group.click();
+  }
   await expect(page.getByText("Только для вас — во всех ваших пространствах и на всех устройствах.")).toBeVisible();
 
   // «Анимации» is a personal appearance option; switching it is saved and marks <html>.

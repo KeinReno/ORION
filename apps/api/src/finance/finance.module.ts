@@ -1,3 +1,7 @@
+import { HomeReferencesModule } from "../home/public/home-references.module";
+import { AgentDraftOperationsModule } from "./public/agent-draft-operations.module";
+import { ProjectReferencesModule } from "../projects/public/project-references.module";
+import { ProjectFinanceReaderModule } from "../projects/public/project-finance-reader.module";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { FinanceAgentController } from "./finance.agent.controller";
 import { Module } from "@nestjs/common";
@@ -9,7 +13,6 @@ import { AccountsService } from "./accounts/accounts.service";
 import { CategoriesController } from "./categories/categories.controller";
 import { CategoriesService } from "./categories/categories.service";
 import { TransactionsController } from "./transactions/transactions.controller";
-import { TransactionsService } from "./transactions/transactions.service";
 import { BudgetsController } from "./budgets/budgets.controller";
 import { BudgetsService } from "./budgets/budgets.service";
 import { RecurringController } from "./recurring/recurring.controller";
@@ -34,10 +37,7 @@ import { SplitsService } from "./splits/splits.service";
 import { ExchangeRatesController } from "./exchange-rates/exchange-rates.controller";
 import { ExchangeRatesService } from "./exchange-rates/exchange-rates.service";
 import { FinanceDraftsController } from "./drafts/finance-drafts.controller";
-import { FinanceDraftsService } from "./drafts/finance-drafts.service";
-import { BudgetAlertsService } from "./budget-alerts.service";
-import { FinanceExpenseReader } from "./public/expense-reader";
-import { FinanceExpenseWriter } from "./public/expense-writer";
+import { FinanceExpenseModule } from "./public/expense.module";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider } from "./finance-search.providers";
 import { FinanceProjectAggregates } from "./finance-project-aggregates";
@@ -51,7 +51,7 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
  * for no reason.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
+  imports: [HomeReferencesModule, AgentDraftOperationsModule, FinanceExpenseModule, ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
   controllers: [
     FinanceAgentController,
     AccountsController,
@@ -74,7 +74,6 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
     FinanceProjectAggregates,
     AccountsService,
     CategoriesService,
-    TransactionsService,
     BudgetsService,
     RecurringService,
     RecurringCheckerService,
@@ -87,11 +86,8 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
     TemplatesService,
     SplitsService,
     ExchangeRatesService,
-    FinanceDraftsService,
-    BudgetAlertsService,
-    FinanceExpenseReader,
-    FinanceExpenseWriter
-  , TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider],
-  exports: [FinanceExpenseReader, FinanceExpenseWriter, FinanceDraftsService]
+    TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider
+  ],
+  exports: [FinanceExpenseModule, AgentDraftOperationsModule]
 })
 export class FinanceModule {}

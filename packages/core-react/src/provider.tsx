@@ -9,6 +9,7 @@ const CoreContext = createContext<OrionClient | null>(null);
 export interface CoreProviderProps {
   baseUrl: string;
   storage: KeyValueStorage;
+  extraHeaders?: () => Record<string, string>;
   children: ReactNode;
 }
 
@@ -16,8 +17,8 @@ export interface CoreProviderProps {
  * Root of the shared frontend core: one OrionClient instance (API + token
  * store) plus a React Query cache, available to every module via useCore().
  */
-export function CoreProvider({ baseUrl, storage, children }: CoreProviderProps): React.ReactElement {
-  const client = useMemo(() => createOrionClient({ baseUrl, storage }), [baseUrl, storage]);
+export function CoreProvider({ baseUrl, storage, extraHeaders, children }: CoreProviderProps): React.ReactElement {
+  const client = useMemo(() => createOrionClient({ baseUrl, storage, extraHeaders }), [baseUrl, storage, extraHeaders]);
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: { queries: { retry: 1, staleTime: 10_000 } }
   }));

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
-import { architectureViolations, colorViolations, moduleBoundaryViolations, ownershipMapViolations, pluginCatalogViolations } from "./architecture-check.mjs";
+import { architectureViolations, colorViolations, foreignQueryHelperViolations, moduleBoundaryViolations, ownershipMapViolations, pluginCatalogViolations } from "./architecture-check.mjs";
 import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 import { CORE_MODELS, MODEL_OWNERS } from "./module-ownership.mjs";
 
@@ -162,6 +162,25 @@ describe("module boundary rule", () => {
   const NOTES = "apps/api/src/notes/notes.service.ts";
   const tasksUse = 'export class S { run(tx) { return tx.task.findMany({}); } }\n';
 
+  it("separates manifest modules while allowing their own model and public contracts", () => {
+    const root = fixture();
+    const file = "apps/api/src/modules-ext/chat-archive/archive.service.ts";
+    put(root, file, 'import { X } from "../pet-care/public/reader"; export class S { a(tx) { tx.chatArchiveConversation.findMany(); tx.workspaceMember.count(); } }');
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+    put(root, file, 'import { PetCareService } from "../pet-care/pet-care.service"; export class S { a(tx) { return tx.petCarePet.findMany(); } }');
+    expect(moduleBoundaryViolations(root, {})).toEqual([
+      expect.stringContaining("чужую модель PetCarePet"),
+      expect.stringContaining("импортирует сервис другого модуля modules-ext/pet-care/pet-care.service")
+    ]);
+  });
+
+  it("checks generated modules against base modules in both directions", () => {
+    const root = fixture();
+    put(root, NOTES, 'export class S { a(tx) { return tx.petCareDay.findMany(); } }');
+    put(root, "apps/api/src/modules-ext/pet-care/reader.service.ts", tasksUse);
+    expect(moduleBoundaryViolations(root, {})).toHaveLength(2);
+  });
+
   it("allows a service to use its own models and core models", () => {
     const root = fixture();
     put(root, NOTES, "export class S { run(tx) { tx.note.create({}); tx.workspaceMember.findFirst({}); tx.entityLink.deleteMany({}); } }\n");
@@ -232,7 +251,24 @@ describe("module boundary rule", () => {
   it("passes on the real repository: every schema model is owned and the exception list is exact", () => {
     expect(ownershipMapViolations()).toEqual([]);
     expect(moduleBoundaryViolations()).toEqual([]);
+    expect(foreignQueryHelperViolations()).toEqual([]);
+    expect(MODULE_BOUNDARY_EXCEPTIONS).toEqual({});
     expect([...MODEL_OWNERS.keys()].filter((model) => CORE_MODELS.has(model))).toEqual([]);
+  });
+
+  it("rejects foreign queries hidden behind an internal helper", () => {
+    const root = fixture();
+    put(root, "apps/api/src/notes/notes.service.ts", 'import { lookup } from "../tasks/task-lookup.util";');
+    put(root, "apps/api/src/tasks/task-lookup.util.ts", 'export const lookup = (tx, id) => tx.task.findUnique({ where: { id } });');
+    expect(foreignQueryHelperViolations(root)).toEqual([expect.stringContaining("foreign model Task")]);
+  });
+
+  it("accepts explicit owner public contracts and helpers that query only Core", () => {
+    const root = fixture();
+    put(root, "apps/api/src/notes/notes.service.ts", 'import { lookup } from "../tasks/public"; import { member } from "../tasks/member.util";');
+    put(root, "apps/api/src/tasks/public.ts", 'export const lookup = (tx, id) => tx.task.findUnique({ where: { id } });');
+    put(root, "apps/api/src/tasks/member.util.ts", 'export const member = (tx, id) => tx.workspaceMember.findUnique({ where: { id } });');
+    expect(foreignQueryHelperViolations(root)).toEqual([]);
   });
 
   it("keeps the projects module off other modules' tables (provider pattern)", () => {

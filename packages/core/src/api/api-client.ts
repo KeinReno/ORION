@@ -1,3 +1,4 @@
+import { publicationPreviewSchema, sharedPublicationSchema, publicationCopySchema, type PublicationSource, type CreatePublication, type PublicationStatusInput } from "@orion/shared-types";
 import {
   SYNC_PROTOCOL_VERSION,
   pushSyncOpsResultSchema,
@@ -40,6 +41,7 @@ import { assessmentSchema, assessmentPageSchema, assistantStatusSchema, draftSch
 import { hhHistoryPageSchema, type HhHistoryQuery, type UpdateOpportunityFactInput, type ArchiveOpportunityItemInput, type UpdateOpportunityTrackInput } from "@orion/shared-types";
 import { opportunityProfileSchema, opportunityProfilePageSchema, opportunityProfileDetailSchema, opportunityFactSchema, opportunityTrackSchema, opportunityMaterialSchema, opportunityMaterialPageSchema, opportunityMaterialContentSchema, hhImportRunSchema, hhOpportunitySourcesSchema, type CreateOpportunityProfileInput, type UpdateOpportunityProfileInput, type CreateOpportunityFactInput, type SetOpportunityFactStateInput, type CreateOpportunityTrackInput, type CreateOpportunityMaterialInput, type HhImportPreviewInput, type HhImportApplyInput } from "@orion/shared-types";
 import { utilityMonthSchema, electricityTariffSchema, importUtilityMonthsResultSchema, type UtilityMonth, type PutUtilityMonthInput, type ElectricityTariff, type ElectricityTariffInput, type ImportUtilityMonthsInput, type ImportUtilityMonthsResult, type PutUtilityPaymentInput } from "@orion/shared-types";
+import { feedbackResultSchema, type FeedbackResult, type SendFeedbackInput } from "@orion/shared-types";
 import {
   accountPublicSchema,
   accountSchema,
@@ -70,6 +72,11 @@ import {
   globalSearchResultSchema,
   habitEntrySchema,
   habitSchema,
+  knowledgeCategorySchema,
+  knowledgeItemDetailSchema,
+  knowledgeItemSchema,
+  knowledgeRelationSchema,
+  knowledgeSourceSchema,
   inboxItemSchema,
   inboxListSchema,
   listItemSchema,
@@ -282,6 +289,17 @@ import {
   type UpdateWorkspaceInput,
   type CreateFinanceCategoryInput,
   type CreateHabitInput,
+  type CreateKnowledgeCategoryInput,
+  type CreateKnowledgeItemInput,
+  type CreateKnowledgeRelationInput,
+  type CreateKnowledgeSourceInput,
+  type KnowledgeCategory,
+  type KnowledgeItem,
+  type KnowledgeItemDetail,
+  type KnowledgeRelation,
+  type KnowledgeSource,
+  type UpdateKnowledgeCategoryInput,
+  type UpdateKnowledgeItemInput,
   type CreateInventoryItemInput,
   type CreateListInput,
   type CreateListItemInput,
@@ -477,6 +495,8 @@ export class ApiError extends Error {
 export interface ApiClientOptions {
   baseUrl: string;
   tokenStore: TokenStore;
+  /** Дополнительные заголовки на каждый запрос. Телефон так предъявляет токен устройства LAN. */
+  extraHeaders?: () => Record<string, string>;
 }
 
 const AUTH_ENDPOINTS_WITHOUT_RETRY = new Set(["/auth/login", "/auth/register", "/auth/refresh", "/auth/accounts"]);
@@ -487,6 +507,8 @@ const AUTH_ENDPOINTS_WITHOUT_RETRY = new Set(["/auth/login", "/auth/register", "
  * and the Tauri webview alike).
  */
 export class ApiClient {
+  /** Namespace for local pending intents; never contains credentials. */
+  get serverIdentity(): string { return this.options.baseUrl; }
   /** Single-flight guard: concurrent 401s share one /auth/refresh call instead of racing each other. */
   private refreshPromise: Promise<string> | null = null;
 
@@ -2312,6 +2334,48 @@ export class ApiClient {
     );
   }
 
+  // --- База знаний ---------------------------------------------------------
+  listKnowledgeCategories(workspaceId: string): Promise<KnowledgeCategory[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/knowledge/categories`, undefined, z.array(knowledgeCategorySchema));
+  }
+  createKnowledgeCategory(workspaceId: string, input: CreateKnowledgeCategoryInput): Promise<KnowledgeCategory> {
+    return this.request("POST", `/workspaces/${workspaceId}/knowledge/categories`, input, knowledgeCategorySchema);
+  }
+  updateKnowledgeCategory(workspaceId: string, categoryId: string, input: UpdateKnowledgeCategoryInput): Promise<KnowledgeCategory> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/knowledge/categories/${categoryId}`, input, knowledgeCategorySchema);
+  }
+  async deleteKnowledgeCategory(workspaceId: string, categoryId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/knowledge/categories/${categoryId}`, undefined, z.unknown());
+  }
+  listKnowledgeItems(workspaceId: string, includeArchived = false, q?: string): Promise<KnowledgeItem[]> {
+    const query = buildQuery({ includeArchived: includeArchived ? "true" : undefined, q: q?.trim() || undefined });
+    return this.request("GET", `/workspaces/${workspaceId}/knowledge/items${query}`, undefined, z.array(knowledgeItemSchema));
+  }
+  getKnowledgeItem(workspaceId: string, itemId: string): Promise<KnowledgeItemDetail> {
+    return this.request("GET", `/workspaces/${workspaceId}/knowledge/items/${itemId}`, undefined, knowledgeItemDetailSchema);
+  }
+  createKnowledgeItem(workspaceId: string, input: CreateKnowledgeItemInput): Promise<KnowledgeItemDetail> {
+    return this.request("POST", `/workspaces/${workspaceId}/knowledge/items`, input, knowledgeItemDetailSchema);
+  }
+  updateKnowledgeItem(workspaceId: string, itemId: string, input: UpdateKnowledgeItemInput): Promise<KnowledgeItemDetail> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/knowledge/items/${itemId}`, input, knowledgeItemDetailSchema);
+  }
+  async deleteKnowledgeItem(workspaceId: string, itemId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/knowledge/items/${itemId}`, undefined, z.unknown());
+  }
+  addKnowledgeSource(workspaceId: string, itemId: string, input: CreateKnowledgeSourceInput): Promise<KnowledgeSource> {
+    return this.request("POST", `/workspaces/${workspaceId}/knowledge/items/${itemId}/sources`, input, knowledgeSourceSchema);
+  }
+  async deleteKnowledgeSource(workspaceId: string, sourceId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/knowledge/sources/${sourceId}`, undefined, z.unknown());
+  }
+  addKnowledgeRelation(workspaceId: string, itemId: string, input: CreateKnowledgeRelationInput): Promise<KnowledgeRelation> {
+    return this.request("POST", `/workspaces/${workspaceId}/knowledge/items/${itemId}/relations`, input, knowledgeRelationSchema);
+  }
+  async deleteKnowledgeRelation(workspaceId: string, relationId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/knowledge/relations/${relationId}`, undefined, z.unknown());
+  }
+
   // --- Списки -----------------------------------------------------------
   // A list is a name plus a small set of checkable items, always fetched and
   // shown together (unlike habits/entries, there's no separate flat endpoint).
@@ -2655,6 +2719,11 @@ export class ApiClient {
     );
   }
 
+  /** Кнопка «Обратная связь»: баг/предложение улетает issue'ем в GitHub (см. `FeedbackService` на сервере). */
+  sendFeedback(input: SendFeedbackInput): Promise<FeedbackResult> {
+    return this.request("POST", "/feedback", input, feedbackResultSchema);
+  }
+
   // ───────── ТЗ-04: LAN Host/Client (управление узлом этого компьютера) ─────────
 
   getLanHost(): Promise<LanHostStatus> {
@@ -2764,6 +2833,19 @@ export class ApiClient {
     return this.request("POST", "/lan/client/activate", {}, z.void());
   }
 
+  previewPublicationRefresh(id: string) { return this.request("GET", `/publications/${encodeURIComponent(id)}/preview`, undefined, publicationPreviewSchema); }
+  refreshPublication(id: string, input: { expectedRevision: number; fingerprint: string }) { return this.request("PATCH", `/publications/${encodeURIComponent(id)}`, input, sharedPublicationSchema); }
+  previewPublication(source: PublicationSource) { return this.request("POST", "/publications/preview", source, publicationPreviewSchema); }
+  createPublication(input: CreatePublication) { return this.request("POST", "/publications", input, sharedPublicationSchema); }
+  listPublications(workspaceId: string) { return this.request("GET", `/publications?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, sharedPublicationSchema.array()); }
+  issuedPublications() { return this.request("GET", "/publications/issued", undefined, sharedPublicationSchema.array()); }
+  pinnedPublications(workspaceId: string) { return this.request("GET", `/publications/pinned?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, sharedPublicationSchema.array()); }
+  updatePublicationStatus(id: string, input: PublicationStatusInput) { return this.request("PATCH", `/publications/${encodeURIComponent(id)}/status`, input, sharedPublicationSchema); }
+  revokePublication(id: string) { return this.request("DELETE", `/publications/${encodeURIComponent(id)}`, undefined, z.object({ revoked: z.boolean() })); }
+  pinPublication(id: string, workspaceId: string) { return this.request("POST", `/publications/${encodeURIComponent(id)}/pin`, { workspaceId }, sharedPublicationSchema); }
+  unpinPublication(id: string, workspaceId: string) { return this.request("DELETE", `/publications/${encodeURIComponent(id)}/pin?workspaceId=${encodeURIComponent(workspaceId)}`, undefined, z.object({ removed: z.boolean() })); }
+  copyPublication(id: string, workspaceId: string) { return this.request("POST", `/publications/${encodeURIComponent(id)}/copy`, { workspaceId }, publicationCopySchema); }
+
   /**
    * G5/G24: типизированный запрос для модулей, подключённых манифестом (`modules-ext/<id>/`): они ходят
    * в собственные маршруты своей схемой ответа и не растят этот класс методом на каждый ресурс.
@@ -2788,6 +2870,7 @@ export class ApiClient {
         // For FormData the browser sets `Content-Type` (incl. the multipart
         // boundary) itself — setting it here would break the request.
         ...(isForm ? {} : { "Content-Type": "application/json" }),
+        ...this.options.extraHeaders?.(),
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body)
@@ -2828,6 +2911,7 @@ export class ApiClient {
       method,
       headers: {
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...this.options.extraHeaders?.(),
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: body === undefined ? undefined : JSON.stringify(body)

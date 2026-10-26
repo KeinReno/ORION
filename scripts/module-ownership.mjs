@@ -42,11 +42,13 @@ function owned(owner, models) {
 export const MODEL_OWNERS = new Map([
   // G5/G10: модели модулей, подключённых манифестом, вносит генератор (scripts/module-registry.mjs).
   ...GENERATED_MODEL_OWNERS,
+  ...owned("shared", "SharedPublication SharedPublicationPin SharedPublicationOperation"),
   ...owned("projects", "Project ProjectStatusUpdate"),
   ...owned("milestones", "Milestone MilestoneDependency"),
   ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),
   ...owned("tasks", "Task TaskComment TaskActivity TaskDependency SavedTaskView"),
   ...owned("captures", "Capture"),
+  ...owned("knowledge", "KnowledgeCategory KnowledgeItem KnowledgeSource KnowledgeRelation"),
   ...owned("time", "TimeEntry"),
   ...owned("habits", "Habit HabitEntry"),
   ...owned("lists", "List ListItem"),
@@ -68,4 +70,10 @@ export const MODEL_OWNERS = new Map([
 
 export function moduleOfDir(dir) {
   return MODULE_GROUPS.get(dir) ?? dir;
+}
+
+/** API-relative path; manifest modules have independent ownership below modules-ext. */
+export function moduleOfPath(path) {
+  const parts = path.replaceAll("\\", "/").split("/");
+  return parts[0] === "modules-ext" && parts[1] ? `modules-ext/${parts[1]}` : moduleOfDir(parts[0]);
 }

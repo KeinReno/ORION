@@ -7,8 +7,12 @@ export interface OrionClient {
   tokenStore: TokenStore;
 }
 
-export function createOrionClient(options: { baseUrl: string; storage: KeyValueStorage }): OrionClient {
+export function createOrionClient(options: {
+  baseUrl: string;
+  storage: KeyValueStorage;
+  extraHeaders?: () => Record<string, string>;
+}): OrionClient {
   const tokenStore = new TokenStore(options.storage);
-  const api = new ApiClient({ baseUrl: options.baseUrl, tokenStore });
+  const api = new ApiClient({ baseUrl: options.baseUrl, tokenStore, extraHeaders: options.extraHeaders });
   return { api, tokenStore };
 }

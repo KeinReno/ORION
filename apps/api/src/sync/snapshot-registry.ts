@@ -55,6 +55,9 @@ export interface ModelClassification {
 export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   // G10: политики моделей подключаемых модулей объявлены их манифестами (scripts/module-registry.mjs).
   ...GENERATED_SNAPSHOT_REGISTRY,
+  { model: "SharedPublication", snapshotKey: "sharedPublications", policy: "included", reason: "Публикации восстанавливаются отозванными через specGrants." },
+  { model: "SharedPublicationPin", snapshotKey: "sharedPublicationPins", policy: "included", reason: "Личные закрепления; не предоставляют доступ к публикации." },
+  { model: "SharedPublicationOperation", snapshotKey: "sharedPublicationOperations", policy: "included", reason: "Журнал и идемпотентность изменений публикаций." },
   { model: "Opportunity", snapshotKey: "opportunities", policy: "included", reason: "Вакансии/заказы и история Base; внешних разрешений здесь нет." },
   // --- workspace config (derived, не построчный список) -------------------
   {
@@ -174,6 +177,10 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "HealthTarget", snapshotKey: null, policy: "secret-excluded", reason: "Личные диапазоны показателей (ADR-0012), в снимок пространства не входят." },
   { model: "HealthSymptom", snapshotKey: null, policy: "secret-excluded", reason: "Журнал симптомов человека (ADR-0012), в снимок пространства не входит." },
   { model: "Habit", snapshotKey: "habits", policy: "included", reason: "Привычки (v0.19)." },
+  { model: "KnowledgeCategory", snapshotKey: "knowledgeCategories", policy: "included", reason: "Разделы базы знаний." },
+  { model: "KnowledgeItem", snapshotKey: "knowledgeItems", policy: "included", reason: "Материалы базы знаний." },
+  { model: "KnowledgeSource", snapshotKey: "knowledgeSources", policy: "included", reason: "Источники материалов базы знаний." },
+  { model: "KnowledgeRelation", snapshotKey: "knowledgeRelations", policy: "included", reason: "Связи между материалами базы знаний." },
   { model: "HabitEntry", snapshotKey: "habitEntries", policy: "included", reason: "Отметки привычек." },
   { model: "List", snapshotKey: "lists", policy: "included", reason: "Списки." },
   { model: "ListItem", snapshotKey: "listItems", policy: "included", reason: "Пункты списков." },
