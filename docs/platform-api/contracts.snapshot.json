@@ -21,7 +21,7 @@
     ]
   },
   "plugin": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "surface": [
       "host:ENTITY_TYPE_LABEL",
       "host:FilterChip",
@@ -126,6 +126,7 @@
       "slot:notes.templates",
       "slot:opportunities.details.sections",
       "slot:opportunities.views",
+      "slot:projects.board.grouped",
       "slot:projects.overview.plan",
       "slot:projects.overview.side",
       "slot:projects.tabs",
