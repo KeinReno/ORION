@@ -2130,6 +2130,7 @@
     "apps/api/src/documents/public/document-attachment-store.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/finance/public/expense.module.ts",
     "apps/api/src/finance/public/finance-anchor-references.module.ts",
     "apps/api/src/finance/public/finance-anchor-references.ts",
     "apps/api/src/finance/public/finance-overview-reader.module.ts",
@@ -2146,6 +2147,8 @@
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/inventory/public/inventory-references.module.ts",
     "apps/api/src/inventory/public/inventory-references.ts",
+    "apps/api/src/lists/public/list-expense-commands.module.ts",
+    "apps/api/src/lists/public/list-expense-commands.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
@@ -2531,15 +2534,6 @@
         "Task",
         "TaskActivity",
         "TaskComment"
-      ]
-    },
-    "apps/api/src/lists-finance/lists-finance.service.ts": {
-      "models": [
-        "List",
-        "ListItem"
-      ],
-      "services": [
-        "lists/lists.service"
       ]
     },
     "apps/api/src/lists-inventory/lists-inventory.service.ts": {

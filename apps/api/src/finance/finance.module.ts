@@ -37,9 +37,7 @@ import { ExchangeRatesController } from "./exchange-rates/exchange-rates.control
 import { ExchangeRatesService } from "./exchange-rates/exchange-rates.service";
 import { FinanceDraftsController } from "./drafts/finance-drafts.controller";
 import { FinanceDraftsService } from "./drafts/finance-drafts.service";
-import { BudgetAlertsService } from "./budget-alerts.service";
-import { FinanceExpenseReader } from "./public/expense-reader";
-import { FinanceExpenseWriter } from "./public/expense-writer";
+import { FinanceExpenseModule } from "./public/expense.module";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider } from "./finance-search.providers";
 import { FinanceProjectAggregates } from "./finance-project-aggregates";
@@ -53,7 +51,7 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
  * for no reason.
  */
 @Module({
-  imports: [ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
+  imports: [FinanceExpenseModule, ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
   controllers: [
     FinanceAgentController,
     AccountsController,
@@ -90,10 +88,8 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
     SplitsService,
     ExchangeRatesService,
     FinanceDraftsService,
-    BudgetAlertsService,
-    FinanceExpenseReader,
-    FinanceExpenseWriter
-  , TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider],
-  exports: [FinanceExpenseReader, FinanceExpenseWriter, FinanceDraftsService]
+    TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider
+  ],
+  exports: [FinanceExpenseModule, FinanceDraftsService]
 })
 export class FinanceModule {}

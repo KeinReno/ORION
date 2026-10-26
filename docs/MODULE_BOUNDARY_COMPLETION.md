@@ -81,3 +81,13 @@ TransactionReferences. Сохраняет batch-чтение в исходном
 движений, отсутствующих объектов и повторных id. Архивные/выключенные соседи
 не меняют прежнюю допустимость ссылки. Полные соседние модули не загружаются.
 Проверено: architecture-check, API typecheck, focused ESLint, Lists integration (11).
+
+## Этап 10 — Lists Finance: 6 → 5
+
+ListExpenseCommands владеет блокировкой пунктов и их отметками; bridge сохраняет
+проверки суммы и повторного расхода. FinanceExpenseModule предоставляет прежние
+read/write контракты без полного FinanceModule. Реализации перенесены из public
+в owner .service.ts, так что запросы также проверяются архитектурой.
+Проверено после исправления ошибки имени Nest-модуля при переносе: API typecheck,
+architecture-check, focused ESLint; Lists + Home integration — 18 сценариев,
+включая гонку записи одного расхода. Модульная ошибка не попала в итоговый этап.
