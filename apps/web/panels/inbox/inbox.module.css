@@ -1,0 +1,36 @@
+.emptyScene {
+  position: relative;
+  isolation: isolate;
+}
+
+.emptyScene::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 -2rem;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 45% 35% at 50% 38%, rgb(var(--orion-accent) / 0.12), transparent 100%),
+    radial-gradient(ellipse 30% 28% at 14% 72%, rgb(var(--orion-accent-hover) / 0.055), transparent 100%);
+}
+
+.captureField {
+  background: rgb(var(--orion-color-elevated, 20 20 25) / 0.76);
+  border: 1px solid rgb(var(--orion-color-border-strong, 60 60 71) / 0.7);
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+
+.captureField:focus-within {
+  border-color: rgb(var(--orion-accent-hover) / 0.75);
+  background: rgb(var(--orion-color-elevated, 20 20 25) / 0.96);
+}
+
+@media (max-width: 480px) {
+  .emptyCapture {
+    flex-wrap: wrap;
+  }
+
+  .emptyCapture button {
+    width: 100%;
+  }
+}

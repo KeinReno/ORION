@@ -76,7 +76,7 @@ export function InboxQueue({
 
   const smooth = useMotionSpring("smooth");
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className="mx-auto w-full max-w-2xl">
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={focus.id}
@@ -90,7 +90,11 @@ export function InboxQueue({
       </AnimatePresence>
 
       {items.length > 1 ? (
-        <div className="mt-8 border-t border-border pt-2">
+        <div className="mt-7 border-t border-border/70 pt-5">
+          <div className="mb-3 flex items-baseline justify-between gap-3 px-1">
+            <h2 className="text-body font-medium text-foreground">Дальше в очереди</h2>
+            <span className="text-label tabular-nums text-subtle-foreground">{items.length - 1}</span>
+          </div>
           {grouped ? (
             <div className="space-y-4">
               {groups.map((group) => {
@@ -98,10 +102,10 @@ export function InboxQueue({
                 if (rows.length === 0) return null;
                 return (
                   <section key={group.key}>
-                    <h2 className="px-2 text-label font-medium text-foreground">
+                    <h3 className="px-3 text-label font-medium text-muted-foreground">
                       {group.label}
                       <span className="ml-2 text-micro font-normal text-subtle-foreground">{rows.length}</span>
-                    </h2>
+                    </h3>
                     <ul>
                       {rows.map((item) => (
                         <li key={item.id}>

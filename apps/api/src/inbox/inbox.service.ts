@@ -36,9 +36,12 @@ export class InboxService {
     const limit = history ? 100 : 250;
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const where = { workspaceId, ...(history ? {} : { processedAt: null }) };
+      const where: Prisma.InboxItemWhereInput = {
+        workspaceId,
+        processedAt: history ? { not: null } : null
+      };
       const [rows, totalCount] = await Promise.all([
-        tx.inboxItem.findMany({ where, orderBy: { createdAt: "desc" }, take: limit }),
+        tx.inboxItem.findMany({ where, orderBy: history ? { processedAt: "desc" } : { createdAt: "desc" }, take: limit }),
         tx.inboxItem.count({ where })
       ]);
       return { items: rows.map(toDto), totalCount, limit };

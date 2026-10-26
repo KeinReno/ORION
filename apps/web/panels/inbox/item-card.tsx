@@ -3,7 +3,7 @@
 import type { InboxItem, OrionModuleId } from "@orion/shared-types";
 import { Badge, Button, IconButton, cx } from "@orion/ui";
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Clock, FolderKanban, ListTodo, Trash2 } from "lucide-react";
+import { CalendarDays, Clock, FolderKanban, ListTodo, StickyNote, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { relativeTime, shortDateTime } from "../../lib/format";
 
@@ -45,57 +45,58 @@ export function InboxFocus({
       onToday={() => onProcessToday(item)}
       onDelete={() => onDelete(item)}
     >
-      <div className="px-1 py-1">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-title font-medium leading-snug text-foreground">{item.title || "Без названия"}</p>
-          <span className="shrink-0 pt-1 text-label tabular-nums text-subtle-foreground">
-            {index} / {total}
-          </span>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card/70">
+        <div className="px-4 pb-5 pt-5 sm:px-6 sm:pt-6">
+          <div className="flex items-start justify-between gap-4">
+            <p className="min-w-0 break-words text-xl font-medium leading-snug tracking-tight text-foreground">{item.title || "Без названия"}</p>
+            <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-label tabular-nums text-accent-text" aria-label={`Запись ${index} из ${total}`}>
+              {index} / {total}
+            </span>
+          </div>
+          {item.body ? <p className="mt-3 whitespace-pre-wrap text-body text-muted-foreground">{item.body}</p> : null}
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-label text-subtle-foreground">
+            <span>{relativeTime(item.createdAt)}</span>
+            {item.projectId ? (
+              <Badge>
+                <FolderKanban className="h-3 w-3" /> {projectNames.get(item.projectId) ?? "Проект"}
+              </Badge>
+            ) : null}
+            {item.dueAt ? (
+              <Badge>
+                <Clock className="h-3 w-3" /> {shortDateTime(item.dueAt)}
+              </Badge>
+            ) : null}
+          </div>
         </div>
-        {item.body ? <p className="mt-2 whitespace-pre-wrap text-body text-muted-foreground">{item.body}</p> : null}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-label text-subtle-foreground">
-          <span>{relativeTime(item.createdAt)}</span>
-          {item.projectId ? (
-            <Badge>
-              <FolderKanban className="h-3 w-3" /> {projectNames.get(item.projectId) ?? "Проект"}
-            </Badge>
-          ) : null}
-          {item.dueAt ? (
-            <Badge>
-              <Clock className="h-3 w-3" /> {shortDateTime(item.dueAt)}
-            </Badge>
-          ) : null}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border/70 bg-panel/45 px-3 py-3 sm:px-5">
           {canToday ? (
-            <Button size="sm" onClick={() => onProcessToday(item)} disabled={processPending}>
+            <Button size="sm" onClick={() => onProcessToday(item)} disabled={processPending} className="min-h-9">
               <ListTodo className="h-3.5 w-3.5" /> На сегодня
             </Button>
           ) : null}
-          <div className="flex flex-wrap items-center gap-x-3 text-label">
+          <div className="flex flex-wrap items-center gap-1 text-label">
             {canToday ? (
               <QuietAction disabled={processPending} onClick={() => onOpenProcess(item, "task")}>
-                В задачу
+                <ListTodo className="h-3.5 w-3.5" aria-hidden="true" /> В задачу
               </QuietAction>
             ) : null}
             {canNote ? (
               <QuietAction disabled={processPending} onClick={() => onOpenProcess(item, "note")}>
-                В заметку
+                <StickyNote className="h-3.5 w-3.5" aria-hidden="true" /> В заметку
               </QuietAction>
             ) : null}
             {canEvent ? (
               <QuietAction disabled={processPending} onClick={() => onOpenProcess(item, "event")}>
-                В событие
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> В событие
               </QuietAction>
             ) : null}
           </div>
-          <IconButton className="ml-auto" label="Удалить запись" size="sm" tone="danger" onClick={() => onDelete(item)}>
+          <IconButton className="ml-auto h-9 w-9" label="Удалить запись" size="sm" tone="danger" onClick={() => onDelete(item)}>
             <Trash2 className="h-4 w-4" />
           </IconButton>
         </div>
         {!hasTarget ? (
-          <p className="mt-3 text-label text-subtle-foreground">Нет включённых модулей, в которые можно разобрать запись.</p>
+          <p className="border-t border-border/70 px-4 py-3 text-label text-subtle-foreground">Нет включённых модулей, в которые можно разобрать запись.</p>
         ) : null}
       </div>
     </InboxSwipe>
@@ -118,8 +119,8 @@ export function InboxQueueRow({
       onClick={onSelect}
       aria-current={active ? "true" : undefined}
       className={cx(
-        "flex w-full items-baseline gap-3 border-b border-border/60 px-1 py-2.5 text-left outline-none transition-colors last:border-0",
-        "hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-accent/60",
+        "flex w-full items-baseline gap-3 rounded-lg px-3 py-3 text-left outline-none transition-colors",
+        "hover:bg-ui-hover focus-visible:ring-2 focus-visible:ring-accent/60",
         active && "bg-accent/[0.07]"
       )}
     >
@@ -145,7 +146,7 @@ function QuietAction({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-muted-foreground outline-none transition-colors hover:bg-ui-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-50"
     >
       {children}
     </button>

@@ -25,7 +25,7 @@ import {
   useToast
 } from "@orion/ui";
 import { AnimatePresence, motion } from "framer-motion";
-import { CircleCheck, Clock, FolderKanban, Inbox, Trash2, TriangleAlert } from "lucide-react";
+import { CalendarDays, Clock, FolderKanban, Inbox, ListTodo, Plus, StickyNote, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import type { PanelComponentProps } from "../lib/panel-registry";
@@ -36,6 +36,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { InboxQueue } from "./inbox/queue";
 import { groupInboxItems, isInboxGroupBy, type InboxGroupBy } from "./inbox/group";
+import styles from "./inbox/inbox.module.css";
 
 type InboxView = "queue" | "history";
 
@@ -134,10 +135,14 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
   // caps the response at 250 rows, so `queue.data.items.length` would
   // silently plateau at 250 while the actual queue kept growing.
   const unprocessed = queue.data?.totalCount ?? 0;
-  const list = data?.items ?? [];
+  const rawList = data?.items ?? [];
+  // Installed runtimes may still return queue items from ?history=true.
+  // Keep the visible history honest while their API is being updated.
+  const legacyHistory = history && rawList.some((item) => item.processedAt === null);
+  const list = history ? rawList.filter((item) => item.processedAt !== null) : rawList;
   // Honest truncation notice (S15 acceptance): only shown when the server
   // actually cut rows, and always states the real total, not the visible count.
-  const truncated = data && data.totalCount > data.items.length ? data : null;
+  const truncated = data && !legacyHistory && data.totalCount > data.items.length ? data : null;
 
   async function submitCapture(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -231,12 +236,38 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
     });
   }
 
+  function captureForm(compact: boolean): React.ReactElement {
+    return (
+      <form onSubmit={submitCapture} className={`${styles.captureField} ${compact ? "" : styles.emptyCapture} flex w-full items-center gap-1.5 rounded-2xl p-1.5`}>
+        <Inbox className="ml-2 h-4 w-4 shrink-0 text-accent-text" aria-hidden="true" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={compact ? "Запишите ещё мысль" : "Что нужно сохранить?"}
+          maxLength={500}
+          aria-label="Новая запись в инбокс"
+          disabled={capture.isPending}
+          className="min-w-0 flex-1 bg-transparent px-2 py-2 text-body text-foreground outline-none placeholder:text-subtle-foreground disabled:opacity-50"
+        />
+        {compact ? (
+          <IconButton type="submit" label="Добавить" disabled={!draft.trim() || capture.isPending} className="h-9 w-9 rounded-xl bg-accent text-accent-foreground hover:bg-accent-hover disabled:opacity-40">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </IconButton>
+        ) : (
+          <Button type="submit" disabled={!draft.trim() || capture.isPending} className="shrink-0">
+            Добавить
+          </Button>
+        )}
+      </form>
+    );
+  }
+
   return (
     <PanelShell>
       <PanelHeader
         icon={Inbox}
         title="Инбокс"
-        subtitle={section.locked ? sectionTabTitle(INBOX_TABS.find((tab) => tab.value === view)) : unprocessed > 0 ? `${unprocessed} к разбору` : "Записывайте мысли, разбирайте потом"}
+        subtitle={section.locked ? sectionTabTitle(INBOX_TABS.find((tab) => tab.value === view)) : history ? "Разобранные записи" : unprocessed > 0 ? `${unprocessed} к разбору` : "Записывайте мысли, разбирайте потом"}
         actions={
           unprocessed > 0 ? (
             <Badge tone="accent">{unprocessed}</Badge>
@@ -277,23 +308,13 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
           )
         ) : (
           <div className="space-y-4">
-            {!history ? (
-              <form onSubmit={submitCapture} className="mx-auto w-full max-w-xl">
-                <Input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Мысль — Enter, чтобы оставить в очереди"
-                  maxLength={500}
-                  aria-label="Новая запись в инбокс"
-                  disabled={capture.isPending}
-                />
-              </form>
+            {!history && (isLoading || isError || list.length > 0) ? (
+              <div className="mx-auto w-full max-w-2xl">{captureForm(true)}</div>
             ) : null}
 
             {truncated ? (
               <p className="text-2xs text-subtle-foreground">
-                Показаны первые {truncated.items.length} из {truncated.totalCount} — сузьте выборку (например, откройте
-                историю отдельно), чтобы увидеть остальные.
+                Показаны первые {truncated.items.length} из {truncated.totalCount} {history ? "обработанных записей" : "записей к разбору"}.
               </p>
             ) : null}
 
@@ -323,10 +344,46 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
                   description="Здесь появятся записи, которые вы уже превратили в задачу, заметку или событие."
                 />
               ) : (
-                <EmptyState icon={CircleCheck} tone="success" title="Инбокс пуст" />
+                <section className={`${styles.emptyScene} mx-auto flex min-h-[min(68vh,620px)] w-full max-w-3xl flex-col items-center justify-center px-1 py-12 text-center sm:px-6`}>
+                  <div className="relative mb-8 flex h-28 w-52 items-center justify-center" aria-hidden="true">
+                    <div className="absolute inset-x-1 top-1/2 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+                    {isEnabled("tasks") ? <div className="absolute left-1 top-3 flex h-9 w-9 -rotate-12 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"><ListTodo className="h-4 w-4" /></div> : null}
+                    {isEnabled("notes") ? <div className="absolute right-1 top-2 flex h-9 w-9 rotate-12 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"><StickyNote className="h-4 w-4" /></div> : null}
+                    {isEnabled("calendar") ? <div className="absolute right-8 bottom-0 flex h-9 w-9 rotate-6 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"><CalendarDays className="h-4 w-4" /></div> : null}
+                    <div className="relative z-10 flex h-20 w-20 items-center justify-center rounded-[1.4rem] border border-accent/35 bg-card text-accent-text shadow-[0_18px_38px_-24px_rgb(var(--orion-accent)/0.7)]">
+                      <Inbox className="h-9 w-9" />
+                    </div>
+                  </div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                    Освободите голову
+                  </h2>
+                  <p className="mt-3 max-w-md text-body text-muted-foreground">
+                    Сохраните мысль сейчас, а разберите запись позже.
+                  </p>
+                  <div className="mt-9 w-full max-w-xl">{captureForm(false)}</div>
+                  <p className="mt-3 text-label text-subtle-foreground">Нажмите Enter, чтобы оставить запись здесь</p>
+                  {isEnabled("tasks") || isEnabled("notes") || isEnabled("calendar") ? (
+                    <>
+                      <div className="mt-11 border-t border-border/60 pt-5 text-label text-muted-foreground">
+                        Позже можно превратить запись в
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-label text-muted-foreground" aria-label="Варианты разбора записи">
+                        {isEnabled("tasks") ? <span className="inline-flex items-center gap-2"><ListTodo className="h-4 w-4" aria-hidden="true" /> Задача</span> : null}
+                        {isEnabled("notes") ? <span className="inline-flex items-center gap-2"><StickyNote className="h-4 w-4" aria-hidden="true" /> Заметка</span> : null}
+                        {isEnabled("calendar") ? <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4" aria-hidden="true" /> Событие</span> : null}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-10 max-w-sm text-label text-subtle-foreground">Запись останется в Инбоксе. Чтобы разбирать её дальше, включите задачи, заметки или календарь.</p>
+                  )}
+                </section>
               )
             ) : history ? (
-              <div className="mx-auto w-full max-w-xl">
+              <div className="mx-auto w-full max-w-2xl">
+                <div className="mb-3 flex items-baseline justify-between gap-3 px-1">
+                  <h2 className="text-body font-medium text-foreground">Разобранные записи</h2>
+                  <span className="text-label tabular-nums text-subtle-foreground">{legacyHistory ? list.length : data?.totalCount ?? list.length}</span>
+                </div>
                 {groupInboxItems(list, grouping, projectNames).map((group) => (
                   <div key={group.key}>
                     {grouping !== "none" ? (
@@ -347,7 +404,7 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
                               exit={{ opacity: 0, x: 40, height: 0, marginBottom: 0 }}
                               transition={{ duration: 0.2, ease: "easeOut" }}
                             >
-                              <div className="flex items-start gap-3 border-b border-border px-1 py-3">
+                              <div className="flex items-start gap-3 border-b border-border/70 px-2 py-4">
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-body text-foreground">{item.title}</p>
                                   {item.body ? (
