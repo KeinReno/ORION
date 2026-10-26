@@ -2130,6 +2130,8 @@
     "apps/api/src/contacts/public/home-contact-commands.ts",
     "apps/api/src/documents/public/document-attachment-store.module.ts",
     "apps/api/src/documents/public/document-attachment-store.ts",
+    "apps/api/src/events/public/event-agent-references.module.ts",
+    "apps/api/src/events/public/event-agent-references.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/finance/public/expense.module.ts",
@@ -2165,8 +2167,12 @@
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
     "apps/api/src/milestones/public/milestone-references.ts",
+    "apps/api/src/notes/public/note-agent-references.module.ts",
+    "apps/api/src/notes/public/note-agent-references.ts",
     "apps/api/src/notes/public/note-operations.module.ts",
     "apps/api/src/notes/public/note-operations.ts",
+    "apps/api/src/projects/public/project-agent-reader.module.ts",
+    "apps/api/src/projects/public/project-agent-reader.ts",
     "apps/api/src/projects/public/project-catalog.module.ts",
     "apps/api/src/projects/public/project-catalog.ts",
     "apps/api/src/projects/public/project-finance-reader.module.ts",
@@ -2531,14 +2537,6 @@
       ],
       "services": [
         "events/events.service"
-      ]
-    },
-    "apps/api/src/ai/agent-tokens.service.ts": {
-      "models": [
-        "Event",
-        "Note",
-        "Project",
-        "Task"
       ]
     }
   },

@@ -1,3 +1,7 @@
+import { ProjectAgentReaderModule } from "../projects/public/project-agent-reader.module";
+import { TaskIntegrationReaderModule } from "../tasks/public/task-integration-reader.module";
+import { NoteAgentReferencesModule } from "../notes/public/note-agent-references.module";
+import { EventAgentReferencesModule } from "../events/public/event-agent-references.module";
 import { Module } from "@nestjs/common";
 import { ModulesModule } from "../modules/modules.module";
 import { NotificationsModule } from "../notifications/notifications.module";
@@ -14,7 +18,7 @@ import { AgentTokensService } from "./agent-tokens.service";
  * which imports tasks/notes/finance…: a module those depend on (documents, finance) could not import `AiModule` back.
  */
 @Module({
-  imports: [WorkspacesModule, ModulesModule, NotificationsModule],
+  imports: [ProjectAgentReaderModule, TaskIntegrationReaderModule, NoteAgentReferencesModule, EventAgentReferencesModule, WorkspacesModule, ModulesModule, NotificationsModule],
   providers: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService],
   exports: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService]
 })

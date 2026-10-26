@@ -6,5 +6,4 @@
 export const MODULE_BOUNDARY_EXCEPTIONS = {
   "apps/api/src/ai/agent-gateway.service.ts": { models: ["Event","InboxItem","Note","Project","Task"], services: ["events/events.service","inbox/inbox.service","search/search.service"] },
   "apps/api/src/ai/agent-jobs.service.ts": { models: ["Event","Note","Task"], services: ["events/events.service"] },
-  "apps/api/src/ai/agent-tokens.service.ts": { models: ["Event","Note","Project","Task"] },
 };

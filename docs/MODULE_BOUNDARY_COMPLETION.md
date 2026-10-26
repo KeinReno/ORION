@@ -110,3 +110,12 @@ TaskTimeReader — время для вклада участников, без �
 дома, телефон/phones, расчёт вклада и отслеживаемое время. Схема не менялась.
 Проверено: architecture-check, API typecheck после уточнения TaskStatus в контракте,
 ESLint всего API (0 ошибок, прежнее предупреждение Knowledge), Home integration (7).
+
+## Этап 13 — Agent Tokens: 3 → 2
+
+ProjectAgentReader проверяет project fence; TaskIntegrationReader и owner SDK
+Notes/Events читают projectId объекта в исходном RLS/пространстве. Существующая
+политика archived/trash для fence не меняется. AgentCoreModule импортирует только
+малые reference SDK, без доменных контроллеров и lifecycle-провайдеров.
+Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
+Agent manager + AI bridge — 21 сценарий, включая fence, роли и отмену создания.
