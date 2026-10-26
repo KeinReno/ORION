@@ -5,6 +5,7 @@ import {
   electricityTariffSchema, type ElectricityTariffInput, type PutUtilityMonthInput,
   type ImportUtilityMonthsInput, type PutUtilityPaymentInput
 } from "@orion/shared-types";
+import { HomeUtilityReferences } from "../home/public/home-utility-references";
 import { PrismaService } from "../common/prisma.service";
 import { FinanceExpenseReader } from "../finance/public/expense-reader";
 import { ModulesService } from "../modules/modules.service";
@@ -44,13 +45,14 @@ export class HomeUtilitiesService {
     private readonly workspaces: WorkspacesService,
     private readonly plugins: PluginsService,
     private readonly modules: ModulesService,
+    private readonly homes: HomeUtilityReferences,
     private readonly expenses: FinanceExpenseReader
   ) {}
 
   private async guard(tx: Prisma.TransactionClient, userId: string, workspaceId: string, homeId: string) {
     await this.workspaces.assertMemberTx(tx, userId, workspaceId);
     await this.plugins.assertEnabledTx(tx, userId, workspaceId, "home-utilities");
-    const home = await tx.home.findFirst({ where: { id: homeId, workspaceId, archivedAt: null }, select: { id: true } });
+    const home = await this.homes.activeHomeTx(tx, workspaceId, homeId);
     if (!home) throw new NotFoundException("Объект не найден");
   }
 
@@ -228,7 +230,7 @@ export class HomeUtilitiesService {
   }
 
   private async electricityMeter(tx: Prisma.TransactionClient, workspaceId: string, homeId: string, meterId: string) {
-    const meter = await tx.meter.findFirst({ where: { id: meterId, workspaceId, homeId, kind: "electricity" }, select: { id: true } });
+    const meter = await this.homes.electricityMeterTx(tx, workspaceId, homeId, meterId);
     if (!meter) throw new NotFoundException("Электросчётчик не найден");
   }
 }

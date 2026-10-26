@@ -14,3 +14,10 @@ Task/Milestone проекции принадлежат владельцам, п�
 контрактный snapshot (2), plugin contracts (11), Goals integration (7).
 Новый сценарий проверяет RLS, scope при доступе к двум пространствам,
 видимость незакоммиченных данных и rollback. Финальные общие проверки ещё впереди.
+
+## Этап 2 — Home Utilities: 16 → 15
+
+HomeUtilityReferences проверяет активный дом и электрический счётчик в исходном tx.
+404, привязка к дому, ограничения пространства и проверки плагина сохранены.
+SDK не загружает HomeModule. Проверено: architecture-check, API typecheck,
+focused ESLint, Home integration (7, включая коммуналку, тарифы, платежи и изоляцию).

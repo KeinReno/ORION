@@ -2124,6 +2124,8 @@
     "apps/api/src/contacts/public/contact-references.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/home/public/home-utility-references.module.ts",
+    "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
@@ -2522,12 +2524,6 @@
       ],
       "services": [
         "tasks/tasks.service"
-      ]
-    },
-    "apps/api/src/home-utilities/home-utilities.service.ts": {
-      "models": [
-        "Home",
-        "Meter"
       ]
     },
     "apps/api/src/home/home.service.ts": {
