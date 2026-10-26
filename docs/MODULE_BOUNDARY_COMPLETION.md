@@ -128,3 +128,15 @@ updatedAt и readOnly. Notes сохраняет скрытие корзины; E
 без полного EventsModule/его jobs. Права человека, CAS, stale basis и diff сохранены.
 Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
 Agent manager + Gateway integration — 20 сценариев.
+
+## Этап 15 — Agent Gateway: 1 → 0
+
+Gateway читает проекты и ссылки через owner SDK; InboxAgentOperations создаёт
+входящие, SearchOperations использует реестр поиска/связей. AI controller также
+переведён на ProjectCatalog и AgentDraftOperations. AiModule больше не импортирует
+полные Tasks, Notes, Projects, Events, Finance, Inbox, Search ради этих операций.
+Сохраняются idempotency, project fence, module/scope gates, аудит и транзакция
+создания/связывания. Ноль исключений, без расширения Core или ослабления checker.
+Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
+Gateway + Agent manager + AI bridge + Create-and-link — 36 сценариев.
+Финальная общая приёмка выполняется отдельно ниже.

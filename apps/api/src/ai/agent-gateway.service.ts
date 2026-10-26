@@ -1,3 +1,7 @@
+import { ProjectAgentReader } from "../projects/public/project-agent-reader";
+import { TaskIntegrationReader } from "../tasks/public/task-integration-reader";
+import { NoteAgentReferences } from "../notes/public/note-agent-references";
+import { EventAgentReferences } from "../events/public/event-agent-references";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
@@ -32,10 +36,10 @@ import {
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { EventOperations } from "../events/public/event-operations";
-import { InboxService } from "../inbox/inbox.service";
+import { InboxAgentOperations } from "../inbox/public/inbox-agent-operations";
 import { ModulesService } from "../modules/modules.service";
 import { NoteOperations } from "../notes/public/note-operations";
-import { SearchService } from "../search/search.service";
+import { SearchOperations } from "../search/public/search-operations";
 import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import type { AgentContext } from "./agent-tokens.service";
@@ -90,8 +94,12 @@ export class AgentGatewayService {
     private readonly tasks: TaskOperations,
     private readonly notes: NoteOperations,
     private readonly events: EventOperations,
-    private readonly inbox: InboxService,
-    private readonly search: SearchService
+    private readonly inbox: InboxAgentOperations,
+    private readonly search: SearchOperations,
+    private readonly projectReader: ProjectAgentReader,
+    private readonly taskReferences: TaskIntegrationReader,
+    private readonly noteReferences: NoteAgentReferences,
+    private readonly eventReferences: EventAgentReferences
   ) {}
 
   // ── context ───────────────────────────────────────────────────────────────────────────────────
@@ -115,12 +123,7 @@ export class AgentGatewayService {
       const canLink = agent.scopes.includes("links:write");
       const canSeeProjects = agent.scopes.includes("projects:read") && accessible.has("projects");
       const projectRows = canSeeProjects
-        ? await tx.project.findMany({
-            where: { workspaceId: agent.workspaceId, archivedAt: null },
-            orderBy: { updatedAt: "desc" },
-            take: AGENT_LIMITS.projects,
-            select: { id: true, name: true }
-          })
+        ? await this.projectReader.recentTx(tx, agent.workspaceId, AGENT_LIMITS.projects)
         : null;
 
       const moduleTools = AGENT_TOOLS.filter(
@@ -327,17 +330,25 @@ export class AgentGatewayService {
       id: first.targetId,
       url: buildOrionLink({ type: kind as OrionLinkType, id: first.targetId, workspaceId: agent.workspaceId }),
       workspaceId: agent.workspaceId,
-      projectId: await projectOf(tx, kind, first.targetId),
+      projectId: await this.projectOf(tx, agent.workspaceId, kind, first.targetId),
       deduplicated: true,
       linked: 0
     };
   }
 
+  private async projectOf(tx: DbClient, workspaceId: string, kind: CaptureKind, id: string): Promise<string | null> {
+    const row = kind === "note" ? await this.noteReferences.referenceTx(tx, workspaceId, id)
+      : kind === "task" ? await this.taskReferences.referenceTx(tx, workspaceId, id)
+        : kind === "event" ? await this.eventReferences.referenceTx(tx, workspaceId, id)
+          : await this.inbox.referenceTx(tx, workspaceId, id);
+    return row?.projectId ?? null;
+  }
+
   private async assertProjectTx(tx: DbClient, agent: AgentContext, projectId: string | null): Promise<void> {
     if (!projectId) return;
     await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "projects");
-    const project = await tx.project.findUnique({ where: { id: projectId }, select: { workspaceId: true } });
-    if (!project || project.workspaceId !== agent.workspaceId) throw new BadRequestException("Проект не найден в этом пространстве");
+    const found = await this.projectReader.countTx(tx, agent.workspaceId, [projectId]);
+    if (found !== 1) throw new BadRequestException("Проект не найден в этом пространстве");
   }
 
   // ── search ────────────────────────────────────────────────────────────────────────────────────
@@ -429,16 +440,5 @@ function stripFirstLine(text: string): string {
 function restAfterFirstLine(text: string, title: string): string {
   const first = text.split("\n", 1)[0]?.trim().replace(/^#+\s*/, "") ?? "";
   return first === title ? stripFirstLine(text) : text;
-}
-
-async function projectOf(tx: DbClient, kind: CaptureKind, id: string): Promise<string | null> {
-  const select = { projectId: true } as const;
-  const where = { id } as const;
-  const row =
-    kind === "note" ? await tx.note.findUnique({ where, select }) :
-    kind === "task" ? await tx.task.findUnique({ where, select }) :
-    kind === "event" ? await tx.event.findUnique({ where, select }) :
-    await tx.inboxItem.findUnique({ where, select });
-  return row?.projectId ?? null;
 }
 

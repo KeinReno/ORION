@@ -1,3 +1,4 @@
+import { InboxAgentOperations } from "./public/inbox-agent-operations";
 import { ProjectReferences } from "../projects/public/project-references";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
@@ -20,7 +21,8 @@ export class InboxService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly targets: InboxTargetRegistry
+    private readonly targets: InboxTargetRegistry,
+    private readonly agentOperations: InboxAgentOperations
   ) {}
 
   /**
@@ -53,18 +55,7 @@ export class InboxService {
     workspaceId: string,
     input: { title: string; body: string; dueAt: string | null; projectId: string | null; agentName: string }
   ): Promise<{ id: string }> {
-    const row = await tx.inboxItem.create({
-      data: {
-        workspaceId,
-        title: input.title,
-        body: input.body,
-        kind: "inbox",
-        dueAt: input.dueAt ? new Date(input.dueAt) : null,
-        projectId: input.projectId,
-        createdByAgent: input.agentName
-      }
-    });
-    return { id: row.id };
+    return this.agentOperations.createFromAgentTx(tx, workspaceId, input);
   }
 
   async capture(userId: string, workspaceId: string, input: CaptureInboxInput): Promise<InboxItem> {
