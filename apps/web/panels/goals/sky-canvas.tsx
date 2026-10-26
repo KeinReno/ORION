@@ -433,36 +433,42 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
                 ) : null}
                 {/* Generous invisible hit area: the smallest star is only ~9px wide. */}
                 <circle cx={star.x} cy={star.y} r={Math.max(star.r + 6, 14)} fill="transparent" />
-                {star.kind === "milestone" ? (
-                  <rect
-                    x={star.x - star.r}
-                    y={star.y - star.r}
-                    width={star.r * 2}
-                    height={star.r * 2}
-                    transform={`rotate(45 ${star.x} ${star.y})`}
-                    strokeWidth={1.5}
-                    strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
-                  />
-                ) : star.kind === "task" ? (
-                  <rect x={star.x - star.r} y={star.y - star.r} width={star.r * 2} height={star.r * 2} rx={2} strokeWidth={1.5} className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`} />
-                ) : star.kind === "goal" ? (
-                  <path
-                    d={`M ${star.x} ${star.y - star.r * 1.5} L ${star.x + star.r * 0.34} ${star.y - star.r * 0.34} L ${star.x + star.r * 1.5} ${star.y} L ${star.x + star.r * 0.34} ${star.y + star.r * 0.34} L ${star.x} ${star.y + star.r * 1.5} L ${star.x - star.r * 0.34} ${star.y + star.r * 0.34} L ${star.x - star.r * 1.5} ${star.y} L ${star.x - star.r * 0.34} ${star.y - star.r * 0.34} Z`}
-                    strokeWidth={1.3}
-                    strokeLinejoin="round"
-                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
-                  />
-                ) : (
-                  <circle
-                    cx={dragging?.id === star.id ? dragging.x : star.x}
-                    cy={dragging?.id === star.id ? dragging.y : star.y}
-                    r={star.r}
-                    strokeWidth={1.5}
-                    strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
-                    className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
-                  />
-                )}
+                {(() => {
+                  // Reparent-dragging ("star" gesture) only ever targets a goal star, but the core
+                  // shape must follow the pointer for whichever kind is actually being dragged.
+                  const coreX = dragging?.id === star.id ? dragging.x : star.x;
+                  const coreY = dragging?.id === star.id ? dragging.y : star.y;
+                  return star.kind === "milestone" ? (
+                    <rect
+                      x={coreX - star.r}
+                      y={coreY - star.r}
+                      width={star.r * 2}
+                      height={star.r * 2}
+                      transform={`rotate(45 ${coreX} ${coreY})`}
+                      strokeWidth={1.5}
+                      strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
+                      className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
+                    />
+                  ) : star.kind === "task" ? (
+                    <rect x={coreX - star.r} y={coreY - star.r} width={star.r * 2} height={star.r * 2} rx={2} strokeWidth={1.5} className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`} />
+                  ) : star.kind === "goal" ? (
+                    <path
+                      d={`M ${coreX} ${coreY - star.r * 1.5} L ${coreX + star.r * 0.34} ${coreY - star.r * 0.34} L ${coreX + star.r * 1.5} ${coreY} L ${coreX + star.r * 0.34} ${coreY + star.r * 0.34} L ${coreX} ${coreY + star.r * 1.5} L ${coreX - star.r * 0.34} ${coreY + star.r * 0.34} L ${coreX - star.r * 1.5} ${coreY} L ${coreX - star.r * 0.34} ${coreY - star.r * 0.34} Z`}
+                      strokeWidth={1.3}
+                      strokeLinejoin="round"
+                      className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
+                    />
+                  ) : (
+                    <circle
+                      cx={coreX}
+                      cy={coreY}
+                      r={star.r}
+                      strokeWidth={1.5}
+                      strokeDasharray={star.state === "unknown" ? "2 2" : undefined}
+                      className={`core ${styles.nodeCore} ${starClasses(star.state, star.kind)}`}
+                    />
+                  );
+                })()}
                 {star.kind === "plan" ? <circle cx={star.x} cy={star.y} r={star.r + 3.5} fill="none" className={styles.planOrbit} strokeWidth={0.8} opacity={0.6} pointerEvents="none" /> : null}
                 {lit ? <circle cx={star.x - star.r * 0.2} cy={star.y - star.r * 0.2} r={Math.max(1.3, star.r * 0.16)} className="fill-foreground" opacity={0.86} pointerEvents="none" /> : null}
                 {star.sharedWith.length > 0 ? <circle cx={star.x + star.r * 0.85} cy={star.y + star.r * 0.85} r={2.6} className="fill-foreground stroke-background" strokeWidth={1} /> : null}
