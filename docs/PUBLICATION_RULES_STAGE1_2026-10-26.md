@@ -1,7 +1,7 @@
 # Автопубликация Tasks: первый backend-срез
 
 Дата: 26.10.2026. Класс: implementation report. База `fdb52cc`, отдельная ветка
-`codex/task-publication-rules`. Направление и согласованные владельцем решения:
+`codex/task-publication-rules`. Реализация: `761b935`, [PR #79](https://github.com/KeinReno/ORION/pull/79). Направление и согласованные владельцем решения:
 [ADR-0035](adr/ADR-0035-publication-rules.md). Публичный контракт:
 [PUBLICATION_RULES](platform-api/PUBLICATION_RULES.md).
 
@@ -38,7 +38,9 @@ Shared владеет конфигурацией и состоянием пуб�
 - Полный typecheck passed; повторный API typecheck и production API build passed.
 - Lint: 0 errors / 30 прежних warnings; изменённые новые файлы — чистый scoped lint.
 - Architecture, 11 plugin contracts, module-docs и platform-map checks passed.
-- Полный integration: результат финального прогона фиксируется перед merge.
+- Полный integration: **634 passed / 111 files**, один прежний skipped test/file.
+  Финальный полный прогон — 404,65с; все новые сценарии, включая закреплённое
+  согласие в истории и конкурентный restore, входят в этот набор.
 
 В интеграциях проверены: stale preview, изменение состава участников, отсутствие
 future consent, FORCE RLS, фильтры, пересечение правил, ручной отзыв, возврат задачи
