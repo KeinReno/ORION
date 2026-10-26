@@ -2124,6 +2124,8 @@
     "apps/api/src/contacts/public/contact-references.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/finance/public/finance-overview-reader.module.ts",
+    "apps/api/src/finance/public/finance-overview-reader.ts",
     "apps/api/src/home/public/home-utility-references.module.ts",
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
@@ -2143,6 +2145,8 @@
     "apps/api/src/tasks/public/task-closure-registry.ts",
     "apps/api/src/tasks/public/task-integration-reader.module.ts",
     "apps/api/src/tasks/public/task-integration-reader.ts",
+    "apps/api/src/tasks/public/task-overview-reader.module.ts",
+    "apps/api/src/tasks/public/task-overview-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
     "apps/web/lib/extensions/host-api.ts",
     "apps/web/lib/extensions/places.ts",
@@ -2578,12 +2582,6 @@
       ],
       "services": [
         "documents/documents.service"
-      ]
-    },
-    "apps/api/src/overview/overview.service.ts": {
-      "models": [
-        "Account",
-        "Task"
       ]
     },
     "apps/api/src/projects/project-captures.service.ts": {

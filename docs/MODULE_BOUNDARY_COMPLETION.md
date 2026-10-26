@@ -21,3 +21,11 @@ HomeUtilityReferences проверяет активный дом и электр
 404, привязка к дому, ограничения пространства и проверки плагина сохранены.
 SDK не загружает HomeModule. Проверено: architecture-check, API typecheck,
 focused ESLint, Home integration (7, включая коммуналку, тарифы, платежи и изоляцию).
+
+## Этап 3 — Overview: 15 → 14
+
+TaskOverviewReader и FinanceOverviewReader возвращают DTO-проекции без имени
+пространства. Overview сохраняет отдельную RLS-транзакцию на пространство,
+проверку доступных модулей, membership задачи, валюты и устранение дублей.
+Баланс вычисляется прежним finance helper внутри владельца данных.
+Проверено: architecture-check, API typecheck, focused ESLint, Overview integration (2).

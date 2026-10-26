@@ -1,8 +1,8 @@
 import { Injectable } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
-import { isTaskClosed, taskChecklistItemSchema, type MyOverview, type TaskChecklistItem } from "@orion/shared-types";
+import type { MyOverview } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
-import { computeNetByAccount } from "../finance/finance-refs.util";
+import { FinanceOverviewReader } from "../finance/public/finance-overview-reader";
+import { TaskOverviewReader } from "../tasks/public/task-overview-reader";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
@@ -30,7 +30,9 @@ export class OverviewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly modules: ModulesService
+    private readonly modules: ModulesService,
+    private readonly taskReader: TaskOverviewReader,
+    private readonly financeReader: FinanceOverviewReader
   ) {}
 
   async getMyOverview(userId: string): Promise<MyOverview> {
@@ -73,67 +75,14 @@ export class OverviewService {
             where: { workspaceId_userId: { workspaceId: ws.id, userId } }
           });
           if (!membership) return [];
-          return tx.task.findMany({
-            where: { workspaceId: ws.id, assigneeId: membership.id },
-            include: { dependsOn: { include: { dependsOn: { select: { status: true } } } } },
-            orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }]
-          });
+          return this.taskReader.assignedTx(tx, ws.id, membership.id);
         });
-        for (const task of wsTasks) {
-          if (isTaskClosed(task.status)) continue;
-          tasks.push({
-            id: task.id,
-            revision: task.revision,
-            workspaceId: task.workspaceId,
-            workspaceName: ws.name,
-            projectId: task.projectId,
-            parentId: task.parentId,
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            priority: task.priority,
-            dueAt: task.dueAt?.toISOString() ?? null,
-            projectTag: task.projectTag,
-            recurrence: task.recurrence as MyOverview["tasks"][number]["recurrence"],
-            completedAt: task.completedAt?.toISOString() ?? null,
-            sortOrder: task.sortOrder,
-            dependencyIds: task.dependsOn.map((d) => d.dependsOnTaskId),
-            blocked: task.dependsOn.some((d) => !isTaskClosed(d.dependsOn.status)),
-            assigneeId: task.assigneeId,
-            startAt: task.startAt?.toISOString() ?? null,
-            estimatedMinutes: task.estimatedMinutes,
-            milestoneId: task.milestoneId,
-            checklist: readChecklist(task.checklist),
-            createdAt: task.createdAt.toISOString(),
-            updatedAt: task.updatedAt.toISOString()
-          });
-        }
+        tasks.push(...wsTasks.map(task => ({ ...task, workspaceName: ws.name })));
       }
 
       if (ws.financeEnabled) {
-        const { wsAccounts, netByAccount } = await this.prisma.withUser(userId, async (tx) => {
-          const wsAccounts = await tx.account.findMany({ where: { workspaceId: ws.id, archivedAt: null } });
-          const netByAccount = await computeNetByAccount(tx, ws.id);
-          return { wsAccounts, netByAccount };
-        });
-        for (const account of wsAccounts) {
-          accounts.push({
-            id: account.id,
-            workspaceId: account.workspaceId,
-            workspaceName: ws.name,
-            name: account.name,
-            kind: account.kind as MyOverview["accounts"][number]["kind"],
-            context: account.context as MyOverview["accounts"][number]["context"],
-            visibility: account.visibility === "private" ? "private" : "workspace",
-            ownerId: account.ownerId,
-            currency: account.currency,
-            startingBalance: account.startingBalance,
-            balance: account.startingBalance + (netByAccount.get(account.id) ?? 0),
-            archivedAt: null,
-            createdAt: account.createdAt.toISOString(),
-            updatedAt: account.updatedAt.toISOString()
-          });
-        }
+        const wsAccounts = await this.prisma.withUser(userId, tx => this.financeReader.accountsTx(tx, ws.id));
+        accounts.push(...wsAccounts.map(account => ({ ...account, workspaceName: ws.name })));
       }
     }
 
@@ -154,14 +103,4 @@ export class OverviewService {
       balancesByCurrency: [...totals.entries()]
     };
   }
-}
-
-function readChecklist(value: Prisma.JsonValue): TaskChecklistItem[] {
-  if (!Array.isArray(value)) return [];
-  const items: TaskChecklistItem[] = [];
-  for (const item of value) {
-    const parsed = taskChecklistItemSchema.safeParse(item);
-    if (parsed.success) items.push(parsed.data);
-  }
-  return items;
 }
