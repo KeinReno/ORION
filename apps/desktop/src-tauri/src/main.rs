@@ -36,6 +36,83 @@ fn ready() -> bool {
         && body.contains("\"database\":\"ok\"")
 }
 
+// Windows does not kill a process's children when it exits — `node.exe` (the launcher) and, through it,
+// the API's own `node.exe` and `postgres.exe` used to keep running in the background after ORION was
+// closed, crashed, or was ended from Task Manager (see docs/DESKTOP_STARTUP_2026-10-26.md). A leftover
+// `postgres.exe`/API process on the same ports also made the `ready()` check below silently reuse that
+// stale instance on the next launch instead of actually starting the freshly installed one.
+//
+// A Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE fixes this at the OS level: every process this
+// launcher spawns (and anything *they* spawn — Windows nests child processes into the parent's job by
+// default) is terminated the moment the job handle closes, which Windows does automatically when this
+// process exits for any reason. The handle is intentionally never closed by hand: it must outlive this
+// function, and letting the OS reclaim it on process exit is exactly the trigger we want.
+#[cfg(all(windows, not(debug_assertions)))]
+fn bind_launcher_lifetime(child: &std::process::Child) {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct BasicLimitInformation {
+        per_process_user_time_limit: i64,
+        per_job_user_time_limit: i64,
+        limit_flags: u32,
+        minimum_working_set_size: usize,
+        maximum_working_set_size: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+    }
+    #[repr(C)]
+    struct IoCounters {
+        read_operation_count: u64,
+        write_operation_count: u64,
+        other_operation_count: u64,
+        read_transfer_count: u64,
+        write_transfer_count: u64,
+        other_transfer_count: u64,
+    }
+    #[repr(C)]
+    struct ExtendedLimitInformation {
+        basic: BasicLimitInformation,
+        io_info: IoCounters,
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory_used: usize,
+        peak_job_memory_used: usize,
+    }
+
+    const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x2000;
+    const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateJobObjectW(attrs: *const c_void, name: *const u16) -> *mut c_void;
+        fn SetInformationJobObject(job: *mut c_void, class: i32, info: *const c_void, len: u32) -> i32;
+        fn AssignProcessToJobObject(job: *mut c_void, process: *mut c_void) -> i32;
+    }
+
+    let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+    if job.is_null() {
+        return;
+    }
+    let mut info: ExtendedLimitInformation = unsafe { std::mem::zeroed() };
+    info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    let configured = unsafe {
+        SetInformationJobObject(
+            job,
+            JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+            &info as *const _ as *const c_void,
+            std::mem::size_of::<ExtendedLimitInformation>() as u32,
+        )
+    };
+    if configured == 0 {
+        return;
+    }
+    unsafe { AssignProcessToJobObject(job, child.as_raw_handle() as *mut c_void) };
+}
+
 #[cfg(all(windows, not(debug_assertions)))]
 fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
     use std::fs::{self, OpenOptions};
@@ -78,6 +155,7 @@ fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .spawn()
         .map_err(|e| e.to_string())?;
+    bind_launcher_lifetime(&child);
     let deadline = Instant::now() + Duration::from_secs(360);
     while Instant::now() < deadline {
         startup::update_phase(app, &phase_file);
