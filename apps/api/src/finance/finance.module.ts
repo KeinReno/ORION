@@ -1,3 +1,4 @@
+import { HomeReferencesModule } from "../home/public/home-references.module";
 import { AgentDraftOperationsModule } from "./public/agent-draft-operations.module";
 import { ProjectReferencesModule } from "../projects/public/project-references.module";
 import { ProjectFinanceReaderModule } from "../projects/public/project-finance-reader.module";
@@ -50,7 +51,7 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
  * for no reason.
  */
 @Module({
-  imports: [AgentDraftOperationsModule, FinanceExpenseModule, ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
+  imports: [HomeReferencesModule, AgentDraftOperationsModule, FinanceExpenseModule, ProjectReferencesModule, ProjectFinanceReaderModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule],
   controllers: [
     FinanceAgentController,
     AccountsController,

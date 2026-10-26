@@ -1,4 +1,4 @@
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { HomeReferences } from "../home/public/home-references";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { List as ListRow, ListItem as ListItemRow, Prisma } from "@prisma/client";
 import {
@@ -56,6 +56,7 @@ type ItemRow = ListItemRow & { checkedBy?: { name: string } | null };
 @Injectable()
 export class ListsService {
   constructor(
+    private readonly homes: HomeReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly inventoryReferences: InventoryReferences,
@@ -91,7 +92,7 @@ export class ListsService {
   async create(userId: string, workspaceId: string, input: CreateListInput): Promise<List> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       const sortOrder = await this.nextListOrderTx(tx, workspaceId);
       if (input.templateId) {
         const source = await this.assertOwnedTx(tx, workspaceId, input.templateId);

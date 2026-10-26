@@ -23,7 +23,7 @@ import {
   type UpdateContactCardInput
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { HomeReferences } from "../home/public/home-references";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { EntityReferenceRegistry } from "../common/entity-reference-registry";
 
@@ -42,6 +42,7 @@ const INTERACTIONS_LIMIT = 200;
 @Injectable()
 export class ContactsService {
   constructor(
+    private readonly homes: HomeReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly references: EntityReferenceRegistry
@@ -66,7 +67,7 @@ export class ContactsService {
   async create(userId: string, workspaceId: string, input: CreateContactCardInput): Promise<ContactCard> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       return tx.contact.create({ data: { ...fieldsFromInput(input), workspaceId, name: input.name } as Prisma.ContactUncheckedCreateInput });
     });
     return toDto(row);
@@ -76,7 +77,7 @@ export class ContactsService {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const existing = await this.assertOwnedTx(tx, workspaceId, contactId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       return tx.contact.update({ where: { id: contactId }, data: fieldsFromInput(input, existing) });
     });
     return toDto(row);
@@ -139,7 +140,7 @@ export class ContactsService {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       for (const homeId of new Set(input.items.map((item) => item.homeId).filter((id): id is string => Boolean(id)))) {
-        await assertHomeInWorkspace(tx, workspaceId, homeId);
+        await this.homes.assertTx(tx, workspaceId, homeId);
       }
       const skip = new Set<number>();
       if (input.skipDuplicates) {

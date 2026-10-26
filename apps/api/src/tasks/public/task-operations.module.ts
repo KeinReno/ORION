@@ -1,3 +1,4 @@
+import { HomeReferencesModule } from "../../home/public/home-references.module";
 import { Module } from "@nestjs/common";
 import { WorkspacesModule } from "../../workspaces/workspaces.module";
 import { ProjectTaskLinksModule } from "../../projects/public/project-task-links.module";
@@ -8,7 +9,7 @@ import { TaskOperations } from "./task-operations";
 
 /** Shared command implementation; no task controllers, listeners or provider registrations. */
 @Module({
-  imports: [WorkspacesModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule],
+  imports: [HomeReferencesModule, WorkspacesModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule],
   providers: [TasksService, { provide: TaskOperations, useFactory: (service: TasksService): TaskOperations => service, inject: [TasksService] }],
   exports: [TaskOperations, TasksService]
 })

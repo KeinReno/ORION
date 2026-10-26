@@ -1,5 +1,5 @@
 import { ProjectReferences } from "../projects/public/project-references";
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { HomeReferences } from "../home/public/home-references";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import type {
@@ -31,6 +31,7 @@ interface ItemTotals {
 @Injectable()
 export class InventoryService {
   constructor(
+    private readonly homes: HomeReferences,
     private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
@@ -54,7 +55,7 @@ export class InventoryService {
     const item = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.projectId) await this.assertProjectTx(tx, workspaceId, input.projectId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       return tx.inventoryItem.create({
         data: {
           workspaceId,

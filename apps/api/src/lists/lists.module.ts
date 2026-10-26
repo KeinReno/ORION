@@ -1,3 +1,4 @@
+import { HomeReferencesModule } from "../home/public/home-references.module";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { ListsAgentController } from "./lists.agent.controller";
 import { InventoryReferencesModule } from "../inventory/public/inventory-references.module";
@@ -12,7 +13,7 @@ import { ListsSearchProvider } from "./lists-search.provider";
 
 /** ORION «Списки» — one controller/service pair, like habits/ or time/. */
 @Module({
-  imports: [InventoryReferencesModule, TransactionReferencesModule, AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
+  imports: [HomeReferencesModule, InventoryReferencesModule, TransactionReferencesModule, AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
   controllers: [ListsController, ListsAgentController],
   providers: [ListsService, ListsSearchProvider]
 })
