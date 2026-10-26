@@ -22,6 +22,7 @@ import { openProject } from "../../lib/panel-bus";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { STATE_LABEL } from "./sky-canvas";
 import { GoalLinks } from "./goal-links";
+import { GoalOutcomeReview } from "./goal-outcome-review";
 
 function clampWeight(raw: string): number {
   return Math.min(100, Math.max(1, Math.round(Number(raw) || 1)));
@@ -436,6 +437,8 @@ export function GoalInspector({ workspaceId, star, goals, projects, tasks, miles
       ) : null}
 
       <GoalLinks workspaceId={workspaceId} goalId={goal.id} goals={goals} visibleLinkIds={visibleLinkIds} onToggleVisible={onToggleVisible} />
+
+      <GoalOutcomeReview workspaceId={workspaceId} goal={goal} />
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="ghost" onClick={() => onShowInList(goal.id)}>
