@@ -14,6 +14,8 @@ Tasks не мешает Time, контрактный Nest-модуль не им
 
 Ссылки задач и их projectId читает публичный `TaskIntegrationReader`; проекты проверяет `ProjectReferences`. Оба SDK сохраняют исходную транзакцию/RLS и не импортируют полные TasksModule/ProjectsModule. Авторизация, 404 и наследование проекта остаются у Time. [Контракт](../../../../docs/platform-api/TASK_INTEGRATION_READER.md).
 
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

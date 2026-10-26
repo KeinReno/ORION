@@ -1,3 +1,7 @@
+import { ProjectAgentReader } from "../projects/public/project-agent-reader";
+import { TaskIntegrationReader } from "../tasks/public/task-integration-reader";
+import { NoteAgentReferences } from "../notes/public/note-agent-references";
+import { EventAgentReferences } from "../events/public/event-agent-references";
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException } from "@nestjs/common";
 import type { AgentToken as TokenRow, Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
@@ -88,7 +92,11 @@ export class AgentTokensService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly notifications: NotificationCenterService,
-    private readonly presence: AgentPresenceService
+    private readonly presence: AgentPresenceService,
+    private readonly projects: ProjectAgentReader,
+    private readonly tasks: TaskIntegrationReader,
+    private readonly notes: NoteAgentReferences,
+    private readonly events: EventAgentReferences
   ) {}
 
   async create(userId: string, workspaceId: string, input: ParsedCreateAgentTokenInput): Promise<CreatedAgentToken> {
@@ -158,7 +166,7 @@ export class AgentTokensService {
   private async assertProjectsTx(tx: Prisma.TransactionClient, workspaceId: string, ids: string[]): Promise<void> {
     const unique = [...new Set(ids)];
     if (unique.length === 0) return;
-    const found = await tx.project.count({ where: { workspaceId, id: { in: unique } } });
+    const found = await this.projects.countTx(tx, workspaceId, unique);
     if (found !== unique.length) throw new BadRequestException("Проект не найден в этом пространстве");
   }
 
@@ -255,13 +263,12 @@ export class AgentTokensService {
   /** The project of an existing object (`null` = none), read under the token owner's RLS. Unknown id → 404. */
   async targetProjectId(agent: AgentContext, kind: "task" | "note" | "event", id: string): Promise<string | null> {
     return this.prisma.withUser(agent.userId, async (tx) => {
-      const row =
-        kind === "task"
-          ? await tx.task.findUnique({ where: { id }, select: { workspaceId: true, projectId: true } })
-          : kind === "note"
-            ? await tx.note.findUnique({ where: { id }, select: { workspaceId: true, projectId: true } })
-            : await tx.event.findUnique({ where: { id }, select: { workspaceId: true, projectId: true } });
-      if (!row || row.workspaceId !== agent.workspaceId) throw new NotFoundException("Объект не найден");
+      const row = kind === "task"
+        ? await this.tasks.referenceTx(tx, agent.workspaceId, id)
+        : kind === "note"
+          ? await this.notes.referenceTx(tx, agent.workspaceId, id)
+          : await this.events.referenceTx(tx, agent.workspaceId, id);
+      if (!row) throw new NotFoundException("Объект не найден");
       return row.projectId;
     });
   }

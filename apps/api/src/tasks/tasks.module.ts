@@ -7,7 +7,7 @@ import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { TasksController } from "./tasks.controller";
-import { TasksService } from "./tasks.service";
+import { TaskOperationsModule } from "./public/task-operations.module";
 import { TaskCommentsService } from "./task-comments.service";
 import { TaskActivityService } from "./task-activity.service";
 import { SearchRegistryModule } from "../search/search-registry.module";
@@ -19,9 +19,9 @@ import { TaskClosedNotifier } from "./task-closed-notifier";
 import { TaskClosureRegistryModule } from "./public/task-closure-registry";
 
 @Module({
-  imports: [ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
+  imports: [TaskOperationsModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [TasksController],
-  providers: [TasksPublicationAdapter, TasksProjectAggregates, TasksService, TaskCommentsService, TaskActivityService, TaskClosedNotifier, TasksSearchProvider, TaskInboxTarget],
-  exports: [TasksService]
+  providers: [TasksPublicationAdapter, TasksProjectAggregates, TaskCommentsService, TaskActivityService, TaskClosedNotifier, TasksSearchProvider, TaskInboxTarget],
+  exports: [TaskOperationsModule]
 })
 export class TasksModule {}

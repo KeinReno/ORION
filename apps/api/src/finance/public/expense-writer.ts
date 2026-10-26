@@ -1,7 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import { BudgetAlertsService } from "../budget-alerts.service";
-import { assertAccountInWorkspace } from "../finance-refs.util";
 
 export interface WriteExpenseInput {
   accountId: string;
@@ -13,44 +10,9 @@ export interface WriteExpenseInput {
   tags?: string[];
 }
 
-/**
- * Public finance WRITE contract for bridges (the read twin is `FinanceExpenseReader`). A bridge that books
- * an expense must go through here so it gets the same checks and the same budget alerts as an expense typed
- * into the Finance panel. The caller owns membership / module checks and the `withUser` transaction; the
- * alerts it gets back are delivered by `deliver` only after that transaction committed.
- */
-@Injectable()
-export class FinanceExpenseWriter {
-  constructor(private readonly budgetAlerts: BudgetAlertsService) {}
 
-  async createExpenseTx(
-    tx: Prisma.TransactionClient,
-    workspaceId: string,
-    input: WriteExpenseInput
-  ): Promise<{ transactionId: string; alerts: string[] }> {
-    await assertAccountInWorkspace(tx, workspaceId, input.accountId);
-    if (input.categoryId) {
-      const category = await tx.financeCategory.findUnique({ where: { id: input.categoryId } });
-      if (!category || category.workspaceId !== workspaceId) throw new BadRequestException("Категория не найдена в этом рабочем пространстве");
-      if (category.kind !== "expense") throw new BadRequestException("Для расхода нужна категория расходов");
-    }
-    const created = await tx.transaction.create({
-      data: {
-        workspaceId,
-        accountId: input.accountId,
-        type: "expense",
-        note: input.note,
-        tags: input.tags ?? [],
-        occurredAt: input.occurredAt,
-        lines: { create: [{ workspaceId, categoryId: input.categoryId, amount: input.amountMinor }] }
-      },
-      include: { lines: true }
-    });
-    const alerts = await this.budgetAlerts.evaluate(tx, workspaceId, [input.categoryId], created.occurredAt);
-    return { transactionId: created.id, alerts };
-  }
-
-  deliver(alerts: string[]): Promise<void> {
-    return this.budgetAlerts.deliver(alerts);
-  }
+/** Caller owns authorization and transaction; deliver alerts only after commit. */
+export abstract class FinanceExpenseWriter {
+  abstract createExpenseTx(tx: Prisma.TransactionClient, workspaceId: string, input: WriteExpenseInput): Promise<{ transactionId: string; alerts: string[] }>;
+  abstract deliver(alerts: string[]): Promise<void>;
 }

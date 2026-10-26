@@ -1,3 +1,4 @@
+import { HomeReferencesModule } from "../home/public/home-references.module";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { ContactsAgentController } from "./contacts.agent.controller";
 import { Module } from "@nestjs/common";
@@ -16,7 +17,7 @@ import { EntityReferenceRegistryModule } from "../common/entity-reference-regist
  * plus the hourly producer of birthday / «пора связаться» notifications.
  */
 @Module({
-  imports: [AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule, EntityReferenceRegistryModule],
+  imports: [HomeReferencesModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, AgentCoreModule, EntityReferenceRegistryModule],
   controllers: [ContactsController, ContactsAgentController],
   providers: [ContactsService, ContactRemindersService, ContactsSearchProvider]
 })

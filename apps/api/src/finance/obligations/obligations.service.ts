@@ -1,4 +1,4 @@
-import { assertHomeInWorkspace } from "../../home/home-refs.util";
+import { HomeReferences } from "../../home/public/home-references";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
@@ -26,6 +26,7 @@ import { assertAccountInWorkspace, assertCategoryInWorkspace } from "../finance-
 @Injectable()
 export class ObligationsService {
   constructor(
+    private readonly homes: HomeReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -43,7 +44,7 @@ export class ObligationsService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
       if (input.categoryId) await assertCategoryInWorkspace(tx, workspaceId, input.categoryId);
-      if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+      if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
       return tx.financeObligation.create({
         data: {
           workspaceId,

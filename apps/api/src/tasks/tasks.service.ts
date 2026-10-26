@@ -1,6 +1,6 @@
 import { ProjectTaskLinks } from "../projects/public/project-task-links";
 import { MilestoneReferences } from "../milestones/public/milestone-references";
-import { assertHomeInWorkspace } from "../home/home-refs.util";
+import { HomeReferences } from "../home/public/home-references";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 // Value import, not `import type`: `Prisma.DbNull` / `Prisma.InputJsonValue` are
 // runtime values. Importing the namespace as a type only compiles the type
@@ -32,6 +32,7 @@ type TaskModel = Prisma.TaskGetPayload<{ include: typeof taskInclude }>;
 @Injectable()
 export class TasksService {
   constructor(
+    private readonly homes: HomeReferences,
     private readonly projectLinks: ProjectTaskLinks,
     private readonly milestoneReferences: MilestoneReferences,
     private readonly prisma: PrismaService,
@@ -90,6 +91,13 @@ export class TasksService {
     return toDto(task);
   }
 
+  /** Agent capture uses the same transaction for the task and its creation journal. */
+  async createFromAgentTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, agentName: string) {
+    const task = await this.createTx(tx, userId, workspaceId, input);
+    await tx.taskActivity.create({ data: { workspaceId, taskId: task.id, actorId: userId, field: "created", toValue: task.title, agentName } });
+    return { id: task.id };
+  }
+
   /**
    * The body of `create()`, minus the `withUser` wrap — pulled out so
    * `SearchService.createAndLink` (U03 Часть 1) can run it inside the SAME
@@ -106,7 +114,7 @@ export class TasksService {
     await this.assertDependenciesTx(tx, workspaceId, null, dependencyIds);
     if (input.assigneeId !== undefined) await this.assertAssigneeWriteTx(tx, userId, workspaceId, input.assigneeId);
     if (input.milestoneId) await this.assertMilestoneTx(tx, workspaceId, input.milestoneId, project?.id ?? null);
-    if (input.homeId) await assertHomeInWorkspace(tx, workspaceId, input.homeId);
+    if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
     const created = await tx.task.create({
       data: {
         ...(clientId ? { id: clientId } : {}),

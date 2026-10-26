@@ -1,9 +1,15 @@
+import { TaskHomeLinks } from "../tasks/public/task-home-links";
+import { ListHomeLinks } from "../lists/public/list-home-links";
+import { InventoryHomeLinks } from "../inventory/public/inventory-home-links";
+import { ObligationHomeLinks } from "../finance/public/obligation-home-links";
+import { TaskJournalReader } from "../tasks/public/task-journal-reader";
+import { TaskTimeReader } from "../time/public/task-time-reader";
+import { HomeContactCommands } from "../contacts/public/home-contact-commands";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import type { Contact as ContactRow, Home as HomeRow, Meter as MeterRow, MeterReading as ReadingRow, Prisma } from "@prisma/client";
+import type { Home as HomeRow, Meter as MeterRow, MeterReading as ReadingRow, Prisma } from "@prisma/client";
 import {
   CONTRIBUTION_PERIOD_DAYS,
   METER_KIND_UNIT,
-  TASK_CLOSED_STATUSES,
   buildContributions,
   entryMinutes,
   homeKindSchema,
@@ -47,7 +53,14 @@ export class HomeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly modules: ModulesService
+    private readonly modules: ModulesService,
+    private readonly taskLinks: TaskHomeLinks,
+    private readonly listLinks: ListHomeLinks,
+    private readonly inventoryLinks: InventoryHomeLinks,
+    private readonly obligationLinks: ObligationHomeLinks,
+    private readonly taskJournal: TaskJournalReader,
+    private readonly taskTime: TaskTimeReader,
+    private readonly contactCommands: HomeContactCommands
   ) {}
 
   // ----------------------------------------------------------------- homes
@@ -108,25 +121,24 @@ export class HomeService {
 
       const [tasks, lists, items, obligations, meters, contacts] = await Promise.all([
         accessible.has("tasks")
-          ? tx.task.findMany({ where: { workspaceId, homeId }, select: { id: true, status: true, updatedAt: true }, take: 500 })
+          ? this.taskLinks.atHomeTx(tx, workspaceId, homeId)
           : Promise.resolve([]),
-        accessible.has("lists") ? tx.list.findMany({ where: { workspaceId, homeId, archivedAt: null }, select: { id: true } }) : Promise.resolve([]),
+        accessible.has("lists") ? this.listLinks.atHomeTx(tx, workspaceId, homeId) : Promise.resolve([]),
         accessible.has("inventory")
-          ? tx.inventoryItem.findMany({ where: { workspaceId, homeId, archivedAt: null }, select: { id: true } })
+          ? this.inventoryLinks.atHomeTx(tx, workspaceId, homeId)
           : Promise.resolve([]),
         accessible.has("finance")
-          ? tx.financeObligation.findMany({ where: { workspaceId, homeId }, select: { id: true, closedAt: true } })
+          ? this.obligationLinks.atHomeTx(tx, workspaceId, homeId)
           : Promise.resolve([]),
         tx.meter.findMany({ where: { workspaceId, homeId }, orderBy: { createdAt: "asc" } }),
-        tx.contact.findMany({ where: { workspaceId, homeId, archivedAt: null }, orderBy: { name: "asc" } })
+        this.contactCommands.listTx(tx, workspaceId, homeId)
       ]);
 
-      const elsewhere = { homeId: { not: null as string | null, notIn: [homeId] }, workspaceId };
       const [otherTasks, otherLists, otherItems, otherBills] = await Promise.all([
-        accessible.has("tasks") ? tx.task.findMany({ where: elsewhere, select: { id: true } }) : Promise.resolve([]),
-        accessible.has("lists") ? tx.list.findMany({ where: { ...elsewhere, archivedAt: null }, select: { id: true } }) : Promise.resolve([]),
-        accessible.has("inventory") ? tx.inventoryItem.findMany({ where: { ...elsewhere, archivedAt: null }, select: { id: true } }) : Promise.resolve([]),
-        accessible.has("finance") ? tx.financeObligation.findMany({ where: elsewhere, select: { id: true } }) : Promise.resolve([])
+        accessible.has("tasks") ? this.taskLinks.elsewhereTx(tx, workspaceId, homeId) : Promise.resolve([]),
+        accessible.has("lists") ? this.listLinks.elsewhereTx(tx, workspaceId, homeId) : Promise.resolve([]),
+        accessible.has("inventory") ? this.inventoryLinks.elsewhereTx(tx, workspaceId, homeId) : Promise.resolve([]),
+        accessible.has("finance") ? this.obligationLinks.elsewhereTx(tx, workspaceId, homeId) : Promise.resolve([])
       ]);
 
       const meterDtos = await Promise.all(meters.map((meter) => this.meterDtoTx(tx, meter)));
@@ -143,7 +155,7 @@ export class HomeService {
           obligationIds: otherBills.map((b) => b.id)
         },
         meters: meterDtos,
-        contacts: contacts.map(contactDto)
+        contacts
       };
     });
   }
@@ -162,20 +174,7 @@ export class HomeService {
       const entries: ActivityEntry[] = [];
 
       if (accessible.has("tasks")) {
-        const [changes, comments] = await Promise.all([
-          tx.taskActivity.findMany({
-            where: { workspaceId, task: { homeId } },
-            orderBy: { createdAt: "desc" },
-            take: limit,
-            include: { task: { select: { id: true, title: true } }, actor: { select: { name: true } } }
-          }),
-          tx.taskComment.findMany({
-            where: { workspaceId, task: { homeId } },
-            orderBy: { createdAt: "desc" },
-            take: limit,
-            include: { task: { select: { id: true, title: true } }, author: { select: { name: true } } }
-          })
-        ]);
+        const { changes, comments } = await this.taskJournal.recentTx(tx, workspaceId, limit, homeId);
         for (const row of changes) {
           const summary =
             row.field === "created"
@@ -248,39 +247,25 @@ export class HomeService {
 
       const [memberRows, rows] = await Promise.all([
         tx.workspaceMember.findMany({ where: { workspaceId }, select: { id: true, userId: true, user: { select: { name: true } } } }),
-        tx.task.findMany({
-          where: {
-            workspaceId,
-            homeId: homeId ?? { not: null },
-            OR: [{ status: "done", completedAt: { gte: windowStart } }, { status: { notIn: [...TASK_CLOSED_STATUSES] } }]
-          },
-          select: {
-            id: true,
-            status: true,
-            completedAt: true,
-            dueAt: true,
-            assigneeId: true,
-            estimatedMinutes: true,
-            timeEntries: { select: { startedAt: true, endedAt: true } }
-          },
-          take: 5000
-        })
+        this.taskLinks.contributionTasksTx(tx, workspaceId, homeId, windowStart)
       ]);
 
       const doneIds = rows.filter((t) => t.status === "done").map((t) => t.id);
       const closers = doneIds.length
-        ? await tx.taskActivity.findMany({
-            where: { workspaceId, taskId: { in: doneIds }, field: "status", toValue: "done" },
-            orderBy: { createdAt: "asc" },
-            select: { taskId: true, actorId: true }
-          })
+        ? await this.taskLinks.closersTx(tx, workspaceId, doneIds)
         : [];
       // Последний переход в done выигрывает: дело могли переоткрыть и закрыть другим человеком.
       const closerByTask = new Map(closers.map((c) => [c.taskId, c.actorId]));
       const userByMember = new Map(memberRows.map((m) => [m.id, m.userId]));
 
+      const timeEntries = await this.taskTime.entriesTx(tx, workspaceId, rows.map(row => row.id));
+      const trackedByTask = new Map<string, number>();
+      for (const e of timeEntries) if (e.taskId) {
+        const minutes = entryMinutes({ startedAt: e.startedAt.toISOString(), endedAt: e.endedAt?.toISOString() ?? null }, now);
+        trackedByTask.set(e.taskId, (trackedByTask.get(e.taskId) ?? 0) + minutes);
+      }
       const tasks: ContributionTask[] = rows.map((t) => {
-        const tracked = t.timeEntries.reduce((sum, e) => sum + entryMinutes({ startedAt: e.startedAt.toISOString(), endedAt: e.endedAt?.toISOString() ?? null }, now), 0);
+        const tracked = trackedByTask.get(t.id) ?? 0;
         return {
           status: t.status,
           completedAt: t.completedAt?.toISOString() ?? null,
@@ -311,17 +296,15 @@ export class HomeService {
       const moduleId = { task: "tasks", list: "lists", inventory: "inventory", obligation: "finance" }[input.type] as "tasks" | "lists" | "inventory" | "finance";
       await this.modules.assertEnabledTx(tx, userId, workspaceId, moduleId);
       // Detaching only touches rows that point at THIS home.
-      const where = { id: input.id, workspaceId, ...(value === null ? { homeId } : {}) };
-      const data = { homeId: value };
-      const result =
-        input.type === "task"
-          ? await tx.task.updateMany({ where, data })
-          : input.type === "list"
-            ? await tx.list.updateMany({ where, data })
-            : input.type === "inventory"
-              ? await tx.inventoryItem.updateMany({ where, data })
-              : await tx.financeObligation.updateMany({ where, data });
-      if (result.count === 0) throw new NotFoundException("Запись не найдена");
+      const requiredHomeId = value === null ? homeId : undefined;
+      const count = input.type === "task"
+        ? await this.taskLinks.setHomeTx(tx, workspaceId, input.id, value, requiredHomeId)
+        : input.type === "list"
+          ? await this.listLinks.setHomeTx(tx, workspaceId, input.id, value, requiredHomeId)
+          : input.type === "inventory"
+            ? await this.inventoryLinks.setHomeTx(tx, workspaceId, input.id, value, requiredHomeId)
+            : await this.obligationLinks.setHomeTx(tx, workspaceId, input.id, value, requiredHomeId);
+      if (count === 0) throw new NotFoundException("Запись не найдена");
     });
   }
 
@@ -400,34 +383,23 @@ export class HomeService {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertHomeTx(tx, workspaceId, homeId);
-      return tx.contact.create({ data: { workspaceId, homeId, name: input.name, role: input.role, phone: input.phone, note: input.note } });
+      return this.contactCommands.createTx(tx, workspaceId, homeId, input);
     });
-    return contactDto(row);
+    return row;
   }
 
   async updateContact(userId: string, workspaceId: string, homeId: string, contactId: string, input: UpdateContactInput): Promise<Contact> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertContactTx(tx, workspaceId, homeId, contactId);
-      return tx.contact.update({
-        where: { id: contactId },
-        data: {
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.role !== undefined ? { role: input.role } : {}),
-          // «Контакты» keeps a list next to the primary phone; a plain phone edit here replaces that list.
-          ...(input.phone !== undefined ? { phone: input.phone, phones: input.phone ? [{ label: "", value: input.phone }] : [] } : {}),
-          ...(input.note !== undefined ? { note: input.note } : {})
-        }
-      });
+      return this.contactCommands.updateTx(tx, workspaceId, homeId, contactId, input);
     });
-    return contactDto(row);
+    return row;
   }
 
   async removeContact(userId: string, workspaceId: string, homeId: string, contactId: string): Promise<void> {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertContactTx(tx, workspaceId, homeId, contactId);
-      await tx.contact.delete({ where: { id: contactId } });
+      await this.contactCommands.removeTx(tx, workspaceId, homeId, contactId);
     });
   }
 
@@ -450,12 +422,6 @@ export class HomeService {
     const meter = await tx.meter.findUnique({ where: { id: meterId } });
     if (!meter || meter.workspaceId !== workspaceId || meter.homeId !== homeId) throw new NotFoundException("Счётчик не найден");
     return meter;
-  }
-
-  private async assertContactTx(tx: Prisma.TransactionClient, workspaceId: string, homeId: string, contactId: string): Promise<ContactRow> {
-    const contact = await tx.contact.findUnique({ where: { id: contactId } });
-    if (!contact || contact.workspaceId !== workspaceId || contact.homeId !== homeId) throw new NotFoundException("Контакт не найден");
-    return contact;
   }
 
   private async meterDtoTx(tx: Prisma.TransactionClient, meter: MeterRow): Promise<Meter> {
@@ -493,7 +459,3 @@ function meterDto(meter: MeterRow, rows: ReadingRow[]): Meter {
   };
 }
 
-function contactDto(row: ContactRow): Contact {
-  // Home reads contacts only with `where: { homeId }`, so the link is always set here.
-  return { id: row.id, homeId: row.homeId ?? "", name: row.name, role: row.role, phone: row.phone, note: row.note };
-}

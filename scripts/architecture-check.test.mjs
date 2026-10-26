@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
-import { architectureViolations, colorViolations, moduleBoundaryViolations, ownershipMapViolations, pluginCatalogViolations } from "./architecture-check.mjs";
+import { architectureViolations, colorViolations, foreignQueryHelperViolations, moduleBoundaryViolations, ownershipMapViolations, pluginCatalogViolations } from "./architecture-check.mjs";
 import { MODULE_BOUNDARY_EXCEPTIONS } from "./module-boundary-exceptions.mjs";
 import { CORE_MODELS, MODEL_OWNERS } from "./module-ownership.mjs";
 
@@ -251,7 +251,24 @@ describe("module boundary rule", () => {
   it("passes on the real repository: every schema model is owned and the exception list is exact", () => {
     expect(ownershipMapViolations()).toEqual([]);
     expect(moduleBoundaryViolations()).toEqual([]);
+    expect(foreignQueryHelperViolations()).toEqual([]);
+    expect(MODULE_BOUNDARY_EXCEPTIONS).toEqual({});
     expect([...MODEL_OWNERS.keys()].filter((model) => CORE_MODELS.has(model))).toEqual([]);
+  });
+
+  it("rejects foreign queries hidden behind an internal helper", () => {
+    const root = fixture();
+    put(root, "apps/api/src/notes/notes.service.ts", 'import { lookup } from "../tasks/task-lookup.util";');
+    put(root, "apps/api/src/tasks/task-lookup.util.ts", 'export const lookup = (tx, id) => tx.task.findUnique({ where: { id } });');
+    expect(foreignQueryHelperViolations(root)).toEqual([expect.stringContaining("foreign model Task")]);
+  });
+
+  it("accepts explicit owner public contracts and helpers that query only Core", () => {
+    const root = fixture();
+    put(root, "apps/api/src/notes/notes.service.ts", 'import { lookup } from "../tasks/public"; import { member } from "../tasks/member.util";');
+    put(root, "apps/api/src/tasks/public.ts", 'export const lookup = (tx, id) => tx.task.findUnique({ where: { id } });');
+    put(root, "apps/api/src/tasks/member.util.ts", 'export const member = (tx, id) => tx.workspaceMember.findUnique({ where: { id } });');
+    expect(foreignQueryHelperViolations(root)).toEqual([]);
   });
 
   it("keeps the projects module off other modules' tables (provider pattern)", () => {

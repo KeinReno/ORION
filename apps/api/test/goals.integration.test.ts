@@ -3,6 +3,8 @@ import { NestFactory } from "@nestjs/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
+import { GoalTaskReader } from "../src/tasks/public/goal-task-reader";
+import { GoalMilestoneReader } from "../src/milestones/public/goal-milestone-reader";
 import { configureApp } from "../src/configure-app";
 
 interface RegisteredSession {
@@ -65,6 +67,27 @@ describe("Global goals over projects", () => {
       expect(patched.status).toBe(200);
     }
   }
+
+  it("goal projections keep workspace scope, RLS and transaction rollback", async () => {
+    const alice = await register("sdk-alice"), bob = await register("sdk-bob");
+    const own = await project(alice, "Own projection"), foreign = await project(bob, "Foreign projection");
+    await task(alice, own, "Visible"); await task(bob, foreign, "Hidden");
+    await prisma.asSystem(tx => tx.workspaceMember.create({ data: { workspaceId: bob.workspaceId, userId: alice.user.id, role: "member" } }));
+    const tasks = app.get(GoalTaskReader), milestones = app.get(GoalMilestoneReader);
+    const read = () => prisma.withUser(alice.user.id, tx => tasks.plansTx(tx, alice.workspaceId, [own, foreign]));
+    expect((await read()).map(row => row.title)).toEqual(["Visible"]);
+    expect(await prisma.withUser(bob.user.id, tx => tasks.historyTx(tx, alice.workspaceId, [own]))).toEqual([]);
+    expect(await prisma.withUser(bob.user.id, tx => milestones.plansTx(tx, alice.workspaceId, [own]))).toEqual([]);
+    await expect(prisma.withUser(alice.user.id, async tx => {
+      await tx.task.create({ data: { workspaceId: alice.workspaceId, projectId: own, title: "Uncommitted" } });
+      await tx.milestone.create({ data: { workspaceId: alice.workspaceId, projectId: own, title: "Uncommitted" } });
+      expect((await tasks.plansTx(tx, alice.workspaceId, [own])).map(row => row.title)).toContain("Uncommitted");
+      expect((await milestones.plansTx(tx, alice.workspaceId, [own])).map(row => row.title)).toEqual(["Uncommitted"]);
+      throw new Error("rollback projection fixture");
+    })).rejects.toThrow("rollback projection fixture");
+    expect((await read()).map(row => row.title)).toEqual(["Visible"]);
+    expect(await prisma.withUser(alice.user.id, tx => milestones.plansTx(tx, alice.workspaceId, [own]))).toEqual([]);
+  });
 
   it("прогресс цели считается по задачам планов с весами; план без задач — «неизвестен», а не 0", async () => {
     const alice = await register("alice");

@@ -5,7 +5,7 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { DocumentsController } from "./documents.controller";
-import { DocumentsService } from "./documents.service";
+import { DocumentsCoreModule } from "./documents-core.module";
 import { DocumentTrashPurgeService } from "./document-trash-purge.service";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { DocumentsSearchProvider } from "./documents-search.provider";
@@ -21,9 +21,9 @@ import { DocumentsProjectAggregates } from "./documents-project-aggregates";
  * The dependency is one-way — this module must not import NotesModule.
  */
 @Module({
-  imports: [ProjectReferencesModule, AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
+  imports: [DocumentsCoreModule, ProjectReferencesModule, AuthModule, WorkspacesModule, SearchRegistryModule, AgentCoreModule],
   controllers: [DocumentsController, DocumentsAgentController],
-  providers: [DocumentsProjectAggregates, DocumentsService, DocumentTrashPurgeService, DocumentsSearchProvider],
-  exports: [DocumentsService]
+  providers: [DocumentsProjectAggregates, DocumentTrashPurgeService, DocumentsSearchProvider],
+  exports: [DocumentsCoreModule]
 })
 export class DocumentsModule {}

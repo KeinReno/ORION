@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.8.0",
+  "platformVersion": "1.9.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.3.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.7.0",
+    "integration": "1.8.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -2120,21 +2120,93 @@
     "workspaces"
   ],
   "publicContracts": [
+    "apps/api/src/ai/public/agent-journal-reader.module.ts",
+    "apps/api/src/ai/public/agent-journal-reader.ts",
+    "apps/api/src/captures/public/capture-operations.module.ts",
+    "apps/api/src/captures/public/capture-operations.ts",
+    "apps/api/src/common/public/entity-edit-snapshot.ts",
     "apps/api/src/contacts/public/contact-references.module.ts",
     "apps/api/src/contacts/public/contact-references.ts",
+    "apps/api/src/contacts/public/home-contact-commands.module.ts",
+    "apps/api/src/contacts/public/home-contact-commands.ts",
+    "apps/api/src/documents/public/document-attachment-store.module.ts",
+    "apps/api/src/documents/public/document-attachment-store.ts",
+    "apps/api/src/events/public/event-agent-references.module.ts",
+    "apps/api/src/events/public/event-agent-references.ts",
+    "apps/api/src/events/public/event-operations.module.ts",
+    "apps/api/src/events/public/event-operations.ts",
+    "apps/api/src/finance/public/agent-draft-operations.module.ts",
+    "apps/api/src/finance/public/agent-draft-operations.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
+    "apps/api/src/finance/public/expense.module.ts",
+    "apps/api/src/finance/public/finance-anchor-references.module.ts",
+    "apps/api/src/finance/public/finance-anchor-references.ts",
+    "apps/api/src/finance/public/finance-overview-reader.module.ts",
+    "apps/api/src/finance/public/finance-overview-reader.ts",
+    "apps/api/src/finance/public/investment-journal.module.ts",
+    "apps/api/src/finance/public/investment-journal.ts",
+    "apps/api/src/finance/public/obligation-home-links.module.ts",
+    "apps/api/src/finance/public/obligation-home-links.ts",
+    "apps/api/src/finance/public/transaction-references.module.ts",
+    "apps/api/src/finance/public/transaction-references.ts",
+    "apps/api/src/goals/public/goal-references.module.ts",
+    "apps/api/src/goals/public/goal-references.ts",
+    "apps/api/src/home/public/home-references.module.ts",
+    "apps/api/src/home/public/home-references.ts",
+    "apps/api/src/home/public/home-utility-references.module.ts",
+    "apps/api/src/home/public/home-utility-references.ts",
+    "apps/api/src/inbox/public/inbox-agent-operations.module.ts",
+    "apps/api/src/inbox/public/inbox-agent-operations.ts",
+    "apps/api/src/inventory/public/inventory-home-links.module.ts",
+    "apps/api/src/inventory/public/inventory-home-links.ts",
+    "apps/api/src/inventory/public/inventory-references.module.ts",
+    "apps/api/src/inventory/public/inventory-references.ts",
+    "apps/api/src/inventory/public/inventory-shopping-commands.module.ts",
+    "apps/api/src/inventory/public/inventory-shopping-commands.ts",
+    "apps/api/src/lists/public/list-expense-commands.module.ts",
+    "apps/api/src/lists/public/list-expense-commands.ts",
+    "apps/api/src/lists/public/list-home-links.module.ts",
+    "apps/api/src/lists/public/list-home-links.ts",
+    "apps/api/src/lists/public/list-shopping-commands.module.ts",
+    "apps/api/src/lists/public/list-shopping-commands.ts",
+    "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
+    "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
     "apps/api/src/milestones/public/milestone-references.ts",
+    "apps/api/src/notes/public/note-agent-references.module.ts",
+    "apps/api/src/notes/public/note-agent-references.ts",
+    "apps/api/src/notes/public/note-operations.module.ts",
+    "apps/api/src/notes/public/note-operations.ts",
+    "apps/api/src/projects/public/project-agent-reader.module.ts",
+    "apps/api/src/projects/public/project-agent-reader.ts",
+    "apps/api/src/projects/public/project-catalog.module.ts",
+    "apps/api/src/projects/public/project-catalog.ts",
     "apps/api/src/projects/public/project-finance-reader.module.ts",
     "apps/api/src/projects/public/project-finance-reader.ts",
     "apps/api/src/projects/public/project-references.module.ts",
     "apps/api/src/projects/public/project-references.ts",
     "apps/api/src/projects/public/project-task-links.module.ts",
     "apps/api/src/projects/public/project-task-links.ts",
+    "apps/api/src/search/public/search-operations.module.ts",
+    "apps/api/src/search/public/search-operations.ts",
+    "apps/api/src/tasks/public/goal-task-reader.module.ts",
+    "apps/api/src/tasks/public/goal-task-reader.ts",
     "apps/api/src/tasks/public/task-closure-registry.ts",
+    "apps/api/src/tasks/public/task-home-links.module.ts",
+    "apps/api/src/tasks/public/task-home-links.ts",
     "apps/api/src/tasks/public/task-integration-reader.module.ts",
     "apps/api/src/tasks/public/task-integration-reader.ts",
+    "apps/api/src/tasks/public/task-journal-reader.module.ts",
+    "apps/api/src/tasks/public/task-journal-reader.ts",
+    "apps/api/src/tasks/public/task-operations.module.ts",
+    "apps/api/src/tasks/public/task-operations.ts",
+    "apps/api/src/tasks/public/task-overview-reader.module.ts",
+    "apps/api/src/tasks/public/task-overview-reader.ts",
+    "apps/api/src/tasks/public/task-proposal-reader.module.ts",
+    "apps/api/src/tasks/public/task-proposal-reader.ts",
+    "apps/api/src/time/public/task-time-reader.module.ts",
+    "apps/api/src/time/public/task-time-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
     "apps/web/lib/extensions/host-api.ts",
     "apps/web/lib/extensions/places.ts",
@@ -2453,159 +2525,7 @@
     "plugin-contract-check": "vitest run apps/web/lib/extensions/registry.test.ts",
     "db:generate": "corepack pnpm --filter @orion/api prisma:generate"
   },
-  "boundaryExceptions": {
-    "apps/api/src/activity/activity.service.ts": {
-      "models": [
-        "AgentAuditEntry",
-        "TaskActivity",
-        "TaskComment"
-      ]
-    },
-    "apps/api/src/ai/agent-gateway.service.ts": {
-      "models": [
-        "Event",
-        "InboxItem",
-        "Note",
-        "Project",
-        "Task",
-        "TaskActivity"
-      ],
-      "services": [
-        "events/events.service",
-        "inbox/inbox.service",
-        "notes/notes.service",
-        "search/search.service",
-        "tasks/tasks.service"
-      ]
-    },
-    "apps/api/src/ai/agent-jobs.service.ts": {
-      "models": [
-        "Event",
-        "Note",
-        "Task"
-      ],
-      "services": [
-        "events/events.service",
-        "notes/notes.service",
-        "tasks/tasks.service"
-      ]
-    },
-    "apps/api/src/ai/agent-tokens.service.ts": {
-      "models": [
-        "Event",
-        "Note",
-        "Project",
-        "Task"
-      ]
-    },
-    "apps/api/src/ai/agent-undo.service.ts": {
-      "services": [
-        "notes/notes.service",
-        "tasks/tasks.service"
-      ]
-    },
-    "apps/api/src/captures/captures.service.ts": {
-      "models": [
-        "Account",
-        "Contact",
-        "FinanceObligation",
-        "Goal",
-        "Home",
-        "Project",
-        "Task"
-      ],
-      "services": [
-        "tasks/tasks.service"
-      ]
-    },
-    "apps/api/src/goals/goals.service.ts": {
-      "models": [
-        "Milestone",
-        "Project",
-        "Task"
-      ],
-      "services": [
-        "projects/projects.service"
-      ]
-    },
-    "apps/api/src/home-utilities/home-utilities.service.ts": {
-      "models": [
-        "Home",
-        "Meter"
-      ]
-    },
-    "apps/api/src/home/home.service.ts": {
-      "models": [
-        "Contact",
-        "FinanceObligation",
-        "InventoryItem",
-        "List",
-        "Task",
-        "TaskActivity",
-        "TaskComment"
-      ]
-    },
-    "apps/api/src/lists-finance/lists-finance.service.ts": {
-      "models": [
-        "List",
-        "ListItem"
-      ],
-      "services": [
-        "lists/lists.service"
-      ]
-    },
-    "apps/api/src/lists-inventory/lists-inventory.service.ts": {
-      "models": [
-        "InventoryItem",
-        "InventoryMovement",
-        "List",
-        "ListItem"
-      ],
-      "services": [
-        "inventory/inventory.service",
-        "lists/lists.service"
-      ]
-    },
-    "apps/api/src/lists/lists.service.ts": {
-      "models": [
-        "InventoryItem",
-        "InventoryMovement",
-        "Transaction"
-      ]
-    },
-    "apps/api/src/markets/markets.service.ts": {
-      "models": [
-        "FinanceCategory",
-        "InvestmentTrade",
-        "Transaction"
-      ]
-    },
-    "apps/api/src/notes/note-attachments.service.ts": {
-      "models": [
-        "Document"
-      ],
-      "services": [
-        "documents/documents.service"
-      ]
-    },
-    "apps/api/src/overview/overview.service.ts": {
-      "models": [
-        "Account",
-        "Task"
-      ]
-    },
-    "apps/api/src/projects/project-captures.service.ts": {
-      "services": [
-        "captures/captures.service"
-      ]
-    },
-    "apps/api/src/search/search.service.ts": {
-      "services": [
-        "notes/notes.service",
-        "tasks/tasks.service"
-      ]
-    }
-  },
+  "boundaryExceptions": {},
   "boundaryCheckLimits": [
     "Prisma delegates in *.service.ts; receiver names tx/trx/db/client/prisma",
     "Raw SQL and arbitrary aliases require manual review",

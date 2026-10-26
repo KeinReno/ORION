@@ -20,13 +20,8 @@ import { WorkspacesService } from "../workspaces/workspaces.service";
 import { STORAGE_ADAPTER, storageKey, type StorageAdapter } from "../storage/storage-adapter";
 import { assertNoActiveRestoreTx } from "../sync/restore-lock.util";
 
-/** Uploaded file shape we rely on (subset of Express.Multer.File — avoids a @types/multer dep). */
-export interface UploadedDocumentFile {
-  originalname: string;
-  mimetype: string;
-  size: number;
-  buffer: Buffer;
-}
+import type { UploadedDocumentFile } from "./public/document-attachment-store";
+export type { UploadedDocumentFile } from "./public/document-attachment-store";
 
 /**
  * Where a soft-deleted node's blob lives on the store: `<ws>/.trash/<id>`,

@@ -23,6 +23,8 @@ Base module `contacts` (default-on). REST `/workspaces/:workspaceId/contacts`, `
 
 Tests: `packages/shared-types/src/contact.test.ts`, `apps/web/lib/contacts.test.ts`, `apps/web/lib/calendar-sources.test.ts`, `apps/api/test/contacts.integration.test.ts`, `e2e/contacts.spec.ts`. Not done: Google/phone sync (only file import), CRM funnel/deals (a separate optional extension per PRODUCT_DIRECTION), a per-user toggle for contact reminders.
 
+Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 

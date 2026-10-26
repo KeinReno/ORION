@@ -11,8 +11,11 @@
 
 Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
 [синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
-Текущие версии: Integration API 1.3.0, Platform API 1.4.0. Историческая строка Integration API ниже
+Текущие версии: Integration API 1.8.0, Platform API 1.9.0. Историческая строка Integration API ниже
 описывает исходный срез, до появления этих контрактов.
+
+Завершение оставшихся 17 межмодульных исключений: [Owner SDKs](MODULE_BOUNDARY_SDKS.md),
+[проекции Goals](GOAL_PROJECTIONS.md), [проверки](../MODULE_BOUNDARY_COMPLETION.md).
 
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|

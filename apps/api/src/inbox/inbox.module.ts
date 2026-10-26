@@ -1,3 +1,4 @@
+import { InboxAgentOperationsModule } from "./public/inbox-agent-operations.module";
 import { ProjectReferencesModule } from "../projects/public/project-references.module";
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
@@ -6,5 +7,5 @@ import { InboxRegistryModule } from "./inbox-registry.module";
 import { InboxController } from "./inbox.controller";
 import { InboxService } from "./inbox.service";
 
-@Module({ imports: [ProjectReferencesModule, AuthModule, WorkspacesModule, InboxRegistryModule], controllers: [InboxController], providers: [InboxService], exports: [InboxService] })
+@Module({ imports: [InboxAgentOperationsModule, ProjectReferencesModule, AuthModule, WorkspacesModule, InboxRegistryModule], controllers: [InboxController], providers: [InboxService], exports: [InboxService] })
 export class InboxModule {}
