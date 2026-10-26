@@ -2,7 +2,8 @@
 
 Historical operational report; follows `SYNC_WINDOWS_BETA25.md`. The owner
 authorized removing all other workspaces, keeping the one linked to OPPO.
-No application source code or database schema was changed in this pass.
+No application source code or migration definitions were edited in this pass;
+the normal launcher's migration checks were retained during the update.
 
 ## Identity and cleanup
 
@@ -17,7 +18,7 @@ phone's existing account. It was not deleted, recreated, renamed or imported.
 The unrelated green `KAIDEN` belonged to the stale virtualized profile, rather
 than a second workspace in this database.
 
-Stopped that stale runtime and its PostgreSQL gracefully, closed its shell,
+Stopped that stale runtime, shut down its PostgreSQL gracefully, closed its shell,
 verified the two profile paths and different node identities, then moved the
 obsolete MSIX LocalCache profile out of the active lookup path into a private
 archive. This removes it from normal app selection while retaining recovery;
