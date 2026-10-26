@@ -2136,12 +2136,16 @@
     "apps/api/src/finance/public/finance-overview-reader.ts",
     "apps/api/src/finance/public/investment-journal.module.ts",
     "apps/api/src/finance/public/investment-journal.ts",
+    "apps/api/src/finance/public/transaction-references.module.ts",
+    "apps/api/src/finance/public/transaction-references.ts",
     "apps/api/src/goals/public/goal-references.module.ts",
     "apps/api/src/goals/public/goal-references.ts",
     "apps/api/src/home/public/home-references.module.ts",
     "apps/api/src/home/public/home-references.ts",
     "apps/api/src/home/public/home-utility-references.module.ts",
     "apps/api/src/home/public/home-utility-references.ts",
+    "apps/api/src/inventory/public/inventory-references.module.ts",
+    "apps/api/src/inventory/public/inventory-references.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
@@ -2548,13 +2552,6 @@
       "services": [
         "inventory/inventory.service",
         "lists/lists.service"
-      ]
-    },
-    "apps/api/src/lists/lists.service.ts": {
-      "models": [
-        "InventoryItem",
-        "InventoryMovement",
-        "Transaction"
       ]
     }
   },

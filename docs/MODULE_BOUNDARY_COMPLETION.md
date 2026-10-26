@@ -73,3 +73,11 @@ TaskJournalReader и AgentJournalReader отдают только поля ле�
 в .service.ts владельцев. Activity сохраняет membership/module gate, сортировку,
 лимит, авторство и тексты. SDK не загружают TasksModule или AiModule.
 Проверено: architecture-check, API typecheck, focused ESLint, Activity integration (1).
+
+## Этап 9 — Lists restore: 7 → 6
+
+Восстановление пунктов проверяет ссылки через InventoryReferences и
+TransactionReferences. Сохраняет batch-чтение в исходном tx, проверки занятых
+движений, отсутствующих объектов и повторных id. Архивные/выключенные соседи
+не меняют прежнюю допустимость ссылки. Полные соседние модули не загружаются.
+Проверено: architecture-check, API typecheck, focused ESLint, Lists integration (11).

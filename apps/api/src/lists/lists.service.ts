@@ -17,6 +17,8 @@ import {
   type UpdateListInput,
   type UpdateListItemInput
 } from "@orion/shared-types";
+import { InventoryReferences } from "../inventory/public/inventory-references";
+import { TransactionReferences } from "../finance/public/transaction-references";
 import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
@@ -55,7 +57,9 @@ type ItemRow = ListItemRow & { checkedBy?: { name: string } | null };
 export class ListsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly inventoryReferences: InventoryReferences,
+    private readonly transactionReferences: TransactionReferences
   ) {}
 
   async list(userId: string, workspaceId: string, options: ListListsOptions = {}): Promise<List[]> {
@@ -316,9 +320,9 @@ export class ListsService {
       const wanted = <K extends keyof ListItemSnapshot>(key: K): string[] =>
         unique(input.items.map((item) => item[key]).filter((value): value is NonNullable<typeof value> & string => typeof value === "string"));
       const [stock, movements, expenses, people, taken, existing] = await Promise.all([
-        tx.inventoryItem.findMany({ where: { workspaceId, id: { in: wanted("inventoryItemId") } }, select: { id: true } }),
-        tx.inventoryMovement.findMany({ where: { workspaceId, id: { in: wanted("stockedMovementId") } }, select: { id: true } }),
-        tx.transaction.findMany({ where: { workspaceId, id: { in: wanted("expenseTransactionId") } }, select: { id: true } }),
+        this.inventoryReferences.itemsTx(tx, workspaceId, wanted("inventoryItemId")),
+        this.inventoryReferences.movementsTx(tx, workspaceId, wanted("stockedMovementId")),
+        this.transactionReferences.existingTx(tx, workspaceId, wanted("expenseTransactionId")),
         tx.workspaceMember.findMany({ where: { workspaceId, userId: { in: wanted("checkedById") } }, select: { userId: true } }),
         tx.listItem.findMany({ where: { stockedMovementId: { in: wanted("stockedMovementId") } }, select: { stockedMovementId: true } }),
         tx.listItem.findMany({ where: { id: { in: input.items.map((item) => item.id) } }, select: { id: true } })
