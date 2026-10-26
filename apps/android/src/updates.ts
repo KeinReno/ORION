@@ -1,9 +1,9 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { androidUpdateManifestSchema, ANDROID_UPDATE_REPOSITORY, type AndroidUpdateManifest } from "@orion/mobile-core";
 
-export const ANDROID_VERSION = "0.1.26";
-export const ANDROID_VERSION_CODE = 27;
-export const ANDROID_RELEASE_LABEL = "alpha.27";
+export const ANDROID_VERSION = "0.1.27";
+export const ANDROID_VERSION_CODE = 28;
+export const ANDROID_RELEASE_LABEL = "alpha.28";
 export const UPDATE_FEED = "https://raw.githubusercontent.com/" + ANDROID_UPDATE_REPOSITORY + "/main/android-update.json";
 
 export interface UpdateState {

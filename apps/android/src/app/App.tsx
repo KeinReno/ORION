@@ -7,6 +7,7 @@ import { connectionIndicator } from "../connection-indicator";
 import { SyncStatus } from "../sync-status";
 import { MarkdownPreview } from "../features/markdown-preview";
 import type { TaskSort, NoteSort } from "../features/view-order";
+import { EditorFeedback } from "../features/editor-feedback";
 import { EntryFields } from "../features/entry-fields";
 import type { AppRoute } from "./navigation/routes";
 import { useRepository } from "./use-repository";
@@ -131,7 +132,7 @@ export default function App() {
     }).catch(() => { draftWriteError.current = true; setError("Черновик не записан на диск. Не закрывайте редактор; попробуйте сохранить ещё раз."); setNotice(""); }).finally(() => { draftWrites.current--; });
   }
   function formatBody(format: MarkdownFormat) {
-    if (!editor || editor.kind !== "task") return;
+    if (!editor) return;
     const area = bodyRef.current;
     const result = applyMarkdownFormat({
       value: editor.body,
@@ -139,6 +140,8 @@ export default function App() {
       end: area?.selectionEnd ?? editor.body.length,
     }, format);
     if (result.value === editor.body) return;
+    if (result.value.length > 20000) { setError("Для форматирования не хватает места: предел — 20 000 символов. Сократите текст и повторите."); return; }
+    setError("");
     pendingSelection.current = { start: result.start, end: result.end };
     changeDraft({ ...editor, body: result.value });
   }
@@ -227,6 +230,7 @@ export default function App() {
     }}>Сохранить</button>
   </header><DepthCard><main className="editor">
     <p className="scope"><Smartphone size={16} /> {remote ? data.remoteSelection?.workspaceName + " · локальная копия ПК" : "Только на этом телефоне"}</p>
+    <EditorFeedback error={error} notice={notice} />
     <Dictation disabled={busy} activity={setDictating}
       prepare={async () => {
         if (!repo.current) throw new Error("Хранилище недоступно");
@@ -246,17 +250,18 @@ export default function App() {
     {!editor.title.trim() && <p className="helper">Добавьте название, чтобы сохранить запись.</p>}
     <div className="editor-text">
       <label htmlFor="editor-body">{editor.kind === "task" ? "Описание" : "Текст заметки"}</label>
-      {editor.kind === "task" && <div className="format-bar" role="toolbar" aria-label="Форматирование описания"
+      <div className="format-bar" role="group" aria-label={editor.kind === "task" ? "Форматирование описания" : "Форматирование заметки"}
         onMouseDown={(event) => event.preventDefault()}>
         {([["bold", Bold, "Жирный текст"], ["italic", Italic, "Курсив"], ["heading", Heading2, "Заголовок"],
           ["list", List, "Список"], ["quote", Quote, "Цитата"]] as const).map(([format, Icon, label]) =>
           <button key={format} type="button" aria-label={label} title={label} disabled={busy || dictating}
             onClick={() => formatBody(format)}><Icon size={18} /></button>)}
-      </div>}
+      </div>
       <textarea ref={bodyRef} id="editor-body" aria-label={editor.kind === "task" ? "Описание" : "Текст заметки"} value={editor.body}
-        maxLength={20000} rows={12} disabled={busy || dictating}
+        maxLength={20000} rows={12} aria-describedby="editor-body-count" disabled={busy || dictating}
         placeholder={editor.kind === "task" ? "Детали, которые пригодятся позже" : "Пишите свободно. Разметка Markdown сохранится."}
         onChange={(e) => changeDraft({ ...editor, body: e.target.value })} />
+      <p id="editor-body-count" className="helper editor-body-count">{editor.body.length.toLocaleString("ru-RU")} / 20 000 символов</p>
     </div>
     {editor.kind === "task" && (editorTaskId
       ? <TaskChecklist parentId={editorTaskId} items={checklistByParent.get(editorTaskId) ?? []} busy={busy || dictating}
@@ -273,8 +278,7 @@ export default function App() {
     </div></fieldset>}
     <MarkdownPreview source={editor.body} />
     <EntryFields draft={editor} disabled={busy || dictating} change={changeDraft} />
-    <p className="helper">{editor.body.length.toLocaleString("ru-RU")} / 20 000 символов</p>
-    {feedback}<button className="text-button" disabled={busy || dictating} onClick={async () => {
+    <button className="text-button" disabled={busy || dictating} onClick={async () => {
       if (await action((value) => remote ? value.saveRemoteDraft(remote.key, null).then(() => { draftWriteError.current = false; }) : value.saveDraft(null).then(() => { draftWriteError.current = false; }), "Черновик отменён")) history.back();
     }}>Отменить изменения</button>
   </main></DepthCard></div>;

@@ -1,12 +1,4 @@
 <!-- Android branch alpha.23 (26.10.2026): compare only replica identity fields;
-
-Android branch alpha.27: общий доступный cancel поиска задач/заметок,
-восстановление из пустой выдачи, переходы ввод/история финансов, текущий месяц,
-видимое предупреждение при незавершённом черновике. 99 профильных tests,
-11 contracts,11 JVM, scoped lint/typecheck, architecture,3 browser smoke и
-Android Gradle checks PASS. [Отчёт](android/RELEASE_ALPHA27.md).
-APK0.1.26/code27 совместим с alpha.26. Физический OPPO smoke НЕ выполнялся;
-финансы остаются локальными. Десктоп и живые данные этим UI-срезом не менялись.
 workspaceName metadata no longer rejects valid copy as offline. Physical task
 phone→installed PC→phone/reload/delete PASS; see android/SYNC_LIVE_ALPHA23.md. -->
 <!-- Android branch alpha.22 (26.10.2026): compact task/note filters, readable
@@ -26,6 +18,21 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch alpha.28: форматирование заметок, видимое состояние черновика и
+ошибки редактора, защита лимита текста без обрезки, шапка для узкого экрана.
+99 профильных tests,11 contracts,11 JVM, scoped lint/typecheck, architecture,
+docs/map,3 browser smoke и Android Gradle checks PASS.
+[Отчёт](android/RELEASE_ALPHA28.md). APK0.1.27/code28 совместим с alpha.27;
+физическая проверка OPPO НЕ выполнялась, финансы остаются локальными.
+
+Android branch alpha.27: общий доступный cancel поиска задач/заметок,
+восстановление из пустой выдачи, переходы ввод/история финансов, текущий месяц,
+видимое предупреждение при незавершённом черновике. 99 профильных tests,
+11 contracts,11 JVM, scoped lint/typecheck, architecture,3 browser smoke и
+Android Gradle checks PASS. [Отчёт](android/RELEASE_ALPHA27.md).
+APK0.1.26/code27 совместим с alpha.26. Физический OPPO smoke НЕ выполнялся;
+финансы остаются локальными. Десктоп и живые данные этим UI-срезом не менялись.
+
 Android branch / Finance server v1: реализован отдельный default-off device-sync
 adapter через Finance public SDK, атомарные receipts, DB revisions/tombstones и
 CAS для простых RUB income/expense. Старый hybrid protocol1 не изменён. 1602 unit,
@@ -33,7 +40,7 @@ CAS для простых RUB income/expense. Старый hybrid protocol1 не
 architecture/contracts/docs/map и production builds прошли.
 [Серверный отчёт и границы](android/FINANCE_SERVER_V1.md),
 [публичный контракт](platform-api/FINANCE_DEVICE_REPLICATION.md).
-На рабочий профиль этот код не установлен; Android alpha.27 пока хранит финансы
+На рабочий профиль этот код не установлен; Android alpha.28 пока хранит финансы
 локально. Negotiation/cache/outbox/UI и физический финансовый обмен — следующий срез.
 
 Android branch alpha.26: foreground recovery ищет только прежний доверенный узел

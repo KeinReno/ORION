@@ -210,3 +210,15 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:max(env(safe-a
 
 .finance-types { display:flex; flex-wrap:wrap; gap:4px; }
 .finance-types button { flex:1 1 8rem; overflow-wrap:normal; }
+
+/* Editor feedback is next to the work, rather than below all metadata. */
+.editor-feedback { margin:12px 0 20px; font-size:.85rem; line-height:1.5; }
+.editor-feedback:has(.notice:empty):not(:has(.error)) { display:none; }
+.editor-feedback .notice { margin:0; }
+.editor-feedback .error { padding:14px; background:var(--raised); border-radius:12px; overflow-wrap:anywhere; scroll-margin-top:140px; }
+.editor-body-count { margin-top:8px; text-align:right; font-size:.75rem; font-variant-numeric:tabular-nums; }
+
+@media(max-width:380px) {
+  .editor-bar { display:grid; grid-template-columns:48px minmax(0,1fr); }
+  .editor-bar > .primary { grid-column:1 / -1; width:100%; }
+}
