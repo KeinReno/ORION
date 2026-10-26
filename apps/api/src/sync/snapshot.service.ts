@@ -155,6 +155,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // must never reactivate external access that has since been revoked —
   // see specGrants() below for why every restored row is force-revoked.
   specGrants("crossWorkspaceGrants", (tx) => tx.crossWorkspaceGrant),
+  specPausedPublicationRules(),
   specGrants("sharedPublications", (tx) => tx.sharedPublication),
   spec("sharedPublicationPins", (tx) => tx.sharedPublicationPin),
   spec("sharedPublicationOperations", (tx) => tx.sharedPublicationOperation),
@@ -347,6 +348,14 @@ function specSelfRef(key: string, pick: (tx: Tx) => unknown): ModelSpec {
  * object wasn't restored in the same snapshot or no longer exists; the
  * grant row simply lands inert, which is exactly the desired outcome.
  */
+function specPausedPublicationRules(): ModelSpec {
+  const base = spec("publicationRules", tx => tx.publicationRule);
+  return { ...base, insert: (tx, rows) => base.insert(tx, (rows as Array<Record<string, unknown>>).map(row => ({
+    ...row, enabled: false, revision: Number(row.revision ?? 1) + 1,
+    lastError: "После восстановления требуется новый предпросмотр и подтверждение"
+  }))) };
+}
+
 function specGrants(key: string, pick: (tx: Tx) => unknown): ModelSpec {
   const base = spec(key, pick);
   return {
@@ -475,6 +484,9 @@ export class SnapshotService {
           : `Версия снапшота ${snapshot.version} не поддерживается (ожидалась ${SNAPSHOT_VERSION})`
       );
     }
+    // Parent before policy rows: background exchange holds workspace SHARE
+    // before rule locks; restore must take the parent first to avoid inversion.
+    await tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${snapshot.workspaceId} FOR UPDATE`;
     // A source restore must not reactivate delegated writes against a restored revision.
     await tx.$executeRaw`SELECT public.revoke_publications_from_source(${snapshot.workspaceId})`;
     // Очистка: от листьев к корню.

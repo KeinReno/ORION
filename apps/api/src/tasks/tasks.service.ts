@@ -138,6 +138,7 @@ export class TasksService {
     if (dependencyIds.length) {
       await tx.taskDependency.createMany({ data: dependencyIds.map((dependsOnTaskId) => ({ workspaceId, taskId: created.id, dependsOnTaskId })) });
     }
+    await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: created.id } });
     return tx.task.findUniqueOrThrow({ where: { id: created.id }, include: taskInclude });
   }
 
@@ -300,12 +301,14 @@ export class TasksService {
             checklist: (input.checklist ?? readChecklist(current.checklist)).map((item) => ({ ...item, done: false })) as unknown as Prisma.InputJsonValue
           }
         });
+        await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: next.id } });
         const dependencyIds = input.dependencyIds ?? current.dependsOn.map((dependency) => dependency.dependsOnTaskId);
         if (dependencyIds.length) {
           await tx.taskDependency.createMany({ data: dependencyIds.map((dependsOnTaskId) => ({ workspaceId, taskId: next.id, dependsOnTaskId })) });
         }
       }
 
+      await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: taskId } });
       return tx.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
     }
   }
@@ -315,6 +318,7 @@ export class TasksService {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertOwnedTx(tx, workspaceId, taskId);
       await tx.task.delete({ where: { id: taskId } });
+      await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: taskId } });
     });
   }
 

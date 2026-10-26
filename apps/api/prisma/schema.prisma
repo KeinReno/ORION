@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  publicationRules PublicationRule[]
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
@@ -163,6 +164,7 @@ model UserPreference {
 }
 
 model Workspace {
+  publicationRules PublicationRule[]
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
@@ -3608,6 +3610,7 @@ model KnowledgeRelation {
 }
 
 model SharedPublication {
+  ruleId String?
   id String @id @default(uuid())
   workspaceId String
   publisherId String
@@ -3627,6 +3630,7 @@ model SharedPublication {
   publisher User @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   pins SharedPublicationPin[]
   operations SharedPublicationOperation[]
+  @@unique([ruleId, sourceId])
   @@index([workspaceId, revokedAt])
   @@map("shared_publications")
 }
@@ -3656,4 +3660,25 @@ model SharedPublicationOperation {
   actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
   @@index([publicationId, createdAt])
   @@map("shared_publication_operations")
+}
+
+
+model PublicationRule {
+  id String @id @default(uuid())
+  workspaceId String
+  userId String
+  targetWorkspaceId String
+  config Json
+  enabled Boolean @default(false)
+  revision Int @default(1)
+  lastRunAt DateTime?
+  lastError String?
+  history Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([workspaceId, enabled])
+  @@index([targetWorkspaceId])
+  @@map("publication_rules")
 }

@@ -33,3 +33,32 @@ export const publicationDestinationSchema = z.object({ workspaceId: z.string().u
 export const publicationCopySchema = z.object({ workspaceId: z.string().uuid(), id: z.string().uuid(), kind: publicationKindSchema });
 
 export const publicationRefreshSchema = z.object({ expectedRevision: z.number().int().positive(), fingerprint: z.string().length(64) }).strict();
+
+
+// Rules are owner-only configuration; never included in recipient publication DTOs.
+export const publicationRuleConfigSchema = z.object({
+  sourceWorkspaceId: z.string().uuid(), workspaceId: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  projectIds: z.array(z.string().uuid()).max(20).default([]),
+  statuses: z.array(taskStatusSchema).max(10).default([]),
+  includeText: z.boolean().default(false), includeDueAt: z.boolean().default(false),
+  allowStatus: z.boolean().default(false)
+}).strict().refine(v => v.sourceWorkspaceId !== v.workspaceId, { message: "Выберите отдельную общую зону" });
+export type PublicationRuleConfig = z.infer<typeof publicationRuleConfigSchema>;
+export const publicationRuleRevisionSchema = z.object({ expectedRevision: z.number().int().positive() }).strict();
+export const publicationRuleEnableSchema = publicationRuleRevisionSchema.extend({
+  fingerprint: z.string().length(64), consentFutureRecords: z.literal(true)
+}).strict();
+export type PublicationRuleEnable = z.infer<typeof publicationRuleEnableSchema>;
+export const publicationRuleEditSchema = z.object({
+  expectedRevision: z.number().int().positive(), config: publicationRuleConfigSchema
+}).strict();
+export interface PublicationRule {
+  id: string; config: PublicationRuleConfig; enabled: boolean; revision: number;
+  lastRunAt: string | null; lastError: string | null;
+  history: Array<{ at: string; action: string; fingerprint?: string; consentFutureRecords?: boolean; published?: number; updated?: number; withdrawn?: number }>;
+}
+export interface PublicationRulePreview {
+  count: number; publishableCount: number; items: Array<{ sourceId: string; content: PublicationContent; action: "publish" | "update" | "excluded" }>;
+  recipients: Array<{ userId: string; role: string }>; fingerprint: string;
+}

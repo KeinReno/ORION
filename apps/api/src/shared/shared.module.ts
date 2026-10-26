@@ -1,3 +1,5 @@
+import { PublicationRulesController } from "./publication-rules.controller";
+import { PublicationRulesService } from "./publication-rules.service";
 import { PublicationsController } from "./publications.controller";
 import { PublicationsService } from "./publications.service";
 import { PublicationRegistryModule } from "./publication-registry";
@@ -15,7 +17,7 @@ import { SharedService } from "./shared.service";
   // `DocumentsService.openContentForGrant` for the on-disk key resolution
   // instead of duplicating the storage-key/folder-chain logic here.
   imports: [PublicationRegistryModule, AuthModule, WorkspacesModule, DocumentsModule],
-  controllers: [PublicationsController, GrantsController, SharedController],
-  providers: [PublicationsService, SharedGrantsService, SharedService]
+  controllers: [PublicationRulesController, PublicationsController, GrantsController, SharedController],
+  providers: [PublicationRulesService, PublicationsService, SharedGrantsService, SharedService]
 })
 export class SharedGrantModule {}
