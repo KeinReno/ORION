@@ -130,7 +130,6 @@ const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
 const transactionChannel = makeIntentChannel<EntityFocusRequest>("finance");
 const contactChannel = makeIntentChannel<EntityFocusRequest>("contacts");
-const goalChannel = makeFocusChannel("goals");
 let focusNonce = 0;
 const browserChannel = makeIntentChannel<{ url: string; nonce: number }>("browser");
 let browserNonce = 0;
@@ -183,8 +182,18 @@ export const useTransactionFocusRequest = transactionChannel.useIntent;
 export function focusContact(id: string): void { contactChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
 export const useContactFocusRequest = contactChannel.useIntent;
 
-export const focusGoal = goalChannel.focus;
-export const useFocusedGoalId = goalChannel.useFocusedId;
+/**
+ * `makeFocusChannel` (above) carries a bare id, with no nonce — fine for a channel whose consumer
+ * only cares "is something pending", but the Goals Atlas re-focuses the same goal on repeat clicks
+ * (e.g. jumping back to a goal from a search hit, a notification, or another goal's link a second
+ * time), and a bare id can't tell that repeat from "nothing changed": `useIntent`'s `useState` bails
+ * out on an unchanged primitive, so the second `focusGoal(sameId)` silently did nothing. A nonce,
+ * like `event`/`transaction`/`contact` above, makes every request a distinct value.
+ */
+export interface GoalFocusRequest { id: string; nonce: number }
+const goalFocusChannel = makeIntentChannel<GoalFocusRequest>("goals");
+export function focusGoal(id: string): void { goalFocusChannel.emit({ id, nonce: ++focusNonce }); }
+export const useGoalFocusRequest = goalFocusChannel.useIntent;
 
 /** A task to open inside its project's tab; `nonce` tells a repeated click from an old request. */
 export interface ProjectTaskRequest { taskId: string; nonce: number }

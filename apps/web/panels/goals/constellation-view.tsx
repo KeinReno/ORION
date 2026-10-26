@@ -116,7 +116,12 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
     [shownGoals, pins, pastIndex, history, openRoot, readOnly, tasks]
   );
   useEffect(() => {
-    if (!focusedGoalId || appliedFocus.current === focusedGoalId) return;
+    // `appliedFocus` only guards against re-running this effect for the SAME still-pending request
+    // while `constellations` keeps recomputing (goals/pins changing) — it must not survive past the
+    // request being cleared, or focusing the same goal a second time (a real null -> id -> null -> id
+    // sequence from the caller) would be silently ignored.
+    if (!focusedGoalId) { appliedFocus.current = null; return; }
+    if (appliedFocus.current === focusedGoalId) return;
     const home = constellations.find((item) => item.stars.some((star) => star.id === focusedGoalId && star.kind === "goal"));
     if (!home) return;
     appliedFocus.current = focusedGoalId;

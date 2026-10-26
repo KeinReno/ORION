@@ -32,7 +32,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ConstellationView } from "./goals/constellation-view";
 import { describeError } from "../lib/error-message";
 import { shortDate } from "../lib/format";
-import { openProject, useFocusedGoalId } from "../lib/panel-bus";
+import { openProject, useGoalFocusRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 
 function ProgressBar({ value }: { value: number | null }): React.ReactElement {
@@ -74,16 +74,18 @@ export function GoalsPanel(): React.ReactElement {
   const [subTitle, setSubTitle] = useState("");
   const [view, setView] = useState<"list" | "sky">("sky");
   const [requestedGoalId, setRequestedGoalId] = useState<string | null>(null);
-  const focusedGoalId = useFocusedGoalId();
+  // `request` changes on every focusGoal() call, even to the same goal (a fresh nonce) — depending on
+  // it, not on request?.id, is what lets jumping back to the same goal a second time keep working.
+  const request = useGoalFocusRequest();
 
   useEffect(() => {
-    if (focusedGoalId) setRequestedGoalId(focusedGoalId);
-  }, [focusedGoalId]);
+    if (request) setRequestedGoalId(request.id);
+  }, [request]);
 
   useEffect(() => {
-    if (!focusedGoalId || !goals?.some((goal) => goal.id === focusedGoalId)) return;
+    if (!request || !goals?.some((goal) => goal.id === request.id)) return;
     setView("sky");
-  }, [focusedGoalId, goals]);
+  }, [request, goals]);
 
   function showInList(goalId: string): void {
     setView("list");
