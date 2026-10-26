@@ -2122,6 +2122,8 @@
   "publicContracts": [
     "apps/api/src/contacts/public/contact-references.module.ts",
     "apps/api/src/contacts/public/contact-references.ts",
+    "apps/api/src/documents/public/document-attachment-store.module.ts",
+    "apps/api/src/documents/public/document-attachment-store.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/finance/public/finance-overview-reader.module.ts",
@@ -2569,14 +2571,6 @@
         "InventoryItem",
         "InventoryMovement",
         "Transaction"
-      ]
-    },
-    "apps/api/src/notes/note-attachments.service.ts": {
-      "models": [
-        "Document"
-      ],
-      "services": [
-        "documents/documents.service"
       ]
     },
     "apps/api/src/projects/project-captures.service.ts": {

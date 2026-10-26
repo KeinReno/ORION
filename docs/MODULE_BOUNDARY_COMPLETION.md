@@ -37,3 +37,12 @@ InvestmentJournal реализован в Finance, текущем владель
 только реальные сделки, явное подтверждение суммы, без повторного списания.
 Markets сохраняет свои API и watchlist; FinanceModule целиком не загружается.
 Проверено: architecture-check, API typecheck, focused ESLint, Markets integration (6).
+
+## Этап 5 — Note attachments: 13 → 12
+
+DocumentAttachmentStore владеет метаданными документов, общей папкой и загрузкой.
+Notes хранит только ссылки; метаданные читаются пакетом в том же tx без чужого
+Prisma include. Отвязка не удаляет файл; повторная привязка, папка вместо файла,
+корзина и отключение Documents сохраняют прежние правила. Notes не загружает
+полный DocumentsModule и его cron. Проверено: architecture-check, API typecheck,
+focused ESLint, API/RLS integration (23, включая вложения и выключение Documents).
