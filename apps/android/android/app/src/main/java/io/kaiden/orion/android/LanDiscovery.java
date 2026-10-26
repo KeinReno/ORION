@@ -5,12 +5,16 @@ import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
+import android.os.Build;
 import android.os.Looper;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Map;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import org.json.JSONArray;
 
 /** Discovery advertisements are untrusted hints. They never grant device trust. */
@@ -23,6 +27,7 @@ final class LanDiscovery implements NsdManager.DiscoveryListener {
     private WifiManager.MulticastLock lock;
     private boolean finished, resolving;
     private int seen;
+    private final Set<String> emitted = new HashSet<>();
     LanDiscovery(Context context, PluginCall call) {
         this.call = call;
         manager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
@@ -62,12 +67,14 @@ final class LanDiscovery implements NsdManager.DiscoveryListener {
                 try {
                     Map<String, byte[]> txt = service.getAttributes();
                     String id = text(txt, "id"), fp = text(txt, "fp"), name = text(txt, "name");
-                    if ("1".equals(text(txt,"v")) && !id.isEmpty() && id.length() <= 128 && fp.matches("[a-fA-F0-9]{64}") && service.getHost() != null) {
-                        String address = service.getHost().getHostAddress(); int port = service.getPort();
-                        // IPv4 matches the current native HTTPS address contract; keep manual fallback for other networks.
-                        if (address != null && address.matches("[0-9.]+") && port > 0 && port <= 65535) {
+                    if ("1".equals(text(txt,"v")) && !id.isEmpty() && id.length() <= 128 && fp.matches("[a-fA-F0-9]{64}")) {
+                        int port = service.getPort();
+                        // Android 34+ resolves all routes. getHost() alone can select a VPN-only address.
+                        for (String address : LanAddresses.ipv4(Build.VERSION.SDK_INT >= 34 ? service.getHostAddresses() : Collections.singletonList(service.getHost()))) {
+                          if (port > 0 && port <= 65535 && nodes.length() < 32 && emitted.add(id + ":" + fp + ":" + address + ":" + port)) {
                             JSObject node = new JSObject(); node.put("protocol",1); node.put("nodeId",id); node.put("name",name.length() > 80 ? name.substring(0,80) : name);
                             node.put("fingerprint",fp.toUpperCase().replaceAll("(..)(?!$)","$1:")); node.put("address",address); node.put("port",port); nodes.put(node);
+                          }
                         }
                     }
                 } catch (RuntimeException ignored) { /* Malformed advertisements are ignored. */ }

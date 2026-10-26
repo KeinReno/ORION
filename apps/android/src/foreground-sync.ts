@@ -1,6 +1,6 @@
 import type { MobileRemoteClient } from "@orion/mobile-core";
 /** Foreground only. Never imports phone-local records or switches workspace policy. */
-export function startForegroundSync(client: Pick<MobileRemoteClient, "engine" | "sync">, options: { active: () => boolean; blocked: () => boolean; error: (message: string) => void }) {
+export function startForegroundSync(client: Pick<MobileRemoteClient, "engine" | "sync">, options: { active: () => boolean; blocked: () => boolean; error: (message: string) => void; recover?: () => Promise<boolean> }) {
   let stopped = false, running = false, deferred = false;
   let queued: ReturnType<typeof setTimeout> | undefined;
   let flight: Promise<void> | undefined;
@@ -9,7 +9,12 @@ export function startForegroundSync(client: Pick<MobileRemoteClient, "engine" | 
     if (stopped || running || !options.active() || options.blocked() || client.engine.status().phase === "revoked") return;
     running = true;
     flight = (async () => {
-    try { await client.sync(); if (!stopped) options.error(""); }
+    try {
+      await client.sync();
+      if (!stopped && options.active() && !options.blocked() && client.engine.status().phase === "offline"
+        && await options.recover?.() && !stopped && options.active() && !options.blocked()) await client.sync();
+      if (!stopped) options.error("");
+    }
     catch { if (!stopped) options.error("Не удалось завершить обмен. Изменения остаются в локальной копии; повторим при наличии связи."); }
     finally {
       running = false;

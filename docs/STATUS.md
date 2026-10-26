@@ -18,6 +18,15 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch alpha.26: foreground recovery ищет только прежний доверенный узел
+после сетевого сбоя; native NSD API34+ сохраняет все пригодные IPv4, а не один
+адрес интерфейса. На OPPO автоматически восстановлен endpoint4444→4443 с прежним
+snapshot/node/user. 120 профильных tests,11 JVM, typecheck/lint/contracts/docs/map,
+browser и Android Gradle checks прошли. [Отчёт](android/RELEASE_ALPHA26.md).
+Finance sync пока отсутствует; подготовлен
+[Extension Proposal](extensions/FINANCE_DEVICE_SYNC.md) для отдельного receipt/CAS
+канала без автоматической публикации локальных денег.
+
 Android branch alpha.25: wake при resume/online во время запроса больше не теряется;
 native active-state читается после регистрации listener с защитой от stale read.
 111 профильных тестов, typecheck/lint, architecture/contracts/docs/map, browser и

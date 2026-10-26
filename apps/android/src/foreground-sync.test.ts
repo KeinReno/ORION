@@ -10,6 +10,20 @@ class Copies implements ReplicaIO {
 }
 afterEach(()=>vi.useRealTimers());
 describe("foreground sync driver",()=>{
+ it("recovers the remembered endpoint only after a network failure then retries the same durable replica",async()=>{
+  vi.useFakeTimers({toFake:["setTimeout","clearTimeout","setInterval","clearInterval"]});
+  const host=new MemoryHost(), disk=new Copies();const scope={nodeId:"node",fingerprint:"AA:BB",userId:"user",workspaceId:"ws"};
+  const phone=await MobileRemoteClient.create(scope,disk,host);await phone.sync();
+  host.failNext=100;await phone.saveEntry({kind:"note",id:crypto.randomUUID(),title:"New endpoint",body:"Keep queue",priority:"normal"});
+  const recover=vi.fn(async()=>{host.failNext=0;return true;});
+  const driver=startForegroundSync(phone,{active:()=>true,blocked:()=>false,error:()=>{},recover});
+  try {
+   await vi.advanceTimersByTimeAsync(1);expect(recover).toHaveBeenCalledOnce();
+   expect(phone.engine.status().pending).toBe(0);expect(phone.engine.notes()).toHaveLength(1);
+   await vi.advanceTimersByTimeAsync(15000);expect(recover).toHaveBeenCalledOnce();
+   host.revoked=true;await vi.advanceTimersByTimeAsync(15000);expect(recover).toHaveBeenCalledOnce();
+  }finally{await driver.stop();}
+ });
  it("retains an unacknowledged edit across sleep and process restart without duplicating the host row",async()=>{
   vi.useFakeTimers({toFake:["setTimeout","clearTimeout","setInterval","clearInterval"]});
   const host=new MemoryHost(), disk=new Copies();

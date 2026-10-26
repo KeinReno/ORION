@@ -2,6 +2,7 @@ import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { startForegroundSync } from "./foreground-sync";
 import { observeNativeActivity } from "./native-activity";
+import { rememberedHostRecovery } from "./remembered-host-recovery";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MobileRemoteClient, type MobileRepository, type MobileSnapshot } from "@orion/mobile-core";
 import type { LanDiscoveredNode, Workspace, AccountPublic } from "@orion/shared-types";
@@ -43,7 +44,13 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
   useEffect(() => {
     if (!client) return;
     let foreground = !Capacitor.isNativePlatform();
-    const auto = startForegroundSync(client, { active: () => foreground && document.visibilityState !== "hidden", blocked: () => working.current, error: setSyncError });
+    let disposed = false;
+    const active = () => !disposed && foreground && document.visibilityState !== "hidden";
+    const recover = rememberedHostRecovery(client.scope, lan, { active: () => active() && !working.current, recovered: saved => {
+      setState(saved); setConfirmation(null);
+      setMessage("Доверенный компьютер найден по новому адресу. Продолжаем обмен.");
+    } });
+    const auto = startForegroundSync(client, { active, blocked: () => working.current, error: setSyncError, recover });
     autoRef.current = auto;
     const wake = () => { auto.wake(); };
     window.addEventListener("online",wake); window.addEventListener("focus",wake); document.addEventListener("visibilitychange",wake);
@@ -52,7 +59,7 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
       setConfirmation(null);
       if (isActive) auto.wake();
     }) : null;
-    return () => { void auto.stop(); stopNative?.(); if (autoRef.current === auto) autoRef.current = null; window.removeEventListener("online",wake); window.removeEventListener("focus",wake); document.removeEventListener("visibilitychange",wake); };
+    return () => { disposed = true; void auto.stop(); stopNative?.(); if (autoRef.current === auto) autoRef.current = null; window.removeEventListener("online",wake); window.removeEventListener("focus",wake); document.removeEventListener("visibilitychange",wake); };
   }, [client, driverEpoch]);
 
   useEffect(() => {
