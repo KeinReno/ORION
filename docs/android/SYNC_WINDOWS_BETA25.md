@@ -73,3 +73,13 @@ confirmed profile; observe list checkbox convergence without HLC warnings,
 automatic desktop refresh, offline outbox drain with exactly one copy and
 synthetic-only cleanup. VPN, two physical PCs and finance sync remain unverified;
 Android finances remain local.
+
+## Follow-up: profile mismatch resolved
+
+The owner authorized removing other active spaces. The real phone-linked profile
+was located outside the stale MSIX LocalCache view, correctly backed up and
+restored. Its only workspace is `Kaiden`; the obsolete profile was archived.
+Beta.25 files are now installed in the real application directory. OPPO connected
+with existing trust, delivered the offline note exactly once and ended synthetic
+cleanup with zero pending operations/conflicts. See
+[full follow-up and remaining limits](PROFILE_CLEANUP_2026-10-26.md).

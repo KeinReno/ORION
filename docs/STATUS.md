@@ -20,9 +20,13 @@ See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 
 Android branch / Windows beta.25: workspace exchange link in network settings;
 causal HLC watermark fix for device clock skew;15 real PostgreSQL sync tests pass.
-Installer runtime boots on an isolated profile. Existing desktop restarted into
-a different node/profile; original phone connection and in-place installation
-are not accepted. See [scoped report](android/SYNC_WINDOWS_BETA25.md).
+Installer runtime boots on an isolated profile. The MSIX profile mismatch was
+resolved; the obsolete virtualized profile was archived and the phone-linked
+Kaiden retained as the sole active workspace. Beta.25 files installed in the real
+installation; OPPO reconnected with existing trust and delivered its offline
+note once, then synthetic cleanup ended with pending0/conflicts0. See
+[recovery acceptance](android/PROFILE_CLEANUP_2026-10-26.md) and
+[earlier scoped report](android/SYNC_WINDOWS_BETA25.md).
 
 
 > **Статус документа:** оперативная сводка с изменениями по 26.10.2026; для факта выполнения требуется проверка на конкретном HEAD. [Политика документации](DOCUMENTATION_LIFECYCLE.md) разграничивает действующие требования и исторические отчёты. Изменения документации сами по себе не подтверждают готовность продукта или Windows-приёмку.
