@@ -10,6 +10,53 @@ class Copies implements ReplicaIO {
 }
 afterEach(()=>vi.useRealTimers());
 describe("foreground sync driver",()=>{
+ it("retains an unacknowledged edit across sleep and process restart without duplicating the host row",async()=>{
+  vi.useFakeTimers({toFake:["setTimeout","clearTimeout","setInterval","clearInterval"]});
+  const host=new MemoryHost(), disk=new Copies();
+  const scope={nodeId:"node",fingerprint:"AA:BB",userId:"user",workspaceId:"ws"};
+  let phone=await MobileRemoteClient.create(scope,disk,host); await phone.sync();
+  let active=true;let driver=startForegroundSync(phone,{active:()=>active,blocked:()=>false,error:()=>{}});
+  try {
+   await vi.advanceTimersByTimeAsync(1);host.dropPushResponses=1;
+   const id=crypto.randomUUID();await phone.saveEntry({kind:"note",id,title:"Durable resume",body:"Queued once",priority:"normal"});
+   await vi.advanceTimersByTimeAsync(700);
+   expect(phone.engine.status().pending).toBe(1);
+   expect([...host.rows.keys()].filter(key=>key===`note:${id}`)).toHaveLength(1);
+   active=false;const calls=vi.spyOn(host,"pull");await vi.advanceTimersByTimeAsync(10*60_000);
+   expect(calls).not.toHaveBeenCalled();await driver.stop();
+   phone=await MobileRemoteClient.create(scope,disk,host);
+   expect(phone.engine.status().pending).toBe(1);
+   active=true;driver=startForegroundSync(phone,{active:()=>active,blocked:()=>false,error:()=>{}});
+   await vi.advanceTimersByTimeAsync(1);
+   expect(phone.engine.status().pending).toBe(0);expect(phone.engine.notes().filter(note=>note.id===id)).toHaveLength(1);
+   expect([...host.rows.keys()].filter(key=>key===`note:${id}`)).toHaveLength(1);
+  }finally{await driver.stop();}
+ });
+ it("coalesces resume/network wakes during a slow request and retries immediately after it settles",async()=>{
+  vi.useFakeTimers(); let release:()=>void=()=>{};
+  const sync=vi.fn().mockImplementationOnce(()=>new Promise<void>(resolve=>{release=resolve;})).mockResolvedValue(undefined);
+  const engine={pending:()=>[],status:()=>({phase:"idle"}),subscribe:()=>()=>{}};
+  const driver=startForegroundSync({engine,sync} as unknown as Parameters<typeof startForegroundSync>[0],{active:()=>true,blocked:()=>false,error:()=>{}});
+  try {
+   await vi.advanceTimersByTimeAsync(1);
+   driver.wake(); driver.wake(); await vi.advanceTimersByTimeAsync(1);
+   expect(sync).toHaveBeenCalledTimes(1);
+   release(); await vi.advanceTimersByTimeAsync(1);
+   expect(sync).toHaveBeenCalledTimes(2);
+   await vi.advanceTimersByTimeAsync(1000); expect(sync).toHaveBeenCalledTimes(2);
+  } finally {release();await driver.stop();}
+ });
+ it("does not start a deferred wake after backgrounding or stopping",async()=>{
+  vi.useFakeTimers(); let release:()=>void=()=>{};let active=true;
+  const sync=vi.fn(()=>new Promise<void>(resolve=>{release=resolve;}));
+  const engine={pending:()=>[],status:()=>({phase:"idle"}),subscribe:()=>()=>{}};
+  const driver=startForegroundSync({engine,sync} as unknown as Parameters<typeof startForegroundSync>[0],{active:()=>active,blocked:()=>false,error:()=>{}});
+  await vi.advanceTimersByTimeAsync(1);driver.wake();await vi.advanceTimersByTimeAsync(1);
+  active=false;release();await vi.advanceTimersByTimeAsync(1);expect(sync).toHaveBeenCalledTimes(1);
+  active=true;driver.wake();await vi.advanceTimersByTimeAsync(1);expect(sync).toHaveBeenCalledTimes(2);
+  driver.wake();await vi.advanceTimersByTimeAsync(1);const drained=driver.stop();release();await drained;
+  await vi.advanceTimersByTimeAsync(20000);expect(sync).toHaveBeenCalledTimes(2);
+ });
  it("exchanges real replicas in both directions without manual sync and pauses in background",async()=>{
   vi.useFakeTimers({toFake:["setTimeout","clearTimeout","setInterval","clearInterval"]});
   const host=new MemoryHost(); const scope={nodeId:"node",fingerprint:"AA:BB",userId:"user",workspaceId:"ws"};

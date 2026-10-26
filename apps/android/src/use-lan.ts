@@ -1,6 +1,7 @@
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { startForegroundSync } from "./foreground-sync";
+import { observeNativeActivity } from "./native-activity";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MobileRemoteClient, type MobileRepository, type MobileSnapshot } from "@orion/mobile-core";
 import type { LanDiscoveredNode, Workspace, AccountPublic } from "@orion/shared-types";
@@ -41,13 +42,17 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
 
   useEffect(() => {
     if (!client) return;
-    let foreground = true;
+    let foreground = !Capacitor.isNativePlatform();
     const auto = startForegroundSync(client, { active: () => foreground && document.visibilityState !== "hidden", blocked: () => working.current, error: setSyncError });
     autoRef.current = auto;
     const wake = () => { auto.wake(); };
     window.addEventListener("online",wake); window.addEventListener("focus",wake); document.addEventListener("visibilitychange",wake);
-    const native = Capacitor.isNativePlatform() ? NativeApp.addListener("appStateChange", ({isActive}) => { foreground = isActive; if (isActive) auto.wake(); }) : null;
-    return () => { void auto.stop(); if (autoRef.current === auto) autoRef.current = null; window.removeEventListener("online",wake); window.removeEventListener("focus",wake); document.removeEventListener("visibilitychange",wake); void native?.then(handle => handle.remove()).catch(() => {}); };
+    const stopNative = Capacitor.isNativePlatform() ? observeNativeActivity(NativeApp, isActive => {
+      foreground = isActive;
+      setConfirmation(null);
+      if (isActive) auto.wake();
+    }) : null;
+    return () => { void auto.stop(); stopNative?.(); if (autoRef.current === auto) autoRef.current = null; window.removeEventListener("online",wake); window.removeEventListener("focus",wake); document.removeEventListener("visibilitychange",wake); };
   }, [client, driverEpoch]);
 
   useEffect(() => {
@@ -77,7 +82,7 @@ export function useLan(repository: MobileRepository | null, publish: (data: Mobi
     working.current = true; setBusy(true); setError(""); setMessage("");
     try { await work(); }
     catch (e) { setError(e instanceof Error ? e.message : "Не удалось выполнить действие. Повторите."); }
-    finally { working.current = false; setBusy(false); }
+    finally { working.current = false; setBusy(false); autoRef.current?.wake(); }
   }, []);
   const discover = useCallback(() => run(async () => {
     setNodes([]); setSearched(false);

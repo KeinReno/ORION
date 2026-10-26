@@ -18,6 +18,14 @@ Restore draft/transfer/duplicate-ID and fenced-code extraction fixes.
 See android/RELEASE_ALPHA18.md; physical OPPO/LAN acceptance pending. -->
 # ORION — состояние на 26 октября 2026
 
+Android branch alpha.25: wake при resume/online во время запроса больше не теряется;
+native active-state читается после регистрации listener с защитой от stale read.
+111 профильных тестов, typecheck/lint, architecture/contracts/docs/map, browser и
+Android Gradle checks прошли. На OPPO проверены реальный outage/restart сервера
+с доставкой одной queued заметки без дубля и блокировка/повторное открытие с
+восстановлением данных/привязки. Cleanup pending0/conflicts0. Подробности и границы:
+[Android alpha.25](android/RELEASE_ALPHA25.md).
+
 Android branch alpha.24: совместимое чтение старых задач без checklist в snapshot,
 replica и backup; индикатор свежего обмена независим от часов ПК; удаление общего
 списка после архива с защитой от concurrent unarchive. Физический OPPO upgrade
