@@ -66,3 +66,10 @@ Home, Finance, Contacts. Сохраняются порядок проверки 
 без загрузки полного CapturesModule/TasksModule в Projects.
 Проверено: architecture-check, API typecheck, focused ESLint;
 Captures + Project captures + Goals integration — 16 сценариев.
+
+## Этап 8 — Activity: 8 → 7
+
+TaskJournalReader и AgentJournalReader отдают только поля ленты; запросы остаются
+в .service.ts владельцев. Activity сохраняет membership/module gate, сортировку,
+лимит, авторство и тексты. SDK не загружают TasksModule или AiModule.
+Проверено: architecture-check, API typecheck, focused ESLint, Activity integration (1).

@@ -4,7 +4,6 @@
 // (долг погашен), обязана быть удалена — иначе проверка падает как «устарела». Закрытие — провайдеры агрегатов
 // (projects), позже события G3 и провайдеры Search/Inbox/Overview (G19).
 export const MODULE_BOUNDARY_EXCEPTIONS = {
-  "apps/api/src/activity/activity.service.ts": { models: ["AgentAuditEntry","TaskActivity","TaskComment"] },
   "apps/api/src/ai/agent-gateway.service.ts": { models: ["Event","InboxItem","Note","Project","Task"], services: ["events/events.service","inbox/inbox.service","search/search.service"] },
   "apps/api/src/ai/agent-jobs.service.ts": { models: ["Event","Note","Task"], services: ["events/events.service"] },
   "apps/api/src/ai/agent-tokens.service.ts": { models: ["Event","Note","Project","Task"] },

@@ -2120,6 +2120,8 @@
     "workspaces"
   ],
   "publicContracts": [
+    "apps/api/src/ai/public/agent-journal-reader.module.ts",
+    "apps/api/src/ai/public/agent-journal-reader.ts",
     "apps/api/src/captures/public/capture-operations.module.ts",
     "apps/api/src/captures/public/capture-operations.ts",
     "apps/api/src/contacts/public/contact-references.module.ts",
@@ -2159,6 +2161,8 @@
     "apps/api/src/tasks/public/task-closure-registry.ts",
     "apps/api/src/tasks/public/task-integration-reader.module.ts",
     "apps/api/src/tasks/public/task-integration-reader.ts",
+    "apps/api/src/tasks/public/task-journal-reader.module.ts",
+    "apps/api/src/tasks/public/task-journal-reader.ts",
     "apps/api/src/tasks/public/task-operations.module.ts",
     "apps/api/src/tasks/public/task-operations.ts",
     "apps/api/src/tasks/public/task-overview-reader.module.ts",
@@ -2482,13 +2486,6 @@
     "db:generate": "corepack pnpm --filter @orion/api prisma:generate"
   },
   "boundaryExceptions": {
-    "apps/api/src/activity/activity.service.ts": {
-      "models": [
-        "AgentAuditEntry",
-        "TaskActivity",
-        "TaskComment"
-      ]
-    },
     "apps/api/src/ai/agent-gateway.service.ts": {
       "models": [
         "Event",
