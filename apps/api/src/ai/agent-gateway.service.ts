@@ -31,7 +31,7 @@ import {
   type RelationKind
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
-import { EventsService } from "../events/events.service";
+import { EventOperations } from "../events/public/event-operations";
 import { InboxService } from "../inbox/inbox.service";
 import { ModulesService } from "../modules/modules.service";
 import { NoteOperations } from "../notes/public/note-operations";
@@ -89,7 +89,7 @@ export class AgentGatewayService {
     private readonly modules: ModulesService,
     private readonly tasks: TaskOperations,
     private readonly notes: NoteOperations,
-    private readonly events: EventsService,
+    private readonly events: EventOperations,
     private readonly inbox: InboxService,
     private readonly search: SearchService
   ) {}

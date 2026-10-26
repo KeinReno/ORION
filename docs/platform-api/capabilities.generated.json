@@ -2124,6 +2124,7 @@
     "apps/api/src/ai/public/agent-journal-reader.ts",
     "apps/api/src/captures/public/capture-operations.module.ts",
     "apps/api/src/captures/public/capture-operations.ts",
+    "apps/api/src/common/public/entity-edit-snapshot.ts",
     "apps/api/src/contacts/public/contact-references.module.ts",
     "apps/api/src/contacts/public/contact-references.ts",
     "apps/api/src/contacts/public/home-contact-commands.module.ts",
@@ -2132,6 +2133,8 @@
     "apps/api/src/documents/public/document-attachment-store.ts",
     "apps/api/src/events/public/event-agent-references.module.ts",
     "apps/api/src/events/public/event-agent-references.ts",
+    "apps/api/src/events/public/event-operations.module.ts",
+    "apps/api/src/events/public/event-operations.ts",
     "apps/api/src/finance/public/expense-reader.ts",
     "apps/api/src/finance/public/expense-writer.ts",
     "apps/api/src/finance/public/expense.module.ts",
@@ -2194,6 +2197,8 @@
     "apps/api/src/tasks/public/task-operations.ts",
     "apps/api/src/tasks/public/task-overview-reader.module.ts",
     "apps/api/src/tasks/public/task-overview-reader.ts",
+    "apps/api/src/tasks/public/task-proposal-reader.module.ts",
+    "apps/api/src/tasks/public/task-proposal-reader.ts",
     "apps/api/src/time/public/task-time-reader.module.ts",
     "apps/api/src/time/public/task-time-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
@@ -2524,19 +2529,8 @@
         "Task"
       ],
       "services": [
-        "events/events.service",
         "inbox/inbox.service",
         "search/search.service"
-      ]
-    },
-    "apps/api/src/ai/agent-jobs.service.ts": {
-      "models": [
-        "Event",
-        "Note",
-        "Task"
-      ],
-      "services": [
-        "events/events.service"
       ]
     }
   },

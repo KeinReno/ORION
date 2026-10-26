@@ -119,3 +119,12 @@ Notes/Events читают projectId объекта в исходном RLS/пр�
 малые reference SDK, без доменных контроллеров и lifecycle-провайдеров.
 Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
 Agent manager + AI bridge — 21 сценарий, включая fence, роли и отмену создания.
+
+## Этап 14 — Agent Jobs: 2 → 1
+
+Предложения читают узкие owner snapshots только с полями превью, revision,
+updatedAt и readOnly. Notes сохраняет скрытие корзины; Events — отказ изменения
+внешнего события. EventOperations использует существующую реализацию recurrence
+без полного EventsModule/его jobs. Права человека, CAS, stale basis и diff сохранены.
+Проверено: architecture-check, API typecheck, ESLint API (0 ошибок);
+Agent manager + Gateway integration — 20 сценариев.

@@ -78,7 +78,7 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
-import { EventsService } from "../events/events.service";
+import { EventOperations } from "../events/public/event-operations";
 import { FinanceDraftsService } from "../finance/drafts/finance-drafts.service";
 import { PluginsService } from "../plugins/plugins.service";
 import { ModulesService } from "../modules/modules.service";
@@ -227,7 +227,7 @@ export class AiController {
     private readonly tasks: TaskOperations,
     private readonly notes: NoteOperations,
     private readonly projects: ProjectsService,
-    private readonly events: EventsService,
+    private readonly events: EventOperations,
     private readonly financeDrafts: FinanceDraftsService,
     private readonly plugins: PluginsService
   ) {}

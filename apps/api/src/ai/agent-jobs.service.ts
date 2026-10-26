@@ -1,3 +1,6 @@
+import { TaskProposalReader } from "../tasks/public/task-proposal-reader";
+import { NoteAgentReferences } from "../notes/public/note-agent-references";
+import { EventAgentReferences } from "../events/public/event-agent-references";
 import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
@@ -19,7 +22,7 @@ import {
 } from "@orion/shared-types";
 import { z } from "zod";
 import { PrismaService } from "../common/prisma.service";
-import { EventsService } from "../events/events.service";
+import { EventOperations } from "../events/public/event-operations";
 import { NoteOperations } from "../notes/public/note-operations";
 import { TaskOperations } from "../tasks/public/task-operations";
 import { WorkspacesService } from "../workspaces/workspaces.service";
@@ -41,7 +44,10 @@ export class AgentJobsService {
     private readonly workspaces: WorkspacesService,
     private readonly tasks: TaskOperations,
     private readonly notes: NoteOperations,
-    private readonly events: EventsService,
+    private readonly events: EventOperations,
+    private readonly taskProposals: TaskProposalReader,
+    private readonly noteReferences: NoteAgentReferences,
+    private readonly eventReferences: EventAgentReferences,
     private readonly moduleProposals: AgentModuleProposalsService
   ) {}
 
@@ -328,19 +334,9 @@ export class AgentJobsService {
 
   /** Same lookup without throwing: `null` = the object is gone (deleted, in the trash, other workspace). */
   private async findTargetTx(tx: Prisma.TransactionClient, workspaceId: string, action: AgentProposalAction, targetId: string): Promise<(TargetSnapshot & { readOnly: boolean }) | null> {
-    if (action.startsWith("task.")) {
-      const task = await tx.task.findUnique({ where: { id: targetId } });
-      if (!task || task.workspaceId !== workspaceId) return null;
-      return { title: task.title, current: task as unknown as Record<string, unknown>, revision: task.revision, updatedAt: task.updatedAt, readOnly: false };
-    }
-    if (action.startsWith("note.")) {
-      const note = await tx.note.findUnique({ where: { id: targetId } });
-      if (!note || note.workspaceId !== workspaceId || note.deletedAt) return null;
-      return { title: note.title, current: note as unknown as Record<string, unknown>, revision: note.revision, updatedAt: note.updatedAt, readOnly: false };
-    }
-    const event = await tx.event.findUnique({ where: { id: targetId } });
-    if (!event || event.workspaceId !== workspaceId) return null;
-    return { title: event.title, current: event as unknown as Record<string, unknown>, revision: null, updatedAt: event.updatedAt, readOnly: event.readOnly };
+    if (action.startsWith("task.")) return this.taskProposals.snapshotTx(tx, workspaceId, targetId);
+    if (action.startsWith("note.")) return this.noteReferences.snapshotTx(tx, workspaceId, targetId);
+    return this.eventReferences.snapshotTx(tx, workspaceId, targetId);
   }
 
   /**
