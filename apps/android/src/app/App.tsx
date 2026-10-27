@@ -21,6 +21,7 @@ import { MorePage } from "./shell/more-page";
 import { ModuleOutlet } from "./shell/module-outlet";
 import { EntryActions } from "../entry-actions";
 import { DepthCard } from "../depth-card";
+import { LivingCosmos, LivingFocusCard } from "../living-cosmos";
 import React, { useEffect, useRef, useState } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -222,7 +223,7 @@ export default function App() {
   for (const task of taskRecords) if (task.parentId) countNested(task.id);
   const editorTaskId = editor?.kind === "task" && editor.id && tasksById.has(editor.id) ? editor.id : null;
 
-  if (editor) return <div className="shell"><header className="editor-bar">
+  if (editor) return <div className="shell"><LivingCosmos /><header className="editor-bar">
     <button className="icon-button" aria-label="Назад к списку, оставить черновик" disabled={busy || dictating} onClick={() => history.back()}><ArrowLeft /></button>
     <h1 ref={heading} tabIndex={-1}>{editor.kind === "task" ? "Задача" : "Заметка"}</h1>
     <button className="primary" disabled={busy || dictating || !editor.title.trim()} onClick={async () => {
@@ -368,18 +369,22 @@ export default function App() {
   const activeModule = scopeMismatch ? undefined : modules.find((item) => item.id === tab);
   const settingsPageId = navigation.route.kind === "settings" ? navigation.route.page : undefined;
   const settingsPage = SETTINGS_PAGES.find((item) => item.id === settingsPageId);
+  const focusTask = tab === "tasks" ? tasks.find((item) => !isTaskClosed(item.status)) : undefined;
   return <QuickActions disabled={busy || dictating} actions={[
     { id: "task", label: "Задача", icon: ListTodo, disabled: remote ? !remote.hasModule("task") : false, run: () => quickEntry("task") },
     { id: "note", label: "Заметка", icon: NotebookPen, disabled: remote ? !remote.hasModule("note") : false, run: () => quickEntry("note") },
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
-  ]}><div className="shell"><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
+  ]}><div className="shell"><LivingCosmos /><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
       indicator={connectionIndicator(Boolean(connection.state?.paired), Boolean(connection.state?.user), connection.client?.engine.status(), connection.confirmedAt)}
       updated={Boolean(updates.state?.available)} settings={() => setTab("settings")} connection={() => setTab("connection")} />
     <main className="content">
       <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "settings" ? settingsPage?.label ?? "Настройки" : tab === "connection" ? "Связь с компьютером" : tab === "more" ? "Ещё" : activeModule?.label ?? "Раздел"}</h1>
         <p>{tab === "tasks" && tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : activeModule?.summary ?? (tab === "settings" ? "Настройте Orion под себя." : tab === "more" ? "Все доступные разделы рядом." : "Ваше пространство — рядом, даже без сети.")}</p></div>
       {activeModule?.primary && <button className="primary page-create icon-button" aria-label={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} title={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={22} aria-hidden="true" /></button>}</div></DepthCard>
+      {focusTask && <LivingFocusCard task={focusTask}
+        onOpen={() => { if (currentDraft) begin(currentDraft); else editTask(focusTask); }}
+        onDone={() => void action((value) => remote ? remote.setTaskDone(focusTask.id, true) : value.setTaskDone(focusTask.id, true), "Задача завершена")} />}
       {feedback}
       {tab !== "connection" && <SyncStatus connection={connection} remoteActive={Boolean(remote)} finance={tab === "finance"} localCount={data.tasks.length + data.notes.length} open={() => setTab("connection")} />}
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
