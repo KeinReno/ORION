@@ -213,7 +213,10 @@ describe("Module Health", () => {
     expect(overdue.data.nextDueAt).toBe("2025-07-10");
     await request(`${base}/preventive`, { method: "POST", token: alice.accessToken, body: { name: "Флюорография", firstDueAt: "2099-01-01" } });
 
-    const today = await request<{ appointments: Array<{ title: string; subjectName: string }>; preventive: Array<{ name: string; status: string }> }>(`${ws}/health/today?today=2026-10-15`, { method: "GET", token: alice.accessToken });
+    // No `?today=` override: the endpoint defaults to the real day, matching `soon`/`far`
+    // above (both computed from `Date.now()`) — a hardcoded date here rots as the calendar
+    // moves past it, since `soon` (+3d) can fall outside a window pinned to a stale "today".
+    const today = await request<{ appointments: Array<{ title: string; subjectName: string }>; preventive: Array<{ name: string; status: string }> }>(`${ws}/health/today`, { method: "GET", token: alice.accessToken });
     expect(today.data.appointments.map((a) => a.title)).toEqual(["Кардиолог"]);
     expect(today.data.appointments[0].subjectName).toBe("Анна");
     expect(today.data.preventive).toEqual([expect.objectContaining({ name: "Стоматолог", status: "overdue" })]);
