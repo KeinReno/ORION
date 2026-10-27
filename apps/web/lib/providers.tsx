@@ -12,6 +12,8 @@ import { PreferencesEffect } from "./preferences-effect";
 import { createIdbReplicaStorage } from "./replica-idb";
 import { ApplicationTheme } from "./application-theme";
 import { MotionPreference } from "./motion-preference";
+import { SoundPreference } from "./sound-preference";
+import { NotificationSoundBridge } from "./notification-sound-bridge";
 import { RuntimeExtensions } from "./extensions/runtime/runtime-extensions";
 
 /** Токен устройства, которым телефон подтвердил себя на узле. На этом компьютере заголовок не нужен. */
@@ -41,7 +43,10 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
       {/* Extensions from the folder (ADR-0022): loads approved ones into this window; renders nothing. */}
       <RuntimeExtensions />
       <MotionPreference>
-        <ApplicationTheme><ToastProvider>{children}</ToastProvider></ApplicationTheme>
+        <SoundPreference>
+          <NotificationSoundBridge />
+          <ApplicationTheme><ToastProvider>{children}</ToastProvider></ApplicationTheme>
+        </SoundPreference>
       </MotionPreference>
     </CoreProvider>
   );

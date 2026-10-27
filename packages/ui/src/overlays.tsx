@@ -10,6 +10,7 @@ import { Button, IconButton, Input } from "./primitives";
 import { useEscapeKey, useMounted, useOnClickOutside } from "./hooks";
 import { computeFocusTrapAction } from "./focus-trap";
 import { useThemeScopeProps } from "./theme-provider";
+import { useUiSound } from "./sound-level";
 
 /** Portal overlays must not stay on screen after their host panel is hidden. */
 function useOverlayOpen(open: boolean): boolean {
@@ -597,6 +598,13 @@ export function ConfirmDialog({
   /** Disables the confirm button — e.g. until a type-to-confirm field matches. */
   confirmDisabled?: boolean;
 }): React.ReactElement {
+  // `danger` is used app-wide specifically for "no undo" deletes (see the doc comment above) —
+  // one place to sound the confirm, rather than every call site remembering to.
+  const { play } = useUiSound();
+  function confirm(): void {
+    if (danger) play("action.deletePermanent");
+    onConfirm();
+  }
   return (
     <Modal open={open} onClose={onCancel} title={title} size="sm">
       {description ? <div className="text-sm text-muted-foreground">{description}</div> : null}
@@ -604,7 +612,7 @@ export function ConfirmDialog({
         <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
           {cancelLabel}
         </Button>
-        <Button type="button" variant={danger ? "danger" : "primary"} size="sm" disabled={confirmDisabled} onClick={onConfirm}>
+        <Button type="button" variant={danger ? "danger" : "primary"} size="sm" disabled={confirmDisabled} onClick={confirm}>
           {confirmLabel}
         </Button>
       </div>

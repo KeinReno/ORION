@@ -282,6 +282,22 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
         <SettingRow anchor="target-cursor" label="Курсор-цель" description="Рамка вокруг кнопки или ссылки под курсором; сам курсор остаётся системным.">
           <Switch label="Курсор-цель" checked={form.targetCursorEnabled} onChange={(targetCursorEnabled) => setForm({ ...form, targetCursorEnabled })} />
         </SettingRow>
+        <SettingRow
+          anchor="sound"
+          label="Звуки"
+          description="«Тихо» — только напоминания и предупреждения. «Полностью» — также отметка, сохранение, удаление навсегда, вход и выход."
+        >
+          <SegmentedControl<UserPreference["soundLevel"]>
+            aria-label="Звуки"
+            value={form.soundLevel}
+            onChange={(soundLevel) => setForm({ ...form, soundLevel })}
+            options={[
+              { value: "off", label: "Выключены" },
+              { value: "quiet", label: "Тихо" },
+              { value: "full", label: "Полностью" }
+            ]}
+          />
+        </SettingRow>
       </SettingGroup>
 
       <SettingGroup title="Отображение">

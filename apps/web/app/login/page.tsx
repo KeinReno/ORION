@@ -4,7 +4,7 @@ import { KaidenLogo } from "../../components/kaiden-logo";
 
 import { useAuthAccounts, useLogin, useOrionMode, useSession } from "@orion/core-react";
 import type { AccountPublic } from "@orion/shared-types";
-import { AuroraBackground, Button, Input, Spinner, SpotlightCard } from "@orion/ui";
+import { AuroraBackground, Button, Input, Spinner, SpotlightCard, useUiSound } from "@orion/ui";
 import { motion } from "framer-motion";
 import { UserPlus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -36,6 +36,7 @@ function LoginContent(): React.ReactElement {
   const isServerMode = orionMode.data?.loginPolicy === "strict";
   const accounts = useAuthAccounts(!isServerMode);
   const login = useLogin();
+  const { play } = useUiSound();
   const [picked, setSelected] = useState<AccountPublic | null>(null);
   const [choosing, setChoosing] = useState(false);
   const list = accounts.data ?? [];
@@ -64,6 +65,7 @@ function LoginContent(): React.ReactElement {
       setSecret("");
       return;
     }
+    play("auth.login");
     router.replace(returnTo);
   }
 
@@ -83,6 +85,7 @@ function LoginContent(): React.ReactElement {
       setServerPassword("");
       return;
     }
+    play("auth.login");
     router.replace(returnTo);
   }
 

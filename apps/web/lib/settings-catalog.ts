@@ -175,6 +175,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   { anchor: "note-ids", tab: "appearance", label: "Номера заметок", keywords: "n-104 идентификатор" },
   { anchor: "motion", tab: "appearance", label: "Анимации", keywords: "движение эффекты пружина уменьшить" },
   { anchor: "target-cursor", tab: "appearance", label: "Курсор-цель", keywords: "рамка мышь" },
+  { anchor: "sound", tab: "appearance", label: "Звуки", keywords: "звук тап отметка сохранение удаление вход выход" },
   { anchor: "theme-library", tab: "themes", label: "Библиотека тем", keywords: "палитра цвета своя тема" },
   { anchor: "workspace-theme", tab: "themes", label: "Тема пространства", keywords: "для всех участников" },
   { anchor: "time-zone", tab: "region", label: "Часовой пояс", keywords: "время зона utc" },

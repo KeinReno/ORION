@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, cx, useMotionLevel } from "@orion/ui";
+import { Button, cx, useMotionLevel, useUiSound } from "@orion/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import type { ReactNode } from "react";
 
@@ -95,6 +95,7 @@ export function SaveBar({
   saveLabel?: string;
 }): React.ReactElement {
   const still = useMotionLevel() === "off";
+  const { play } = useUiSound();
   return (
     <AnimatePresence initial={false}>
       {changedCount > 0 ? (
@@ -114,7 +115,7 @@ export function SaveBar({
             <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={onReset}>
               Отменить
             </Button>
-            <Button type="submit" size="sm" form={form} status={pending ? "pending" : "idle"}>
+            <Button type="submit" size="sm" form={form} status={pending ? "pending" : "idle"} onClick={() => play("action.save")}>
               {saveLabel}
             </Button>
           </div>

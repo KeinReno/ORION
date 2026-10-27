@@ -49,7 +49,8 @@ import {
   PanelShell,
   Skeleton,
   StrikeText,
-  useToast
+  useToast,
+  useUiSound
 } from "@orion/ui";
 import {
   AlertCircle,
@@ -164,6 +165,7 @@ function DashboardOverview(): React.ReactElement {
   const stopTimer = useStopTimer(timeOn ? wsId : undefined);
   const toggleHabit = useToggleHabit(habitsOn ? wsId : undefined);
   const { toast } = useToast();
+  const { play } = useUiSound();
   const tick = useNowTick(Boolean(running));
 
   const [capture, setCapture] = usePersistedDraft(wsId, "capture");
@@ -293,6 +295,7 @@ function DashboardOverview(): React.ReactElement {
 
   function toggleDone(task: Task): void {
     const next = task.status === "done" ? "todo" : "done";
+    if (next === "done") play("action.check");
     updateTask.mutate(
       { taskId: task.id, input: { status: next } },
       {
@@ -310,6 +313,7 @@ function DashboardOverview(): React.ReactElement {
   }
 
   function onToggleHabit(habit: Habit): void {
+    if (!habit.doneToday) play("action.check");
     toggleHabit.mutate({ habitId: habit.id, day: todayKey });
   }
 

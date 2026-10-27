@@ -13,6 +13,7 @@ import {
   sidebarPositionSchema,
   openTabsModeSchema,
   motionLevelSchema,
+  soundLevelSchema,
   type BackgroundEffectSettings,
   type UpdateUserPreferenceInput,
   type UserPreference,
@@ -360,6 +361,7 @@ function toDto(preference: {
   sidebarPosition: string;
   openTabsMode: string;
   motionLevel: string;
+  soundLevel: string;
   onboardingCompletedAt: Date | null;
 }): UserPreference {
   const parsedTheme = themeDocumentSchema.safeParse(preference.customTheme);
@@ -377,6 +379,7 @@ function toDto(preference: {
     sidebarPosition: sidebarPositionSchema.safeParse(preference.sidebarPosition).success ? (preference.sidebarPosition as UserPreference["sidebarPosition"]) : "left",
     openTabsMode: openTabsModeSchema.safeParse(preference.openTabsMode).success ? (preference.openTabsMode as UserPreference["openTabsMode"]) : "accumulate",
     motionLevel: motionLevelSchema.safeParse(preference.motionLevel).success ? (preference.motionLevel as UserPreference["motionLevel"]) : "calm",
+    soundLevel: soundLevelSchema.safeParse(preference.soundLevel).success ? (preference.soundLevel as UserPreference["soundLevel"]) : "off",
     onboardingCompletedAt: preference.onboardingCompletedAt?.toISOString() ?? null
   } as UserPreference;
 }

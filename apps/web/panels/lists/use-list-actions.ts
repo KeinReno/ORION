@@ -9,7 +9,7 @@ import {
   useUpdateListItem
 } from "@orion/core-react";
 import type { List, ListItem } from "@orion/shared-types";
-import { useToast } from "@orion/ui";
+import { useToast, useUiSound } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeError } from "../../lib/error-message";
 import { useSlotContributions } from "../../lib/extensions/slot";
@@ -26,6 +26,7 @@ export function useListActions(workspaceId: string | undefined, list: List) {
   const clearChecked = useClearCheckedItems(workspaceId);
   const restoreItems = useRestoreListItems(workspaceId);
   const { toast } = useToast();
+  const { play } = useUiSound();
   // A bridge plugin (lists.item, e.g. «Покупки → Склад») may mark entries and take over ticking them.
   const itemBridge = useSlotContributions("lists.item")[0]?.meta?.api;
   const { api } = useCore();
@@ -33,6 +34,7 @@ export function useListActions(workspaceId: string | undefined, list: List) {
   const { isEnabled } = useEnabledModules();
 
   function toggle(item: ListItem): void {
+    if (!item.checked) play("action.check");
     if (!item.checked && itemBridge && workspaceId) {
       const completion = itemBridge.completeItem({ api, queryClient, workspaceId, listId: list.id, item, isModuleEnabled: isEnabled });
       if (completion) {

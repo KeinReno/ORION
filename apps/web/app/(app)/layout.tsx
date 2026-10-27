@@ -29,6 +29,7 @@ import {
   ErrorBoundary,
   LoadingScreen,
   cx,
+  useUiSound,
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
@@ -305,6 +306,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const navigationToast = useRef(toast);
   navigationToast.current = toast;
   const logout = useLogout();
+  const { play } = useUiSound();
   // A window opened with `?workspaceId=` starts on that workspace. Only when this window has no
   // choice of its own yet (a reload keeps its own), and before the "no workspace → /spaces"
   // redirect below can fire.
@@ -350,9 +352,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       setPendingExit(destination);
       return;
     }
-    if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
-    else router.push("/spaces");
-  }, [logout, router]);
+    if (destination === "logout") {
+      play("auth.logout");
+      logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+    } else router.push("/spaces");
+  }, [logout, play, router]);
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
@@ -1230,8 +1234,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         onConfirm={() => {
           const destination = pendingExit;
           setPendingExit(null);
-          if (destination === "logout") logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
-          else if (destination) router.push("/spaces");
+          if (destination === "logout") {
+            play("auth.logout");
+            logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+          } else if (destination) router.push("/spaces");
         }}
         onCancel={() => setPendingExit(null)}
       />

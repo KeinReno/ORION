@@ -2,6 +2,7 @@ export * from "./sidebar";
 export * from "./primitives";
 export * from "./motion";
 export * from "./motion-level";
+export * from "./sound-level";
 export * from "./save-glyph";
 export * from "./lattice-loader";
 export * from "./slosh-gauge";

@@ -22,7 +22,8 @@ import {
   Skeleton,
   StatCard,
   cx,
-  useToast
+  useToast,
+  useUiSound
 } from "@orion/ui";
 import { Archive, Plus, Target, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -79,6 +80,7 @@ export function HabitsPanel(): React.ReactElement {
   const archiveHabit = useArchiveHabit(workspaceId);
   const toggleHabit = useToggleHabit(workspaceId);
   const { toast } = useToast();
+  const { play } = useUiSound();
 
   const habits = habitsQuery.data ?? [];
   const activeHabits = habits.filter((habit) => !habit.archivedAt);
@@ -107,7 +109,8 @@ export function HabitsPanel(): React.ReactElement {
   // The layout adapts to whether anything fills the insights slot: two columns when it does, one when not.
   const hasInsights = useSlotContributions("habits.insights").length > 0;
 
-  function toggle(habitId: string, day: string): void {
+  function toggle(habitId: string, day: string, wasDone: boolean): void {
+    if (!wasDone) play("action.check");
     toggleHabit.mutate(
       { habitId, day },
       {
@@ -268,7 +271,7 @@ export function HabitsPanel(): React.ReactElement {
                         habit={habit}
                         checked={isDoneToday(habit)}
                         busy={toggling}
-                        onToggle={() => toggle(habit.id, todayKey)}
+                        onToggle={() => toggle(habit.id, todayKey, isDoneToday(habit))}
                         onEdit={() => setEditing(habit)}
                         onArchive={() => doArchive(habit)}
                       />
