@@ -20,6 +20,7 @@ export function MotionSettings({ settings, pending, patch, depth }: SettingContr
         <p className="helper">Держите телефон удобно, затем плавно наклоняйте влево и вправо. При касании все слои замирают до завершения жеста. При системном отключении анимаций эффект не работает.</p>
       </div>}
       <CosmosControls />
+      <label className="switch-row" id="swipe-gestures"><span><strong>Жесты в списках</strong><small>Необязательно. Вправо: завершить задачу или закрепить заметку. Влево: открыть подтверждение удаления. Удержание открывает действия; кнопки и меню остаются доступны.</small></span><input type="checkbox" role="switch" checked={settings.swipeGestures} disabled={Boolean(pending.swipeGestures)} onChange={(event) => void patch({ swipeGestures: event.target.checked })} /></label>
       <section id="quick-actions"><h2>Быстрые действия</h2><p>Удерживайте пустое место или кнопку «+», затем выберите действие. Обычное нажатие на «+» открывает то же меню.</p>
       <p className="helper">Для порядка задач используйте захват или кнопки «Выше» и «Ниже». Жесты не заменяют обычные кнопки.</p></section>
     </section></DepthCard>;
