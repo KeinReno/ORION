@@ -13,7 +13,7 @@ import type { useSettingWrites } from "./use-setting-writes";
 import type { useUpdates } from "../../use-updates";
 import { ANDROID_VERSION, ANDROID_VERSION_CODE, ANDROID_RELEASE_LABEL } from "../../updates";
 
-const storageKeys: Partial<Record<string, keyof MobileSettings>> = { theme: "theme", "dark-theme": "darkTheme", "depth-effects": "depthEffects", "depth-strength": "depthStrength", "auto-check-updates": "autoCheckUpdates", "download-updates-wifi": "downloadUpdatesOnWifi" };
+const storageKeys: Partial<Record<string, keyof MobileSettings>> = { theme: "theme", "dark-theme": "darkTheme", "depth-effects": "depthEffects", "depth-strength": "depthStrength", "swipe-gestures": "swipeGestures", "auto-check-updates": "autoCheckUpdates", "download-updates-wifi": "downloadUpdatesOnWifi" };
 export function SettingsCenter({ route, navigate, replace, data, writes, updates, depth, backup, backupBusy, connection, note, restore }: {
   route: Extract<AppRoute, { kind: "settings" }>; navigate: (route: AppRoute) => void; replace: (route: AppRoute) => void;
   data: MobileSnapshot; writes: ReturnType<typeof useSettingWrites>; updates: ReturnType<typeof useUpdates>;

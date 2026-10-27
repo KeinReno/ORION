@@ -37,6 +37,7 @@ export const mobileSettingsSchema = z.object({
   theme: z.enum(["system", "light", "dark"]).default("system"),
   depthEffects: z.boolean().default(true),
   depthStrength: z.number().int().min(0).max(100).default(60),
+  swipeGestures: z.boolean().default(false),
   darkTheme: z.enum(["kaiden-precision", "obsidian", "midnight", "emerald", "crimson"]).default("kaiden-precision"),
   autoCheckUpdates: z.boolean().default(true),
   downloadUpdatesOnWifi: z.boolean().default(false),
@@ -265,6 +266,9 @@ export class MobileRepository {
   }
   setTaskDone(id: string, done: boolean): Promise<void> {
     return this.transaction((next) => { this.apply(next, "task", id, { status: done ? "done" : "todo" }); });
+  }
+  setNotePinned(id: string, pinned: boolean): Promise<void> {
+    return this.transaction((next) => { this.apply(next, "note", id, { pinnedAt: pinned ? new Date().toISOString() : null }); });
   }
   archiveNote(id: string, archived: boolean): Promise<void> {
     return this.transaction((next) => { this.apply(next, "note", id, { archivedAt: archived ? new Date().toISOString() : null }); });

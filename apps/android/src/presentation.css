@@ -87,15 +87,28 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .depth-status{font-size:.85rem;min-height:2.5em;line-height:1.5}
 
 /* Shared card model: one perspective and rotation, one flat interactive surface. */
-:root{--depth-x:0px;--depth-y:0px;--depth-rx:0deg;--depth-ry:0deg;--depth-lift:0px}
-.depth-card{min-width:0;width:100%;perspective:1000px}
-.depth-card-body{min-width:0;transform-origin:center;transform-style:flat}
-.depth-card-body>*{transform-style:flat}
-.depth-card-body :is(.entry-main,.depth-controls,.depth-preview,.task-row,.note-depth-row,.finance-entry){transform-style:flat}
-:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card-body{transform:translate3d(var(--depth-x),var(--depth-y),var(--card-elevation,var(--depth-lift))) rotateX(var(--depth-rx)) rotateY(var(--depth-ry));transition:transform 100ms linear}
-:root[data-depth=paused] .depth-card-body{transition:none!important}
-:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-back{transform:translateZ(var(--depth-lift))}
-:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-front{transform:translateZ(calc(var(--depth-lift)*2))}
+:root{--depth-x:0px;--depth-y:0px}
+.depth-card{min-width:0;width:100%}
+.depth-card-body{min-width:0}
+/* One coordinate system: backplate -> content -> cards -> readable foreground.
+   Translation preserves card geometry and does not sweep edges across neighbours. */
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .content{
+  translate:var(--depth-x) var(--depth-y);
+}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card-body{
+  translate:calc(var(--depth-x)*.5) calc(var(--depth-y)*.5);
+}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card[data-elevation=base]>.depth-card-body{
+  translate:calc(var(--depth-x)*.25) calc(var(--depth-y)*.25);
+}
+/* Nested cards share their nearest card's plane, avoiding compounded movement. */
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-card .depth-card .depth-card-body{translate:none}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] :is(.entry-main strong,.entry-main small,.page-heading h1,.page-heading p){
+  translate:calc(var(--depth-x)*.2) calc(var(--depth-y)*.2);
+}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-back{translate:calc(var(--depth-x)*-.5) calc(var(--depth-y)*-.5)}
+:root:is([data-depth=active],[data-depth=paused])[data-motion=full] .depth-preview-front{translate:var(--depth-x) var(--depth-y)}
+/* No transitions: pointerdown freezes the exact painted position. */
 .notes>li{display:block}.note-depth-row{display:flex;align-items:flex-start;gap:12px}
 /* Fixed navigation and gesture overlays are outside all depth cards. */
 
@@ -103,7 +116,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 .depth-card-body button{isolation:auto}
 .settings-page>.depth-card+.depth-card .settings-section,.connection>.depth-card+.depth-card .settings-section{padding-top:24px}
 
-.depth-card-body{pointer-events:none}.depth-card-body :is(button,input,textarea,select,summary,label,a){pointer-events:auto}
+.depth-card-body{pointer-events:auto}.depth-card-body :is(button,input,textarea,select,summary,label,a){pointer-events:auto}
 /* Read-only text that must stay selectable instead of starting quick actions. */
 .depth-card-body :is(.markdown-preview,.release-notes,.changed-fields){pointer-events:auto;user-select:text;-webkit-user-select:text}
 
@@ -222,3 +235,22 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:max(env(safe-a
   .editor-bar { display:grid; grid-template-columns:48px minmax(0,1fr); }
   .editor-bar > .primary { grid-column:1 / -1; width:100%; }
 }
+
+
+/* Mobile compact actions: meaning stays in accessible names and connection details. */
+.page-heading .page-create{width:48px;height:48px;min-width:48px;padding:12px;border-radius:16px;background:var(--accent);color:var(--on-accent)}
+.page-heading{gap:12px;margin-bottom:16px}
+.page-heading>div{min-width:0;flex:1}
+.page-heading p{margin-top:8px}
+.sync-summary{display:flex;width:fit-content;max-width:100%;min-height:48px;margin:0 0 12px;padding:8px 12px;gap:8px;border:1px solid var(--line);border-radius:24px;background:var(--raised);color:var(--muted);font-size:.78rem;text-align:left}
+.sync-summary[data-tone=attention]{color:var(--accent)}
+.brand .local-label small{font-size:.65rem;line-height:1.2}
+.brand .local-label .sr-only{position:absolute;white-space:normal}
+.view-options>summary{min-height:48px;padding:10px 12px}
+.view-options:not([open]){width:fit-content;min-width:100px;margin-left:auto;border-radius:24px}
+.view-options[open]{width:100%}
+.view-presets button{min-height:48px}
+@media(max-width:380px){.page-heading{flex-wrap:nowrap}.brand .local-label{max-width:none}.brand .local-label small{display:block}}
+/* The translated content plane must not create horizontal page scrolling. */
+.shell{overflow-x:clip}
+@media(max-width:380px){.view-presets button{flex:1 1 0;min-width:0;padding:8px 6px;gap:4px;font-size:.75rem;white-space:nowrap}}

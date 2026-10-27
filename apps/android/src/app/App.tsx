@@ -21,6 +21,7 @@ import { MorePage } from "./shell/more-page";
 import { ModuleOutlet } from "./shell/module-outlet";
 import { EntryActions } from "../entry-actions";
 import { DepthCard } from "../depth-card";
+import { LivingCosmos, LivingFocusCard } from "../living-cosmos";
 import React, { useEffect, useRef, useState } from "react";
 import { App as NativeApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -58,7 +59,10 @@ export default function App() {
   const settingWrites = useSettingWrites(repo.current, setData);
   const [, refreshClock] = useState(0);
   useEffect(() => { const timer = setInterval(() => refreshClock(value => value + 1), 15_000); return () => clearInterval(timer); }, []);
-  const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string } | null>(null);
+  const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string; delete?: boolean } | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{ kind: "task" | "note"; id: string; title: string } | null>(null);
+  const removalTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (removalTimer.current !== null) clearTimeout(removalTimer.current); }, []);
   const [editor, setEditor] = useState<Draft | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
   const [noteQuery, setNoteQuery] = useState("");
@@ -197,7 +201,7 @@ export default function App() {
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     <button onClick={() => void connection.switchSpace(false)}>Открыть записи «На телефоне»</button></main>;
 
-  const taskRecords = remote ? remote.engine.tasks() : data.tasks;
+  const taskRecords = (remote ? remote.engine.tasks() : data.tasks).filter((task) => pendingRemoval?.kind !== "task" || task.id !== pendingRemoval.id);
   const tasksById = new Map(taskRecords.map((task) => [task.id, task]));
   const checklistByParent = new Map<string, Task[]>();
   for (const task of taskRecords) {
@@ -222,7 +226,7 @@ export default function App() {
   for (const task of taskRecords) if (task.parentId) countNested(task.id);
   const editorTaskId = editor?.kind === "task" && editor.id && tasksById.has(editor.id) ? editor.id : null;
 
-  if (editor) return <div className="shell"><header className="editor-bar">
+  if (editor) return <div className="shell"><LivingCosmos /><header className="editor-bar">
     <button className="icon-button" aria-label="Назад к списку, оставить черновик" disabled={busy || dictating} onClick={() => history.back()}><ArrowLeft /></button>
     <h1 ref={heading} tabIndex={-1}>{editor.kind === "task" ? "Задача" : "Заметка"}</h1>
     <button className="primary" disabled={busy || dictating || !editor.title.trim()} onClick={async () => {
@@ -283,8 +287,26 @@ export default function App() {
     }}>Отменить изменения</button>
   </main></DepthCard></div>;
 
+  const stageRemoval = (kind: "task" | "note", item: Task | Note) => {
+    if (busy) return;
+    if (pendingRemoval) { setNotice("Сначала отмените текущее удаление или дождитесь его завершения."); return; }
+    const target = remote;
+    setEntryMenu(null);
+    setPendingRemoval({ kind, id: item.id, title: item.title });
+    removalTimer.current = window.setTimeout(() => {
+      removalTimer.current = null;
+      void action((repository) => target ? target.deleteEntry(kind, item.id) : repository.deleteEntry(kind, item.id), "Запись удалена");
+      setPendingRemoval(null);
+    }, 6500);
+  };
+  const undoRemoval = () => {
+    if (removalTimer.current !== null) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setPendingRemoval(null);
+    setNotice("Удаление отменено");
+  };
   const entryActions = (kind: "task" | "note", item: Task | Note) => entryMenu?.kind === kind && entryMenu.id === item.id
-    ? <EntryActions key={kind + item.id} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy}
+    ? <EntryActions key={kind + item.id + (entryMenu?.delete ? ":remove" : "")} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy} defaultConfirm={Boolean(entryMenu?.delete)}
       close={() => setEntryMenu(null)} edit={() => { setEntryMenu(null); if (currentDraft) begin(currentDraft); else if (kind === "task") editTask(item as Task); else editNote(item as Note); }}
       remove={() => action(async (value) => {
         if (remote) { await remote.deleteEntry(kind, item.id); if (currentDraft?.kind === kind && currentDraft.id === item.id) await value.saveRemoteDraft(remote.key, null); }
@@ -311,7 +333,7 @@ export default function App() {
   }
   const tasks = taskRecords.filter((item) => !item.parentId && (!taskNeedle || matchingRoots.has(item.id)))
     .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER) || b.updatedAt.localeCompare(a.updatedAt));
-  const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
+  const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => (pendingRemoval?.kind !== "note" || item.id !== pendingRemoval.id) && Boolean(item.archivedAt) === archive
     && (item.title + " " + item.summary + " " + item.body + " " + item.tags.join(" ")).toLocaleLowerCase().includes(noteNeedle)).sort((a, b) => Number(Boolean(b.pinnedAt)) - Number(Boolean(a.pinnedAt)) || b.updatedAt.localeCompare(a.updatedAt));
   const quickEntry = (kind: "task" | "note") => {
     if (financeWrites.current || financeWriteError.current) { setError("Сначала сохраните или отмените ввод финансов. Не удалось подтвердить запись черновика."); return; }
@@ -324,7 +346,18 @@ export default function App() {
     if (data.finance?.draft) { setNotice("Открыт незавершённый ввод финансов. Он не заменён новой операцией."); return; }
     setFinanceLaunch({ id: Date.now(), type }); setNotice("");
   };
+  const openTask = (task: Task) => {
+    if (currentDraft) {
+      if (window.confirm("Есть незавершённый черновик. Открыть его вместо выбранной задачи?")) begin(currentDraft);
+      return;
+    }
+    editTask(task);
+  };
+  const toggleTask = (task: Task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена");
+  const taskCalendarPorts = { tasks: taskRecords, edit: openTask, done: toggleTask, create: () => quickEntry("task") };
   const modules = createBuiltinModules({
+    calendar: taskCalendarPorts,
+    today: { ...taskCalendarPorts, calendar: () => setTab("calendar") },
     lists: { lists: remote ? remote.engine.lists().lists : data.lists, initialDraft: data.listDrafts[remote?.key ?? "phone"] ?? null,
       busy, available: !remote || remote.hasModule("list"), canItems: !remote || remote.hasModule("listItem"), remote: Boolean(remote),
       selectedId: navigation.route.kind === "module" ? navigation.route.entityId : undefined,
@@ -343,12 +376,13 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
-      edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
+    tasks: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (task) => stageRemoval("task", task), tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+      edit: openTask,
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
-    notes: { notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
+    notes: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (note) => stageRemoval("note", note),
+       pinNote: (note) => void action((value) => remote ? remote.setNotePinned(note.id, !note.pinnedAt) : value.setNotePinned(note.id, !note.pinnedAt), "Закрепление заметки изменено"), notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
       edit: (note) => currentDraft ? begin(currentDraft) : editNote(note),
       archiveNote: (note) => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть"),
       menu: (note) => menuButton("note", note), actions: (note) => entryActions("note", note) },
@@ -368,18 +402,22 @@ export default function App() {
   const activeModule = scopeMismatch ? undefined : modules.find((item) => item.id === tab);
   const settingsPageId = navigation.route.kind === "settings" ? navigation.route.page : undefined;
   const settingsPage = SETTINGS_PAGES.find((item) => item.id === settingsPageId);
+  const focusTask = tab === "tasks" ? tasks.find((item) => !isTaskClosed(item.status)) : undefined;
   return <QuickActions disabled={busy || dictating} actions={[
     { id: "task", label: "Задача", icon: ListTodo, disabled: remote ? !remote.hasModule("task") : false, run: () => quickEntry("task") },
     { id: "note", label: "Заметка", icon: NotebookPen, disabled: remote ? !remote.hasModule("note") : false, run: () => quickEntry("note") },
     { id: "expense", label: "Расход", icon: ArrowUpRight, run: () => quickFinance("expense") },
     { id: "income", label: "Доход", icon: ArrowDownLeft, run: () => quickFinance("income") },
-  ]}><div className="shell"><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
+  ]}><div className="shell"><LivingCosmos /><AppHeader scope={remote && tab !== "finance" ? data.remoteSelection?.workspaceName ?? "Копия ПК" : "На телефоне"}
       indicator={connectionIndicator(Boolean(connection.state?.paired), Boolean(connection.state?.user), connection.client?.engine.status(), connection.confirmedAt)}
       updated={Boolean(updates.state?.available)} settings={() => setTab("settings")} connection={() => setTab("connection")} />
     <main className="content">
       <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "settings" ? settingsPage?.label ?? "Настройки" : tab === "connection" ? "Связь с компьютером" : tab === "more" ? "Ещё" : activeModule?.label ?? "Раздел"}</h1>
         <p>{tab === "tasks" && tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : activeModule?.summary ?? (tab === "settings" ? "Настройте Orion под себя." : tab === "more" ? "Все доступные разделы рядом." : "Ваше пространство — рядом, даже без сети.")}</p></div>
-      {activeModule?.primary && <button className="primary" disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={20} /><span>{activeModule.primary.label}</span></button>}</div></DepthCard>
+      {activeModule?.primary && <button className="primary page-create icon-button" aria-label={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} title={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={22} aria-hidden="true" /></button>}</div></DepthCard>
+      {focusTask && <LivingFocusCard task={focusTask}
+        onOpen={() => openTask(focusTask)}
+        onDone={() => void action((value) => remote ? remote.setTaskDone(focusTask.id, true) : value.setTaskDone(focusTask.id, true), "Задача завершена")} />}
       {feedback}
       {tab !== "connection" && <SyncStatus connection={connection} remoteActive={Boolean(remote)} finance={tab === "finance"} localCount={data.tasks.length + data.notes.length} open={() => setTab("connection")} />}
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
@@ -398,8 +436,11 @@ export default function App() {
         : <ModuleOutlet definition={activeModule} scope={remote?.key ?? "phone"} />}
 
     </main>
+    {pendingRemoval && <div className="orion-undo" role="status"><span>Удаление «{pendingRemoval.title}» через несколько секунд</span>
+      <button type="button" onClick={undoRemoval}>Отменить</button></div>}
     <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); }} />
   </div></QuickActions>;
 }
+
 
 

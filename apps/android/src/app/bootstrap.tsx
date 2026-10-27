@@ -1,6 +1,7 @@
 import { ListsScreen, type ListsScreenProps } from "../features/lists/lists-screen";
 import type { ComponentProps } from "react";
-import { ListChecks, ListTodo, NotebookPen, Wallet } from "lucide-react";
+import { CalendarDays, Home, ListChecks, ListTodo, NotebookPen, Wallet } from "lucide-react";
+import { CalendarScreen, TodayScreen, type CalendarScreenProps } from "../features/calendar/calendar-screen";
 import { TasksScreen, type TasksScreenProps } from "../features/tasks/tasks-screen";
 import { NotesScreen, type NotesScreenProps } from "../features/notes/notes-screen";
 import { FinancePage } from "../finance";
@@ -9,10 +10,14 @@ import { createModuleRegistry } from "./runtime/module-registry";
 // Only this composition root knows the bundled implementations.
 export function createBuiltinModules(ports: {
   lists: ListsScreenProps; tasks: TasksScreenProps; notes: NotesScreenProps; finance: ComponentProps<typeof FinancePage> & { launchKey?: number };
+  calendar: CalendarScreenProps; today: CalendarScreenProps & { calendar: () => void };
   createTask: () => void; createNote: () => void;
 }) {
   return createModuleRegistry([
+    { id: "today", label: "Сегодня", icon: Home, summary: "Ваше пространство и дела на день.", render: () => <TodayScreen {...ports.today} /> },
     { id: "tasks", label: "Задачи", icon: ListTodo, summary: "Освободите голову. Начните с одного дела.", render: () => <TasksScreen {...ports.tasks} />,
+      primary: { label: "Создать", run: ports.createTask, disabled: ports.tasks.busy || !ports.tasks.available } },
+    { id: "calendar", label: "Календарь", icon: CalendarDays, summary: "День, неделя и месяц с задачами и дедлайнами.", render: () => <CalendarScreen {...ports.calendar} />,
       primary: { label: "Создать", run: ports.createTask, disabled: ports.tasks.busy || !ports.tasks.available } },
     { id: "notes", label: "Заметки", icon: NotebookPen, summary: "Мысли и детали, к которым хочется вернуться.", render: () => <NotesScreen {...ports.notes} />,
       primary: { label: "Создать", run: ports.createNote, disabled: ports.notes.busy || !ports.notes.available } },

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Pencil, Trash2, X } from "lucide-react";
 
-export function EntryActions({ kind, title, remote, busy, edit, remove, close }: {
+export function EntryActions({ kind, title, remote, busy, edit, remove, close, defaultConfirm = false }: {
   kind: "task" | "note"; title: string; remote: boolean; busy: boolean;
-  edit: () => void; remove: () => Promise<boolean>; close: () => void;
+  edit: () => void; remove: () => Promise<boolean>; close: () => void; defaultConfirm?: boolean;
 }) {
-  const [confirm, setConfirm] = useState(false);
+  const [confirm, setConfirm] = useState(defaultConfirm);
   const name = kind === "task" ? "задачу" : "заметку";
   return <section className="entry-action-panel" aria-label={"Действия: " + title}>
     {confirm ? <>
