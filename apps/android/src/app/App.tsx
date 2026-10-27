@@ -325,7 +325,13 @@ export default function App() {
     if (data.finance?.draft) { setNotice("Открыт незавершённый ввод финансов. Он не заменён новой операцией."); return; }
     setFinanceLaunch({ id: Date.now(), type }); setNotice("");
   };
-  const openTask = (task: Task) => currentDraft ? begin(currentDraft) : editTask(task);
+  const openTask = (task: Task) => {
+    if (currentDraft) {
+      if (window.confirm("Есть незавершённый черновик. Открыть его вместо выбранной задачи?")) begin(currentDraft);
+      return;
+    }
+    editTask(task);
+  };
   const toggleTask = (task: Task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена");
   const taskCalendarPorts = { tasks: taskRecords, edit: openTask, done: toggleTask, create: () => quickEntry("task") };
   const modules = createBuiltinModules({
@@ -350,7 +356,7 @@ export default function App() {
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
     tasks: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (task) => setEntryMenu({ kind: "task", id: task.id, delete: true }), tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
-      edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
+      edit: openTask,
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
@@ -389,7 +395,7 @@ export default function App() {
         <p>{tab === "tasks" && tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : activeModule?.summary ?? (tab === "settings" ? "Настройте Orion под себя." : tab === "more" ? "Все доступные разделы рядом." : "Ваше пространство — рядом, даже без сети.")}</p></div>
       {activeModule?.primary && <button className="primary page-create icon-button" aria-label={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} title={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={22} aria-hidden="true" /></button>}</div></DepthCard>
       {focusTask && <LivingFocusCard task={focusTask}
-        onOpen={() => { if (currentDraft) begin(currentDraft); else editTask(focusTask); }}
+        onOpen={() => openTask(focusTask)}
         onDone={() => void action((value) => remote ? remote.setTaskDone(focusTask.id, true) : value.setTaskDone(focusTask.id, true), "Задача завершена")} />}
       {feedback}
       {tab !== "connection" && <SyncStatus connection={connection} remoteActive={Boolean(remote)} finance={tab === "finance"} localCount={data.tasks.length + data.notes.length} open={() => setTab("connection")} />}
