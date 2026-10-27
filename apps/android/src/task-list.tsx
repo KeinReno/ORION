@@ -75,5 +75,6 @@ export function TaskList({ tasks, disabled, reorder, children, actions }: {
         <button disabled={disabled || saving || !tasks[index + 1] || isTaskClosed(tasks[index + 1]!.status) !== isTaskClosed(task.status)}
           onClick={() => void move(task.id, tasks[index + 1]!.id, true)}><ArrowDown size={18} />Ниже</button>
       </div>}
-    {actions?.(task)}</DepthCard></li>)}</ul>{tasks.length > 0 && <p className="helper order-help">Порядок на телефоне: тяните за захват или нажмите его для кнопок «Выше» и «Ниже».</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
+    {actions?.(task)}</DepthCard></li>)}</ul>{tasks.length > 1 && <p className="helper order-help">Перестановка: потяните ⋮⋮ или нажмите для выбора порядка.</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
 }
+

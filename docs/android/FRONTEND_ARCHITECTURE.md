@@ -173,8 +173,9 @@ rule/cover-reachable-states, rule/keyboard-complete-flow, rule/accessible-name-r
 
 KAIDEN tokens общие с desktop; мобильные плотность/48px targets/safe areas свои.
 Одна elevation scale: base chrome → whole content card → foreground overlay.
-Внутри interactive card текст/контролы одной плоскости, без произвольных Z и
-встречных rotations. Жесты — ускорители видимых кнопок. Нет критического действия,
+После исправления параллакса 27.10.2026 текст и карточки используют общий
+сдвиг с небольшой разницей глубины, без отдельных камер, произвольных Z и
+встречных rotations. См. MOTION_COMPACT_UI_2026-10-27.md. Жесты — ускорители видимых кнопок. Нет критического действия,
 доступного только через long press/drag/voice. OS reduced motion имеет приоритет.
 Не запрашивать permissions при старте без сценария (rule/value-before-interruption).
 
@@ -209,3 +210,4 @@ plan как разрешение массово менять desktop. Unit + bou
 Основания подхода: [Android UI layer](https://developer.android.com/topic/architecture/ui-layer)
 (state holders и однонаправленные события), [adaptive navigation](https://developer.android.com/develop/ui/compose/layouts/adaptive/build-adaptive-navigation)
 (bar/rail по ширине). Это принципы, не переход данного React/Capacitor приложения на Compose.
+

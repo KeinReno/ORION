@@ -379,7 +379,7 @@ export default function App() {
     <main className="content">
       <DepthCard elevation="base"><div className="page-heading"><div><h1 ref={heading} tabIndex={-1}>{tab === "settings" ? settingsPage?.label ?? "Настройки" : tab === "connection" ? "Связь с компьютером" : tab === "more" ? "Ещё" : activeModule?.label ?? "Раздел"}</h1>
         <p>{tab === "tasks" && tasks.length ? `Открыто: ${tasks.filter((task) => !isTaskClosed(task.status)).length} · Завершено: ${tasks.filter((task) => isTaskClosed(task.status)).length}` : activeModule?.summary ?? (tab === "settings" ? "Настройте Orion под себя." : tab === "more" ? "Все доступные разделы рядом." : "Ваше пространство — рядом, даже без сети.")}</p></div>
-      {activeModule?.primary && <button className="primary" disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={20} /><span>{activeModule.primary.label}</span></button>}</div></DepthCard>
+      {activeModule?.primary && <button className="primary page-create icon-button" aria-label={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} title={activeModule.id === "tasks" ? "Создать задачу" : "Создать заметку"} disabled={activeModule.primary.disabled} onClick={activeModule.primary.run}><Plus size={22} aria-hidden="true" /></button>}</div></DepthCard>
       {feedback}
       {tab !== "connection" && <SyncStatus connection={connection} remoteActive={Boolean(remote)} finance={tab === "finance"} localCount={data.tasks.length + data.notes.length} open={() => setTab("connection")} />}
       {currentDraft && tab !== "finance" && <button className="draft-banner" onClick={() => begin(currentDraft)}><NotebookPen size={20} /><span>Продолжить черновик<strong>{currentDraft.title || "Без названия"}</strong></span></button>}
@@ -401,5 +401,6 @@ export default function App() {
     <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); }} />
   </div></QuickActions>;
 }
+
 
 

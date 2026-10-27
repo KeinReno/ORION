@@ -30,7 +30,7 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v3
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vitest run packages/mobile-core/src
+      - run: pnpm exec vitest run packages/mobile-core/src apps/android/src
       - run: pnpm --filter @orion/android build
       - run: pnpm --filter @orion/android android:sync
       - run: bash gradlew assembleDebug assembleRelease lintDebug testDebugUnitTest --console=plain
@@ -41,3 +41,4 @@ jobs:
           path: |
             apps/android/android/app/build/outputs/apk/debug/*.apk
             apps/android/android/app/build/outputs/apk/release/*.apk
+
