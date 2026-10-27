@@ -15,8 +15,9 @@ export interface TasksScreenProps {
   remote: boolean; available: boolean; edit: (task: Task) => void;
   done: (task: Task) => void; reorder: (ids: string[]) => Promise<boolean>;
   menu: (task: Task) => ReactNode; actions: (task: Task) => ReactNode;
+  gestureEnabled: boolean; swipeDelete: (task: Task) => void;
 }
-export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTasks, checklist, busy, query, setQuery, remote, available, edit, done, reorder, menu, actions }: TasksScreenProps) {
+export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTasks, checklist, busy, query, setQuery, remote, available, edit, done, reorder, menu, actions, gestureEnabled, swipeDelete }: TasksScreenProps) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const tick = () => setNow(Date.now()); const timer = setInterval(tick, 60_000); window.addEventListener("focus", tick); document.addEventListener("visibilitychange", tick); return () => { clearInterval(timer); window.removeEventListener("focus", tick); document.removeEventListener("visibilitychange", tick); }; }, []);
   const tasks = orderTasks(filterTasks(allTasks, filters, now), sort);
@@ -40,7 +41,7 @@ export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTask
     </ModuleFilters></DepthCard>
     <div className="results-line"><p role="status">Показано: {tasks.length}</p>{filtered && <button className="text-button" onClick={() => setFilters({ ...EMPTY_TASK_FILTERS })}>Сбросить фильтры задач</button>}</div>
     {(filtered || sort !== "manual" || query) && tasks.length > 1 && <p className="helper">Для перестановки выберите порядок вручную, сбросьте фильтры и поиск.</p>}
-    {available && <TaskList tasks={tasks} disabled={busy || Boolean(query) || filtered || sort !== "manual"} reorder={reorder} actions={actions}>{(task) => <>
+    {available && <TaskList tasks={tasks} disabled={busy || Boolean(query) || filtered || sort !== "manual"} reorder={reorder} actions={actions} gestureEnabled={gestureEnabled && !busy} swipeRight={done} swipeLeft={swipeDelete}>{(task) => <>
       <button className="check-button" aria-label={(isTaskClosed(task.status) ? "Вернуть в работу: " : "Завершить: ") + task.title} aria-pressed={isTaskClosed(task.status)} disabled={busy} onClick={() => done(task)}>{isTaskClosed(task.status) && <Check size={19} />}</button>
       <button className="entry-main" onClick={() => edit(task)}><strong>{task.title}</strong>{task.description && <span className="excerpt">{task.description}</span>}<small className="entry-status">{STATUS_LABELS[task.status]}{checklistLabel(task)}</small>
         <span className="entry-badges">{task.priority !== "normal" && <span className={task.priority === "high" ? "entry-badge important" : "entry-badge"}>{task.priority === "high" ? "Высокий приоритет" : "Низкий приоритет"}</span>}
