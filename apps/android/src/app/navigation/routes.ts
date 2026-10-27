@@ -32,5 +32,5 @@ export function parseRoute(hash: string): AppRoute {
   if (path.startsWith("module/")) {
     try { return { kind: "module", moduleId: decodeURIComponent(path.slice(7)), ...(new URLSearchParams(search).get("entity") ? { entityId: new URLSearchParams(search).get("entity")! } : {}) }; } catch { /* malformed URL uses safe default */ }
   }
-  return { kind: "module", moduleId: "tasks" };
+  return { kind: "module", moduleId: "today" };
 }
