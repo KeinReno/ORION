@@ -16,6 +16,7 @@ export const SETTINGS_FIELDS = [
   { id: "depth-effects", page: "motion", label: "Глубина при наклоне", keywords: "датчик параллакс движение эффект" },
   { id: "depth-strength", page: "motion", label: "Сила наклона", keywords: "чувствительность глубина" },
   { id: "cosmos-mode", page: "motion", label: "Живой фон", keywords: "living cosmos графит текстуры орбиты гипноз движение фон" },
+  { id: "swipe-gestures", page: "motion", label: "Свайпы по задачам и заметкам", keywords: "свайп вправо влево выполнить закрепить удалить жест" },
   { id: "quick-actions", page: "motion", label: "Быстрые действия", keywords: "удержание холо жест перетаскивание drag" },
   { id: "dictation", page: "voice", label: "Системная диктовка", keywords: "голос микрофон транскрибация распознавание речь" },
   { id: "backup", page: "data", label: "Резервная копия", keywords: "экспорт данные сохранить файл json" },
