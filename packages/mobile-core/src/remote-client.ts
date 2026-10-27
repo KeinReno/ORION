@@ -116,6 +116,9 @@ export class MobileRemoteClient {
   async setTaskDone(id: string, done: boolean): Promise<void> {
     await this.write(() => this.engine.enqueue({ entity: "task", entityId: id, kind: "patch", fields: { status: done ? "done" : "todo" }, expectedRevision: this.revision("task", id) }));
   }
+  async setNotePinned(id: string, pinned: boolean): Promise<void> {
+    await this.write(() => this.engine.enqueue({ entity: "note", entityId: id, kind: "patch", fields: { pinnedAt: pinned ? new Date().toISOString() : null }, expectedRevision: this.revision("note", id) }));
+  }
   async archiveNote(id: string, archived: boolean): Promise<void> {
     await this.write(() => this.engine.enqueue({ entity: "note", entityId: id, kind: "patch", fields: { archivedAt: archived ? new Date().toISOString() : null }, expectedRevision: this.revision("note", id) }));
   }
