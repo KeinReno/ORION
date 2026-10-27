@@ -60,6 +60,9 @@ export default function App() {
   const [, refreshClock] = useState(0);
   useEffect(() => { const timer = setInterval(() => refreshClock(value => value + 1), 15_000); return () => clearInterval(timer); }, []);
   const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string; delete?: boolean } | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{ kind: "task" | "note"; id: string; title: string } | null>(null);
+  const removalTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (removalTimer.current !== null) clearTimeout(removalTimer.current); }, []);
   const [editor, setEditor] = useState<Draft | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
   const [noteQuery, setNoteQuery] = useState("");
@@ -198,7 +201,7 @@ export default function App() {
     {connection.error && <p className="error" role="alert">{connection.error}</p>}
     <button onClick={() => void connection.switchSpace(false)}>Открыть записи «На телефоне»</button></main>;
 
-  const taskRecords = remote ? remote.engine.tasks() : data.tasks;
+  const taskRecords = (remote ? remote.engine.tasks() : data.tasks).filter((task) => pendingRemoval?.kind !== "task" || task.id !== pendingRemoval.id);
   const tasksById = new Map(taskRecords.map((task) => [task.id, task]));
   const checklistByParent = new Map<string, Task[]>();
   for (const task of taskRecords) {
@@ -284,6 +287,24 @@ export default function App() {
     }}>Отменить изменения</button>
   </main></DepthCard></div>;
 
+  const stageRemoval = (kind: "task" | "note", item: Task | Note) => {
+    if (busy) return;
+    if (pendingRemoval) { setNotice("Сначала отмените текущее удаление или дождитесь его завершения."); return; }
+    const target = remote;
+    setEntryMenu(null);
+    setPendingRemoval({ kind, id: item.id, title: item.title });
+    removalTimer.current = window.setTimeout(() => {
+      removalTimer.current = null;
+      void action((repository) => target ? target.deleteEntry(kind, item.id) : repository.deleteEntry(kind, item.id), "Запись удалена");
+      setPendingRemoval(null);
+    }, 6500);
+  };
+  const undoRemoval = () => {
+    if (removalTimer.current !== null) clearTimeout(removalTimer.current);
+    removalTimer.current = null;
+    setPendingRemoval(null);
+    setNotice("Удаление отменено");
+  };
   const entryActions = (kind: "task" | "note", item: Task | Note) => entryMenu?.kind === kind && entryMenu.id === item.id
     ? <EntryActions key={kind + item.id + (entryMenu?.delete ? ":remove" : "")} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy} defaultConfirm={Boolean(entryMenu?.delete)}
       close={() => setEntryMenu(null)} edit={() => { setEntryMenu(null); if (currentDraft) begin(currentDraft); else if (kind === "task") editTask(item as Task); else editNote(item as Note); }}
@@ -312,7 +333,7 @@ export default function App() {
   }
   const tasks = taskRecords.filter((item) => !item.parentId && (!taskNeedle || matchingRoots.has(item.id)))
     .sort((a, b) => Number(isTaskClosed(a.status)) - Number(isTaskClosed(b.status)) || (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER) || b.updatedAt.localeCompare(a.updatedAt));
-  const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => Boolean(item.archivedAt) === archive
+  const notes = (remote ? remote.engine.notes() : data.notes).filter((item) => (pendingRemoval?.kind !== "note" || item.id !== pendingRemoval.id) && Boolean(item.archivedAt) === archive
     && (item.title + " " + item.summary + " " + item.body + " " + item.tags.join(" ")).toLocaleLowerCase().includes(noteNeedle)).sort((a, b) => Number(Boolean(b.pinnedAt)) - Number(Boolean(a.pinnedAt)) || b.updatedAt.localeCompare(a.updatedAt));
   const quickEntry = (kind: "task" | "note") => {
     if (financeWrites.current || financeWriteError.current) { setError("Сначала сохраните или отмените ввод финансов. Не удалось подтвердить запись черновика."); return; }
@@ -355,12 +376,12 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (task) => setEntryMenu({ kind: "task", id: task.id, delete: true }), tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+    tasks: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (task) => stageRemoval("task", task), tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
       edit: openTask,
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
-    notes: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (note) => setEntryMenu({ kind: "note", id: note.id, delete: true }),
+    notes: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (note) => stageRemoval("note", note),
        pinNote: (note) => void action((value) => remote ? remote.setNotePinned(note.id, !note.pinnedAt) : value.setNotePinned(note.id, !note.pinnedAt), "Закрепление заметки изменено"), notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
       edit: (note) => currentDraft ? begin(currentDraft) : editNote(note),
       archiveNote: (note) => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть"),
@@ -415,6 +436,8 @@ export default function App() {
         : <ModuleOutlet definition={activeModule} scope={remote?.key ?? "phone"} />}
 
     </main>
+    {pendingRemoval && <div className="orion-undo" role="status"><span>Удаление «{pendingRemoval.title}» через несколько секунд</span>
+      <button type="button" onClick={undoRemoval}>Отменить</button></div>}
     <BottomNavigation items={modules} selected={activeModule?.id ?? "more"} navigate={(id) => { setTab(id); }} />
   </div></QuickActions>;
 }
