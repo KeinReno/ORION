@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DepthCard } from "../../depth-card";
+import { CosmosControls } from "../../living-cosmos";
 import type { SettingControlProps } from "./types";
 export function MotionSettings({ settings, pending, patch, depth }: SettingControlProps & { depth: { status: string } }) {
   const [strength, setStrength] = useState(settings.depthStrength);
@@ -18,6 +19,7 @@ export function MotionSettings({ settings, pending, patch, depth }: SettingContr
         <p className="depth-status" role="status">{depth.status}</p>
         <p className="helper">Держите телефон удобно, затем плавно наклоняйте влево и вправо. При касании все слои замирают до завершения жеста. При системном отключении анимаций эффект не работает.</p>
       </div>}
+      <CosmosControls />
       <section id="quick-actions"><h2>Быстрые действия</h2><p>Удерживайте пустое место или кнопку «+», затем выберите действие. Обычное нажатие на «+» открывает то же меню.</p>
       <p className="helper">Для порядка задач используйте захват или кнопки «Выше» и «Ниже». Жесты не заменяют обычные кнопки.</p></section>
     </section></DepthCard>;
