@@ -89,7 +89,7 @@ const COSMOS_OPTIONS: readonly { id: CosmosMode; name: string; detail: string }[
 
 export function CosmosControls() {
   const mode = useCosmosMode();
-  return <section className="cosmos-settings" aria-labelledby="cosmos-settings-title">
+  return <section id="cosmos-mode" className="cosmos-settings" aria-labelledby="cosmos-settings-title">
     <h2 id="cosmos-settings-title"><Orbit size={18} aria-hidden="true" /> Живой фон</h2>
     <p className="helper">Living Cosmos: спокойные орбиты позади интерфейса и матовые графитовые поверхности в тёмной теме. Текст, кнопки и зоны касаний не движутся.</p>
     <div className="cosmos-settings__options" role="group" aria-label="Интенсивность живого фона">
