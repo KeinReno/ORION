@@ -325,7 +325,12 @@ export default function App() {
     if (data.finance?.draft) { setNotice("Открыт незавершённый ввод финансов. Он не заменён новой операцией."); return; }
     setFinanceLaunch({ id: Date.now(), type }); setNotice("");
   };
+  const openTask = (task: Task) => currentDraft ? begin(currentDraft) : editTask(task);
+  const toggleTask = (task: Task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена");
+  const taskCalendarPorts = { tasks: taskRecords, edit: openTask, done: toggleTask, create: () => quickEntry("task") };
   const modules = createBuiltinModules({
+    calendar: taskCalendarPorts,
+    today: { ...taskCalendarPorts, calendar: () => setTab("calendar") },
     lists: { lists: remote ? remote.engine.lists().lists : data.lists, initialDraft: data.listDrafts[remote?.key ?? "phone"] ?? null,
       busy, available: !remote || remote.hasModule("list"), canItems: !remote || remote.hasModule("listItem"), remote: Boolean(remote),
       selectedId: navigation.route.kind === "module" ? navigation.route.entityId : undefined,
