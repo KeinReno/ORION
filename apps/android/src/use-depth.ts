@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { depthOffset } from "./depth-model";
 
 const Depth = registerPlugin<{
   start(): Promise<{ available: boolean }>; stop(): Promise<void>;
@@ -20,7 +21,6 @@ export function useDepth(enabled: boolean, strength = 60) {
     let listener: Promise<PluginListenerHandle> | null = null;
     const reset = () => {
       if (frame) cancelAnimationFrame(frame); frame = 0;
-      root.querySelectorAll<HTMLElement>(".depth-card-body").forEach((element) => element.style.removeProperty("transform"));
       root.dataset.depth = "off";
       root.style.setProperty("--depth-lift", "0px");
       for (const key of ["x", "y"]) root.style.setProperty("--depth-" + key, "0px");
@@ -28,26 +28,22 @@ export function useDepth(enabled: boolean, strength = 60) {
     };
     const paint = () => {
       frame = 0; if (!alive || !wanted || touching) return;
-      const scale = strengthRef.current / 100;
-      root.style.setProperty("--depth-lift", `${(24 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-x", `${(Math.max(-1, Math.min(1, latest.x * 1.5)) * 32 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-y", `${(Math.max(-1, Math.min(1, latest.y * 1.5)) * 32 * scale).toFixed(2)}px`);
-      root.style.setProperty("--depth-rx", `${(-Math.max(-1, Math.min(1, latest.y * 1.5)) * 28 * scale).toFixed(2)}deg`);
-      root.style.setProperty("--depth-ry", `${(Math.max(-1, Math.min(1, latest.x * 1.5)) * 28 * scale).toFixed(2)}deg`);
+      const offset = depthOffset(latest.x, latest.y, strengthRef.current);
+      root.style.setProperty("--depth-x", `${offset.x.toFixed(3)}px`);
+      root.style.setProperty("--depth-y", `${offset.y.toFixed(3)}px`);
     };
     const sync = () => {
       const editing = document.activeElement?.matches("input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select");
       const next = alive && enabled && Capacitor.isNativePlatform() && active && !document.hidden && !editing && !touching && root.dataset.motion === "full";
       if (!next) setStatus(!enabled ? "Эффект выключен" : !Capacitor.isNativePlatform() ? "Датчик доступен в Android-приложении" : root.dataset.motion !== "full" ? "Анимации отключены в настройках телефона" : "Пауза: касание, ввод или приложение в фоне");
-      if (next === wanted) { if (!next && !touching) reset(); return; }
+      if (next === wanted) { if (!next && (!touching || !active || document.hidden || editing || !enabled || root.dataset.motion !== "full")) reset(); return; }
       wanted = next;
       // Freeze the card under the finger: resetting here changes the pointer-up target.
       if (touching && root.dataset.depth === "active" && root.dataset.motion === "full") {
-        const cards = Array.from(root.querySelectorAll<HTMLElement>(".depth-card-body"));
-        const transforms = cards.map((element) => getComputedStyle(element).transform);
-        cards.forEach((element, index) => { element.style.transform = transforms[index]!; });
+        if (frame) cancelAnimationFrame(frame); frame = 0;
+        // All layers inherit the same variables: freeze those, not each DOM node.
         root.dataset.depth = "paused";
-      } else if (!touching || root.dataset.motion !== "full") reset();
+      } else if (root.dataset.motion !== "full" || !enabled || !active || document.hidden || editing) reset();
       clearTimeout(watchdog); received = false;
       void serial(async () => {
         if (!next || !alive || !wanted) { await Depth.stop(); return; }
@@ -69,14 +65,15 @@ export function useDepth(enabled: boolean, strength = 60) {
       });
       void listener.catch(() => {});
     }
-    const down = () => { touching = true; clearTimeout(resume); sync(); };
-    const up = () => { touching = false; clearTimeout(resume); resume = window.setTimeout(sync, 200); };
+    const pointers = new Set<number>();
+    const down = (event: PointerEvent) => { pointers.add(event.pointerId); touching = true; clearTimeout(resume); sync(); };
+    const up = (event: PointerEvent) => { pointers.delete(event.pointerId); touching = pointers.size > 0; clearTimeout(resume); if (!touching) resume = window.setTimeout(sync, 200); };
     const focus = () => { clearTimeout(resume); resume = window.setTimeout(sync, 0); };
     const visibility = () => sync();
     const observer = new MutationObserver(sync); observer.observe(root, { attributes: true, attributeFilter: ["data-motion"] });
     document.addEventListener("pointerdown", down, true); document.addEventListener("pointerup", up, true); document.addEventListener("pointercancel", up, true);
     document.addEventListener("focusin", focus); document.addEventListener("focusout", focus); document.addEventListener("visibilitychange", visibility);
-    const app = Capacitor.isNativePlatform() ? App.addListener("appStateChange", ({ isActive }) => { active = isActive; touching = false; if (isActive) wanted = false; sync(); }) : null;
+    const app = Capacitor.isNativePlatform() ? App.addListener("appStateChange", ({ isActive }) => { active = isActive; pointers.clear(); touching = false; if (isActive) wanted = false; sync(); }) : null;
     sync();
     return () => {
       alive = false; wanted = false; clearTimeout(resume); clearTimeout(watchdog); reset(); observer.disconnect();
@@ -88,3 +85,4 @@ export function useDepth(enabled: boolean, strength = 60) {
   }, [enabled]);
   return { status };
 }
+

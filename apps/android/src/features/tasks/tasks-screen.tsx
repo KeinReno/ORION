@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, ListTodo } from "lucide-react";
+import { CalendarDays, Check, CircleDashed, ListTodo } from "lucide-react";
 import { isTaskClosed, type Task } from "@orion/shared-types";
 import { filterTasks, EMPTY_TASK_FILTERS, type TaskFilters } from "./task-filters";
 import { orderTasks, type TaskSort } from "../view-order";
@@ -28,9 +28,9 @@ export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTask
   return <>
     <ModuleSearch placeholder="Найти задачу" query={query} setQuery={setQuery} />
     <div className="view-presets" role="group" aria-label="Быстрые фильтры задач">
-      <button aria-pressed={!filtered} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS })}>Все</button>
-      <button aria-pressed={filters.status === "active" && filters.due === "all" && filters.priority === "all"} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS, status: "active" })}>Открытые</button>
-      <button aria-pressed={filters.due === "today" && filters.status === "all" && filters.priority === "all"} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS, due: "today" })}>Сегодня</button>
+      <button aria-pressed={!filtered} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS })}><ListTodo size={16} aria-hidden="true" />Все</button>
+      <button aria-pressed={filters.status === "active" && filters.due === "all" && filters.priority === "all"} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS, status: "active" })}><CircleDashed size={16} aria-hidden="true" />Открытые</button>
+      <button aria-pressed={filters.due === "today" && filters.status === "all" && filters.priority === "all"} onClick={() => setFilters({ ...EMPTY_TASK_FILTERS, due: "today" })}><CalendarDays size={16} aria-hidden="true" />Сегодня</button>
     </div>
     <DepthCard><ModuleFilters name="Фильтры задач" active={Object.values(filters).filter((value) => value !== "all").length + Number(sort !== "manual")} >
       <label>Порядок задач<select aria-label="Порядок задач" value={sort} onChange={(e) => setSort(e.target.value as TaskSort)}><option value="manual">Вручную</option><option value="due">По сроку</option><option value="priority">По приоритету</option><option value="title">По названию</option></select></label>
@@ -49,7 +49,8 @@ export function TasksScreen({ sort, setSort, filters, setFilters, tasks: allTask
         </span></button>{menu(task)}
     </>}</TaskList>}
     {(!tasks.length || !available) && <DepthCard><section className="empty"><ListTodo size={36} /><h2>{!available ? "Модуль недоступен" : query || filtered ? "Ничего не найдено" : "Место для первого дела"}</h2>
-      <p>{!available ? "Этот модуль недоступен в пространстве компьютера." : query || filtered ? "Измените фильтры или очистите поиск." : remote ? "Создайте запись в локальной копии, затем синхронизируйте её с ПК." : "Нажмите «Создать». Всё сохранится на телефоне, даже в авиарежиме."}</p>
+      <p>{!available ? "Этот модуль недоступен в пространстве компьютера." : query || filtered ? "Измените фильтры или очистите поиск." : remote ? "Создайте запись в локальной копии, затем синхронизируйте её с ПК." : "Нажмите «+» в заголовке. Всё сохранится на телефоне, даже в авиарежиме."}</p>
       {available && (query || filtered) && <button onClick={() => { setQuery(""); setFilters({ ...EMPTY_TASK_FILTERS }); }}>Показать все задачи</button>}</section></DepthCard>}
   </>;
 }
+

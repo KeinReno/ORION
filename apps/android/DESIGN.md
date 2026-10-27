@@ -15,4 +15,5 @@ system font scale, SQLite durability and ColorOS require native acceptance.
 
 Motion: finite feedback (90–260ms); orbit menu is the focal moment. Hit targets remain stable. Keyboard/reduced-motion routes are instant. Native animator preference is read on resume. Presentation styles are mobile-only.
 
-Depth: native foreground gravity adapter, max 3deg/2.5px, decorative/read-only layers only. Paused during touch/input and disabled by reduced motion. Hold/release without selection now latches quick actions; descendant capture loss is not cancellation (alpha.9).
+Depth: native gravity adapter drives a shared screen-space parallax, without per-card rotation/perspective. Static background -> content plane (up to 2px/axis) -> card (+1px) -> text (+0.4px). Chrome moves subtly; fixed navigation/gesture overlays stay anchored. All planes freeze through the last pointer release, reset for input/background/reduced motion. Hold/release without selection now latches quick actions; descendant capture loss is not cancellation (alpha.9).
+

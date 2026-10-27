@@ -1,3 +1,7 @@
+<!-- Android UI fix 27.10.2026 on 50da9f6: shared bounded parallax replaces
+independent card rotations; ordinary offline banner removed; compact actions.
+Types/lint/104 mobile tests/browser smoke PASS; native APK/OPPO NOT RUN.
+See android/MOTION_COMPACT_UI_2026-10-27.md. -->
 <!-- Android branch alpha.23 (26.10.2026): compare only replica identity fields;
 workspaceName metadata no longer rejects valid copy as offline. Physical task
 phone→installed PC→phone/reload/delete PASS; see android/SYNC_LIVE_ALPHA23.md. -->
@@ -347,3 +351,4 @@ CI на каждом PR зелёный: typecheck, lint, architecture-check, plu
 2. Проверить установленную Tauri-версию с master на Windows; пройти [SYNC_TWO_INSTALL_ACCEPTANCE.md](SYNC_TWO_INSTALL_ACCEPTANCE.md) на двух ПК (G20).
 3. Пройти остальные модули и плагины при смене темы.
 4. Личные записи для задач и остальных сущностей (G21), панель «Ассистент» и личные заметки — глазами и в e2e.
+
