@@ -59,7 +59,7 @@ export default function App() {
   const settingWrites = useSettingWrites(repo.current, setData);
   const [, refreshClock] = useState(0);
   useEffect(() => { const timer = setInterval(() => refreshClock(value => value + 1), 15_000); return () => clearInterval(timer); }, []);
-  const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string } | null>(null);
+  const [entryMenu, setEntryMenu] = useState<{ kind: "task" | "note"; id: string; delete?: boolean } | null>(null);
   const [editor, setEditor] = useState<Draft | null>(null);
   const [taskQuery, setTaskQuery] = useState("");
   const [noteQuery, setNoteQuery] = useState("");
@@ -285,7 +285,7 @@ export default function App() {
   </main></DepthCard></div>;
 
   const entryActions = (kind: "task" | "note", item: Task | Note) => entryMenu?.kind === kind && entryMenu.id === item.id
-    ? <EntryActions key={kind + item.id} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy}
+    ? <EntryActions key={kind + item.id + (entryMenu?.delete ? ":remove" : "")} kind={kind} title={item.title} remote={Boolean(remote)} busy={busy} defaultConfirm={Boolean(entryMenu?.delete)}
       close={() => setEntryMenu(null)} edit={() => { setEntryMenu(null); if (currentDraft) begin(currentDraft); else if (kind === "task") editTask(item as Task); else editNote(item as Note); }}
       remove={() => action(async (value) => {
         if (remote) { await remote.deleteEntry(kind, item.id); if (currentDraft?.kind === kind && currentDraft.id === item.id) await value.saveRemoteDraft(remote.key, null); }
@@ -344,12 +344,13 @@ export default function App() {
           if (draft || (mutation.kind === "delete" && savedDraft && (savedDraft.id === mutation.id || (mutation.entity === "list" && savedDraft.parentId === mutation.id)))) await value.saveListDraft(scope, null);
         } else await value.mutateList(mutation, Boolean(draft));
       }, remote ? "Изменение списка сохранено в копии. Синхронизируйте для отправки на ПК." : "Список сохранён на телефоне") },
-    tasks: { tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
+    tasks: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (task) => setEntryMenu({ kind: "task", id: task.id, delete: true }), tasks, checklist: checklistByParent, sort: taskSort, setSort: setTaskSort, filters: taskFilters, setFilters: setTaskFilters, query: taskQuery, setQuery: setTaskQuery, busy, remote: Boolean(remote), available: !remote || remote.hasModule("task"),
       edit: (task) => currentDraft ? begin(currentDraft) : editTask(task),
       done: (task) => void action((value) => remote ? remote.setTaskDone(task.id, !isTaskClosed(task.status)) : value.setTaskDone(task.id, !isTaskClosed(task.status)), "Задача сохранена"),
       reorder: (ids) => action((value) => value.saveTaskOrder(remote?.key ?? "phone", ids), "Порядок задач сохранён на телефоне"),
       menu: (task) => menuButton("task", task), actions: (task) => entryActions("task", task) },
-    notes: { notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
+    notes: { gestureEnabled: data.settings.swipeGestures, swipeDelete: (note) => setEntryMenu({ kind: "note", id: note.id, delete: true }),
+       pinNote: (note) => void action((value) => remote ? remote.setNotePinned(note.id, !note.pinnedAt) : value.setNotePinned(note.id, !note.pinnedAt), "Закрепление заметки изменено"), notes, sort: noteSort, setSort: setNoteSort, tag: noteTag, setTag: setNoteTag, pinned: pinnedNotes, setPinned: setPinnedNotes, query: noteQuery, setQuery: setNoteQuery, busy, archive, setArchive, remote: Boolean(remote), available: !remote || remote.hasModule("note"),
       edit: (note) => currentDraft ? begin(currentDraft) : editNote(note),
       archiveNote: (note) => void action((value) => remote ? remote.archiveNote(note.id, !archive) : value.archiveNote(note.id, !archive), archive ? "Заметка возвращена" : "Заметка в архиве — её можно вернуть"),
       menu: (note) => menuButton("note", note), actions: (note) => entryActions("note", note) },
