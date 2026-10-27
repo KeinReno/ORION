@@ -8,7 +8,12 @@ import { ApiError } from "@orion/core";
  */
 export function describeAuthError(error: unknown, kind?: "pin" | "password"): string {
   if (error instanceof ApiError) {
-    if (error.status >= 500) {
+    // Only a bare 500 (Nest's uncaught-exception handler) lacks a useful
+    // message. 502/503/504 are often a deliberate, specific exception (e.g.
+    // FeedbackService's "не настроена на сервере" when the GitHub token is
+    // missing) — showing the generic "server is down" line there buries the
+    // real, actionable cause under a false diagnosis.
+    if (error.status === 500) {
       return "Сервер недоступен: похоже, API или база данных сейчас не запущены.";
     }
     if (error.status === 401) {
@@ -33,7 +38,9 @@ export function describeAuthError(error: unknown, kind?: "pin" | "password"): st
  */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status >= 500) {
+    // See the comment in `describeAuthError` — only a bare 500 lacks a
+    // real cause; 502/503/504 often carry one worth showing instead.
+    if (error.status === 500) {
       return "Сервер недоступен: похоже, API или база данных сейчас не запущены.";
     }
     if (error.status === 409) return error.message || "Конфликт: запись уже изменена.";

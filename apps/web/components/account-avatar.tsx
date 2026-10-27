@@ -1,7 +1,7 @@
 "use client";
 
+import { useAccountAvatarBlob } from "@orion/core-react";
 import { useEffect, useState } from "react";
-import { accountAvatarUrl } from "../lib/api-base";
 
 export function AccountAvatar({
   userId,
@@ -17,11 +17,24 @@ export function AccountAvatar({
   bust?: number;
 }): React.ReactElement {
   const initial = (name.trim().slice(0, 1) || "?").toUpperCase();
-  // A missing/broken image (file gone on the server) falls back to the initial
-  // instead of an empty box; a new upload (`bust`) tries the image again.
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [userId, bust]);
-  if (!hasAvatar || failed) {
+  // Fetched as a blob, not a plain `<img src>` — the desktop build's CSP
+  // (`img-src 'self' data: blob:`) blocks a direct cross-origin image
+  // request to the API, which showed up as a broken-image icon instead of
+  // the avatar. See `ApiClient.getAccountAvatarBlob`.
+  const { data: blob, isError } = useAccountAvatarBlob(userId, hasAvatar, bust);
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [blob]);
+
+  if (!hasAvatar || isError || !url) {
     return (
       <span
         className="flex shrink-0 items-center justify-center rounded-xl bg-accent/15 text-sm font-bold text-accent-text"
@@ -32,15 +45,13 @@ export function AccountAvatar({
     );
   }
   return (
-    // Public local avatar — no auth header; cache-bust after upload.
     <img
-      src={accountAvatarUrl(userId, bust)}
+      src={url}
       alt=""
       width={size}
       height={size}
       className="shrink-0 rounded-xl object-cover"
       style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
     />
   );
 }

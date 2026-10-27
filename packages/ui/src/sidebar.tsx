@@ -670,10 +670,12 @@ export function Sidebar({
               ]}
         </nav>
       </div>
-      <div className={clsx("flex gap-2", horizontal ? "shrink-0 flex-row items-center" : "shrink-0 flex-col")}>
-        {footer ? (
-          <div className={horizontal ? "border-l border-border pl-3" : "border-t border-border pt-3"}>{typeof footer === "function" ? footer({ open }) : footer}</div>
-        ) : null}
+      <div
+        className={clsx(
+          "flex gap-2",
+          horizontal ? "shrink-0 flex-row items-center border-l border-border pl-3" : "shrink-0 flex-col border-t border-border pt-3"
+        )}
+      >
         {isDrawer ? (
           <button
             type="button"
@@ -698,6 +700,7 @@ export function Sidebar({
             <span className={clsx("whitespace-nowrap", !open && "sr-only")}>{pinned ? "Открепить" : "Закрепить"}</span>
           </button>
         )}
+        {footer ? <div>{typeof footer === "function" ? footer({ open }) : footer}</div> : null}
       </div>
       {mounted && hovered && hoveredLink
         ? createPortal(

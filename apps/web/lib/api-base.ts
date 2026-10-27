@@ -61,8 +61,3 @@ export const LOCAL_API_BASE_URL = resolveApiBaseUrl({
 
 /** Адрес API окна: локальный, а в режиме «Клиент LAN» — прокси выбранного узла на локальном API (ТЗ-04). */
 export const API_BASE_URL = applyNodeMode(LOCAL_API_BASE_URL, readNodeMark());
-
-export function accountAvatarUrl(userId: string, bust?: number): string {
-  const query = bust != null ? `?t=${bust}` : "";
-  return `${API_BASE_URL}/auth/accounts/${userId}/avatar${query}`;
-}

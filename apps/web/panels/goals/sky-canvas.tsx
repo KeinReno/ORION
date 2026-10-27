@@ -106,6 +106,8 @@ export interface SkyCanvasProps {
   onReparent?: (goalId: string, parentId: string) => void;
   /** A project from the tray was dropped onto a goal star. */
   onDropProject?: (projectId: string, goalId: string) => void;
+  /** A project from the tray was released over the canvas but not on a goal star — explain the miss instead of silently ignoring it (ORION-15). */
+  onInvalidDropProject?: () => void;
   /** Arrange mode (or Shift held): a drag moves the star itself; the new position is reported here. */
   arrange?: boolean;
   onPin?: (starId: string, x: number, y: number) => void;
@@ -121,7 +123,7 @@ export interface SkyCanvasProps {
  * (`buildConstellations`); this only draws it and turns pointer / keyboard input into
  * select / pan / zoom / drop callbacks. Editing itself is the caller's job.
  */
-export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onActivate, onReparent, onDropProject, arrange = false, onPin, dependencyLinks = [], onCanvasPrimaryClick, onCanvasContextMenu }: SkyCanvasProps): React.ReactElement {
+export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onActivate, onReparent, onDropProject, onInvalidDropProject, arrange = false, onPin, dependencyLinks = [], onCanvasPrimaryClick, onCanvasContextMenu }: SkyCanvasProps): React.ReactElement {
   const full = mode === "full";
   const glowId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -308,6 +310,11 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
               if (projectId && target) {
                 event.preventDefault();
                 onDropProject?.(projectId, target.goalId);
+              } else if (projectId) {
+                // Released over the canvas but not within a goal star's drop radius — say so
+                // instead of leaving the user wondering why nothing happened (ORION-15 AC2).
+                event.preventDefault();
+                onInvalidDropProject?.();
               }
             }
           : undefined

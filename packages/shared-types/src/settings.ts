@@ -285,7 +285,12 @@ export const appInfoSchema = z.object({
   version: z.string(),
   environment: z.string(),
   apiVersion: z.string(),
-  updateManifestUrl: z.string().nullable()
+  updateManifestUrl: z.string().nullable(),
+  /** ORION-14: канал/бета-метка, commit SHA и время сборки staged runtime (`build.json`) —
+   * null на источнике из исходников (dev), а не в собранном дистрибутиве. */
+  buildTag: z.string().nullable(),
+  commit: z.string().nullable(),
+  builtAt: z.string().nullable()
 });
 export type AppInfo = z.infer<typeof appInfoSchema>;
 

@@ -419,6 +419,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
               onActivate={readOnly || arrange || editLinks ? undefined : (id) => activateStar(id, open.stars)}
               onReparent={readOnly || !editLinks ? undefined : reparent}
               onDropProject={readOnly || !editLinks ? undefined : attachProject}
+              onInvalidDropProject={readOnly || !editLinks ? undefined : () => toast({ title: "Проект не прикреплён", description: "Отпустите его точно на звезде цели (крупный круг).", tone: "default" })}
               arrange={arrange && !readOnly}
               onPin={readOnly || !arrange ? undefined : pin}
               onCanvasPrimaryClick={() => { setSelectedId(null); setLinkSource(null); setComposer(null); }}

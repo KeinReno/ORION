@@ -557,6 +557,18 @@ export class ApiClient {
     return this.request("GET", "/auth/accounts", undefined, z.array(accountPublicSchema));
   }
 
+  /**
+   * Avatar bytes, fetched (not a plain `<img src>`): the desktop build's CSP
+   * only allows `img-src 'self' data: blob:`, and the API runs on a
+   * different origin (127.0.0.1, or an arbitrary LAN node address in
+   * "Клиент LAN" mode) — a direct `<img>` request is silently blocked there,
+   * showing a broken-image icon. The caller turns the blob into an object
+   * URL, same pattern as `getDocumentBlob`.
+   */
+  getAccountAvatarBlob(userId: string): Promise<Blob> {
+    return this.requestBlob("GET", `/auth/accounts/${userId}/avatar`);
+  }
+
   uploadAvatar(file: Blob): Promise<SessionUser> {
     const form = new FormData();
     form.append("file", file);

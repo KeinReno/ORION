@@ -89,6 +89,21 @@ export function useUpdateProfile() {
   });
 }
 
+/**
+ * Avatar bytes as a `Blob`, not a plain `<img src>` — see
+ * `ApiClient.getAccountAvatarBlob`. `bust` is folded into the query key so a
+ * fresh upload (same userId) refetches instead of serving the cached blob.
+ */
+export function useAccountAvatarBlob(userId: string | undefined, hasAvatar: boolean, bust = 0) {
+  const { api } = useCore();
+  return useQuery<Blob>({
+    queryKey: ["account-avatar", userId, bust],
+    queryFn: () => api.getAccountAvatarBlob(userId as string),
+    enabled: Boolean(userId) && hasAvatar,
+    staleTime: Infinity
+  });
+}
+
 export function useUploadAvatar() {
   const { api } = useCore();
   const queryClient = useQueryClient();
