@@ -10,4 +10,5 @@ export function applyMobileTheme(mode: MobileSettings["theme"], darkTheme: Mobil
   root.style.colorScheme = theme.baseMode;
   root.dataset.theme = mode;
   root.dataset.palette = theme.id;
+  root.dataset.cosmosTheme = theme.baseMode;
 }
