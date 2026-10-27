@@ -105,6 +105,15 @@ export const motionLevelSchema = z.enum(["off", "calm", "expressive"]);
 export type MotionLevel = z.infer<typeof motionLevelSchema>;
 export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 
+/**
+ * How much the interface sounds: `off` (default — opt-in, like a fresh install should be silent);
+ * `quiet` — only things the user didn't just trigger themselves (reminders, alerts); `full` — also
+ * the taps the user did trigger (check, save, permanent delete, sign-in/out). Quiet hours mute
+ * reminders regardless of this — see `isWithinQuietHours` — but never mute a tap the user just made.
+ */
+export const soundLevelSchema = z.enum(["off", "quiet", "full"]);
+export type SoundLevel = z.infer<typeof soundLevelSchema>;
+
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
   /**
@@ -154,6 +163,7 @@ export const userPreferenceSchema = z.object({
   /** Whether opening sections keeps adding tabs on top, or reuses the current tab. Personal. */
   openTabsMode: openTabsModeSchema,
   motionLevel: motionLevelSchema,
+  soundLevel: soundLevelSchema,
   onboardingCompletedAt: z.string().datetime().nullable()
 });
 export type UserPreference = z.infer<typeof userPreferenceSchema>;

@@ -121,7 +121,18 @@ async function migrate(config) {
 
 // Метка сборки (`v0.1.0-windows-beta.3`) кладёт в runtime/build.json скрипт сборки установщика; без неё версия неизвестна.
 function buildTag() {
-  try { return JSON.parse(fs.readFileSync(path.join(appRoot, 'build.json'), 'utf8')).tag || ''; } catch { return ''; }
+  return buildInfo().tag;
+}
+
+// ORION-14: version/commit/builtAt from the same file, passed to the API so «Настройки → О программе»
+// can show exactly what's installed — the thing a user can check without asking a developer to look at git log.
+function buildInfo() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(appRoot, 'build.json'), 'utf8'));
+    return { tag: parsed.tag || '', commit: parsed.commit || '', builtAt: parsed.builtAt || '' };
+  } catch {
+    return { tag: '', commit: '', builtAt: '' };
+  }
 }
 
 function selectApplication() {
@@ -161,7 +172,9 @@ async function main() {
     // ТЗ-04: настройки узла (режим, устройства, сертификат) лежат рядом с данными; API сам перезапускается лаунчером.
     ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
     // Обновления программы (apps/api/src/updates): метка сборки, каталог установки и способ штатно остановить PostgreSQL.
-    ORION_BUILD_TAG: buildTag(), ORION_INSTALL_DIR: path.resolve(runtime, '..'),
+    // ORION_BUILD_COMMIT/ORION_BUILD_TIME (ORION-14): same build.json, surfaced in «О программе» so provenance
+    // is checkable from inside a running install, not just by reading the staged runtime folder by hand.
+    ORION_BUILD_TAG: buildInfo().tag, ORION_BUILD_COMMIT: buildInfo().commit, ORION_BUILD_TIME: buildInfo().builtAt, ORION_INSTALL_DIR: path.resolve(runtime, '..'),
     ORION_WEB_DIST: path.join(appRoot, 'web'),
     ORION_SHELL_RUNTIME: runtime,
     ORION_SHELL_BASE_TAG: JSON.parse(fs.readFileSync(path.join(runtime, 'build.json'), 'utf8')).tag,

@@ -38,6 +38,17 @@ const OPS_FOR: Record<AgentPermissionModule, AgentPermissionOp[]> = {
   finance: ["create"]
 };
 
+/**
+ * ORION-13: a cell the matrix never offers (the "·" placeholder) used to give no reason at all — exactly
+ * the "некликабельный чекбокс без объяснения" complaint. These are capability limits of the agent API
+ * itself (see `OPS_FOR`'s own comment), not a UI bug to silently "unlock" — that's the risk note in
+ * ORION-13: unblocking only the checkbox without matching server support would be a lie the UI tells.
+ */
+const OP_UNAVAILABLE_REASON: Partial<Record<AgentPermissionModule, string>> = {
+  projects: "Проекты агенту доступны только для чтения — создание и изменение проектов через API агентов не предусмотрено.",
+  finance: "Финансовые операции агент может только предложить черновиком (создать проводку, которую вы подтверждаете) — читать или менять существующие операции агенту не даётся."
+};
+
 export interface PolicyDraft {
   mode: AgentMode;
   matrix: Required<AgentPermissions>;
@@ -127,7 +138,7 @@ export function ModulePermissionsField({ value, onChange }: { value: string[]; o
                         className="accent-accent"
                       />
                     ) : (
-                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground" title={`${row}: эта операция не предусмотрена для раздела — агенту доступны только отмеченные в строке.`}>·</span>
                     )}
                   </td>
                 );
@@ -199,7 +210,7 @@ export function AgentPolicyFields({
                         className="accent-accent"
                       />
                     ) : (
-                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground" title={OP_UNAVAILABLE_REASON[module] ?? "Эта операция не предусмотрена для этого раздела."}>·</span>
                     )}
                   </td>
                 ))}

@@ -89,7 +89,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
       {installed ? (
         <InstalledCard workspaceId={workspaceId} installed={installed} onDone={() => setInstalled(null)} />
       ) : info && !info.bridgeEnabled ? (
-        <p className="text-label text-danger">Мост для агентов выключен на этом сервере (нужен ORION_AI_BRIDGE=1).</p>
+        <p className="text-label text-danger">{info.bridgeDisabledReason ?? "Мост для агентов выключен на этом сервере (нужен ORION_AI_BRIDGE=1)."}</p>
       ) : issued ? (
         <div className="space-y-3">
           <p className="text-label font-medium">

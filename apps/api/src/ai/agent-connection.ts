@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AgentConnectionInfo } from "@orion/shared-types";
 import { isServerMode } from "../common/orion-mode";
-import { aiBridgeEnabled } from "./agent-tokens.service";
+import { aiBridgeDisabledReason, aiBridgeEnabled } from "./agent-tokens.service";
 
 /**
  * Where the MCP adapter and the Agent Manual live for the process that is running right now. The API is the only
@@ -35,6 +35,7 @@ export function resolveAgentConnection(
   const port = env.PORT?.trim() || "4000";
   return {
     bridgeEnabled: aiBridgeEnabled(),
+    bridgeDisabledReason: aiBridgeDisabledReason(),
     mode: server ? "server" : "local",
     apiUrl: env.ORION_PUBLIC_API_URL?.trim().replace(/\/+$/, "") || (server ? null : `http://127.0.0.1:${port}`),
     launcher,

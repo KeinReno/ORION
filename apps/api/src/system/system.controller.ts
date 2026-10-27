@@ -35,7 +35,12 @@ export class SystemController {
       version: process.env.APP_VERSION ?? "0.2.0",
       apiVersion: "2026-09-09",
       environment: process.env.NODE_ENV ?? "development",
-      updateManifestUrl: process.env.DESKTOP_UPDATE_MANIFEST_URL ?? null
+      updateManifestUrl: process.env.DESKTOP_UPDATE_MANIFEST_URL ?? null,
+      // ORION-14: from the staged runtime's build.json via the launcher — lets «О программе» answer
+      // "is this install actually the commit I think it is" without reaching for git log.
+      buildTag: process.env.ORION_BUILD_TAG?.trim() || null,
+      commit: process.env.ORION_BUILD_COMMIT?.trim() || null,
+      builtAt: process.env.ORION_BUILD_TIME?.trim() || null
     };
   }
 

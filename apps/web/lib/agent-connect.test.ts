@@ -5,6 +5,7 @@ import { buildConnectSnippet, checkAgentConnection } from "./agent-connect";
 const SECRET = "orion_agt_abc123";
 const installed: AgentConnectionInfo = {
   bridgeEnabled: true,
+  bridgeDisabledReason: null,
   mode: "local",
   apiUrl: "http://127.0.0.1:4000",
   launcher: "installed",

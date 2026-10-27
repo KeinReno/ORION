@@ -652,6 +652,9 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
                     <Row label="Версия" value={appInfo.data.version} />
                     <Row label="Версия API" value={appInfo.data.apiVersion} />
                     <Row label="Окружение" value={appInfo.data.environment} />
+                    <Row label="Сборка (бета)" value={appInfo.data.buildTag ?? "не упакована (запуск из исходников)"} />
+                    <Row label="Commit" value={appInfo.data.commit ?? "—"} />
+                    <Row label="Собрана" value={appInfo.data.builtAt ? shortDateTime(appInfo.data.builtAt) : "—"} />
                     <Row className="[@container(min-width:576px)]:col-span-2" label="Манифест обновлений" value={appInfo.data.updateManifestUrl ?? "не задан"} />
                   </dl>
                 ) : (

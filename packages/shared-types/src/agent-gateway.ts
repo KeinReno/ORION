@@ -231,6 +231,8 @@ export const AGENT_LIMITS = { textMaxLength: 20_000, projects: 100, linksPerCapt
  */
 export const agentConnectionInfoSchema = z.object({
   bridgeEnabled: z.boolean(),
+  /** ORION-12: why `bridgeEnabled` is false (e.g. LAN Host) — null when enabled, or genuinely unknown. */
+  bridgeDisabledReason: z.string().nullable(),
   mode: z.enum(["local", "server"]),
   /** Where the agent's HTTP calls go; `null` when this server does not know its public address. */
   apiUrl: z.string().nullable(),

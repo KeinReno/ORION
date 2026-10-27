@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ServiceUnavailableException } from "@nes
 import { ASSISTANT_DEFAULT_MODEL, type AssistantKeyStatus, type SetAssistantKeyInput, setAssistantKeyInputSchema } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
 import { openSecret, sealSecret, SyncSecretMissingError } from "../sync/sync-crypto";
-import { aiBridgeEnabled } from "./agent-tokens.service";
+import { aiBridgeDisabledReason, aiBridgeEnabled } from "./agent-tokens.service";
 
 /**
  * Ключ владельца к языковой модели (ADR-0017, вариант C). Хранится зашифрованным (`sealSecret`, ключ узла `SYNC_SECRET`),
@@ -13,7 +13,7 @@ export class AssistantKeyService {
   constructor(private readonly prisma: PrismaService) {}
 
   private unavailableReason(): string | null {
-    if (!aiBridgeEnabled()) return "Мост для агентов выключен на этом сервере (ORION_AI_BRIDGE=1 включает)";
+    if (!aiBridgeEnabled()) return aiBridgeDisabledReason();
     if (!process.env.SYNC_SECRET?.trim()) return "На этом узле не задан SYNC_SECRET — ключ нельзя хранить зашифрованным";
     return null;
   }

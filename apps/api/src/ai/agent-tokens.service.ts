@@ -45,6 +45,21 @@ export function aiBridgeEnabled(): boolean {
   return !isServerMode() || process.env.ORION_AI_BRIDGE === "1";
 }
 
+/**
+ * ORION-12: the generic "ORION_AI_BRIDGE=1 включает" line left the owner unable to tell *why* the node
+ * ended up in server mode in the first place — the single most common cause here is "Хост LAN" (ADR-0015),
+ * which is the same `ORION_MODE=server` posture as a real multi-user deployment, not a copy of it. Naming
+ * that cause (without exposing it as a toggle — the risk note in ORION-12 is explicit about that) turns a
+ * dead end into an actionable choice: turn LAN Host off, or accept the risk and set the env var.
+ */
+export function aiBridgeDisabledReason(): string | null {
+  if (aiBridgeEnabled()) return null;
+  if (process.env.ORION_LAN_HOST === "1") {
+    return "Мост для агентов выключен, потому что включён режим «Хост LAN» (Настройки → Сеть) — это тот же серверный режим, доступный другим устройствам. Выключите «Хост LAN», если удалённый доступ не нужен, либо задайте ORION_AI_BRIDGE=1 на этом узле и перезапустите, понимая, что мост станет доступен любому подключённому устройству.";
+  }
+  return "Мост для агентов выключен: этот узел запущен в серверном режиме (ORION_MODE=server). Задайте ORION_AI_BRIDGE=1 в конфигурации узла и перезапустите, понимая, что мост станет доступен всем, кто может подключиться к серверу.";
+}
+
 export function hashAgentSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");
 }
