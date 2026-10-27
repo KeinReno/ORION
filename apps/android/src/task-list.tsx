@@ -1,10 +1,12 @@
 import { DepthCard } from "./depth-card";
+import { SwipeRow } from "./swipe-row";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { isTaskClosed, type Task } from "@orion/shared-types";
 
-export function TaskList({ tasks, disabled, reorder, children, actions }: {
+export function TaskList({ tasks, disabled, reorder, children, actions, gestureEnabled = false, swipeRight, swipeLeft }: {
   tasks: Task[]; disabled: boolean; reorder: (ids: string[]) => Promise<boolean>; children: (task: Task) => ReactNode; actions?: (task: Task) => ReactNode;
+  gestureEnabled?: boolean; swipeRight?: (task: Task) => void; swipeLeft?: (task: Task) => void;
 }) {
   const list = useRef<HTMLUListElement>(null);
   const drag = useRef<{ id: string; pointer: number; moved: boolean; x: number; y: number } | null>(null);
@@ -39,7 +41,7 @@ export function TaskList({ tasks, disabled, reorder, children, actions }: {
   return <>
     <ul ref={list} className="entries task-list">{tasks.map((task, index) => <li key={task.id} data-task-id={task.id}
       className={[isTaskClosed(task.status) ? "completed" : "", moving === task.id ? "task-moving" : "", target === task.id && moving !== task.id ? (dropAfter ? "task-drop-after" : "task-drop-target") : ""].join(" ")}>
-      <DepthCard><div className="task-row">{children(task)}
+      <SwipeRow enabled={gestureEnabled && !saving} rightLabel="Выполнить" onRight={() => swipeRight?.(task)} onLeft={() => swipeLeft?.(task)} onHold={() => setControls(task.id)}><DepthCard><div className="task-row">{children(task)}
         <button className="task-grip icon-button" disabled={disabled || saving} aria-label={"Переместить задачу: " + task.title} aria-expanded={controls === task.id}
           onPointerDown={(event) => {
             if (!event.isPrimary || event.button !== 0 || disabled || saving) return;
@@ -75,6 +77,6 @@ export function TaskList({ tasks, disabled, reorder, children, actions }: {
         <button disabled={disabled || saving || !tasks[index + 1] || isTaskClosed(tasks[index + 1]!.status) !== isTaskClosed(task.status)}
           onClick={() => void move(task.id, tasks[index + 1]!.id, true)}><ArrowDown size={18} />Ниже</button>
       </div>}
-    {actions?.(task)}</DepthCard></li>)}</ul>{tasks.length > 1 && <p className="helper order-help">Перестановка: потяните ⋮⋮ или нажмите для выбора порядка.</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
+    {actions?.(task)}</DepthCard></SwipeRow></li>)}</ul>{tasks.length > 1 && <p className="helper order-help">Перестановка: потяните ⋮⋮ или нажмите для выбора порядка.</p>}<p className="helper" role="status">{moving ? "Отпустите в отмеченном месте списка." : message}</p></>;
 }
 
