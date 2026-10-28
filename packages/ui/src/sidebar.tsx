@@ -126,6 +126,13 @@ export interface SidebarProps {
    * `beforeId`, or at the end), or out of its folder when `folderId` is null. Enables dragging.
    */
   onMoveLink?: (linkId: string, folderId: string | null, beforeId?: string) => void;
+  /**
+   * ORION-10: dropping `linkId` directly ON `targetId` (its body, not the gap above it that
+   * `onMoveLink` already reaches) — "наложение" creates a group. Absent = dropping on a link's
+   * body falls back to the plain reorder `onMoveLink` already does; present = the sidebar shows
+   * the two zones as visually distinct drop targets.
+   */
+  onGroupLinks?: (linkId: string, targetId: string) => void;
   /** Which window edge the menu sits on. top/bottom make a horizontal icon bar. Ignored for the phone drawer. */
   position?: "left" | "right" | "top" | "bottom";
 }
@@ -168,6 +175,7 @@ export function Sidebar({
   onToggleFolder,
   onCreateFolder,
   onMoveLink,
+  onGroupLinks,
   allIconsVisible = false,
   position = "left"
 }: SidebarProps): React.ReactElement {
@@ -275,6 +283,49 @@ export function Sidebar({
         setDropKey(null);
         if (onDropped) onDropped(id);
         else onMoveLink(id, folderId, beforeId);
+      }
+    };
+  }
+
+  // ORION-10: an ungrouped link is both drop targets at once — the top edge means "order"
+  // (insert before, same as `dropProps` above), the rest of its body means "group" (merge with
+  // it into a new folder). `dropMode` names which one the pointer is currently over, so the
+  // highlight can show the two as visually different without two separate DOM elements fighting
+  // over the same small row.
+  const [dropMode, setDropMode] = useState<"order" | "group" | null>(null);
+  const ORDER_ZONE = 0.3;
+  function linkDropProps(link: SidebarLinkItem): React.HTMLAttributes<HTMLElement> {
+    if (!onMoveLink || !link.id) return {};
+    const key = `link:${link.id}`;
+    const targetId = link.id;
+    return {
+      onDragOver: (event) => {
+        if (!dragId || dragId === targetId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        const rect = event.currentTarget.getBoundingClientRect();
+        const mode: "order" | "group" = onGroupLinks && (event.clientY - rect.top) / rect.height > ORDER_ZONE ? "group" : "order";
+        if (dropKey !== key) setDropKey(key);
+        if (dropMode !== mode) setDropMode(mode);
+      },
+      onDragLeave: (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setDropKey((cur) => (cur === key ? null : cur));
+          setDropMode((cur) => (dropKey === key ? null : cur));
+        }
+      },
+      onDrop: (event) => {
+        if (!dragId || dragId === targetId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const id = dragId;
+        const mode = dropMode;
+        setDragId(null);
+        setDropKey(null);
+        setDropMode(null);
+        if (mode === "group" && onGroupLinks) onGroupLinks(id, targetId);
+        else onMoveLink(id, null, targetId);
       }
     };
   }
@@ -410,17 +461,30 @@ export function Sidebar({
     );
   }
 
-  /** A link that is also a drop target: dropped here, a dragged link takes this link's place in its folder. */
+  /**
+   * A link that is also a drop target. Already in a folder: dropped here, a dragged link takes
+   * this link's place in the same folder (plain reorder — nesting a folder inside a folder is
+   * out of scope, see `onGroupLinks`'s own comment). Ungrouped: the top edge reorders among
+   * ungrouped links, the rest of the body groups the two into a new folder (ORION-10) —
+   * `linkDropProps` tells the two zones apart; the ring is solid for "group", a top accent bar
+   * for "order" so a drag never looks the same for two different outcomes.
+   */
   function renderLink(link: SidebarLinkItem): React.ReactElement {
     const base = renderLinkBase(link);
     if (!onMoveLink || !link.id) return base;
     const folder = folders.find((f) => f.linkIds.includes(link.id as string));
     const key = `link:${link.id}`;
+    const isDropTarget = dragId && dragId !== link.id && dropKey === key;
     return (
       <div
         key={link.label}
-        {...dropProps(key, folder?.id ?? null, link.id)}
-        className={clsx("rounded-lg", dragId && dragId !== link.id && dropKey === key && "bg-accent/10 ring-1 ring-accent/60")}
+        {...(folder ? dropProps(key, folder.id, link.id) : linkDropProps(link))}
+        className={clsx(
+          "rounded-lg",
+          isDropTarget && folder && "bg-accent/10 ring-1 ring-accent/60",
+          isDropTarget && !folder && dropMode === "group" && "bg-accent/10 ring-1 ring-accent/60",
+          isDropTarget && !folder && dropMode === "order" && "border-t-2 border-accent"
+        )}
       >
         {base}
       </div>

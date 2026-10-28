@@ -1,6 +1,6 @@
 import type { SidebarFolder } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, normalizeFolders, orderedIds, placeInFolder, reorderPanels, renameFolder, toggleFolder } from "./sidebar-folders";
+import { addFolder, deleteFolder, folderOf, groupOnto, moveFolder, moveToFolder, normalizeFolders, orderedIds, placeInFolder, reorderPanels, renameFolder, toggleFolder } from "./sidebar-folders";
 
 const f = (id: string, items: string[] = [], collapsed = false, name = id): SidebarFolder => ({ id, name, collapsed, items });
 
@@ -42,6 +42,34 @@ describe("addFolder", () => {
   it("trims and shortens the name", () => {
     expect(addFolder([], "  a   b  ", "n")?.[0]?.name).toBe("a b");
     expect(addFolder([], "x".repeat(100), "n")?.[0]?.name).toHaveLength(40);
+  });
+});
+
+describe("groupOnto", () => {
+  it("dropping one ungrouped link onto another creates a new folder holding exactly the two", () => {
+    const out = groupOnto([], "notes", "tasks", "n", "Работа");
+    expect(out).toEqual([{ id: "n", name: "Работа", collapsed: false, items: ["tasks", "notes"] }]);
+  });
+
+  it("dropping onto a link that is already in a folder joins that same folder — same result as dropping on the folder itself", () => {
+    const base = [f("a", ["tasks", "finance"], false, "Деньги")];
+    const out = groupOnto(base, "notes", "tasks", "n", "fallback");
+    expect(out).toEqual([{ id: "a", name: "Деньги", collapsed: false, items: ["notes", "tasks", "finance"] }]);
+  });
+
+  it("moves the dragged link out of its own folder first, so it can't end up in two places", () => {
+    const base = [f("a", ["notes", "finance"])];
+    const out = groupOnto(base, "notes", "tasks", "n", "Новая");
+    expect(out).toEqual([{ id: "a", items: ["finance"], collapsed: false, name: "a" }, { id: "n", name: "Новая", collapsed: false, items: ["tasks", "notes"] }]);
+  });
+
+  it("refuses a self-drop and a full folder list", () => {
+    expect(groupOnto([], "tasks", "tasks", "n", "Х")).toBeNull();
+    expect(groupOnto(Array.from({ length: 12 }, (_, i) => f(`f${i}`)), "notes", "tasks", "n", "Х")).toBeNull();
+  });
+
+  it("falls back to «Новая папка» for a blank name", () => {
+    expect(groupOnto([], "notes", "tasks", "n", "   ")?.[0]?.name).toBe("Новая папка");
   });
 });
 

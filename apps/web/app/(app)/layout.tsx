@@ -94,7 +94,7 @@ import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
-import { addFolder, deleteFolder, folderOf, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
+import { addFolder, deleteFolder, folderOf, groupOnto, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
 import { PanelScrollMemory } from "../../lib/scroll-memory";
 import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
@@ -1012,6 +1012,19 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           if (nextFolders.some((folder, index) => folder.items.join() !== sidebarFolders[index]?.items.join())) saveFolders(nextFolders);
           // Dropped among the free sections: it also takes that place in the user's own order.
           if (folderId === null && beforeId) saveOrder(reorderPanels(defaultNavIds, sidebarOrder, panelId, beforeId));
+        }}
+        onGroupLinks={(panelId, targetId) => {
+          const targetLabel = navPanels.find((panel) => panel.id === targetId)?.label ?? "";
+          const draggedLabel = navPanels.find((panel) => panel.id === panelId)?.label ?? "";
+          const before = sidebarFolders;
+          const existingFolder = folderOf(before, targetId);
+          const next = groupOnto(before, panelId, targetId, newFolderId(), [targetLabel, draggedLabel].filter(Boolean).join(", "));
+          if (!next) return;
+          saveFolders(next);
+          toast({
+            title: existingFolder ? `Добавлено в «${existingFolder.name}»` : `Группа «${next[next.length - 1]?.name ?? ""}» создана`,
+            action: { label: "Отменить", onClick: () => saveFolders(before) }
+          });
         }}
         variant={compact ? "drawer" : "rail"}
         position={sidebarPosition}

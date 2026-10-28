@@ -68,6 +68,31 @@ export function moveToFolder(folders: readonly SidebarFolder[], panelId: string,
 }
 
 /**
+ * ORION-10: dropping one sidebar link directly ON another (not in the gap between links,
+ * which is `placeInFolder`/`reorderPanels`'s plain reorder) — the "наложение" the backlog asks
+ * for. `targetId` already in a folder: `draggedId` just joins that folder, right before it —
+ * the same result dropping on the folder itself gives, so two ways to reach a folder never
+ * disagree. `targetId` ungrouped: a brand-new folder is created holding exactly the two of
+ * them, named by the caller (there is no user-typed name at drop time — unlike `addFolder`'s
+ * explicit-dialog path — so the caller picks a sensible default and the existing rename affordance
+ * covers the rest). Refuses (null) a self-drop and a full folder list, same as `addFolder`.
+ */
+export function groupOnto(
+  folders: readonly SidebarFolder[],
+  draggedId: string,
+  targetId: string,
+  newFolderId: string,
+  fallbackName: string
+): SidebarFolder[] | null {
+  if (draggedId === targetId) return null;
+  const existing = folderOf(folders, targetId);
+  if (existing) return placeInFolder(folders, draggedId, existing.id, targetId);
+  if (folders.length >= SIDEBAR_FOLDERS_MAX) return null;
+  const cleared = moveToFolder(folders, draggedId, null);
+  return [...cleared, { id: newFolderId, name: cleanFolderName(fallbackName) || "Новая папка", collapsed: false, items: [targetId, draggedId] }];
+}
+
+/**
  * Drag-and-drop placement: puts a panel into `folderId` right before `beforeId` (appended
  * when `beforeId` is absent or not in that folder), or takes it out of every folder when
  * `folderId` is null. Dropping a panel on itself changes nothing.
