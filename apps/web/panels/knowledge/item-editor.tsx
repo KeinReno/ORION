@@ -27,42 +27,11 @@ import {
   type KnowledgeStatus,
   type KnowledgeVisibility
 } from "@orion/shared-types";
-import { Button, ConfirmDialog, Input, MarkdownEditor, Select, Textarea, useToast } from "@orion/ui";
+import { Badge, Button, ConfirmDialog, DropdownMenu, Input, MarkdownEditor, Select, Sheet, Textarea, useToast } from "@orion/ui";
+import { BookOpen, Check, ChevronDown, Library, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-
-const STATUS_LABEL: Record<KnowledgeStatus, string> = {
-  captured: "Сырьё",
-  draft: "Черновик",
-  review: "На проверке",
-  approved: "Принято",
-  published: "Опубликовано",
-  archived: "Архив"
-};
-
-const KIND_LABEL: Record<KnowledgeKind, string> = {
-  method: "Методика",
-  tool: "Инструмент",
-  fact: "Факт",
-  opinion: "Мнение",
-  link: "Ссылка"
-};
-
-const SOURCE_LABEL: Record<KnowledgeSourceType, string> = {
-  url: "Ссылка",
-  note: "Заметка",
-  document: "Документ",
-  manual: "Запись",
-  other: "Другое"
-};
-
-const RELATION_LABEL: Record<KnowledgeRelationKind, string> = {
-  related: "Связано",
-  expands: "Развивает",
-  contradicts: "Противоречит",
-  duplicate_of: "Дубликат",
-  derived_from: "Выведено из",
-  part_of: "Часть"
-};
+import { KIND_ICON, KIND_LABEL, RELATION_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, VISIBILITY_LABEL } from "./knowledge-labels";
+import { KnowledgeReadingView } from "./reading-view";
 
 interface Draft {
   id: string;
@@ -99,6 +68,14 @@ function conflictOf(error: unknown): KnowledgeItemDetail | null {
   return details.current;
 }
 
+/**
+ * ORION-19: the material's text is the surface now, not one of three equal columns. Status/kind/
+ * visibility live in one chip row (same quick-change pattern as `ProjectStatusMenu`), source and
+ * relations moved into a "Контекст" sheet opened on demand — the task doc's own words, "атрибуты
+ * доступны по контексту без обязательных выдвижных панелей". «Режим чтения» (`KnowledgeReadingView`)
+ * is a separate, distraction-free render, not a CSS tweak on this one — editing chrome has no
+ * business being present while reading something straight through.
+ */
 export function KnowledgeItemEditor({
   workspaceId,
   itemId,
@@ -122,6 +99,8 @@ export function KnowledgeItemEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [conflict, setConflict] = useState<KnowledgeItemDetail | null>(null);
+  const [reading, setReading] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const draftRef = useRef<Draft | null>(null);
   const dirty = useRef(false);
   const [unsaved, setUnsaved] = useState(false);
@@ -140,6 +119,8 @@ export function KnowledgeItemEditor({
       return fromDetail(detail.data);
     });
   }, [detail.data]);
+  // Switching to another material while reading would show the wrong one's text under the toggle.
+  useEffect(() => setReading(false), [itemId]);
 
   function edit(patch: Partial<Draft>) {
     dirty.current = true;
@@ -226,16 +207,20 @@ export function KnowledgeItemEditor({
   if (detail.isError) {
     return (
       <div className="space-y-3">
-        <p className="text-body text-ui-primary">Материал не загрузился.</p>
+        <p className="text-body text-foreground">Материал не загрузился.</p>
         <Button onClick={() => void detail.refetch()}>Повторить</Button>
       </div>
     );
   }
-  if (!draft || !detail.data) return <p className="text-caption text-ui-muted">Загрузка материала…</p>;
+  if (!draft || !detail.data) return <p className="text-label text-subtle-foreground">Загрузка материала…</p>;
 
   const item = detail.data;
+  const contextCount = item.sources.length + item.relations.length + item.backlinks.length;
+
+  if (reading) return <KnowledgeReadingView item={item} onExit={() => setReading(false)} />;
+
   return (
-    <div className="grid min-w-0 gap-4 [@container(min-width:1100px)]:grid-cols-[minmax(0,1fr)_16rem]">
+    <div className="min-w-0 space-y-4">
       <ConfirmDialog
         open={confirmDelete}
         title="Удалить материал навсегда?"
@@ -249,146 +234,211 @@ export function KnowledgeItemEditor({
           });
         }}
       />
-      <aside className="min-w-0 order-3 space-y-3 rounded-xl border border-ui-border p-4">
-        <h2 className="text-body text-ui-primary">Источник</h2>
-        {item.sources.map((source) => (
-          <div key={source.id} className="space-y-1 rounded-lg border border-ui-border p-3 text-caption text-ui-muted">
-            <div className="text-ui-primary">
-              {SOURCE_LABEL[source.type]}
-              {source.sourceTitle ? ` · ${source.sourceTitle}` : ""}
-            </div>
-            {source.sourceUrl ? <div className="break-all">{source.sourceUrl}</div> : null}
-            {source.originalText ? <div className="whitespace-pre-wrap">{source.originalText}</div> : null}
-            <Button variant="ghost" onClick={() => deleteSource.mutate(source.id, { onError: () => toast({ title: "Не удалось убрать источник", tone: "danger" }) })}>
-              Убрать источник
-            </Button>
-          </div>
-        ))}
-        <details className="text-body text-ui-muted"><summary className="cursor-pointer py-2 text-ui-primary">Добавить источник</summary><SourceForm workspaceId={workspaceId} itemId={item.id} /></details>
-      </aside>
-      <div className="order-1 min-w-0 space-y-4 rounded-xl border border-ui-border p-4">
-        {conflict ? (
-          <div className="space-y-2 rounded-lg border border-ui-border p-3">
-            <p className="text-body text-ui-primary">Материал сохранился в другой версии. Ваш текст на месте.</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => {
-                  setDraft(fromDetail(conflict));
-                  setConflict(null);
-                  dirty.current = false;
-                  setUnsaved(false);
-                }}
-              >
-                Загрузить версию сервера
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDraft((current) => (current ? { ...current, revision: conflict.revision } : current));
-                  setConflict(null);
-                  dirty.current = true;
 
-                }}
-              >
-                Сохранить мою поверх
-              </Button>
-            </div>
-          </div>
-        ) : null}
-        <Input value={draft.title} onChange={(event) => edit({ title: event.target.value })} aria-label="Название" />
-        <Textarea aria-label="Краткое содержание" value={draft.summary} rows={2} placeholder="Кратко, своими словами" onChange={(event) => edit({ summary: event.target.value })} />
-        <MarkdownEditor value={draft.body} onChange={(body) => edit({ body })} onSave={() => void save()} placeholder="Редакционный текст" />
-        <Relations item={item} items={items} workspaceId={workspaceId} />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={!unsaved || update.isPending || Boolean(conflict)} onClick={() => void save()}>Сохранить</Button>
-          <span role="status" className="text-caption text-ui-muted">{update.isPending ? "Сохраняю…" : unsaved ? "Есть несохранённые изменения" : "Сохранено"}</span>
-          {item.status === "archived" ? (
-            <Button variant="outline" onClick={() => edit({ status: "draft" })}>
-              Вернуть из архива
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => edit({ status: "archived" })}>
-              В архив
-            </Button>
-          )}
-          {item.status === "archived" ? (
+      {conflict ? (
+        <div className="space-y-2 rounded-lg border border-border bg-card p-3">
+          <p className="text-body text-foreground">Материал сохранился в другой версии. Ваш текст на месте.</p>
+          <div className="flex flex-wrap gap-2">
             <Button
-              variant="danger"
               onClick={() => {
-                setConfirmDelete(true);
+                setDraft(fromDetail(conflict));
+                setConflict(null);
+                dirty.current = false;
+                setUnsaved(false);
               }}
             >
-              Удалить навсегда
+              Загрузить версию сервера
             </Button>
-          ) : null}
-        </div>
-      </div>
-      <aside className="order-2 min-w-0 space-y-4 [@container(min-width:1100px)]:row-span-2 rounded-xl border border-ui-border p-4">
-        <label className="flex flex-col gap-2 text-caption text-ui-muted">
-          Статус
-          <Select value={draft.status} onChange={(event) => edit({ status: event.target.value as KnowledgeStatus })}>
-            {KNOWLEDGE_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABEL[status]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <div className="space-y-1 text-caption text-ui-muted">
-          Видимость
-          <div className="flex flex-wrap gap-2">
-            <Button variant={draft.visibility === "private" ? "primary" : "outline"} onClick={() => edit({ visibility: "private" })}>
-              Только я
-            </Button>
-            <Button variant={draft.visibility === "workspace" ? "primary" : "outline"} onClick={() => edit({ visibility: "workspace" })}>
-              Пространство
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDraft((current) => (current ? { ...current, revision: conflict.revision } : current));
+                setConflict(null);
+                dirty.current = true;
+              }}
+            >
+              Сохранить мою поверх
             </Button>
           </div>
         </div>
-        <label className="flex flex-col gap-2 text-caption text-ui-muted">
-          Тип
-          <Select value={draft.kind} onChange={(event) => edit({ kind: event.target.value as KnowledgeKind })}>
-            {KNOWLEDGE_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {KIND_LABEL[kind]}
-              </option>
+      ) : null}
+
+      {/* The one chip row every density elsewhere in ORION uses for quick state changes — not a
+          permanently-visible column of labelled <Select>s. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <KnowledgeStatusMenu status={draft.status} onChange={(status) => edit({ status })} />
+        <KnowledgeKindMenu kind={draft.kind} onChange={(kind) => edit({ kind })} />
+        <KnowledgeVisibilityMenu visibility={draft.visibility} onChange={(visibility) => edit({ visibility })} />
+        <span className="flex-1" />
+        <Button size="sm" variant="outline" onClick={() => setReading(true)} disabled={!draft.body.trim()} title={!draft.body.trim() ? "В материале пока нет текста" : undefined}>
+          <BookOpen className="h-3.5 w-3.5" /> Режим чтения
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setContextOpen(true)}>
+          <Library className="h-3.5 w-3.5" /> Контекст{contextCount > 0 ? ` · ${contextCount}` : ""}
+        </Button>
+      </div>
+
+      <Input value={draft.title} onChange={(event) => edit({ title: event.target.value })} aria-label="Название" className="text-title" />
+      <Textarea aria-label="Краткое содержание" value={draft.summary} rows={2} placeholder="Кратко, своими словами" onChange={(event) => edit({ summary: event.target.value })} />
+      <MarkdownEditor value={draft.body} onChange={(body) => edit({ body })} onSave={() => void save()} placeholder="Редакционный текст" className="min-h-[24rem]" />
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <Button disabled={!unsaved || update.isPending || Boolean(conflict)} onClick={() => void save()}>Сохранить</Button>
+        <span role="status" className="text-label text-subtle-foreground">{update.isPending ? "Сохраняю…" : unsaved ? "Есть несохранённые изменения" : "Сохранено"}</span>
+        {item.status === "archived" ? (
+          <Button variant="outline" onClick={() => edit({ status: "draft" })}>Вернуть из архива</Button>
+        ) : (
+          <Button variant="outline" onClick={() => edit({ status: "archived" })}>В архив</Button>
+        )}
+        {item.status === "archived" ? (
+          <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+            <Trash2 className="h-3.5 w-3.5" /> Удалить навсегда
+          </Button>
+        ) : null}
+      </div>
+
+      <Sheet open={contextOpen} onClose={() => setContextOpen(false)} title="Контекст материала" width="26rem">
+        <div className="space-y-5">
+          <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
+            Раздел
+            <Select value={draft.categoryId ?? ""} onChange={(event) => edit({ categoryId: event.target.value || null })}>
+              <option value="">Без раздела</option>
+              {categories
+                .filter((category) => !category.parentId)
+                .map((category) => (
+                  <optgroup key={category.id} label={category.name}>
+                    <option value={category.id}>{category.name}</option>
+                    {categories
+                      .filter((child) => child.parentId === category.id)
+                      .map((child) => (
+                        <option key={child.id} value={child.id}>
+                          {child.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
+            Теги
+            <Input value={draft.tags} placeholder="через запятую" onChange={(event) => edit({ tags: event.target.value })} />
+          </label>
+
+          <div className="space-y-2">
+            <h2 className="text-label font-medium text-foreground">Источник</h2>
+            {item.sources.length === 0 ? <p className="text-label text-subtle-foreground">Источников пока нет.</p> : null}
+            {item.sources.map((source) => (
+              <div key={source.id} className="space-y-1 rounded-lg border border-border p-3 text-label text-subtle-foreground">
+                <div className="text-foreground">
+                  {SOURCE_LABEL[source.type]}
+                  {source.sourceTitle ? ` · ${source.sourceTitle}` : ""}
+                  {source.sourceAuthor ? ` · ${source.sourceAuthor}` : ""}
+                </div>
+                {source.sourceUrl ? <div className="break-all">{source.sourceUrl}</div> : null}
+                {source.originalText ? <div className="whitespace-pre-wrap">{source.originalText}</div> : null}
+                <Button size="sm" variant="ghost" onClick={() => deleteSource.mutate(source.id, { onError: () => toast({ title: "Не удалось убрать источник", tone: "danger" }) })}>
+                  Убрать источник
+                </Button>
+              </div>
             ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-2 text-caption text-ui-muted">
-          Раздел
-          <Select value={draft.categoryId ?? ""} onChange={(event) => edit({ categoryId: event.target.value || null })}>
-            <option value="">Без раздела</option>
-            {categories
-              .filter((category) => !category.parentId)
-              .map((category) => (
-                <optgroup key={category.id} label={category.name}>
-                  <option value={category.id}>{category.name}</option>
-                  {categories
-                    .filter((child) => child.parentId === category.id)
-                    .map((child) => (
-                      <option key={child.id} value={child.id}>
-                        {child.name}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-2 text-caption text-ui-muted">
-          Теги
-          <Input value={draft.tags} placeholder="через запятую" onChange={(event) => edit({ tags: event.target.value })} />
-        </label>
-      </aside>
+            <details className="text-label text-subtle-foreground">
+              <summary className="cursor-pointer py-1 text-foreground">Добавить источник</summary>
+              <SourceForm workspaceId={workspaceId} itemId={item.id} />
+            </details>
+          </div>
+
+          <Relations item={item} items={items} workspaceId={workspaceId} />
+        </div>
+      </Sheet>
     </div>
   );
+}
 
+function KnowledgeStatusMenu({ status, onChange }: { status: KnowledgeStatus; onChange: (status: KnowledgeStatus) => void }): React.ReactElement {
+  return (
+    <DropdownMenu
+      align="start"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={`Статус: ${STATUS_LABEL[status]}. Изменить`}
+          className="inline-flex items-center gap-0.5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
+          <ChevronDown className="h-3 w-3 text-subtle-foreground" aria-hidden />
+        </button>
+      )}
+      items={KNOWLEDGE_STATUSES.map((value) => ({
+        label: STATUS_LABEL[value],
+        icon: value === status ? Check : undefined,
+        onSelect: () => {
+          if (value !== status) onChange(value);
+        }
+      }))}
+    />
+  );
+}
+
+function KnowledgeKindMenu({ kind, onChange }: { kind: KnowledgeKind; onChange: (kind: KnowledgeKind) => void }): React.ReactElement {
+  const Icon = KIND_ICON[kind];
+  return (
+    <DropdownMenu
+      align="start"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={`Тип: ${KIND_LABEL[kind]}. Изменить`}
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-micro text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          <Icon className="h-3 w-3" aria-hidden />
+          {KIND_LABEL[kind]}
+          <ChevronDown className="h-3 w-3 text-subtle-foreground" aria-hidden />
+        </button>
+      )}
+      items={KNOWLEDGE_KINDS.map((value) => ({
+        label: KIND_LABEL[value],
+        icon: KIND_ICON[value],
+        onSelect: () => {
+          if (value !== kind) onChange(value);
+        }
+      }))}
+    />
+  );
+}
+
+function KnowledgeVisibilityMenu({ visibility, onChange }: { visibility: KnowledgeVisibility; onChange: (visibility: KnowledgeVisibility) => void }): React.ReactElement {
+  return (
+    <DropdownMenu
+      align="start"
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={`Видимость: ${VISIBILITY_LABEL[visibility]}. Изменить`}
+          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-micro text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        >
+          {VISIBILITY_LABEL[visibility]}
+          <ChevronDown className="h-3 w-3 text-subtle-foreground" aria-hidden />
+        </button>
+      )}
+      items={(["private", "workspace"] as const).map((value) => ({
+        label: VISIBILITY_LABEL[value],
+        icon: value === visibility ? Check : undefined,
+        onSelect: () => {
+          if (value !== visibility) onChange(value);
+        }
+      }))}
+    />
+  );
 }
 
 function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: string }) {
   const addSource = useAddKnowledgeSource(workspaceId);
   const [type, setType] = useState<KnowledgeSourceType>("url");
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [noteId, setNoteId] = useState("");
@@ -398,7 +448,7 @@ function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: stri
   const { toast } = useToast();
 
   return (
-    <div className="space-y-2">
+    <div className="mt-2 space-y-2">
       <Select value={type} onChange={(event) => setType(event.target.value as KnowledgeSourceType)} aria-label="Тип источника">
         {KNOWLEDGE_SOURCE_TYPES.map((item) => (
           <option key={item} value={item}>
@@ -432,6 +482,7 @@ function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: stri
         <Input value={url} placeholder="Адрес" onChange={(event) => setUrl(event.target.value)} />
       ) : null}
       <Input value={title} placeholder="Название источника" onChange={(event) => setTitle(event.target.value)} />
+      <Input value={author} placeholder="Автор (необязательно)" onChange={(event) => setAuthor(event.target.value)} />
       <Textarea value={text} rows={4} placeholder="Исходный текст" onChange={(event) => setText(event.target.value)} />
       <Button
         disabled={addSource.isPending}
@@ -439,10 +490,11 @@ function SourceForm({ workspaceId, itemId }: { workspaceId: string; itemId: stri
           void addSource
             .mutateAsync({
               itemId,
-              input: { type, sourceTitle: title, sourceUrl: url, originalText: text, noteId: noteId || null, documentId: documentId || null }
+              input: { type, sourceTitle: title, sourceAuthor: author, sourceUrl: url, originalText: text, noteId: noteId || null, documentId: documentId || null }
             })
             .then(() => {
               setTitle("");
+              setAuthor("");
               setUrl("");
               setText("");
               setNoteId("");
@@ -471,20 +523,21 @@ function Relations({ item, items, workspaceId }: { item: KnowledgeItemDetail; it
   const [kind, setKind] = useState<KnowledgeRelationKind>("related");
   return (
     <div className="space-y-2">
-      <h2 className="text-body text-ui-primary">Связи</h2>
+      <h2 className="text-label font-medium text-foreground">Связи</h2>
+      {item.relations.length === 0 && item.backlinks.length === 0 ? <p className="text-label text-subtle-foreground">Связей пока нет.</p> : null}
       {item.relations.map((relation) => (
-        <div key={relation.id} className="flex items-center justify-between gap-2 text-caption text-ui-muted">
+        <div key={relation.id} className="flex items-center justify-between gap-2 text-label text-subtle-foreground">
           <span>
             {RELATION_LABEL[relation.kind]} · {relation.peerTitle}
           </span>
-          <Button variant="ghost" onClick={() => deleteRelation.mutate(relation.id, { onError: () => toast({ title: "Не удалось убрать связь", tone: "danger" }) })}>
-            Убрать связь
+          <Button size="sm" variant="ghost" onClick={() => deleteRelation.mutate(relation.id, { onError: () => toast({ title: "Не удалось убрать связь", tone: "danger" }) })}>
+            Убрать
           </Button>
         </div>
       ))}
-      {item.backlinks.length > 0 ? <h3 className="text-caption text-ui-muted">На это ссылаются</h3> : null}
+      {item.backlinks.length > 0 ? <h3 className="text-micro uppercase tracking-wide text-subtle-foreground">На это ссылаются</h3> : null}
       {item.backlinks.map((relation) => (
-        <div key={relation.id} className="text-caption text-ui-muted">
+        <div key={relation.id} className="text-label text-subtle-foreground">
           {relation.peerTitle} · {RELATION_LABEL[relation.kind]}
         </div>
       ))}
