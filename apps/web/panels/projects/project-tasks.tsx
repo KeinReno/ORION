@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeleteTask, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
+import { useCreateTask, useDeleteTask, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
 import type { Milestone, Project, Task, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, PanelSection, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
 import { ListTodo, Milestone as MilestoneIcon, Plus } from "lucide-react";
@@ -67,6 +67,7 @@ export function ProjectTasks({
     if (allowObjectNavigation(id)) navigateToTask(id);
   }
   const updateTask = useUpdateTask(workspaceId);
+  const createTask = useCreateTask(workspaceId);
   const deleteTask = useDeleteTask(workspaceId);
   const { isEnabled: isPluginEnabled } = useEnabledPlugins();
   const teamOn = isPluginEnabled("team");
@@ -114,6 +115,42 @@ export function ProjectTasks({
     updateTask.mutate(
       { taskId: task.id, input: { milestoneId } },
       { onSuccess: onChanged, onError: () => toast({ title: "Не удалось перенести задачу", tone: "danger" }) }
+    );
+  }
+  // ORION-02: drag-to-reparent in the tree. The server re-checks cycles/ownership regardless of
+  // the client-side guard in TaskTree — this mutation is the same `parentId` edit the detail
+  // pane's "Родитель" select already makes, just triggered by a drop instead of a form submit.
+  function reparentTask(taskId: string, parentId: string | null): void {
+    const task = allTasks.find((t) => t.id === taskId);
+    const before = task?.parentId ?? null;
+    if (before === parentId) return;
+    updateTask.mutate(
+      { taskId, input: { parentId } },
+      {
+        onSuccess: () => {
+          onChanged();
+          toast({
+            title: parentId ? "Задача перенесена" : "Задача стала верхнего уровня",
+            action: {
+              label: "Отменить",
+              onClick: () => updateTask.mutate({ taskId, input: { parentId: before } }, { onSuccess: onChanged, onError: () => toast({ title: "Не удалось вернуть", tone: "danger" }) })
+            }
+          });
+        },
+        onError: () => toast({ title: "Не удалось перенести задачу", description: "Возможно, это создало бы цикл подзадач.", tone: "danger" })
+      }
+    );
+  }
+  function createChildTask(parent: Task, title: string): void {
+    createTask.mutate(
+      { title, description: "", priority: "normal", checklist: [], parentId: parent.id, projectId: parent.projectId, milestoneId: parent.milestoneId },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось создать подзадачу", tone: "danger" }) }
+    );
+  }
+  function renameTask(task: Task, title: string): void {
+    updateTask.mutate(
+      { taskId: task.id, input: { title } },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось переименовать", tone: "danger" }) }
     );
   }
   function confirmDelete(): void {
@@ -188,7 +225,16 @@ export function ProjectTasks({
               onMove={moveToMilestone}
             />
           ) : layout === "tree" ? (
-            <TaskTree tasks={tasks} showClosed={showClosed} openTaskId={openTaskId} onToggle={onToggle} onOpen={(task) => onOpenTask(task.id)} />
+            <TaskTree
+              tasks={tasks}
+              showClosed={showClosed}
+              openTaskId={openTaskId}
+              onToggle={onToggle}
+              onOpen={(task) => onOpenTask(task.id)}
+              onReparent={reparentTask}
+              onCreateChild={createChildTask}
+              onRename={renameTask}
+            />
           ) : layout === "graph" ? (
             <TaskDependencyGraph tasks={allTasks} showClosed={showClosed} openTaskId={openTaskId} onOpen={(task) => onOpenTask(task.id)} />
           ) : layout === "board" ? (
