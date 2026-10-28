@@ -1,6 +1,6 @@
 import type { Task, TaskPriority, TaskStatus } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
-import { CheckToggle, cx, DropdownMenu, IconButton, type MenuItem, Tooltip, StatusMark, StrikeText } from "@orion/ui";
+import { CheckToggle, cx, DropdownMenu, IconButton, type MenuItem, Tooltip, StatusMark, StrikeText, useContextMenu } from "@orion/ui";
 import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { useSlotContributions } from "../../lib/extensions/slot";
@@ -89,6 +89,8 @@ export function TaskCard({
 
   // Lit while an agent has just read or changed this task (lib/agent-presence.tsx).
   const agentMark = useAgentRowMark(task.id);
+  // ORION-07: same items as the "⋯" menu — right-click is just another way to reach them, not a second menu to maintain.
+  const contextMenu = useContextMenu(() => items);
 
   return (
     <div
@@ -112,6 +114,7 @@ export function TaskCard({
         onOpen();
       }}
       onFocus={() => onSelect?.()}
+      onContextMenu={contextMenu.onContextMenu}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();

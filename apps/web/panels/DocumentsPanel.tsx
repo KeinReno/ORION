@@ -30,6 +30,7 @@ import {
   Skeleton,
   cx,
   isTypingTarget,
+  useContextMenuApi,
   useDebouncedValue,
   usePanelVisible,
   useResizeWidth,
@@ -79,6 +80,8 @@ export function DocumentsPanel(): React.ReactElement {
   const workspaceId = workspace?.id;
   const { api } = useCore();
   const { toast } = useToast();
+  // ORION-07: right-click on a row — same items as its "⋯" menu (docMenuItems below).
+  const showContextMenu = useContextMenuApi();
 
   const [view, setView] = useState<DocumentView>("active");
   const trash = view === "trash";
@@ -590,6 +593,17 @@ export function DocumentsPanel(): React.ReactElement {
         if (e.currentTarget === e.target) setDragOver(false);
       }}
       onDrop={(e) => dropOnto(e, cwd)}
+      onContextMenu={(e) =>
+        showContextMenu(
+          e,
+          trash
+            ? null
+            : [
+                { label: "Новая папка", icon: FolderPlus, onSelect: () => setNewFolderOpen(true) },
+                { label: "Загрузить файлы", icon: Upload, onSelect: () => fileInputRef.current?.click() }
+              ]
+        )
+      }
     >
       <AnimatePresence>
         {dragOver && !trash ? (
@@ -707,6 +721,7 @@ export function DocumentsPanel(): React.ReactElement {
                 onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                 onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
                 onClick={() => openRow(doc)}
+                onContextMenu={(e) => showContextMenu(e, menuItems)}
                 className={cx(
                   "group relative flex flex-col gap-1.5 rounded-xl border p-2",
                   trash ? "border-transparent" : "cursor-pointer",
@@ -789,6 +804,7 @@ export function DocumentsPanel(): React.ReactElement {
                     onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
                     onDrop={isFolder && !trash ? (e) => dropOnto(e, doc.id) : undefined}
                     onClick={() => openRow(doc)}
+                    onContextMenu={(e) => showContextMenu(e, docMenuItems(doc, isFolder))}
                     className={cx(
                       "group grid items-center gap-2 px-2.5 py-2 transition-colors",
                       compactList

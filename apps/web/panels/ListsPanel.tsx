@@ -22,6 +22,7 @@ import {
   Select,
   Skeleton,
   cx,
+  useContextMenuApi,
   useToast
 } from "@orion/ui";
 import { ExternalLink, FilePlus2, ListChecks, Plus, Search, TriangleAlert } from "lucide-react";
@@ -34,7 +35,7 @@ import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useRowDnd } from "../lib/use-row-dnd";
 import { ItemAdder } from "./lists/item-adder";
 import { ListItemRow } from "./lists/list-item-row";
-import { ListMenu } from "./lists/list-menu";
+import { useListMenu } from "./lists/list-menu";
 import { useListActions } from "./lists/use-list-actions";
 
 type Tab = "active" | "templates" | "archive";
@@ -344,6 +345,8 @@ function ListCard({
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(false);
   const actions = useListActions(workspaceId, list);
+  const showContextMenu = useContextMenuApi();
+  const menu = useListMenu({ workspaceId, list });
 
   // Unchecked first (what's left to do), then manual order — display-only, nothing persisted.
   const sortedItems = useMemo(() => sortListItems(list.items), [list.items]);
@@ -354,7 +357,10 @@ function ListCard({
   const editable = mode === "active";
 
   return (
-    <div className={cx("flex flex-col rounded-xl border border-border p-3", mode === "archive" && "opacity-80")}>
+    <div
+      className={cx("flex flex-col rounded-xl border border-border p-3", mode === "archive" && "opacity-80")}
+      onContextMenu={(e) => showContextMenu(e, menu.items)}
+    >
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -366,7 +372,7 @@ function ListCard({
         </button>
         <div className="flex shrink-0 items-center gap-0.5">
           <ItemOpenButton onOpen={() => openList(list.id, list.name)} />
-          <ListMenu workspaceId={workspaceId} list={list} />
+          {menu.node}
         </div>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-subtle-foreground">

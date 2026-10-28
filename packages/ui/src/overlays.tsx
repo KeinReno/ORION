@@ -3,11 +3,11 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import clsx from "clsx";
 import { X } from "lucide-react";
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { usePanelVisible } from "./panel-shell";
 import { Button, IconButton, Input } from "./primitives";
-import { useEscapeKey, useMounted, useOnClickOutside } from "./hooks";
+import { isTypingTarget, useEscapeKey, useMounted, useOnClickOutside } from "./hooks";
 import { computeFocusTrapAction } from "./focus-trap";
 import { useThemeScopeProps } from "./theme-provider";
 import { useUiSound } from "./sound-level";
@@ -566,6 +566,174 @@ export function Popover({
           )
         : null}
     </>
+  );
+}
+
+/* ------------------------------------------------------------ ContextMenu */
+
+/**
+ * ORION-07: one point-anchored menu Orion shows on right-click, instead of
+ * the WebView/Edge menu ("Назад", "Обновить", "Печать") that reads as a bug
+ * on an Orion surface. `useContextMenu` is the one way a component offers
+ * its own items at the pointer; `ContextMenuProvider` (mounted once, e.g. at
+ * the Workbench root) owns the single open menu's state.
+ *
+ * Composition rule — this is the "contextual resolver" from the platform
+ * doc, built the cheap way (React bubbling) instead of a global DOM
+ * listener plus a separate target-matching registry:
+ *  - A handler whose `buildItems` returns items calls `stopPropagation` and
+ *    owns the click.
+ *  - A handler with nothing to offer does **not** stop propagation, so the
+ *    event keeps bubbling to an ancestor's own `useContextMenu` — up to
+ *    whatever root fallback the app registered (e.g. "Команды… Ctrl+K").
+ *  - An editable surface (`isTypingTarget`) or a live text selection is left
+ *    alone everywhere — no `preventDefault` at all — so native copy/paste
+ *    and spellcheck keep working exactly as before.
+ */
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  items: (MenuItem | "separator")[];
+}
+
+interface ContextMenuApi {
+  show: (x: number, y: number, items: (MenuItem | "separator")[]) => void;
+  hide: () => void;
+}
+
+const ContextMenuCtx = createContext<ContextMenuApi | null>(null);
+
+/** Native copy/paste/spellcheck stays available for an editable field or a selection the user made to copy. */
+function isNativeTextContext(target: EventTarget | null): boolean {
+  return isTypingTarget(target) || Boolean(typeof window !== "undefined" && window.getSelection()?.toString());
+}
+
+export function ContextMenuProvider({ children }: { children: ReactNode }): React.ReactElement {
+  const [state, setState] = useState<ContextMenuState | null>(null);
+  const hide = useCallback(() => setState(null), []);
+  const api = useMemo<ContextMenuApi>(() => ({ show: (x, y, items) => setState({ x, y, items }), hide }), [hide]);
+  return (
+    <ContextMenuCtx.Provider value={api}>
+      {children}
+      <ContextMenuSurface state={state} onClose={hide} />
+    </ContextMenuCtx.Provider>
+  );
+}
+
+/** Shared by `useContextMenu` and `useContextMenuApi` — see their doc comments for the composition rule. */
+function runContextMenu(api: ContextMenuApi | null, event: React.MouseEvent, items: (MenuItem | "separator")[] | null): void {
+  if (isNativeTextContext(event.target)) return;
+  event.preventDefault();
+  if (!items || items.length === 0) return;
+  event.stopPropagation();
+  api?.show(event.clientX, event.clientY, items);
+}
+
+/**
+ * Spread the returned `onContextMenu` onto any element. `buildItems` may
+ * return `null`/`[]` to decline — the event then bubbles to an ancestor
+ * instead of showing an empty menu. Declining still suppresses the native
+ * menu (every handler in the chain calls `preventDefault`); only
+ * `stopPropagation` is conditional.
+ */
+export function useContextMenu(
+  buildItems: (event: React.MouseEvent) => (MenuItem | "separator")[] | null
+): { onContextMenu: (event: React.MouseEvent) => void } {
+  const api = useContext(ContextMenuCtx);
+  const buildRef = useRef(buildItems);
+  buildRef.current = buildItems;
+  const onContextMenu = useCallback((event: React.MouseEvent) => runContextMenu(api, event, buildRef.current(event)), [api]);
+  return { onContextMenu };
+}
+
+/**
+ * For a list/grid `.map()`, where a hook can't be called once per row: get
+ * this once at the component's top level, then build each row's handler
+ * inline — `onContextMenu={(e) => showContextMenu(e, itemsForRow(row))}`.
+ * Same decline-to-bubble rule as `useContextMenu`.
+ */
+export function useContextMenuApi(): (event: React.MouseEvent, items: (MenuItem | "separator")[] | null) => void {
+  const api = useContext(ContextMenuCtx);
+  return useCallback((event: React.MouseEvent, items: (MenuItem | "separator")[] | null) => runContextMenu(api, event, items), [api]);
+}
+
+function ContextMenuSurface({ state, onClose }: { state: ContextMenuState | null; onClose: () => void }): React.ReactElement | null {
+  const mounted = useMounted();
+  const themeScope = useThemeScopeProps();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const open = state !== null;
+  const shown = useOverlayOpen(open);
+  const isTop = useTopmostOverlay(shown);
+  useEscapeKey(onClose, isTop);
+  useOnClickOutside([panelRef], onClose, shown);
+
+  // A stale menu floating over content that just scrolled/resized under it reads as broken, not alive.
+  useEffect(() => {
+    if (!shown) return;
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [shown, onClose]);
+
+  const pos = useMemo(() => {
+    if (!state) return { left: 0, top: 0 };
+    const width = 224; // estimate before layout — clamped so the menu never opens off-screen
+    return {
+      left: Math.max(8, Math.min(state.x, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(state.y, window.innerHeight - 8))
+    };
+  }, [state]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {shown && state ? (
+        <motion.div
+          {...themeScope}
+          key="context-menu"
+          ref={panelRef}
+          role="menu"
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.1 }}
+          style={{ ...themeScope.style, position: "fixed", left: pos.left, top: pos.top }}
+          className="z-[110] min-w-[12rem] overflow-hidden rounded-xl border border-ui-overlay-border bg-ui-overlay/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        >
+          {state.items.map((item, index) => {
+            if (item === "separator") return <div key={`sep-${index}`} className="my-1 h-px bg-border" />;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                disabled={item.disabled}
+                onClick={() => {
+                  onClose();
+                  item.onSelect();
+                }}
+                className={clsx(
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors disabled:opacity-40",
+                  item.tone === "danger"
+                    ? "text-destructive hover:bg-destructive/10"
+                    : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                )}
+              >
+                {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+                {item.label}
+              </button>
+            );
+          })}
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body
   );
 }
 

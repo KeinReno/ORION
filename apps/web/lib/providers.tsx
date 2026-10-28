@@ -2,7 +2,7 @@
 
 import { BrowserLocalStorage } from "@orion/core";
 import { CoreProvider, setReplicaStorage } from "@orion/core-react";
-import { ToastProvider } from "@orion/ui";
+import { ContextMenuProvider, ToastProvider } from "@orion/ui";
 import { useState, type ReactNode } from "react";
 import { API_BASE_URL, isLoopbackHost } from "./api-base";
 import { PHONE_DEVICE_TOKEN_KEY } from "../phone/phone-device";
@@ -45,7 +45,7 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
       <MotionPreference>
         <SoundPreference>
           <NotificationSoundBridge />
-          <ApplicationTheme><ToastProvider>{children}</ToastProvider></ApplicationTheme>
+          <ApplicationTheme><ToastProvider><ContextMenuProvider>{children}</ContextMenuProvider></ToastProvider></ApplicationTheme>
         </SoundPreference>
       </MotionPreference>
     </CoreProvider>

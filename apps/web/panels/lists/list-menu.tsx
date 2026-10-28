@@ -14,8 +14,12 @@ import { useState } from "react";
 import { describeError } from "../../lib/error-message";
 import { openList } from "../../lib/panel-bus";
 
-/** The «⋯» menu of a list — the same actions on the board card and in the list's own tab. */
-export function ListMenu({
+/**
+ * The «⋯» menu of a list — the same actions on the board card and in the list's own tab, and (via
+ * `items`) the card's own right-click (ORION-07): one source of the action list for both surfaces,
+ * rather than a second copy that could drift from the first.
+ */
+export function useListMenu({
   workspaceId,
   list,
   onDeleted
@@ -24,7 +28,7 @@ export function ListMenu({
   list: List;
   /** Called after the list stopped existing (deleted for good) — the tab of a deleted list closes itself. */
   onDeleted?: () => void;
-}): React.ReactElement {
+}): { items: (MenuItem | "separator")[]; node: React.ReactElement } {
   const update = useUpdateList(workspaceId);
   const archive = useArchiveList(workspaceId);
   const remove = useDeleteListPermanently(workspaceId);
@@ -127,7 +131,7 @@ export function ListMenu({
       : [])
   ];
 
-  return (
+  const node = (
     <>
       <DropdownMenu
         trigger={({ toggle }) => (
@@ -190,4 +194,10 @@ export function ListMenu({
       />
     </>
   );
+  return { items, node };
+}
+
+/** Backward-compatible component form for call sites that only need the rendered trigger/dialogs. */
+export function ListMenu(props: { workspaceId: string | undefined; list: List; onDeleted?: () => void }): React.ReactElement {
+  return useListMenu(props).node;
 }

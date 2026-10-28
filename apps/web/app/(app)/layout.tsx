@@ -29,6 +29,7 @@ import {
   ErrorBoundary,
   LoadingScreen,
   cx,
+  useContextMenu,
   useUiSound,
   type MenuItem,
   type SidebarFolderView
@@ -307,6 +308,17 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   navigationToast.current = toast;
   const logout = useLogout();
   const { play } = useUiSound();
+  // ORION-07, root fallback: right-clicking anywhere that didn't claim its own menu (empty dock
+  // space, a panel with no context items yet) gets Orion's own generic menu instead of the WebView's
+  // — never the browser "Назад/Обновить/Печать" menu, and never literally nothing either.
+  const rootContextMenu = useContextMenu(
+    useCallback(
+      (): (MenuItem | "separator")[] => [
+        { label: "Команды… (Ctrl+K)", icon: Search, onSelect: () => window.dispatchEvent(new CustomEvent("orion:open-command-palette")) }
+      ],
+      []
+    )
+  );
   // A window opened with `?workspaceId=` starts on that workspace. Only when this window has no
   // choice of its own yet (a reload keeps its own), and before the "no workspace → /spaces"
   // redirect below can fire.
@@ -937,6 +949,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         !compact && sidebarPosition === "top" && "flex-col",
         !compact && sidebarPosition === "bottom" && "flex-col-reverse"
       )}
+      onContextMenu={rootContextMenu.onContextMenu}
     >
       <AppBackground />
       <FolderNameDialog

@@ -27,10 +27,12 @@ import {
   Skeleton,
   cx,
   isTypingTarget,
+  useContextMenuApi,
   useDebouncedValue,
   usePanelVisible,
   useResizeWidth,
-  useToast
+  useToast,
+  type MenuItem
 } from "@orion/ui";
 import {
   Archive,
@@ -86,6 +88,8 @@ export function NotesPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
   const projectsOn = isEnabled("projects");
+  // ORION-07: right-click on a row — same items as its "⋯" menu.
+  const showContextMenu = useContextMenuApi();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 300);
   const [view, setView] = useState<NoteView>("active");
@@ -535,6 +539,32 @@ export function NotesPanel(): React.ReactElement {
             const startsGroup = groupingActive && (index === 0 || displayed[index - 1]?.projectId !== note.projectId);
             // The author's own description wins; otherwise a cleaned excerpt of the body.
             const preview = noteListPreview(note.summary.trim() || note.body);
+            const noteMenuItems: (MenuItem | "separator")[] = trash
+              ? [
+                  { label: "Восстановить", icon: RotateCcw, onSelect: () => handleRestore(note) },
+                  "separator",
+                  { label: "Удалить навсегда", icon: Trash2, tone: "danger", onSelect: () => setPendingPurge(note) }
+                ]
+              : [
+                  { label: note.pinnedAt ? "Открепить" : "Закрепить", icon: note.pinnedAt ? PinOff : Pin, onSelect: () => handleTogglePin(note) },
+                  { label: note.archivedAt ? "Из архива" : "В архив", icon: note.archivedAt ? ArchiveRestore : Archive, onSelect: () => requestLeave(() => handleToggleArchive(note)) },
+                  { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
+                  { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`note:${note.id}`, note.title) },
+                  { label: "Дублировать", icon: Copy, onSelect: () => requestLeave(() => void handleDuplicate(note)) },
+                  { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },
+                  {
+                    label: "Копировать Markdown",
+                    icon: ClipboardCopy,
+                    onSelect: () =>
+                      void copyNoteMarkdown(note).then(
+                        () => toast({ title: "Скопировано", tone: "success" }),
+                        () => toast({ title: "Не удалось скопировать", tone: "danger" })
+                      )
+                  },
+                  ...(templatesApi ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => requestLeave(() => handleToggleTemplate(note)) }] : []),
+                  "separator",
+                  { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => requestLeave(() => setPendingDelete(note)) }
+                ];
             return (
               <li key={note.id}>
                 {startsGroup ? (
@@ -548,6 +578,7 @@ export function NotesPanel(): React.ReactElement {
                   // button around the text below. The row itself must not be a button: it also
                   // holds the actions menu, and interactive controls cannot nest.
                   onClick={trash ? undefined : () => selectNote(note.id)}
+                  onContextMenu={(e) => showContextMenu(e, noteMenuItems)}
                   // Drag the note into the dock: it opens as a panel of its own, where it is dropped.
                   draggable={!trash}
                   onDragStart={(event) => {
@@ -624,49 +655,7 @@ export function NotesPanel(): React.ReactElement {
                           <MoreHorizontal className="h-4 w-4" />
                         </IconButton>
                       )}
-                      items={
-                        trash
-                          ? [
-                              { label: "Восстановить", icon: RotateCcw, onSelect: () => handleRestore(note) },
-                              "separator",
-                              {
-                                label: "Удалить навсегда",
-                                icon: Trash2,
-                                tone: "danger",
-                                onSelect: () => setPendingPurge(note)
-                              }
-                            ]
-                          : [
-                              {
-                                label: note.pinnedAt ? "Открепить" : "Закрепить",
-                                icon: note.pinnedAt ? PinOff : Pin,
-                                onSelect: () => handleTogglePin(note)
-                              },
-                              {
-                                label: note.archivedAt ? "Из архива" : "В архив",
-                                icon: note.archivedAt ? ArchiveRestore : Archive,
-                                onSelect: () => requestLeave(() => handleToggleArchive(note))
-                              },
-                              { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
-                              { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`note:${note.id}`, note.title) },
-                              { label: "Дублировать", icon: Copy, onSelect: () => requestLeave(() => void handleDuplicate(note)) },
-                              { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },
-                              {
-                                label: "Копировать Markdown",
-                                icon: ClipboardCopy,
-                                onSelect: () =>
-                                  void copyNoteMarkdown(note).then(
-                                    () => toast({ title: "Скопировано", tone: "success" }),
-                                    () => toast({ title: "Не удалось скопировать", tone: "danger" })
-                                  )
-                              },
-                              ...(templatesApi
-                                ? [{ label: templatesApi.toggleLabel(note), icon: FileStack, onSelect: () => requestLeave(() => handleToggleTemplate(note)) }]
-                                : []),
-                              "separator",
-                              { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => requestLeave(() => setPendingDelete(note)) }
-                            ]
-                      }
+                      items={noteMenuItems}
                     />
                   </div>
                 </div>
