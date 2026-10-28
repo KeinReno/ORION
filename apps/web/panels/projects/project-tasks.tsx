@@ -112,6 +112,15 @@ export function ProjectTasks({
       { onSuccess: onChanged, onError: () => toast({ title: "Не удалось изменить статус", tone: "danger" }) }
     );
   }
+  // ORION-03: dragging a card between the Eisenhower matrix's importance columns — the matrix's
+  // own transparent rule is `priority === "high"`, so this is exactly that field, not a new one.
+  function setPriority(task: Task, priority: Task["priority"]): void {
+    if (task.priority === priority) return;
+    updateTask.mutate(
+      { taskId: task.id, input: { priority } },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось изменить приоритет", tone: "danger" }) }
+    );
+  }
   function moveToMilestone(task: Task, milestoneId: string | null): void {
     updateTask.mutate(
       { taskId: task.id, input: { milestoneId } },
@@ -242,6 +251,7 @@ export function ProjectTasks({
               onToggle={onToggle}
               onOpen={(task) => onOpenTask(task.id)}
               onMove={moveToMilestone}
+              onPriorityChange={setPriority}
             />
           ) : layout === "tree" ? (
             <TaskTree

@@ -1,6 +1,6 @@
 import type { Milestone, Task } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { NO_MILESTONE_KEY, buildTaskMatrix, urgencyRow } from "./project-matrix";
+import { NO_MILESTONE_KEY, buildEisenhowerMatrix, buildTaskMatrix, eisenhowerImportance, eisenhowerUrgency, urgencyRow } from "./project-matrix";
 
 // Local noon on 20 Sep 2026; fixtures are built from local dates so the suite does not depend on the machine zone.
 const NOW = new Date(2026, 8, 20, 12, 0);
@@ -133,5 +133,41 @@ describe("buildTaskMatrix", () => {
       NOW
     );
     expect(m.cells["week"]?.["m1"]?.map((t) => t.id)).toEqual(["started", "sooner", "later"]);
+  });
+});
+
+describe("eisenhowerUrgency / eisenhowerImportance / buildEisenhowerMatrix", () => {
+  it("срочность — явное правило от dueAt: нет даты или дальше 3 дней = не срочно", () => {
+    expect(eisenhowerUrgency(task("a", { dueAt: at(-1) }), NOW)).toBe("urgent");
+    expect(eisenhowerUrgency(task("a", { dueAt: at(0) }), NOW)).toBe("urgent");
+    expect(eisenhowerUrgency(task("a", { dueAt: at(3) }), NOW)).toBe("urgent");
+    expect(eisenhowerUrgency(task("a", { dueAt: at(4) }), NOW)).toBe("notUrgent");
+    expect(eisenhowerUrgency(task("a", {}), NOW)).toBe("notUrgent");
+  });
+
+  it("важность — явное правило от priority: только «высокий» считается важным", () => {
+    expect(eisenhowerImportance(task("a", { priority: "high" }))).toBe("important");
+    expect(eisenhowerImportance(task("a", { priority: "normal" }))).toBe("notImportant");
+    expect(eisenhowerImportance(task("a", { priority: "low" }))).toBe("notImportant");
+  });
+
+  it("раскладывает по 4 квадрантам и отдельно считает закрытые", () => {
+    const tasks = [
+      task("now", { priority: "high", dueAt: at(0) }),
+      task("plan", { priority: "high", dueAt: at(10) }),
+      task("delegate", { priority: "normal", dueAt: at(1) }),
+      task("later", { priority: "low" }),
+      task("done", { priority: "high", dueAt: at(0), status: "done" })
+    ];
+    const hidden = buildEisenhowerMatrix(tasks, false, NOW);
+    expect(hidden.rows).toEqual(["urgent", "notUrgent"]);
+    expect(hidden.cells["urgent"]?.important.map((t) => t.id)).toEqual(["now"]);
+    expect(hidden.cells["urgent"]?.notImportant.map((t) => t.id)).toEqual(["delegate"]);
+    expect(hidden.cells["notUrgent"]?.important.map((t) => t.id)).toEqual(["plan"]);
+    expect(hidden.cells["notUrgent"]?.notImportant.map((t) => t.id)).toEqual(["later"]);
+
+    const shown = buildEisenhowerMatrix(tasks, true, NOW);
+    expect(shown.rows).toEqual(["urgent", "notUrgent", "closed"]);
+    expect(shown.cells["closed"]?.important.map((t) => t.id)).toEqual(["done"]);
   });
 });

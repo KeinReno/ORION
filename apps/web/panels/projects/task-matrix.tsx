@@ -1,17 +1,27 @@
 "use client";
 
-import { isTaskClosed, type Milestone, type Task } from "@orion/shared-types";
-import { CheckToggle, cx, DropdownMenu, IconButton, StrikeText, useContextMenu, useResizeWidth } from "@orion/ui";
+import { isTaskClosed, type Milestone, type Task, type TaskPriority } from "@orion/shared-types";
+import { CheckToggle, cx, DropdownMenu, IconButton, SegmentedControl, StrikeText, useContextMenu, useResizeWidth } from "@orion/ui";
 import { MoreHorizontal } from "lucide-react";
 import { useId, useState } from "react";
 import { shortDate } from "../../lib/format";
 import {
+  EISENHOWER_IMPORTANCE_HINT,
+  EISENHOWER_IMPORTANCE_LABEL,
+  EISENHOWER_QUADRANT_HINT,
+  EISENHOWER_URGENCY_LABEL,
   NO_MILESTONE_KEY,
   URGENCY_LABEL,
+  buildEisenhowerMatrix,
   buildTaskMatrix,
+  eisenhowerImportance,
+  type EisenhowerImportance,
   type MatrixColumn,
   type UrgencyRow
 } from "../../lib/project-matrix";
+
+type MatrixView = "milestone" | "eisenhower";
+const VIEW_KEY = "orion.task-matrix-view";
 
 /** Under this width the grid would show one milestone column at a time: the matrix becomes urgency groups instead. */
 const STACK_MAX = 640;
@@ -35,12 +45,15 @@ const ROW_EDGE: Record<UrgencyRow, string> = {
 };
 
 /**
- * The project's tasks on two axes: DIRECTION across (its milestones, then
- * "Без вехи") and URGENCY down. It shows both at once — what is burning and in
- * which part of the project — which a flat list cannot. Moving a card to another
- * column changes its milestone (drag it, or use the card's menu — the menu is the
- * keyboard / touch path); urgency comes from the deadline and is edited on the
- * task, never by dropping, so a drop can't silently invent a date.
+ * ORION-03: two presets over the same tasks, never two copies of the data.
+ *  - «По вехам» (default, unchanged): DIRECTION across (milestones, then "Без вехи") × URGENCY
+ *    down. Moving a card to another column changes its milestone; urgency comes from the
+ *    deadline and is edited on the task, never by dropping.
+ *  - «Эйзенхауэр»: ВАЖНОСТЬ across (`priority === "high"`, an explicit rule, not a hidden one) ×
+ *    СРОЧНОСТЬ down (overdue-or-within-3-days, same `dueAt` rule in spirit as the row above).
+ *    Moving a card between the importance columns edits `priority`; urgency stays look-only,
+ *    same reasoning as the milestone view.
+ * The view choice is a personal display setting (localStorage), not project data.
  */
 export function TaskMatrix({
   tasks,
@@ -48,7 +61,8 @@ export function TaskMatrix({
   includeClosed,
   onToggle,
   onOpen,
-  onMove
+  onMove,
+  onPriorityChange
 }: {
   tasks: readonly Task[];
   milestones: readonly Milestone[];
@@ -57,9 +71,27 @@ export function TaskMatrix({
   onOpen: (task: Task) => void;
   /** `milestoneId` null = "Без вехи". */
   onMove: (task: Task, milestoneId: string | null) => void;
+  onPriorityChange: (task: Task, priority: TaskPriority) => void;
 }): React.ReactElement {
   const now = new Date();
+  const [view, setView] = useState<MatrixView>(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      return saved === "eisenhower" ? "eisenhower" : "milestone";
+    } catch {
+      return "milestone";
+    }
+  });
+  function chooseView(next: MatrixView): void {
+    setView(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* a remembered view is a convenience only */
+    }
+  }
   const matrix = buildTaskMatrix(tasks, milestones, includeClosed, now);
+  const eisenhower = buildEisenhowerMatrix(tasks, includeClosed, now);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
   const columnTemplate = `7.5rem repeat(${matrix.columns.length}, minmax(13.5rem, 1fr))`;
@@ -78,8 +110,103 @@ export function TaskMatrix({
     if ((task.milestoneId ?? null) !== target) onMove(task, target);
   }
 
+  function dropOnImportance(importance: EisenhowerImportance, event: React.DragEvent): void {
+    event.preventDefault();
+    setOverKey(null);
+    const id = event.dataTransfer.getData("text/plain");
+    const task = tasks.find((candidate) => candidate.id === id);
+    if (!task) return;
+    const current = eisenhowerImportance(task);
+    if (current !== importance) onPriorityChange(task, importance === "important" ? "high" : "normal");
+  }
+
+  const viewToggle = (
+    <SegmentedControl<MatrixView>
+      aria-label="Вид матрицы"
+      size="sm"
+      value={view}
+      onChange={chooseView}
+      options={[
+        { value: "milestone", label: "По вехам" },
+        { value: "eisenhower", label: "Эйзенхауэр" }
+      ]}
+    />
+  );
+
+  if (view === "eisenhower") {
+    return (
+      <div className="flex flex-col gap-2">
+        {viewToggle}
+        {renderEisenhower()}
+      </div>
+    );
+  }
+
   // One measured wrapper for both layouts: the width observer is attached once, to this element.
-  return <div ref={frameRef}>{frameWidth > 0 && frameWidth < STACK_MAX ? renderStacked() : renderGrid()}</div>;
+  return (
+    <div className="flex flex-col gap-2">
+      {viewToggle}
+      <div ref={frameRef}>{frameWidth > 0 && frameWidth < STACK_MAX ? renderStacked() : renderGrid()}</div>
+    </div>
+  );
+
+  function renderEisenhower(): React.ReactElement {
+    const importances: EisenhowerImportance[] = ["important", "notImportant"];
+    const rowLabel = { urgent: EISENHOWER_URGENCY_LABEL.urgent, notUrgent: EISENHOWER_URGENCY_LABEL.notUrgent, closed: "Закрыто" } as const;
+    return (
+      <div className="orion-scroll overflow-x-auto rounded-xl border border-border">
+        <div className="grid min-w-full" style={{ gridTemplateColumns: `7.5rem repeat(${importances.length}, minmax(14rem, 1fr))` }} role="table" aria-label="Матрица Эйзенхауэра">
+          <div role="row" className="contents">
+            <div role="columnheader" className="border-b border-border px-2 py-2 text-2xs font-medium uppercase tracking-wide text-subtle-foreground">Срочность</div>
+            {importances.map((importance) => (
+              <div key={importance} role="columnheader" className="border-b border-border px-2 py-2">
+                <p className="text-label text-foreground">{EISENHOWER_IMPORTANCE_LABEL[importance]}</p>
+                <p className="text-micro text-subtle-foreground">{EISENHOWER_IMPORTANCE_HINT[importance]}</p>
+              </div>
+            ))}
+          </div>
+          {eisenhower.rows.length === 0 ? (
+            <p className="col-span-full px-3 py-6 text-center text-label text-subtle-foreground">Открытых задач нет.</p>
+          ) : (
+            eisenhower.rows.map((row) => (
+              <div key={row} role="row" className="contents">
+                <div role="rowheader" className={cx("border-b border-l-2 border-border px-2 py-2 text-label", row === "urgent" ? "border-l-destructive text-destructive" : row === "closed" ? "border-l-success/50 text-subtle-foreground" : "border-l-border text-muted-foreground")}>
+                  {rowLabel[row]}
+                </div>
+                {importances.map((importance) => {
+                  const list = row === "closed" ? eisenhower.cells.closed?.[importance] ?? [] : eisenhower.cells[row]?.[importance] ?? [];
+                  const cellKey = `${row}:${importance}`;
+                  return (
+                    <div
+                      key={cellKey}
+                      role="cell"
+                      onDragOver={row === "closed" ? undefined : (event) => { event.preventDefault(); setOverKey(cellKey); }}
+                      onDragLeave={() => setOverKey((cur) => (cur === cellKey ? null : cur))}
+                      onDrop={row === "closed" ? undefined : (event) => dropOnImportance(importance, event)}
+                      className={cx("flex min-h-[3.5rem] flex-col gap-1 border-b border-border/60 p-1.5 transition-colors", overKey === cellKey && "bg-accent/[0.06]")}
+                      title={row !== "closed" ? EISENHOWER_QUADRANT_HINT[importance][row] : undefined}
+                    >
+                      {list.map((task) => (
+                        <MatrixCard
+                          key={task.id}
+                          task={task}
+                          row={row === "urgent" ? "overdue" : row === "closed" ? "closed" : "later"}
+                          destinations={destinations.filter((d) => d.id !== (task.milestoneId ?? null))}
+                          onToggle={() => onToggle(task)}
+                          onOpen={() => onOpen(task)}
+                          onMove={(milestoneId) => onMove(task, milestoneId)}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
 
   function renderStacked(): React.ReactElement {
     // Narrow panel or phone: a 13.5rem column per milestone left only the first one on screen,

@@ -53,6 +53,66 @@ export interface TaskMatrix {
 export const NO_MILESTONE_KEY = "__none__";
 
 /**
+ * ORION-03, Эйзенхауэр: an alternative view of the same tasks, important × urgent, not a
+ * second data model. Both buckets are explicit, documented rules over existing fields — never
+ * invented values — per the risk note: "не вычислять важность только из приоритета... без
+ * прозрачного правила". «Важность» here IS exactly `priority === "high"`, shown as such in the
+ * UI; «Срочность» is overdue-or-due-within-3-days, the same `dueAt` the plain urgency rows above
+ * already read. Dragging a card between the importance columns edits `priority` (an explicit,
+ * named field); the urgency row is look-only, same as the milestone matrix never lets a drop
+ * invent a due date.
+ */
+export type EisenhowerUrgency = "urgent" | "notUrgent";
+export type EisenhowerImportance = "important" | "notImportant";
+
+export const EISENHOWER_URGENT_WITHIN_DAYS = 3;
+
+export function eisenhowerUrgency(task: Pick<Task, "dueAt">, now: Date = new Date()): EisenhowerUrgency {
+  if (!task.dueAt) return "notUrgent";
+  return daysUntil(task.dueAt, now) <= EISENHOWER_URGENT_WITHIN_DAYS ? "urgent" : "notUrgent";
+}
+
+export function eisenhowerImportance(task: Pick<Task, "priority">): EisenhowerImportance {
+  return task.priority === "high" ? "important" : "notImportant";
+}
+
+export const EISENHOWER_URGENCY_LABEL: Record<EisenhowerUrgency, string> = { urgent: "Срочно", notUrgent: "Не срочно" };
+export const EISENHOWER_IMPORTANCE_LABEL: Record<EisenhowerImportance, string> = { important: "Важно", notImportant: "Не важно" };
+/** Shown under each column header so "важно" never reads as a mystery field. */
+export const EISENHOWER_IMPORTANCE_HINT: Record<EisenhowerImportance, string> = {
+  important: "приоритет «высокий»",
+  notImportant: "приоритет не «высокий»"
+};
+export const EISENHOWER_QUADRANT_HINT: Record<EisenhowerImportance, Record<EisenhowerUrgency, string>> = {
+  important: { urgent: "Делать сейчас", notUrgent: "Планировать" },
+  notImportant: { urgent: "Делегировать или сократить", notUrgent: "Отложить или удалить" }
+};
+
+export interface EisenhowerMatrix {
+  /** Only rows that hold at least one task, plus "Закрыто" when `includeClosed`. */
+  rows: ("urgent" | "notUrgent" | "closed")[];
+  /** `cells[row][importance]` → tasks in work order. */
+  cells: Record<string, Record<EisenhowerImportance, Task[]>>;
+}
+
+export function buildEisenhowerMatrix(tasks: readonly Task[], includeClosed: boolean, now: Date = new Date()): EisenhowerMatrix {
+  const cells: Record<string, Record<EisenhowerImportance, Task[]>> = {};
+  const used = new Set<"urgent" | "notUrgent" | "closed">();
+  for (const task of tasks) {
+    const row = isTaskClosed(task.status) ? "closed" : eisenhowerUrgency(task, now);
+    if (row === "closed" && !includeClosed) continue;
+    used.add(row);
+    const bucket = (cells[row] ??= { important: [], notImportant: [] });
+    bucket[eisenhowerImportance(task)].push(task);
+  }
+  for (const byImportance of Object.values(cells)) {
+    for (const list of Object.values(byImportance)) list.sort(compareTasksByFocus);
+  }
+  const order: ("urgent" | "notUrgent" | "closed")[] = ["urgent", "notUrgent", "closed"];
+  return { rows: order.filter((row) => used.has(row)), cells };
+}
+
+/**
  * Lays tasks out on the matrix. Closed tasks appear (in the "Закрыто" row) only
  * when `includeClosed` is on, but the per-column tallies always count them, so
  * a column's "3/7" stays true whatever is shown. A column for milestones is
