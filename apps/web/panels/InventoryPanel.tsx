@@ -26,7 +26,9 @@ import {
   Skeleton,
   StatCard,
   SegmentedControl,
-  useToast
+  useContextMenuApi,
+  useToast,
+  type MenuItem
 } from "@orion/ui";
 import { Archive, ArchiveRestore, Boxes, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Search, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -53,6 +55,7 @@ export function InventoryPanel(): React.ReactElement {
   const { workspace, isLoading: workspaceLoading } = useActiveWorkspace();
   const workspaceId = workspace?.id;
   const { isEnabled } = useEnabledModules();
+  const showContextMenu = useContextMenuApi();
 
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
@@ -252,7 +255,14 @@ export function InventoryPanel(): React.ReactElement {
                   <span>Позиция</span><span className="text-right">Остаток</span><span />
                 </div>
               ) : null}
-              {visibleItems.map((item) => (
+              {visibleItems.map((item) => {
+                const itemMenuItems: (MenuItem | "separator")[] = [
+                  { label: "Изменить", icon: Pencil, onSelect: () => setEditing(item) },
+                  item.archivedAt
+                    ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(item) }
+                    : { label: "В архив", icon: Archive, onSelect: () => setPendingArchive(item) }
+                ];
+                return (
                 <Card
                   key={item.id}
                   interactive
@@ -260,6 +270,7 @@ export function InventoryPanel(): React.ReactElement {
                     ? `flex flex-col gap-2 ${item.archivedAt ? "opacity-60" : ""}`
                     : `grid min-w-0 grid-cols-[minmax(0,1fr)_auto_2rem] items-center gap-3 rounded-none border-0 border-b border-border px-3 py-2 last:border-b-0 [@container(min-width:560px)]:grid-cols-[minmax(0,1fr)_7rem_2rem] ${item.archivedAt ? "opacity-60" : ""}`}
                   onClick={() => setDetail(item)}
+                  onContextMenu={(e) => showContextMenu(e, itemMenuItems)}
                   role="button"
                   tabIndex={0}
                   aria-label={`Открыть позицию ${item.name}`}
@@ -293,12 +304,7 @@ export function InventoryPanel(): React.ReactElement {
                           <MoreHorizontal className="h-4 w-4" />
                         </IconButton>
                       )}
-                      items={[
-                        { label: "Изменить", icon: Pencil, onSelect: () => setEditing(item) },
-                        item.archivedAt
-                          ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(item) }
-                          : { label: "В архив", icon: Archive, onSelect: () => setPendingArchive(item) }
-                      ]}
+                      items={itemMenuItems}
                     />
                     </div>
                   </div>
@@ -310,7 +316,8 @@ export function InventoryPanel(): React.ReactElement {
                   </div>
                   {layout === "cards" && costing ? <costing.CardLine avgCostMinor={item.avgCostMinor} /> : null}
                 </Card>
-              ))}
+                );
+              })}
             </div>
             )}
           </div>

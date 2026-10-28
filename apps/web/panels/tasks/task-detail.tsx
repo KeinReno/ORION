@@ -30,6 +30,7 @@ import {
   Skeleton,
   Textarea,
   cx,
+  useContextMenu,
   useToast
 } from "@orion/ui";
 import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Square, Trash2, X } from "lucide-react";
@@ -287,9 +288,10 @@ export function TaskDetail({
         ]),
     { label: "Удалить задачу", icon: Trash2, tone: "danger", onSelect: onDelete }
   ];
+  const sectionContextMenu = useContextMenu(() => menuItems);
 
   return (
-    <section aria-label="Детали задачи" className="flex h-full min-h-0 flex-col bg-panel">
+    <section aria-label="Детали задачи" className="flex h-full min-h-0 flex-col bg-panel" onContextMenu={sectionContextMenu.onContextMenu}>
       <header
         className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2.5"
         {...(standalone ? {} : panelDragHandleProps(buildPanelDragId("task", task.id)))}

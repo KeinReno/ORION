@@ -19,7 +19,9 @@ import {
   Modal,
   SegmentedControl,
   Skeleton,
-  useToast
+  useContextMenuApi,
+  useToast,
+  type MenuItem
 } from "@orion/ui";
 import { ArchiveRestore, Archive, MoreHorizontal, Paperclip, Pencil, Plus, Scale, Trash2, Wallet } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -38,6 +40,7 @@ export function AccountsView(): React.ReactElement {
   const deleteAccount = useDeleteAccount(workspace?.id);
   const reconcileAccount = useReconcileAccount(workspace?.id);
   const { toast } = useToast();
+  const showContextMenu = useContextMenuApi();
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
@@ -118,8 +121,18 @@ export function AccountsView(): React.ReactElement {
         </div>
       ) : accounts && accounts.length > 0 ? (
         <div className="grid gap-3 [@container(min-width:576px)]:grid-cols-2 [@container(min-width:896px)]:grid-cols-3">
-          {accounts.map((account) => (
-            <Card key={account.id} elevate className={`flex flex-col gap-2 ${account.archivedAt ? "opacity-60" : ""}`}>
+          {accounts.map((account) => {
+            const accountMenuItems: (MenuItem | "separator")[] = [
+              { label: "Файлы и связи", icon: Paperclip, onSelect: () => showResourcesFor("finance", { type: "account", id: account.id, title: account.name }) },
+              { label: "Изменить", icon: Pencil, onSelect: () => setEditing(account) },
+              { label: "Сверить баланс", icon: Scale, onSelect: () => setReconciling(account) },
+              account.archivedAt
+                ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(account) }
+                : { label: "Архивировать", icon: Archive, onSelect: () => toggleArchived(account) },
+              { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(account) }
+            ];
+            return (
+            <Card key={account.id} elevate className={`flex flex-col gap-2 ${account.archivedAt ? "opacity-60" : ""}`} onContextMenu={(e) => showContextMenu(e, accountMenuItems)}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
@@ -137,22 +150,15 @@ export function AccountsView(): React.ReactElement {
                       <MoreHorizontal className="h-4 w-4" />
                     </IconButton>
                   )}
-                  items={[
-                    { label: "Файлы и связи", icon: Paperclip, onSelect: () => showResourcesFor("finance", { type: "account", id: account.id, title: account.name }) },
-                    { label: "Изменить", icon: Pencil, onSelect: () => setEditing(account) },
-                    { label: "Сверить баланс", icon: Scale, onSelect: () => setReconciling(account) },
-                    account.archivedAt
-                      ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(account) }
-                      : { label: "Архивировать", icon: Archive, onSelect: () => toggleArchived(account) },
-                    { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(account) }
-                  ]}
+                  items={accountMenuItems}
                 />
               </div>
               <p className={`font-mono text-xl font-semibold tabular-nums ${account.balance < 0 ? "text-destructive" : "text-foreground"}`}>
                 {formatMoney(account.balance, account.currency)}
               </p>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState
