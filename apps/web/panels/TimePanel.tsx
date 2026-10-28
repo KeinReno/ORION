@@ -31,6 +31,7 @@ import {
   PanelSection,
   PanelShell,
   Skeleton,
+  useContextMenu,
   useResizeWidth,
   useToast
 } from "@orion/ui";
@@ -81,8 +82,15 @@ function EntryRow({
   onResume: () => void;
   onDelete: () => void;
 }): React.ReactElement {
+  const entryMenuItems = [
+    { label: "Изменить", icon: Pencil, onSelect: onEdit },
+    { label: "Запустить заново", icon: Play, onSelect: onResume, disabled: resumeDisabled },
+    "separator" as const,
+    { label: "Удалить", icon: Trash2, tone: "danger" as const, onSelect: onDelete }
+  ];
+  const contextMenu = useContextMenu(() => entryMenuItems);
   return (
-    <div className="flex items-start gap-2 rounded-2xl border border-border bg-card/60 px-3 py-card-row">
+    <div className="flex items-start gap-2 rounded-2xl border border-border bg-card/60 px-3 py-card-row" onContextMenu={contextMenu.onContextMenu}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-mono text-micro tabular-nums text-muted-foreground">{timeRange(entry)}</span>
@@ -111,12 +119,7 @@ function EntryRow({
             <MoreVertical className="h-4 w-4" />
           </IconButton>
         )}
-        items={[
-          { label: "Изменить", icon: Pencil, onSelect: onEdit },
-          { label: "Запустить заново", icon: Play, onSelect: onResume, disabled: resumeDisabled },
-          "separator",
-          { label: "Удалить", icon: Trash2, tone: "danger", onSelect: onDelete }
-        ]}
+        items={entryMenuItems}
       />
     </div>
   );

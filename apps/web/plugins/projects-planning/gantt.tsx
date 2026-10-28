@@ -10,7 +10,7 @@ import {
   useUpdateTask
 } from "@orion/core-react";
 import { formatDuration, isTaskClosed, type Milestone, type MilestoneCascadeImpact, type Task } from "@orion/shared-types";
-import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, SegmentedControl, Skeleton, cx, useContextMenuApi, useResizeWidth, useToast, type MenuItem } from "@orion/ui";
 import { Milestone as MilestoneIcon, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openProjectTask } from "../../lib/extensions/host-api";
@@ -580,6 +580,7 @@ function GanttChart({
   onDeleteMilestone: (id: string) => void;
   onOpenTask: (id: string) => void;
 }): React.ReactElement {
+  const showContextMenu = useContextMenuApi();
   const chartWidth = range.totalDays * pxPerDay;
   // Where "today" falls on the time axis; absent when the plan lies entirely before or after it.
   const todayOffset = (Date.now() - range.start.getTime()) / DAY_MS;
@@ -614,8 +615,23 @@ function GanttChart({
         {/* Label column — the only place a milestone/task row is clickable; bars themselves are drag-only (see file comment). A blank spacer keeps it aligned under the ticks header, which lives in the scroll region on the right so it can never scroll out of sync with the bars. */}
         <div style={{ width: labelWidth }} className="shrink-0 border-r border-border">
           <div className="h-6 border-b border-border" />
-          {rows.map((row) => (
-            <div key={`${row.kind}:${row.id}`} style={{ height: ROW_H }} className="flex items-center gap-1 px-2 text-2xs">
+          {rows.map((row) => {
+            const rowMenuItems: (MenuItem | "separator")[] | null =
+              row.kind === "milestone"
+                ? [
+                    { label: "Изменить веху", icon: Pencil, onSelect: () => onEditMilestone(row.id) },
+                    { label: "Удалить веху", icon: Trash2, tone: "danger", onSelect: () => onDeleteMilestone(row.id) }
+                  ]
+                : row.kind === "task"
+                  ? [{ label: "Открыть задачу", onSelect: () => onOpenTask(row.id) }]
+                  : null;
+            return (
+            <div
+              key={`${row.kind}:${row.id}`}
+              style={{ height: ROW_H }}
+              className="flex items-center gap-1 px-2 text-2xs"
+              onContextMenu={(e) => showContextMenu(e, rowMenuItems)}
+            >
               {row.kind === "header" ? (
                 <span className="font-medium uppercase tracking-wide text-subtle-foreground">{row.title}</span>
               ) : row.kind === "milestone" ? (
@@ -630,10 +646,7 @@ function GanttChart({
                           <MoreHorizontal className="h-3.5 w-3.5" />
                         </IconButton>
                       )}
-                      items={[
-                        { label: "Изменить веху", icon: Pencil, onSelect: () => onEditMilestone(row.id) },
-                        { label: "Удалить веху", icon: Trash2, tone: "danger", onSelect: () => onDeleteMilestone(row.id) }
-                      ]}
+                      items={rowMenuItems ?? []}
                     />
                   ) : (
                     <>
@@ -657,7 +670,8 @@ function GanttChart({
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* One scroll region for ticks + bars together — a separate header scroller would desync from the body on scroll. */}

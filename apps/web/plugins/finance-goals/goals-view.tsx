@@ -8,7 +8,7 @@ import {
   useUpdateGoal
 } from "@orion/core-react";
 import type { SavingsGoal } from "@orion/shared-types";
-import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, Skeleton, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Modal, Skeleton, useContextMenuApi, useToast, type MenuItem } from "@orion/ui";
 import { ArchiveRestore, Archive, MoreHorizontal, Pencil, Plus, Target, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { describeAuthError } from "../../lib/extensions/host-api";
@@ -34,6 +34,7 @@ export function GoalsView(): React.ReactElement {
   const updateGoal = useUpdateGoal(workspace?.id);
   const deleteGoal = useDeleteGoal(workspace?.id);
   const { toast } = useToast();
+  const showContextMenu = useContextMenuApi();
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<SavingsGoal | null>(null);
@@ -96,8 +97,15 @@ export function GoalsView(): React.ReactElement {
             const ratio = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
             const reached = ratio >= 1;
             const left = goal.targetDate ? daysLeft(goal.targetDate) : null;
+            const goalMenuItems: (MenuItem | "separator")[] = [
+              { label: "Изменить", icon: Pencil, onSelect: () => setEditing(goal) },
+              goal.archivedAt
+                ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(goal) }
+                : { label: "Архивировать", icon: Archive, onSelect: () => toggleArchived(goal) },
+              { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(goal) }
+            ];
             return (
-              <li key={goal.id} className={`rounded-xl border border-border p-3 ${goal.archivedAt ? "opacity-60" : ""}`}>
+              <li key={goal.id} className={`rounded-xl border border-border p-3 ${goal.archivedAt ? "opacity-60" : ""}`} onContextMenu={(e) => showContextMenu(e, goalMenuItems)}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">{goal.name}</span>
                   <div className="flex items-center gap-1">
@@ -110,13 +118,7 @@ export function GoalsView(): React.ReactElement {
                           <MoreHorizontal className="h-4 w-4" />
                         </IconButton>
                       )}
-                      items={[
-                        { label: "Изменить", icon: Pencil, onSelect: () => setEditing(goal) },
-                        goal.archivedAt
-                          ? { label: "Восстановить", icon: ArchiveRestore, onSelect: () => toggleArchived(goal) }
-                          : { label: "Архивировать", icon: Archive, onSelect: () => toggleArchived(goal) },
-                        { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => setPendingDelete(goal) }
-                      ]}
+                      items={goalMenuItems}
                     />
                   </div>
                 </div>

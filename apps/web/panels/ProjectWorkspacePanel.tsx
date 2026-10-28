@@ -40,6 +40,7 @@ import {
   Skeleton,
   Textarea,
   cx,
+  useContextMenu,
   useResizeWidth,
   useToast
 } from "@orion/ui";
@@ -409,6 +410,35 @@ function ProjectWorkspace({
   const swatch = projectSwatchColor(project.color);
   const progress = Math.min(100, Math.max(0, project.progress));
 
+  const projectMenuItems: React.ComponentProps<typeof DropdownMenu>["items"] = [
+    ...(notesOn ? [{ label: "Новая заметка", icon: FileText, onSelect: () => setAdding("note") }] : []),
+    { label: "Изменить проект", icon: Pencil, onSelect: () => setEditing(true) },
+    "separator" as const,
+    // The same plan / materials the tabs show, as panels of their own: beside the
+    // overview, or in a separate window (second monitor). Same data, no copies.
+    ...(tasksOn && planPlugin
+      ? [
+          { label: "План панелью", icon: GanttChartSquare, onSelect: () => openPanel(`projectplan:${project.id}`, `План · ${project.name}`) },
+          { label: "План окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectplan:${project.id}`, `План · ${project.name}`) }
+        ]
+      : []),
+    ...(tasksOn
+      ? [
+          { label: "Задачи панелью", icon: ListTodo, onSelect: () => openPanel(`projecttasks:${project.id}`, `Задачи · ${project.name}`) },
+          { label: "Задачи окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projecttasks:${project.id}`, `Задачи · ${project.name}`) }
+        ]
+      : []),
+    { label: "Доступ панелью", icon: ShieldCheck, onSelect: () => openPanel(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
+    { label: "Доступ окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
+    { label: "Материалы панелью", icon: FolderOpen, onSelect: () => openPanel(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
+    { label: "Материалы окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
+    "separator" as const,
+    project.archivedAt
+      ? { label: "Восстановить из архива", icon: ArchiveRestore, onSelect: restore }
+      : { label: "В архив", icon: Archive, onSelect: () => setConfirmArchive(true) }
+  ];
+  const projectContextMenu = useContextMenu(() => projectMenuItems);
+
   return (
     <PanelShell>
       <PanelHeader
@@ -435,33 +465,7 @@ function ProjectWorkspace({
                   <MoreHorizontal className="h-4 w-4" />
                 </IconButton>
               )}
-              items={[
-                ...(notesOn ? [{ label: "Новая заметка", icon: FileText, onSelect: () => setAdding("note") }] : []),
-                { label: "Изменить проект", icon: Pencil, onSelect: () => setEditing(true) },
-                "separator" as const,
-                // The same plan / materials the tabs show, as panels of their own: beside the
-                // overview, or in a separate window (second monitor). Same data, no copies.
-                ...(tasksOn && planPlugin
-                  ? [
-                      { label: "План панелью", icon: GanttChartSquare, onSelect: () => openPanel(`projectplan:${project.id}`, `План · ${project.name}`) },
-                      { label: "План окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectplan:${project.id}`, `План · ${project.name}`) }
-                    ]
-                  : []),
-                ...(tasksOn
-                  ? [
-                      { label: "Задачи панелью", icon: ListTodo, onSelect: () => openPanel(`projecttasks:${project.id}`, `Задачи · ${project.name}`) },
-                      { label: "Задачи окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projecttasks:${project.id}`, `Задачи · ${project.name}`) }
-                    ]
-                  : []),
-                { label: "Доступ панелью", icon: ShieldCheck, onSelect: () => openPanel(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
-                { label: "Доступ окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectaccess:${project.id}`, `Доступ · ${project.name}`) },
-                { label: "Материалы панелью", icon: FolderOpen, onSelect: () => openPanel(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
-                { label: "Материалы окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`projectmaterials:${project.id}`, `Материалы · ${project.name}`) },
-                "separator" as const,
-                project.archivedAt
-                  ? { label: "Восстановить из архива", icon: ArchiveRestore, onSelect: restore }
-                  : { label: "В архив", icon: Archive, onSelect: () => setConfirmArchive(true) }
-              ]}
+              items={projectMenuItems}
             />
           </>
         }
@@ -532,7 +536,7 @@ function ProjectWorkspace({
         </div>
       </PanelHeader>
 
-      <PanelBody className="[container-type:inline-size]">
+      <PanelBody className="[container-type:inline-size]" onContextMenu={projectContextMenu.onContextMenu}>
         {section.missing ? <p className="text-label text-muted-foreground">Этой вкладки больше нет: её плагин или модуль выключен. Данные сохранены.</p> : null}
         {!section.missing && tab === "overview" ? (
           <OverviewTab

@@ -2,7 +2,7 @@
 
 import { useCreateHome, useDeleteHome, useHomeOverview, useHomes, useUpdateHome } from "@orion/core-react";
 import { HOME_KINDS, HOME_KIND_LABEL, type Home, type HomeKind } from "@orion/shared-types";
-import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, PanelBody, PanelHeader, PanelShell, Select, Skeleton, Textarea, useToast } from "@orion/ui";
+import { Button, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, PanelBody, PanelHeader, PanelShell, Select, Skeleton, Textarea, useContextMenu, useToast } from "@orion/ui";
 import { ArrowLeft, ArrowRight, ClipboardList, Gauge, HomeIcon, Link2, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { describeError } from "../lib/error-message";
@@ -104,6 +104,13 @@ export function HomePanel({ params, api }: PanelComponentProps): React.ReactElem
     }
   }
 
+  const objectMenuItems = [
+    { label: "Изменить", icon: Pencil, onSelect: () => setDialog("edit") },
+    "separator" as const,
+    { label: "Удалить объект", icon: Trash2, tone: "danger" as const, onSelect: () => setConfirmDelete(true) }
+  ];
+  const objectContextMenu = useContextMenu(() => ((locked || view === "object") && home ? objectMenuItems : null));
+
   return (
     <PanelShell>
       <PanelHeader
@@ -125,17 +132,13 @@ export function HomePanel({ params, api }: PanelComponentProps): React.ReactElem
                     <MoreHorizontal className="h-4 w-4" />
                   </IconButton>
                 )}
-                items={[
-                  { label: "Изменить", icon: Pencil, onSelect: () => setDialog("edit") },
-                  "separator" as const,
-                  { label: "Удалить объект", icon: Trash2, tone: "danger" as const, onSelect: () => setConfirmDelete(true) }
-                ]}
+                items={objectMenuItems}
               />
             ) : null}
           </>
         }
       />
-      <PanelBody className="space-y-5 [container-type:inline-size]">
+      <PanelBody className="space-y-5 [container-type:inline-size]" onContextMenu={objectContextMenu.onContextMenu}>
         {isLoading ? (
           <Skeleton className="h-48 w-full" />
         ) : homesError ? (

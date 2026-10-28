@@ -120,11 +120,14 @@ export type PanelMeasure = keyof typeof PANEL_MEASURE_CLASS;
 export function PanelBody({
   children,
   className,
-  measure
+  measure,
+  onContextMenu
 }: {
   children: ReactNode;
   className?: string;
   measure?: PanelMeasure;
+  /** ORION-07: a whole-panel right-click fallback (e.g. "Изменить"/"Удалить" the one object a panel shows). */
+  onContextMenu?: (event: React.MouseEvent) => void;
 }): React.ReactElement {
   return (
     <div
@@ -133,6 +136,7 @@ export function PanelBody({
         measure && PANEL_MEASURE_CLASS[measure],
         className
       )}
+      onContextMenu={onContextMenu}
     >
       {children}
     </div>

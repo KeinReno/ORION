@@ -38,7 +38,9 @@ import {
   Select,
   Skeleton,
   Textarea,
-  useToast
+  useContextMenuApi,
+  useToast,
+  type MenuItem
 } from "@orion/ui";
 import { CandlestickChart, ExternalLink, FileUp, MoreHorizontal, Plus, Star } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
@@ -271,6 +273,7 @@ function TradesTab({ workspaceId }: { workspaceId: string | undefined }): React.
   const recordFee = useRecordTradeFee(workspaceId);
   const remove = useDeleteInvestmentTrade(workspaceId);
   const { toast } = useToast();
+  const showContextMenu = useContextMenuApi();
   const [mode, setMode] = useState<TradeMode | "all">("real");
   const [feeFor, setFeeFor] = useState<{ trade: InvestmentTrade; accountId: string; amount: string; categoryId: string } | null>(null);
   const [deleting, setDeleting] = useState<InvestmentTrade | null>(null);
@@ -346,9 +349,16 @@ function TradesTab({ workspaceId }: { workspaceId: string | undefined }): React.
       />
 
       <ul className="space-y-1.5">
-        {shown.map((trade) => (
+        {shown.map((trade) => {
+          const tradeMenuItems: (MenuItem | "separator")[] = [
+            ...(trade.mode === "real" && trade.fee > 0 && !trade.feeTransactionId
+              ? [{ label: "Записать комиссию в финансы…", onSelect: () => setFeeFor({ trade, accountId: "", amount: String(Math.round(trade.fee * 100) / 100), categoryId: "" }) }]
+              : []),
+            { label: "Удалить из журнала ORION", tone: "danger" as const, onSelect: () => setDeleting(trade) }
+          ];
+          return (
           <li key={trade.id}>
-            <Card className="flex flex-wrap items-center gap-3 py-2.5">
+            <Card className="flex flex-wrap items-center gap-3 py-2.5" onContextMenu={(e) => showContextMenu(e, tradeMenuItems)}>
               <Badge tone={trade.side === "buy" ? "success" : "warning"}>{trade.side === "buy" ? "покупка" : "продажа"}</Badge>
               <p className="min-w-0 flex-1 text-sm text-foreground">
                 {trade.symbol} <span className="text-xs text-muted-foreground">· {trade.market} · {num(trade.qty)} × {num(trade.price, 4)}</span>
@@ -366,16 +376,12 @@ function TradesTab({ workspaceId }: { workspaceId: string | undefined }): React.
                     <MoreHorizontal className="h-4 w-4" />
                   </IconButton>
                 )}
-                items={[
-                  ...(trade.mode === "real" && trade.fee > 0 && !trade.feeTransactionId
-                    ? [{ label: "Записать комиссию в финансы…", onSelect: () => setFeeFor({ trade, accountId: "", amount: String(Math.round(trade.fee * 100) / 100), categoryId: "" }) }]
-                    : []),
-                  { label: "Удалить из журнала ORION", tone: "danger" as const, onSelect: () => setDeleting(trade) }
-                ]}
+                items={tradeMenuItems}
               />
             </Card>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <Modal open={feeFor !== null} onClose={() => setFeeFor(null)} title="Комиссия сделки — расходом" size="sm">

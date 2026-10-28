@@ -1,7 +1,7 @@
 "use client";
 
 import { isTaskClosed, type Milestone, type Task } from "@orion/shared-types";
-import { CheckToggle, cx, DropdownMenu, IconButton, StrikeText, useResizeWidth } from "@orion/ui";
+import { CheckToggle, cx, DropdownMenu, IconButton, StrikeText, useContextMenu, useResizeWidth } from "@orion/ui";
 import { MoreHorizontal } from "lucide-react";
 import { useId, useState } from "react";
 import { shortDate } from "../../lib/format";
@@ -215,8 +215,16 @@ function MatrixCard({
 }): React.ReactElement {
   const cardId = useId();
   const closed = isTaskClosed(task.status);
+  // ORION-07: "Открыть" mirrors the row's own click target; the rest is the same "⋯" menu below.
+  const contextMenu = useContextMenu(() => [
+    { label: "Открыть", onSelect: onOpen },
+    ...(destinations.length > 0
+      ? (["separator", ...destinations.map((destination) => ({ label: `В «${destination.title}»`, onSelect: () => onMove(destination.id) }))] as const)
+      : [])
+  ]);
   return (
     <div
+      onContextMenu={contextMenu.onContextMenu}
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("text/plain", task.id);

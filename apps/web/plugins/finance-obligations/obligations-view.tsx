@@ -10,7 +10,7 @@ import {
   useUpdateObligation
 } from "@orion/core-react";
 import { OBLIGATION_KIND_LABEL, OBLIGATION_KINDS, type CreateObligationInput, type Obligation, type ObligationInterval, type ObligationKind } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, Select, Skeleton, useToast } from "@orion/ui";
+import { Badge, Button, Card, ConfirmDialog, DropdownMenu, EmptyState, IconButton, Input, Modal, Select, Skeleton, useContextMenuApi, useToast, type MenuItem } from "@orion/ui";
 import { HandCoins, MoreHorizontal, Plus } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import { describeAuthError } from "../../lib/extensions/host-api";
@@ -94,6 +94,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
   const remove = useDeleteObligation(id);
   const pay = usePayObligation(id);
   const { toast } = useToast();
+  const showContextMenu = useContextMenuApi();
 
   const [editing, setEditing] = useState<{ obligation: Obligation | null; values: FormValues } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -157,9 +158,16 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
       <ul className="space-y-2">
         {open.map((o) => {
           const state = dueState(o.nextDueAt, now);
+          const obligationMenuItems: (MenuItem | "separator")[] = [
+            { label: "Изменить", onSelect: () => { setEditing({ obligation: o, values: fromObligation(o) }); setFormError(null); } },
+            { label: "История платежей", onSelect: () => setHistory(o) },
+            { label: "Закрыть", onSelect: () => void update.mutateAsync({ obligationId: o.id, input: { closedAt: new Date().toISOString() } }) },
+            "separator",
+            { label: "Удалить", tone: "danger", onSelect: () => setDeleting(o) }
+          ];
           return (
             <li key={o.id}>
-              <Card className="flex flex-wrap items-center gap-3 py-3">
+              <Card className="flex flex-wrap items-center gap-3 py-3" onContextMenu={(e) => showContextMenu(e, obligationMenuItems)}>
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                     {o.name}
@@ -184,13 +192,7 @@ export function ObligationsView({ workspaceId }: FinanceTabSlotProps): React.Rea
                       <MoreHorizontal className="h-4 w-4" />
                     </IconButton>
                   )}
-                  items={[
-                    { label: "Изменить", onSelect: () => { setEditing({ obligation: o, values: fromObligation(o) }); setFormError(null); } },
-                    { label: "История платежей", onSelect: () => setHistory(o) },
-                    { label: "Закрыть", onSelect: () => void update.mutateAsync({ obligationId: o.id, input: { closedAt: new Date().toISOString() } }) },
-                    "separator",
-                    { label: "Удалить", tone: "danger", onSelect: () => setDeleting(o) }
-                  ]}
+                  items={obligationMenuItems}
                 />
               </Card>
             </li>
