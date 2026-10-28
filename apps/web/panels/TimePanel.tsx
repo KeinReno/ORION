@@ -297,8 +297,12 @@ export function TimePanel(): React.ReactElement {
             />
           )
         ) : (
-          <div className={wideLayout && hasInsights ? "grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-6" : "mx-auto max-w-2xl space-y-6"}>
-            <div className="min-w-0 space-y-6">
+          // ORION-09: composed "сессия → история → аналитика", in that priority — the timer is
+          // its own full-width row, the unmistakable visual anchor regardless of panel width;
+          // history and secondary analytics sit below it, side by side on a wide panel (history
+          // wider — it's the primary secondary content, analytics is "вторичная" by the task
+          // doc's own wording) and history-before-insights when stacked on a narrow one.
+          <div className={wideLayout ? "space-y-6" : "mx-auto max-w-2xl space-y-6"}>
             <TimerWidget
               key={running?.id ?? "idle"}
               workspaceId={workspaceId}
@@ -307,26 +311,7 @@ export function TimePanel(): React.ReactElement {
               projects={projectsOn ? (projects ?? []) : undefined}
             />
 
-            <ExtensionSlot
-              name="time.insights"
-              props={{
-                workspaceId,
-                allProjects,
-                projectNames,
-                entries: list,
-                summary,
-                ratesKnown,
-                projectsOn,
-                headline: {
-                  today: todaySummaryQuery.data?.minutes,
-                  week: weekSummaryQuery.data?.minutes,
-                  total: totalSummaryQuery.data?.minutes
-                },
-                billing
-              }}
-            />
-            </div>
-
+            <div className={wideLayout && hasInsights ? "grid grid-cols-[minmax(0,1.12fr)_minmax(0,1fr)] gap-6" : "space-y-6"}>
             <div className="min-w-0">
             <PanelSection title="Записи">
               {entriesQuery.isLoading ? (
@@ -401,6 +386,28 @@ export function TimePanel(): React.ReactElement {
                 </div>
               )}
             </PanelSection>
+            </div>
+
+            <div className="min-w-0">
+              <ExtensionSlot
+                name="time.insights"
+                props={{
+                  workspaceId,
+                  allProjects,
+                  projectNames,
+                  entries: list,
+                  summary,
+                  ratesKnown,
+                  projectsOn,
+                  headline: {
+                    today: todaySummaryQuery.data?.minutes,
+                    week: weekSummaryQuery.data?.minutes,
+                    total: totalSummaryQuery.data?.minutes
+                  },
+                  billing
+                }}
+              />
+            </div>
             </div>
           </div>
         )}

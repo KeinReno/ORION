@@ -46,6 +46,19 @@ export function TimerWidget({
   // Draft of the running entry's note; saved on blur / Enter, not per keystroke.
   const [noteDraft, setNoteDraft] = useState(running?.note ?? "");
 
+  // ORION-09: "опциональная привязка свободной записи позднее" — the server already allows
+  // patching taskId/projectId on a running entry (same PATCH the history's "Изменить" uses
+  // after stopping); this just offers it while it's still running, so attaching context never
+  // requires a stop/restart that would split one session into two rows.
+  async function bindRunning(patch: { taskId?: string | null; projectId?: string | null }): Promise<void> {
+    if (!running) return;
+    try {
+      await updateEntry.mutateAsync({ entryId: running.id, input: patch });
+    } catch {
+      toast({ title: "Не удалось привязать запись", tone: "danger" });
+    }
+  }
+
   function reportConflict(): void {
     void queryClient.invalidateQueries({ queryKey: ["time-running", workspaceId] });
     toast({ title: "Уже идёт", tone: "default" });
@@ -100,32 +113,76 @@ export function TimerWidget({
     const project = running.projectId ? (projects ?? []).find((item) => item.id === running.projectId) : undefined;
 
     return (
-      <Card className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      // ORION-09: the running card is the one place on this panel that must win the eye
+      // immediately — a visible accent border/tint and digits far bigger than any other
+      // number on the page, not the same `text-display` size used for ordinary headings.
+      <Card className="space-y-4 border-accent/50 bg-accent/[0.06]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-accent-text">
               <LiveDot />
-              <span className="font-mono text-display tabular-nums text-foreground">
+              <span className="font-mono text-5xl font-semibold leading-none tabular-nums text-foreground">
                 {formatDuration(minutes)}
               </span>
-              <span className="font-mono text-title tabular-nums text-subtle-foreground">
+              <span className="font-mono text-2xl leading-none tabular-nums text-subtle-foreground">
                 :{String(seconds).padStart(2, "0")}
               </span>
             </div>
-            <p className="mt-1 truncate text-title text-foreground">{task?.title ?? project?.name ?? "Без задачи"}</p>
+            <p className="mt-1.5 truncate text-title text-foreground">{task?.title ?? project?.name ?? "Без задачи"}</p>
             {project && task ? (
               <p className="text-micro text-subtle-foreground">{project.name}</p>
             ) : null}
           </div>
           <Button
-            size="sm"
             variant="danger"
+            className="px-5 py-2.5 text-body"
             disabled={stopTimer.isPending || updateEntry.isPending}
             onClick={() => void handleStop()}
           >
-            <Square className="h-3.5 w-3.5" /> Стоп
+            <Square className="h-4 w-4" /> Стоп
           </Button>
         </div>
+
+        {(tasks || projects) ? (
+          // ORION-09: "опциональная привязка свободной записи позднее" — attach a task/project
+          // without stopping first, same PATCH the history's "Изменить" makes after the fact.
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
+            {tasks ? (
+              <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
+                Задача
+                <Select
+                  value={running.taskId ?? ""}
+                  disabled={updateEntry.isPending}
+                  onChange={(event) => void bindRunning({ taskId: event.target.value || null })}
+                >
+                  <option value="">Без задачи</option>
+                  {tasks.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            {projects ? (
+              <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
+                Проект
+                <Select
+                  value={running.projectId ?? ""}
+                  disabled={updateEntry.isPending}
+                  onChange={(event) => void bindRunning({ projectId: event.target.value || null })}
+                >
+                  <option value="">Без проекта</option>
+                  {projects.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         <Input
           value={noteDraft}
@@ -145,11 +202,13 @@ export function TimerWidget({
   }
 
   return (
-    <Card className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <span className="font-mono text-display tabular-nums text-muted-foreground">0 мин</span>
-        <Button size="sm" disabled={startTimer.isPending} onClick={() => void handleStart()}>
-          <Play className="h-3.5 w-3.5" /> Старт
+    // ORION-09: idle state is the other half of "основное действие не теряется" — one big,
+    // unmistakable primary button, not a small "sm" one sharing weight with everything else.
+    <Card className="space-y-3 border-border-strong">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="font-mono text-2xl leading-none tabular-nums text-subtle-foreground">00:00</span>
+        <Button className="px-6 py-3 text-title font-semibold" disabled={startTimer.isPending} onClick={() => void handleStart()}>
+          <Play className="h-5 w-5" /> Старт
         </Button>
       </div>
 
