@@ -6,6 +6,7 @@ import {
   nextActionByProject,
   planStrip,
   pluralDays,
+  primaryAttentionReason,
   projectAttention,
   projectDueLabel,
   projectsNeedingAttention,
@@ -213,6 +214,22 @@ describe("projectAttention", () => {
       { ...base, id: "d", name: "Я", reportedHealth: "at_risk", reportedAt: at(-2) }
     ];
     expect(projectsNeedingAttention(list, new Map(), NOW).map((x) => x.project.id)).toEqual(["b", "a", "d"]);
+  });
+});
+
+describe("primaryAttentionReason", () => {
+  const base = { status: "active", archivedAt: null, dueAt: null, reportedHealth: null, reportedAt: null };
+  it("is null with nothing to say", () => {
+    expect(primaryAttentionReason(null, false)).toBeNull();
+  });
+  it("drops a redundant 'Срок прошёл…' when a due chip already says so, keeping the next reason", () => {
+    const attention = projectAttention({ ...base, reportedHealth: "delayed", dueAt: at(-3), reportedAt: at(-1) }, { next: null, open: 2, overdue: 2 }, NOW)!;
+    expect(attention.reasons[0]).toBe("Автор отметил задержку");
+    expect(primaryAttentionReason(attention, true)).toBe("Автор отметил задержку");
+    const dueOnlyAttention = projectAttention({ ...base, dueAt: at(-3) }, undefined, NOW)!;
+    expect(dueOnlyAttention.reasons).toEqual(["Срок прошёл 3 дня назад"]);
+    expect(primaryAttentionReason(dueOnlyAttention, true)).toBeNull(); // the chip already said it — nothing left worth a second line
+    expect(primaryAttentionReason(dueOnlyAttention, false)).toBe("Срок прошёл 3 дня назад"); // no chip shown here — keep it
   });
 });
 

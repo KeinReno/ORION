@@ -47,6 +47,19 @@ export function moveProject(fullOrder: readonly string[], visibleIds: readonly s
   return result;
 }
 
+/**
+ * Pinning (ORION-08): a viewer's own shortlist, same storage shape as "Мой порядок" above —
+ * per-viewer, per-workspace, never shared. Deliberately client-local rather than a schema field:
+ * it duplicates nothing a server field would need to reconcile across members.
+ */
+export function projectPinKey(userId: string, workspaceId: string): string {
+  return `orion.projectPins:${userId}:${workspaceId}`;
+}
+
+export function togglePin(pinned: readonly string[], id: string): string[] {
+  return pinned.includes(id) ? pinned.filter((x) => x !== id) : [...pinned, id];
+}
+
 /** One step up (-1) or down (+1) among the visible ids: the keyboard alternative to dragging. */
 export function stepProject(fullOrder: readonly string[], visibleIds: readonly string[], id: string, step: 1 | -1): string[] {
   const index = visibleIds.indexOf(id);

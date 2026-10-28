@@ -3,11 +3,10 @@
 import { dragEndWindowTarget } from "../lib/panel-drag";
 import { ORION_PANEL_DRAG_MIME } from "../lib/panel-drop";
 import { detachPanelToWindow } from "../lib/panel-window";
-import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "../lib/project-order";
-import { useCreateProject, useProjects, useReorderProjects, useSession, useTasks } from "@orion/core-react";
+import { applyProjectOrder, moveProject, projectOrderKey, projectPinKey, stepProject, togglePin } from "../lib/project-order";
+import { useCreateProject, useProjects, useReorderProjects, useSession, useTasks, useUpdateProject } from "@orion/core-react";
 import { compareProjectsBySharedOrder, formatDuration, PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -22,7 +21,7 @@ import {
   cx,
   useToast
 } from "@orion/ui";
-import { ChevronDown, FolderKanban, Plus, Search, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { ChevronDown, FolderKanban, Pin, Plus, Search, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useViewState } from "../lib/use-view-state";
 import { projectsViewStateSchema } from "@orion/shared-types";
@@ -40,11 +39,21 @@ import {
   type ProjectBoardSort,
   type ProjectBoardSummary
 } from "./projects/board";
-import { ReportedHealthBadge, STATUS_TONE, taskProgressLabel } from "../components/project-bits";
+import { ReportedHealthBadge, taskProgressLabel } from "../components/project-bits";
 import { ProjectListHeader, ProjectRow } from "./projects/project-row";
-import { DueChip, NextLine } from "./projects/project-vitals";
-import { nextActionByProject, pluralDays, projectsNeedingAttention, reportFreshness, type ProjectNextAction } from "../lib/project-status";
+import { DueChip, NextLine, ProjectStatusMenu } from "./projects/project-vitals";
+import {
+  nextActionByProject,
+  pluralDays,
+  primaryAttentionReason,
+  projectAttention,
+  projectsNeedingAttention,
+  reportFreshness,
+  type ProjectAttention,
+  type ProjectNextAction
+} from "../lib/project-status";
 import { ProjectAttentionBand } from "./projects/project-attention";
+import { ProjectOpsView } from "./projects/project-ops";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 /**
@@ -55,12 +64,13 @@ import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
  * `openProject`) — it used to be a 40rem Sheet over this board, which showed
  * counters instead of the work.
  */
-type BoardLayout = "list" | "cards";
+type BoardLayout = "list" | "cards" | "ops";
 const LAYOUT_KEY = "orion.projects.layout";
 
 function loadLayout(): BoardLayout {
   try {
-    return localStorage.getItem(LAYOUT_KEY) === "cards" ? "cards" : "list";
+    const saved = localStorage.getItem(LAYOUT_KEY);
+    return saved === "cards" || saved === "ops" ? saved : "list";
   } catch {
     return "list";
   }
@@ -117,13 +127,52 @@ export function ProjectsPanel(): React.ReactElement {
       setManualOrder([]);
     }
   }, [orderKey]);
+  // Pinning (ORION-08): the viewer's own shortlist, same storage convention as "Мой порядок".
+  const pinKey = user && workspaceId ? projectPinKey(user.id, workspaceId) : null;
+  const [pinned, setPinned] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = pinKey ? localStorage.getItem(pinKey) : null;
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      setPinned(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+    } catch {
+      setPinned([]);
+    }
+  }, [pinKey]);
+  const pinnedSet = useMemo(() => new Set(pinned), [pinned]);
+  function togglePinned(id: string): void {
+    setPinned((current) => {
+      const next = togglePin(current, id);
+      try {
+        if (pinKey) localStorage.setItem(pinKey, JSON.stringify(next));
+      } catch {
+        /* a remembered pin is a convenience only */
+      }
+      return next;
+    });
+  }
+  const updateProject = useUpdateProject(workspaceId);
+  function changeStatus(project: Project, status: ProjectStatus): void {
+    updateProject.mutate(
+      { projectId: project.id, input: { status } },
+      { onError: () => toast({ title: "Не удалось изменить статус", tone: "danger" }) }
+    );
+  }
   const list = useMemo(() => {
     const visible = visibleProjectBoard(source, query, statusFilter, sort);
-    return sort === "manual" ? applyProjectOrder(visible, manualOrder) : visible;
-  }, [source, query, statusFilter, sort, manualOrder]);
+    const ordered = sort === "manual" ? applyProjectOrder(visible, manualOrder) : visible;
+    // Pinned float to the top regardless of the chosen sort — a stable sort keeps everything else's order.
+    return pinnedSet.size === 0 ? ordered : [...ordered].sort((a, b) => Number(pinnedSet.has(b.id)) - Number(pinnedSet.has(a.id)));
+  }, [source, query, statusFilter, sort, manualOrder, pinnedSet]);
   // The band answers "what needs me today" for the whole live board; it steps aside while the user searches or filters.
   const attention = useMemo(() => projectsNeedingAttention(source, nextActions), [source, nextActions]);
   const showAttention = !archived && !query.trim() && statusFilter === null && attention.length > 0;
+  // Every card/row gets its own reason line now (ORION-08), not only the band's top offenders.
+  const attentionByProject = useMemo(() => {
+    const map = new Map<string, ProjectAttention | null>();
+    for (const project of source) map.set(project.id, projectAttention(project, nextActions.get(project.id)));
+    return map;
+  }, [source, nextActions]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   /** What the drag in flight will do at its end: an OS window (Ctrl, or dock drop outside the app) or nothing. */
   const dragModeRef = useRef<"dock" | "window" | null>(null);
@@ -244,7 +293,8 @@ export function ProjectsPanel(): React.ReactElement {
         aria-label="Вид списка"
         options={[
           { value: "list", label: "Список" },
-          { value: "cards", label: "Карточки" }
+          { value: "cards", label: "Карточки" },
+          { value: "ops", label: "Сводка" }
         ]}
       /> : null}
       <SegmentedControl<"active" | "archive">
@@ -318,7 +368,7 @@ export function ProjectsPanel(): React.ReactElement {
         <details className="group w-full sm:hidden">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-3 text-label text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 [&::-webkit-details-marker]:hidden">
             <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            <span className="flex-1">Вид и порядок · {layout === "list" ? "Список" : "Карточки"} · {archived ? "Архив" : "Активные"}</span>
+            <span className="flex-1">Вид и порядок · {layout === "list" ? "Список" : layout === "cards" ? "Карточки" : "Сводка"} · {archived ? "Архив" : "Активные"}</span>
             <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
           </summary>
           <div className="mt-2 flex flex-col items-stretch gap-2">{viewControls}</div>
@@ -392,6 +442,16 @@ export function ProjectsPanel(): React.ReactElement {
             ) : (
               groupedByGoal && !archived ? (
                 <ExtensionSlot name="projects.board.grouped" props={{ workspaceId, projects: list, onOpenProject: (project) => openProject(project.id, project.name) }} />
+              ) : layout === "ops" ? (
+                <ProjectOpsView
+                  projects={list}
+                  attentionByProject={attentionByProject}
+                  nextActions={nextActions}
+                  pinned={pinnedSet}
+                  onTogglePin={togglePinned}
+                  onChangeStatus={changeStatus}
+                  onOpen={(project) => openProject(project.id, project.name)}
+                />
               ) : layout === "list" ? (
                 <div className="rounded-xl border border-border bg-card/40 py-2">
                   <ProjectListHeader />
@@ -402,6 +462,10 @@ export function ProjectsPanel(): React.ReactElement {
                         project={project}
                         nextAction={nextActions.get(project.id)}
                         tasksOn={isEnabled("tasks")}
+                        attention={attentionByProject.get(project.id) ?? null}
+                        pinned={pinnedSet.has(project.id)}
+                        onTogglePin={() => togglePinned(project.id)}
+                        onChangeStatus={(status) => changeStatus(project, status)}
                         onOpen={() => openProject(project.id, project.name)}
                         itemProps={itemProps(project)}
                       />
@@ -415,6 +479,10 @@ export function ProjectsPanel(): React.ReactElement {
                     <ProjectCard
                       project={project}
                       nextAction={nextActions.get(project.id)}
+                      attention={attentionByProject.get(project.id) ?? null}
+                      pinned={pinnedSet.has(project.id)}
+                      onTogglePin={() => togglePinned(project.id)}
+                      onChangeStatus={(status) => changeStatus(project, status)}
                       onOpen={() => openProject(project.id, project.name)}
                     />
                   </div>
@@ -442,10 +510,18 @@ export function ProjectsPanel(): React.ReactElement {
 function ProjectCard({
   project,
   nextAction,
+  attention,
+  pinned,
+  onTogglePin,
+  onChangeStatus,
   onOpen
 }: {
   project: Project;
   nextAction: ProjectNextAction | undefined;
+  attention: ProjectAttention | null;
+  pinned: boolean;
+  onTogglePin: () => void;
+  onChangeStatus: (status: ProjectStatus) => void;
   onOpen: () => void;
 }): React.ReactElement {
   const { isEnabled } = useEnabledModules();
@@ -457,6 +533,8 @@ function ProjectCard({
   const overspent = financeOn && project.budgetAmount !== null && project.spentAmount > project.budgetAmount;
   const freshness = reportFreshness(project);
   const live = project.status === "active" && !project.archivedAt;
+  const dueShown = project.status !== "completed";
+  const reason = primaryAttentionReason(attention, dueShown);
 
   // One mono line, only the modules that are actually on — not five equal chips.
   const meta: string[] = [];
@@ -490,7 +568,25 @@ function ProjectCard({
         <span className="truncate text-title text-foreground">{project.name}</span>
         <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
           <ReportedHealthBadge project={project} />
-          {project.status !== "active" ? <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge> : null}
+          <span onClick={(event) => event.stopPropagation()}>
+            <ProjectStatusMenu status={project.status} disabled={Boolean(project.archivedAt)} onChange={onChangeStatus} />
+          </span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onTogglePin();
+            }}
+            aria-pressed={pinned}
+            aria-label={pinned ? "Открепить" : "Закрепить"}
+            title={pinned ? "Открепить" : "Закрепить"}
+            className={cx(
+              "rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+              pinned ? "text-accent-text" : "text-subtle-foreground hover:text-foreground"
+            )}
+          >
+            <Pin className={cx("h-3.5 w-3.5", pinned && "fill-current")} aria-hidden />
+          </button>
         </span>
       </div>
 
@@ -499,7 +595,7 @@ function ProjectCard({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        {project.status !== "completed" ? <DueChip project={project} /> : null}
+        {dueShown ? <DueChip project={project} /> : null}
         {nextAction && nextAction.overdue > 0 ? (
           <span className="inline-flex items-center gap-1 text-micro text-destructive">
             <TriangleAlert className="h-3 w-3" aria-hidden />
@@ -507,6 +603,7 @@ function ProjectCard({
           </span>
         ) : null}
       </div>
+      {reason ? <p className="-mt-1 text-micro text-warning">{reason}</p> : null}
 
       {tasksOn && project.counts.tasks > 0 ? (
         <div>

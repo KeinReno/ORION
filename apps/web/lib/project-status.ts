@@ -161,6 +161,19 @@ export function projectAttention(
   return reasons.length > 0 ? { reasons, score } : null;
 }
 
+/**
+ * One reason line for a card/row that ALSO shows a due chip right next to it: the most serious
+ * reason, except "Срок прошёл…" — when the due date has passed, the due chip already says so
+ * ("просрочен на N дней"), so repeating it as a second sentence is noise, not information. The
+ * attention band (which has no due chip beside it) keeps every reason — this is for a surface that
+ * already shows one.
+ */
+export function primaryAttentionReason(attention: ProjectAttention | null, dueAlreadyShown: boolean): string | null {
+  if (!attention) return null;
+  const reasons = dueAlreadyShown ? attention.reasons.filter((r) => !r.startsWith("Срок прошёл")) : attention.reasons;
+  return reasons[0] ?? null;
+}
+
 /** Projects worth a look, most urgent first (ties: by name, so the order is stable). */
 export function projectsNeedingAttention<T extends { id: string; name: string; status: string; archivedAt: string | null; dueAt: string | null; reportedHealth: string | null; reportedAt: string | null }>(
   projects: readonly T[],

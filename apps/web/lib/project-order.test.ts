@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyProjectOrder, moveProject, projectOrderKey, stepProject } from "./project-order";
+import { applyProjectOrder, moveProject, projectOrderKey, projectPinKey, stepProject, togglePin } from "./project-order";
 
 const p = (id: string) => ({ id });
 
@@ -46,4 +46,14 @@ describe("stepProject", () => {
 
 it("keys by user and workspace", () => {
   expect(projectOrderKey("u", "w1")).not.toBe(projectOrderKey("u", "w2"));
+  expect(projectPinKey("u", "w1")).not.toBe(projectPinKey("u", "w2"));
+  expect(projectPinKey("u", "w1")).not.toBe(projectOrderKey("u", "w1"));
+});
+
+describe("togglePin", () => {
+  it("adds an unpinned id and removes an already-pinned one", () => {
+    expect(togglePin([], "a")).toEqual(["a"]);
+    expect(togglePin(["a"], "b")).toEqual(["a", "b"]);
+    expect(togglePin(["a", "b"], "a")).toEqual(["b"]);
+  });
 });

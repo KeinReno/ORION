@@ -52,7 +52,7 @@ export const projectsViewStateSchema = z.object({
   archived: z.boolean(),
   statusFilter: z.enum(["active", "on_hold", "completed"]).nullable(),
   sort: z.enum(["lifecycle", "manual", "shared", "name", "due", "progress", "spent", "time"]),
-  layout: z.enum(["list", "cards"])
+  layout: z.enum(["list", "cards", "ops"])
 }).strict();
 export type ProjectsViewState = z.infer<typeof projectsViewStateSchema>;
 

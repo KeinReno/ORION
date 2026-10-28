@@ -1,12 +1,12 @@
 "use client";
 
-import type { Project } from "@orion/shared-types";
-import { Badge, cx } from "@orion/ui";
-import { TriangleAlert } from "lucide-react";
-import { pluralDays, reportFreshness, type ProjectNextAction } from "../../lib/project-status";
-import { PROJECT_STATUS_LABEL, projectSwatchColor } from "../project-form";
-import { Meter, ReportedHealthBadge, STATUS_TONE } from "../../components/project-bits";
-import { DueChip, NextLine } from "./project-vitals";
+import type { Project, ProjectStatus } from "@orion/shared-types";
+import { cx } from "@orion/ui";
+import { Pin, TriangleAlert } from "lucide-react";
+import { pluralDays, primaryAttentionReason, reportFreshness, type ProjectAttention, type ProjectNextAction } from "../../lib/project-status";
+import { projectSwatchColor } from "../project-form";
+import { Meter, ReportedHealthBadge } from "../../components/project-bits";
+import { DueChip, NextLine, ProjectStatusMenu } from "./project-vitals";
 
 /**
  * Column template shared by the header and every row, so they cannot drift.
@@ -23,11 +23,14 @@ export const PROJECT_ROW_GRID =
 export function ProjectListHeader(): React.ReactElement {
   const label = "text-2xs font-medium uppercase tracking-wide text-subtle-foreground";
   return (
-    <div className={cx(PROJECT_ROW_GRID, "hidden px-3 pb-1.5 [@container(min-width:560px)]:grid")} aria-hidden>
-      <span className={label}>Проект</span>
-      <span className={label}>Состояние</span>
-      <span className={cx(label, "hidden [@container(min-width:760px)]:block")}>Срок</span>
-      <span className={cx(label, "hidden [@container(min-width:960px)]:block")}>Прогресс</span>
+    <div className="flex items-center gap-1 px-3 pb-1.5">
+      <span className="w-7 shrink-0" aria-hidden />
+      <div className={cx(PROJECT_ROW_GRID, "hidden flex-1 [@container(min-width:560px)]:grid")} aria-hidden>
+        <span className={label}>Проект</span>
+        <span className={label}>Состояние</span>
+        <span className={cx(label, "hidden [@container(min-width:760px)]:block")}>Срок</span>
+        <span className={cx(label, "hidden [@container(min-width:960px)]:block")}>Прогресс</span>
+      </div>
     </div>
   );
 }
@@ -41,12 +44,20 @@ export function ProjectRow({
   project,
   nextAction,
   tasksOn,
+  attention,
+  pinned,
+  onTogglePin,
+  onChangeStatus,
   onOpen,
   itemProps
 }: {
   project: Project;
   nextAction: ProjectNextAction | undefined;
   tasksOn: boolean;
+  attention: ProjectAttention | null;
+  pinned: boolean;
+  onTogglePin: () => void;
+  onChangeStatus: (status: ProjectStatus) => void;
   onOpen: () => void;
   /** Drag / keyboard-reorder handlers of the list item ("Мой порядок"). */
   itemProps?: React.HTMLAttributes<HTMLLIElement>;
@@ -56,9 +67,24 @@ export function ProjectRow({
   const live = project.status === "active" && !project.archivedAt;
   const freshness = reportFreshness(project);
   const overdueTasks = nextAction?.overdue ?? 0;
+  const dueShown = project.status !== "completed";
+  const reason = primaryAttentionReason(attention, dueShown);
 
   return (
-    <li {...itemProps}>
+    <li {...itemProps} className="flex items-start gap-1 px-3">
+      <button
+        type="button"
+        onClick={onTogglePin}
+        aria-pressed={pinned}
+        aria-label={pinned ? "Открепить" : "Закрепить"}
+        title={pinned ? "Открепить" : "Закрепить"}
+        className={cx(
+          "mt-2.5 shrink-0 rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+          pinned ? "text-accent-text" : "text-subtle-foreground hover:text-foreground"
+        )}
+      >
+        <Pin className={cx("h-3.5 w-3.5", pinned && "fill-current")} aria-hidden />
+      </button>
       <div
         role="button"
         tabIndex={0}
@@ -72,7 +98,7 @@ export function ProjectRow({
         }}
         className={cx(
           PROJECT_ROW_GRID,
-          "cursor-pointer rounded-lg px-3 py-2.5 transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+          "flex-1 cursor-pointer rounded-lg py-2.5 transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
           !live && "opacity-75"
         )}
       >
@@ -91,6 +117,7 @@ export function ProjectRow({
               </span>
             ) : null}
           </p>
+          {reason ? <p className="mt-0.5 truncate pl-[1.125rem] text-label text-warning">{reason}</p> : null}
           {tasksOn ? (
             <p className="mt-0.5 truncate pl-[1.125rem] text-label">
               <NextLine live={live} tasksCount={project.counts.tasks} nextAction={nextAction} />
@@ -102,7 +129,9 @@ export function ProjectRow({
 
         <div className="mt-1.5 flex flex-wrap items-center gap-1 [@container(min-width:560px)]:mt-0">
           <ReportedHealthBadge project={project} />
-          {project.status !== "active" ? <Badge tone={STATUS_TONE[project.status]}>{PROJECT_STATUS_LABEL[project.status]}</Badge> : null}
+          <span onClick={(event) => event.stopPropagation()}>
+            <ProjectStatusMenu status={project.status} disabled={Boolean(project.archivedAt)} onChange={onChangeStatus} />
+          </span>
           {freshness.kind === "stale" ? (
             <span className="text-micro text-warning" title="Автор давно не обновлял состояние проекта">
               {pluralDays(freshness.daysOld)}
