@@ -3,6 +3,7 @@
 import { createModuleClient, workspaceModuleBase } from "@orion/core";
 import { useCore } from "@orion/core-react";
 import {
+  chatArchiveAutoSourceSchema,
   chatArchiveConversationSchema,
   chatArchiveImportResultSchema,
   chatArchiveImportStateSchema,
@@ -11,6 +12,7 @@ import {
   chatArchiveRawPageSchema,
   chatArchiveSearchHitSchema,
   sniffChatArchiveFile,
+  type ChatArchiveAutoSource,
   type ChatArchiveConversation,
   type ChatArchiveLinesPage,
   type ChatArchiveSearchHit,
@@ -95,6 +97,26 @@ export function useDeleteChatArchiveConversation(workspaceId: string | undefined
   return useMutation({
     mutationFn: (id: string) => client(api, workspaceId).delete(`/conversations/${id}`, chatArchiveNoContentSchema),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["chat-archive", workspaceId] })
+  });
+}
+
+/** ORION-16: явный тумблер автосбора по источнику, выключен по умолчанию — см. module.manifest.json/MODULE.md. */
+export function useChatArchiveAutoSources(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useQuery<ChatArchiveAutoSource[]>({
+    queryKey: ["chat-archive", workspaceId, "auto-sources"],
+    queryFn: () => client(api, workspaceId).get("/auto-sources", chatArchiveAutoSourceSchema.array()),
+    enabled: Boolean(workspaceId)
+  });
+}
+
+export function useSetChatArchiveAutoSource(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ source, enabled }: { source: ChatArchiveSource; enabled: boolean }) =>
+      client(api, workspaceId).put("/auto-sources", { source, enabled }, chatArchiveAutoSourceSchema),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["chat-archive", workspaceId, "auto-sources"] })
   });
 }
 

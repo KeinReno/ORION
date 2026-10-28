@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
   chatArchiveImportQuerySchema,
@@ -7,7 +7,9 @@ import {
   chatArchiveRawQuerySchema,
   chatArchiveSearchQuerySchema,
   chatArchiveSourceSchema,
+  setChatArchiveAutoSourceInputSchema,
   updateChatArchiveConversationInputSchema,
+  type ChatArchiveAutoSource,
   type ChatArchiveConversation,
   type ChatArchiveImportQuery,
   type ChatArchiveImportResult,
@@ -19,6 +21,7 @@ import {
   type ChatArchiveRawQuery,
   type ChatArchiveSearchHit,
   type ChatArchiveSearchQuery,
+  type SetChatArchiveAutoSourceInput,
   type UpdateChatArchiveConversationInput
 } from "@orion/shared-types";
 import type { RequestUser } from "../../auth/jwt.strategy";
@@ -103,6 +106,21 @@ export class ChatArchiveController {
     @Query(new ZodValidationPipe(chatArchiveSearchQuerySchema)) query: ChatArchiveSearchQuery
   ): Promise<ChatArchiveSearchHit[]> {
     return this.service.search(user.userId, workspaceId, query);
+  }
+
+  /** ORION-16: явный тумблер автосбора по источнику — всегда отвечает за все известные источники, даже невключённые. */
+  @Get("auto-sources")
+  listAutoSources(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<ChatArchiveAutoSource[]> {
+    return this.service.listAutoSources(user.userId, workspaceId);
+  }
+
+  @Put("auto-sources")
+  setAutoSource(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(setChatArchiveAutoSourceInputSchema)) body: SetChatArchiveAutoSourceInput
+  ): Promise<ChatArchiveAutoSource> {
+    return this.service.setAutoSource(user.userId, workspaceId, body);
   }
 
   @Get("import-state")

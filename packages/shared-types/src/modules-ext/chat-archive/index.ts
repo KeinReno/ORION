@@ -156,3 +156,21 @@ export type ChatArchiveImportResult = z.infer<typeof chatArchiveImportResultSche
 
 /** Ответ 204 на удаление: клиентам модуля нужна схема «без тела», а `z` они из контракта не берут. */
 export const chatArchiveNoContentSchema = z.void();
+
+/**
+ * ORION-16 (opt-in): автоматический сбор локальных транскриптов — явный тумблер на источник, выключен по умолчанию.
+ * Только `claude-code`/`codex`: это единственные форматы, которые `identify()` реально разбирает (см.
+ * `chat-archive-push.mjs`) — заявлять поддержку Cursor/Qoder раньше реальной проверки формата не стоит.
+ */
+export const chatArchiveAutoSourceSchema = z.object({
+  source: chatArchiveSourceSchema,
+  enabled: z.boolean(),
+  lastScanAt: z.string().nullable()
+});
+export type ChatArchiveAutoSource = z.infer<typeof chatArchiveAutoSourceSchema>;
+
+export const setChatArchiveAutoSourceInputSchema = z.object({
+  source: chatArchiveSourceSchema,
+  enabled: z.boolean()
+});
+export type SetChatArchiveAutoSourceInput = z.infer<typeof setChatArchiveAutoSourceInputSchema>;

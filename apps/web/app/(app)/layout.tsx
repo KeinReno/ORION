@@ -2,7 +2,7 @@
 
 import { KaidenLogo } from "../../components/kaiden-logo";
 
-import { ObjectContextScope, useObjectContext, useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
+import { useObjectContext, useInbox, useLogout, usePreferences, useSession, useTasks, useWorkspaceOrganization } from "@orion/core-react";
 import { effectiveDisabledModules, isModuleEnabled, isTaskClosed } from "@orion/shared-types";
 import {
   AppBackground,
@@ -23,10 +23,7 @@ import {
   type DockviewReadyEvent,
   type DockviewWillShowOverlayLocationEvent,
   type IDockviewHeaderActionsProps,
-  type IDockviewPanelProps,
-  Button,
   ConfirmDialog,
-  ErrorBoundary,
   LoadingScreen,
   cx,
   useContextMenu,
@@ -34,10 +31,10 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { ChevronLeft, ChevronRight, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { CommandCenter, showCommandPalette } from "../../lib/command-center";
 import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspace-context";
@@ -79,7 +76,7 @@ import {
 import { openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus";
 import { useTaskProjectRouting } from "../../lib/task-project-routing";
 import { rememberAssistantView } from "../../lib/assistant-context";
-import { AgentPanelFrame, AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
+import { AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
 import { FeedbackButton } from "../../components/feedback-dialog";
 import { GlobalCorner } from "../../components/global-corner";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
@@ -87,6 +84,14 @@ import { objectViewPanel } from "../../lib/object-view";
 import { sanitizeDockLayout } from "../../lib/dock-layout-sanitize";
 import { canStep, EMPTY_NAV_HISTORY, readNavHistory, recordVisit, saveNavHistory, stepHistory, type NavHistory } from "../../lib/nav-history";
 import { getPanelDefinition, instancePanelId, isPanelAvailable, panelInstanceId, panelRegistry, panelSupportsSurface, visiblePanels, type PanelDefinition } from "../../lib/panel-registry";
+import { buildPanelComponents } from "../../lib/panel-components";
+import {
+  moveToPrimaryDock,
+  moveToSecondaryDock,
+  registerSecondaryDockMove,
+  useSecondaryDock
+} from "../../lib/secondary-dock";
+import { detachSecondaryDockToWindow, useSecondaryDockHost } from "../../lib/secondary-dock-window";
 import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
 import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -96,8 +101,7 @@ import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
 import { addFolder, deleteFolder, folderOf, groupOnto, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
-import { PanelScrollMemory } from "../../lib/scroll-memory";
-import { PanelDraftScope, cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
+import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
@@ -132,38 +136,8 @@ function closeDisabledPanels(api: DockviewApi, disabledModules: readonly string[
 
 // Dockview hands every panel its full `IDockviewPanelProps`; registry
 // components only declare the slice they use (`params.instanceId`, `api.setTitle`).
-const panelComponents: Record<string, (props: IDockviewPanelProps) => React.ReactElement> = Object.fromEntries(
-  panelRegistry.map((panel) => [
-    panel.id,
-    // The boundary sits outside the scopes so a crashed panel is reset cleanly, and inside the dock
-    // so one broken panel never unmounts the shell or its neighbours.
-    (props: IDockviewPanelProps) =>
-      createElement(
-        ErrorBoundary,
-        {
-          fallback: (error, reset) => createElement(PanelCrash, { error, onRetry: reset }),
-          onError: (error) => console.error(`[panels] panel "${panel.id}" crashed`, error)
-        },
-        // The frame lights up while an agent works in this panel's module (lib/agent-presence.tsx).
-        createElement(AgentPanelFrame, {
-          moduleId: panel.moduleId ?? null,
-          children: createElement(PanelScrollMemory, { panelId: props.api.id }, createElement(PanelDraftScope, { panelId: props.api.id }, createElement(ObjectContextScope, { panelId: props.api.id }, createElement(panel.component, { params: props.params, api: props.api }))))
-        })
-      )
-  ])
-);
-
-function PanelCrash({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
-  return (
-    <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-sm text-foreground">Панель не открылась из-за ошибки</p>
-      <p className="max-w-md break-words font-mono text-2xs text-muted-foreground">{error.message}</p>
-      <Button size="sm" variant="outline" onClick={onRetry}>
-        Повторить
-      </Button>
-    </div>
-  );
-}
+// Shared with the second dock (`secondary-dock.ts`) — see `panel-components.tsx`.
+const panelComponents = buildPanelComponents();
 
 function NextLink({ href, className, children }: { href: string; className?: string; children: ReactNode }): React.ReactElement {
   return (
@@ -207,6 +181,38 @@ function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React
       className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
     >
       ⧉
+    </button>
+  );
+}
+
+/** ORION-11: send the active tab to the second dock. Close-here/open-there, so nothing duplicates. */
+function MoveToSecondaryHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+  if (!activePanel) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => moveToSecondaryDock(activePanel.id)}
+      title="Переместить во второй сайдбар"
+      aria-label="Переместить во второй сайдбар"
+      className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+    >
+      ⇥
+    </button>
+  );
+}
+
+/** The second dock's mirror of the action above — sends the active tab back to the main Workbench. */
+function MoveToPrimaryHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React.ReactElement | null {
+  if (!activePanel) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => moveToPrimaryDock(activePanel.id)}
+      title="Переместить в основной сайдбар"
+      aria-label="Переместить в основной сайдбар"
+      className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+    >
+      ⇤
     </button>
   );
 }
@@ -291,6 +297,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
       />
       <ResourcesToggle />
       <FloatHeaderAction {...props} />
+      <MoveToSecondaryHeaderAction {...props} />
       <DetachHeaderAction {...props} />
       {precision ? null : <AgentPresencePill />}
       <RunningTimerChip />
@@ -397,6 +404,61 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   useUpdateNotifier();
 
   const apiRef = useRef<DockviewApi | null>(null);
+
+  // ORION-11: a second, independent dock — own DockviewApi, own saved layout, can be
+  // detached into its own window on another monitor. See `secondary-dock.ts`.
+  const secondaryDock = useSecondaryDock();
+  const { requestRedock } = useSecondaryDockHost();
+  const secondaryApiRef = useRef<DockviewApi | null>(null);
+  const secondaryKey = user && workspace ? dockLayoutStorageKey(user.id, workspace.id, "secondary") : null;
+  const openInSecondaryDock = useCallback(
+    (panelId: string, title?: string) => {
+      const api = secondaryApiRef.current;
+      const definition = getPanelDefinition(panelId);
+      if (!api || !definition || !isPanelAvailable(definition, disabledModulesRef.current, pluginOverridesRef.current)) return;
+      const existing = api.getPanel(panelId);
+      if (existing) {
+        existing.api.setActive();
+        return;
+      }
+      const instanceId = panelInstanceId(panelId);
+      api.addPanel({ id: panelId, component: definition.id, title: title ?? definition.label, ...(instanceId ? { params: { instanceId } } : {}) });
+      secondaryDock.setOpen(true);
+    },
+    [secondaryDock]
+  );
+  const onSecondaryReady = useCallback(
+    (event: DockviewReadyEvent) => {
+      secondaryApiRef.current = event.api;
+      if (!secondaryKey) return;
+      try {
+        const raw = window.localStorage.getItem(secondaryKey);
+        const clean = raw ? sanitizeDockLayout(JSON.parse(raw), (id) => Boolean(getPanelDefinition(id)), { width: window.innerWidth, height: window.innerHeight }) : null;
+        if (clean) event.api.fromJSON(clean.layout as unknown as Parameters<DockviewApi["fromJSON"]>[0]);
+      } catch {
+        /* a corrupt saved layout just starts this dock empty */
+      }
+      event.api.onDidLayoutChange(() => {
+        try {
+          window.localStorage.setItem(secondaryKey, JSON.stringify(event.api.toJSON()));
+        } catch {
+          /* a lost save just means the next change tries again */
+        }
+      });
+    },
+    [secondaryKey]
+  );
+  /** "Переместить во второй сайдбар": close here, open there with the same id/params — never duplicates the underlying record. */
+  const moveOpenPanelToSecondary = useCallback(
+    (panelId: string) => {
+      const panel = apiRef.current?.getPanel(panelId);
+      const title = panel?.title ?? getPanelDefinition(panelId)?.label;
+      panel?.api.close();
+      openInSecondaryDock(panelId, title);
+    },
+    [openInSecondaryDock]
+  );
+
   // Named layouts ("Разработка", "Финансы"): a saved set of open panels, per user and workspace.
   const [layoutDialogOpen, setLayoutDialogOpen] = useState(false);
   const [layoutNames, setLayoutNames] = useState<string[]>([]);
@@ -651,6 +713,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // A click in the menu is the only open that may replace the current tab («Заменять текущую»);
   // moving between panels from inside a panel (open a project from the list) always adds a tab.
   const openFromMenu = useCallback((panelId: string) => placePanel(panelId, undefined, undefined, true), [placePanel]);
+  /** "Переместить в основной сайдбар": close here, reopen there with the same id/params — never duplicates the record. */
+  const moveOpenPanelToPrimary = useCallback(
+    (panelId: string) => {
+      const panel = secondaryApiRef.current?.getPanel(panelId);
+      const title = panel?.title;
+      panel?.api.close();
+      placePanel(panelId, undefined, title);
+    },
+    [placePanel]
+  );
+  useEffect(
+    () => registerSecondaryDockMove({ toSecondary: moveOpenPanelToSecondary, toPrimary: moveOpenPanelToPrimary }),
+    [moveOpenPanelToSecondary, moveOpenPanelToPrimary]
+  );
 
   /**
    * Non-drag alternative to "drop on an edge" (U06 done-criterion:
@@ -938,6 +1014,51 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     return <LoadingScreen />;
   }
 
+  const secondaryDockColumn = secondaryDock.detachedElsewhere ? (
+    <div
+      className={cx(
+        "flex w-10 shrink-0 flex-col items-center gap-2 border-border bg-background/60 py-2",
+        secondaryDock.position === "left" ? "border-r" : "border-l"
+      )}
+    >
+      <IconButton label="Второй сайдбар открыт в отдельном окне — вернуть сюда" onClick={requestRedock}>
+        <Columns2 className="h-4 w-4" />
+      </IconButton>
+    </div>
+  ) : (
+    <div
+      className="flex shrink-0 flex-col border-border"
+      style={{ width: secondaryDock.width, borderLeftWidth: secondaryDock.position === "right" ? 1 : 0, borderRightWidth: secondaryDock.position === "left" ? 1 : 0 }}
+    >
+      <div className="flex h-9 shrink-0 items-center justify-between gap-1 border-b border-border px-2">
+        <span className="truncate text-label text-subtle-foreground">Второй сайдбар</span>
+        <div className="flex items-center gap-0.5">
+          <IconButton
+            label={secondaryDock.position === "left" ? "Перенести вправо" : "Перенести влево"}
+            size="sm"
+            onClick={() => secondaryDock.setPosition(secondaryDock.position === "left" ? "right" : "left")}
+          >
+            {secondaryDock.position === "left" ? <PanelRight className="h-3.5 w-3.5" /> : <PanelLeft className="h-3.5 w-3.5" />}
+          </IconButton>
+          <IconButton label="Открепить на другой экран" size="sm" onClick={() => void detachSecondaryDockToWindow(workspace.id)}>
+            <span aria-hidden className="text-xs">⧉</span>
+          </IconButton>
+          <IconButton label="Закрыть второй сайдбар" size="sm" onClick={() => secondaryDock.setOpen(false)}>
+            <span aria-hidden className="text-xs">✕</span>
+          </IconButton>
+        </div>
+      </div>
+      <div className="min-h-0 min-w-0 flex-1">
+        <Workbench
+          components={panelComponents}
+          onReady={onSecondaryReady}
+          onRequestClose={(panelId) => secondaryApiRef.current?.getPanel(panelId)?.api.close()}
+          rightHeaderActionsComponent={MoveToPrimaryHeaderAction}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <div
       className={cx(
@@ -1084,6 +1205,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           menuItems: [
             { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
             { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
+            { label: "Открыть во втором сайдбаре", onSelect: () => openInSecondaryDock(panel.id, panel.label) },
             ...(panelSupportsSurface(panel.id, "window")
               ? [{ label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) }]
               : []),
@@ -1213,6 +1335,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
           ]} />
           {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
+          <IconButton label="Второй сайдбар" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={secondaryDock.open} onClick={secondaryDock.toggle}><Columns2 className="h-4 w-4" /></IconButton>
           <FeedbackButton className="h-11 w-11 sm:h-8 sm:w-8" />
           <IconButton label="Настройки" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openPanel("settings")}><Settings className="h-4 w-4" /></IconButton>
           <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
@@ -1225,10 +1348,12 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               switcher={<WorkspaceSwitcher groups={switcherGroups} active={workspace} expanded alwaysList onSelect={requestWorkspaceSwitch} onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find(w => w.id === id)?.name ?? "ORION")} onOpenSpaces={() => leaveWorkbench("spaces")} />}
               onOpen={openContextProject} onClose={() => { document.getElementById("orion-context-toggle")?.focus(); setContextHidden(true); }} />
           </div> : null}
+          {!compact && secondaryDock.open && secondaryDock.position === "left" ? secondaryDockColumn : null}
           <div className="min-h-0 min-w-0 flex-1">
             <AgentPresenceFeed />
             <Workbench components={panelComponents} onReady={onReady} onRequestClose={closeTab} rightHeaderActionsComponent={HeaderActions} />
           </div>
+          {!compact && secondaryDock.open && secondaryDock.position === "right" ? secondaryDockColumn : null}
           {precision && inspectorOpen && !editorContext && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
           <ResourcesDock />
         </main>

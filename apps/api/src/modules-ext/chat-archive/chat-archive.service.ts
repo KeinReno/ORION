@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
+  CHAT_ARCHIVE_SOURCES,
   CHAT_ARCHIVE_TITLE_SOURCES,
   chatArchiveFallbackTitle,
   isChatArchiveMessage,
   parseChatArchiveLine,
+  type ChatArchiveAutoSource,
   type ChatArchiveConversation,
   type ChatArchiveImportQuery,
   type ChatArchiveImportResult,
@@ -20,6 +22,7 @@ import {
   type ChatArchiveSearchQuery,
   type ChatArchiveSource,
   type ChatArchiveTitleSource,
+  type SetChatArchiveAutoSourceInput,
   type UpdateChatArchiveConversationInput
 } from "@orion/shared-types";
 import { createHash } from "node:crypto";
@@ -271,6 +274,36 @@ export class ChatArchiveService {
       }
       throw error;
     }
+  }
+
+  /**
+   * ORION-16 — явный тумблер автосбора по источнику, выключен по умолчанию: ни один источник не
+   * появляется здесь, пока его не включили хотя бы раз (ряд создаётся лениво, на первое `setAutoSource`).
+   * Отключение источника — обычное `enabled: false`, строка остаётся: уже собранные разговоры никуда не
+   * делись (AC3), следующий тик `ChatArchiveDiscoveryService` этот источник просто пропустит.
+   */
+  async listAutoSources(userId: string, workspaceId: string): Promise<ChatArchiveAutoSource[]> {
+    const rows = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return tx.chatArchiveAutoSource.findMany({ where: { workspaceId, userId } });
+    });
+    const bySource = new Map(rows.map((row) => [row.source, row]));
+    return CHAT_ARCHIVE_SOURCES.map((source) => {
+      const row = bySource.get(source);
+      return { source, enabled: row?.enabled ?? false, lastScanAt: row?.lastScanAt?.toISOString() ?? null };
+    });
+  }
+
+  async setAutoSource(userId: string, workspaceId: string, input: SetChatArchiveAutoSourceInput): Promise<ChatArchiveAutoSource> {
+    const row = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return tx.chatArchiveAutoSource.upsert({
+        where: { workspaceId_userId_source: { workspaceId, userId, source: input.source } },
+        create: { workspaceId, userId, source: input.source, enabled: input.enabled },
+        update: { enabled: input.enabled }
+      });
+    });
+    return { source: row.source as ChatArchiveSource, enabled: row.enabled, lastScanAt: row.lastScanAt?.toISOString() ?? null };
   }
 
   /** Разговор должен принадлежать ЭТОМУ пространству и этому человеку. */

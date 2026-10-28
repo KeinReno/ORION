@@ -314,6 +314,7 @@ model Workspace {
   // <module-registry:workspace-relations>
   chatArchiveConversations ChatArchiveConversation[]
   chatArchiveLines         ChatArchiveLine[]
+  chatArchiveAutoSources   ChatArchiveAutoSource[]
   petCarePets    PetCarePet[]
   petCareEntries PetCareEntry[]
   petCareDays    PetCareDay[]
@@ -3420,6 +3421,26 @@ model ChatArchiveLine {
   @@unique([conversationId, seq])
   @@index([workspaceId])
   @@map("chat_archive_lines")
+}
+
+/// ORION-16 — opt-in тумблер автосбора по источнику, выключен по умолчанию. Личный, как сам архив.
+model ChatArchiveAutoSource {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  /// claude-code | codex — см. CHAT_ARCHIVE_SOURCES.
+  source      String
+  enabled     Boolean   @default(true)
+  /// Последний успешный проход сканера для этого источника — отсекает уже просмотренные файлы по mtime.
+  lastScanAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, source], map: "chat_archive_auto_sources_key")
+  @@index([workspaceId])
+  @@map("chat_archive_auto_sources")
 }
 
 // module: pet-care

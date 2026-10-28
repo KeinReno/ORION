@@ -1,7 +1,7 @@
 "use client";
 
 import { useCore } from "@orion/core-react";
-import { CHAT_ARCHIVE_SOURCE_LABELS, type ChatArchiveConversation, type ChatArchiveLine, type ChatArchiveSource } from "@orion/shared-types";
+import { CHAT_ARCHIVE_SOURCES, CHAT_ARCHIVE_SOURCE_LABELS, type ChatArchiveConversation, type ChatArchiveLine, type ChatArchiveSource } from "@orion/shared-types";
 import {
   Badge,
   Button,
@@ -12,11 +12,13 @@ import {
   PanelBody,
   PanelHeader,
   PanelShell,
+  Popover,
   SegmentedControl,
   Skeleton,
+  Switch,
   useToast
 } from "@orion/ui";
-import { ArrowLeft, Download, FileUp, MessagesSquare, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileUp, MessagesSquare, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { describeError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
@@ -24,12 +26,14 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import {
   downloadChatArchiveOriginal,
   fetchChatArchiveRawLine,
+  useChatArchiveAutoSources,
   useChatArchiveConversations,
   useChatArchiveLines,
   useChatArchiveSearch,
   useDeleteChatArchiveConversation,
   useImportChatArchiveFile,
-  useRenameChatArchiveConversation
+  useRenameChatArchiveConversation,
+  useSetChatArchiveAutoSource
 } from "./use-chat-archive";
 
 type SourceFilter = "all" | ChatArchiveSource;
@@ -60,6 +64,8 @@ export function ChatArchivePanel(): React.ReactElement {
   const conversations = useChatArchiveConversations(workspaceId, source === "all" ? undefined : source);
   const search = useChatArchiveSearch(workspaceId, q);
   const importFile = useImportChatArchiveFile(workspaceId, (done, total) => setProgress({ done, total }));
+  const autoSources = useChatArchiveAutoSources(workspaceId);
+  const setAutoSource = useSetChatArchiveAutoSource(workspaceId);
   const searching = q.trim().length >= 2;
   const current = (conversations.data ?? []).find((item) => item.id === selected?.id);
 
@@ -96,6 +102,42 @@ export function ChatArchivePanel(): React.ReactElement {
             <FileUp className="h-4 w-4" />
             {progress && importFile.isPending ? `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` : "Импорт файла"}
           </Button>
+          {workspaceId ? (
+            <Popover
+              align="end"
+              trigger={({ toggle, ref }) => (
+                <span ref={ref as unknown as React.RefObject<HTMLSpanElement>}>
+                  <Button size="sm" variant="ghost" onClick={toggle} aria-label="Автосбор локальных транскриптов">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </span>
+              )}
+            >
+              {() => (
+                <div className="space-y-3 p-3">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">Автосбор</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      Периодически подтягивает новые сессии с этого компьютера. Выключено по умолчанию; выключить источник — не удалить уже собранное.
+                    </div>
+                  </div>
+                  {CHAT_ARCHIVE_SOURCES.map((item) => {
+                    const row = autoSources.data?.find((candidate) => candidate.source === item);
+                    return (
+                      <label key={item} className="flex items-center justify-between gap-3 text-sm">
+                        <span>{CHAT_ARCHIVE_SOURCE_LABELS[item]}</span>
+                        <Switch
+                          checked={row?.enabled ?? false}
+                          disabled={autoSources.isLoading}
+                          onChange={(checked) => setAutoSource.mutate({ source: item, enabled: checked })}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </Popover>
+          ) : null}
         </>
       }
     />

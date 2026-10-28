@@ -65,7 +65,7 @@ Claude Code) < `custom` (заданный в источнике) < `manual` (п�
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/chat-archive` |
 | Плагины, расширяющие модуль | — |
-| Миграции в манифесте | `20261020222504_chat_archive` |
+| Миграции в манифесте | `20261020222504_chat_archive`, `20261028120000_chat_archive_auto_source` |
 | Код на сервере | `apps/api/src/modules-ext/chat-archive/` |
 | При выключении | Панель, API и инструменты агентов скрываются, хук получает отказ. Сохранённые разговоры остаются и вернутся при включении. |
 <!-- generated:manifest:end -->

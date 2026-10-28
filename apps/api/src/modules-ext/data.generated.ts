@@ -25,6 +25,12 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
     "reason": "Строки транскрипта — копия исходного файла; в снапшот не входят по той же причине, что и разговор."
   },
   {
+    "model": "ChatArchiveAutoSource",
+    "snapshotKey": "chatArchiveAutoSources",
+    "policy": "included",
+    "reason": "Тумблер — сам по себе настройка владельца, не копия чужих данных: пара байт, входит в снапшот как обычная настройка."
+  },
+  {
     "model": "PetCarePet",
     "snapshotKey": "petCarePets",
     "policy": "included",
@@ -52,6 +58,7 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
 
 /** Делегаты для снапшота; порядок — «родитель раньше ребёнка» (в `SNAPSHOT_MODELS`). */
 export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prisma.TransactionClient) => unknown }> = [
+  { key: "chatArchiveAutoSources", delegate: (tx) => tx.chatArchiveAutoSource },
   { key: "petCarePets", delegate: (tx) => tx.petCarePet },
   { key: "petCareEntries", delegate: (tx) => tx.petCareEntry },
   { key: "petCareDays", delegate: (tx) => tx.petCareDay },
@@ -69,6 +76,11 @@ export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> =
     "syncClass": "not-synced",
     "stage": "never",
     "note": "Строка — неизменяемая копия строки файла; не синхронизируется, как и разговор."
+  },
+  "ChatArchiveAutoSource": {
+    "syncClass": "not-synced",
+    "stage": "never",
+    "note": "Переключается явным действием в настройках; гибридная репликация до него не доведена (как и у остальных настроек)."
   },
   "PetCarePet": {
     "syncClass": "lww-fields",

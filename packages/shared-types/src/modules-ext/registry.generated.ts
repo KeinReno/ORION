@@ -47,6 +47,7 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
       "Панель «Архив чатов»: список разговоров, чтение, поиск, выгрузка оригинала",
       "Импорт транскрипта Claude Code или Codex файлом",
       "Автосохранение разговоров Claude Code хуком (chat-archive-push.mjs)",
+      "Опциональный автосбор: периодическое сканирование локальных транскриптов Claude Code/Codex, явный тумблер на источник (ORION_MODE=local)",
       "Поиск и чтение прошлых разговоров для ИИ-агентов"
     ],
     "optionalDependencies": [],
@@ -84,7 +85,8 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
   "chat-archive": [
-    "20261020222504_chat_archive"
+    "20261020222504_chat_archive",
+    "20261028120000_chat_archive_auto_source"
   ],
   "pet-care": [
     "20261018120000_pet_care",

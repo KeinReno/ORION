@@ -10,6 +10,10 @@ export const GENERATED_MODEL_OWNERS = [
     "modules-ext/chat-archive"
   ],
   [
+    "ChatArchiveAutoSource",
+    "modules-ext/chat-archive"
+  ],
+  [
     "PetCarePet",
     "modules-ext/pet-care"
   ],

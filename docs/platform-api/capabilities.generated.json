@@ -47,10 +47,12 @@
         "subscribes": []
       },
       "migrations": [
-        "20261020222504_chat_archive"
+        "20261020222504_chat_archive",
+        "20261028120000_chat_archive_auto_source"
       ],
       "sourceDirectory": "apps/api/src/modules-ext/chat-archive",
       "dataModels": [
+        "ChatArchiveAutoSource",
         "ChatArchiveConversation",
         "ChatArchiveLine"
       ]
@@ -2009,6 +2011,7 @@
       "CalendarConnection": "events",
       "Capture": "captures",
       "CategoryRule": "finance",
+      "ChatArchiveAutoSource": "modules-ext/chat-archive",
       "ChatArchiveConversation": "modules-ext/chat-archive",
       "ChatArchiveLine": "modules-ext/chat-archive",
       "Contact": "contacts",
