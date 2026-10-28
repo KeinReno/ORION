@@ -1,17 +1,18 @@
 "use client";
 
-import { useAgentConnection, useAgentTokens, useCreateAgentToken, useInstallAgentClient } from "@orion/core-react";
+import { useAgentConnection, useAgentTokens, useCreateAgentToken, useInstallAgentClient, useSetAiBridgeOverride } from "@orion/core-react";
 import {
   AGENT_INSTALL_CLIENTS,
   AGENT_RECOMMENDED_SCOPES,
   AGENT_SCOPES,
   AGENT_SCOPE_LABEL,
+  type AgentConnectionInfo,
   type AgentInstallClient,
   type AgentScope,
   type CreatedAgentToken,
   type InstalledAgentClient
 } from "@orion/shared-types";
-import { Button, Card, Select, useToast } from "@orion/ui";
+import { Button, Card, ConfirmDialog, SegmentedControl, Select, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { AGENT_CLIENTS, AGENT_CLIENT_LABEL, buildConnectSnippet, checkAgentConnection, type AgentClient, type ConnectionCheck } from "../../lib/agent-connect";
 import { describeError } from "../../lib/error-message";
@@ -85,6 +86,8 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
           Выберите программу и что ей разрешить — ORION подключит её сам или покажет настройку, чтобы вставить вручную. Ни исходники, ни Node не нужны.
         </p>
       </div>
+
+      {info?.bridgeOverrideEditable ? <BridgeOverrideControl workspaceId={workspaceId} info={info} /> : null}
 
       {installed ? (
         <InstalledCard workspaceId={workspaceId} installed={installed} onDone={() => setInstalled(null)} />
@@ -171,6 +174,68 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
         </form>
       )}
     </Card>
+  );
+}
+
+/**
+ * ORION-12: the owner's explicit choice, persisted on the node (not an env var) and effective
+ * immediately — no restart. "Включён" while this node is in server mode (or LAN Host is on) is
+ * a real widening of access, so it asks for confirmation instead of flipping silently; turning
+ * it off, or choosing "Авто", never needs one.
+ */
+function BridgeOverrideControl({ workspaceId, info }: { workspaceId: string | undefined; info: AgentConnectionInfo }): React.ReactElement {
+  const { toast } = useToast();
+  const setOverride = useSetAiBridgeOverride(workspaceId);
+  const [confirmEnable, setConfirmEnable] = useState(false);
+  const value = info.bridgeOverride === null ? "auto" : info.bridgeOverride ? "on" : "off";
+  const risky = info.mode === "server";
+
+  function apply(next: boolean | null): void {
+    setOverride.mutate(
+      { override: next },
+      { onError: (error) => toast({ title: "Не удалось изменить", description: describeError(error), tone: "danger" }) }
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 rounded-xl border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-label font-medium">Мост для агентов</p>
+        <SegmentedControl<"auto" | "on" | "off">
+          aria-label="Мост для агентов"
+          size="sm"
+          value={value}
+          onChange={(next) => {
+            if (next === "on" && risky) setConfirmEnable(true);
+            else apply(next === "auto" ? null : next === "on");
+          }}
+          options={[
+            { value: "auto", label: "Авто" },
+            { value: "on", label: "Включён" },
+            { value: "off", label: "Выключен" }
+          ]}
+        />
+      </div>
+      <p className="text-2xs text-subtle-foreground">
+        {value === "auto"
+          ? "Авто — включён на личном устройстве, выключен в серверном режиме, пока не задан ORION_AI_BRIDGE."
+          : value === "on"
+            ? "Включён явно — доступен независимо от режима."
+            : "Выключен явно — не работает, даже на личном устройстве."}
+      </p>
+      <ConfirmDialog
+        open={confirmEnable}
+        title="Включить мост для агентов?"
+        description={`Этот узел сейчас ${info.mode === "server" ? "в серверном режиме" : "хостом LAN"} — включение моста сделает его доступным любому, кто может подключиться к серверу, а не только вам на этом компьютере.`}
+        confirmLabel="Включить"
+        danger={false}
+        onConfirm={() => {
+          setConfirmEnable(false);
+          apply(true);
+        }}
+        onCancel={() => setConfirmEnable(false)}
+      />
+    </div>
   );
 }
 

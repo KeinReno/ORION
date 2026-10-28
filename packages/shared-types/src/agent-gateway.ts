@@ -233,6 +233,10 @@ export const agentConnectionInfoSchema = z.object({
   bridgeEnabled: z.boolean(),
   /** ORION-12: why `bridgeEnabled` is false (e.g. LAN Host) — null when enabled, or genuinely unknown. */
   bridgeDisabledReason: z.string().nullable(),
+  /** The owner's explicit choice in Настройки → ИИ и агенты, overriding the mode/env default either way. `null` = "Авто". */
+  bridgeOverride: z.boolean().nullable(),
+  /** Whether the signed-in user may change `bridgeOverride` — the node's owner, or anyone on a single-user node with no owner recorded yet. */
+  bridgeOverrideEditable: z.boolean(),
   mode: z.enum(["local", "server"]),
   /** Where the agent's HTTP calls go; `null` when this server does not know its public address. */
   apiUrl: z.string().nullable(),
@@ -242,6 +246,10 @@ export const agentConnectionInfoSchema = z.object({
   manualPath: z.string().nullable()
 });
 export type AgentConnectionInfo = z.infer<typeof agentConnectionInfoSchema>;
+
+/** `null` clears the override (back to "Авто" — mode/env decide). */
+export const setAiBridgeOverrideInputSchema = z.object({ override: z.boolean().nullable() });
+export type SetAiBridgeOverrideInput = z.infer<typeof setAiBridgeOverrideInputSchema>;
 
 /** Programs ORION can connect itself to in one click (writes its MCP entry into their config on this computer). */
 export const AGENT_INSTALL_CLIENTS = ["claude-desktop", "claude-code", "cursor", "codex"] as const;

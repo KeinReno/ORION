@@ -1,6 +1,6 @@
 "use client";
 
-import type { AgentConnectionInfo, AgentAuditEntry, AgentPresence, InstallAgentClientInput, InstalledAgentClient, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
+import type { AgentConnectionInfo, AgentAuditEntry, AgentPresence, InstallAgentClientInput, InstalledAgentClient, AgentAuditQuery, AgentProposal, AgentProposalBulkResult, SetAiBridgeOverrideInput, UpdateAgentTokenInput, AgentToken, CreateAgentTokenInput, CreatedAgentToken } from "@orion/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCore } from "./provider";
 
@@ -51,6 +51,15 @@ export function useAgentConnection(workspaceId: string | undefined) {
     queryFn: () => api.getAgentConnection(workspaceId as string),
     enabled: Boolean(workspaceId),
     staleTime: 60_000
+  });
+}
+
+export function useSetAiBridgeOverride(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation<AgentConnectionInfo, Error, SetAiBridgeOverrideInput>({
+    mutationFn: (input) => api.setAiBridgeOverride(workspaceId as string, input),
+    onSuccess: (info) => queryClient.setQueryData(["agent-connection", workspaceId], info)
   });
 }
 

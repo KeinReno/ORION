@@ -6,6 +6,8 @@ const SECRET = "orion_agt_abc123";
 const installed: AgentConnectionInfo = {
   bridgeEnabled: true,
   bridgeDisabledReason: null,
+  bridgeOverride: null,
+  bridgeOverrideEditable: false,
   mode: "local",
   apiUrl: "http://127.0.0.1:4000",
   launcher: "installed",

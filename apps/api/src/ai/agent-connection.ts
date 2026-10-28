@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AgentConnectionInfo } from "@orion/shared-types";
 import { isServerMode } from "../common/orion-mode";
-import { aiBridgeDisabledReason, aiBridgeEnabled } from "./agent-tokens.service";
+import { loadNodeConfig } from "../lan/node-config";
+import { aiBridgeDisabledReason, aiBridgeEnabled, aiBridgeOverrideEditableBy } from "./agent-tokens.service";
 
 /**
  * Where the MCP adapter and the Agent Manual live for the process that is running right now. The API is the only
@@ -10,7 +11,7 @@ import { aiBridgeDisabledReason, aiBridgeEnabled } from "./agent-tokens.service"
  * `process.execPath` and `__dirname` ARE the real installed paths (TZ-02, 2.5/2.6). Pure and injectable for tests.
  */
 export function resolveAgentConnection(
-  options: { baseDir?: string; execPath?: string; env?: NodeJS.ProcessEnv; exists?: (path: string) => boolean; server?: boolean } = {}
+  options: { baseDir?: string; execPath?: string; env?: NodeJS.ProcessEnv; exists?: (path: string) => boolean; server?: boolean; userId?: string } = {}
 ): AgentConnectionInfo {
   const baseDir = options.baseDir ?? __dirname;
   const execPath = options.execPath ?? process.execPath;
@@ -36,6 +37,8 @@ export function resolveAgentConnection(
   return {
     bridgeEnabled: aiBridgeEnabled(),
     bridgeDisabledReason: aiBridgeDisabledReason(),
+    bridgeOverride: loadNodeConfig().aiBridgeOverride,
+    bridgeOverrideEditable: options.userId !== undefined && aiBridgeOverrideEditableBy(options.userId),
     mode: server ? "server" : "local",
     apiUrl: env.ORION_PUBLIC_API_URL?.trim().replace(/\/+$/, "") || (server ? null : `http://127.0.0.1:${port}`),
     launcher,

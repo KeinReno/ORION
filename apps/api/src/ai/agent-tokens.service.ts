@@ -32,6 +32,7 @@ import {
 } from "@orion/shared-types";
 import { isServerMode } from "../common/orion-mode";
 import { PrismaService } from "../common/prisma.service";
+import { loadNodeConfig } from "../lan/node-config";
 import { NotificationCenterService } from "../notifications/notification-center.service";
 import { AgentPresenceService, objectOfResource, presenceActivity } from "./agent-presence.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
@@ -40,8 +41,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** `lastUsedAt` is a hint, not a log: don't write on every call. */
 const LAST_USED_GRANULARITY_MS = 60_000;
 
-/** In `server` mode the bridge is opt-in (`ORION_AI_BRIDGE=1`); on a personal machine it is on. */
+/**
+ * In `server` mode the bridge is opt-in (`ORION_AI_BRIDGE=1`); on a personal machine it is on.
+ * ORION-12 follow-up: the owner can now override either direction from Настройки → ИИ и агенты
+ * (`PATCH .../agent-connection/bridge`, persisted in `lan-node.json` — see `node-config.ts`), read
+ * fresh on every call like `resolveMode()`/`resolveLoginPolicy()` so a toggle takes effect without
+ * a restart. An explicit override always wins over the mode/env default, in both directions.
+ */
 export function aiBridgeEnabled(): boolean {
+  const override = loadNodeConfig().aiBridgeOverride;
+  if (override !== null) return override;
   return !isServerMode() || process.env.ORION_AI_BRIDGE === "1";
 }
 
@@ -49,15 +58,24 @@ export function aiBridgeEnabled(): boolean {
  * ORION-12: the generic "ORION_AI_BRIDGE=1 включает" line left the owner unable to tell *why* the node
  * ended up in server mode in the first place — the single most common cause here is "Хост LAN" (ADR-0015),
  * which is the same `ORION_MODE=server` posture as a real multi-user deployment, not a copy of it. Naming
- * that cause (without exposing it as a toggle — the risk note in ORION-12 is explicit about that) turns a
- * dead end into an actionable choice: turn LAN Host off, or accept the risk and set the env var.
+ * that cause turns a dead end into an actionable choice: turn LAN Host off, flip the Настройки toggle, or
+ * accept the risk and set the env var.
  */
 export function aiBridgeDisabledReason(): string | null {
   if (aiBridgeEnabled()) return null;
-  if (process.env.ORION_LAN_HOST === "1") {
-    return "Мост для агентов выключен, потому что включён режим «Хост LAN» (Настройки → Сеть) — это тот же серверный режим, доступный другим устройствам. Выключите «Хост LAN», если удалённый доступ не нужен, либо задайте ORION_AI_BRIDGE=1 на этом узле и перезапустите, понимая, что мост станет доступен любому подключённому устройству.";
+  if (loadNodeConfig().aiBridgeOverride === false) {
+    return "Мост для агентов выключен владельцем узла в Настройках → ИИ и агенты. Включите его там же, если он нужен.";
   }
-  return "Мост для агентов выключен: этот узел запущен в серверном режиме (ORION_MODE=server). Задайте ORION_AI_BRIDGE=1 в конфигурации узла и перезапустите, понимая, что мост станет доступен всем, кто может подключиться к серверу.";
+  if (process.env.ORION_LAN_HOST === "1") {
+    return "Мост для агентов выключен, потому что включён режим «Хост LAN» (Настройки → Сеть) — это тот же серверный режим, доступный другим устройствам. Выключите «Хост LAN», если удалённый доступ не нужен, либо включите мост явно в Настройках → ИИ и агенты, понимая, что он станет доступен любому подключённому устройству.";
+  }
+  return "Мост для агентов выключен: этот узел запущен в серверном режиме (ORION_MODE=server). Включите его в Настройках → ИИ и агенты, понимая, что он станет доступен всем, кто может подключиться к серверу.";
+}
+
+/** Who may flip `aiBridgeOverride` — the node's recorded owner, or anyone while a fresh node has none yet (same rule as `LanService.isOwner`). */
+export function aiBridgeOverrideEditableBy(userId: string): boolean {
+  const owner = loadNodeConfig().ownerUserId;
+  return !owner || owner === userId;
 }
 
 export function hashAgentSecret(secret: string): string {

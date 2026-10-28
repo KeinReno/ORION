@@ -201,6 +201,7 @@ import {
   type UpdateAgentTokenInput,
   type AgentToken,
   type AgentConnectionInfo,
+  type SetAiBridgeOverrideInput,
   type ActivityEntry,
   type AttachToHomeInput,
   type Contact,
@@ -1408,6 +1409,11 @@ export class ApiClient {
 
   getAgentConnection(workspaceId: string): Promise<AgentConnectionInfo> {
     return this.request("GET", `/workspaces/${workspaceId}/agent-connection`, undefined, agentConnectionInfoSchema);
+  }
+
+  /** ORION-12: owner-only, loopback-only (see the controller) — `override: null` clears back to "Авто". */
+  setAiBridgeOverride(workspaceId: string, input: SetAiBridgeOverrideInput): Promise<AgentConnectionInfo> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/agent-connection/bridge`, input, agentConnectionInfoSchema);
   }
 
   /** The only response that carries the token secret. */

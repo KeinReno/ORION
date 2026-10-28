@@ -23,6 +23,9 @@ export interface LanNodeConfig {
   ownerUserId: string | null;
   /** Политика входа хоста; нет в файле (старые узлы) — домашняя. */
   loginPolicy: LanLoginPolicy;
+  /** ORION-12: явный выбор владельца в Настройках → ИИ и агенты, поверх дефолта режима/ORION_AI_BRIDGE.
+   * `null` (нет в файле у старых узлов) — «Авто». См. `aiBridgeEnabled()` в ai/agent-tokens.service.ts. */
+  aiBridgeOverride: boolean | null;
 }
 
 export interface LanClientBinding {
@@ -70,7 +73,8 @@ export function loadNodeConfig(dir = nodeDir()): LanNodeConfig {
     mode: stored?.mode === "host" || stored?.mode === "client" ? stored.mode : "local",
     port: Number.isInteger(stored?.port) ? (stored!.port as number) : LAN_DEFAULT_PORT,
     ownerUserId: stored?.ownerUserId ?? null,
-    loginPolicy: stored?.loginPolicy === "strict" ? "strict" : "home"
+    loginPolicy: stored?.loginPolicy === "strict" ? "strict" : "home",
+    aiBridgeOverride: typeof stored?.aiBridgeOverride === "boolean" ? stored.aiBridgeOverride : null
   };
   if (!stored?.nodeId) writeJsonAtomic(file, config);
   return config;
