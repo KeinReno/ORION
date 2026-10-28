@@ -259,8 +259,14 @@ function TimelineView({
     else onSchedule(task, day);
   }
 
+  const undated = useMemo(
+    () => groups.flatMap((group) => group.undated.map((task) => ({ task, milestoneTitle: group.milestone?.title ?? null }))),
+    [groups]
+  );
+
   return (
     <div ref={frameRef} className="overflow-hidden rounded-xl border border-border">
+      {undated.length > 0 ? <UndatedShelf items={undated} onOpen={onOpen} /> : null}
       <div className="flex">
         <div style={{ width: labelWidth }} className="shrink-0 border-r border-border">
           <div className="h-7 border-b border-border" />
@@ -295,7 +301,17 @@ function TimelineView({
 
             {groups.map((group) => (
               <div key={group.milestone?.id ?? "none"}>
-                <div style={{ height: ROW_H }} className="relative border-b border-white/5 bg-white/[0.02]">
+                <div
+                  style={{ height: ROW_H }}
+                  className="relative border-b border-white/5 bg-white/[0.02]"
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragOverDay(Math.round((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerDay));
+                  }}
+                  onDragLeave={() => setDragOverDay(null)}
+                  onDrop={dropOnTrack}
+                >
+                  {dragOverDay !== null ? <span className="pointer-events-none absolute inset-y-0 w-px bg-accent" style={{ left: dragOverDay * pxPerDay }} aria-hidden /> : null}
                   {group.milestone ? <MilestoneMark milestone={group.milestone} x={x} pxPerDay={pxPerDay} /> : null}
                 </div>
                 {group.dated.map((row) => (
@@ -314,20 +330,6 @@ function TimelineView({
                     <TaskMark row={row} x={x} now={now} onOpen={onOpen} />
                   </div>
                 ))}
-                {group.undated.length > 0 ? (
-                  <div
-                    style={{ height: ROW_H }}
-                    className="relative border-b border-white/5"
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      setDragOverDay(Math.round((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerDay));
-                    }}
-                    onDragLeave={() => setDragOverDay(null)}
-                    onDrop={dropOnTrack}
-                  >
-                    {dragOverDay !== null ? <span className="pointer-events-none absolute inset-y-0 w-px bg-accent" style={{ left: dragOverDay * pxPerDay }} aria-hidden /> : null}
-                  </div>
-                ) : null}
               </div>
             ))}
           </div>
@@ -372,26 +374,47 @@ function GroupLabels({ group, onOpen }: { group: PlanGroup; onOpen: (task: Task)
           </button>
         </div>
       ))}
-      {group.undated.length > 0 ? (
-        <div style={{ height: ROW_H }} className="flex items-center gap-1.5 overflow-x-auto border-b border-white/5 pl-4 pr-2 text-micro text-subtle-foreground">
-          <span className="shrink-0">Без даты:</span>
-          {group.undated.map((task) => (
-            <span
-              key={task.id}
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.setData(TASK_DRAG_MIME, task.id);
-                event.dataTransfer.effectAllowed = "move";
-              }}
-              onClick={() => onOpen(task)}
-              title={`${task.title} — перетащите на шкалу, чтобы назначить срок`}
-              className="shrink-0 cursor-grab truncate rounded-full border border-dashed border-border px-1.5 py-0.5 hover:border-border-strong hover:text-foreground active:cursor-grabbing"
-            >
-              {task.title}
-            </span>
-          ))}
-        </div>
-      ) : null}
+    </div>
+  );
+}
+
+/**
+ * ORION-04, revised: unscheduled tasks used to repeat "Без даты:" as a cramped, non-truncating
+ * horizontal-scroll strip inside every milestone's row in the (already narrow) label column — it
+ * broke the column's layout on any project with more than a couple of unscheduled tasks (every
+ * title ran past the chip's unconstrained width, so neither `truncate` nor the row's fixed height
+ * held). One shelf above the whole chart instead: wraps onto as many lines as it needs, each chip
+ * properly capped so `truncate` actually applies, and a task keeps its milestone name as a caption
+ * instead of the "Без даты:" label repeating per group.
+ */
+function UndatedShelf({
+  items,
+  onOpen
+}: {
+  items: { task: Task; milestoneTitle: string | null }[];
+  onOpen: (task: Task) => void;
+}): React.ReactElement {
+  return (
+    <div className="max-h-28 overflow-y-auto border-b border-border bg-white/[0.02] px-3 py-2">
+      <p className="mb-1.5 text-2xs text-subtle-foreground">Без срока · {items.length} — перетащите на шкалу</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map(({ task, milestoneTitle }) => (
+          <span
+            key={task.id}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData(TASK_DRAG_MIME, task.id);
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onClick={() => onOpen(task)}
+            title={milestoneTitle ? `${task.title} · ${milestoneTitle}` : task.title}
+            className="flex max-w-[14rem] cursor-grab items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-micro text-muted-foreground hover:border-border-strong hover:text-foreground active:cursor-grabbing"
+          >
+            <span className="min-w-0 truncate">{task.title}</span>
+            {milestoneTitle ? <span className="shrink-0 truncate text-subtle-foreground">· {milestoneTitle}</span> : null}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

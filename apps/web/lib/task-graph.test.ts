@@ -84,6 +84,36 @@ describe("buildTaskTree", () => {
     expect(() => buildTaskTree(cyclic, true)).not.toThrow();
   });
 
+  it("marks guide lines by whether an ancestor has a later sibling, and the node's own isLast", () => {
+    const tree = buildTaskTree(tasks, true); // root { kid1 { grand }, kid2 }, orphan
+    const [root, orphan] = tree;
+    expect(root.isLast).toBe(false); // orphan follows it at the root level
+    expect(orphan.guides).toEqual([]);
+    const [kid1, kid2] = root.children;
+    expect(kid1.isLast).toBe(false); // kid2 follows
+    expect(kid1.guides).toEqual([!root.isLast]); // true: root has a later sibling (orphan)
+    expect(kid2.isLast).toBe(true);
+    const grand = kid1.children[0];
+    expect(grand.isLast).toBe(true);
+    expect(grand.guides).toEqual([!root.isLast, !kid1.isLast]); // [true, true]: both ancestors have later siblings
+  });
+
+  it("flags a branch as having a blocked descendant even many levels down, for a collapsed ancestor to show", () => {
+    const withDep = [
+      task("p", { sortOrder: 1 }),
+      task("mid", { parentId: "p", sortOrder: 1 }),
+      task("leaf", { parentId: "mid", dependencyIds: ["blocker"] }),
+      task("blocker", { sortOrder: 2 }),
+      task("clean", { sortOrder: 3 })
+    ];
+    const tree = buildTaskTree(withDep, true);
+    const p = tree.find((n) => n.task.id === "p")!;
+    const clean = tree.find((n) => n.task.id === "clean")!;
+    expect(p.hasBlockedDescendant).toBe(true);
+    expect(p.children[0].children[0].hasBlockedDescendant).toBe(true); // "leaf" itself
+    expect(clean.hasBlockedDescendant).toBe(false);
+  });
+
   it("flattenTree skips collapsed subtrees", () => {
     const rows = flattenTree(buildTaskTree(tasks, true), new Set(["kid1"]));
     expect(rows.map((n) => n.task.id)).toEqual(["root", "kid1", "kid2", "orphan"]);

@@ -17,6 +17,14 @@ export interface TreeNode {
   /** Direct subtasks counted BEFORE hiding closed ones, so progress stays true when closed work is hidden. */
   childTotal: number;
   childClosed: number;
+  /** Last among its own siblings — the row's own connector stops here instead of continuing down. */
+  isLast: boolean;
+  /** One entry per ancestor level (index = depth): true when that ancestor has a later sibling, so a
+   *  guide line must run through its column past this row. Root rows carry an empty array. */
+  guides: boolean[];
+  /** This task or any task in its subtree is currently blocked — the signal a collapsed branch needs,
+   *  since the per-task "ждёт" badge is invisible once its row is hidden under a collapsed ancestor. */
+  hasBlockedDescendant: boolean;
 }
 
 function compareTasks(a: Task, b: Task): number {
@@ -58,29 +66,34 @@ export function buildTaskTree(tasks: Task[], showClosed: boolean): TreeNode[] {
   }
 
   const visiting = new Set<string>();
-  function build(task: Task, depth: number): TreeNode | null {
+  function build(task: Task, depth: number, guides: boolean[], isLast: boolean): TreeNode | null {
     if (visiting.has(task.id)) return null; // a parent cycle in bad data must not hang the view
     visiting.add(task.id);
-    const children = (childrenOf.get(task.id) ?? [])
-      .sort(compareTasks)
-      .map((child) => build(child, depth + 1))
+    const sortedChildren = (childrenOf.get(task.id) ?? []).sort(compareTasks);
+    const childGuides = [...guides, !isLast];
+    const children = sortedChildren
+      .map((child, index) => build(child, depth + 1, childGuides, index === sortedChildren.length - 1))
       .filter((node): node is TreeNode => node !== null);
     visiting.delete(task.id);
     if (!showClosed && isTaskClosed(task.status) && children.length === 0) return null;
     const direct = childrenOf.get(task.id) ?? [];
+    const ownBlocked = (blockers.get(task.id) ?? []).length > 0;
     return {
       task,
       depth,
       children,
       blockedBy: blockers.get(task.id) ?? [],
       childTotal: direct.length,
-      childClosed: direct.filter((child) => isTaskClosed(child.status)).length
+      childClosed: direct.filter((child) => isTaskClosed(child.status)).length,
+      isLast,
+      guides,
+      hasBlockedDescendant: ownBlocked || children.some((child) => child.hasBlockedDescendant)
     };
   }
 
   return roots
     .sort(compareTasks)
-    .map((task) => build(task, 0))
+    .map((task, index, arr) => build(task, 0, [], index === arr.length - 1))
     .filter((node): node is TreeNode => node !== null);
 }
 

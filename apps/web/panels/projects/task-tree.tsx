@@ -2,10 +2,11 @@
 
 import { isTaskClosed, type Task } from "@orion/shared-types";
 import { Badge, CheckToggle, cx, IconButton, StrikeText, useContextMenuApi, useToast } from "@orion/ui";
-import { ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, TriangleAlert } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { shortDate } from "../../lib/format";
 import { descendantIds } from "../../lib/task-structure";
+import { Meter } from "../../components/project-bits";
 import { GRAPH_NODE_H, GRAPH_NODE_W, buildTaskTree, flattenTree, layoutDependencyGraph } from "../../lib/task-graph";
 
 /** The same `text/plain` task-id convention `TaskCard`/the board drag already use — one MIME, not a new one per view. */
@@ -69,11 +70,14 @@ export function TaskTree({
 
   return (
     <ul role="tree" aria-label="Иерархия задач" className="flex max-w-4xl flex-col">
-      {rows.map(({ task, depth, children, blockedBy, childTotal, childClosed }) => {
+      {rows.map(({ task, depth, children, blockedBy, childTotal, childClosed, isLast, guides, hasBlockedDescendant }) => {
         const closed = isTaskClosed(task.status);
         const hasChildren = children.length > 0;
         const isCollapsed = collapsed.has(task.id);
         const isRenaming = renamingId === task.id;
+        // A branch that hides its own trouble: the task is fine, but something inside its (collapsed)
+        // subtree is blocked — the per-task "ждёт" badge below is invisible while the branch is folded.
+        const hidesProblem = hasChildren && isCollapsed && blockedBy.length === 0 && hasBlockedDescendant;
         const rowMenuItems = [
           { label: "Открыть", onSelect: () => onOpen(task) },
           { label: "Переименовать", icon: Pencil, onSelect: () => setRenamingId(task.id) },
@@ -87,7 +91,6 @@ export function TaskTree({
               aria-level={depth + 1}
               aria-expanded={hasChildren ? !isCollapsed : undefined}
               aria-selected={openTaskId === task.id}
-              style={{ paddingLeft: depth * 20 }}
               onContextMenu={(e) => showContextMenu(e, rowMenuItems)}
               draggable={!isRenaming}
               onDragStart={(event) => {
@@ -124,14 +127,20 @@ export function TaskTree({
                 dragOverId === task.id && "outline outline-2 outline-accent"
               )}
             >
+              <TreeGuides guides={guides} isLast={isLast} depth={depth} />
               {hasChildren ? (
                 <button
                   type="button"
                   onClick={() => toggleCollapsed(task.id)}
                   aria-label={isCollapsed ? "Развернуть" : "Свернуть"}
-                  className="rounded p-0.5 text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                  className="relative rounded p-0.5 text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
                   {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  {hidesProblem ? (
+                    <span className="absolute -right-1 -top-1" title="В свёрнутой ветке есть задача, которая чего-то ждёт">
+                      <TriangleAlert className="h-2.5 w-2.5 text-warning" aria-hidden />
+                    </span>
+                  ) : null}
                 </button>
               ) : (
                 <span className="inline-block w-[1.125rem]" aria-hidden />
@@ -169,8 +178,13 @@ export function TaskTree({
                 </button>
               )}
               {childTotal > 0 ? (
-                <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
-                  {childClosed}/{childTotal}
+                <span className="flex shrink-0 items-center gap-1.5" title={`Подзадачи: ${childClosed} из ${childTotal} закрыто`}>
+                  <span className="w-8">
+                    <Meter value={(childClosed / childTotal) * 100} tone={childClosed === childTotal ? "success" : "accent"} />
+                  </span>
+                  <span className="font-mono text-micro tabular-nums text-subtle-foreground">
+                    {childClosed}/{childTotal}
+                  </span>
                 </span>
               ) : null}
               {blockedBy.length > 0 ? (
@@ -189,7 +203,8 @@ export function TaskTree({
               </span>
             </div>
             {addingChildFor === task.id ? (
-              <div style={{ paddingLeft: (depth + 1) * 20 }} className="flex items-center gap-1.5 px-2 py-row">
+              <div className="flex items-center gap-1.5 px-2 py-row">
+                <TreeGuides guides={[...guides, !isLast]} isLast={true} depth={depth + 1} />
                 <span className="inline-block w-[1.125rem]" aria-hidden />
                 <span className="inline-block h-4 w-4 shrink-0" aria-hidden />
                 <RenameField
@@ -207,6 +222,30 @@ export function TaskTree({
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * The connecting lines that make nesting readable at a glance instead of just indentation: a
+ * straight guide through every ancestor column that still has a later sibling below it, and an
+ * elbow — vertical-then-horizontal, stopping if this is the last child — into the row itself.
+ * `guides[i]` says whether depth `i`'s ancestor continues (see `TreeNode.guides`).
+ */
+function TreeGuides({ guides, isLast, depth }: { guides: boolean[]; isLast: boolean; depth: number }): React.ReactElement | null {
+  if (depth === 0) return null;
+  return (
+    <span className="flex shrink-0 self-stretch" aria-hidden>
+      {guides.map((continues, i) => (
+        <span key={i} className="relative w-5 shrink-0">
+          {continues ? <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/10" /> : null}
+        </span>
+      ))}
+      <span className="relative w-5 shrink-0">
+        <span className="absolute left-1/2 top-0 h-1/2 w-px -translate-x-1/2 bg-white/10" />
+        {!isLast ? <span className="absolute bottom-0 left-1/2 h-1/2 w-px -translate-x-1/2 bg-white/10" /> : null}
+        <span className="absolute left-1/2 top-1/2 h-px w-1/2 -translate-y-1/2 bg-white/10" />
+      </span>
+    </span>
   );
 }
 
