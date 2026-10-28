@@ -107,6 +107,30 @@ export function ProjectPlan({ projectId }: { projectId: string }): React.ReactEl
     openProjectTask(projectId, task.id);
   };
 
+  // ORION-04: drag-to-reschedule on the Таймлайн. `field` names exactly which date the drag
+  // moved — "due" (the common case) or "start" when that is the only date a task has — never
+  // both, and never a cascade to dependent tasks (the risk note is explicit: no silent cascade).
+  // `targetDay` is local midnight of the dropped-on column; the task's own existing time of day
+  // (if it had one) carries over, so a drag changes the DAY, never silently invents a time.
+  function rescheduleTask(task: Task, field: "due" | "start", targetDay: Date): void {
+    const current = field === "due" ? task.dueAt : task.startAt;
+    const time = current ? new Date(current) : null;
+    const next = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), time?.getHours() ?? 12, time?.getMinutes() ?? 0);
+    updateTask.mutate(
+      { taskId: task.id, input: field === "due" ? { dueAt: next.toISOString() } : { startAt: next.toISOString() } },
+      { onError: () => toast({ title: "Не удалось перенести срок", tone: "danger" }) }
+    );
+  }
+  // Dragging an unscheduled task onto a day assigns it a due date (the common, visible-on-
+  // timeline field) at local noon — explicit, not an invented time that quietly looks precise.
+  function scheduleTask(task: Task, targetDay: Date): void {
+    const next = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), 12, 0);
+    updateTask.mutate(
+      { taskId: task.id, input: { dueAt: next.toISOString() } },
+      { onError: () => toast({ title: "Не удалось назначить срок", tone: "danger" }) }
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -135,7 +159,7 @@ export function ProjectPlan({ projectId }: { projectId: string }): React.ReactEl
           }
         />
       ) : view === "timeline" ? (
-        <TimelineView tasks={tasks} milestones={milestones} onOpen={openTask} />
+        <TimelineView tasks={tasks} milestones={milestones} onOpen={openTask} onReschedule={rescheduleTask} onSchedule={scheduleTask} />
       ) : view === "roadmap" ? (
         <RoadmapView tasks={tasks} milestones={milestones} onOpen={openTask} onToggle={toggle} />
       ) : (
@@ -170,20 +194,29 @@ function markerTone(row: PlanRow, now: Date): string {
   return "bg-foreground/70";
 }
 
+/** The same `text/plain` task-id convention the board/task tree/graph drags already use. */
+const TASK_DRAG_MIME = "text/plain";
+
 /**
  * Milestones with their tasks on a weekly axis. A deadline is a diamond on its day (not a
  * grey square the size of a button); a task with both a start and a due date is a bar.
- * Work without a date is listed at the foot of its group instead of being drawn somewhere
- * it is not. Read-only by design: moving dates is the Gantt's job.
+ * ORION-04: dragging a task's marker to another day reschedules it (whichever date it was
+ * drawn from — see `rescheduleTask`); dragging an unscheduled task from the tray onto a day
+ * assigns it a due date. Milestones stay read-only here — the Гант is where their own dates
+ * move, same reasoning the Гант/Таймлайн split documented in `ProjectPlan` already applies.
  */
 function TimelineView({
   tasks,
   milestones,
-  onOpen
+  onOpen,
+  onReschedule,
+  onSchedule
 }: {
   tasks: Task[];
   milestones: Milestone[];
   onOpen: (task: Task) => void;
+  onReschedule: (task: Task, field: "due" | "start", targetDay: Date) => void;
+  onSchedule: (task: Task, targetDay: Date) => void;
 }): React.ReactElement {
   const now = new Date();
   const groups = useMemo(() => planGroups(tasks, milestones), [tasks, milestones]);
@@ -197,6 +230,7 @@ function TimelineView({
   const chartWidth = range.days * pxPerDay;
   const todayX = (dayOffset(now, range.start) + 0.5) * pxPerDay;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [dragOverDay, setDragOverDay] = useState<number | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollLeft = Math.max(0, todayX - el.clientWidth / 3);
@@ -205,6 +239,25 @@ function TimelineView({
   }, [frameWidth > 0]);
 
   const x = (date: Date): number => (dayOffset(date, range.start) + 0.5) * pxPerDay;
+  /** Inverse of `x`: the local-midnight day a pixel offset (from the chart's own left edge) falls on. */
+  const dayAt = (pixelX: number): Date => {
+    const offset = Math.round(pixelX / pxPerDay - 0.5);
+    return new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate() + offset);
+  };
+  // Which date moves is decided by the DRAGGED task's own state, not which row it lands on —
+  // every row in the chart accepts any task, same as the board accepts any card into a column.
+  function dropOnTrack(event: React.DragEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    setDragOverDay(null);
+    const id = event.dataTransfer.getData(TASK_DRAG_MIME);
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const day = dayAt(event.clientX - rect.left);
+    if (task.dueAt) onReschedule(task, "due", day);
+    else if (task.startAt) onReschedule(task, "start", day);
+    else onSchedule(task, day);
+  }
 
   return (
     <div ref={frameRef} className="overflow-hidden rounded-xl border border-border">
@@ -246,11 +299,35 @@ function TimelineView({
                   {group.milestone ? <MilestoneMark milestone={group.milestone} x={x} pxPerDay={pxPerDay} /> : null}
                 </div>
                 {group.dated.map((row) => (
-                  <div key={row.task.id} style={{ height: ROW_H }} className="relative border-b border-white/5">
+                  <div
+                    key={row.task.id}
+                    style={{ height: ROW_H }}
+                    className="relative border-b border-white/5"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragOverDay(Math.round((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerDay));
+                    }}
+                    onDragLeave={() => setDragOverDay(null)}
+                    onDrop={dropOnTrack}
+                  >
+                    {dragOverDay !== null ? <span className="pointer-events-none absolute inset-y-0 w-px bg-accent" style={{ left: dragOverDay * pxPerDay }} aria-hidden /> : null}
                     <TaskMark row={row} x={x} now={now} onOpen={onOpen} />
                   </div>
                 ))}
-                {group.undated.length > 0 ? <div style={{ height: ROW_H }} className="border-b border-white/5" /> : null}
+                {group.undated.length > 0 ? (
+                  <div
+                    style={{ height: ROW_H }}
+                    className="relative border-b border-white/5"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragOverDay(Math.round((event.clientX - event.currentTarget.getBoundingClientRect().left) / pxPerDay));
+                    }}
+                    onDragLeave={() => setDragOverDay(null)}
+                    onDrop={dropOnTrack}
+                  >
+                    {dragOverDay !== null ? <span className="pointer-events-none absolute inset-y-0 w-px bg-accent" style={{ left: dragOverDay * pxPerDay }} aria-hidden /> : null}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -272,7 +349,16 @@ function GroupLabels({ group, onOpen }: { group: PlanGroup; onOpen: (task: Task)
         </span>
       </div>
       {group.dated.map((row) => (
-        <div key={row.task.id} style={{ height: ROW_H }} className="flex items-center border-b border-white/5 pl-4 pr-2">
+        <div
+          key={row.task.id}
+          style={{ height: ROW_H }}
+          className="flex items-center border-b border-white/5 pl-4 pr-2"
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(TASK_DRAG_MIME, row.task.id);
+            event.dataTransfer.effectAllowed = "move";
+          }}
+        >
           <button
             type="button"
             onClick={() => onOpen(row.task)}
@@ -287,10 +373,23 @@ function GroupLabels({ group, onOpen }: { group: PlanGroup; onOpen: (task: Task)
         </div>
       ))}
       {group.undated.length > 0 ? (
-        <div style={{ height: ROW_H }} className="flex items-center border-b border-white/5 pl-4 pr-2 text-micro text-subtle-foreground">
-          <span className="truncate" title={group.undated.map((t) => t.title).join(", ")}>
-            Без даты: {group.undated.length}
-          </span>
+        <div style={{ height: ROW_H }} className="flex items-center gap-1.5 overflow-x-auto border-b border-white/5 pl-4 pr-2 text-micro text-subtle-foreground">
+          <span className="shrink-0">Без даты:</span>
+          {group.undated.map((task) => (
+            <span
+              key={task.id}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData(TASK_DRAG_MIME, task.id);
+                event.dataTransfer.effectAllowed = "move";
+              }}
+              onClick={() => onOpen(task)}
+              title={`${task.title} — перетащите на шкалу, чтобы назначить срок`}
+              className="shrink-0 cursor-grab truncate rounded-full border border-dashed border-border px-1.5 py-0.5 hover:border-border-strong hover:text-foreground active:cursor-grabbing"
+            >
+              {task.title}
+            </span>
+          ))}
         </div>
       ) : null}
     </div>
@@ -335,10 +434,15 @@ function TaskMark({ row, x, now, onOpen }: { row: PlanRow; x: (d: Date) => numbe
       {start ? <span className={cx("absolute top-1/2 h-2 -translate-y-1/2 rounded-full opacity-40", tone)} style={{ left: x(start), width: Math.max(4, to - x(start)) }} aria-hidden /> : null}
       <button
         type="button"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData(TASK_DRAG_MIME, row.task.id);
+          event.dataTransfer.effectAllowed = "move";
+        }}
         onClick={() => onOpen(row.task)}
-        title={`${row.task.title} · ${row.due ? "срок" : "начало"} ${when}`}
+        title={`${row.task.title} · ${row.due ? "срок" : "начало"} ${when} · перетащите, чтобы перенести`}
         aria-label={`${row.task.title}, ${row.due ? "срок" : "начало"} ${when}`}
-        className="absolute top-1/2 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="absolute top-1/2 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:cursor-grabbing"
         style={{ left: to }}
       >
         <span className={cx("h-2.5 w-2.5 rotate-45 rounded-[2px]", tone)} />
