@@ -6,6 +6,7 @@ import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Inj
 import type { AgentToken as TokenRow, Prisma } from "@prisma/client";
 import { createHash, randomBytes } from "node:crypto";
 import {
+  AGENT_MODE_LABEL,
   AGENT_TOKEN_PREFIX,
   ASSISTANT_CHAT_TOKEN_NAME,
   type AgentPresence,
@@ -181,6 +182,8 @@ export class AgentTokensService {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertProjectsTx(tx, workspaceId, [...(input.allowedProjectIds ?? []), ...(input.autoCommitProjectIds ?? [])]);
+      const before = await tx.agentToken.findFirst({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null } });
+      if (!before) throw new NotFoundException("Токен не найден");
       const data: Prisma.AgentTokenUpdateManyMutationInput = {};
       if (input.mode !== undefined) data.mode = input.mode;
       if (input.permissions !== undefined) data.permissions = input.permissions;
@@ -190,7 +193,24 @@ export class AgentTokensService {
       if (input.autoCommitProjectIds !== undefined) data.autoCommitProjectIds = [...new Set(input.autoCommitProjectIds)];
       const result = await tx.agentToken.updateMany({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null }, data });
       if (result.count === 0) throw new NotFoundException("Токен не найден");
-      return tx.agentToken.findUniqueOrThrow({ where: { id: tokenId } });
+      const after = await tx.agentToken.findUniqueOrThrow({ where: { id: tokenId } });
+      // ORION-13: changing a token's own rights is a security-relevant event in its own right,
+      // not just something the next agent call happens to reflect — the journal is where the owner
+      // would look to answer "when did this token stop being read-only", so it belongs there too.
+      await tx.agentAuditEntry.create({
+        data: {
+          workspaceId,
+          tokenId: after.id,
+          tokenName: after.name,
+          action: "policy.update",
+          resource: null,
+          status: 200,
+          module: null,
+          summary: describePolicyChange(before, after),
+          wrote: false
+        }
+      });
+      return after;
     });
     return toDto(row);
   }
@@ -463,6 +483,23 @@ function contextOf(row: TokenRow): AgentContext {
 
 function forbiddenOf(values: string[]): AgentForbidden[] {
   return values.filter((v): v is AgentForbidden => agentForbiddenSchema.safeParse(v).success);
+}
+
+type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds">;
+
+/** One sentence for the journal: what actually changed, not just "обновлён". Empty when nothing did (a no-op save). */
+export function describePolicyChange(before: PolicySnapshot, after: PolicySnapshot): string {
+  const parts: string[] = [];
+  if (before.mode !== after.mode) {
+    parts.push(`режим «${AGENT_MODE_LABEL[before.mode as keyof typeof AGENT_MODE_LABEL]}» → «${AGENT_MODE_LABEL[after.mode as keyof typeof AGENT_MODE_LABEL]}»`);
+  }
+  if (JSON.stringify(before.permissions) !== JSON.stringify(after.permissions)) parts.push("права по разделам изменены");
+  if (JSON.stringify([...before.forbidden].sort()) !== JSON.stringify([...after.forbidden].sort())) parts.push("запреты изменены");
+  if (before.writeLimitPerHour !== after.writeLimitPerHour) {
+    parts.push(`лимит записей: ${before.writeLimitPerHour ?? "без лимита"} → ${after.writeLimitPerHour ?? "без лимита"}`);
+  }
+  if (JSON.stringify([...before.allowedProjectIds].sort()) !== JSON.stringify([...after.allowedProjectIds].sort())) parts.push("набор проектов изменён");
+  return parts.length > 0 ? `Права токена изменены: ${parts.join(", ")}` : "Настройки токена сохранены без изменений";
 }
 
 /** The journal's "result" filter as a status condition (`agentAuditResultOf` is its inverse). */

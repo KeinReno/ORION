@@ -72,6 +72,49 @@ export const defaultPolicy = (): PolicyDraft => ({
   autoCommitProjectIds: []
 });
 
+/**
+ * ORION-13: «профили привилегий» — a starting point for the matrix below, not a locked-in choice.
+ * Applying one only touches mode/matrix/forbidden/extraScopes: project scoping, the write limit and
+ * module permissions are a separate decision (what's in scope, not how much the agent can do inside
+ * it) and stay exactly as the owner already set them.
+ */
+export const AGENT_POLICY_PRESETS: { id: string; label: string; description: string; apply: (draft: PolicyDraft) => PolicyDraft }[] = [
+  {
+    id: "observer",
+    label: "Наблюдатель",
+    description: "Только читает — ничего не создаёт и не меняет нигде.",
+    apply: (draft) => ({
+      ...draft,
+      mode: "observer",
+      matrix: { tasks: ["read"], notes: ["read"], events: ["read"], projects: ["read"], finance: [] },
+      forbidden: ["delete"],
+      extraScopes: []
+    })
+  },
+  {
+    id: "assistant",
+    label: "Помощник",
+    description: "Создаёт задачи/заметки и предлагает изменения — ничего не делает напрямую без подтверждения.",
+    apply: (draft) => ({
+      ...draft,
+      mode: "assistant",
+      matrix: { tasks: ["read", "create", "propose"], notes: ["read", "create", "propose"], events: ["read"], projects: ["read"], finance: [] },
+      forbidden: ["delete"]
+    })
+  },
+  {
+    id: "trusted",
+    label: "Доверенный помощник",
+    description: "Меняет существующие задачи/заметки напрямую, без подтверждения на каждую правку — удалять всё ещё не может.",
+    apply: (draft) => ({
+      ...draft,
+      mode: "assistant",
+      matrix: { tasks: ["read", "create", "update"], notes: ["read", "create", "update"], events: ["read"], projects: ["read"], finance: ["create"] },
+      forbidden: ["delete"]
+    })
+  }
+];
+
 /** The request body for `POST agent-tokens` minus name and expiry. */
 export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "mode" | "permissions" | "scopes" | "allowedProjectIds" | "forbidden" | "writeLimitPerHour" | "autoCommitProjectIds" | "modulePermissions"> {
   const limit = Number(draft.writeLimit);
@@ -174,6 +217,23 @@ export function AgentPolicyFields({
 
   return (
     <div className="space-y-3">
+      <fieldset className="space-y-1.5">
+        <legend className="mb-1 text-xs text-muted-foreground">Профиль (отправная точка — после можно донастроить вручную)</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {AGENT_POLICY_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              title={preset.description}
+              onClick={() => onChange(preset.apply(draft))}
+              className="rounded-full border border-border px-2.5 py-1 text-label text-muted-foreground hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
       <label className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground">Режим автономности</span>
         <Select value={draft.mode} onChange={(e) => set({ mode: e.target.value as AgentMode })} className="w-auto">
