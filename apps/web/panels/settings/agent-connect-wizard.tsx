@@ -6,6 +6,7 @@ import {
   AGENT_RECOMMENDED_SCOPES,
   AGENT_SCOPES,
   AGENT_SCOPE_LABEL,
+  REMOTE_TOKEN_MAX_DAYS,
   type AgentConnectionInfo,
   type AgentInstallClient,
   type AgentScope,
@@ -51,10 +52,15 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
   }
   const snippet = issued && info ? buildConnectSnippet(issued.client, info, issued.token.secret) : null;
 
+  // ADR-0017: a server-mode node refuses a token with no/too-long expiry outright (it never serves
+  // one that can't be revoked just by waiting it out). This wizard used to always ask for 90 days,
+  // which a server-mode node rejects on every single use — pick the server's own cap there instead.
+  const expiresInDays = info?.mode === "server" ? REMOTE_TOKEN_MAX_DAYS : 90;
+
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, modulePermissions, expiresInDays: 90 });
+      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, modulePermissions, expiresInDays });
       setIssued({ token, client });
       setCheck(null);
     } catch (error) {
@@ -169,6 +175,11 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
             <p className="text-xs text-muted-foreground">
               Автоматически: ORION допишет себя в настройки {AGENT_CLIENT_LABEL[client]} на этом компьютере (прежний файл сохранится рядом
               копией). Агент будет работать по вашей подписке в этой программе.
+            </p>
+          ) : null}
+          {info?.mode === "server" ? (
+            <p className="text-xs text-muted-foreground">
+              Сервер доступен извне — токен выпускается на {REMOTE_TOKEN_MAX_DAYS} дней (ADR-0017), продлить его можно будет тем же мастером.
             </p>
           ) : null}
         </form>
