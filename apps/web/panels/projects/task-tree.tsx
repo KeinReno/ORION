@@ -258,19 +258,57 @@ function RenameField({
  * accent arrow is an edge that is blocking right now; a faint one points from a finished
  * task. Only tasks that take part in some dependency are drawn.
  */
+/**
+ * ORION-01: «Связи» stays strictly causal — a node's x/y here is topology only, never a date (that
+ * is Гант/Таймлайн's job, by the owner's explicit call). "Создать задачу" from a point on the graph
+ * is NOT added here: the existing per-task dependency checklist (task-detail's "Ждёт завершения")
+ * already lets you wire ANY task into the graph, including one not drawn yet — duplicating that as
+ * a second picker here, for a graph that only draws tasks already in some dependency (so 100+ tasks
+ * stay readable), risked a second, driftable way to do the same edit. What IS added: connecting or
+ * disconnecting two tasks that are already on the graph, directly on it — no modal.
+ */
 export function TaskDependencyGraph({
   tasks,
   showClosed,
   openTaskId,
-  onOpen
+  onOpen,
+  onLink,
+  onUnlink
 }: {
   tasks: Task[];
   showClosed: boolean;
   openTaskId: string | null;
   onOpen: (task: Task) => void;
+  onLink: (fromTaskId: string, toTaskId: string) => void;
+  onUnlink: (fromTaskId: string, toTaskId: string) => void;
 }): React.ReactElement {
   const graph = useMemo(() => layoutDependencyGraph(tasks, showClosed), [tasks, showClosed]);
   const position = useMemo(() => new Map(graph.nodes.map((n) => [n.task.id, n])), [graph]);
+  const [linking, setLinking] = useState(false);
+  const [linkSource, setLinkSource] = useState<string | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+
+  function stopLinking(): void {
+    setLinking(false);
+    setLinkSource(null);
+  }
+
+  function clickNode(taskId: string, task: Task): void {
+    if (!linking) {
+      onOpen(task);
+      return;
+    }
+    if (linkSource === null) {
+      setLinkSource(taskId);
+      return;
+    }
+    if (linkSource === taskId) {
+      setLinkSource(null);
+      return;
+    }
+    onLink(linkSource, taskId);
+    setLinkSource(null);
+  }
 
   if (graph.nodes.length === 0) {
     return (
@@ -282,12 +320,56 @@ export function TaskDependencyGraph({
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (linking) stopLinking();
+            else {
+              setLinking(true);
+              setSelectedEdge(null);
+            }
+          }}
+          className={cx(
+            "rounded-md border px-2 py-1 text-2xs",
+            linking ? "border-accent text-accent-text" : "border-border text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {linking ? "Соединяю…" : "Соединить"}
+        </button>
+        {selectedEdge ? (
+          <button
+            type="button"
+            onClick={() => {
+              onUnlink(selectedEdge.from, selectedEdge.to);
+              setSelectedEdge(null);
+            }}
+            className="rounded-md border border-destructive px-2 py-1 text-2xs text-destructive"
+          >
+            Удалить связь
+          </button>
+        ) : null}
+      </div>
+      {linking ? (
+        <p className="text-2xs text-subtle-foreground">
+          {linkSource
+            ? `Теперь выберите задачу, которая ждёт завершения «${tasks.find((t) => t.id === linkSource)?.title ?? ""}».`
+            : "Выберите задачу-предшественника, затем ту, что от неё зависит. Esc — отмена."}
+        </p>
+      ) : (
+        <p className="text-2xs text-subtle-foreground">Клик по линии — выделить связь для удаления. Координата здесь — только порядок, не дата.</p>
+      )}
       {graph.cyclic.length > 0 ? (
         <p role="alert" className="text-label text-destructive">
           В зависимостях есть цикл — раскладка приблизительная. Разорвите его в одной из задач.
         </p>
       ) : null}
-      <div className="orion-scroll overflow-auto rounded-xl border border-border">
+      <div
+        className="orion-scroll overflow-auto rounded-xl border border-border"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") stopLinking();
+        }}
+      >
         <svg width={graph.width} height={graph.height} role="group" aria-label="Граф зависимостей задач" className="block">
           <defs>
             <marker id="dep-arrow-blocking" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -306,16 +388,30 @@ export function TaskDependencyGraph({
             const x2 = to.x;
             const y2 = to.y + GRAPH_NODE_H / 2;
             const bend = Math.max(24, (x2 - x1) / 2);
+            const d = `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 2},${y2}`;
+            const isSelected = selectedEdge?.from === edge.from && selectedEdge?.to === edge.to;
             return (
-              <path
-                key={`${edge.from}>${edge.to}`}
-                d={`M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2 - 2},${y2}`}
-                fill="none"
-                strokeWidth={edge.blocking ? 2 : 1.25}
-                markerEnd={edge.blocking ? "url(#dep-arrow-blocking)" : "url(#dep-arrow-idle)"}
-                className={edge.blocking ? "text-accent" : "text-border"}
-                stroke="currentColor"
-              />
+              <g key={`${edge.from}>${edge.to}`}>
+                {/* Wide, invisible hit target — the visible stroke alone is too thin to click reliably. */}
+                <path
+                  d={d}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={14}
+                  className={linking ? undefined : "cursor-pointer"}
+                  onClick={() => !linking && setSelectedEdge(isSelected ? null : { from: edge.from, to: edge.to })}
+                />
+                <path
+                  d={d}
+                  fill="none"
+                  strokeWidth={isSelected ? 3 : edge.blocking ? 2 : 1.25}
+                  strokeDasharray={isSelected ? "4 3" : undefined}
+                  markerEnd={edge.blocking ? "url(#dep-arrow-blocking)" : "url(#dep-arrow-idle)"}
+                  className={isSelected ? "text-destructive" : edge.blocking ? "text-accent" : "text-border"}
+                  stroke="currentColor"
+                  pointerEvents="none"
+                />
+              </g>
             );
           })}
           {graph.nodes.map((node) => {
@@ -327,11 +423,11 @@ export function TaskDependencyGraph({
                 role="button"
                 tabIndex={0}
                 aria-label={`${node.task.title}${node.blocked ? " — ждёт зависимость" : ""}`}
-                onClick={() => onOpen(node.task)}
+                onClick={() => clickNode(node.task.id, node.task)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    onOpen(node.task);
+                    clickNode(node.task.id, node.task);
                   }
                 }}
                 className="cursor-pointer focus-visible:outline-none"
@@ -342,8 +438,15 @@ export function TaskDependencyGraph({
                   rx={10}
                   className={cx(
                     "fill-card stroke-1",
-                    openTaskId === node.task.id ? "stroke-accent" : node.blocked ? "stroke-warning" : "stroke-border"
+                    linkSource === node.task.id
+                      ? "stroke-accent"
+                      : openTaskId === node.task.id
+                        ? "stroke-accent"
+                        : node.blocked
+                          ? "stroke-warning"
+                          : "stroke-border"
                   )}
+                  strokeWidth={linkSource === node.task.id ? 2 : 1}
                 />
                 <text x={12} y={GRAPH_NODE_H / 2 - 3} className={cx("text-[12px]", closed ? "fill-subtle-foreground" : "fill-foreground")} textDecoration={closed ? "line-through" : undefined}>
                   {node.task.title.length > 26 ? `${node.task.title.slice(0, 25)}…` : node.task.title}

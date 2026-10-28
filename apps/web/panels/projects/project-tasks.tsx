@@ -6,6 +6,7 @@ import { Button, ConfirmDialog, EmptyState, PanelSection, SegmentedControl, Skel
 import { ListTodo, Milestone as MilestoneIcon, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useObjectNavigation } from "../../lib/use-object-navigation";
+import { describeError } from "../../lib/error-message";
 import { groupTasksByMilestone } from "../../lib/project-focus";
 import { shortDate } from "../../lib/format";
 import { useEnabledPlugins } from "../../lib/use-enabled-plugins";
@@ -153,6 +154,24 @@ export function ProjectTasks({
       { onSuccess: onChanged, onError: () => toast({ title: "Не удалось переименовать", tone: "danger" }) }
     );
   }
+  // ORION-01: the server is the real cycle guard (`assertDependenciesTx`) — this just sends the
+  // same `dependencyIds` edit the detail pane's checklist already makes, from a click on the graph.
+  function linkTasks(fromTaskId: string, toTaskId: string): void {
+    const target = allTasks.find((t) => t.id === toTaskId);
+    if (!target || target.dependencyIds.includes(fromTaskId)) return;
+    updateTask.mutate(
+      { taskId: toTaskId, input: { dependencyIds: [...target.dependencyIds, fromTaskId] } },
+      { onSuccess: onChanged, onError: (error) => toast({ title: "Не удалось связать задачи", description: describeError(error), tone: "danger" }) }
+    );
+  }
+  function unlinkTasks(fromTaskId: string, toTaskId: string): void {
+    const target = allTasks.find((t) => t.id === toTaskId);
+    if (!target) return;
+    updateTask.mutate(
+      { taskId: toTaskId, input: { dependencyIds: target.dependencyIds.filter((id) => id !== fromTaskId) } },
+      { onSuccess: onChanged, onError: () => toast({ title: "Не удалось убрать связь", tone: "danger" }) }
+    );
+  }
   function confirmDelete(): void {
     const task = pendingDelete;
     if (!task) return;
@@ -236,7 +255,14 @@ export function ProjectTasks({
               onRename={renameTask}
             />
           ) : layout === "graph" ? (
-            <TaskDependencyGraph tasks={allTasks} showClosed={showClosed} openTaskId={openTaskId} onOpen={(task) => onOpenTask(task.id)} />
+            <TaskDependencyGraph
+              tasks={allTasks}
+              showClosed={showClosed}
+              openTaskId={openTaskId}
+              onOpen={(task) => onOpenTask(task.id)}
+              onLink={linkTasks}
+              onUnlink={unlinkTasks}
+            />
           ) : layout === "board" ? (
             <ProjectBoard
               tasks={tasks}
