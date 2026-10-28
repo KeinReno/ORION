@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { openProjectTask } from "../../lib/extensions/host-api";
 import { shortDateTime } from "../../lib/extensions/host-api";
 import { useActiveWorkspace } from "../../lib/extensions/host-api";
+import { criticalPath } from "./gantt-critical-path";
 import { MilestoneForm, type MilestoneFormValues } from "./milestone-form";
 import { TODAY_HALF_W, coveredByToday } from "./today-badge";
 
@@ -42,6 +43,7 @@ type GanttScale = "close" | "normal" | "far";
 const SCALE_PX: Record<GanttScale, number> = { close: 56, normal: 32, far: 14 };
 const SCALE_LABEL: Record<GanttScale, string> = { close: "Дни", normal: "Недели", far: "Месяцы" };
 const SCALE_KEY = "orion.gantt.scale";
+const CRITICAL_KEY = "orion.gantt.critical";
 
 function loadScale(): GanttScale {
   try {
@@ -49,6 +51,14 @@ function loadScale(): GanttScale {
     return saved === "close" || saved === "far" ? saved : "normal";
   } catch {
     return "normal";
+  }
+}
+
+function loadShowCritical(): boolean {
+  try {
+    return localStorage.getItem(CRITICAL_KEY) === "1";
+  } catch {
+    return false;
   }
 }
 const ROW_H = 32;
@@ -99,8 +109,12 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   const [pendingDeleteMilestone, setPendingDeleteMilestone] = useState<Milestone | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [scale, setScale] = useState<GanttScale>("normal");
+  const [showCritical, setShowCritical] = useState(false);
   // Read after mount so the first paint matches the server-rendered markup.
-  useEffect(() => setScale(loadScale()), []);
+  useEffect(() => {
+    setScale(loadScale());
+    setShowCritical(loadShowCritical());
+  }, []);
   const pxPerDay = SCALE_PX[scale];
   const scrollRef = useRef<HTMLDivElement>(null);
   function chooseScale(next: GanttScale): void {
@@ -109,6 +123,15 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
       localStorage.setItem(SCALE_KEY, next);
     } catch {
       /* the remembered scale is a convenience only */
+    }
+  }
+  function toggleCritical(): void {
+    const next = !showCritical;
+    setShowCritical(next);
+    try {
+      localStorage.setItem(CRITICAL_KEY, next ? "1" : "0");
+    } catch {
+      /* the remembered toggle is a convenience only */
     }
   }
   // S14a — cascade preview. A date edit on a milestone with dependents is
@@ -129,6 +152,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
   const tasks = useMemo(() => (tasksQuery.data ?? []).filter((task) => task.projectId === projectId), [tasksQuery.data, projectId]);
 
   const rows = useMemo(() => buildRows(milestones, tasks), [milestones, tasks]);
+  const critical = useMemo(() => criticalPath(rows), [rows]);
   // The time axis is at least as wide as the panel, so the plan fills the space instead of
   // ending in the middle of an empty frame; a longer plan simply scrolls.
   const [frameRef, frameWidth] = useResizeWidth<HTMLDivElement>();
@@ -208,10 +232,33 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
     } else {
       try {
         await updateTask.mutateAsync({ taskId: node.id, input: { startAt, dueAt } });
+        warnIfDependentsNowOverlap(node.id, nextDue ?? nextStart);
       } catch {
         toast({ title: "Не удалось перенести срок", tone: "danger" });
       }
     }
+  }
+
+  /**
+   * ORION-05: tasks deliberately don't auto-cascade like milestones do (see
+   * `MilestonesService`'s own comment — "the piece tasks don't need"), so a drag never silently
+   * shifts another task. But silence about the side effect isn't the same as no side effect: if
+   * the task just moved finishes LATER than another task's own start (one that names it as a
+   * dependency), that other task now starts before its prerequisite is done. This says so —
+   * read-only, informational, never auto-moves anything.
+   */
+  function warnIfDependentsNowOverlap(movedTaskId: string, newFinish: Date | null): void {
+    if (!newFinish) return;
+    const affected = tasks.filter((t) => {
+      if (!t.dependencyIds.includes(movedTaskId)) return false;
+      const theirStart = t.startAt ? new Date(t.startAt) : t.dueAt ? new Date(t.dueAt) : null;
+      return theirStart !== null && theirStart.getTime() < newFinish.getTime();
+    });
+    if (affected.length === 0) return;
+    toast({
+      title: "Задача теперь начинается раньше предшественника",
+      description: `Зависит от перенесённой: ${affected.map((t) => t.title).join(", ")}. Даты не изменены автоматически — перенесите вручную, если нужно.`
+    });
   }
 
   /**
@@ -347,6 +394,14 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
               <Button size="sm" variant="outline" onClick={() => scrollToToday("smooth")}>
                 К сегодня
               </Button>
+              <Button
+                size="sm"
+                variant={showCritical ? "primary" : "outline"}
+                onClick={toggleCritical}
+                title="Цепочка зависимостей, которая определяет дату завершения плана — сдвиг любого звена сдвигает и конец"
+              >
+                Критический путь
+              </Button>
             </>
           ) : null}
           {/* An empty chart offers «Веха» in its empty state — one button, not two. */}
@@ -385,6 +440,7 @@ export function ProjectGantt({ projectId }: { projectId: string }): React.ReactE
           onEditMilestone={(id) => setEditingMilestone(milestones.find((m) => m.id === id) ?? null)}
           onDeleteMilestone={(id) => setPendingDeleteMilestone(milestones.find((m) => m.id === id) ?? null)}
           onOpenTask={(id) => openProjectTask(projectId, id)}
+          critical={showCritical ? critical : null}
         />
       )}
       </div>
@@ -567,7 +623,8 @@ function GanttChart({
   onStartDrag,
   onEditMilestone,
   onDeleteMilestone,
-  onOpenTask
+  onOpenTask,
+  critical
 }: {
   rows: GanttNode[];
   range: { start: Date; totalDays: number };
@@ -579,6 +636,8 @@ function GanttChart({
   onEditMilestone: (id: string) => void;
   onDeleteMilestone: (id: string) => void;
   onOpenTask: (id: string) => void;
+  /** `${kind}:${id}` keys on the critical chain — `null` when the toggle is off (see `ProjectGantt`). */
+  critical: Set<string> | null;
 }): React.ReactElement {
   const showContextMenu = useContextMenuApi();
   const chartWidth = range.totalDays * pxPerDay;
@@ -605,7 +664,8 @@ function GanttChart({
       const x2 = rowGeo.left;
       const y2 = index * ROW_H + ROW_H / 2;
       const midX = x1 + Math.max(6, (x2 - x1) / 2);
-      return [{ key: `${row.kind}:${row.id}:${depId}`, d: `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}` }];
+      const isCritical = Boolean(critical?.has(`${row.kind}:${row.id}`) && critical?.has(`${row.kind}:${depId}`));
+      return [{ key: `${row.kind}:${row.id}:${depId}`, d: `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`, isCritical }];
     });
   });
 
@@ -709,9 +769,18 @@ function GanttChart({
                 <marker id="gantt-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                   <path d="M0,0 L6,3 L0,6 Z" className="fill-subtle-foreground" />
                 </marker>
+                <marker id="gantt-arrow-critical" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 Z" className="fill-destructive" />
+                </marker>
               </defs>
               {arrows.map((arrow) => (
-                <path key={arrow.key} d={arrow.d} className="fill-none stroke-subtle-foreground/60" strokeWidth={1.5} markerEnd="url(#gantt-arrow)" />
+                <path
+                  key={arrow.key}
+                  d={arrow.d}
+                  className={cx("fill-none", arrow.isCritical ? "stroke-destructive" : "stroke-subtle-foreground/60")}
+                  strokeWidth={arrow.isCritical ? 2.25 : 1.5}
+                  markerEnd={arrow.isCritical ? "url(#gantt-arrow-critical)" : "url(#gantt-arrow)"}
+                />
               ))}
             </svg>
 
@@ -721,10 +790,10 @@ function GanttChart({
               const geo = barGeometry(display, range, pxPerDay);
               if (!geo) return null;
               const isDragging = drag?.node.kind === row.kind && drag?.node.id === row.id;
+              const isCritical = critical?.has(`${row.kind}:${row.id}`) ?? false;
               const barTitle =
-                row.estimatedMinutes !== null
-                  ? `${row.title} · план ${formatDuration(row.estimatedMinutes)}`
-                  : row.title;
+                (row.estimatedMinutes !== null ? `${row.title} · план ${formatDuration(row.estimatedMinutes)}` : row.title) +
+                (isCritical ? " · на критическом пути" : "");
               return (
                 <div
                   key={`${row.kind}:${row.id}`}
@@ -736,13 +805,15 @@ function GanttChart({
                   className={cx(
                     "absolute flex cursor-grab select-none items-center overflow-hidden rounded-md border text-2xs active:cursor-grabbing",
                     geo.width >= BAR_LABEL_MIN_PX && "px-1.5",
-                    row.kind === "milestone"
-                      ? "border-accent/50 bg-accent/20 font-medium text-foreground"
-                      : row.done
-                        ? "border-success/30 bg-success/10 text-muted-foreground line-through opacity-70"
-                        : row.blocked
-                          ? "border-warning/40 bg-warning/10 text-foreground"
-                          : "border-border bg-white/[0.06] text-foreground",
+                    isCritical
+                      ? "border-destructive/60 bg-destructive/15 text-foreground"
+                      : row.kind === "milestone"
+                        ? "border-accent/50 bg-accent/20 font-medium text-foreground"
+                        : row.done
+                          ? "border-success/30 bg-success/10 text-muted-foreground line-through opacity-70"
+                          : row.blocked
+                            ? "border-warning/40 bg-warning/10 text-foreground"
+                            : "border-border bg-white/[0.06] text-foreground",
                     isDragging && "opacity-80 ring-1 ring-accent"
                   )}
                   title={barTitle}
