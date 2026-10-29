@@ -1,6 +1,6 @@
 # ADR-0042 — separate runtime presence permission from task execution (PROPOSED)
 
-**Date:** 2026-10-29  
+**Date:** 2026-10-29
 **Status:** staged draft, stacked on F3c.
 
 ## Security issue

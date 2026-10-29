@@ -1,6 +1,6 @@
 # ADR-0038 — Manual MCP execution lease bridge (PROPOSED)
 
-**Date:** 2026-10-29  
+**Date:** 2026-10-29
 **Status:** F2 draft, stacked on ADR-0037. Integration tests written, not yet executed.
 
 ## Decision

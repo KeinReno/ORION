@@ -3423,7 +3423,6 @@ model AgentHubEvent {
   @@map("agent_hub_events")
 }
 
-
 /// An agent-reported local observer session. TTL = recently authenticated, not proof of running AI.
 model AgentHubRuntimeSession {
   id              String   @id

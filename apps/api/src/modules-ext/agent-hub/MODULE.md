@@ -29,7 +29,7 @@ See `docs/adr/ADR-0036-agent-hub-execution-foundation.md` and `docs/agent-hub/RO
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks` |
-| Права (permissions) | `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete` |
+| Права (permissions) | `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`, `agent-hub.runtime.create` |
 | События | публикует: —; слушает: — |
 | Панели веба | `agent-hub` |
 | Слоты | — |

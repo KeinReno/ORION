@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type AgentHubRuntimeSession as RuntimeRow } from "@prisma/client";
-import type { AgentContext } from "../../ai/agent-tokens.service";
+import type { AgentContext } from "../../ai/public/agent-context";
 import { PrismaService } from "../../common/prisma.service";
 import { ModulesService } from "../../modules/modules.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";

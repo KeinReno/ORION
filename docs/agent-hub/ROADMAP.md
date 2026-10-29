@@ -1,9 +1,26 @@
 # KAIDEN Agent Hub — implementation roadmap
 
 **Status:** engineering work started 2026-10-29, base `master` @ `68a2384a86467f09af00da6311f934cd738f1d0d`.
-**Current branch:** `feature/agent-hub-foundation-20261029`.
+**Current integration branch:** `codex/agent-hub-integration` (F0–F3d stacked source, including the F3c RLS correction).
 **Governance:** `docs/PLATFORM.md`, `ORION_CONSTITUTION.md`, `docs/AGENT_HUB_ARCHITECTURE.md`, ADR-0036.
 **Release rule:** do not describe a design/contract as deployed functionality.
+
+## Local integration validation — 29–30 October 2026
+
+The stacked Agent Hub and Habitat sources are assembled in `codex/agent-hub-integration`.
+On Windows, the module registry, generated module docs, platform map, Prisma client
+generation, architecture boundaries, lint, typecheck and web build passed. All 150 Prisma
+migrations applied to a newly created isolated test database; the three Agent
+Hub API integration files passed (13 tests). Habitat's real Node process tests
+passed (26 tests). The repository unit suite passed (1603 tests), and a browser
+smoke with a synthetic profile and workspace opened the registered Agent Hub
+panel and displayed its empty state. The Windows test adapts directory escape coverage to a
+junction when file symlinks require Developer Mode or elevation.
+
+This validates the current manual queue, token-scoped observation and opt-in
+operator runner. It does not validate a Windows service, OS process containment,
+provider CLI authentication, independent artifact verification, automatic
+dispatch, an Android surface, or the visual state with active executions.
 
 ## Deliverable sequence
 

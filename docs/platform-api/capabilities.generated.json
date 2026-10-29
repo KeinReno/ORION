@@ -16,6 +16,51 @@
   },
   "components": [
     {
+      "id": "agent-hub",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Agent Hub",
+      "description": "История и жизненный цикл исполнений задач агентами. Первый срез: долговременная очередь, события, отмена и просмотр.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks"
+        ]
+      },
+      "permissions": [
+        "agent-hub.execution.read",
+        "agent-hub.execution.create",
+        "agent-hub.execution.update",
+        "agent-hub.execution.delete",
+        "agent-hub.runtime.create"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "agent-hub"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [
+        "20261029202000_agent_hub_executions",
+        "20261029223000_agent_hub_runtime_sessions"
+      ],
+      "sourceDirectory": "apps/api/src/modules-ext/agent-hub",
+      "dataModels": [
+        "AgentHubEvent",
+        "AgentHubExecution",
+        "AgentHubRuntimeSession"
+      ]
+    },
+    {
       "id": "chat-archive",
       "kind": "module",
       "version": "1.0.0",
@@ -2001,6 +2046,9 @@
       "Account": "finance",
       "AgentAuditEntry": "ai",
       "AgentCapture": "ai",
+      "AgentHubEvent": "modules-ext/agent-hub",
+      "AgentHubExecution": "modules-ext/agent-hub",
+      "AgentHubRuntimeSession": "modules-ext/agent-hub",
       "AgentMessage": "ai",
       "AgentProposal": "ai",
       "AgentTask": "ai",
@@ -2126,6 +2174,7 @@
     "workspaces"
   ],
   "publicContracts": [
+    "apps/api/src/ai/public/agent-context.ts",
     "apps/api/src/ai/public/agent-journal-reader.module.ts",
     "apps/api/src/ai/public/agent-journal-reader.ts",
     "apps/api/src/captures/public/capture-operations.module.ts",
@@ -2222,6 +2271,8 @@
     "apps/web/lib/extensions/slot-boundary.ts",
     "packages/shared-types/src/activity.ts",
     "packages/shared-types/src/agent-gateway.ts",
+    "packages/shared-types/src/agent-hub-lifecycle.ts",
+    "packages/shared-types/src/agent-hub.ts",
     "packages/shared-types/src/agent-manual.ts",
     "packages/shared-types/src/agent-module-inputs.ts",
     "packages/shared-types/src/agent-policy.ts",
@@ -2314,6 +2365,7 @@
     "apps/api/src/inbox/inbox-registry.module.ts",
     "apps/api/src/inbox/inbox-target.registry.ts",
     "apps/api/src/lan/pairing-registry.ts",
+    "apps/api/src/modules-ext/agent-hub/agent-hub-runtime-registry.service.ts",
     "apps/api/src/opportunities-execution/authority-registry.ts",
     "apps/api/src/search/entity-registry.ts",
     "apps/api/src/search/search-provider.registry.ts",
@@ -2452,6 +2504,10 @@
     "health.record.create",
     "health.record.update",
     "health.record.delete",
+    "agent-hub.execution.read",
+    "agent-hub.execution.create",
+    "agent-hub.execution.update",
+    "agent-hub.execution.delete",
     "chat-archive.conversation.read",
     "chat-archive.conversation.create",
     "chat-archive.conversation.update",
@@ -2460,6 +2516,7 @@
     "pet-care.pet.create",
     "pet-care.pet.update",
     "pet-care.pet.delete",
+    "agent-hub.runtime.create",
     "finance.draft.propose",
     "core.link.create",
     "core.link.delete",
@@ -2491,6 +2548,8 @@
     "apps/api/src/lists/MODULE.md",
     "apps/api/src/markets/AI_CONTEXT.md",
     "apps/api/src/markets/MODULE.md",
+    "apps/api/src/modules-ext/agent-hub/AI_CONTEXT.md",
+    "apps/api/src/modules-ext/agent-hub/MODULE.md",
     "apps/api/src/modules-ext/chat-archive/AI_CONTEXT.md",
     "apps/api/src/modules-ext/chat-archive/MODULE.md",
     "apps/api/src/modules-ext/pet-care/AI_CONTEXT.md",

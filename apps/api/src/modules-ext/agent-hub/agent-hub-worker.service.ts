@@ -4,7 +4,7 @@ import {
   transitionAgentHubExecution, AgentHubTransitionError,
   type AgentHubCommand, type AgentHubExecution, type AgentHubReportInput
 } from "@orion/shared-types";
-import type { AgentContext } from "../../ai/agent-tokens.service";
+import type { AgentContext } from "../../ai/public/agent-context";
 import { PrismaService } from "../../common/prisma.service";
 import { ModulesService } from "../../modules/modules.service";
 import { TaskIntegrationReader } from "../../tasks/public/task-integration-reader";

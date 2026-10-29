@@ -1,6 +1,6 @@
 # ADR-0041 — Agent Hub reported runtime registry (PROPOSED)
 
-**Date:** 2026-10-29  
+**Date:** 2026-10-29
 **Status:** F3c code in a stacked draft branch; tests written, not run. Depends on F0/F1/F2 and Habitat F3/F3b.
 
 ## Decision

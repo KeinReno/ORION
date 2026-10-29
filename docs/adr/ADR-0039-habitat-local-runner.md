@@ -1,7 +1,7 @@
 # ADR-0039 — KAIDEN Habitat local process host (PROPOSED)
 
-**Date:** 2026-10-29  
-**Status:** Prototype in `feature/kaiden-habitat-f3-local-host-20261029`; draft local operator-initiated loopback Agent Hub F2 bridge; no unattended service or Windows installer.  
+**Date:** 2026-10-29
+**Status:** Prototype in `feature/kaiden-habitat-f3-local-host-20261029`; draft local operator-initiated loopback Agent Hub F2 bridge; no unattended service or Windows installer.
 **Parent decisions:** ADR-0036 execution, ADR-0037 durable queue, ADR-0038 manual MCP.
 
 ## Decision

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,11 +42,16 @@ test('does not allow directory traversal or escaping task-file symlinks', async 
   const externalFile = join(other, 'secret.txt');
   await writeFile(externalFile, 'secret');
   const fileLink = join(e.workdir, 'external.txt');
-  await symlink(externalFile, fileLink);
   const { root, cwd } = await resolveWorkspaceDirectory(e.root, e.workdir);
-  await rejectsCode(resolveTaskFile(root, cwd, fileLink), 'task_outside_workdir');
+  try {
+    await symlink(externalFile, fileLink);
+    await rejectsCode(resolveTaskFile(root, cwd, fileLink), 'task_outside_workdir');
+  } catch (error) {
+    if (process.platform !== 'win32' || error.code !== 'EPERM') throw error;
+    // Creating file symlinks on Windows requires Developer Mode or elevation.
+  }
   const dirLink = join(e.root, 'external-workdir');
-  await symlink(other, dirLink, 'dir');
+  await symlink(other, dirLink, process.platform === 'win32' ? 'junction' : 'dir');
   await rejectsCode(resolveWorkspaceDirectory(e.root, dirLink), 'outside_workspace');
 });
 
@@ -95,8 +101,12 @@ test('operator can abort process and the result is never a completion claim', as
   const config = configOf(e.root);
   config.profiles[0].args = ['-e', 'setInterval(() => {}, 1000)'];
   const controller = new AbortController();
-  const pending = runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true, signal: controller.signal });
-  setTimeout(() => controller.abort(), 150);
+  const spawnAndAbort = (...args) => {
+    const child = spawn(...args);
+    setTimeout(() => controller.abort(), 150);
+    return child;
+  };
+  const pending = runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true, signal: controller.signal, spawnImpl: spawnAndAbort });
   const result = await pending;
   assert.equal(result.outcome, 'stopped');
   assert.equal(result.verified, false);

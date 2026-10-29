@@ -13,7 +13,7 @@ internals. Model code must not infer an online runtime from token presence. A ru
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/agent-hub` (за `@RequireModule("agent-hub")`); панель веба `agent-hub`; код `apps/api/src/modules-ext/agent-hub/`.
-- Права: `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`.
+- Права: `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`, `agent-hub.runtime.create`.
 - Модуль владеет: Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.
 - Соседи: жёсткие: —; мягкие: `tasks`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: —.
