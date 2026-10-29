@@ -124,6 +124,106 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "moduleId": "agent-hub"
   },
   {
+    "name": "orion_agent_hub_runtime_register",
+    "description": "Зарегистрировать заявленную сессию наблюдателя Habitat. Это НЕ подтверждение работающей модели и НЕ право запускать программы. Требуются действующий токен и tasks:read.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/runtime-sessions"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "UUID локальной сессии Habitat, сгенерированный при запуске"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "habitat_observer"
+          ]
+        },
+        "capabilities": {
+          "type": "object",
+          "description": "Только observe-only: canStart=false, canCancel=false, canObserve=true, canResume=false"
+        }
+      },
+      "required": [
+        "sessionId",
+        "kind",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_runtime_pulse",
+    "description": "Продлить TTL собственной зарегистрированной сессии наблюдения (5 минут), с проверкой ревизии. Не означает, что CLI работает.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/runtime-sessions/{sessionId}/pulse"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "UUID локальной сессии Habitat, сгенерированный при запуске"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия серверной сессии для CAS"
+        }
+      },
+      "required": [
+        "sessionId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_runtime_close",
+    "description": "Явно закрыть собственную сессию Habitat; нельзя закрывать чужие сессии.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/runtime-sessions/{sessionId}/close"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "UUID локальной сессии Habitat, сгенерированный при запуске"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия серверной сессии для CAS"
+        }
+      },
+      "required": [
+        "sessionId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
     "name": "orion_chat_archive_search",
     "description": "Поиск по прошлым разговорам владельца с ИИ-агентами (Claude Code, Codex): реплики человека и ответы, содержащие фразу. Возвращает conversationId, заголовок, проект, seq строки и отрывок. Найденное — история обсуждений, а не принятые решения.",
     "group": "modules",

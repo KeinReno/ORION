@@ -26,6 +26,12 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
     "reason": "Неподменяемая история состояния исполнения; события идут после связанных исполнений."
   },
   {
+    "model": "AgentHubRuntimeSession",
+    "snapshotKey": null,
+    "policy": "ephemeral-excluded",
+    "reason": "Статус присутствия runtime недостоверен после восстановления из снапшота; не переносить как живую сессию."
+  },
+  {
     "model": "ChatArchiveConversation",
     "snapshotKey": null,
     "policy": "derived",
@@ -91,6 +97,11 @@ export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> =
     "syncClass": "append-only",
     "stage": "later",
     "note": "После завершения конфликтов синхронизации нужен отдельный протокол консенсуса; текущий источник — локальный хозяин."
+  },
+  "AgentHubRuntimeSession": {
+    "syncClass": "not-synced",
+    "stage": "never",
+    "note": "Эфемерный lease runtime привязан к конкретному узлу и токену; не копировать между устройствами."
   },
   "ChatArchiveConversation": {
     "syncClass": "not-synced",

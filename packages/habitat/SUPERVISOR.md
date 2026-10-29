@@ -31,7 +31,7 @@ The local file `.orion/habitat/supervisor.json` contains a session UUID, PID, mo
 
 ## Explicit limitations
 
-- There is no durable server-side runtime registration, secure process attestation or remote heartbeat in this PR. The session UUID is **local diagnostic data**, not an ORION Agent Registry identity.
+- This F3b supervisor does not yet call the F3c server registry. The separately drafted F3c module exposes scoped register/pulse/close, but still provides no secure process attestation. The session UUID is **local diagnostic data**, not an ORION Agent Registry identity.
 - The supervisor does not automatically reclaim expired Agent Hub leases: F2 currently requires an explicit owner/lead reconciliation.
 - The supervisor does not spawn a CLI, run OS commands or wake a subscription IDE. F3 `run-hub` remains a **separate operator-initiated command**.
 - It is not a Windows Service. It runs only as long as the manually launched Node process remains alive; it will not start after Windows login or a reboot.
@@ -41,6 +41,6 @@ The local file `.orion/habitat/supervisor.json` contains a session UUID, PID, mo
 
 ## Next integration milestone
 
-Implement a server-side, versioned, authenticated Agent Runtime Registry in the Agent Hub module with session binding, capabilities, explicit owner approvals, signed nonce/replay protection, TTL expiry, and device identity. Separate monitoring rights from worker rights and normal write budgets. Then add a Windows Job Object-powered runner and user-controlled service installer; only after these gates consider unattended task claiming.
+After validating the new draft server runtime registry, integrate its register/pulse/close protocol into the local supervisor. Explicit owner approvals, signed nonce/replay protection, and device identity still require implementation. Separate monitoring rights from worker rights and normal write budgets. Then add a Windows Job Object-powered runner and user-controlled service installer; only after these gates consider unattended task claiming.
 
 The `supervisor-status` command remains available when monitoring has been disabled in the local configuration; this does not enable polling.
