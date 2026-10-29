@@ -197,6 +197,7 @@ This is NOT autonomous execution. The owner must initiate each local run and app
 - [x] Native .NET 8 host source with CreateProcessW(CREATE_SUSPENDED), AssignProcessToJobObject, KILL_ON_JOB_CLOSE and inherited stdin/out/err streams.
 - [x] On Windows, the Node profile runner refuses direct CLI execution unless an operator-approved `windowsHost` binary path exists.
 - [x] Add simulated Win32-path tests for missing host and Job Object launch request construction.
-- [ ] Compile on Windows and pass child + grandchild process-tree smoke tests, timeout, crash and command-line quoting cases.
+- [x] Compile on Windows and pass stdin/argv quoting plus parent/grandchild termination smoke when the host is killed.
+- [ ] Test native host crash, timeout and provider-specific child behavior on Windows.
 - [ ] Add low-privilege Windows account, executable hash pinning/signature validation, and provider-specific profiles.
 - [ ] Obtain reliable actual Windows acceptance before any unattended execution.

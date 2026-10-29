@@ -66,7 +66,7 @@ test('does not forward an unrelated secret environment variable to a child', asy
   const config = configOf(e.root);
   config.profiles[0].args = ['-e', 'process.stdin.resume();process.stdin.on("end", () => process.stdout.write(process.env.SECRET_API_KEY ?? "absent"))'];
   const receipt = await runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true,
-    env: { PATH: process.env.PATH, SECRET_API_KEY: 'super-secret-value' } });
+    env: { PATH: process.env.PATH, SECRET_API_KEY: 'super-secret-value' }, platform: 'linux' });
   assert.equal(receipt.stdoutSha256, createHash('sha256').update('absent').digest('hex'));
 });
 
@@ -74,7 +74,7 @@ test('launches approved Node profile without shell and writes hash-only receipt'
   const e = await environment();
   const config = configOf(e.root);
   const receipt = await runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true,
-    env: { PATH: process.env.PATH, SECRET_API_KEY: 'never-propagate' } });
+    env: { PATH: process.env.PATH, SECRET_API_KEY: 'never-propagate' }, platform: 'linux' });
   assert.equal(receipt.outcome, 'exited');
   assert.equal(receipt.exitCode, 0);
   assert.equal(receipt.stdoutBytes, 'an authorized local test'.length);
@@ -91,7 +91,7 @@ test('stops a running process after its configured deadline', async () => {
   const config = configOf(e.root);
   config.profiles[0].args = ['-e', 'setInterval(() => {}, 1000)'];
   config.profiles[0].timeoutMs = 1000;
-  const receipt = await runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true });
+  const receipt = await runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true, platform: 'linux' });
   assert.equal(receipt.outcome, 'timed_out');
   assert.equal(receipt.verified, false);
 });
@@ -106,7 +106,7 @@ test('operator can abort process and the result is never a completion claim', as
     setTimeout(() => controller.abort(), 150);
     return child;
   };
-  const pending = runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true, signal: controller.signal, spawnImpl: spawnAndAbort });
+  const pending = runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true, signal: controller.signal, spawnImpl: spawnAndAbort, platform: 'linux' });
   const result = await pending;
   assert.equal(result.outcome, 'stopped');
   assert.equal(result.verified, false);

@@ -1,6 +1,6 @@
 # KAIDEN Habitat — local approved process host (F3 alpha)
 
-**State: local operator prototype, with an explicit loopback bridge to the draft Agent Hub F2 API; not installed as a Windows service.** Works with Node.js 20+ and has no external dependencies.
+**State: local operator prototype, with an explicit loopback bridge to Agent Hub F2 API; not installed as a Windows service.** Works with Node.js 20+ and has no external dependencies. The Windows beta bundles the CLI source, Node runtime and native Job Object host; the operator must still create a private config and token file and explicitly start each run.
 
 Habitat is a local human-operated process runner. It probes whether preconfigured executable paths exist **without starting them**. It can run one explicitly selected, locally approved profile only when `config.enabled`, `profile.approved`, and the command-line acknowledgement are all present. It never accepts a command, arbitrary arguments or a shell string from an LLM, MCP message or remote HTTP request.
 
@@ -16,6 +16,7 @@ Habitat is a local human-operated process runner. It probes whether preconfigure
       "id": "local-cli",
       "executable": "C:\\Path\\to\\trusted-cli.exe",
       "args": ["verified", "provider", "flags"],
+      "windowsHost": "C:\\Path\\to\\Kaiden.Habitat.WindowsHost.exe",
       "approved": false,
       "timeoutMs": 600000
     }
@@ -24,6 +25,7 @@ Habitat is a local human-operated process runner. It probes whether preconfigure
 ```
 
 Save this configuration locally outside the repository. Use **absolute paths** for binaries, working directories and task files. Executables and flags must be verified for each provider before approval.
+In the Windows installer, `node.exe`, `habitat/src/cli.mjs` and `habitat/Kaiden.Habitat.WindowsHost.exe` are under the installed `runtime` resource directory. Set `windowsHost` to the exact installed host path. The package does not enable Habitat or provision a token.
 
 ```powershell
 node packages/habitat/src/cli.mjs probe --config C:\private\habitat.json
@@ -64,7 +66,7 @@ Windows profile execution now requires a separately built .NET Job Object host, 
 ## Explicit limitations
 
 - **Not an OS sandbox:** a spawned CLI keeps the local account's filesystem/network privileges, and a CLI can itself launch subprocesses. Do not run untrusted agents unattended with this prototype.
-- On Windows the current single-process terminate/kill does not guarantee termination of a spawned process tree. A proper Windows Job Object/process-tree supervisor is required before unattended mode.
+- On Windows the optional native host creates the child suspended, assigns it to a Job Object and kills job-associated descendants when the host exits. This was smoke-tested on Windows; it does not restrict filesystem/network privileges or catch every possible external process-creation mechanism.
 - No capability proof, provider authentication check, official Codex/Claude flags, persistent daemon, lease scheduler, ORION runtime attestation, UI or remote transport is implemented.
 - `installed: true` means only that the executable file was found; it does **not** mean the provider subscription, login or API access is available.
 - This package is not an OS authorization boundary. Its explicit run-hub/observer commands make **scoped loopback HTTP calls** to Agent Hub using an agent token kept outside the spawned process. A human starts it, and runtime presence is not proof of process attestation.
