@@ -33,3 +33,5 @@ An optional local supervisor flag enables the loopback-only client to register i
 ## Remaining risks and gates
 
 No OS attestation, device enrollment, hardware-bound identity, Windows process isolation, automatic task dispatch, verified artifacts, or full end-to-end migration acceptance. Heartbeats consume token write budget; add dedicated liveness budget before scale. Run `pnpm module-registry --check`, `pnpm module-docs:check`, `pnpm typecheck`, `pnpm test:integration`, `pnpm architecture-check`, and Windows smoke before merging. Earlier stacked PRs remain draft.
+
+**Local check:** 14 standalone Node tests passed against mocked server responses and lightweight stubs, after correcting one test that expected a rejected Promise for a synchronous validation error. This is not a real ORION API integration test.

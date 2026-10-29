@@ -11,7 +11,7 @@ export function createRuntimeRegistryClient({ apiUrl, token, fetchImpl = fetch }
   const origin = requireLoopbackApiUrl(apiUrl);
   if (typeof token !== 'string' || !token.startsWith('orion_agt_')) throw new HabitatPolicyError('invalid_token');
 
-  async function request(route, body) {
+  async function request(route, body, expectedSessionId) {
     const response = await fetchImpl(origin + '/ai/v1/agent-hub/' + route, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -20,7 +20,7 @@ export function createRuntimeRegistryClient({ apiUrl, token, fetchImpl = fetch }
     });
     if (!response.ok) throw new HabitatPolicyError('runtime_registry_http_' + response.status);
     const result = await response.json();
-    if (!result || typeof result.id !== 'string' || !Number.isInteger(result.revision) || result.revision < 0 ||
+    if (!result || result.id !== expectedSessionId || typeof result.id !== 'string' || !Number.isInteger(result.revision) || result.revision < 0 ||
       !['recent', 'stale', 'closed'].includes(result.presence)) {
       throw new HabitatPolicyError('invalid_runtime_registry_response');
     }
@@ -30,15 +30,15 @@ export function createRuntimeRegistryClient({ apiUrl, token, fetchImpl = fetch }
   return {
     register(sessionId) {
       if (typeof sessionId !== 'string' || !/^[0-9a-f-]{36}$/i.test(sessionId)) throw new HabitatPolicyError('invalid_session_id');
-      return request('runtime-sessions', { sessionId, kind: 'habitat_observer', capabilities: CAPABILITIES });
+      return request('runtime-sessions', { sessionId, kind: 'habitat_observer', capabilities: CAPABILITIES }, sessionId);
     },
     pulse(sessionId, expectedRevision) {
       if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new HabitatPolicyError('invalid_revision');
-      return request('runtime-sessions/' + encodeURIComponent(sessionId) + '/pulse', { expectedRevision });
+      return request('runtime-sessions/' + encodeURIComponent(sessionId) + '/pulse', { expectedRevision }, sessionId);
     },
     close(sessionId, expectedRevision) {
       if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new HabitatPolicyError('invalid_revision');
-      return request('runtime-sessions/' + encodeURIComponent(sessionId) + '/close', { expectedRevision });
+      return request('runtime-sessions/' + encodeURIComponent(sessionId) + '/close', { expectedRevision }, sessionId);
     }
   };
 }

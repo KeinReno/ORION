@@ -2,7 +2,7 @@
 
 **Status:** prototype, explicitly started by a local operator. No Windows Service installer, no auto-start, no background autonomous dispatch.
 
-The supervisor is a long-running **read-only observer**. It polls the existing Agent Hub F2 `orion_agent_hub_queue` HTTP endpoint on the loopback interface and records a local observation state. It does NOT claim tasks, run CLI programs, verify evidence or declare a model online.
+The supervisor is a long-running **task-read-only observer**. When server registration is explicitly enabled it also writes only its own presence reports. It polls the existing Agent Hub F2 `orion_agent_hub_queue` HTTP endpoint on the loopback interface and records a local observation state. It does NOT claim tasks, run CLI programs, verify evidence or declare a model online.
 
 ## Local configuration
 
@@ -14,11 +14,11 @@ Add this field to the local `habitat.json` config (keep the file out of Git):
   "enabled": false,
   "workspaceRoot": "C:\\work\\ORION",
   "profiles": [],
-  "supervisor": { "enabled": false, "pollMs": 30000 }
+  "supervisor": { "enabled": false, "pollMs": 30000, "registerWithOrion": false }
 }
 ```
 
-To start observing, the human operator must **explicitly** set both `enabled` values to true and pass `--acknowledge-monitoring`. Unlike a process-launch profile, this opt-in grants read-only queue polling; the Agent Hub token still needs `tasks:read`, `agent-hub.execution.read`, and any project fence must be satisfied.
+To start observing, the human operator must **explicitly** set both `enabled` values to true and pass `--acknowledge-monitoring`. Optional server registration additionally requires `supervisor.registerWithOrion=true` and `pollMs <= 120000`; this option is off by default. Unlike a process-launch profile, this opt-in grants read-only queue polling; the Agent Hub token still needs `tasks:read`, `agent-hub.execution.read`, and any project fence must be satisfied.
 
 ```powershell
 node packages/habitat/src/cli.mjs supervise --config C:\private\habitat.json --token-file C:\private\orion-agent-token.txt --acknowledge-monitoring
@@ -26,6 +26,8 @@ node packages/habitat/src/cli.mjs supervisor-status --config C:\private\habitat.
 ```
 
 Press **Ctrl+C** to stop. The `SIGINT/SIGTERM` handlers persist `status=stopped` and release the instance lock when the event loop is still alive. Force-termination or power loss can leave a stale `supervisor.lock`; before manually deleting it, verify the recorded PID is no longer running. A second instance fails closed on the lock and never steals it.
+
+For presence-only registration, provision token scopes `tasks:read` and **module permissions `agent-hub.execution.read` and `agent-hub.runtime.create`**. Do not grant `agent-hub.execution.create`: it authorizes task claiming. Server presence is reported with a five-minute TTL, renewed at most once per two minutes and closed when possible at graceful shutdown. Each pulse consumes the existing Agent Gateway write budget.
 
 The local file `.orion/habitat/supervisor.json` contains a session UUID, PID, mode, timestamps, last successful queue count, and a diagnostic `previousSession.interrupted` flag when the former run did not exit cleanly. **No task bodies, transcript content or bearer tokens are persisted.** State updates use a unique temporary file and an atomic rename. `freshObservation` only describes the age of the observation, not process existence or agent availability.
 

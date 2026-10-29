@@ -31,6 +31,6 @@ test('fails closed on remote hosts and unauthorized or malformed server response
 
 test('never sends a privileged runtime profile or accepts negative revisions', async () => {
   const client = createRuntimeRegistryClient({ apiUrl: 'http://localhost:4000', token: 'orion_agt_TEST_ONLY', fetchImpl: async () => { throw Error('must not call'); } });
-  await assert.rejects(client.pulse(id, -1), /invalid_revision/);
+  assert.throws(() => client.pulse(id, -1), /invalid_revision/);
   assert.throws(() => client.register('not-a-uuid'), /invalid_session_id/);
 });

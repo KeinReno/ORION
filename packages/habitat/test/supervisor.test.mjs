@@ -124,7 +124,7 @@ test('optional runtime registration is reported and then closed, never claims wo
     }
     assert.equal(body.expectedRevision, revision);
     revision++;
-    return { ok: true, json: async () => ({ id: url.split('/')[6], presence: 'closed', revision }) };
+    return { ok: true, json: async () => ({ id: url.split('/')[7], presence: 'closed', revision }) };
   };
   const result = await superviseHabitat(args(config, { fetchImpl: response }));
   assert.equal(result.reportedPresence, 'closed');
