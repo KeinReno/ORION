@@ -45,14 +45,14 @@ async function readBodyUpTo(
   let received = 0;
   try {
     while (received < size) {
-      const next = await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+      const next = await new Promise<{ done: boolean; value?: Uint8Array }>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error("Скачивание остановилось — соединение замолчало")), READ_IDLE_MS);
         reader.read().then(
           (value) => { clearTimeout(timer); resolve(value); },
           (error: unknown) => { clearTimeout(timer); reject(error instanceof Error ? error : new Error(String(error))); }
         );
       });
-      if (next.done) break;
+      if (next.done || next.value === undefined) break;
       const chunk = Buffer.from(next.value);
       const take = Math.min(chunk.length, size - received);
       const bytes = take === chunk.length ? chunk : chunk.subarray(0, take);
