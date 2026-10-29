@@ -38,7 +38,12 @@ export function buildApplyScript(p: ApplyScriptParams): string {
     "Start-Sleep -Seconds 2",
     ...(p.installer ? [
       `$installer = Start-Process -FilePath ${ps(p.installer)} -ArgumentList '/S' -PassThru -Wait`,
-      "Write-Log ('установщик завершился с кодом ' + $installer.ExitCode)"
+      // 0 is the only success code NSIS documents for /S; anything else (including the silent
+      // "same version, reinstall?" page defaulting to uninstall-and-exit when its dialog never
+      // got created in passive mode) means the old files are very likely still in place. Logged
+      // loudly so a stuck-on-old-version report after this can be diagnosed from this file alone —
+      // the real fix is keeping the app's version bumped every beta (see Cargo.toml), not this.
+      "if ($installer.ExitCode -ne 0) { Write-Log ('ОШИБКА: установщик вернул код ' + $installer.ExitCode + ' — обновление, возможно, не применилось') } else { Write-Log 'установщик завершился успешно (код 0)' }"
     ] : ["Write-Log 'пакет проверен: перезапуск без установщика'"]),
     `Start-Process -FilePath ${ps(p.appExe)}`,
     "Write-Log 'обновление: программа запущена'"

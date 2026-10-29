@@ -1,6 +1,13 @@
 [package]
 name = "orion-desktop"
-version = "0.1.0"
+# Must increase with every beta (keep in sync with tauri.conf.json's "version"): Tauri's generated
+# NSIS installer runs a completely different, much-less-exercised "same version, reinstall or
+# uninstall?" branch when this string matches what's already installed — observed in practice to
+# leave a silent (`/S`) self-update stuck reading an uninstantiated dialog widget, so the apply
+# script's installer step effectively no-ops and the app relaunches unchanged. A real version bump
+# takes the normal "upgrading" branch instead. ORION's own update check still keys off
+# ORION_BUILD_TAG/build.json, not this string — this only has to satisfy NSIS.
+version = "0.1.29"
 description = "ORION desktop shell — thin Tauri wrapper around the Next.js web app"
 edition = "2021"
 
