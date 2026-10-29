@@ -123,3 +123,19 @@ implemented yet. No CI or local build was run during the GitHub-connector change
 - **Code written in feature branch:** module manifest, owner/lead human API, service, DB models/migration, generated registry targets, read-only panel, unit/integration test source.
 - **No claim of runtime acceptance:** GitHub connector cannot execute the repository's toolchain; no pnpm, Prisma migration, RLS integration tests, Windows launch or APK test was run. Keep PR draft.
 - **Next blocker:** local CI-equivalent check and database migration verification before adding autonomous runtime endpoints. No secrets or real user data were modified.
+
+## F2 — manual MCP worker bridge (draft, 29 October 2026)
+
+- [x] Module manifest declares scoped MCP tools: `orion_agent_hub_queue`, `orion_agent_hub_claim`, `orion_agent_hub_report`.
+- [x] AgentTokenGuard and AgentModuleToolsService enforce permissions, mode and write budget.
+- [x] Task read scope and per-project fence are checked before disclosing or claiming a target.
+- [x] Server derives worker ID from token; command timestamps and lease length are server-issued.
+- [x] Durable CAS state transition and same-transaction audit event for all worker changes.
+- [x] Owner/lead-triggered reclaim of timed-out leases, with checkpoint retained.
+- [x] Integration test source: second worker denial, scope/project fences, successful claim→checkpoint→review, expiry/recovery.
+- [ ] Run all checks against generated Prisma client and migrated local DB; fixes required before merge.
+- [ ] Add runtime session attestation, auto lease reconciler and device-aware worker scheduling.
+- [ ] Verify actual artifact content before granting a final 'done' state; no agent-controlled verify endpoint.
+- [ ] Add end-to-end Windows MCP smoke including token revocation and module disabling.
+
+**Important:** F2 is a manually invoked MCP protocol, **not** a remotely wakeable Cursor/Claude/Codex process. A model must actually call the tools. No background agent has been launched or tested.
