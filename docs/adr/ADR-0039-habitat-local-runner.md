@@ -28,7 +28,7 @@ Provider adapters (Codex CLI, Claude Code CLI, Cursor) must verify their officia
 
 ## Tests and observability
 
-`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Eleven local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
+`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Twelve local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
 
 A human-operated `run-hub` CLI now integrates the draft F2 claim/start/report REST API over **loopback HTTP only** using a separate, locally permissioned agent-token file. The token is used for HTTP requests, never passed into the child environment. This is a narrow manual bridge, **not** runtime attestation or autonomous dispatch. Cross-machine access requires a separate authenticated encrypted transport; plaintext remote HTTP is prohibited.
 

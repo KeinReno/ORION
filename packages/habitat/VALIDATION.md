@@ -6,6 +6,6 @@ This file tracks `packages/habitat` and does not replace the Agent Hub roadmap.
 
 **Not yet implemented:** Windows Job Objects, secure process isolation, Windows packaging/service, auto-start, provider-specific Codex/Claude CLI adapters, attested runtime identity, production-grade persistent leases, provider authentication diagnostics, independent artifact verification, autonomous task dispatch.
 
-**Local check (2026-10-29):** Node v22 `node --test packages/habitat/test/*.test.mjs`: 11 passed, 0 failed on Linux. The entire ORION monorepo and Windows device were not exercised.
+**Local check (2026-10-29):** Node v22 `node --test packages/habitat/test/*.test.mjs`: 12 passed, 0 failed on Linux. The entire ORION monorepo and Windows device were not exercised.
 
 **Merge gates:** package tests on Windows, full `pnpm typecheck`, `pnpm lint`, `pnpm test`, architecture checks, F0–F2 tests and migrated DB integration tests. No secrets or local personal paths in Git.

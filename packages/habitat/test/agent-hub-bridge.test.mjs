@@ -63,3 +63,18 @@ test('local approval refusal occurs before any API claim or token use', async ()
   await assert.rejects(runAgentHubExecution({ ...args(e, hub, async () => { throw Error('must not run'); }), acknowledged: false }), /operator_approval_required/);
   assert.deepEqual(hub.events, []);
 });
+
+test('heartbeat authorization failure aborts local execution and never submits', async () => {
+  const e = await fixtures(), hub = mockHub();
+  const fetchImpl = async (url, req) => {
+    if (url.endsWith('/report') && JSON.parse(req.body).action === 'heartbeat') return { ok: false, status: 401 };
+    return hub.fetchImpl(url, req);
+  };
+  let aborted = false;
+  const runImpl = async ({ signal }) => new Promise(resolve => {
+    signal.addEventListener('abort', () => { aborted = true; resolve({ id: 'stopped', outcome: 'stopped', exitCode: null, verified: false }); }, { once: true });
+  });
+  await assert.rejects(runAgentHubExecution({ ...args(e, hub, runImpl), fetchImpl, heartbeatMs: 100 }), /agent_hub_http_401/);
+  assert.equal(aborted, true);
+  assert.deepEqual(hub.events.map(v => v.action), ['list', 'claim', 'start']);
+});

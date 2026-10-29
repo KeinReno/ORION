@@ -139,3 +139,19 @@ implemented yet. No CI or local build was run during the GitHub-connector change
 - [ ] Add end-to-end Windows MCP smoke including token revocation and module disabling.
 
 **Important:** F2 is a manually invoked MCP protocol, **not** a remotely wakeable Cursor/Claude/Codex process. A model must actually call the tools. No background agent has been launched or tested.
+
+
+## F3 — KAIDEN Habitat local operator integration (draft)
+
+- [x] Standalone Node 20+ runtime package with explicitly locally approved profiles, filesystem canonicalization, no-shell spawn, timeout/abort and hash-only receipts.
+- [x] run-hub loopback-only operator bridge to the F2 queue: claim, start, periodic heartbeat, submit for review on successful exit; fail on failed process.
+- [x] Agent token stays in a local file/HTTP header and is never forwarded to the spawned CLI.
+- [x] Heartbeat authorization failure aborts the local runner; no evidence is submitted after a revoked/invalid lease.
+- [x] Standalone Linux Node checks: 12 passing tests, 0 failing; mocked F2 API for the loopback bridge.
+- [ ] Windows Job Object supervision and restricted OS identity.
+- [ ] End-to-end F0–F3 run against a migrated ORION instance, including token revocation, write-budget behavior and restored checkpoints.
+- [ ] Provider-specific, officially supported CLI adapters and license/auth verification.
+- [ ] Independent verification of local evidence before a server-side done transition.
+- [ ] Workspace-scoped permissioned installation, default-off service/UX, and explicit rollback.
+
+This is NOT autonomous execution. The owner must initiate each local run and approve the profile.
