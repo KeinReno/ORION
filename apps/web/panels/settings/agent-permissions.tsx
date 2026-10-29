@@ -112,6 +112,20 @@ export const AGENT_POLICY_PRESETS: { id: string; label: string; description: str
       matrix: { tasks: ["read", "create", "update"], notes: ["read", "create", "update"], events: ["read"], projects: ["read"], finance: ["create"] },
       forbidden: ["delete"]
     })
+  },
+  {
+    id: "admin",
+    label: "Администратор",
+    description: "Делает всё сразу и без подтверждений, в любом модуле — включая удаление. Без предохранителей: выдавайте только токену, которому доверяете полностью.",
+    apply: (draft) => ({
+      ...draft,
+      mode: "admin",
+      // Not consulted by the server in this mode (agent-policy.ts) — cleared so the matrix UI doesn't
+      // imply a boundary that isn't actually enforced.
+      matrix: { tasks: [], notes: [], events: [], projects: [], finance: [] },
+      forbidden: [],
+      extraScopes: []
+    })
   }
 ];
 
@@ -130,9 +144,12 @@ export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "
   };
 }
 
-/** True when the matrix grants nothing and no extra scope is ticked: the server would refuse it. */
+/** True when the matrix grants nothing and no extra scope is ticked: the server would refuse it. Admin needs none of that. */
 export const policyIsEmpty = (draft: PolicyDraft): boolean =>
-  draft.extraScopes.length === 0 && draft.modulePermissions.length === 0 && AGENT_PERMISSION_MODULES.every((m) => draft.matrix[m].length === 0);
+  draft.mode !== "admin" &&
+  draft.extraScopes.length === 0 &&
+  draft.modulePermissions.length === 0 &&
+  AGENT_PERMISSION_MODULES.every((m) => draft.matrix[m].length === 0);
 
 /**
  * «Другие разделы»: what an agent may do in each module beyond tasks/notes/calendar — a table of sections × actions
@@ -244,46 +261,55 @@ export function AgentPolicyFields({
         <span className="text-2xs text-muted-foreground">{AGENT_MODE_HINT[draft.mode]}</span>
       </label>
 
-      <fieldset>
-        <legend className="mb-1 text-xs text-muted-foreground">Права по разделам (режим может их только сузить)</legend>
-        <table className="text-label">
-          <thead>
-            <tr className="text-2xs text-muted-foreground">
-              <th className="pr-4 text-left font-normal" />
-              {AGENT_PERMISSION_OPS.map((op) => (
-                <th key={op} className="px-2 text-center font-normal">{AGENT_PERMISSION_OP_LABEL[op]}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {AGENT_PERMISSION_MODULES.map((module) => (
-              <tr key={module}>
-                <th scope="row" className="pr-4 text-left font-normal">{AGENT_PERMISSION_MODULE_LABEL[module]}</th>
-                {AGENT_PERMISSION_OPS.map((op) => (
-                  <td key={op} className="px-2 text-center">
-                    {OPS_FOR[module].includes(op) ? (
-                      <input
-                        type="checkbox"
-                        aria-label={`${AGENT_PERMISSION_MODULE_LABEL[module]}: ${AGENT_PERMISSION_OP_LABEL[op].toLowerCase()}`}
-                        checked={draft.matrix[module].includes(op)}
-                        onChange={() => setCell(module, op)}
-                        className="accent-accent"
-                      />
-                    ) : (
-                      <span className="text-muted-foreground" title={OP_UNAVAILABLE_REASON[module] ?? "Эта операция не предусмотрена для этого раздела."}>·</span>
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-1 text-2xs text-muted-foreground">
-          «Менять» — править существующее; «Предлагать» — просить вас подтвердить (изменение или удаление). В режиме помощника любое изменение идёт через подтверждение.
+      {draft.mode === "admin" ? (
+        <p className="rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-label text-warning">
+          В режиме «Администратор» матрица прав и список модулей ниже не нужны и не проверяются — токен может всё, в
+          любом подключённом модуле. Единственное, что всё ещё действует — галочки «Запреты» ниже, если вы их поставите.
         </p>
-      </fieldset>
+      ) : (
+        <>
+          <fieldset>
+            <legend className="mb-1 text-xs text-muted-foreground">Права по разделам (режим может их только сузить)</legend>
+            <table className="text-label">
+              <thead>
+                <tr className="text-2xs text-muted-foreground">
+                  <th className="pr-4 text-left font-normal" />
+                  {AGENT_PERMISSION_OPS.map((op) => (
+                    <th key={op} className="px-2 text-center font-normal">{AGENT_PERMISSION_OP_LABEL[op]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {AGENT_PERMISSION_MODULES.map((module) => (
+                  <tr key={module}>
+                    <th scope="row" className="pr-4 text-left font-normal">{AGENT_PERMISSION_MODULE_LABEL[module]}</th>
+                    {AGENT_PERMISSION_OPS.map((op) => (
+                      <td key={op} className="px-2 text-center">
+                        {OPS_FOR[module].includes(op) ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`${AGENT_PERMISSION_MODULE_LABEL[module]}: ${AGENT_PERMISSION_OP_LABEL[op].toLowerCase()}`}
+                            checked={draft.matrix[module].includes(op)}
+                            onChange={() => setCell(module, op)}
+                            className="accent-accent"
+                          />
+                        ) : (
+                          <span className="text-muted-foreground" title={OP_UNAVAILABLE_REASON[module] ?? "Эта операция не предусмотрена для этого раздела."}>·</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-2xs text-muted-foreground">
+              «Менять» — править существующее; «Предлагать» — просить вас подтвердить (изменение или удаление). В режиме помощника любое изменение идёт через подтверждение.
+            </p>
+          </fieldset>
 
-      <ModulePermissionsField value={draft.modulePermissions} onChange={(modulePermissions) => set({ modulePermissions })} />
+          <ModulePermissionsField value={draft.modulePermissions} onChange={(modulePermissions) => set({ modulePermissions })} />
+        </>
+      )}
 
       <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
         <legend className="mb-1 text-xs text-muted-foreground">Взаимодействие агентов</legend>

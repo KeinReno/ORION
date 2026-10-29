@@ -22,6 +22,7 @@ import {
   type AgentAuditQuery,
   type AgentForbidden,
   type AgentMessage,
+  type AgentMode,
   type AgentPeer,
   type AgentPolicySubject,
   type SendAgentMessageInput,
@@ -142,8 +143,9 @@ export class AgentTokensService {
       : [...new Set(input.scopes)];
     const unknownPermission = input.modulePermissions.find((permission) => !isExtensionAgentPermission(permission));
     if (unknownPermission) throw new BadRequestException(`Разрешение «${unknownPermission}» не объявлено ни одним модулем`);
-    // ADR-0017: на сервере токен живёт ограниченно и без удаления. Запрет удаления добавляем сами, остальное — отказ.
-    const forbidden = isServerMode() ? [...new Set([...input.forbidden, "delete" as const])] : [...new Set(input.forbidden)];
+    // ADR-0017: на сервере токен живёт ограниченно и без удаления — кроме `admin` (явное решение владельца
+    // 2026-10-29, agent-policy.ts): этому режиму запрет удаления не навязывается принудительно.
+    const forbidden = isServerMode() && input.mode !== "admin" ? [...new Set([...input.forbidden, "delete" as const])] : [...new Set(input.forbidden)];
     if (isServerMode()) {
       const problems = remoteTokenViolations({ mode: input.mode, expiresInDays: input.expiresInDays, forbidden });
       if (problems.length > 0) throw new BadRequestException(problems.join(". "));
@@ -174,16 +176,22 @@ export class AgentTokensService {
 
   /** Mode and restrictions of a live token. The matrix is intersected with the scopes, so this can only narrow rights. */
   async update(userId: string, workspaceId: string, tokenId: string, input: UpdateAgentTokenInput): Promise<AgentToken> {
-    if (isServerMode()) {
-      // Срок при обновлении не меняется, поэтому проверяем только режим и запрет удаления (он не снимается).
-      const problems = remoteTokenViolations({ mode: input.mode ?? "assistant", forbidden: input.forbidden ?? ["delete"] }, false);
-      if (problems.length > 0) throw new BadRequestException(problems.join(". "));
-    }
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertProjectsTx(tx, workspaceId, [...(input.allowedProjectIds ?? []), ...(input.autoCommitProjectIds ?? [])]);
       const before = await tx.agentToken.findFirst({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null } });
       if (!before) throw new NotFoundException("Токен не найден");
+      if (isServerMode()) {
+        // Срок при обновлении не меняется, поэтому проверяем только режим и запрет удаления (он не снимается) —
+        // против итогового состояния ПОСЛЕ патча. Раньше недостающий `input.mode` угадывался как "assistant"
+        // независимо от реального режима токена, из-за чего PATCH {forbidden: []} на уже admin-токене отказывал,
+        // думая, что патчит воображаемого "assistant" (найдено собственным тестом, 2026-10-29).
+        const problems = remoteTokenViolations(
+          { mode: input.mode ?? (before.mode as AgentMode), forbidden: input.forbidden ?? forbiddenOf(before.forbidden) },
+          false
+        );
+        if (problems.length > 0) throw new BadRequestException(problems.join(". "));
+      }
       const data: Prisma.AgentTokenUpdateManyMutationInput = {};
       if (input.mode !== undefined) data.mode = input.mode;
       if (input.permissions !== undefined) data.permissions = input.permissions;

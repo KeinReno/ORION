@@ -216,7 +216,7 @@ export const agentGatewayContextSchema = z.object({
 export type AgentGatewayContext = z.infer<typeof agentGatewayContextSchema>;
 
 export const AGENT_CONFIRMATION_RULES: Array<{ operation: string; how: string }> = [
-  { operation: "task.delete / note.delete / event.delete", how: "Агент не удаляет: POST /ai/v1/proposals создаёт запрос, человек подтверждает его в Настройки → ИИ и агенты. Записи других разделов — их инструменты удаления, тоже только запросом." },
+  { operation: "task.delete / note.delete / event.delete", how: "В режимах наблюдатель, помощник и менеджер агент не удаляет сам: POST /ai/v1/proposals создаёт запрос, человек подтверждает его в Настройки → ИИ и агенты. Режим «администратор» удаляет сразу. Записи других разделов — их инструменты удаления: для администратора они тоже выполняются сразу, для остальных — только запросом." },
   { operation: "finance.draft", how: "Операция — только черновик; человек правит и подтверждает её в «Финансах». Баланс до этого не меняется." },
   { operation: "capture без hint", how: "Текст попадает во «Входящие» и ждёт разбора человеком; ORION не угадывает, чем он является." }
 ];

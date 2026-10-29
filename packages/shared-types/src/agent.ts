@@ -67,15 +67,24 @@ export const AGENT_TOKEN_PREFIX = "orion_agt_";
  * - `observer`  — reads only; any write is 403.
  * - `assistant` — creates notes/tasks/events at once; changing an EXISTING object becomes a proposal a human approves.
  * - `manager`   — writes at once inside the scopes and limits; the dangerous (delete, finance, rights) is still a proposal.
+ * - `admin`     — owner-requested 2026-10-29: does everything the matrix/modulePermissions would otherwise gate,
+ *   including immediate delete, without a proposal step. `decideAgentOperation`/`decideAgentModuleOperation`
+ *   (agent-policy.ts) short-circuit to `allow` for this mode — the matrix and modulePermissions list are simply
+ *   not consulted. The token's own `forbidden` flags (finance/delete/documents) are the ONLY thing that still
+ *   applies — they are an explicit, opt-in restriction the owner chose on that specific token, not a system
+ *   ceiling, so leaving them in effect lets an owner build "admin, but never finance" if they want it. By
+ *   explicit owner decision this mode is allowed even on a server-reachable token (remoteTokenViolations no
+ *   longer forces it out or forces a delete-forbid onto it) — unlike every other mode, which ADR-0017 still caps.
  */
-export const AGENT_MODES = ["observer", "assistant", "manager"] as const;
+export const AGENT_MODES = ["observer", "assistant", "manager", "admin"] as const;
 export const agentModeSchema = z.enum(AGENT_MODES);
 export type AgentMode = z.infer<typeof agentModeSchema>;
-export const AGENT_MODE_LABEL: Record<AgentMode, string> = { observer: "Наблюдатель", assistant: "Помощник", manager: "ИИ-менеджер" };
+export const AGENT_MODE_LABEL: Record<AgentMode, string> = { observer: "Наблюдатель", assistant: "Помощник", manager: "ИИ-менеджер", admin: "Администратор" };
 export const AGENT_MODE_HINT: Record<AgentMode, string> = {
   observer: "Только читает. Любая запись отклоняется.",
   assistant: "Создаёт заметки, задачи и события сразу; изменения существующего — только через ваше подтверждение.",
-  manager: "Пишет сразу в пределах разрешений и лимитов; удаление и финансы — всё равно только через подтверждение."
+  manager: "Пишет сразу в пределах разрешений и лимитов; удаление и финансы — всё равно только через подтверждение.",
+  admin: "Делает всё сразу и без подтверждений — любая операция в любом подключённом модуле, включая удаление. Галочки «Никогда» ниже всё ещё действуют, если вы их поставите; матрица прав и список модулей — не нужны, этот режим их не спрашивает."
 };
 
 /** The permission matrix: module × operation. `propose` = may file a request a human approves. */
@@ -170,7 +179,9 @@ export const createAgentTokenInputSchema = z
     /** `null` = no expiry (the settings screen warns about it). */
     expiresInDays: z.number().int().min(1).max(365).nullable().default(30)
   })
-  .refine((v) => v.scopes.length > 0 || v.modulePermissions.length > 0 || Object.values(v.permissions ?? {}).some((ops) => (ops?.length ?? 0) > 0), {
+  // admin doesn't consult the matrix/modulePermissions at all (agent-policy.ts) — an empty one is
+  // correct for it, not a mistake the "choose at least one permission" guard should catch.
+  .refine((v) => v.mode === "admin" || v.scopes.length > 0 || v.modulePermissions.length > 0 || Object.values(v.permissions ?? {}).some((ops) => (ops?.length ?? 0) > 0), {
     message: "Выберите хотя бы одно разрешение",
     path: ["scopes"]
   });

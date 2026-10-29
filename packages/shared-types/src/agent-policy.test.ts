@@ -64,6 +64,20 @@ describe("decideAgentOperation", () => {
     expect(decideAgentOperation(legacy, "tasks", "delete").kind).toBe("propose");
     expect(decideAgentOperation(legacy, "notes", "read").kind).toBe("deny");
   });
+
+  it("админ: всё сразу, включая удаление, без матрицы и скоупов вообще", () => {
+    const empty = subject({ mode: "admin", scopes: [], permissions: null });
+    for (const op of ["read", "create", "update", "delete", "propose"] as const) {
+      expect(decideAgentOperation(empty, "tasks", op).kind).toBe("allow");
+    }
+    expect(decideAgentOperation(empty, "finance", "create").kind).toBe("allow");
+  });
+
+  it("админ всё равно уважает собственные запреты этого токена", () => {
+    expect(decideAgentOperation(subject({ mode: "admin", forbidden: ["delete"] }), "tasks", "delete").kind).toBe("deny");
+    expect(decideAgentOperation(subject({ mode: "admin", forbidden: ["finance"] }), "finance", "create").kind).toBe("deny");
+    expect(decideAgentOperation(subject({ mode: "admin", forbidden: ["delete"] }), "tasks", "update").kind).toBe("allow");
+  });
 });
 
 describe("матрица ↔ скоупы", () => {
@@ -85,6 +99,9 @@ describe("схема выпуска токена", () => {
   it("без разрешений вообще — отказ; матрица вместо скоупов — ок", () => {
     expect(createAgentTokenInputSchema.safeParse({ name: "x" }).success).toBe(false);
     expect(createAgentTokenInputSchema.safeParse({ name: "x", permissions: { notes: ["read"] } }).success).toBe(true);
+  });
+  it("режим admin — разрешения не нужны вообще", () => {
+    expect(createAgentTokenInputSchema.safeParse({ name: "x", mode: "admin" }).success).toBe(true);
   });
 });
 
@@ -129,6 +146,14 @@ describe("decideAgentModuleOperation (G13)", () => {
     expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted, forbidden: [] }), remove, "delete")).toEqual({ kind: "propose" });
     expect(decideAgentModuleOperation(subject({ mode: "manager", modulePermissions: granted, forbidden: ["delete"] }), remove, "delete")).toMatchObject({ kind: "deny" });
   });
+
+  it("админ: не нужно никакое modulePermissions, даже удаление сразу", () => {
+    const empty = subject({ mode: "admin", modulePermissions: [] });
+    for (const op of ["read", "create", "update", "delete"] as const) {
+      expect(decideAgentModuleOperation(empty, "pet-care.pet.delete", op).kind).toBe("allow");
+    }
+    expect(decideAgentModuleOperation(subject({ mode: "admin", forbidden: ["delete"] }), "pet-care.pet.delete", "delete").kind).toBe("deny");
+  });
 });
 
 describe("remoteTokenViolations (ADR-0017)", () => {
@@ -147,5 +172,11 @@ describe("remoteTokenViolations (ADR-0017)", () => {
 
   it("при обновлении срок не проверяется", () => {
     expect(remoteTokenViolations({ mode: "assistant", forbidden: ["delete"] }, false)).toEqual([]);
+  });
+
+  it("админ — явное исключение из режимного запрета и запрета удаления, но не из срока", () => {
+    expect(remoteTokenViolations({ mode: "admin", expiresInDays: 30, forbidden: [] })).toEqual([]);
+    expect(remoteTokenViolations({ mode: "admin", expiresInDays: null, forbidden: [] })).toHaveLength(1);
+    expect(remoteTokenViolations({ mode: "admin", expiresInDays: 365, forbidden: [] })[0]).toContain("30 дней");
   });
 });

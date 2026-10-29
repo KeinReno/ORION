@@ -82,6 +82,9 @@ const deny = (reason: string): AgentDecision => ({ kind: "deny", reason });
 export function decideAgentOperation(subject: AgentPolicySubject, module: AgentPermissionModule, op: AgentOperation): AgentDecision {
   if (module === "finance" && subject.forbidden.includes("finance")) return deny("Финансы запрещены для этого токена");
   if (op === "delete" && subject.forbidden.includes("delete")) return deny("Удаление запрещено для этого токена");
+  // admin: everything the matrix would otherwise gate is allowed at once — the two explicit
+  // forbidden-flag denials above are the only thing this mode still respects (see agent.ts).
+  if (subject.mode === "admin") return { kind: "allow" };
 
   const granted = new Set(effectiveAgentPermissions(subject.scopes, subject.permissions)[module]);
   if (op === "read") return granted.has("read") ? { kind: "allow" } : deny("У токена нет права читать этот раздел");
@@ -108,11 +111,14 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
  * refused outright when the token forbids deletion.
  */
 export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create" | "update" | "delete"): AgentDecision {
+  if (op === "delete" && subject.forbidden?.includes("delete")) return deny("Этому агенту удаление запрещено");
+  // admin: doesn't need `permission` granted at all — same short-circuit as decideAgentOperation.
+  if (subject.mode === "admin") return { kind: "allow" };
   if (!subject.modulePermissions?.includes(permission)) return deny(`У токена нет разрешения «${permission}»`);
   if (op === "read") return { kind: "allow" };
   if (subject.mode === "observer") return deny("Режим «наблюдатель»: запись запрещена");
   if (op === "create") return { kind: "allow" };
-  if (op === "delete") return subject.forbidden?.includes("delete") ? deny("Этому агенту удаление запрещено") : { kind: "propose" };
+  if (op === "delete") return { kind: "propose" };
   return subject.mode === "manager" ? { kind: "allow" } : { kind: "propose" };
 }
 
@@ -123,14 +129,20 @@ export const REMOTE_TOKEN_MAX_DAYS = 30;
  * ADR-0017, «что запрещено при любом варианте»: токен, который может использоваться удалённо (режим `server`), живёт
  * не дольше `REMOTE_TOKEN_MAX_DAYS`, не бывает `manager` и всегда несёт запрет удаления. Чистая функция: сервер отказывает
  * ею, экран настроек может показать те же причины. Пустой список — токен допустим.
+ *
+ * Явное решение владельца (2026-10-29): `admin` — единственное исключение из режимного и delete-ограничения
+ * ниже. Срок жизни (`REMOTE_TOKEN_MAX_DAYS`) при этом продолжает действовать и для него — это гигиена ротации
+ * секрета, а не предохранитель от удаления, и владелец отдельно это не отменял.
  */
 export function remoteTokenViolations(token: { mode: AgentMode; expiresInDays?: number | null; forbidden: readonly AgentForbidden[] }, checkExpiry = true): string[] {
   const problems: string[] = [];
-  if (token.mode === "manager") problems.push("Режим «менеджер» недоступен для токенов на сервере: выберите «помощник» или «наблюдатель»");
   if (checkExpiry && (token.expiresInDays === null || token.expiresInDays === undefined || token.expiresInDays > REMOTE_TOKEN_MAX_DAYS)) {
     problems.push(`На сервере токен выпускается со сроком не больше ${REMOTE_TOKEN_MAX_DAYS} дней`);
   }
-  if (!token.forbidden.includes("delete")) problems.push("На сервере у токена всегда включён запрет удаления");
+  if (token.mode !== "admin") {
+    if (token.mode === "manager") problems.push("Режим «менеджер» недоступен для токенов на сервере: выберите «помощник» или «наблюдатель»");
+    if (!token.forbidden.includes("delete")) problems.push("На сервере у токена всегда включён запрет удаления");
+  }
   return problems;
 }
 

@@ -1152,38 +1152,43 @@ export function isExtensionAgentPermission(value: string): boolean {
   return EXTENSION_AGENT_PERMISSIONS.includes(value);
 }
 
-const MODE_NAME: Record<AgentMode, string> = { observer: "наблюдатель", assistant: "помощник", manager: "менеджер" };
+const MODE_NAME: Record<AgentMode, string> = { observer: "наблюдатель", assistant: "помощник", manager: "менеджер", admin: "администратор" };
 
-/** The per-mode outcome of one tool, as three short phrases (observer / assistant / manager). */
+/** The per-mode outcome of one tool, as four short phrases (observer / assistant / manager / admin). */
 const MODE_OUTCOME: Record<AgentToolEffect, Record<AgentMode, string>> = {
-  any: { observer: "работает", assistant: "работает", manager: "работает" },
-  read: { observer: "читает", assistant: "читает", manager: "читает" },
+  any: { observer: "работает", assistant: "работает", manager: "работает", admin: "работает" },
+  read: { observer: "читает", assistant: "читает", manager: "читает", admin: "читает" },
   create: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "выполняется сразу",
-    manager: "выполняется сразу, но не чаще лимита записей в час (сверх — 429)"
+    manager: "выполняется сразу, но не чаще лимита записей в час (сверх — 429)",
+    admin: "выполняется сразу, без ограничений матрицы и модулей"
   },
   update: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "изменение НЕ применяется: создаётся запрос на подтверждение, ответ 202 {proposed:true, proposal} с превью до/после, применит человек",
-    manager: "выполняется сразу (в пределах разрешений и лимита записей в час, сверх — 429); без права «менять» — запрос на подтверждение, как у помощника"
+    manager: "выполняется сразу (в пределах разрешений и лимита записей в час, сверх — 429); без права «менять» — запрос на подтверждение, как у помощника",
+    admin: "выполняется сразу, без ограничений матрицы и модулей"
   },
   capture: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "выполняется сразу (с hint — объект, без hint — во «Входящие»)",
-    manager: "выполняется сразу (с hint — объект, без hint — во «Входящие»)"
+    manager: "выполняется сразу (с hint — объект, без hint — во «Входящие»)",
+    admin: "выполняется сразу (с hint — объект, без hint — во «Входящие»)"
   },
-  link: { observer: "отказ 403 (запись запрещена)", assistant: "выполняется сразу", manager: "выполняется сразу" },
+  link: { observer: "отказ 403 (запись запрещена)", assistant: "выполняется сразу", manager: "выполняется сразу", admin: "выполняется сразу" },
   draft: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "создаётся только черновик, баланс не меняется — подтверждает человек",
-    manager: "создаётся только черновик, баланс не меняется — подтверждает человек"
+    manager: "создаётся только черновик, баланс не меняется — подтверждает человек",
+    admin: "создаётся только черновик, баланс не меняется — подтверждает человек"
   },
-  talk: { observer: "отказ 403 (запись запрещена)", assistant: "выполняется сразу", manager: "выполняется сразу" },
+  talk: { observer: "отказ 403 (запись запрещена)", assistant: "выполняется сразу", manager: "выполняется сразу", admin: "выполняется сразу" },
   delete_request: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "удаление не выполняется: создаётся запрос, подтверждает человек",
-    manager: "удаление не выполняется: создаётся запрос, подтверждает человек"
+    manager: "удаление не выполняется: создаётся запрос, подтверждает человек",
+    admin: "удаляет сразу, без запроса — если только на этом токене не включена галочка «Никогда: удаление»"
   }
 };
 

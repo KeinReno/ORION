@@ -91,4 +91,23 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     expect((await patch({ forbidden: [] })).status).toBe(400);
     expect((await patch({ mode: "observer", forbidden: ["delete", "finance"] })).status).toBe(200);
   });
+
+  it("owner decision (2026-10-29): admin IS allowed on the server, without a forced delete-forbid, unlike every other mode", async () => {
+    const { token, ws } = await owner();
+    process.env.ORION_MODE = "server";
+    process.env.ORION_AI_BRIDGE = "1";
+    const issue = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens`, "POST", token, { name: "Админ на сервере", mode: "admin", expiresInDays: 30, forbidden: [], ...body });
+
+    const ok = await issue({});
+    expect(ok.status, JSON.stringify(ok.data)).toBe(201);
+    expect(ok.data).toMatchObject({ mode: "admin", forbidden: [] });
+
+    // Still capped by the 30-day rotation hygiene rule — that one wasn't an exception.
+    expect((await issue({ expiresInDays: null })).status).toBe(400);
+    expect((await issue({ expiresInDays: 31 })).status).toBe(400);
+
+    // Updating a live token to admin on the server also isn't forced into a delete-forbid.
+    const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
+    expect((await patch({ forbidden: [] })).status).toBe(200);
+  });
 });
