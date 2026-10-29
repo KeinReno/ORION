@@ -188,11 +188,17 @@ export const createAgentTokenInputSchema = z
 export type CreateAgentTokenInput = z.input<typeof createAgentTokenInputSchema>;
 export type ParsedCreateAgentTokenInput = z.infer<typeof createAgentTokenInputSchema>;
 
-/** What may change on a live token. Rights can only be narrowed here (the matrix is intersected with the scopes). */
+/**
+ * What may change on a live token. The matrix, the extra scopes and the module permissions may be widened or
+ * narrowed; the server rewrites `scopes` to match, so a newly ticked right actually takes effect.
+ */
 export const updateAgentTokenInputSchema = z
   .object({
     mode: agentModeSchema,
     permissions: agentPermissionsSchema,
+    /** Non-matrix scopes (`agents:message`, `agents:delegate`, `links:write`). Omitted = leave them as they are. */
+    scopes: z.array(agentScopeSchema).max(AGENT_SCOPES.length),
+    modulePermissions: z.array(z.string().min(1)).max(100),
     allowedProjectIds: agentRestrictionFields.allowedProjectIds,
     forbidden: agentRestrictionFields.forbidden,
     writeLimitPerHour: agentRestrictionFields.writeLimitPerHour,

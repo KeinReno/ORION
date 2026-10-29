@@ -26,6 +26,7 @@ import {
   type AgentPeer,
   type AgentPolicySubject,
   type SendAgentMessageInput,
+  type AgentPermissions,
   type AgentScope,
   type AgentToken,
   type CreatedAgentToken,
@@ -174,7 +175,7 @@ export class AgentTokensService {
     return { ...toDto(row), secret };
   }
 
-  /** Mode and restrictions of a live token. The matrix is intersected with the scopes, so this can only narrow rights. */
+  /** Mode, matrix and restrictions of a live token. A saved matrix rewrites the scopes, so rights can be widened too. */
   async update(userId: string, workspaceId: string, tokenId: string, input: UpdateAgentTokenInput): Promise<AgentToken> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -195,6 +196,16 @@ export class AgentTokensService {
       const data: Prisma.AgentTokenUpdateManyMutationInput = {};
       if (input.mode !== undefined) data.mode = input.mode;
       if (input.permissions !== undefined) data.permissions = input.permissions;
+      if (input.permissions !== undefined || input.scopes !== undefined || input.modulePermissions !== undefined) {
+        const modules = input.modulePermissions ?? before.scopes.filter(isExtensionAgentPermission);
+        const unknown = modules.find((permission) => !isExtensionAgentPermission(permission));
+        if (unknown) throw new BadRequestException(`Разрешение «${unknown}» не объявлено ни одним модулем`);
+        data.scopes = scopesAfterPolicyEdit(before.scopes, {
+          permissions: input.permissions,
+          extraScopes: input.scopes,
+          modulePermissions: input.modulePermissions
+        });
+      }
       if (input.allowedProjectIds !== undefined) data.allowedProjectIds = [...new Set(input.allowedProjectIds)];
       if (input.forbidden !== undefined) data.forbidden = [...new Set(input.forbidden)];
       if (input.writeLimitPerHour !== undefined) data.writeLimitPerHour = input.writeLimitPerHour;
@@ -491,6 +502,23 @@ function contextOf(row: TokenRow): AgentContext {
 
 function forbiddenOf(values: string[]): AgentForbidden[] {
   return values.filter((v): v is AgentForbidden => agentForbiddenSchema.safeParse(v).success);
+}
+
+/**
+ * Scopes after a settings save. A provided matrix replaces the matrix scopes (wider or narrower); omitted fields
+ * stay as they were. Module permissions live in the same column and are replaced only when the patch names them.
+ */
+export function scopesAfterPolicyEdit(
+  previousScopes: readonly string[],
+  patch: { permissions?: AgentPermissions | null; extraScopes?: readonly AgentScope[]; modulePermissions?: readonly string[] }
+): string[] {
+  const isExtra = (scope: string): scope is AgentScope => (NON_MATRIX_SCOPES as readonly string[]).includes(scope);
+  const extras = patch.extraScopes !== undefined ? patch.extraScopes.filter(isExtra) : previousScopes.filter(isExtra);
+  const modules = patch.modulePermissions !== undefined ? patch.modulePermissions : previousScopes.filter(isExtensionAgentPermission);
+  const matrix = patch.permissions !== undefined
+    ? scopesFromPermissions(patch.permissions ?? {})
+    : previousScopes.filter((scope) => agentScopeSchema.safeParse(scope).success && !isExtra(scope));
+  return [...new Set([...matrix, ...extras, ...modules])];
 }
 
 type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds">;

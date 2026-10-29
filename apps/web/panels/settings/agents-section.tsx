@@ -24,7 +24,7 @@ import { openPanel } from "../../lib/panel-bus";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { AssistantKeyForm, AssistantModelPicker, ClearAssistantKeyButton } from "../assistant-key";
 import { AgentConnectWizard } from "./agent-connect-wizard";
-import { AgentPolicyFields, defaultPolicy, describeModulePermissions, policyIsEmpty, policyToInput, type PolicyDraft } from "./agent-permissions";
+import { AgentPolicyFields, TokenPolicyEditor, defaultPolicy, describeModulePermissions, policyIsEmpty, policyToInput, type PolicyDraft } from "./agent-permissions";
 import { AgentJournal } from "./agents-journal";
 import { AgentProposals } from "./agents-proposals";
 
@@ -103,8 +103,10 @@ function Connections({ workspaceId }: { workspaceId: string | undefined }): Reac
     <div className="space-y-5">
       <p className="text-label text-muted-foreground">
         Подключите программу, которой пользуетесь, — Claude Desktop, Claude Code, Cursor или Codex. Агент работает по вашей
-        подписке в этой программе и действует в ORION от вашего имени, только в рамках выбранных разрешений; удалять он не может.
-        Что он делает, видно сразу — плашкой в шапке и рамкой вокруг раздела.
+        подписке в этой программе и действует в ORION от вашего имени, только в рамках выбранных разрешений. Уже подключённую
+        программу можно изменить в любой момент: разрешить или запретить действие, поднять или снизить лимит записей. Удалять
+        сразу может только режим «Администратор», и только если запрет на удаление не стоит. Что агент делает, видно сразу —
+        плашкой в шапке и рамкой вокруг раздела.
       </p>
 
       <AgentConnectWizard workspaceId={workspaceId} />
@@ -176,9 +178,10 @@ function ConnectionCard({ workspaceId, token }: { workspaceId: string | undefine
   const update = useUpdateAgentToken(workspaceId);
   const revoke = useRevokeAgentToken(workspaceId);
   const [confirm, setConfirm] = useState(false);
+  const [editing, setEditing] = useState(false);
   const working = useAgentPresenceNow().agents.find((event) => event.tokenId === token.id);
   return (
-    <li>
+    <li className={editing ? "md:col-span-2" : undefined}>
       <Card className="h-full space-y-2 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <Bot className="h-4 w-4 text-accent" aria-hidden />
@@ -201,30 +204,39 @@ function ConnectionCard({ workspaceId, token }: { workspaceId: string | undefine
           {token.forbidden.length > 0 ? ` · запрет: ${token.forbidden.join(", ")}` : ""}
           {token.modulePermissions.length > 0 ? ` · ${describeModulePermissions(token.modulePermissions)}` : ""}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            aria-label={`Режим: ${token.name}`}
-            value={token.mode}
-            title={AGENT_MODE_HINT[token.mode]}
-            onChange={(event) =>
-              update.mutate(
-                { tokenId: token.id, input: { mode: event.target.value as AgentMode } },
-                { onError: (error) => toast({ title: "Не удалось сменить режим", description: describeError(error), tone: "danger" }) }
-              )
-            }
-            className="w-auto"
-          >
-            {AGENT_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {AGENT_MODE_LABEL[mode]}
-              </option>
-            ))}
-          </Select>
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setConfirm(true)}>
-            Отключить
-          </Button>
-        </div>
-        <p className="text-2xs text-subtle-foreground">{AGENT_MODE_HINT[token.mode]}</p>
+        {editing ? (
+          <TokenPolicyEditor workspaceId={workspaceId} token={token} onClose={() => setEditing(false)} />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                aria-label={`Режим: ${token.name}`}
+                value={token.mode}
+                title={AGENT_MODE_HINT[token.mode]}
+                onChange={(event) =>
+                  update.mutate(
+                    { tokenId: token.id, input: { mode: event.target.value as AgentMode } },
+                    { onError: (error) => toast({ title: "Не удалось сменить режим", description: describeError(error), tone: "danger" }) }
+                  )
+                }
+                className="w-auto"
+              >
+                {AGENT_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {AGENT_MODE_LABEL[mode]}
+                  </option>
+                ))}
+              </Select>
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                Настроить
+              </Button>
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setConfirm(true)}>
+                Отключить
+              </Button>
+            </div>
+            <p className="text-2xs text-subtle-foreground">{AGENT_MODE_HINT[token.mode]}</p>
+          </>
+        )}
       </Card>
       <ConfirmDialog
         open={confirm}

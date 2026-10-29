@@ -1,6 +1,6 @@
 "use client";
 
-import { useProjects } from "@orion/core-react";
+import { useProjects, useUpdateAgentToken } from "@orion/core-react";
 import {
   AGENT_FORBIDDEN,
   AGENT_FORBIDDEN_LABEL,
@@ -14,6 +14,7 @@ import {
   AGENT_SCOPE_LABEL,
   MODULE_AGENT_PERMISSIONS,
   MODULE_PERMISSION_ACTION_LABEL,
+  permissionsFromScopes,
   type OrionModuleId,
   type AgentForbidden,
   type AgentMode,
@@ -21,13 +22,16 @@ import {
   type AgentPermissionOp,
   type AgentPermissions,
   type AgentScope,
+  type AgentToken,
   type CreateAgentTokenInput
 } from "@orion/shared-types";
-import { Select } from "@orion/ui";
+import { Button, Select, useToast } from "@orion/ui";
+import { useState } from "react";
+import { describeError } from "../../lib/error-message";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 
 /** Non-matrix scopes: agent-to-agent traffic and links. */
-const EXTRA_SCOPES: AgentScope[] = ["agents:message", "agents:delegate"];
+const EXTRA_SCOPES: AgentScope[] = ["agents:message", "agents:delegate", "links:write"];
 
 /** Which ops make sense per module: projects are read-only, finance only ever produces drafts a human confirms. */
 const OPS_FOR: Record<AgentPermissionModule, AgentPermissionOp[]> = {
@@ -142,6 +146,69 @@ export function policyToInput(draft: PolicyDraft): Pick<CreateAgentTokenInput, "
     autoCommitProjectIds: draft.mode === "manager" ? draft.autoCommitProjectIds : [],
     modulePermissions: draft.modulePermissions
   };
+}
+
+/** The editor for a token that already exists: same fields as creation, filled from what the token has now. */
+export function policyFromToken(token: Pick<AgentToken, "mode" | "scopes" | "permissions" | "allowedProjectIds" | "forbidden" | "writeLimitPerHour" | "autoCommitProjectIds" | "modulePermissions">): PolicyDraft {
+  const stored = token.permissions;
+  const matrix = stored
+    ? {
+        tasks: [...(stored.tasks ?? [])],
+        notes: [...(stored.notes ?? [])],
+        events: [...(stored.events ?? [])],
+        projects: [...(stored.projects ?? [])],
+        finance: [...(stored.finance ?? [])]
+      }
+    : permissionsFromScopes(token.scopes);
+  return {
+    mode: token.mode,
+    matrix,
+    extraScopes: token.scopes.filter((scope): scope is AgentScope => (EXTRA_SCOPES as readonly string[]).includes(scope)),
+    allowedProjectIds: [...token.allowedProjectIds],
+    forbidden: [...token.forbidden],
+    writeLimit: token.writeLimitPerHour === null ? "" : String(token.writeLimitPerHour),
+    autoCommitProjectIds: [...token.autoCommitProjectIds],
+    modulePermissions: [...token.modulePermissions]
+  };
+}
+
+/** Save the current policy of a live token: allow, deny, raise or lower the write limit. */
+export function TokenPolicyEditor({
+  workspaceId,
+  token,
+  onClose
+}: {
+  workspaceId: string | undefined;
+  token: AgentToken;
+  onClose: () => void;
+}): React.ReactElement {
+  const { toast } = useToast();
+  const update = useUpdateAgentToken(workspaceId);
+  const [draft, setDraft] = useState(() => policyFromToken(token));
+
+  async function save(): Promise<void> {
+    try {
+      await update.mutateAsync({ tokenId: token.id, input: policyToInput(draft) });
+      toast({ title: "Настройки сохранены", description: `«${token.name}» будет работать с ними со следующего обращения.`, tone: "success" });
+      onClose();
+    } catch (error) {
+      toast({ title: "Не удалось сохранить", description: describeError(error), tone: "danger" });
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border pt-3">
+      <AgentPolicyFields workspaceId={workspaceId} draft={draft} onChange={setDraft} />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={update.isPending || policyIsEmpty(draft)} onClick={() => void save()}>
+          Сохранить
+        </Button>
+        <Button size="sm" variant="ghost" disabled={update.isPending} onClick={onClose}>
+          Отмена
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** True when the matrix grants nothing and no extra scope is ticked: the server would refuse it. Admin needs none of that. */
