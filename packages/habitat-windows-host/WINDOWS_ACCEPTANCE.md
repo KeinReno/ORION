@@ -2,6 +2,7 @@
 
 This is a **manual verification plan**, not a claim that the tests have been run.
 
+0. Run `node packages/habitat-windows-host/windows-smoke.mjs <absolute-exe-path>` after publishing and record its output; the smoke is not yet executed.
 1. Build/publish with the .NET 8 SDK on Windows 10/11 x64; verify no C# compiler errors and no P/Invoke marshalling errors.
 2. Record SHA-256 for the produced exe; review the source before approving the path.
 3. Test negative mode: omit `windowsHost` from a locally approved profile; `run` must fail with `windows_job_host_required` and no target CLI process.

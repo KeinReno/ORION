@@ -126,7 +126,8 @@ internal static class Program
             });
             if (ResumeThread(thread) == uint.MaxValue) return Fail("resume_failed");
             started = true;
-            WaitForSingleObject(process, INFINITE);
+            var waitResult = WaitForSingleObject(process, INFINITE);
+            if (waitResult != 0) return Fail("process_wait_failed");
             // A process that exits early closes its pipe reader; bounded task
             // input from the Node caller never contains credentials.
             try { pump.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }

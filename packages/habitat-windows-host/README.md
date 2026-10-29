@@ -45,6 +45,16 @@ Habitat on Windows now refuses the `run` and `run-hub` profile commands unless `
 
 The Node caller still imposes a timeout/abort. It records only output hashes, byte counts and a receipt with `verified=false`. A successful process exit can only lead to Agent Hub `review`, never `done`.
 
+## Windows manual smoke
+
+After building the native executable, run:
+
+```powershell
+node packages/habitat-windows-host/windows-smoke.mjs C:\KAIDEN\habitat-windows-host\Kaiden.Habitat.WindowsHost.exe
+```
+
+This script verifies stdin transport, Windows argv quoting with Unicode and embedded quotes, and actual termination of parent **and grandchild** processes after killing the host. It is intentionally **Windows-only** and is not executed by Linux unit tests.
+
 ## Outstanding limitations (do not enable unattended execution)
 
 - The host has **not been compiled or tested on Windows** in the GitHub connector environment. The source and native P/Invoke structs require a genuine Windows build and integration smoke.
