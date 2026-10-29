@@ -21,19 +21,21 @@
 
 ### F1 — registered optional module and durable execution
 
-- [ ] Generate a fully valid `module.manifest.json` using `pnpm create:module`;
+**Current slice (draft):** manifested module + RLS schema + snapshot registration, owner/lead create/cancel/read API, read-only board, integration test source. NOT yet validated against the running database or IDE. See ADR-0037.
+
+- [x] Generate a fully valid `module.manifest.json` using `pnpm create:module`;
       do not create an orphan `modules-ext` directory.
-- [ ] Schema and migration for execution attempts, event journal,
-      checkpoint references, evidence and runtime registration, with workspace RLS.
+- [x] Schema and migration for execution attempts, event journal,
+      checkpoint references and evidence, with workspace RLS (runtime registration deferred).
 - [ ] Persist transitions with CAS and atomic audit append; idempotency keys for
       command delivery, unique active claim and replay protection.
 - [ ] Expose minimal human read endpoint and scope-protected agent endpoints;
       distinguish an execution run from the existing user Task and AgentJob.
 - [ ] Public Task/AgentJob Module Bridge, no imports of another module's internals.
-- [ ] Include durable agent-to-agent messages/jobs and new execution state in
-      snapshot/restore according to a documented retention and privacy policy.
-- [ ] Disable/re-enable preserves data, prevents new dispatch and safely handles
-      in-flight work.
+- [ ] Include durable agent-to-agent messages/jobs in backup and verify actual snapshot restore.
+- [x] Register new execution/event models for snapshot inclusion (restore untested).
+- [x] Disable/re-enable denies human HTTP access without deleting data (integration test written, not run).
+- [ ] Safely handle in-flight work during disable (requires F2 scheduler).
 
 **Acceptance:** two simultaneous claimants -> one claim; kill/restart -> recover;
 restored snapshot -> exact task/provenance, no duplicate work; disabled module
@@ -115,3 +117,9 @@ an audit trail. This branch adds only a portable, pure lifecycle policy and
 associated tests/source documentation. No module manifest, scheduler, database
 table, worker launch, UI, backup integration or autonomous execution has been
 implemented yet. No CI or local build was run during the GitHub-connector change.
+
+## F1 implementation status — 29 October 2026
+
+- **Code written in feature branch:** module manifest, owner/lead human API, service, DB models/migration, generated registry targets, read-only panel, unit/integration test source.
+- **No claim of runtime acceptance:** GitHub connector cannot execute the repository's toolchain; no pnpm, Prisma migration, RLS integration tests, Windows launch or APK test was run. Keep PR draft.
+- **Next blocker:** local CI-equivalent check and database migration verification before adding autonomous runtime endpoints. No secrets or real user data were modified.
