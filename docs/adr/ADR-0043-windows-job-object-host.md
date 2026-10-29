@@ -13,12 +13,12 @@ Do not treat Node.js `child.kill()` as a reliable way to kill CLI descendants on
 3. Calls `CreateProcessW` with `CREATE_SUSPENDED` and inherited pipe/stdio handles.
 4. Assigns the suspended target to the job; if assignment fails it terminates the suspended process, without resuming.
 5. Resumes and forwards bounded task input via stdin; the caller hashes stdout and stderr without persisting raw model output.
-6. On timeout/abort the Node caller kills the host. Closing the last Job Object handle terminates all associated processes, including descendants that remain in the job.
+6. On timeout/abort the Node caller kills the host. Closing the last Job Object handle terminates all associated processes, including descendants that remain in the job. Out-of-job descendants, such as processes launched through WMI, are not contained.
 
 The existing `runApprovedProfile` behavior is unchanged on POSIX. On Windows, an operator-approved `profile.windowsHost` is **mandatory** and must resolve to an existing file. Missing host fails closed; no direct Node spawn fallback exists.
 
 ## Security and maturity caveats
 
-A Job Object is NOT a filesystem/network/credential sandbox. The approved CLI and its children inherit the local OS identity's permissions, and provider-specific subprocesses can behave differently when nested in jobs. A production unattended worker requires a low-privilege identity, isolated worktree, OS/network policy, signed/pinned native executable, device-bound runtime attestation and independent artifact review. No auto-execution or service installer is added here.
+A Job Object is NOT a filesystem/network/credential sandbox and does not capture every possible out-of-job process creation mechanism. The approved CLI and its children inherit the local OS identity's permissions, and provider-specific subprocesses can behave differently when nested in jobs. A production unattended worker requires a low-privilege identity, isolated worktree, OS/network policy, signed/pinned native executable, device-bound runtime attestation and independent artifact review. No auto-execution or service installer is added here.
 
 **Required before merge:** Windows .NET build; a smoke test proving shutdown of a child **and grandchild** on host termination and on timeout; token nonleak, error-path cleanup, quote/Unicode argv, startup refusal, and actual Windows Host integration with F2–F3d. The contained executable does not automatically become an `AgentHubExecution` in `done`; it still can only submit for human review. Staged pull request remains draft.
