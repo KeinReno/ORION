@@ -73,12 +73,13 @@ export function UpdatesSettings(): React.ReactElement {
   const s = status.data;
   const c = config.data;
   const downloading = s.state === "downloading";
+  const verifying = downloading && s.progress >= 1;
 
   return (
     <div className="space-y-5">
       <Card className="space-y-2 py-3">
         <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-          {STATE_LABEL[s.state] ?? s.state}
+          {verifying ? "Файл получен, проверяю…" : (STATE_LABEL[s.state] ?? s.state)}
           {s.state === "available" || s.state === "ready" ? <Badge tone="success">{s.latest?.tag}</Badge> : null}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -87,8 +88,11 @@ export function UpdatesSettings(): React.ReactElement {
         </p>
         {s.error ? <p className="text-xs text-danger">{s.error}</p> : null}
         {downloading ? (
-          <div className="h-2 w-full overflow-hidden rounded bg-white/10" role="progressbar" aria-valuenow={Math.round(s.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full bg-accent transition-all" style={{ width: `${Math.round(s.progress * 100)}%` }} />
+          <div className="space-y-1">
+            <div className="h-2 w-full overflow-hidden rounded bg-white/10" role="progressbar" aria-valuenow={Math.round(s.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-full bg-accent transition-all" style={{ width: `${Math.round(s.progress * 100)}%` }} />
+            </div>
+            {verifying ? <p className="text-xs text-muted-foreground">Кнопка «Установить и перезапустить» появится, когда проверка закончится. Это не зависание шкалы.</p> : null}
           </div>
         ) : null}
         {s.latest && (s.state === "available" || s.state === "ready" || s.state === "downloading") ? (
@@ -112,7 +116,7 @@ export function UpdatesSettings(): React.ReactElement {
           {s.state === "ready" ? (
             <Button
               size="sm"
-              disabled={busy !== null || !s.canApply}
+              disabled={(busy !== null && busy !== "download") || !s.canApply}
               title={s.canApply ? undefined : "Автоматическая установка доступна только в установленной версии для Windows"}
               onClick={() => void run("apply", applyUpdate, "Устанавливаю… программа закроется и откроется заново")}
             >

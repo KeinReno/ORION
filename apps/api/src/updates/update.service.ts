@@ -3,8 +3,6 @@ import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { BadRequestException, ConflictException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   APP_UPDATE_DEFAULT_REPO,
@@ -30,6 +28,55 @@ const FIRST_CHECK_DELAY_MS = 60 * 1000;
 /** Адрес API GitHub берётся только из окружения (тесты подставляют свой сервер), не из запроса пользователя. */
 function githubApi(): string {
   return (process.env.ORION_GITHUB_API_URL?.trim() || "https://api.github.com").replace(/\/+$/, "");
+}
+
+const READ_IDLE_MS = 20_000;
+
+/** Read at most `size` bytes, then cancel. A quiet connection fails instead of leaving the bar at 100%. */
+async function readBodyUpTo(
+  body: ReadableStream<Uint8Array>,
+  file: string,
+  size: number,
+  onProgress: (received: number) => void
+): Promise<{ received: number; sha256: string }> {
+  const hash = createHash("sha256");
+  const out = fs.createWriteStream(file);
+  const reader = body.getReader();
+  let received = 0;
+  try {
+    while (received < size) {
+      const next = await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Скачивание остановилось — соединение замолчало")), READ_IDLE_MS);
+        reader.read().then(
+          (value) => { clearTimeout(timer); resolve(value); },
+          (error: unknown) => { clearTimeout(timer); reject(error instanceof Error ? error : new Error(String(error))); }
+        );
+      });
+      if (next.done) break;
+      const chunk = Buffer.from(next.value);
+      const take = Math.min(chunk.length, size - received);
+      const bytes = take === chunk.length ? chunk : chunk.subarray(0, take);
+      hash.update(bytes);
+      received += bytes.length;
+      await new Promise<void>((resolve, reject) => out.write(bytes, (error) => (error ? reject(error) : resolve())));
+      onProgress(received);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    await new Promise<void>((resolve) => out.end(() => resolve()));
+  }
+  return { received, sha256: hash.digest("hex") };
+}
+
+function downloadFailure(error: unknown): string {
+  if (error instanceof BadRequestException) return error.message;
+  if (error && typeof error === "object" && "stderr" in error) {
+    const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
+    const line = stderr.split(/\r?\n/).find((item) => item.trim() !== "");
+    if (line) return line.trim();
+  }
+  if (error instanceof Error && error.message.trim() !== "") return error.message;
+  return "Не удалось скачать обновление";
 }
 
 /**
@@ -60,7 +107,9 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   private async payloadCommand(command: string, ...args: string[]): Promise<string> {
     const runtime = process.env.ORION_SHELL_RUNTIME;
     if (!runtime || !this.payloadBase()) throw new BadRequestException("Для пакетов обновлений нужна новая полная установка ORION");
-    const { stdout } = await promisify(execFile)(process.execPath, [path.join(runtime, "payload.cjs"), command, runtime, nodeDir(), ...args], { windowsHide: true, timeout: 120_000, maxBuffer: 1024 * 1024 });
+    // Copying the unchanged files of a payload is a few hundred megabytes. 120s was killing a
+    // healthy prepare, and the settings screen then sat at 100% with no install button.
+    const { stdout } = await promisify(execFile)(process.execPath, [path.join(runtime, "payload.cjs"), command, runtime, nodeDir(), ...args], { windowsHide: true, timeout: 10 * 60_000, maxBuffer: 1024 * 1024 });
     return stdout;
   }
 
@@ -245,21 +294,17 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         signal: AbortSignal.timeout(10 * 60_000)
       });
       if (!response.ok || !response.body) this.fail(`Не удалось скачать установщик (код ${response.status})`);
-      const hash = createHash("sha256");
-      let received = 0;
-      const source = Readable.fromWeb(response.body as never);
-      source.on("data", (chunk: Buffer) => {
-        hash.update(chunk);
-        received += chunk.length;
-        if (received > asset.size) source.destroy(new Error("Размер скачивания превышен"));
+      // Stop at the declared size. Waiting for the GitHub connection to close left the bar at
+      // 100% forever: the body was already complete, `end` never arrived, and the install button
+      // only exists in the `ready` state.
+      const downloadedBody = await readBodyUpTo(response.body, `${file}.part`, asset.size, (received) => {
         this.status = { ...this.status, progress: Math.min(1, received / Math.max(1, asset.size)) };
       });
-      await pipeline(source, fs.createWriteStream(`${file}.part`));
-      if (received !== asset.size) {
+      if (downloadedBody.received !== asset.size) {
         fs.rmSync(`${file}.part`, { force: true });
-        this.fail(`Скачано ${received} байт вместо ${asset.size}: файл повреждён, повторите`);
+        this.fail(`Скачано ${downloadedBody.received} байт вместо ${asset.size}: файл повреждён, повторите`);
       }
-      if (latest.kind !== "payload" && hash.digest("hex") !== latest.sha256) {
+      if (latest.kind !== "payload" && downloadedBody.sha256 !== latest.sha256) {
         fs.rmSync(`${file}.part`, { force: true });
         this.fail("Контрольная сумма скачанного установщика не совпала — файл отвергнут");
       }
@@ -269,12 +314,13 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       this.status = { ...this.status, state: "ready", progress: 1, error: null };
     } catch (error) {
       if (downloadPath) { fs.rmSync(`${downloadPath}.part`, { force: true }); fs.rmSync(downloadPath, { force: true }); }
+      const message = downloadFailure(error);
       if (this.status.state !== "error") {
-        this.status = { ...this.status, state: "error", progress: 0, error: "Не удалось скачать обновление" };
-        this.logger.warn(`Скачивание обновления: ${error instanceof Error ? error.message : String(error)}`);
+        this.status = { ...this.status, state: "error", progress: 0, error: message };
+        this.logger.warn(`Скачивание обновления: ${message}`);
       }
       if (error instanceof BadRequestException) throw error;
-      throw new BadRequestException(this.status.error ?? "Не удалось скачать обновление");
+      throw new BadRequestException(this.status.error ?? message);
     }
     return this.getStatus();
   }
