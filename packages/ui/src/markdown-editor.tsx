@@ -6,8 +6,8 @@ import {
   type CompletionContext,
   type CompletionResult
 } from "@codemirror/autocomplete";
-import { EditorSelection, EditorState } from "@codemirror/state";
-import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from "@codemirror/view";
+import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
+import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection, type KeyBinding } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -133,6 +133,96 @@ export interface MarkdownEditorApi {
   focus: () => void;
 }
 
+/**
+ * ORION-06 — the editor doesn't know about the Shortcut Manager (`apps/web/lib/shortcuts`,
+ * decidedly one layer up: packages/ui stays app-logic-free); it just takes the CURRENT combo for
+ * each command as a plain string ("mod+shift+x") and turns it into CodeMirror's own key-name
+ * format ("Mod-Shift-X"). `note-editor.tsx` is what actually reads the registry and passes the
+ * live values down, so a rebind takes effect without this file ever importing from apps/web.
+ */
+const CM_SPECIAL_KEYS: Record<string, string> = {
+  escape: "Escape",
+  enter: "Enter",
+  tab: "Tab",
+  backspace: "Backspace",
+  delete: "Delete",
+  arrowup: "ArrowUp",
+  arrowdown: "ArrowDown",
+  arrowleft: "ArrowLeft",
+  arrowright: "ArrowRight",
+  " ": "Space"
+};
+
+function comboToCodeMirrorKey(combo: string): string | null {
+  const parts = combo
+    .toLowerCase()
+    .split("+")
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+  const key = parts.filter((part) => part !== "mod" && part !== "shift" && part !== "alt").pop();
+  if (!key) return null;
+  const mods: string[] = [];
+  if (parts.includes("mod")) mods.push("Mod");
+  if (parts.includes("alt")) mods.push("Alt");
+  if (parts.includes("shift")) mods.push("Shift");
+  return [...mods, CM_SPECIAL_KEYS[key] ?? key].join("-");
+}
+
+/** All format commands bound to their current combo, plus "selection → task" if wired up. */
+function buildFormatKeymap(
+  combos: Partial<Record<FormatCommand, string>>,
+  convertToTask?: { combo: string; onInvoke: (selectedText: string) => void }
+): KeyBinding[] {
+  const bindings: KeyBinding[] = [];
+  for (const [command, combo] of Object.entries(combos) as [FormatCommand, string | undefined][]) {
+    if (!combo) continue;
+    const key = comboToCodeMirrorKey(combo);
+    if (!key) continue;
+    bindings.push({
+      key,
+      preventDefault: true,
+      run: (target) => {
+        formatView(target, command);
+        return true;
+      }
+    });
+  }
+  if (convertToTask) {
+    const key = comboToCodeMirrorKey(convertToTask.combo);
+    if (key) {
+      bindings.push({
+        key,
+        preventDefault: true,
+        run: (target) => {
+          const { from, to } = target.state.selection.main;
+          const text = target.state.sliceDoc(from, to).trim();
+          if (text !== "") convertToTask.onInvoke(text);
+          return true;
+        }
+      });
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The current selection's viewport rect, for the floating contextual toolbar. `coordsAtPos`
+ * returns null for a position that isn't actually laid out (can happen mid-update) — treated the
+ * same as "no selection" rather than risking a toolbar anchored at (0,0).
+ */
+function selectionRect(view: EditorView): { top: number; bottom: number; left: number; right: number } | null {
+  const { from, to } = view.state.selection.main;
+  const start = view.coordsAtPos(from);
+  const end = view.coordsAtPos(to, -1);
+  if (!start || !end) return null;
+  return {
+    top: Math.min(start.top, end.top),
+    bottom: Math.max(start.bottom, end.bottom),
+    left: Math.min(start.left, end.left),
+    right: Math.max(start.right, end.right)
+  };
+}
+
 /** One undoable transaction: the replacement and the restored selection together. */
 function formatView(view: EditorView, command: FormatCommand): void {
   const range = view.state.selection.main;
@@ -146,6 +236,15 @@ function formatView(view: EditorView, command: FormatCommand): void {
   view.focus();
 }
 
+/** Defaults used only if the caller doesn't pass `formatCombos` — kept so the editor still works standalone. */
+const DEFAULT_FORMAT_COMBOS: Partial<Record<FormatCommand, string>> = {
+  bold: "mod+b",
+  italic: "mod+i",
+  code: "mod+e",
+  strike: "mod+shift+x",
+  link: "mod+shift+k"
+};
+
 export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -157,6 +256,23 @@ export interface MarkdownEditorProps {
   className?: string;
   /** Note titles to offer as `[[wiki link]]` autocomplete. Omit to disable it. */
   wikiLinkTargets?: string[];
+  /**
+   * ORION-06 — the live, rebind-aware combo for each format command ("mod+shift+x", CodeMirror's
+   * own key syntax is derived from this, not stored anywhere). Omit a command to leave it with no
+   * keyboard shortcut at all (still reachable from the toolbar). Caller owns the Shortcut Manager
+   * lookup — see this file's `comboToCodeMirrorKey` doc comment for why.
+   */
+  formatCombos?: Partial<Record<FormatCommand, string>>;
+  /** "Selection → task": fires with the trimmed selected text; a no-op binding if either half is missing. */
+  convertToTaskCombo?: string;
+  onConvertToTask?: (selectedText: string) => void;
+  /**
+   * The contextual selection toolbar (AC: "контекстное форматирование выделенного текста") lives
+   * one level up — this just reports what's selected and where, in viewport coordinates
+   * (`view.coordsAtPos`, ready to use directly in a `position: fixed` floating element). `null`
+   * means "nothing selected, hide the toolbar."
+   */
+  onSelectionChange?: (selection: { text: string; rect: { top: number; bottom: number; left: number; right: number } } | null) => void;
   /** Filled with the toolbar handle once the view exists; cleared on unmount. */
   apiRef?: MutableRefObject<MarkdownEditorApi | null>;
 }
@@ -166,7 +282,9 @@ export interface MarkdownEditorProps {
  * docs/HISTORY.md v0.9 phase 2). Controlled: `value` in, `onChange` out. The
  * view is created once on mount; external `value` changes (switching notes,
  * reverting) are reconciled without stomping the cursor on the user's own
- * keystrokes.
+ * keystrokes. The format keymap is the one thing that CAN change live without
+ * a remount — rebinding a shortcut in Settings should take effect in an
+ * already-open note — via a `Compartment` reconfigured in its own effect.
  */
 export function MarkdownEditor({
   value,
@@ -177,16 +295,33 @@ export function MarkdownEditor({
   readOnly,
   className,
   wikiLinkTargets,
+  formatCombos,
+  convertToTaskCombo,
+  onConvertToTask,
+  onSelectionChange,
   apiRef
 }: MarkdownEditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const formatKeymapCompartment = useRef(new Compartment()).current;
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const onConvertToTaskRef = useRef(onConvertToTask);
+  const onSelectionChangeRef = useRef(onSelectionChange);
   const wikiTargetsRef = useRef<string[]>(wikiLinkTargets ?? []);
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
+  onConvertToTaskRef.current = onConvertToTask;
+  onSelectionChangeRef.current = onSelectionChange;
   wikiTargetsRef.current = wikiLinkTargets ?? [];
+
+  function currentFormatKeymap(): KeyBinding[] {
+    const combos = formatCombos ?? DEFAULT_FORMAT_COMBOS;
+    return buildFormatKeymap(
+      combos,
+      convertToTaskCombo ? { combo: convertToTaskCombo, onInvoke: (text) => onConvertToTaskRef.current?.(text) } : undefined
+    );
+  }
 
   useEffect(() => {
     if (!host.current) return;
@@ -204,29 +339,10 @@ export function MarkdownEditor({
               onSaveRef.current?.();
               return true;
             }
-          },
-          // Same commands as the toolbar. Mod-K is taken by the command palette,
-          // so the link shortcut is Mod-Shift-K.
-          ...(
-            [
-              ["Mod-b", "bold"],
-              ["Mod-i", "italic"],
-              ["Mod-e", "code"],
-              ["Mod-Shift-x", "strike"],
-              ["Mod-Shift-k", "link"]
-            ] as const
-          ).map(([key, command]) => ({
-            key,
-            preventDefault: true,
-            run: (target: EditorView) => {
-              formatView(target, command);
-              return true;
-            }
-          })),
-          indentWithTab,
-          ...defaultKeymap,
-          ...historyKeymap
+          }
         ]),
+        Prec.highest(formatKeymapCompartment.of(keymap.of(currentFormatKeymap()))),
+        keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(mdHighlight),
         autocompletion({
@@ -239,6 +355,23 @@ export function MarkdownEditor({
         EditorView.editable.of(!readOnly),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+          if ((u.docChanged || u.selectionSet) && onSelectionChangeRef.current) {
+            const { from, to } = u.state.selection.main;
+            if (from === to) {
+              onSelectionChangeRef.current(null);
+            } else {
+              const rect = selectionRect(u.view);
+              onSelectionChangeRef.current(rect ? { text: u.state.sliceDoc(from, to), rect } : null);
+            }
+          }
+        }),
+        EditorView.domEventHandlers({
+          // A click away from the editor leaves the selection intact (so "format" still has a
+          // target) but the floating toolbar must go — it has nothing to anchor to anymore.
+          blur: () => {
+            onSelectionChangeRef.current?.(null);
+            return false;
+          }
         })
       ]
     });
@@ -263,6 +396,17 @@ export function MarkdownEditor({
       instance.dispatch({ changes: { from: 0, to: current.length, insert: value } });
     }
   }, [value]);
+
+  // Serialized so an unrelated re-render (parent recreating the object literal) doesn't reconfigure
+  // CodeMirror on every keystroke — only an actual combo value change dispatches an effect.
+  const comboKey = JSON.stringify([formatCombos ?? DEFAULT_FORMAT_COMBOS, convertToTaskCombo ?? null]);
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance) return;
+    instance.dispatch({ effects: formatKeymapCompartment.reconfigure(keymap.of(currentFormatKeymap())) });
+    // currentFormatKeymap reads formatCombos/convertToTaskCombo via closure; comboKey is their stable fingerprint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comboKey]);
 
   return <div ref={host} className={clsx("w-full", className)} />;
 }

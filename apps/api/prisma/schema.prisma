@@ -129,6 +129,10 @@ model UserPreference {
   hiddenModules        String[]  @default([])
   /// Show the short note id ("N-104") in the list and the editor. Personal, off by default.
   showNoteIds          Boolean   @default(false)
+  /// ORION-06 — rebound shortcuts: { [shortcutId]: combo }, only entries that differ from
+  /// SHORTCUT_CATALOG's defaultCombo (apps/web/lib/shortcuts/catalog.ts). Unknown/stale ids
+  /// (a removed shortcut) are simply ignored on read, never cleaned up eagerly.
+  shortcutOverrides    Json      @default("{}")
   /// The user's own folders in the left sidebar: [{ id, name, collapsed, items: panelId[] }].
   /// Personal view state only — parsed defensively on read (see settings.service toDto).
   sidebarFolders       Json      @default("[]")

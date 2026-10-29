@@ -2,7 +2,7 @@
 
 import { useCaptureInboxItem, useCreateNote, useCreateTask, useGlobalSearch, useNotes, useTasks } from "@orion/core-react";
 import { isModuleEnabled, localDayDueAt, quickCapturePlaceholder, resolveQuickCapture } from "@orion/shared-types";
-import { Input, Kbd, Modal, isTypingTarget, useDebouncedValue, useHotkey, useToast } from "@orion/ui";
+import { Input, Kbd, Modal, isTypingTarget, useDebouncedValue, useToast } from "@orion/ui";
 import {
   CalendarDays,
   Bot,
@@ -28,6 +28,7 @@ import { instancePanelId, isPanelAvailable, panelRegistry } from "./panel-regist
 import { placeKey } from "./extensions/places";
 import { useEnabledPlaces } from "./extensions/places-host";
 import { SETTINGS_FIELDS, settingsScopeText, settingsTabInfo } from "./settings-catalog";
+import { useShortcutHandler } from "./shortcuts/registry";
 import { relativeTime, shortDate } from "./format";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "./task-labels";
 import type { ViewRef } from "@orion/shared-types";
@@ -177,23 +178,11 @@ export function CommandCenter(): React.ReactElement {
   const debouncedQuery = useDebouncedValue(query, 250);
   const { data: searchHits, isFetching: searchPending } = useGlobalSearch(workspace?.id, debouncedQuery);
 
-  useHotkey(
-    "mod+k",
-    (e) => {
-      e.preventDefault();
-      setPaletteOpen((v) => !v);
-    },
-    true
-  );
-  useHotkey(
-    "mod+shift+n",
-    (e) => {
-      e.preventDefault();
-      setCapturePrefill("");
-      setCaptureOpen(true);
-    },
-    true
-  );
+  useShortcutHandler("global.command-palette", () => setPaletteOpen((v) => !v));
+  useShortcutHandler("global.quick-capture", () => {
+    setCapturePrefill("");
+    setCaptureOpen(true);
+  });
 
   useEffect(() => {
     let timer = 0;

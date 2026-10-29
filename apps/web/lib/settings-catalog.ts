@@ -13,6 +13,7 @@ import {
   Clock,
   Download,
   Info,
+  Keyboard,
   Layers,
   Network,
   Palette,
@@ -33,6 +34,7 @@ export type SettingsTab =
   | "appearance"
   | "themes"
   | "region"
+  | "shortcuts"
   | "spheres"
   | "workspace"
   | "members"
@@ -71,6 +73,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       { value: "appearance", label: "Внешний вид", scope: "personal", icon: Palette },
       { value: "themes", label: "Темы", scope: "personal", icon: Sparkles },
       { value: "region", label: "Дата и время", scope: "personal", icon: Clock },
+      { value: "shortcuts", label: "Горячие клавиши", scope: "personal", icon: Keyboard },
       { value: "spheres", label: "Сферы и избранное", scope: "personal", icon: Layers }
     ]
   },
@@ -180,6 +183,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   { anchor: "workspace-theme", tab: "themes", label: "Тема пространства", keywords: "для всех участников" },
   { anchor: "time-zone", tab: "region", label: "Часовой пояс", keywords: "время зона utc" },
   { anchor: "week-start", tab: "region", label: "Начало недели", keywords: "понедельник воскресенье календарь" },
+  { anchor: "shortcuts-list", tab: "shortcuts", label: "Горячие клавиши", keywords: "hotkey сочетания клавиш перевязка rebind" },
   { anchor: "spheres", tab: "spheres", label: "Сферы", keywords: "группы пространств" },
   { anchor: "favorites", tab: "spheres", label: "Избранные пространства", keywords: "звезда" },
   { anchor: "rename", tab: "workspace", label: "Название пространства", keywords: "переименовать" },

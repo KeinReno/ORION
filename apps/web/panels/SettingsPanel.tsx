@@ -52,6 +52,7 @@ import { SettingsNav, type ExtensionSettingsTab } from "./settings/settings-nav"
 import { PlaceBoundary, useEnabledPlaces } from "../lib/extensions/places-host";
 import { placeKey } from "../lib/extensions/places";
 import { RegionSettings } from "./settings/region-section";
+import { ShortcutsSettings } from "./settings/shortcuts-section";
 import { AppearanceSettings, NotificationSettings } from "./settings/preference-sections";
 import { SaveBar, SettingGroup, SettingRow } from "./settings/setting-row";
 import { sectionTabTitle, useSectionView } from "../components/section-tabs";
@@ -90,8 +91,9 @@ const APPEARANCE_KEYS: readonly PreferenceKey[] = [
   "motionLevel"
 ];
 const REGION_KEYS: readonly PreferenceKey[] = ["timeZone", "weekStartsOn"];
+const SHORTCUTS_KEYS: readonly PreferenceKey[] = ["shortcutOverrides"];
 /** Tabs whose fields come from the preferences form: a jump to one of their parameters waits for it. */
-const FORM_TABS = new Set<string>(["notifications", "appearance", "region"]);
+const FORM_TABS = new Set<string>(["notifications", "appearance", "region", "shortcuts"]);
 /** The brief ring around a parameter reached from search. */
 const FLASH_CLASSES = ["rounded-lg", "ring-2", "ring-accent/60", "ring-offset-4", "ring-offset-background"];
 
@@ -219,7 +221,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
   // (no toast per click); only a failure is reported.
   useEffect(() => {
     if (!form || !preferences.data) return;
-    const patch = diffPreferences(form, preferences.data, [...APPEARANCE_KEYS, ...NOTIFICATION_KEYS, ...REGION_KEYS]);
+    const patch = diffPreferences(form, preferences.data, [...APPEARANCE_KEYS, ...NOTIFICATION_KEYS, ...REGION_KEYS, ...SHORTCUTS_KEYS]);
     if (Object.keys(patch).length === 0) return;
     const timer = setTimeout(() => {
       updatePreferences.mutate(patch, {
@@ -636,6 +638,19 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
               <Skeleton className="h-32" />
             ) : (
               <RegionSettings timeZone={form.timeZone} weekStartsOn={form.weekStartsOn} onChange={(patch) => setForm({ ...form, ...patch })} />
+            )}
+          </PanelSection>
+        ) : null}
+
+        {tab === "shortcuts" ? (
+          <PanelSection title="Горячие клавиши" actions={<LiveSaveHint pending={updatePreferences.isPending} failed={updatePreferences.isError} />}>
+            {preferences.isError ? preferencesError : !form ? (
+              <Skeleton className="h-56" />
+            ) : (
+              <ShortcutsSettings
+                overrides={(form.shortcutOverrides ?? {}) as Record<string, string>}
+                onChange={(patch) => setForm({ ...form, ...patch })}
+              />
             )}
           </PanelSection>
         ) : null}

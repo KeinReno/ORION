@@ -1,6 +1,6 @@
 "use client";
 
-import { usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
+import { useCaptureInboxItem, useCreateAndLink, usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
 import { noteNumberLabel, type Note, type Project } from "@orion/shared-types";
 import {
   AutosaveStatus,
@@ -10,6 +10,7 @@ import {
   MarkdownEditor,
   MarkdownToolbar,
   MarkdownView,
+  Popover,
   SegmentedControl,
   Select,
   cx,
@@ -17,12 +18,14 @@ import {
   useResizeWidth,
   markdownOutline,
   useToast,
+  type FormatCommand,
   type MarkdownEditorApi
 } from "@orion/ui";
 import {
   ArrowLeft,
   Archive,
   ArchiveRestore,
+  Baseline,
   ClipboardCopy,
   Copy,
   Download,
@@ -33,8 +36,11 @@ import {
   History,
   Link2,
   List,
+  EyeOff,
+  Eye,
   ExternalLink,
   MoreHorizontal,
+  PanelLeft as PanelLeftIcon,
   PanelRight,
   Pin,
   PinOff,
@@ -59,6 +65,12 @@ import { useEnabledModules } from "../lib/use-enabled-modules";
 import { NoteAttachmentsSection } from "./note-attachments";
 import { openInBrowser } from "../lib/panel-bus";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
+import { isApplePlatform } from "../lib/mod-key";
+import { useNotesToolbarPrefs } from "../lib/notes-toolbar-prefs";
+import { describeCombo } from "../lib/shortcuts/combo";
+import { useShortcutCombo, useShortcutCombos } from "../lib/shortcuts/registry";
+import { taskFieldsFromSelection } from "../lib/convert-selection-to-task";
+import { SelectionToolbar, type SelectionRect } from "./notes/selection-toolbar";
 
 type EditorMode = "edit" | "preview";
 
@@ -158,6 +170,51 @@ export function NoteEditor({
   const wideInspector = editorWidth >= 1000;
   // A phone-width editor has no room for the word count beside the mode switch and the tools.
   const narrow = editorWidth > 0 && editorWidth < 420;
+
+  // ORION-06 — the sticky formatting rail (AC1), the live rebind-aware combos it and the
+  // CodeMirror keymap both read from, and "selection → task" (contextual toolbar + Mod-Alt-T).
+  const toolbarPrefs = useNotesToolbarPrefs();
+  const isMac = useMemo(() => isApplePlatform(), []);
+  const formatCombos = useShortcutCombos([
+    "notes.bold", "notes.italic", "notes.strike", "notes.code", "notes.link",
+    "notes.h1", "notes.h2", "notes.h3", "notes.ordered", "notes.bullet", "notes.task", "notes.quote", "notes.codeblock"
+  ] as const);
+  const formatCombosByCommand: Partial<Record<FormatCommand, string>> = {
+    bold: formatCombos["notes.bold"], italic: formatCombos["notes.italic"], strike: formatCombos["notes.strike"],
+    code: formatCombos["notes.code"], link: formatCombos["notes.link"], h1: formatCombos["notes.h1"],
+    h2: formatCombos["notes.h2"], h3: formatCombos["notes.h3"], ordered: formatCombos["notes.ordered"],
+    bullet: formatCombos["notes.bullet"], task: formatCombos["notes.task"], quote: formatCombos["notes.quote"],
+    codeblock: formatCombos["notes.codeblock"]
+  };
+  const shortcutLabels: Partial<Record<FormatCommand, string>> = Object.fromEntries(
+    Object.entries(formatCombosByCommand).map(([command, combo]) => [command, describeCombo(combo, isMac)])
+  );
+  const convertToTaskCombo = useShortcutCombo("notes.convert-to-task");
+  const createAndLink = useCreateAndLink(workspaceId);
+  const captureInbox = useCaptureInboxItem(workspaceId);
+  const [selection, setSelection] = useState<{ text: string; rect: SelectionRect } | null>(null);
+
+  async function convertSelectionToTask(selectedText: string): Promise<void> {
+    if (!workspaceId) return;
+    const { title, description } = taskFieldsFromSelection(selectedText);
+    if (!title) return;
+    try {
+      if (note && note.projectId) {
+        await createAndLink.mutateAsync({
+          targetType: "note",
+          targetId: note.id,
+          kind: "related_to",
+          entity: { type: "task", input: { title, description, priority: "normal", checklist: [], projectId: note.projectId } }
+        });
+        toast({ title: "Задача создана в проекте заметки", tone: "success" });
+      } else {
+        await captureInbox.mutateAsync({ title, body: description, kind: "inbox" });
+        toast({ title: "Отправлено в Инбокс", tone: "success" });
+      }
+    } catch (error) {
+      toast({ title: "Не удалось создать задачу", description: describeError(error), tone: "danger" });
+    }
+  }
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
   // "compare current fields to what was last saved" dirty check. An
@@ -361,7 +418,22 @@ export function NoteEditor({
   const saving = autosaveState === "saving";
 
   const menuItems: ComponentProps<typeof DropdownMenu>["items"] = [];
+  if (mode === "edit") {
+    menuItems.push(
+      {
+        label: toolbarPrefs.side === "left" ? "Панель форматирования направо" : "Панель форматирования налево",
+        icon: toolbarPrefs.side === "left" ? PanelRight : PanelLeftIcon,
+        onSelect: () => toolbarPrefs.setSide(toolbarPrefs.side === "left" ? "right" : "left")
+      },
+      {
+        label: toolbarPrefs.hidden ? "Показать панель форматирования" : "Скрыть панель форматирования",
+        icon: toolbarPrefs.hidden ? Eye : EyeOff,
+        onSelect: toolbarPrefs.toggleHidden
+      }
+    );
+  }
   if (note) {
+    if (menuItems.length > 0) menuItems.push("separator");
     if (!standalone) {
       menuItems.push(
         { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
@@ -460,7 +532,7 @@ export function NoteEditor({
                   Создать
                 </Button>
               ) : null}
-              {note && menuItems.length > 0 ? (
+              {menuItems.length > 0 ? (
                 <DropdownMenu
                   align="end"
                   trigger={({ toggle }) => (
@@ -572,23 +644,54 @@ export function NoteEditor({
                   <History className="h-4 w-4" />
                 </IconButton>
               ) : null}
+              {/* ORION-06: a pinned side rail has no room on a phone/narrow pane — the same tools live in this popover instead. */}
+              {mode === "edit" && (narrow || compact) && !toolbarPrefs.hidden ? (
+                <Popover
+                  align="end"
+                  trigger={({ toggle, ref }) => (
+                    <span ref={ref as unknown as MutableRefObject<HTMLSpanElement>}>
+                      <IconButton label="Форматирование" size="sm" onClick={toggle}>
+                        <Baseline className="h-4 w-4" />
+                      </IconButton>
+                    </span>
+                  )}
+                >
+                  {() => <div className="p-1"><MarkdownToolbar apiRef={editorApi} orientation="horizontal" shortcutLabels={shortcutLabels} /></div>}
+                </Popover>
+              ) : null}
             </div>
           </div>
 
           {mode === "edit" ? (
-            // Поле правки видно рамкой и фоном, а при фокусе подсвечивается;
-            // в «Просмотре» рамки нет — там это уже не поле ввода.
-            <div className="space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
-              <MarkdownToolbar apiRef={editorApi} />
-              <MarkdownEditor
-                apiRef={editorApi}
-                value={body}
-                onChange={setBody}
-                onSave={() => void runSave()}
-                placeholder="Текст заметки… Markdown и [[ссылки]] поддерживаются"
-                className="min-h-[18rem]"
-                wikiLinkTargets={wikiTargets}
-              />
+            <div className="flex items-start gap-2">
+              {/* AC1: pinned beside the editor, inside the page's own scroll region — never scrolls out of view with a long note. */}
+              {!narrow && !compact && !toolbarPrefs.hidden && toolbarPrefs.side === "left" ? (
+                <div className="sticky top-2 shrink-0 self-start rounded-xl border border-border-strong bg-card/60 py-1">
+                  <MarkdownToolbar apiRef={editorApi} shortcutLabels={shortcutLabels} />
+                </div>
+              ) : null}
+              {/* Поле правки видно рамкой и фоном, а при фокусе подсвечивается;
+                  в «Просмотре» рамки нет — там это уже не поле ввода. */}
+              <div className="min-w-0 flex-1 space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
+                <MarkdownEditor
+                  apiRef={editorApi}
+                  value={body}
+                  onChange={setBody}
+                  onSave={() => void runSave()}
+                  placeholder="Текст заметки… Markdown и [[ссылки]] поддерживаются"
+                  className="min-h-[18rem]"
+                  wikiLinkTargets={wikiTargets}
+                  formatCombos={formatCombosByCommand}
+                  convertToTaskCombo={convertToTaskCombo}
+                  onConvertToTask={(text) => void convertSelectionToTask(text)}
+                  onSelectionChange={setSelection}
+                />
+              </div>
+              {!narrow && !compact && !toolbarPrefs.hidden && toolbarPrefs.side === "right" ? (
+                <div className="sticky top-2 shrink-0 self-start rounded-xl border border-border-strong bg-card/60 py-1">
+                  <MarkdownToolbar apiRef={editorApi} shortcutLabels={shortcutLabels} />
+                </div>
+              ) : null}
             </div>
           ) : body.trim() ? (
             <MarkdownView
@@ -601,6 +704,13 @@ export function NoteEditor({
           ) : (
             <p className="min-h-[18rem] text-body text-subtle-foreground">Пусто — переключитесь на «Правку».</p>
           )}
+          {mode === "edit" && selection ? (
+            <SelectionToolbar
+              rect={selection.rect}
+              onFormat={(command) => editorApi.current?.format(command)}
+              onConvertToTask={() => void convertSelectionToTask(selection.text)}
+            />
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-1.5">
             {tags.map((tag) => (

@@ -114,6 +114,15 @@ export const sidebarOrderSchema = z.array(z.string().min(1).max(40)).max(80);
 export const soundLevelSchema = z.enum(["off", "quiet", "full"]);
 export type SoundLevel = z.infer<typeof soundLevelSchema>;
 
+/**
+ * ORION-06 — `{ [shortcutId]: combo }`, only entries that differ from the catalog's own
+ * `defaultCombo` (`apps/web/lib/shortcuts/catalog.ts` — the catalog itself is client-only UI
+ * chrome, not a server contract, so it doesn't live here). An id this server has never heard of
+ * (a shortcut removed in a later release) is harmless — the client simply ignores it on read.
+ */
+export const shortcutOverridesSchema = z.record(z.string().min(1).max(80), z.string().max(60));
+export type ShortcutOverrides = z.infer<typeof shortcutOverridesSchema>;
+
 export const userPreferenceSchema = z.object({
   theme: themePreferenceSchema,
   /**
@@ -154,6 +163,7 @@ export const userPreferenceSchema = z.object({
   hiddenModules: z.array(z.string().max(40)).max(40),
   /** Show the short note id ("N-104") in the notes list and editor. Personal, off by default. */
   showNoteIds: z.boolean(),
+  shortcutOverrides: shortcutOverridesSchema,
   /** The user's own sidebar folders. Personal: other participants and the workspace are untouched. */
   sidebarFolders: sidebarFoldersSchema,
   /** The user's own order of sidebar sections (panel ids). Ids missing here keep their default place after the listed ones. */

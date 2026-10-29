@@ -92,6 +92,7 @@ import {
   useSecondaryDock
 } from "../../lib/secondary-dock";
 import { detachSecondaryDockToWindow, useSecondaryDockHost } from "../../lib/secondary-dock-window";
+import { GlobalShortcutDispatcher, ShortcutsProvider } from "../../lib/shortcuts/registry";
 import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
 import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -346,6 +347,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
   const precision = preferences?.theme === "kaiden-precision";
+  const shortcutOverrides = useMemo(() => (preferences?.shortcutOverrides ?? {}) as Record<string, string>, [preferences?.shortcutOverrides]);
   const [contextHidden, setContextHidden] = useState(false);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -1060,6 +1062,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   );
 
   return (
+    <ShortcutsProvider overrides={shortcutOverrides}>
     <div
       className={cx(
         "flex h-dvh bg-background",
@@ -1072,6 +1075,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       )}
       onContextMenu={rootContextMenu.onContextMenu}
     >
+      <GlobalShortcutDispatcher />
       <AppBackground />
       <FolderNameDialog
         open={layoutDialogOpen}
@@ -1408,5 +1412,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       <NodeBadge />
       {children}
     </div>
+    </ShortcutsProvider>
   );
 }

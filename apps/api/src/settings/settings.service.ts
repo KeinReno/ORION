@@ -8,6 +8,7 @@ import {
   type SaveThemeInput,
   type ThemeLibraryEntry,
   DEFAULT_BACKGROUND_EFFECT_SETTINGS,
+  shortcutOverridesSchema,
   sidebarFoldersSchema,
   sidebarOrderSchema,
   sidebarPositionSchema,
@@ -76,7 +77,8 @@ export class SettingsService {
       ...(input.customTheme === null ? { customThemeEnabled: false } : {}),
       ...(input.backgroundEffectSettings ? { backgroundEffectSettings: input.backgroundEffectSettings as Prisma.InputJsonValue } : {}),
       ...(input.sidebarFolders ? { sidebarFolders: input.sidebarFolders as Prisma.InputJsonValue } : {}),
-      ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {})
+      ...(input.sidebarOrder ? { sidebarOrder: input.sidebarOrder as Prisma.InputJsonValue } : {}),
+      ...(input.shortcutOverrides ? { shortcutOverrides: input.shortcutOverrides as Prisma.InputJsonValue } : {})
     };
     const legacyWrite = customTheme !== undefined || input.customThemeEnabled !== undefined;
     const before = legacyWrite ? await this.preferenceRow(userId) : null;
@@ -356,6 +358,7 @@ function toDto(preference: {
   dashboardWidgets: string[];
   hiddenModules: string[];
   showNoteIds: boolean;
+  shortcutOverrides: Prisma.JsonValue;
   sidebarFolders: Prisma.JsonValue;
   sidebarOrder: Prisma.JsonValue;
   sidebarPosition: string;
@@ -373,7 +376,8 @@ function toDto(preference: {
     activeThemeId: preference.activeThemeId ?? null,
     workspaceThemeMode: workspaceThemeModeSchema.safeParse(preference.workspaceThemeMode).success ? (preference.workspaceThemeMode as UserPreference["workspaceThemeMode"]) : "follow",
     backgroundEffectSettings: mergeBackgroundEffectSettings(preference.backgroundEffectSettings),
-    // A damaged value must not break the settings screen: read it defensively, fall back to no folders.
+    // A damaged value must not break the settings screen: read it defensively, fall back to no overrides/folders.
+    shortcutOverrides: shortcutOverridesSchema.safeParse(preference.shortcutOverrides).success ? (preference.shortcutOverrides as UserPreference["shortcutOverrides"]) : {},
     sidebarFolders: sidebarFoldersSchema.safeParse(preference.sidebarFolders).success ? (preference.sidebarFolders as UserPreference["sidebarFolders"]) : [],
     sidebarOrder: sidebarOrderSchema.safeParse(preference.sidebarOrder).success ? (preference.sidebarOrder as string[]) : [],
     sidebarPosition: sidebarPositionSchema.safeParse(preference.sidebarPosition).success ? (preference.sidebarPosition as UserPreference["sidebarPosition"]) : "left",

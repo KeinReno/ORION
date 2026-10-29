@@ -15,6 +15,7 @@ import {
   Quote,
   Strikethrough
 } from "lucide-react";
+import clsx from "clsx";
 import type { MutableRefObject } from "react";
 import type { MarkdownEditorApi } from "./markdown-editor";
 import type { FormatCommand } from "./markdown-format";
@@ -23,8 +24,6 @@ import { IconButton } from "./primitives";
 interface ToolbarItem {
   command: FormatCommand;
   label: string;
-  /** Shown in the tooltip; the real binding lives in markdown-editor.tsx. */
-  shortcut?: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
@@ -35,10 +34,10 @@ const GROUPS: ToolbarItem[][] = [
     { command: "h3", label: "Заголовок 3", icon: Heading3 }
   ],
   [
-    { command: "bold", label: "Жирный", shortcut: "Ctrl+B", icon: Bold },
-    { command: "italic", label: "Курсив", shortcut: "Ctrl+I", icon: Italic },
-    { command: "strike", label: "Зачёркнутый", shortcut: "Ctrl+Shift+X", icon: Strikethrough },
-    { command: "code", label: "Код в строке", shortcut: "Ctrl+E", icon: Code }
+    { command: "bold", label: "Жирный", icon: Bold },
+    { command: "italic", label: "Курсив", icon: Italic },
+    { command: "strike", label: "Зачёркнутый", icon: Strikethrough },
+    { command: "code", label: "Код в строке", icon: Code }
   ],
   [
     { command: "bullet", label: "Маркированный список", icon: List },
@@ -47,7 +46,7 @@ const GROUPS: ToolbarItem[][] = [
     { command: "quote", label: "Цитата", icon: Quote }
   ],
   [
-    { command: "link", label: "Ссылка", shortcut: "Ctrl+Shift+K", icon: Link2 },
+    { command: "link", label: "Ссылка", icon: Link2 },
     { command: "codeblock", label: "Блок кода", icon: Code2 }
   ]
 ];
@@ -59,38 +58,57 @@ const GROUPS: ToolbarItem[][] = [
  * (`mousedown` is cancelled) — otherwise the click would collapse the selection
  * the command is meant to act on. Every button is a real focusable control with
  * a text name, so the toolbar is reachable without a mouse too.
+ *
+ * ORION-06: a narrow vertical rail by default (pinned beside the editor, so
+ * scrolling a long note never hides it — AC1), `orientation="horizontal"` keeps
+ * the original top-row layout for callers that still want it (none left in this
+ * app, kept for the component's own flexibility). `shortcutLabels` is the live,
+ * rebind-aware tooltip text per command (`describeCombo` + the Shortcut Manager
+ * override) — this component has no opinion on where that string comes from.
  */
 export function MarkdownToolbar({
   apiRef,
-  disabled
+  disabled,
+  orientation = "vertical",
+  shortcutLabels
 }: {
   apiRef: MutableRefObject<MarkdownEditorApi | null>;
   disabled?: boolean;
+  orientation?: "horizontal" | "vertical";
+  /** command → human-readable combo, e.g. "Ctrl+B"; omit a command to show no shortcut hint. */
+  shortcutLabels?: Partial<Record<FormatCommand, string>>;
 }): React.ReactElement {
+  const vertical = orientation === "vertical";
   return (
     <div
       role="toolbar"
       aria-label="Форматирование"
-      aria-orientation="horizontal"
-      className="orion-scroll flex items-center gap-0.5 overflow-x-auto border-b border-border pb-1.5"
+      aria-orientation={orientation}
+      className={clsx(
+        "orion-scroll flex items-center gap-0.5",
+        vertical ? "flex-col overflow-y-auto py-1" : "overflow-x-auto border-b border-border pb-1.5"
+      )}
     >
       {GROUPS.map((group, index) => (
-        <div key={group[0]?.command} className="flex shrink-0 items-center gap-0.5">
-          {index > 0 ? <span className="mx-1 h-4 w-px bg-border" aria-hidden /> : null}
-          {group.map((item) => (
-            <IconButton
-              key={item.command}
-              type="button"
-              size="sm"
-              label={item.shortcut ? `${item.label} (${item.shortcut})` : item.label}
-              title={item.shortcut ? `${item.label} · ${item.shortcut}` : item.label}
-              disabled={disabled}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => apiRef.current?.format(item.command)}
-            >
-              <item.icon className="h-4 w-4" />
-            </IconButton>
-          ))}
+        <div key={group[0]?.command} className={clsx("flex shrink-0 items-center gap-0.5", vertical && "flex-col")}>
+          {index > 0 ? <span className={clsx("bg-border", vertical ? "my-1 h-px w-4" : "mx-1 h-4 w-px")} aria-hidden /> : null}
+          {group.map((item) => {
+            const shortcut = shortcutLabels?.[item.command];
+            return (
+              <IconButton
+                key={item.command}
+                type="button"
+                size="sm"
+                label={shortcut ? `${item.label} (${shortcut})` : item.label}
+                title={shortcut ? `${item.label} · ${shortcut}` : item.label}
+                disabled={disabled}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => apiRef.current?.format(item.command)}
+              >
+                <item.icon className="h-4 w-4" />
+              </IconButton>
+            );
+          })}
         </div>
       ))}
     </div>
