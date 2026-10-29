@@ -99,3 +99,12 @@ test('status is local observation, never proof of an online executor', async () 
   assert.equal((await readSupervisorStatus(config)).freshObservation, true);
   assert.equal((await readSupervisorStatus(config, Date.parse(time) + 30_000)).freshObservation, false);
 });
+
+test('status can be inspected after the supervisor is disabled', async () => {
+  const { config } = await fixture();
+  config.supervisor.enabled = false;
+  const { readSupervisorStatus } = await import('../src/supervisor.mjs');
+  const result = await readSupervisorStatus(config);
+  assert.equal(result.freshObservation, false);
+  assert.equal(result.state, null);
+});

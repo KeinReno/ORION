@@ -120,10 +120,12 @@ export async function superviseHabitat({
 
 /** Observation freshness is not process attestation or a remote online claim. */
 export async function readSupervisorStatus(config, now = Date.now()) {
-  const policy = validateSupervisorPolicy(config);
+  validateConfig(config);
+  const pollMs = config.supervisor?.pollMs;
+  if (!Number.isInteger(pollMs) || pollMs < 10_000 || pollMs > 300_000) throw new HabitatPolicyError('invalid_supervisor_policy');
   const state = await priorState(await stateDir(config));
   if (!state) return { state: null, freshObservation: false };
   const timestamp = Date.parse(state.lastPollAt ?? '');
-  const freshObservation = state.status === 'observing' && Number.isFinite(timestamp) && now >= timestamp && now - timestamp <= 2 * policy.pollMs;
+  const freshObservation = state.status === 'observing' && Number.isFinite(timestamp) && now >= timestamp && now - timestamp <= 2 * pollMs;
   return { state, freshObservation };
 }

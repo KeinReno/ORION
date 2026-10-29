@@ -25,4 +25,4 @@ A successful local `GET` proves only that this token could read queue data at on
 
 ## Validation
 
-Standalone Node.js v22 on Linux: 8 tests pass (mocked F2 HTTP and lightweight stubs for the existing F3 module imports). Full ORION lint/typecheck, database migrations, Windows service smoke and integrated tests are not run.
+Standalone Node.js v22 on Linux: 9 tests pass (mocked F2 HTTP and lightweight stubs for the existing F3 module imports). Full ORION lint/typecheck, database migrations, Windows service smoke and integrated tests are not run.

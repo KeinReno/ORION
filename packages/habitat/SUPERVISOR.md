@@ -42,3 +42,5 @@ The local file `.orion/habitat/supervisor.json` contains a session UUID, PID, mo
 ## Next integration milestone
 
 Implement a server-side, versioned, authenticated Agent Runtime Registry in the Agent Hub module with session binding, capabilities, explicit owner approvals, signed nonce/replay protection, TTL expiry, and device identity. Separate monitoring rights from worker rights and normal write budgets. Then add a Windows Job Object-powered runner and user-controlled service installer; only after these gates consider unattended task claiming.
+
+The `supervisor-status` command remains available when monitoring has been disabled in the local configuration; this does not enable polling.
