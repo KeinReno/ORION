@@ -21,6 +21,7 @@ export function validateConfig(value) {
   for (const p of value.profiles) {
     if (!p || typeof p !== 'object' || !/^[a-z][a-z0-9-]{0,63}$/.test(p.id ?? '') || ids.has(p.id) ||
         typeof p.executable !== 'string' || !isAbsolute(p.executable) ||
+        (p.windowsHost != null && (typeof p.windowsHost !== 'string' || !isAbsolute(p.windowsHost))) ||
         !Array.isArray(p.args) || p.args.length > 30 || p.args.some(arg => typeof arg !== 'string' || arg.length > 2048 || arg.includes('\0')) ||
         typeof p.approved !== 'boolean' || !Number.isInteger(p.timeoutMs) || p.timeoutMs < 1000 || p.timeoutMs > MAX_RUNTIME_MS) {
       throw new HabitatPolicyError('invalid_profile');
@@ -85,12 +86,28 @@ function executionEnv(env) {
 }
 
 /**
+ * The Windows host receives only a fixed operator-approved executable/argv.
+ * Request JSON rides in Base64 argv (no task content, no token).
+ * Direct Node spawn is forbidden on Windows: the native host must create the
+ * target suspended, attach it to a KILL_ON_JOB_CLOSE job, then resume it.
+ */
+export function buildLaunchSpec({ profile, executable, cwd, platform = process.platform, windowsHost }) {
+  if (platform === 'win32') {
+    if (!windowsHost || !isAbsolute(windowsHost)) throw new HabitatPolicyError('windows_job_host_required');
+    const request = Buffer.from(JSON.stringify({ Executable: executable, Cwd: cwd, Args: [...profile.args] })).toString('base64');
+    if (request.length > 32768) throw new HabitatPolicyError('windows_job_request_too_large');
+    return { executable: windowsHost, args: [request], runtime: 'windows-job-object' };
+  }
+  return { executable, args: [...profile.args], runtime: 'local-approved-cli' };
+}
+
+/**
  * Explicit local operator action, not an Agent Hub HTTP endpoint. The caller
  * cannot supply a binary or argv: both come from the preapproved local profile.
  * This is a process guard, NOT an OS sandbox: the child still has the local
  * account's filesystem/network privileges. Use only with trusted CLI providers.
  */
-export async function runApprovedProfile({ config, profileId, workdir, taskFile, acknowledged, signal, spawnImpl = spawn, env = process.env }) {
+export async function runApprovedProfile({ config, profileId, workdir, taskFile, acknowledged, signal, spawnImpl = spawn, env = process.env, platform = process.platform }) {
   validateConfig(config);
   if (!config.enabled || acknowledged !== true) throw new HabitatPolicyError('operator_approval_required');
   const profile = config.profiles.find(item => item.id === profileId);
@@ -100,6 +117,15 @@ export async function runApprovedProfile({ config, profileId, workdir, taskFile,
   const executable = await realpath(profile.executable).catch(() => { throw new HabitatPolicyError('executable_missing'); });
   if (!(await stat(executable)).isFile()) throw new HabitatPolicyError('invalid_executable');
   await access(executable, constants.X_OK);
+  // Fail closed before any user task bytes are forwarded on Windows.
+  if (platform === 'win32' && !profile.windowsHost) throw new HabitatPolicyError('windows_job_host_required');
+  let windowsHost;
+  if (platform === 'win32') {
+    windowsHost = await realpath(profile.windowsHost).catch(() => { throw new HabitatPolicyError('windows_job_host_missing'); });
+    if (!(await stat(windowsHost)).isFile()) throw new HabitatPolicyError('windows_job_host_invalid');
+    await access(windowsHost, constants.X_OK);
+  }
+  const launch = buildLaunchSpec({ profile, executable, cwd, platform, windowsHost });
   const task = await readFile(source);
   if (task.length < 1 || task.length > MAX_TASK_BYTES) throw new HabitatPolicyError('invalid_task_file');
   if (signal?.aborted) throw new HabitatPolicyError('already_aborted');
@@ -108,7 +134,7 @@ export async function runApprovedProfile({ config, profileId, workdir, taskFile,
   const stdoutHash = createHash('sha256'), stderrHash = createHash('sha256');
   let stdoutBytes = 0, stderrBytes = 0;
   let outcome = 'exited', exitCode = null, exitSignal = null;
-  const child = spawnImpl(executable, [...profile.args], {
+  const child = spawnImpl(launch.executable, launch.args, {
     cwd, env: executionEnv(env), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe']
   });
   const done = new Promise(resolveDone => {
@@ -141,7 +167,7 @@ export async function runApprovedProfile({ config, profileId, workdir, taskFile,
   });
   await done;
   return {
-    version: 1, id: randomUUID(), profileId, runtime: 'local-approved-cli',
+    version: 1, id: randomUUID(), profileId, runtime: launch.runtime,
     startedAt, endedAt: new Date().toISOString(), outcome,
     exitCode, exitSignal, timedOut: outcome === 'timed_out',
     taskSha256: createHash('sha256').update(task).digest('hex'),

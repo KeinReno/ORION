@@ -57,6 +57,10 @@ node packages/habitat/src/cli.mjs supervise --config C:\\private\\habitat.json -
 node packages/habitat/src/cli.mjs supervisor-status --config C:\\private\\habitat.json
 ```
 
+## Windows process-tree host (F3e, draft)
+
+Windows profile execution now requires a separately built .NET Job Object host, specified by the operator as `profiles[].windowsHost`. Without it, `run` / `run-hub` refuse to start a CLI on Windows. The native host creates the child suspended, attaches its Job Object and only then resumes it; it does not sandbox file/network access. See `packages/habitat-windows-host/README.md`. The native Windows host is **not compiled or smoke-tested yet**.
+
 ## Explicit limitations
 
 - **Not an OS sandbox:** a spawned CLI keeps the local account's filesystem/network privileges, and a CLI can itself launch subprocesses. Do not run untrusted agents unattended with this prototype.

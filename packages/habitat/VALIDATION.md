@@ -13,3 +13,5 @@ This file tracks `packages/habitat` and does not replace the Agent Hub roadmap.
 **F3 observation supervisor (draft):** local-only session id and state, atomic observation updates, exclusive lock, explicit opt-in, loopback GET queue, no autonomous claim. 8 isolated Node v22 unit tests pass with stub imports/mock HTTP. Windows service and ORION-integrated checks still outstanding. See SUPERVISOR.md and ADR-0040.
 
 **F3d isolated Node checks (2026-10-29):** 14 passing tests, 0 failing on Node v22/Linux using mocked F2/F3c HTTP and lightweight local dependency stubs. They cover runtime register/pulse/close, registration refusal, denial of remote HTTP and status persistence. Full ORION/database/Windows checks have not run.
+
+**F3e Windows draft:** C#/.NET 8 Job Object containment source written; Windows `runApprovedProfile` now fails closed without an operator-configured native host. New simulated-Windows selection/denial test source added. Native binary compilation, Windows process-tree termination and complete package tests are **not** verified in this environment.
