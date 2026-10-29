@@ -5,7 +5,7 @@ This is a registered but NOT AUTONOMOUS module. Manual MCP sessions may explicit
 AgentJob status and the execution state machine.
 
 Server code calls TaskIntegrationReader through its public module, never Tasks
-internals. Model code must not infer an online runtime from token presence.
+internals. Model code must not infer an online runtime from token presence. A runtime session with presence=recent proves only that a scoped token renewed a TTL within 5 minutes; it does not prove local process or device identity. No auto-dispatch rights derive from runtime registration.
 
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)

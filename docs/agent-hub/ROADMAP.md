@@ -155,3 +155,14 @@ implemented yet. No CI or local build was run during the GitHub-connector change
 - [ ] Workspace-scoped permissioned installation, default-off service/UX, and explicit rollback.
 
 This is NOT autonomous execution. The owner must initiate each local run and approve the profile.
+
+## F3c — reported runtime session registry (draft, 29 October 2026)
+
+- [x] Dedicated `AgentHubRuntimeSession` model with forced workspace RLS, TTL, token ID, scoped declared capabilities, optimistic revision and closed state.
+- [x] Agent-token-scoped register/pulse/close endpoints through AgentModuleToolsService; human read-only inventory.
+- [x] v0 runtime capabilities hard-locked to observer-only; a registration cannot authorize CLI execution.
+- [x] Presence computed as recent/stale/closed, not an authenticated running process. Runtime session is ephemeral-excluded from backups.
+- [x] Integration test source for replay, cross-token denial, invalid capabilities, stale sessions and CAS.
+- [ ] Full Prisma generation, DB migration, module-registry checks and integration tests (not run in connector).
+- [ ] Wire local supervisor's session lifecycle to register/pulse/close after server-side API validation.
+- [ ] Add tamper-resistant runtime attestation and restricted Windows process execution before unattended claims.

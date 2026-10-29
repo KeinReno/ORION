@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import type { AgentHubRuntimeSession as RuntimeRow } from "@prisma/client";
+import { Prisma, type AgentHubRuntimeSession as RuntimeRow } from "@prisma/client";
 import type { AgentContext } from "../../ai/agent-tokens.service";
 import { PrismaService } from "../../common/prisma.service";
 import { ModulesService } from "../../modules/modules.service";
@@ -44,7 +44,8 @@ export class AgentHubRuntimeRegistryService {
 
   async register(agent: AgentContext, input: AgentHubRuntimeRegisterInput): Promise<AgentHubRuntimeSession> {
     await this.checkAgent(agent);
-    return this.prisma.withUser(agent.userId, async tx => {
+    try {
+    return await this.prisma.withUser(agent.userId, async tx => {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
       const existing = await tx.agentHubRuntimeSession.findUnique({ where: { id: input.sessionId } });
       if (existing) {
@@ -71,6 +72,12 @@ export class AgentHubRuntimeRegistryService {
       });
       return dto(row, now.getTime());
     });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ConflictException("Сессия зарегистрирована конкурентно");
+      }
+      throw error;
+    }
   }
 
   private async mutate(agent: AgentContext, id: string, expectedRevision: number, closing: boolean): Promise<AgentHubRuntimeSession> {
@@ -82,7 +89,7 @@ export class AgentHubRuntimeRegistryService {
         where: { id, workspaceId: agent.workspaceId, tokenId: agent.tokenId }
       });
       if (!row) throw new NotFoundException("Сессия runtime не найдена");
-      if (row.revision !== expectedRevision || row.status !== "active" || row.expiresAt <= now) {
+      if (row.revision !== expectedRevision || row.status !== "active" || row.expiresAt.getTime() <= now.getTime()) {
         throw new ConflictException("Сессия неактивна или ревизия устарела");
       }
       const result = await tx.agentHubRuntimeSession.updateMany({
