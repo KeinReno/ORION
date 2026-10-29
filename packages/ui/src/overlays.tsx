@@ -589,6 +589,8 @@ export function Popover({
  *  - An editable surface (`isTypingTarget`) or a live text selection is left
  *    alone everywhere — no `preventDefault` at all — so native copy/paste
  *    and spellcheck keep working exactly as before.
+ *  - A caller that must offer its own actions on a selection (format commands
+ *    in the note editor) passes `includeTypingTarget` and owns that click.
  */
 
 interface ContextMenuState {
@@ -621,9 +623,19 @@ export function ContextMenuProvider({ children }: { children: ReactNode }): Reac
   );
 }
 
+export interface ContextMenuShowOptions {
+  /** Open on a text field or a selection. The caller replaces the native menu for that click. */
+  includeTypingTarget?: boolean;
+}
+
 /** Shared by `useContextMenu` and `useContextMenuApi` — see their doc comments for the composition rule. */
-function runContextMenu(api: ContextMenuApi | null, event: React.MouseEvent, items: (MenuItem | "separator")[] | null): void {
-  if (isNativeTextContext(event.target)) return;
+function runContextMenu(
+  api: ContextMenuApi | null,
+  event: React.MouseEvent,
+  items: (MenuItem | "separator")[] | null,
+  options?: ContextMenuShowOptions
+): void {
+  if (!options?.includeTypingTarget && isNativeTextContext(event.target)) return;
   event.preventDefault();
   if (!items || items.length === 0) return;
   event.stopPropagation();
@@ -653,9 +665,17 @@ export function useContextMenu(
  * inline — `onContextMenu={(e) => showContextMenu(e, itemsForRow(row))}`.
  * Same decline-to-bubble rule as `useContextMenu`.
  */
-export function useContextMenuApi(): (event: React.MouseEvent, items: (MenuItem | "separator")[] | null) => void {
+export function useContextMenuApi(): (
+  event: React.MouseEvent,
+  items: (MenuItem | "separator")[] | null,
+  options?: ContextMenuShowOptions
+) => void {
   const api = useContext(ContextMenuCtx);
-  return useCallback((event: React.MouseEvent, items: (MenuItem | "separator")[] | null) => runContextMenu(api, event, items), [api]);
+  return useCallback(
+    (event: React.MouseEvent, items: (MenuItem | "separator")[] | null, options?: ContextMenuShowOptions) =>
+      runContextMenu(api, event, items, options),
+    [api]
+  );
 }
 
 function ContextMenuSurface({ state, onClose }: { state: ContextMenuState | null; onClose: () => void }): React.ReactElement | null {
@@ -714,6 +734,8 @@ function ContextMenuSurface({ state, onClose }: { state: ContextMenuState | null
                 type="button"
                 role="menuitem"
                 disabled={item.disabled}
+                // Keep a CodeMirror selection: focusing the menu item would collapse it before onSelect.
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   onClose();
                   item.onSelect();

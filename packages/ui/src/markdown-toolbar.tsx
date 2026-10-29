@@ -60,9 +60,10 @@ const GROUPS: ToolbarItem[][] = [
  * a text name, so the toolbar is reachable without a mouse too.
  *
  * ORION-06: a narrow vertical rail by default (pinned beside the editor, so
- * scrolling a long note never hides it — AC1), `orientation="horizontal"` keeps
- * the original top-row layout for callers that still want it (none left in this
- * app, kept for the component's own flexibility). `shortcutLabels` is the live,
+ * scrolling a long note never hides it — AC1). `orientation="horizontal"` is
+ * the top row for a narrow detail column (project problems and ideas): it must
+ * be allowed to shrink (`min-w-0`) or its buttons become the column's minimum
+ * width and the editor text stops wrapping. `shortcutLabels` is the live,
  * rebind-aware tooltip text per command (`describeCombo` + the Shortcut Manager
  * override) — this component has no opinion on where that string comes from.
  */
@@ -85,7 +86,7 @@ export function MarkdownToolbar({
       aria-label="Форматирование"
       aria-orientation={orientation}
       className={clsx(
-        "orion-scroll flex items-center gap-0.5",
+        "orion-scroll flex min-w-0 max-w-full items-center gap-0.5",
         vertical ? "flex-col overflow-y-auto py-1" : "overflow-x-auto border-b border-border pb-1.5"
       )}
     >

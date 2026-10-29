@@ -94,13 +94,16 @@ const editorTheme = EditorView.theme(
     // No fixed height: the view grows with its content and the surrounding
     // panel scroll region (title + body + tags together) does the scrolling,
     // Obsidian-style — rather than a scrollbar boxed inside the editor.
-    "&": { color: "rgb(var(--orion-color-text, 244 244 245))", backgroundColor: "transparent", fontSize: "14px" },
+    // Fill the host. A sibling format rail must not become the column's minimum width
+    // (see the project capture board): otherwise the body wraps one glyph per line.
+    "&": { color: "rgb(var(--orion-color-text, 244 244 245))", backgroundColor: "transparent", fontSize: "14px", width: "100%" },
     "&.cm-focused": { outline: "none" },
     ".cm-scroller": {
       fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-      lineHeight: "1.65"
+      lineHeight: "1.65",
+      minWidth: "0"
     },
-    ".cm-content": { padding: "2px 0", caretColor: "#6366f1" },
+    ".cm-content": { padding: "2px 0", caretColor: "#6366f1", minWidth: "0" },
     ".cm-line": { padding: "0" },
     ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#6366f1" },
     "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
@@ -130,7 +133,13 @@ const editorTheme = EditorView.theme(
 /** Imperative handle for the formatting toolbar: it never touches CodeMirror itself. */
 export interface MarkdownEditorApi {
   format: (command: FormatCommand) => void;
+  /** Format a range captured earlier (a context-menu click may have moved the caret). */
+  formatRange: (command: FormatCommand, range: { from: number; to: number }) => void;
+  /** Replace a captured range. Used by cut/paste from the selection menu. */
+  replaceRange: (range: { from: number; to: number }, insert: string) => void;
   focus: () => void;
+  /** The main selection when it is non-empty. Offsets are into the current document. */
+  selection: () => { from: number; to: number; text: string } | null;
 }
 
 /**
@@ -205,32 +214,25 @@ function buildFormatKeymap(
   return bindings;
 }
 
-/**
- * The current selection's viewport rect, for the floating contextual toolbar. `coordsAtPos`
- * returns null for a position that isn't actually laid out (can happen mid-update) — treated the
- * same as "no selection" rather than risking a toolbar anchored at (0,0).
- */
-function selectionRect(view: EditorView): { top: number; bottom: number; left: number; right: number } | null {
-  const { from, to } = view.state.selection.main;
-  const start = view.coordsAtPos(from);
-  const end = view.coordsAtPos(to, -1);
-  if (!start || !end) return null;
-  return {
-    top: Math.min(start.top, end.top),
-    bottom: Math.max(start.bottom, end.bottom),
-    left: Math.min(start.left, end.left),
-    right: Math.max(start.right, end.right)
-  };
-}
-
 /** One undoable transaction: the replacement and the restored selection together. */
-function formatView(view: EditorView, command: FormatCommand): void {
-  const range = view.state.selection.main;
-  const result = applyFormat(view.state.doc.toString(), { from: range.from, to: range.to }, command);
+function formatView(view: EditorView, command: FormatCommand, range?: { from: number; to: number }): void {
+  const current = range ?? view.state.selection.main;
+  const result = applyFormat(view.state.doc.toString(), { from: current.from, to: current.to }, command);
   view.dispatch({
     changes: { from: result.from, to: result.to, insert: result.insert },
     selection: EditorSelection.range(result.anchor, result.head),
     userEvent: "input.format",
+    scrollIntoView: true
+  });
+  view.focus();
+}
+
+function replaceRange(view: EditorView, range: { from: number; to: number }, insert: string): void {
+  const caret = range.from + insert.length;
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert },
+    selection: EditorSelection.cursor(caret),
+    userEvent: "input",
     scrollIntoView: true
   });
   view.focus();
@@ -266,13 +268,6 @@ export interface MarkdownEditorProps {
   /** "Selection → task": fires with the trimmed selected text; a no-op binding if either half is missing. */
   convertToTaskCombo?: string;
   onConvertToTask?: (selectedText: string) => void;
-  /**
-   * The contextual selection toolbar (AC: "контекстное форматирование выделенного текста") lives
-   * one level up — this just reports what's selected and where, in viewport coordinates
-   * (`view.coordsAtPos`, ready to use directly in a `position: fixed` floating element). `null`
-   * means "nothing selected, hide the toolbar."
-   */
-  onSelectionChange?: (selection: { text: string; rect: { top: number; bottom: number; left: number; right: number } } | null) => void;
   /** Filled with the toolbar handle once the view exists; cleared on unmount. */
   apiRef?: MutableRefObject<MarkdownEditorApi | null>;
 }
@@ -298,7 +293,6 @@ export function MarkdownEditor({
   formatCombos,
   convertToTaskCombo,
   onConvertToTask,
-  onSelectionChange,
   apiRef
 }: MarkdownEditorProps): React.ReactElement {
   const host = useRef<HTMLDivElement>(null);
@@ -307,12 +301,10 @@ export function MarkdownEditor({
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
   const onConvertToTaskRef = useRef(onConvertToTask);
-  const onSelectionChangeRef = useRef(onSelectionChange);
   const wikiTargetsRef = useRef<string[]>(wikiLinkTargets ?? []);
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
   onConvertToTaskRef.current = onConvertToTask;
-  onSelectionChangeRef.current = onSelectionChange;
   wikiTargetsRef.current = wikiLinkTargets ?? [];
 
   function currentFormatKeymap(): KeyBinding[] {
@@ -355,29 +347,24 @@ export function MarkdownEditor({
         EditorView.editable.of(!readOnly),
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
-          if ((u.docChanged || u.selectionSet) && onSelectionChangeRef.current) {
-            const { from, to } = u.state.selection.main;
-            if (from === to) {
-              onSelectionChangeRef.current(null);
-            } else {
-              const rect = selectionRect(u.view);
-              onSelectionChangeRef.current(rect ? { text: u.state.sliceDoc(from, to), rect } : null);
-            }
-          }
-        }),
-        EditorView.domEventHandlers({
-          // A click away from the editor leaves the selection intact (so "format" still has a
-          // target) but the floating toolbar must go — it has nothing to anchor to anymore.
-          blur: () => {
-            onSelectionChangeRef.current?.(null);
-            return false;
-          }
         })
       ]
     });
     const instance = new EditorView({ state, parent: host.current });
     view.current = instance;
-    if (apiRef) apiRef.current = { format: (command) => formatView(instance, command), focus: () => instance.focus() };
+    if (apiRef) {
+      apiRef.current = {
+        format: (command) => formatView(instance, command),
+        formatRange: (command, range) => formatView(instance, command, range),
+        replaceRange: (range, insert) => replaceRange(instance, range, insert),
+        focus: () => instance.focus(),
+        selection: () => {
+          const { from, to } = instance.state.selection.main;
+          if (from === to) return null;
+          return { from, to, text: instance.state.sliceDoc(from, to) };
+        }
+      };
+    }
     if (autoFocus) instance.focus();
     return () => {
       if (apiRef) apiRef.current = null;

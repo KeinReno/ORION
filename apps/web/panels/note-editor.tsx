@@ -15,18 +15,22 @@ import {
   Select,
   cx,
   useContextMenu,
+  useContextMenuApi,
   useResizeWidth,
   markdownOutline,
   useToast,
   type FormatCommand,
-  type MarkdownEditorApi
+  type MarkdownEditorApi,
+  type MenuItem
 } from "@orion/ui";
 import {
   ArrowLeft,
   Archive,
   ArchiveRestore,
   Baseline,
+  Bold,
   ClipboardCopy,
+  Code,
   Copy,
   Download,
   FileStack,
@@ -34,8 +38,10 @@ import {
   Unlock,
   Hash,
   History,
+  Italic,
   Link2,
   List,
+  ListChecks,
   EyeOff,
   Eye,
   ExternalLink,
@@ -48,7 +54,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MutableRefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MouseEvent, type MutableRefObject } from "react";
 import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
 import { openPanel } from "../lib/panel-bus";
 import { buildPanelDragId } from "../lib/panel-drag";
@@ -70,7 +76,6 @@ import { useNotesToolbarPrefs } from "../lib/notes-toolbar-prefs";
 import { describeCombo } from "../lib/shortcuts/combo";
 import { useShortcutCombo, useShortcutCombos } from "../lib/shortcuts/registry";
 import { taskFieldsFromSelection } from "../lib/convert-selection-to-task";
-import { SelectionToolbar, type SelectionRect } from "./notes/selection-toolbar";
 
 type EditorMode = "edit" | "preview";
 
@@ -172,7 +177,7 @@ export function NoteEditor({
   const narrow = editorWidth > 0 && editorWidth < 420;
 
   // ORION-06 — the sticky formatting rail (AC1), the live rebind-aware combos it and the
-  // CodeMirror keymap both read from, and "selection → task" (contextual toolbar + Mod-Alt-T).
+  // CodeMirror keymap both read from, and "selection → task" (right-click on a selection + Mod-Alt-T).
   const toolbarPrefs = useNotesToolbarPrefs();
   const isMac = useMemo(() => isApplePlatform(), []);
   const formatCombos = useShortcutCombos([
@@ -192,7 +197,7 @@ export function NoteEditor({
   const convertToTaskCombo = useShortcutCombo("notes.convert-to-task");
   const createAndLink = useCreateAndLink(workspaceId);
   const captureInbox = useCaptureInboxItem(workspaceId);
-  const [selection, setSelection] = useState<{ text: string; rect: SelectionRect } | null>(null);
+  const showContextMenu = useContextMenuApi();
 
   async function convertSelectionToTask(selectedText: string): Promise<void> {
     if (!workspaceId) return;
@@ -215,6 +220,45 @@ export function NoteEditor({
       toast({ title: "Не удалось создать задачу", description: describeError(error), tone: "danger" });
     }
   }
+
+  function onSelectionContextMenu(event: MouseEvent): void {
+    if (mode !== "edit") return;
+    const selected = editorApi.current?.selection();
+    if (!selected || selected.text.trim() === "") return;
+    const range = { from: selected.from, to: selected.to };
+    const items: (MenuItem | "separator")[] = [
+      { label: "Жирный", icon: Bold, onSelect: () => editorApi.current?.formatRange("bold", range) },
+      { label: "Курсив", icon: Italic, onSelect: () => editorApi.current?.formatRange("italic", range) },
+      { label: "Код в строке", icon: Code, onSelect: () => editorApi.current?.formatRange("code", range) },
+      { label: "Ссылка", icon: Link2, onSelect: () => editorApi.current?.formatRange("link", range) },
+      "separator",
+      { label: "Выделенное — в задачу", icon: ListChecks, onSelect: () => void convertSelectionToTask(selected.text) },
+      "separator",
+      {
+        label: "Копировать",
+        icon: ClipboardCopy,
+        onSelect: () => void navigator.clipboard.writeText(selected.text).catch(() => toast({ title: "Не удалось скопировать", tone: "danger" }))
+      },
+      {
+        label: "Вырезать",
+        onSelect: () =>
+          void navigator.clipboard.writeText(selected.text).then(
+            () => editorApi.current?.replaceRange(range, ""),
+            () => toast({ title: "Не удалось вырезать", tone: "danger" })
+          )
+      },
+      {
+        label: "Вставить",
+        onSelect: () =>
+          void navigator.clipboard.readText().then(
+            (clip) => editorApi.current?.replaceRange(range, clip),
+            () => toast({ title: "Не удалось вставить", tone: "danger" })
+          )
+      }
+    ];
+    showContextMenu(event, items, { includeTypingTarget: true });
+  }
+
   // S11: the compose form (note === null) always saves explicitly via the
   // Create button and never autosaves, so it keeps the old plain
   // "compare current fields to what was last saved" dirty check. An
@@ -672,7 +716,10 @@ export function NoteEditor({
               ) : null}
               {/* Поле правки видно рамкой и фоном, а при фокусе подсвечивается;
                   в «Просмотре» рамки нет — там это уже не поле ввода. */}
-              <div className="min-w-0 flex-1 space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25">
+              <div
+                className="min-w-0 flex-1 space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25"
+                onContextMenu={onSelectionContextMenu}
+              >
                 <MarkdownEditor
                   apiRef={editorApi}
                   value={body}
@@ -684,7 +731,6 @@ export function NoteEditor({
                   formatCombos={formatCombosByCommand}
                   convertToTaskCombo={convertToTaskCombo}
                   onConvertToTask={(text) => void convertSelectionToTask(text)}
-                  onSelectionChange={setSelection}
                 />
               </div>
               {!narrow && !compact && !toolbarPrefs.hidden && toolbarPrefs.side === "right" ? (
@@ -704,14 +750,6 @@ export function NoteEditor({
           ) : (
             <p className="min-h-[18rem] text-body text-subtle-foreground">Пусто — переключитесь на «Правку».</p>
           )}
-          {mode === "edit" && selection ? (
-            <SelectionToolbar
-              rect={selection.rect}
-              onFormat={(command) => editorApi.current?.format(command)}
-              onConvertToTask={() => void convertSelectionToTask(selection.text)}
-            />
-          ) : null}
-
           <div className="flex flex-wrap items-center gap-1.5">
             {tags.map((tag) => (
               <span
