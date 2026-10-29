@@ -117,3 +117,13 @@ export async function superviseHabitat({
     await rm(lockfile, { force: true });
   }
 }
+
+/** Observation freshness is not process attestation or a remote online claim. */
+export async function readSupervisorStatus(config, now = Date.now()) {
+  const policy = validateSupervisorPolicy(config);
+  const state = await priorState(await stateDir(config));
+  if (!state) return { state: null, freshObservation: false };
+  const timestamp = Date.parse(state.lastPollAt ?? '');
+  const freshObservation = state.status === 'observing' && Number.isFinite(timestamp) && now >= timestamp && now - timestamp <= 2 * policy.pollMs;
+  return { state, freshObservation };
+}

@@ -88,3 +88,14 @@ test('abort interrupts polling interval and releases instance lock', async () =>
   const next = await superviseHabitat(args(config, { fetchImpl: ok }));
   assert.equal(next.status, 'stopped');
 });
+
+test('status is local observation, never proof of an online executor', async () => {
+  const { root, config } = await fixture();
+  const path = join(root, '.orion', 'habitat');
+  await mkdir(path, { recursive: true });
+  const time = new Date().toISOString();
+  await writeFile(join(path, 'supervisor.json'), JSON.stringify({ version: 1, sessionId: 'x', status: 'observing', lastPollAt: time }));
+  const { readSupervisorStatus } = await import('../src/supervisor.mjs');
+  assert.equal((await readSupervisorStatus(config)).freshObservation, true);
+  assert.equal((await readSupervisorStatus(config, Date.parse(time) + 30_000)).freshObservation, false);
+});

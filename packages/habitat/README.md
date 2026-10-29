@@ -48,6 +48,15 @@ node packages/habitat/src/cli.mjs run-hub --config C:\\private\\habitat.json --t
 - The evidence reference identifies a **local** hash-only receipt; the ORION server does not yet retrieve or verify it. It is not proof of correctness, and never sets the Task itself to done.
 - F2 is a **stacked draft PR**; this bridge has been unit-tested with a mocked HTTP server, not a migrated ORION database.
 
+## F3 observation supervisor (opt-in)
+
+The optional `supervise` command observes the existing Agent Hub queue with a scoped read-only token, records local session/last-poll state and diagnoses unclean restarts. It does **not** claim jobs, start an agent or advertise a verified online runtime. See [SUPERVISOR.md](SUPERVISOR.md) for setup and limitations.
+
+```powershell
+node packages/habitat/src/cli.mjs supervise --config C:\\private\\habitat.json --token-file C:\\private\\orion-agent-token.txt --acknowledge-monitoring
+node packages/habitat/src/cli.mjs supervisor-status --config C:\\private\\habitat.json
+```
+
 ## Explicit limitations
 
 - **Not an OS sandbox:** a spawned CLI keeps the local account's filesystem/network privileges, and a CLI can itself launch subprocesses. Do not run untrusted agents unattended with this prototype.
