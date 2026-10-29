@@ -63,7 +63,7 @@ node packages/habitat/src/cli.mjs supervisor-status --config C:\\private\\habita
 - On Windows the current single-process terminate/kill does not guarantee termination of a spawned process tree. A proper Windows Job Object/process-tree supervisor is required before unattended mode.
 - No capability proof, provider authentication check, official Codex/Claude flags, persistent daemon, lease scheduler, ORION runtime attestation, UI or remote transport is implemented.
 - `installed: true` means only that the executable file was found; it does **not** mean the provider subscription, login or API access is available.
-- This package is not a trusted authorization boundary for Agent Hub. It intentionally makes no authenticated HTTP calls and requires a local operator command.
+- This package is not an OS authorization boundary. Its explicit run-hub/observer commands make **scoped loopback HTTP calls** to Agent Hub using an agent token kept outside the spawned process. A human starts it, and runtime presence is not proof of process attestation.
 - User secrets, session tokens, CLI transcripts, project data, and personal paths must not be committed. Keep profile config local.
 
 See `docs/adr/ADR-0039-habitat-local-runner.md` for follow-up security gates.

@@ -166,3 +166,11 @@ This is NOT autonomous execution. The owner must initiate each local run and app
 - [ ] Full Prisma generation, DB migration, module-registry checks and integration tests (not run in connector).
 - [ ] Wire local supervisor's session lifecycle to register/pulse/close after server-side API validation.
 - [ ] Add tamper-resistant runtime attestation and restricted Windows process execution before unattended claims.
+
+## F3d — dedicated observation permission and local registry handshake (draft)
+
+- [x] Extend optional module manifest generator with declared additional permission resources and per-tool resource selection.
+- [x] Register `agent-hub.runtime.create` independently of `agent-hub.execution.create` so monitoring tokens cannot claim queued work.
+- [x] Add local loopback client and opt-in supervisor register/pulse/close handshake (never auto-executes a task).
+- [ ] Run module-registry, module-docs, lint, typecheck, integration tests on migrated ORION.
+- [ ] Complete explicit token revocation/presence invalidation and secure device attestation.

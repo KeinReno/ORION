@@ -173,6 +173,21 @@ export function collectModules(root = defaultRoot) {
       fail("permissions.primaryResource — строка вида [a-z_]+ (ресурс для реестра разрешений)");
     }
 
+    // Optional per-module resources keep operational permissions distinct from the primary data resource.
+    const additionalResources = manifest.permissions?.additionalResources ?? [];
+    if (!Array.isArray(additionalResources)) fail("permissions.additionalResources — массив");
+    else {
+      const resourceNames = new Set([manifest.permissions.primaryResource]);
+      for (const resource of additionalResources) {
+        if (typeof resource?.resource !== "string" || !/^[a-z_]+$/.test(resource.resource) || resourceNames.has(resource.resource) ||
+            !Array.isArray(resource.actions) || resource.actions.length === 0 ||
+            resource.actions.some((action) => !["read", "create", "update", "delete"].includes(action)) ||
+            new Set(resource.actions).size !== resource.actions.length) {
+          fail("permissions.additionalResources: уникальный resource и список допустимых действий");
+        } else resourceNames.add(resource.resource);
+      }
+    }
+
     const apiModule = manifest.api?.module;
     if (!apiModule || typeof apiModule.file !== "string" || typeof apiModule.export !== "string") fail("api.module = { file, export }");
     else {
@@ -270,6 +285,10 @@ export function collectModules(root = defaultRoot) {
       const label = `agent.tools "${tool?.name}"`;
       if (typeof tool?.name !== "string" || !tool.name.startsWith(toolPrefix) || !/^orion_[a-z_]+$/.test(tool.name)) fail(`${label}: имя вида ${toolPrefix}<действие>`);
       if (!AGENT_TOOL_OPS.includes(tool?.op)) fail(`${label}: op ∈ ${AGENT_TOOL_OPS.join(" | ")}`);
+      if (tool?.resource != null && tool.resource !== manifest.permissions?.primaryResource &&
+          !(Array.isArray(additionalResources) && additionalResources.some(item => item.resource === tool.resource && item.actions?.includes(tool.op)))) {
+        fail(`${label}: ресурс ${tool.resource} не объявлен в permissions.additionalResources`);
+      }
       if (typeof tool?.description !== "string" || tool.description === "") fail(`${label}: description обязателен`);
       const route = tool?.http;
       if (!["GET", "POST", "PATCH", "DELETE"].includes(route?.method) || typeof route?.path !== "string" || !route.path.startsWith(`/ai/v1/${id}/`)) {
@@ -347,6 +366,8 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
     defaultEnabled: m.manifest.catalog.defaultEnabled
   }));
   const resources = Object.fromEntries(modules.map((m) => [m.id, m.manifest.permissions.primaryResource]));
+  const additionalPermissionIds = modules.flatMap((m) => (m.manifest.permissions.additionalResources ?? [])
+    .flatMap((resource) => resource.actions.map((action) => `${m.id}.${resource.resource}.${action}`)));
   out.set(
     `${PATHS.sharedExt}/registry.generated.ts`,
     HEADER +
@@ -360,6 +381,8 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
       `export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = ${json(catalog)};\n\n` +
       `/** Основной ресурс модуля для реестра разрешений (\`<module>.<resource>.<action>\`). */\n` +
       `export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = ${json(resources)};\n` +
+      `\n/** Additional, explicitly declared capabilities of optional modules. */\n` +
+      `export const GENERATED_ADDITIONAL_PERMISSIONS: readonly string[] = ${json(additionalPermissionIds)};\n` +
       `\n/** Имена миграций модуля в порядке применения (G11): манифест компонента и \`GET system/components\` сверяют их с базой. */\n` +
       `export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = ${json(Object.fromEntries(modules.map((m) => [m.id, m.migrations.map((item) => item.name)])))};\n` +
       modules.map((m) => `\nexport * from "./${m.name}";`).join("") +
@@ -376,7 +399,7 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
       http: tool.http,
       input: tool.input,
       ...(tool.example ? { example: tool.example } : {}),
-      permission: `${m.id}.${m.primaryResource}.${tool.op}`,
+      permission: `${m.id}.${tool.resource ?? m.primaryResource}.${tool.op}`,
       moduleId: m.id
     }))
   );

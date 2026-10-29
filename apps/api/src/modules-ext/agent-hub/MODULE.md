@@ -39,3 +39,5 @@ See `docs/adr/ADR-0036-agent-hub-execution-foundation.md` and `docs/agent-hub/RO
 | Код на сервере | `apps/api/src/modules-ext/agent-hub/` |
 | При выключении | Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует. |
 <!-- generated:manifest:end -->
+
+F3d note: runtime register/pulse/close require dedicated `agent-hub.runtime.create`, not `agent-hub.execution.create`. A presence observer must never inherit worker claim rights.

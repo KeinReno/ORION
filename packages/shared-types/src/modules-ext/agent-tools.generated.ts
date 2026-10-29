@@ -158,7 +158,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
       ],
       "additionalProperties": false
     },
-    "permission": "agent-hub.execution.create",
+    "permission": "agent-hub.runtime.create",
     "moduleId": "agent-hub"
   },
   {
@@ -189,7 +189,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
       ],
       "additionalProperties": false
     },
-    "permission": "agent-hub.execution.create",
+    "permission": "agent-hub.runtime.create",
     "moduleId": "agent-hub"
   },
   {
@@ -220,7 +220,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
       ],
       "additionalProperties": false
     },
-    "permission": "agent-hub.execution.create",
+    "permission": "agent-hub.runtime.create",
     "moduleId": "agent-hub"
   },
   {

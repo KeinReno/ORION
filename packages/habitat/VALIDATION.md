@@ -11,3 +11,5 @@ This file tracks `packages/habitat` and does not replace the Agent Hub roadmap.
 **Merge gates:** package tests on Windows, full `pnpm typecheck`, `pnpm lint`, `pnpm test`, architecture checks, F0–F2 tests and migrated DB integration tests. No secrets or local personal paths in Git.
 
 **F3 observation supervisor (draft):** local-only session id and state, atomic observation updates, exclusive lock, explicit opt-in, loopback GET queue, no autonomous claim. 8 isolated Node v22 unit tests pass with stub imports/mock HTTP. Windows service and ORION-integrated checks still outstanding. See SUPERVISOR.md and ADR-0040.
+
+**F3d isolated Node checks (2026-10-29):** 14 passing tests, 0 failing on Node v22/Linux using mocked F2/F3c HTTP and lightweight local dependency stubs. They cover runtime register/pulse/close, registration refusal, denial of remote HTTP and status persistence. Full ORION/database/Windows checks have not run.
