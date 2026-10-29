@@ -6,12 +6,25 @@ import type { SyncClassification } from "../sync/sync-classification";
 
 /** GET-маршрут модуля внутри пространства (`/workspaces/:id` + путь): матричные тесты включения/выключения опрашивают его. */
 export const GENERATED_MODULE_PROBES: Record<string, string> = {
+  "agent-hub": "/agent-hub/executions",
   "chat-archive": "/chat-archive/conversations",
   "pet-care": "/pet-care/pets"
 };
 
 /** Политика снапшота моделей подключаемых модулей (в `SNAPSHOT_MODEL_REGISTRY`). */
 export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
+  {
+    "model": "AgentHubExecution",
+    "snapshotKey": "agentHubExecutions",
+    "policy": "included",
+    "reason": "Исполнение — пользовательское долговременное состояние; требуется для восстановления очереди и контрольных точек."
+  },
+  {
+    "model": "AgentHubEvent",
+    "snapshotKey": "agentHubEvents",
+    "policy": "included",
+    "reason": "Неподменяемая история состояния исполнения; события идут после связанных исполнений."
+  },
   {
     "model": "ChatArchiveConversation",
     "snapshotKey": null,
@@ -58,6 +71,8 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
 
 /** Делегаты для снапшота; порядок — «родитель раньше ребёнка» (в `SNAPSHOT_MODELS`). */
 export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prisma.TransactionClient) => unknown }> = [
+  { key: "agentHubExecutions", delegate: (tx) => tx.agentHubExecution },
+  { key: "agentHubEvents", delegate: (tx) => tx.agentHubEvent },
   { key: "chatArchiveAutoSources", delegate: (tx) => tx.chatArchiveAutoSource },
   { key: "petCarePets", delegate: (tx) => tx.petCarePet },
   { key: "petCareEntries", delegate: (tx) => tx.petCareEntry },
@@ -67,6 +82,16 @@ export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prism
 
 /** Класс гибридной синхронизации моделей подключаемых модулей (в `SYNC_CLASSIFICATION`). */
 export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
+  "AgentHubExecution": {
+    "syncClass": "not-synced",
+    "stage": "later",
+    "note": "Исполнительские leases и переходы должны координироваться единым узлом; гибридная репликация пока не разрешена."
+  },
+  "AgentHubEvent": {
+    "syncClass": "append-only",
+    "stage": "later",
+    "note": "После завершения конфликтов синхронизации нужен отдельный протокол консенсуса; текущий источник — локальный хозяин."
+  },
   "ChatArchiveConversation": {
     "syncClass": "not-synced",
     "stage": "never",
