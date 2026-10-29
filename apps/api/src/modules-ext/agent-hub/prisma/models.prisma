@@ -1,0 +1,45 @@
+/// A durable execution attempt, distinct from the existing Task and AgentJob records.
+model AgentHubExecution {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  targetKind    String
+  targetId      String
+  status        String   @default("queued")
+  revision      Int      @default(0)
+  attempt       Int      @default(0)
+  workerId      String?
+  runtimeId     String?
+  leaseUntil    DateTime?
+  checkpointRef String?
+  evidenceRefs  Json     @default("[]")
+  verifiedBy    String?
+  blockedReason String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    AgentHubEvent[]
+
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, targetKind, targetId])
+  @@map("agent_hub_executions")
+}
+
+/// Append-only execution log; unique (executionId, revision) guards duplicate commits.
+model AgentHubEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  executionId String
+  revision    Int
+  action      String
+  actorId     String
+  data        Json     @default("{}")
+  at          DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  execution AgentHubExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, revision])
+  @@index([workspaceId, executionId])
+  @@map("agent_hub_events")
+}

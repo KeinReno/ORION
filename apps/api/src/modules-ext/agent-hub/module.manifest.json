@@ -1,0 +1,86 @@
+{
+  "id": "agent-hub",
+  "version": "1.0.0",
+  "catalog": {
+    "kind": "additional",
+    "required": false,
+    "label": "Agent Hub",
+    "summary": "История и жизненный цикл исполнений задач агентами. Первый срез: долговременная очередь, события, отмена и просмотр.",
+    "owns": "Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.",
+    "livesWithout": "Работает как журнал и очередь без запущенных агентов; не требует облачного inference API или открытой IDE.",
+    "provides": [
+      "Панель исполнений и состояний",
+      "Создание исполнения для существующей задачи",
+      "Отмена исполнения владельцем/руководителем",
+      "История изменений с ревизиями"
+    ],
+    "optionalDependencies": [
+      "tasks"
+    ],
+    "disableBehavior": "Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует.",
+    "panelId": "agent-hub",
+    "defaultEnabled": false
+  },
+  "permissions": {
+    "primaryResource": "execution"
+  },
+  "api": {
+    "module": {
+      "file": "agent-hub.module",
+      "export": "AgentHubModule"
+    },
+    "probePath": "/agent-hub/executions"
+  },
+  "web": {
+    "panel": {
+      "id": "agent-hub",
+      "label": "Agent Hub",
+      "icon": "Network",
+      "group": "Инструменты",
+      "file": "AgentHubPanel",
+      "export": "AgentHubPanel"
+    }
+  },
+  "prisma": {
+    "fragment": "prisma/models.prisma",
+    "workspaceBackRelations": [
+      "  agentHubExecutions AgentHubExecution[]",
+      "  agentHubEvents AgentHubEvent[]"
+    ],
+    "migrations": [
+      {
+        "name": "20261029202000_agent_hub_executions",
+        "file": "prisma/migration.sql",
+        "rls": "workspace-member"
+      }
+    ]
+  },
+  "data": {
+    "models": [
+      {
+        "model": "AgentHubExecution",
+        "delegate": "agentHubExecution",
+        "snapshotKey": "agentHubExecutions",
+        "snapshotPolicy": "included",
+        "reason": "Исполнение — пользовательское долговременное состояние; требуется для восстановления очереди и контрольных точек.",
+        "sync": {
+          "syncClass": "not-synced",
+          "stage": "later",
+          "note": "Исполнительские leases и переходы должны координироваться единым узлом; гибридная репликация пока не разрешена."
+        }
+      },
+      {
+        "model": "AgentHubEvent",
+        "delegate": "agentHubEvent",
+        "snapshotKey": "agentHubEvents",
+        "snapshotPolicy": "included",
+        "reason": "Неподменяемая история состояния исполнения; события идут после связанных исполнений.",
+        "sync": {
+          "syncClass": "append-only",
+          "stage": "later",
+          "note": "После завершения конфликтов синхронизации нужен отдельный протокол консенсуса; текущий источник — локальный хозяин."
+        }
+      }
+    ]
+  }
+}
