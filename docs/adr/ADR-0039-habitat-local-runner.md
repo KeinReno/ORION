@@ -1,7 +1,7 @@
 # ADR-0039 — KAIDEN Habitat local process host (PROPOSED)
 
 **Date:** 2026-10-29  
-**Status:** Prototype in `feature/kaiden-habitat-f3-local-host-20261029`; no Agent Hub wiring, no Windows installer.  
+**Status:** Prototype in `feature/kaiden-habitat-f3-local-host-20261029`; draft local operator-initiated loopback Agent Hub F2 bridge; no unattended service or Windows installer.  
 **Parent decisions:** ADR-0036 execution, ADR-0037 durable queue, ADR-0038 manual MCP.
 
 ## Decision
@@ -28,9 +28,9 @@ Provider adapters (Codex CLI, Claude Code CLI, Cursor) must verify their officia
 
 ## Tests and observability
 
-`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Seven local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
+`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Eleven local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
 
-The existing Agent Hub F2 claims are token-bound manual-MCP. They remain separate from this runtime package. Linking them requires a mutually authenticated local bridge whose credentials and scope are provisioned by a human, not a bearer token copied into a generic runtime environment.
+A human-operated `run-hub` CLI now integrates the draft F2 claim/start/report REST API over **loopback HTTP only** using a separate, locally permissioned agent-token file. The token is used for HTTP requests, never passed into the child environment. This is a narrow manual bridge, **not** runtime attestation or autonomous dispatch. Cross-machine access requires a separate authenticated encrypted transport; plaintext remote HTTP is prohibited.
 
 ## Follow-up gates
 

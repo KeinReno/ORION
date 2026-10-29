@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 import { loadConfig, probeProfiles, runApprovedProfile, saveReceipt } from './habitat.mjs';
+import { runAgentHubExecution } from './agent-hub-bridge.mjs';
+import { readFile, stat } from 'node:fs/promises';
+
+async function readAgentToken(file) {
+  const info = await stat(file);
+  if (!info.isFile() || info.size < 1 || info.size > 4096) throw Error('Invalid token file');
+  if (process.platform !== 'win32' && (info.mode & 0o077) !== 0) throw Error('Token file readable by other users');
+  const token = (await readFile(file, 'utf8')).split(/\r?\n/, 1)[0].trim();
+  if (!token.startsWith('orion_agt_')) throw Error('Invalid agent token');
+  return token;
+}
 
 function opts(argv) {
   const parsed = { command: argv[0] };
@@ -16,12 +27,21 @@ function opts(argv) {
 
 try {
   const args = opts(process.argv.slice(2));
-  if (!['probe', 'run'].includes(args.command) || !args.config) {
-    throw Error('Usage: habitat probe --config /path/config.json | habitat run --config /path/config.json --profile NAME --workdir DIR --task-file FILE --acknowledge-local-execution');
+  if (!['probe', 'run', 'run-hub'].includes(args.command) || !args.config) {
+    throw Error('Usage: habitat probe --config FILE | habitat run --config FILE --profile ID --workdir DIR --task-file FILE --acknowledge-local-execution | habitat run-hub --config FILE --token-file FILE --execution-id ID --profile ID --workdir DIR --task-file FILE --acknowledge-local-execution');
   }
   const config = await loadConfig(args.config);
   if (args.command === 'probe') {
     console.log(JSON.stringify(await probeProfiles(config), null, 2));
+  } else if (args.command === 'run-hub') {
+    if (!args['token-file'] || !args['execution-id'] || !args.profile || !args.workdir || !args['task-file']) throw Error('Missing --token-file, --execution-id, --profile, --workdir or --task-file');
+    const token = await readAgentToken(args['token-file']);
+    const result = await runAgentHubExecution({
+      config, token, executionId: args['execution-id'], apiUrl: args['api-url'] ?? 'http://127.0.0.1:4000',
+      profileId: args.profile, workdir: args.workdir, taskFile: args['task-file'], acknowledged: args.acknowledged
+    });
+    console.log(JSON.stringify({ execution: result.execution, receipt: result.receipt, receiptFile: result.receiptFile }, null, 2));
+    if (result.execution.status !== 'review') process.exitCode = 1;
   } else {
     if (!args.profile || !args.workdir || !args['task-file']) throw Error('Missing --profile, --workdir or --task-file');
     const receipt = await runApprovedProfile({
