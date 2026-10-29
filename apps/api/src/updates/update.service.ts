@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -300,15 +300,23 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       });
       // BOM — чтобы PowerShell 5.1 прочитал кириллицу в путях как UTF-8.
       fs.writeFileSync(scriptPath, String.fromCharCode(0xfeff) + script, "utf8");
-      // Запуск через `cmd /c start /B`: PowerShell, запущенный напрямую с `detached`, тихо завершается, не выполнив скрипт, а
-      // запущенный без `detached` умирает вместе с родителем (проверено на установленной программе). Через `start` скрипт
-      // становится независимым процессом и переживает остановку API.
-      const child = spawn("cmd.exe", ["/c", "start", "", "/B", "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true
-      });
-      child.unref();
+      // The apply script's own first act is to stop `orion-desktop.exe` — but that process owns a Windows
+      // Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (apps/desktop/src-tauri/src/main.rs,
+      // `bind_launcher_lifetime`, added to stop orphaned node/postgres processes surviving a crash).
+      // Windows nests every descendant into that same job by default — including a `cmd /c start`-detached
+      // PowerShell child of this API process — so the moment the script's own `Stop-Process -Name
+      // 'orion-desktop'` line runs, the whole job closes and kills the script along with it, one line in.
+      // Observed in practice: apply-update.log stops dead after "обновление: старт", every time.
+      // Launching through the Task Scheduler sidesteps this entirely: the script then runs as a child of
+      // the Task Scheduler service, never a descendant of this process or its job, so it survives
+      // `orion-desktop.exe` dying by construction rather than by hoping a detach trick isn't swept up too.
+      const taskName = `OrionApplyUpdate_${Date.now()}`;
+      const run = promisify(execFile);
+      await run("schtasks.exe", ["/create", "/tn", taskName, "/tr", `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`, "/sc", "once", "/st", "23:59", "/f"], { windowsHide: true });
+      await run("schtasks.exe", ["/run", "/tn", taskName], { windowsHide: true });
+      // The task has already fired by the time /run returns; deleting its definition doesn't touch the
+      // now-independent running script. Best-effort only — a failed cleanup must never undo the update.
+      run("schtasks.exe", ["/delete", "/tn", taskName, "/f"], { windowsHide: true }).catch(() => {});
       this.status = { ...this.status, state: "applying" };
       this.logger.warn(`Запущено применение обновления ${this.downloaded.tag}`);
       return { started: true };
