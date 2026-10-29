@@ -1,7 +1,7 @@
 # Agent Hub — local AI context
 
 Read docs/PLATFORM.md, ORION_CONSTITUTION.md, docs/AI_REFACTOR_MIGRATION_MAP.md,
-docs/AGENT_HUB_ARCHITECTURE.md and this MODULE.md before modifying this area.
+docs/AGENT_HUB_ARCHITECTURE.md and docs/agent-hub/MODULE.md before modifying this area.
 
 Only stable public types are imported from @orion/shared-types. Do not wire
 Agent Hub directly to apps/api/src/ai/agent-jobs.service.ts; create an explicit

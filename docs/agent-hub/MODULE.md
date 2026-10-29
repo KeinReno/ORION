@@ -1,7 +1,6 @@
 # Agent Hub — module passport (foundation branch)
 
-**State:** NOT REGISTERED / NOT ENABLED. The code in this directory is an initial,
-framework-free lifecycle policy, not a running orchestrator.
+**State:** NOT REGISTERED / NOT ENABLED. This directory holds a module proposal, not a running orchestrator.
 
 **Owner:** optional Agent Hub module (domain coordination). It is not Core and
 must not directly import concrete Tasks, Projects, Chat Archive or IDE internals.
@@ -22,7 +21,7 @@ must not directly import concrete Tasks, Projects, Chat Archive or IDE internals
 
 - agent-hub-lifecycle.ts — pure, deterministic execution transition policy.
 - agent-hub-lifecycle.test.ts — revision, lease, checkpoint, review and terminal guards.
-- packages/shared-types/src/agent-hub.ts — public serialized contract.
+- agent-hub.ts — public serialized contract.
 
 ## Next integration wave (NOT implemented by this branch)
 

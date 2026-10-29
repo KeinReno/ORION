@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentHubCommandSchema, agentHubExecutionSchema, type AgentHubExecution } from "@orion/shared-types";
+import { agentHubCommandSchema, agentHubExecutionSchema, type AgentHubExecution } from "./agent-hub";
 import { AgentHubTransitionError, createAgentHubExecution, transitionAgentHubExecution } from "./agent-hub-lifecycle";
 
 const t0 = "2026-10-29T10:00:00.000Z";

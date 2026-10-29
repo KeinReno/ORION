@@ -2,7 +2,7 @@ import {
   type AgentHubCommand,
   type AgentHubExecution,
   type AgentHubTarget
-} from "@orion/shared-types";
+} from "./agent-hub";
 
 export type AgentHubTransitionErrorCode =
   | "stale_revision"

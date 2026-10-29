@@ -1,7 +1,7 @@
 # ADR-0036 — Agent Hub execution foundation (PROPOSED)
 
 **Date:** 2026-10-29
-**Status:** Proposed; initial contract and pure transition policy in feature branch.
+**Status:** Proposed; initial contract and pure transition policy in feature branch. Module registration deferred until the first functional vertical slice.
 **Governance:** docs/PLATFORM.md, ORION_CONSTITUTION.md, docs/AGENT_HUB_ARCHITECTURE.md.
 **Scope:** only Agent Hub foundation. No modification of existing AI Bridge behavior.
 
@@ -78,5 +78,5 @@ create an Extension Proposal rather than importing another module's internals.
 7. In a manual-MCP-only environment, dispatch correctly reports unsupported
    instead of silently pretending to start an IDE.
 
-Current branch delivers item 1 code and test source only; tests still require
+Current branch delivers item 1 code and test source under shared-types only; the Agent Hub module is not registered. Tests still require
 a full repository install/CI run. It does not claim items 2-7 completed.
