@@ -143,3 +143,16 @@ test('Windows selects only the operator-configured Job Object host and fixed CLI
   assert.equal(receipt.runtime, 'windows-job-object');
   assert.equal(receipt.verified, false);
 });
+
+
+test('Windows rejects a configured but missing native host before launching any CLI', async () => {
+  const e = await environment();
+  const config = configOf(e.root);
+  config.profiles[0].windowsHost = join(e.root, 'missing-habitat-windows-host.exe');
+  let spawned = false;
+  await rejectsCode(runApprovedProfile({
+    config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile,
+    acknowledged: true, platform: 'win32', spawnImpl: () => { spawned = true; }
+  }), 'windows_job_host_missing');
+  assert.equal(spawned, false);
+});

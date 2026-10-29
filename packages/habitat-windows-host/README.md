@@ -41,7 +41,7 @@ Habitat on Windows now refuses the `run` and `run-hub` profile commands unless `
 3. Call `CreateProcessW` with `CREATE_SUSPENDED`, so no CLI instructions execute yet.
 4. Call `AssignProcessToJobObject`; **do not resume if this fails**.
 5. Resume the CLI; stream the bounded task input; wait for the process to exit.
-6. Close the Job Object handle. Remaining processes in its job are terminated, including on native host process termination.
+6. Close the Job Object handle. Remaining **job-associated** processes are terminated, including on native host process termination.
 
 The Node caller still imposes a timeout/abort. It records only output hashes, byte counts and a receipt with `verified=false`. A successful process exit can only lead to Agent Hub `review`, never `done`.
 
@@ -58,7 +58,7 @@ This script verifies stdin transport, Windows argv quoting with Unicode and embe
 ## Outstanding limitations (do not enable unattended execution)
 
 - The host has **not been compiled or tested on Windows** in the GitHub connector environment. The source and native P/Invoke structs require a genuine Windows build and integration smoke.
-- Windows Job Objects group processes but **do not restrict file, network or registry access**. Run under a dedicated, low-privilege account and restrict the worktree before permitting untrusted input.
+- Windows Job Objects group processes but **do not restrict file, network or registry access**. Some process-creation mechanisms, including WMI Win32_Process.Create, do not automatically join the parent's job. Do not treat this as a hostile-code sandbox or a guarantee that every possible descendant is contained. Run under a dedicated, low-privilege account and restrict the worktree before permitting untrusted input.
 - This host inherits the parent account's security context and environment. Native code signing and binary hash pinning are not yet implemented.
 - A spawned CLI can itself have provider-specific licensing or login requirements. Detecting an executable file is not proof of authorization.
 - Restrict or forbid provider implementations that deliberately break away from jobs; confirm target/provider behavior on Windows.
