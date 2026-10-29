@@ -1,0 +1,75 @@
+# KAIDEN Habitat — local approved process host (F3 alpha)
+
+**State: local operator prototype, with an explicit loopback bridge to Agent Hub F2 API; not installed as a Windows service.** Works with Node.js 20+ and has no external dependencies. The Windows beta bundles the CLI source, Node runtime and native Job Object host; the operator must still create a private config and token file and explicitly start each run.
+
+Habitat is a local human-operated process runner. It probes whether preconfigured executable paths exist **without starting them**. It can run one explicitly selected, locally approved profile only when `config.enabled`, `profile.approved`, and the command-line acknowledgement are all present. It never accepts a command, arbitrary arguments or a shell string from an LLM, MCP message or remote HTTP request.
+
+## Local configuration (illustrative — do not commit personal paths or secrets)
+
+```json
+{
+  "version": 1,
+  "enabled": false,
+  "workspaceRoot": "C:\\work\\ORION",
+  "profiles": [
+    {
+      "id": "local-cli",
+      "executable": "C:\\Path\\to\\trusted-cli.exe",
+      "args": ["verified", "provider", "flags"],
+      "windowsHost": "C:\\Path\\to\\Kaiden.Habitat.WindowsHost.exe",
+      "approved": false,
+      "timeoutMs": 600000
+    }
+  ]
+}
+```
+
+Save this configuration locally outside the repository. Use **absolute paths** for binaries, working directories and task files. Executables and flags must be verified for each provider before approval.
+In the Windows installer, `node.exe`, `habitat/src/cli.mjs` and `habitat/Kaiden.Habitat.WindowsHost.exe` are under the installed `runtime` resource directory. Set `windowsHost` to the exact installed host path. The package does not enable Habitat or provision a token.
+
+```powershell
+node packages/habitat/src/cli.mjs probe --config C:\private\habitat.json
+node packages/habitat/src/cli.mjs run --config C:\private\habitat.json --profile local-cli --workdir C:\work\ORION --task-file C:\work\ORION\task.txt --acknowledge-local-execution
+node --test packages/habitat/test/*.test.mjs
+```
+
+Execution streams the task content over stdin, with a fixed executable and fixed arguments, no shell. It restricts the working directory and task-file path using canonical filesystem paths and a maximum task size of 64 KiB. Timeout is bounded to 60 minutes. It collects only SHA-256 hashes and output byte counts, **not raw output or transcript content**. A receipt is saved under `.orion/habitat-receipts` in the chosen workspace. A receipt is **not proof of correctness**, and never auto-marks an Agent Hub task done.
+
+## Optional loopback bridge to Agent Hub (F2)
+
+The separate `run-hub` command binds one **human-selected queued execution** to one approved local CLI profile:
+
+```powershell
+node packages/habitat/src/cli.mjs run-hub --config C:\\private\\habitat.json --token-file C:\\private\\orion-agent-token.txt --execution-id 00000000-0000-4000-8000-000000000001 --profile local-cli --workdir C:\\work\\ORION --task-file C:\\work\\ORION\\task.txt --acknowledge-local-execution
+```
+
+- The token file contains only the ORION agent token. On POSIX its permissions must restrict group/other reads. On Windows use private NTFS ACLs.
+- User must enable the Agent Hub module and provision a token authorized for `tasks:read`, `agent-hub.execution.read`, `agent-hub.execution.create`; project fences remain enforced by the server.
+- Only `http://127.0.0.1`, `http://localhost` or `http://[::1]` is accepted. Remote HTTP endpoints are refused so the bearer token is not transmitted in cleartext off-device.
+- The bridge checks local approval **before contacting ORION**, then claims the chosen execution, starts it, heartbeats while the local process runs, and reports `review` (exit code 0) or `failed` (nonzero exit).
+- The evidence reference identifies a **local** hash-only receipt; the ORION server does not yet retrieve or verify it. It is not proof of correctness, and never sets the Task itself to done.
+- F2 is a **stacked draft PR**; this bridge has been unit-tested with a mocked HTTP server, not a migrated ORION database.
+
+## F3 observation supervisor (opt-in)
+
+The optional `supervise` command observes the existing Agent Hub queue with a scoped read-only token, records local session/last-poll state and diagnoses unclean restarts. It does **not** claim jobs, start an agent or advertise a verified online runtime. See [SUPERVISOR.md](SUPERVISOR.md) for setup and limitations.
+
+```powershell
+node packages/habitat/src/cli.mjs supervise --config C:\\private\\habitat.json --token-file C:\\private\\orion-agent-token.txt --acknowledge-monitoring
+node packages/habitat/src/cli.mjs supervisor-status --config C:\\private\\habitat.json
+```
+
+## Windows process-tree host (F3e, draft)
+
+Windows profile execution now requires a separately built .NET Job Object host, specified by the operator as `profiles[].windowsHost`. Without it, `run` / `run-hub` refuse to start a CLI on Windows. The native host creates the child suspended, attaches its Job Object and only then resumes it; it does not sandbox file/network access. See `packages/habitat-windows-host/README.md`. The native Windows host is **not compiled or smoke-tested yet**.
+
+## Explicit limitations
+
+- **Not an OS sandbox:** a spawned CLI keeps the local account's filesystem/network privileges, and a CLI can itself launch subprocesses. Do not run untrusted agents unattended with this prototype.
+- On Windows the optional native host creates the child suspended, assigns it to a Job Object and kills job-associated descendants when the host exits. This was smoke-tested on Windows; it does not restrict filesystem/network privileges or catch every possible external process-creation mechanism.
+- No capability proof, provider authentication check, official Codex/Claude flags, persistent daemon, lease scheduler, ORION runtime attestation, UI or remote transport is implemented.
+- `installed: true` means only that the executable file was found; it does **not** mean the provider subscription, login or API access is available.
+- This package is not an OS authorization boundary. Its explicit run-hub/observer commands make **scoped loopback HTTP calls** to Agent Hub using an agent token kept outside the spawned process. A human starts it, and runtime presence is not proof of process attestation.
+- User secrets, session tokens, CLI transcripts, project data, and personal paths must not be committed. Keep profile config local.
+
+See `docs/adr/ADR-0039-habitat-local-runner.md` for follow-up security gates.

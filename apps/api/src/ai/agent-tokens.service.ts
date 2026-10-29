@@ -24,7 +24,6 @@ import {
   type AgentMessage,
   type AgentMode,
   type AgentPeer,
-  type AgentPolicySubject,
   type SendAgentMessageInput,
   type AgentPermissions,
   type AgentScope,
@@ -39,6 +38,8 @@ import { loadNodeConfig } from "../lan/node-config";
 import { NotificationCenterService } from "../notifications/notification-center.service";
 import { AgentPresenceService, objectOfResource, presenceActivity } from "./agent-presence.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import type { AgentContext } from "./public/agent-context";
+export type { AgentContext } from "./public/agent-context";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** `lastUsedAt` is a hint, not a log: don't write on every call. */
@@ -91,21 +92,6 @@ const NON_MATRIX_SCOPES: AgentScope[] = ["agents:message", "agents:delegate", "l
 const DENIAL_SERIES = 5;
 const DENIAL_WINDOW_MS = 10 * 60_000;
 const HOUR_MS = 60 * 60_000;
-
-/** What an authenticated agent request carries: whose rights, where, and for what. */
-export interface AgentContext extends AgentPolicySubject {
-  tokenId: string;
-  tokenName: string;
-  workspaceId: string;
-  /** The member the token acts as — every service call runs with this user's RLS context. */
-  userId: string;
-  scopes: AgentScope[];
-  /** Разрешения реестра для инструментов модулей (G13); в БД лежат в той же колонке `scopes`. */
-  modulePermissions: string[];
-  allowedProjectIds: string[];
-  writeLimitPerHour: number | null;
-  autoCommitProjectIds: string[];
-}
 
 /** What a call leaves in the journal besides method and status (TZ-03 section 3.4). */
 export interface AuditMeta {

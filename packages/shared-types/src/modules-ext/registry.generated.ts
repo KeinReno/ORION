@@ -3,12 +3,16 @@
 
 /** Идентификаторы модулей, подключённых манифестом; ядро дописывает их в закрытый `z.enum` (modules.ts). */
 export const GENERATED_MODULE_IDS = [
+  "agent-hub",
   "chat-archive",
   "pet-care"
 ] as const;
 
 import type { ComponentMetadata } from "../component-manifest";
 export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = {
+  "agent-hub": {
+    "version": "1.0.0"
+  },
   "chat-archive": {
     "version": "1.0.0"
   },
@@ -35,6 +39,28 @@ export interface GeneratedModuleCatalogEntry {
 
 /** Записи каталога модулей; `MODULE_CATALOG` добавляет их к встроенным. */
 export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = [
+  {
+    "id": "agent-hub",
+    "kind": "additional",
+    "required": false,
+    "label": "Agent Hub",
+    "summary": "История и жизненный цикл исполнений задач агентами. Первый срез: долговременная очередь, события, отмена и просмотр.",
+    "owns": "Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.",
+    "livesWithout": "Работает как журнал и очередь без запущенных агентов; не требует облачного inference API или открытой IDE.",
+    "provides": [
+      "Панель исполнений и состояний",
+      "Создание исполнения для существующей задачи",
+      "Отмена исполнения владельцем/руководителем",
+      "История изменений с ревизиями",
+      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности"
+    ],
+    "optionalDependencies": [
+      "tasks"
+    ],
+    "disableBehavior": "Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует.",
+    "panelId": "agent-hub",
+    "defaultEnabled": true
+  },
   {
     "id": "chat-archive",
     "kind": "additional",
@@ -78,12 +104,22 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
 
 /** Основной ресурс модуля для реестра разрешений (`<module>.<resource>.<action>`). */
 export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = {
+  "agent-hub": "execution",
   "chat-archive": "conversation",
   "pet-care": "pet"
 };
 
+/** Additional, explicitly declared capabilities of optional modules. */
+export const GENERATED_ADDITIONAL_PERMISSIONS: readonly string[] = [
+  "agent-hub.runtime.create"
+];
+
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
+  "agent-hub": [
+    "20261029202000_agent_hub_executions",
+    "20261029223000_agent_hub_runtime_sessions"
+  ],
   "chat-archive": [
     "20261020222504_chat_archive",
     "20261028120000_chat_archive_auto_source"
@@ -95,5 +131,6 @@ export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[n
   ]
 };
 
+export * from "./agent-hub";
 export * from "./chat-archive";
 export * from "./pet-care";
