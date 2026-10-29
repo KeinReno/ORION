@@ -111,3 +111,45 @@ test('operator can abort process and the result is never a completion claim', as
   assert.equal(result.outcome, 'stopped');
   assert.equal(result.verified, false);
 });
+
+
+test('Windows refuses uncontained launch before a process is spawned', async () => {
+  const e = await environment();
+  const config = configOf(e.root);
+  let called = false;
+  await rejectsCode(runApprovedProfile({
+    config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile,
+    acknowledged: true, platform: 'win32', spawnImpl: () => { called = true; }
+  }), 'windows_job_host_required');
+  assert.equal(called, false);
+});
+
+test('Windows selects only the operator-configured Job Object host and fixed CLI argv', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { PassThrough } = await import('node:stream');
+  const e = await environment();
+  const config = configOf(e.root);
+  config.profiles[0].windowsHost = process.execPath;
+  let observed;
+  const spawnImpl = (exe, argv, opts) => {
+    observed = { exe, request: JSON.parse(Buffer.from(argv[0], 'base64').toString('utf8')), opts };
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(() => { child.stdout.end(); child.stderr.end(); child.emit('close', 0, null); });
+    return child;
+  };
+  const receipt = await runApprovedProfile({
+    config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile,
+    acknowledged: true, platform: 'win32', spawnImpl
+  });
+  assert.equal(observed.exe, process.execPath);
+  assert.equal(observed.request.Executable, process.execPath);
+  assert.deepEqual(observed.request.Args, config.profiles[0].args);
+  assert.equal(observed.request.Cwd, e.workdir);
+  assert.equal(observed.opts.shell, false);
+  assert.equal(receipt.runtime, 'windows-job-object');
+  assert.equal(receipt.verified, false);
+});
