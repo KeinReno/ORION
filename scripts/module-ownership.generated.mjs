@@ -2,6 +2,14 @@
 /** Модели подключаемых модулей -> каталог-владелец (см. module-ownership.mjs). */
 export const GENERATED_MODEL_OWNERS = [
   [
+    "AgentHubExecution",
+    "modules-ext/agent-hub"
+  ],
+  [
+    "AgentHubEvent",
+    "modules-ext/agent-hub"
+  ],
+  [
     "ChatArchiveConversation",
     "modules-ext/chat-archive"
   ],
