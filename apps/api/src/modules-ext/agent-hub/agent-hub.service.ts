@@ -15,7 +15,7 @@ import { WorkspacesService } from "../../workspaces/workspaces.service";
 
 const LIMIT = 100;
 
-function executionDto(row: ExecutionRow): AgentHubExecution {
+export function executionDto(row: ExecutionRow): AgentHubExecution {
   return agentHubExecutionSchema.parse({
     id: row.id,
     workspaceId: row.workspaceId,
