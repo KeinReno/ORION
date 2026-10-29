@@ -174,3 +174,12 @@ This is NOT autonomous execution. The owner must initiate each local run and app
 - [x] Add local loopback client and opt-in supervisor register/pulse/close handshake (never auto-executes a task).
 - [ ] Run module-registry, module-docs, lint, typecheck, integration tests on migrated ORION.
 - [ ] Complete explicit token revocation/presence invalidation and secure device attestation.
+
+## F3e — native Windows Job Object containment (draft)
+
+- [x] Native .NET 8 host source with CreateProcessW(CREATE_SUSPENDED), AssignProcessToJobObject, KILL_ON_JOB_CLOSE and inherited stdin/out/err streams.
+- [x] On Windows, the Node profile runner refuses direct CLI execution unless an operator-approved `windowsHost` binary path exists.
+- [x] Add simulated Win32-path tests for missing host and Job Object launch request construction.
+- [ ] Compile on Windows and pass child + grandchild process-tree smoke tests, timeout, crash and command-line quoting cases.
+- [ ] Add low-privilege Windows account, executable hash pinning/signature validation, and provider-specific profiles.
+- [ ] Obtain reliable actual Windows acceptance before any unattended execution.
