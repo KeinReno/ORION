@@ -1,5 +1,6 @@
 export * from "./auth";
 export * from "./agent";
+export * from "./agent-hub";
 export * from "./agent-gateway";
 export * from "./agent-tools";
 export * from "./agent-module-inputs";
