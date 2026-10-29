@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, mkdir, open, readFile, realpath, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 
 const MAX_TASK_BYTES = 64 * 1024;
 const MAX_RUNTIME_MS = 60 * 60 * 1000;

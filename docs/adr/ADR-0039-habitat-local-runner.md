@@ -28,7 +28,7 @@ Provider adapters (Codex CLI, Claude Code CLI, Cursor) must verify their officia
 
 ## Tests and observability
 
-`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Six local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
+`node --test packages/habitat/test/*.test.mjs` tests denial without opt-in, profile approval, realpath/symlink escape, probe without launch, local approved Node execution, hash-only receipt, deadline termination and operator cancellation. Seven local Node tests were executed successfully on Linux Node v22; **not** a Windows acceptance test and **not** a repository-wide typecheck.
 
 The existing Agent Hub F2 claims are token-bound manual-MCP. They remain separate from this runtime package. Linking them requires a mutually authenticated local bridge whose credentials and scope are provisioned by a human, not a bearer token copied into a generic runtime environment.
 

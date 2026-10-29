@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -52,6 +53,15 @@ test('does not run probe binaries, only checks installation (not provider auth)'
   const e = await environment();
   const profiles = await probeProfiles(configOf(e.root));
   assert.deepEqual(profiles, [{ id: 'node-test', installed: true, approved: true, enabled: true, auth: 'not_checked', execution: 'not_attempted' }]);
+});
+
+test('does not forward an unrelated secret environment variable to a child', async () => {
+  const e = await environment();
+  const config = configOf(e.root);
+  config.profiles[0].args = ['-e', 'process.stdin.resume();process.stdin.on("end", () => process.stdout.write(process.env.SECRET_API_KEY ?? "absent"))'];
+  const receipt = await runApprovedProfile({ config, profileId: 'node-test', workdir: e.workdir, taskFile: e.taskFile, acknowledged: true,
+    env: { PATH: process.env.PATH, SECRET_API_KEY: 'super-secret-value' } });
+  assert.equal(receipt.stdoutSha256, createHash('sha256').update('absent').digest('hex'));
 });
 
 test('launches approved Node profile without shell and writes hash-only receipt', async () => {
