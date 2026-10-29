@@ -22,7 +22,7 @@ See `docs/adr/ADR-0036-agent-hub-execution-foundation.md` and `docs/agent-hub/RO
 | Поле | Значение |
 |---|---|
 | id / версия | `agent-hub` / 1.0.0 (платформа ^1.0.0) |
-| Вид | дополнительный, по умолчанию выключен |
+| Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks` |
 | Права (permissions) | `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete` |

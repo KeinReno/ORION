@@ -66,7 +66,7 @@ describe("Agent Hub: durable human queue v1", () => {
 
   it("is a registered optional module with persistent snapshot models", () => {
     expect(ORION_MODULE_IDS).toContain("agent-hub");
-    expect(MODULE_CATALOG.find((m) => m.id === "agent-hub")?.defaultEnabled).toBe(false);
+    expect(MODULE_CATALOG.find((m) => m.id === "agent-hub")?.defaultEnabled).toBe(true);
     for (const model of ["AgentHubExecution", "AgentHubEvent"]) {
       expect(SNAPSHOT_MODEL_REGISTRY.find((m) => m.model === model)?.policy).toBe("included");
     }

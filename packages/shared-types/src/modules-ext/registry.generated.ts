@@ -58,7 +58,7 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
     ],
     "disableBehavior": "Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует.",
     "panelId": "agent-hub",
-    "defaultEnabled": false
+    "defaultEnabled": true
   },
   {
     "id": "chat-archive",

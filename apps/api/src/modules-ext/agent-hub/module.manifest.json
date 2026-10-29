@@ -19,7 +19,7 @@
     ],
     "disableBehavior": "Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует.",
     "panelId": "agent-hub",
-    "defaultEnabled": false
+    "defaultEnabled": true
   },
   "permissions": {
     "primaryResource": "execution"
