@@ -5,6 +5,125 @@ import type { AgentToolDef } from "../agent-tools";
 /** Инструменты ИИ-агентов, объявленные модулями в манифесте (`agent.tools`); `AGENT_TOOLS` добавляет их к инструментам ядра. */
 export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
+    "name": "orion_agent_hub_queue",
+    "description": "Показывает ожидающие задания и собственные текущие исполнения. Требуется tasks:read; действует ограничение на проекты токена. Не запускает IDE и не обещает автономности.",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/agent-hub/executions"
+    },
+    "input": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.read",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_claim",
+    "description": "Взять выбранное ожидающее задание в ручной MCP-сессии. Сервер привязывает исполнение к токену агента, выдаёт lease на 120 секунд. Не запускает модель автоматически. После claim вызовите report action=start.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/executions/{executionId}/claim"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "description": "UUID исполнения, возвращённый orion_agent_hub_queue"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия состояния из последнего ответа Agent Hub (защита от гонки)"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "example": {
+      "executionId": "<uuid>",
+      "expectedRevision": 0
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_report",
+    "description": "Отправить реальное событие о выполнении своего задания (start, heartbeat, checkpoint, submit, block, fail). Только владелец действующего lease. Данные не подтверждают автоматически завершение: submit ставит на проверку. Heartbeat продлевает lease на 120 секунд.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/executions/{executionId}/report"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "description": "UUID исполнения, возвращённый orion_agent_hub_queue"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия состояния из последнего ответа Agent Hub (защита от гонки)"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "heartbeat",
+            "checkpoint",
+            "submit",
+            "block",
+            "fail"
+          ],
+          "description": "Тип отчёта"
+        },
+        "checkpointRef": {
+          "type": "string",
+          "description": "Контрольная точка (checkpoint): ссылка на сохранённое состояние, без секретов"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Для submit: 1–20 ссылок на конкретные проверяемые артефакты"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Для block или fail: причина"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedRevision",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "example": {
+      "executionId": "<uuid>",
+      "expectedRevision": 2,
+      "action": "checkpoint",
+      "checkpointRef": "git:abcdef"
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
     "name": "orion_chat_archive_search",
     "description": "Поиск по прошлым разговорам владельца с ИИ-агентами (Claude Code, Codex): реплики человека и ответы, содержащие фразу. Возвращает conversationId, заголовок, проект, seq строки и отрывок. Найденное — история обсуждений, а не принятые решения.",
     "group": "modules",

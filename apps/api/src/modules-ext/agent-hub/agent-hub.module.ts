@@ -1,15 +1,18 @@
 import { Module } from "@nestjs/common";
+import { AgentCoreModule } from "../../ai/agent-core.module";
 import { AuthModule } from "../../auth/auth.module";
 import { ModulesModule } from "../../modules/modules.module";
 import { TaskIntegrationReaderModule } from "../../tasks/public/task-integration-reader.module";
 import { WorkspacesModule } from "../../workspaces/workspaces.module";
+import { AgentHubAgentController } from "./agent-hub.agent.controller";
+import { AgentHubWorkerService } from "./agent-hub-worker.service";
 import { AgentHubController } from "./agent-hub.controller";
 import { AgentHubService } from "./agent-hub.service";
 
 /** Optional agent coordination records, powered by existing platform services. */
 @Module({
-  imports: [AuthModule, ModulesModule, TaskIntegrationReaderModule, WorkspacesModule],
-  controllers: [AgentHubController],
-  providers: [AgentHubService]
+  imports: [AuthModule, AgentCoreModule, ModulesModule, TaskIntegrationReaderModule, WorkspacesModule],
+  controllers: [AgentHubController, AgentHubAgentController],
+  providers: [AgentHubService, AgentHubWorkerService]
 })
 export class AgentHubModule {}

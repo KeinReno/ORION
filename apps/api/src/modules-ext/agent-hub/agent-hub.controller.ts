@@ -9,13 +9,21 @@ import { CurrentUser } from "../../common/current-user.decorator";
 import { RequirePermission } from "../../common/require-permission";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { RequireModule } from "../../modules/require-module";
+import { AgentHubWorkerService } from "./agent-hub-worker.service";
 import { AgentHubService } from "./agent-hub.service";
 
 /** Human routes only. Autonomous claim/heartbeat are intentionally NOT exposed. */
 @RequireModule("agent-hub")
 @Controller("workspaces/:workspaceId/agent-hub")
 export class AgentHubController {
-  constructor(private readonly hub: AgentHubService) {}
+  constructor(private readonly hub: AgentHubService, private readonly workers: AgentHubWorkerService) {}
+
+  /** Server-side lease expiration; only human owner/lead can invoke it. */
+  @Post("reconcile")
+  @RequirePermission("agent-hub.execution.update")
+  reconcile(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<{ recovered: number }> {
+    return this.workers.reconcileExpired(user.userId, workspaceId);
+  }
 
   @Get("executions")
   @RequirePermission("agent-hub.execution.read")

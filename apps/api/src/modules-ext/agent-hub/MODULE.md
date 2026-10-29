@@ -1,13 +1,15 @@
 # Agent Hub module
 
-Optional module for persistent execution attempts. First wave stores queue records, events and cancellation; no autonomous executor is enabled.
+Optional module for persistent execution attempts. First waves store queue records, events and cancellation, and allow explicit manual MCP execution; no autonomous executor is enabled.
 
 - Source of user tasks: Tasks public reader; never duplicate task body or mutate Tasks directly.
 - Existing AI Bridge still owns messages, tokens, scopes, proposals and agent audit.
 - Agent Hub owns only `AgentHubExecution` and `AgentHubEvent`.
 - Workspace isolation: `withUser` + membership, database FORCE RLS.
 - Owner/lead-only writes, CAS cancellation and a journal row in the same transaction.
-- No user-supplied claim, heartbeat or verify endpoint before a trusted coordinator exists.
+- Three **manual MCP** tools are available: queue, claim, report. Worker identity/time are bound server-side to the authenticated agent token; all calls require scoped module permissions and tasks:read, plus project-fence checks.
+- The optional, human-only reconcile endpoint requeues timed-out leases, retaining checkpoint references; no background scheduler exists.
+- No agent-driven verification or task completion; submit means review, never done. No automatic IDE launch.
 - Snapshot policy: both executions and events included, in that order.
 - Runtime unavailable means `queued`, never `online`; manual MCP remains distinct.
 - Disabling the module preserves all records.
