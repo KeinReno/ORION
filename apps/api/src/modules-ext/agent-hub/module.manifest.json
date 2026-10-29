@@ -23,7 +23,15 @@
     "defaultEnabled": true
   },
   "permissions": {
-    "primaryResource": "execution"
+    "primaryResource": "execution",
+    "additionalResources": [
+      {
+        "resource": "runtime",
+        "actions": [
+          "create"
+        ]
+      }
+    ]
   },
   "api": {
     "module": {
@@ -246,7 +254,8 @@
             "capabilities"
           ],
           "additionalProperties": false
-        }
+        },
+        "resource": "runtime"
       },
       {
         "name": "orion_agent_hub_runtime_pulse",
@@ -273,7 +282,8 @@
             "expectedRevision"
           ],
           "additionalProperties": false
-        }
+        },
+        "resource": "runtime"
       },
       {
         "name": "orion_agent_hub_runtime_close",
@@ -300,7 +310,8 @@
             "expectedRevision"
           ],
           "additionalProperties": false
-        }
+        },
+        "resource": "runtime"
       }
     ]
   }

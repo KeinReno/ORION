@@ -1,5 +1,5 @@
 import { CORE_MODULE_IDS, ORION_MODULE_IDS, type OrionModuleId } from "./modules";
-import { GENERATED_PRIMARY_RESOURCES } from "./modules-ext/registry.generated";
+import { GENERATED_ADDITIONAL_PERMISSIONS, GENERATED_PRIMARY_RESOURCES } from "./modules-ext/registry.generated";
 import type { AgentScope } from "./agent";
 import { workspaceRoleSchema } from "./workspace";
 
@@ -55,7 +55,7 @@ function buildPermissionIds(): string[] {
   for (const moduleId of ORION_MODULE_IDS) {
     for (const action of CRUD_ACTIONS) ids.push(`${moduleId}.${MODULE_PRIMARY_RESOURCE[moduleId]}.${action}`);
   }
-  ids.push(...EXTRA_PERMISSIONS);
+  ids.push(...GENERATED_ADDITIONAL_PERMISSIONS, ...EXTRA_PERMISSIONS);
   return ids;
 }
 

@@ -19,12 +19,3 @@ CREATE INDEX "agent_hub_runtime_sessions_workspaceId_tokenId_idx" ON "agent_hub_
 
 ALTER TABLE "agent_hub_runtime_sessions" ADD CONSTRAINT "agent_hub_runtime_sessions_workspaceId_fkey"
   FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-ALTER TABLE "agent_hub_runtime_sessions" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "agent_hub_runtime_sessions" FORCE ROW LEVEL SECURITY;
-CREATE POLICY agent_hub_runtime_sessions_isolation ON "agent_hub_runtime_sessions"
-  USING (EXISTS (
-    SELECT 1 FROM "workspace_members" wm
-    WHERE wm."workspaceId" = "agent_hub_runtime_sessions"."workspaceId"
-      AND wm."userId" = current_setting('app.current_user_id', true)
-  ));

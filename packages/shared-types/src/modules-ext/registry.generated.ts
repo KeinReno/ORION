@@ -109,6 +109,11 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
   "pet-care": "pet"
 };
 
+/** Additional, explicitly declared capabilities of optional modules. */
+export const GENERATED_ADDITIONAL_PERMISSIONS: readonly string[] = [
+  "agent-hub.runtime.create"
+];
+
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
   "agent-hub": [

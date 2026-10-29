@@ -3,6 +3,7 @@ import { mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import { HabitatPolicyError, validateConfig } from './habitat.mjs';
 import { requireLoopbackApiUrl } from './agent-hub-bridge.mjs';
+import { createRuntimeRegistryClient } from './runtime-registry-client.mjs';
 
 const MAX_STATE_BYTES = 8192;
 
@@ -60,6 +61,9 @@ export async function superviseHabitat({
 }) {
   const policy = validateSupervisorPolicy(config);
   const origin = requireLoopbackApiUrl(apiUrl);
+  const registrationEnabled = policy.registerWithOrion === true;
+  if (registrationEnabled && policy.pollMs > 120_000) throw new HabitatPolicyError('registry_poll_too_slow');
+  const registry = registrationEnabled ? createRuntimeRegistryClient({ apiUrl: origin, token, fetchImpl }) : null;
   if (acknowledged !== true || !config.enabled) throw new HabitatPolicyError('operator_approval_required');
   if (typeof token !== 'string' || !token.startsWith('orion_agt_')) throw new HabitatPolicyError('invalid_token');
   if (!(maxPolls === Infinity || (Number.isInteger(maxPolls) && maxPolls > 0))) throw new HabitatPolicyError('invalid_poll_count');
@@ -74,13 +78,35 @@ export async function superviseHabitat({
   const state = {
     version: 1, sessionId: randomUUID(), pid: process.pid, mode: 'observe_only',
     status: 'starting', startedAt: new Date().toISOString(), lastPollAt: null,
-    queueCount: null, previousSession: previous ? { id: previous.sessionId, interrupted: !['stopped', 'auth_denied'].includes(previous.status) } : null
+    queueCount: null, reportedPresence: registry ? 'not_registered' : 'disabled',
+    previousSession: previous ? { id: previous.sessionId, interrupted: !['stopped', 'auth_denied'].includes(previous.status) } : null
   };
   let polls = 0;
+  let registered = null;
+  let lastRegistryAt = 0;
   try {
     await lock.writeFile(JSON.stringify({ sessionId: state.sessionId, pid: process.pid }));
     await writeState(dir, state);
+    if (registry) {
+      registered = await registry.register(state.sessionId);
+      if (registered.id !== state.sessionId) throw new HabitatPolicyError('registry_session_mismatch');
+      lastRegistryAt = Date.now();
+      state.reportedPresence = registered.presence;
+      await writeState(dir, state);
+    }
     while (!signal?.aborted && polls < maxPolls) {
+      if (registered && Date.now() - lastRegistryAt >= 120_000) {
+        try {
+          registered = await registry.pulse(state.sessionId, registered.revision);
+          lastRegistryAt = Date.now();
+          state.reportedPresence = registered.presence;
+        } catch {
+          state.status = 'registry_unavailable';
+          state.reportedPresence = 'unconfirmed';
+          await writeState(dir, state);
+          break;
+        }
+      }
       polls++;
       let denied = false;
       try {
@@ -109,7 +135,15 @@ export async function superviseHabitat({
       if (denied || signal?.aborted || polls >= maxPolls) break;
       await sleep(policy.pollMs, signal);
     }
-    if (state.status !== 'auth_denied') state.status = 'stopped';
+    if (registered) {
+      try {
+        const closed = await registry.close(state.sessionId, registered.revision);
+        state.reportedPresence = closed.presence;
+      } catch {
+        state.reportedPresence = 'unconfirmed';
+      }
+    }
+    if (!['auth_denied', 'registry_unavailable'].includes(state.status)) state.status = 'stopped';
     await writeState(dir, state);
     return { ...state, polls };
   } finally {

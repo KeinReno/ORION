@@ -56,7 +56,7 @@ describe("Agent Hub runtime session registry (reported presence, not attestation
     const issue = async (overrides: Record<string, unknown> = {}) => {
       const response = await request<{ id: string; secret: string }>("POST", `/workspaces/${ws}/agent-tokens`, auth.data.accessToken, {
         name: "Runtime observer", mode: "assistant", expiresInDays: 7,
-        scopes: ["tasks:read"], modulePermissions: ["agent-hub.execution.create"], ...overrides
+        scopes: ["tasks:read"], modulePermissions: ["agent-hub.runtime.create"], ...overrides
       });
       expect(response.status, JSON.stringify(response.data)).toBe(201);
       return { ...response.data, call: <T = any>(method: string, path: string, body?: unknown) =>
@@ -96,6 +96,15 @@ describe("Agent Hub runtime session registry (reported presence, not attestation
     expect((await noTaskScope.call("POST", "/runtime-sessions", {
       sessionId: crypto.randomUUID(), kind: "habitat_observer", capabilities
     })).status).toBe(403);
+  });
+
+  it("observer-only token cannot claim or mutate a user task", async () => {
+    const s = await setup();
+    const observer = await s.issue({ name: "Presence only", modulePermissions: ["agent-hub.runtime.create", "agent-hub.execution.read"] });
+    const humanToken = (await s.human("GET", "/executions")).status;
+    expect(humanToken).toBe(200);
+    // There is no execution ID associated with this session, so any claim is denied by permission policy before database read.
+    expect((await observer.call("POST", `/executions/${crypto.randomUUID()}/claim`, { expectedRevision: 0 })).status).toBe(403);
   });
 
   it("expiry becomes stale and refuses resurrection of an expired session", async () => {

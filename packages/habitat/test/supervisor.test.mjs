@@ -108,3 +108,39 @@ test('status can be inspected after the supervisor is disabled', async () => {
   assert.equal(result.freshObservation, false);
   assert.equal(result.state, null);
 });
+
+test('optional runtime registration is reported and then closed, never claims work', async () => {
+  const { root, config } = await fixture();
+  config.supervisor.registerWithOrion = true;
+  const events = [];
+  let revision = 0;
+  const response = async (url, req) => {
+    events.push(req.method + ' ' + url.split('/').at(-1));
+    if (req.method === 'GET') return ok();
+    const body = JSON.parse(req.body);
+    if (url.endsWith('/runtime-sessions')) {
+      assert.equal(body.capabilities.canStart, false);
+      return { ok: true, json: async () => ({ id: body.sessionId, presence: 'recent', revision: 0 }) };
+    }
+    assert.equal(body.expectedRevision, revision);
+    revision++;
+    return { ok: true, json: async () => ({ id: url.split('/')[6], presence: 'closed', revision }) };
+  };
+  const result = await superviseHabitat(args(config, { fetchImpl: response }));
+  assert.equal(result.reportedPresence, 'closed');
+  assert.equal(result.status, 'stopped');
+  assert.equal(events.length, 3);
+  assert.equal(events.filter(e => e.startsWith('GET')).length, 1);
+  const stored = await readFile(join(root, '.orion', 'habitat', 'supervisor.json'), 'utf8');
+  assert.equal(stored.includes('orion_agt_'), false);
+});
+
+test('registration refusal fails closed before polling, and does not retain lock', async () => {
+  const { config } = await fixture();
+  config.supervisor.registerWithOrion = true;
+  const bad = async () => ({ ok: false, status: 403 });
+  await assert.rejects(superviseHabitat(args(config, { fetchImpl: bad })), /runtime_registry_http_403/);
+  config.supervisor.registerWithOrion = false;
+  const again = await superviseHabitat(args(config, { fetchImpl: ok }));
+  assert.equal(again.status, 'stopped');
+});
