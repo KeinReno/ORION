@@ -2,13 +2,14 @@ import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import {
   agentHubCreateExecutionInputSchema, agentHubCancelInputSchema,
   type AgentHubCreateExecutionInput, type AgentHubCancelInput,
-  type AgentHubExecution, type AgentHubEvent
+  type AgentHubExecution, type AgentHubEvent, type AgentHubRuntimeSession
 } from "@orion/shared-types";
 import type { RequestUser } from "../../auth/jwt.strategy";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { RequirePermission } from "../../common/require-permission";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { RequireModule } from "../../modules/require-module";
+import { AgentHubRuntimeRegistryService } from "./agent-hub-runtime-registry.service";
 import { AgentHubWorkerService } from "./agent-hub-worker.service";
 import { AgentHubService } from "./agent-hub.service";
 
@@ -16,13 +17,19 @@ import { AgentHubService } from "./agent-hub.service";
 @RequireModule("agent-hub")
 @Controller("workspaces/:workspaceId/agent-hub")
 export class AgentHubController {
-  constructor(private readonly hub: AgentHubService, private readonly workers: AgentHubWorkerService) {}
+  constructor(private readonly hub: AgentHubService, private readonly workers: AgentHubWorkerService, private readonly runtimes: AgentHubRuntimeRegistryService) {}
 
   /** Server-side lease expiration; only human owner/lead can invoke it. */
   @Post("reconcile")
   @RequirePermission("agent-hub.execution.update")
   reconcile(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<{ recovered: number }> {
     return this.workers.reconcileExpired(user.userId, workspaceId);
+  }
+
+  @Get("runtime-sessions")
+  @RequirePermission("agent-hub.execution.read")
+  runtimeSessions(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<AgentHubRuntimeSession[]> {
+    return this.runtimes.list(user.userId, workspaceId);
   }
 
   @Get("executions")

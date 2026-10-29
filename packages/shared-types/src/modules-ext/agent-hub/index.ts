@@ -43,3 +43,39 @@ export type AgentHubReportInput = z.infer<typeof agentHubReportInputSchema>;
 
 export const agentHubReconcileResultSchema = z.object({ recovered: z.number().int().nonnegative() });
 export type AgentHubReconcileResult = z.infer<typeof agentHubReconcileResultSchema>;
+
+/**
+ * v0 runtime registry is presence evidence only: it does not authorize or attest CLI execution.
+ * A bearer token can report only a declared observe-only Habitat session.
+ */
+export const agentHubRuntimeRegisterSchema = z.object({
+  sessionId: z.string().uuid(),
+  kind: z.literal("habitat_observer"),
+  capabilities: z.object({
+    canStart: z.literal(false),
+    canCancel: z.literal(false),
+    canObserve: z.literal(true),
+    canResume: z.literal(false)
+  }).strict()
+}).strict();
+export type AgentHubRuntimeRegisterInput = z.infer<typeof agentHubRuntimeRegisterSchema>;
+
+export const agentHubRuntimePulseSchema = z.object({
+  expectedRevision: z.number().int().nonnegative()
+}).strict();
+export type AgentHubRuntimePulseInput = z.infer<typeof agentHubRuntimePulseSchema>;
+
+export const agentHubRuntimePresenceSchema = z.enum(["recent", "stale", "closed"]);
+export const agentHubRuntimeSessionSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string(),
+  kind: z.literal("habitat_observer"),
+  tokenId: z.string(),
+  capabilities: agentHubRuntimeRegisterSchema.shape.capabilities,
+  revision: z.number().int().nonnegative(),
+  startedAt: z.string().datetime(),
+  lastHeartbeatAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  presence: agentHubRuntimePresenceSchema
+});
+export type AgentHubRuntimeSession = z.infer<typeof agentHubRuntimeSessionSchema>;

@@ -318,6 +318,7 @@ model Workspace {
   // <module-registry:workspace-relations>
     agentHubExecutions AgentHubExecution[]
     agentHubEvents AgentHubEvent[]
+    agentHubRuntimeSessions AgentHubRuntimeSession[]
   chatArchiveConversations ChatArchiveConversation[]
   chatArchiveLines         ChatArchiveLine[]
   chatArchiveAutoSources   ChatArchiveAutoSource[]
@@ -3420,6 +3421,28 @@ model AgentHubEvent {
   @@unique([executionId, revision])
   @@index([workspaceId, executionId])
   @@map("agent_hub_events")
+}
+
+
+/// An agent-reported local observer session. TTL = recently authenticated, not proof of running AI.
+model AgentHubRuntimeSession {
+  id              String   @id
+  workspaceId     String
+  tokenId         String
+  kind            String   @default("habitat_observer")
+  status          String   @default("active")
+  revision        Int      @default(0)
+  capabilities    Json     @default("{}")
+  startedAt       DateTime @default(now())
+  lastHeartbeatAt DateTime @default(now())
+  expiresAt       DateTime
+  closedAt        DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, expiresAt])
+  @@index([workspaceId, tokenId])
+  @@map("agent_hub_runtime_sessions")
 }
 
 // module: chat-archive

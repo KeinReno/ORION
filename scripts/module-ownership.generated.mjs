@@ -10,6 +10,10 @@ export const GENERATED_MODEL_OWNERS = [
     "modules-ext/agent-hub"
   ],
   [
+    "AgentHubRuntimeSession",
+    "modules-ext/agent-hub"
+  ],
+  [
     "ChatArchiveConversation",
     "modules-ext/chat-archive"
   ],

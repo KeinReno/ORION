@@ -51,7 +51,8 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
       "Панель исполнений и состояний",
       "Создание исполнения для существующей задачи",
       "Отмена исполнения владельцем/руководителем",
-      "История изменений с ревизиями"
+      "История изменений с ревизиями",
+      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности"
     ],
     "optionalDependencies": [
       "tasks"
@@ -111,7 +112,8 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
   "agent-hub": [
-    "20261029202000_agent_hub_executions"
+    "20261029202000_agent_hub_executions",
+    "20261029223000_agent_hub_runtime_sessions"
   ],
   "chat-archive": [
     "20261020222504_chat_archive",
