@@ -9,4 +9,14 @@ Server code calls TaskIntegrationReader through its public module, never Tasks
 internals. Model code must not infer an online runtime from token presence.
 
 <!-- generated:manifest:start -->
+## Для агента (генерируется)
+
+Блок собирается `pnpm module-docs`; руками не править.
+
+- Точки входа: API `workspaces/:workspaceId/agent-hub` (за `@RequireModule("agent-hub")`); панель веба `agent-hub`; код `apps/api/src/modules-ext/agent-hub/`.
+- Права: `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`.
+- Модуль владеет: Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.
+- Соседи: жёсткие: —; мягкие: `tasks`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
+- Расширения: плагины: —.
+- Выключение модуля не удаляет данные; новые таблицы — только с ENABLE + FORCE RLS и записью в реестре снапшота.
 <!-- generated:manifest:end -->
