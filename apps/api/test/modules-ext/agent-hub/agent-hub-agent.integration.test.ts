@@ -103,9 +103,10 @@ describe("Agent Hub manual MCP adapter", () => {
       action: "submit", expectedRevision: 4, evidenceRefs: ["git:def456", "test:passed"]
     });
     expect(submitted.data).toMatchObject({ status: "review", revision: 5, evidenceRefs: ["git:def456", "test:passed"] });
-    const events = await s.human<Array<{ action: string; revision: number }>>("GET", `/agent-hub/executions/${s.runId}/events`);
+    const events = await s.human<Array<{ action: string; revision: number; data: Record<string, unknown> }>>("GET", `/agent-hub/executions/${s.runId}/events`);
     expect(events.data.map(e => e.action)).toEqual(["create", "claim", "start", "checkpoint", "heartbeat", "submit"]);
     expect(events.data.map(e => e.revision)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(events.data[5]!.data.evidenceRefs).toEqual(["git:def456", "test:passed"]);
     expect((await worker.call("POST", `/executions/${s.runId}/report`, { action: "start", expectedRevision: 5 })).status).toBe(409);
   });
 

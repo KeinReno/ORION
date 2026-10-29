@@ -67,7 +67,7 @@ export class AgentHubWorkerService {
     current: ExecutionRow,
     command: AgentHubCommand,
     actorId: string,
-    metadata: Record<string, string> = {}
+    metadata: Record<string, string | string[]> = {}
   ): Promise<AgentHubExecution> {
     let next: AgentHubExecution;
     try {
@@ -138,9 +138,10 @@ export class AgentHubWorkerService {
               : input.action === "block"
                 ? { ...shared, type: "block", reason: input.reason }
                 : { ...shared, type: "fail", reason: input.reason };
-      const metadata: Record<string, string> = {};
+      const metadata: Record<string, string | string[]> = {};
       if (input.action === "block" || input.action === "fail") metadata.reason = input.reason;
       if (input.action === "checkpoint") metadata.checkpointRef = input.checkpointRef;
+      if (input.action === "submit") metadata.evidenceRefs = input.evidenceRefs;
       // These are unverified references; they do NOT close the Task automatically.
       return this.commitTx(tx, row, command, agent.tokenId, metadata);
     });
