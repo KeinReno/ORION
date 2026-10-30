@@ -78,3 +78,38 @@ test('heartbeat authorization failure aborts local execution and never submits',
   assert.equal(aborted, true);
   assert.deepEqual(hub.events.map(v => v.action), ['list', 'claim', 'start']);
 });
+
+test('human cancellation aborts a running local process before the next heartbeat', async () => {
+  const e = await fixtures(), hub = mockHub();
+  let queueReads = 0;
+  const fetchImpl = async (url, req) => {
+    if (req.method === 'GET' && ++queueReads > 1) {
+      return { ok: true, json: async () => [] }; // canceled runs leave the worker queue
+    }
+    return hub.fetchImpl(url, req);
+  };
+  let aborted = false;
+  const runImpl = async ({ signal }) => new Promise(resolve => {
+    signal.addEventListener('abort', () => { aborted = true; resolve({ id: 'stopped', outcome: 'stopped', exitCode: null, verified: false }); }, { once: true });
+  });
+  await assert.rejects(runAgentHubExecution({ ...args(e, hub, runImpl), fetchImpl, cancelPollMs: 100 }), /execution_no_longer_active/);
+  assert.equal(aborted, true);
+  assert.equal(hub.events.some(v => v.action === 'submit'), false);
+  assert.equal(hub.events.some(v => v.action === 'heartbeat'), false);
+});
+
+test('token revocation on read-only poll aborts local execution without submitting evidence', async () => {
+  const e = await fixtures(), hub = mockHub();
+  let queueReads = 0;
+  const fetchImpl = async (url, req) => {
+    if (req.method === 'GET' && ++queueReads > 1) return { ok: false, status: 401 };
+    return hub.fetchImpl(url, req);
+  };
+  let aborted = false;
+  const runImpl = async ({ signal }) => new Promise(resolve => {
+    signal.addEventListener('abort', () => { aborted = true; resolve({ id: 'stopped', outcome: 'stopped', exitCode: null, verified: false }); }, { once: true });
+  });
+  await assert.rejects(runAgentHubExecution({ ...args(e, hub, runImpl), fetchImpl, cancelPollMs: 100 }), /agent_hub_http_401/);
+  assert.equal(aborted, true);
+  assert.equal(hub.events.some(v => v.action === 'submit'), false);
+});

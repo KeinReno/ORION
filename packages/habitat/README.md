@@ -47,8 +47,9 @@ node packages/habitat/src/cli.mjs run-hub --config C:\\private\\habitat.json --t
 - User must enable the Agent Hub module and provision a token authorized for `tasks:read`, `agent-hub.execution.read`, `agent-hub.execution.create`; project fences remain enforced by the server.
 - Only `http://127.0.0.1`, `http://localhost` or `http://[::1]` is accepted. Remote HTTP endpoints are refused so the bearer token is not transmitted in cleartext off-device.
 - The bridge checks local approval **before contacting ORION**, then claims the chosen execution, starts it, heartbeats while the local process runs, and reports `review` (exit code 0) or `failed` (nonzero exit).
+- While running, a read-only queue check every 5 seconds detects cancellation, token revocation or module access loss and aborts the local host. The displayed `canceled` state is a server record, not an acknowledgement that the child process has already exited; a failed local connection aborts the run as well.
 - The evidence reference identifies a **local** hash-only receipt; the ORION server does not yet retrieve or verify it. It is not proof of correctness, and never sets the Task itself to done.
-- F2 is a **stacked draft PR**; this bridge has been unit-tested with a mocked HTTP server, not a migrated ORION database.
+- Agent Hub and the manual bridge shipped in Windows beta 34. The cancellation follow-up is in a later branch until a new beta is published. The bridge's HTTP behavior is covered by mocked-server tests; Agent Hub API behavior is separately covered by migrated-database integration tests.
 
 ## F3 observation supervisor (opt-in)
 

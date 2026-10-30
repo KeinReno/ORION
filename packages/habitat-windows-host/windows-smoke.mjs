@@ -5,9 +5,10 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
+import { runApprovedProfile } from '../habitat/src/habitat.mjs';
 
 if (process.platform !== 'win32') {
   console.error('Windows smoke must run on an actual Windows host');
@@ -87,7 +88,32 @@ try {
     await sleep(100);
   }
   assert.equal(bothTerminated, true, 'orphan parent/grandchild detected: Job Object containment failed');
-  console.log('Windows Job Object smoke: stdin, argv and descendant termination passed');
+
+  // Exercise the Node-to-native-host abort path used by Agent Hub cancellation.
+  const taskFile = join(testDir, 'task.txt');
+  const abortPidFile = join(testDir, 'abort-pid.txt');
+  await writeFile(taskFile, 'synthetic cancellation task');
+  const config = { version: 1, enabled: true, workspaceRoot: testDir, profiles: [{
+    id: 'abort-fixture', executable: process.execPath,
+    args: ['-e', "require('node:fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)", abortPidFile],
+    windowsHost: hostPath, approved: true, timeoutMs: 5000
+  }] };
+  const controller = new AbortController();
+  const pending = runApprovedProfile({ config, profileId: 'abort-fixture', workdir: testDir, taskFile,
+    acknowledged: true, signal: controller.signal });
+  let abortPid = null;
+  for (let i = 0; i < 50; i++) {
+    try { abortPid = Number(await readFile(abortPidFile, 'utf8')); break; }
+    catch { await sleep(100); }
+  }
+  assert.ok(Number.isInteger(abortPid) && abortPid > 0, 'abort fixture did not start');
+  controller.abort();
+  const receipt = await pending;
+  assert.equal(receipt.outcome, 'stopped');
+  assert.equal(receipt.verified, false);
+  for (let i = 0; i < 50 && alive(abortPid); i++) await sleep(100);
+  assert.equal(alive(abortPid), false, 'abort left the approved CLI running');
+  console.log('Windows Job Object smoke: stdin, argv, descendant termination and Habitat abort passed');
 } finally {
   await rm(testDir, { recursive: true, force: true });
 }
