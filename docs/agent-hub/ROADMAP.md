@@ -1,7 +1,7 @@
 # KAIDEN Agent Hub — implementation roadmap
 
 **Status:** engineering work started 2026-10-29, base `master` @ `68a2384a86467f09af00da6311f934cd738f1d0d`.
-**Current release:** F0–F3e manual beta slice merged via PR #92; Windows `v0.1.0-windows-beta.34` from `1397203`. Unattended dispatch and provider adapters remain roadmap work.
+**Current release:** F0–F3e manual beta slice merged via PR #92; cancellation safety merged via PR #93; Windows `v0.1.0-windows-beta.35` from `bc99d82`. Unattended dispatch and provider adapters remain roadmap work.
 **Governance:** `docs/PLATFORM.md`, `ORION_CONSTITUTION.md`, `docs/AGENT_HUB_ARCHITECTURE.md`, ADR-0036.
 **Release rule:** do not describe a design/contract as deployed functionality.
 
