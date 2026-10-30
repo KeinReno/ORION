@@ -127,6 +127,14 @@ describe("module-registry: без модулей", () => {
 });
 
 describe("module-registry: модуль-фикстура", () => {
+  it("нормализует CRLF фрагмента Prisma для чистого Windows checkout", () => {
+    addFixtureModule();
+    put("apps/api/src/modules-ext/fixture-mod/prisma/models.prisma", FRAGMENT.replaceAll("\n", "\r\n"));
+    writeRegistry(root);
+    const generated = readFileSync(join(root, "apps/api/prisma/schema.prisma"), "utf8");
+    expect(generated).not.toContain("\r");
+    expect(registryViolations(root)).toEqual([]);
+  });
   it("добавление каталога с манифестом порождает записи во всех реестрах без правки файлов ядра", () => {
     addFixtureModule();
     const { modules, errors } = collectModules(root);

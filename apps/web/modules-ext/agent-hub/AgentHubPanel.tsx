@@ -11,7 +11,7 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 const statusLabel: Record<AgentHubExecution["status"], string> = {
   queued: "Ожидает исполнителя", claimed: "Захвачено", working: "В работе", blocked: "Заблокировано",
-  review: "Ожидает проверки", done: "Проверено", failed: "Ошибка", canceled: "Отменено"
+  review: "Ожидает проверки", done: "Проверено", failed: "Ошибка", canceled: "Запись отменена"
 };
 
 export function AgentHubPanel(): React.ReactElement {
@@ -67,7 +67,7 @@ export function AgentHubPanel(): React.ReactElement {
         <EmptyState icon={Network} title="Нет рабочего пространства" description="Agent Hub работает внутри пространства." /> : <div className="space-y-6">
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="text-sm font-semibold">Поставить задачу в очередь</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Исполнение появится в ручной очереди. Агент не запускается автоматически.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Исполнение появится в ручной очереди. Агент не запускается автоматически. После отмены Habitat проверяет состояние и останавливает локальный процесс; запись не подтверждает, что процесс уже завершён.</p>
           {canManage ? <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); if (taskId) create.mutate(taskId); }}>
             <label className="min-w-56 flex-1 text-xs">Задача
               <Select className="mt-1 w-full" value={taskId} onChange={event => setTaskId(event.target.value)} required>
@@ -92,7 +92,7 @@ export function AgentHubPanel(): React.ReactElement {
                 <div className="min-w-0"><h3 className="truncate text-sm font-medium">{taskNames.get(run.target.id) ?? `Задача ${run.target.id}`}</h3>
                   <p className="mt-1 text-xs text-muted-foreground">{statusLabel[run.status]} · Попытка {run.attempt} · Обновлено {new Date(run.updatedAt).toLocaleString("ru-RU")}</p></div>
                 <div className="flex gap-2"><Button variant="subtle" size="sm" aria-expanded={selectedId === run.id} onClick={() => setSelectedId(selectedId === run.id ? null : run.id)}>События</Button>
-                  {canManage && !["done", "failed", "canceled"].includes(run.status) ? <Button variant="danger" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(run)}>Отменить исполнение</Button> : null}</div>
+                  {canManage && !["done", "failed", "canceled"].includes(run.status) ? <Button variant="danger" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(run)}>Запросить отмену</Button> : null}</div>
               </div>
               {run.blockedReason ? <p className="mt-2 text-xs text-muted-foreground">Причина: {run.blockedReason}</p> : null}
               {selectedId === run.id ? <div className="mt-3 border-t border-border pt-3 text-xs">

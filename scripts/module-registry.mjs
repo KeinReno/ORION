@@ -218,7 +218,10 @@ export function collectModules(root = defaultRoot) {
       const fragmentPath = `${dir}/${prismaDecl.fragment}`;
       if (!existsSync(join(root, fragmentPath))) fail(`нет фрагмента Prisma ${fragmentPath}`);
       else {
-        fragment = read(root, fragmentPath).trim();
+        // A legacy fragment may contain CRLF even when generated schema.prisma
+        // is checked out with LF. Normalize before splicing so --check is
+        // stable on a fresh Windows checkout as well as after regeneration.
+        fragment = read(root, fragmentPath).replace(/\r\n?/g, "\n").trim();
         parsedModels = parsePrismaFragment(fragment);
       }
     }
