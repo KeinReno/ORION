@@ -44,6 +44,19 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const workspaces = snapshot.workspaces ?? [];
   const existingProjects = snapshot.projects ?? [];
   const existingTasks = snapshot.tasks ?? [];
+  const mappings = snapshot.mappings ?? [];
+  if (!Array.isArray(mappings)) throw new Error("Invalid snapshot mappings");
+  const mappedKeys = new Set();
+  const mappedTargets = new Set();
+  for (const m of mappings) {
+    if (m.catalogId !== catalog.catalogId) continue;
+    if (!["project", "task"].includes(m.kind) || typeof m.externalId !== "string" || typeof m.entityId !== "string") throw new Error("Invalid mapping");
+    const key = m.kind + ":" + m.externalId;
+    const target = m.kind + ":" + m.entityId;
+    if (mappedKeys.has(key) || mappedTargets.has(target)) throw new Error("Duplicate mapping");
+    mappedKeys.add(key); mappedTargets.add(target);
+  }
+  const mappingFor = (kind, id) => mappings.find((m) => m.catalogId === catalog.catalogId && m.kind === kind && m.externalId === id);
   for (const rows of [workspaces, existingProjects, existingTasks]) {
     if (!Array.isArray(rows)) throw new Error("Invalid snapshot");
   }
@@ -60,10 +73,13 @@ export function planOrionDevImport(catalog, snapshot = {}) {
       ? existingProjects.filter((row) => row.workspaceId === workspace.id && normalize(row.name) === normalize(project.title))
       : [];
     if (candidates.length > 1) throw new Error("Ambiguous project: " + project.title);
-    const matched = candidates[0] ?? null;
+    const mapped = mappingFor("project", project.id);
+    const mappedProject = mapped ? existingProjects.find((p) => p.id === mapped.entityId && p.workspaceId === workspace?.id) : null;
+    if (mapped && !mappedProject) throw new Error("Stale project mapping: " + project.id);
+    const matched = mappedProject ?? candidates[0] ?? null;
     actions.push({
       kind: "project", externalId: project.id, name: project.title,
-      action: matched ? "confirm_existing" : "propose_create",
+      action: mappedProject ? "already_mapped" : matched ? "confirm_existing" : "propose_create",
       candidateId: matched?.id ?? null
     });
     for (const item of items.filter((row) => row.project === project.id)) {
@@ -71,10 +87,13 @@ export function planOrionDevImport(catalog, snapshot = {}) {
         ? existingTasks.filter((row) => row.workspaceId === workspace.id &&
             row.projectId === matched.id && normalize(row.title) === normalize(item.title))
         : [];
+      const mappedTask = mappingFor("task", item.id);
+      const resolvedTask = mappedTask ? existingTasks.find((t) => t.id === mappedTask.entityId && t.workspaceId === workspace?.id && t.projectId === matched?.id) : null;
+      if (mappedTask && !resolvedTask) throw new Error("Stale task mapping: " + item.id);
       actions.push({
         kind: "task", externalId: item.id, projectExternalId: project.id,
         title: item.title, dependsOn: item.dependsOn ?? [],
-        action: possible.length ? "review_possible_match" : "propose_create",
+        action: resolvedTask ? "already_mapped" : possible.length ? "review_possible_match" : "propose_create",
         candidateIds: possible.map((row) => row.id)
       });
     }
