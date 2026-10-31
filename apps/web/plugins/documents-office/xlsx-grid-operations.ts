@@ -185,7 +185,8 @@ export function setCellNumberFormat(
   for (let index = rows.length; index <= row; index++) rows[index] = [];
   const cells = [...(rows[row] ?? [])];
   const original = cells[col] ?? { value: null };
-  const { numFmt: _previous, ...value } = original;
+  const value = { ...original };
+  delete value.numFmt;
   cells[col] = numberFormat === "General" ? value : { ...value, numFmt: numberFormat };
   rows[row] = cells;
   return { ...workbook, sheets: workbook.sheets.map((item, i) =>
@@ -231,7 +232,10 @@ export function changeGridStructure(
     }
     rows = rows.map((cells) => {
       const next = cells.slice();
-      if (action === "insert-column") next.splice(col, 0, { value: null });
+      if (action === "insert-column") {
+        while (next.length < col) next.push({ value: null });
+        next.splice(col, 0, { value: null });
+      }
       else if (col < next.length) next.splice(col, 1);
       return next;
     });
