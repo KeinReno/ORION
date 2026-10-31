@@ -50,8 +50,8 @@ describe("ORION DEV dry-run planner", () => {
       projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
       tasks: [{ id: "t", workspaceId: "w", projectId: "p", title: "First" }],
       mappings: [
-        { catalogId: "orion-dev", kind: "project", externalId: "core", entityId: "p" },
-        { catalogId: "orion-dev", kind: "task", externalId: "DEV-1", entityId: "t" }
+        { catalogId: "orion-dev", workspaceId: "w", kind: "project", externalId: "core", entityId: "p" },
+        { catalogId: "orion-dev", workspaceId: "w", kind: "task", externalId: "DEV-1", entityId: "t" }
       ]
     });
     expect(plan.actions.find((a) => a.kind === "project").action).toBe("already_mapped");
@@ -61,12 +61,27 @@ describe("ORION DEV dry-run planner", () => {
   it("rejects stale and duplicate mappings", () => {
     const snapshot = {
       workspaces: [{ id: "w", name: "ORION DEV" }],
-      mappings: [{ catalogId: "orion-dev", kind: "project", externalId: "core", entityId: "missing" }]
+      mappings: [{ catalogId: "orion-dev", workspaceId: "w", kind: "project", externalId: "core", entityId: "missing" }]
     };
     expect(() => planOrionDevImport(catalog, snapshot)).toThrow(/Stale project mapping/);
     expect(() => planOrionDevImport(catalog, {
       ...snapshot, mappings: [...snapshot.mappings, ...snapshot.mappings]
     })).toThrow(/Duplicate mapping/);
+  });
+
+  it("rejects mappings that belong to another workspace", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
+      mappings: [{ catalogId: "orion-dev", workspaceId: "other", kind: "project", externalId: "core", entityId: "p" }]
+    })).toThrow(/Foreign or unresolved workspace mapping/);
+  });
+
+  it("does not trust mappings without an explicit workspace scope", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      mappings: [{ catalogId: "orion-dev", kind: "project", externalId: "core", entityId: "p" }]
+    })).toThrow(/Invalid mapping/);
   });
 
 });
