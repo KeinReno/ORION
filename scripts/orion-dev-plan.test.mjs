@@ -44,4 +44,29 @@ describe("ORION DEV dry-run planner", () => {
       workspaces: [{ id: "1", name: "ORION DEV" }, { id: "2", name: "orion dev" }]
     })).toThrow(/Ambiguous/);
   });
+  it("recognizes durable project and task mappings without recreating them", () => {
+    const plan = planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
+      tasks: [{ id: "t", workspaceId: "w", projectId: "p", title: "First" }],
+      mappings: [
+        { catalogId: "orion-dev", kind: "project", externalId: "core", entityId: "p" },
+        { catalogId: "orion-dev", kind: "task", externalId: "DEV-1", entityId: "t" }
+      ]
+    });
+    expect(plan.actions.find((a) => a.kind === "project").action).toBe("already_mapped");
+    expect(plan.actions.find((a) => a.externalId === "DEV-1").action).toBe("already_mapped");
+  });
+
+  it("rejects stale and duplicate mappings", () => {
+    const snapshot = {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      mappings: [{ catalogId: "orion-dev", kind: "project", externalId: "core", entityId: "missing" }]
+    };
+    expect(() => planOrionDevImport(catalog, snapshot)).toThrow(/Stale project mapping/);
+    expect(() => planOrionDevImport(catalog, {
+      ...snapshot, mappings: [...snapshot.mappings, ...snapshot.mappings]
+    })).toThrow(/Duplicate mapping/);
+  });
+
 });
