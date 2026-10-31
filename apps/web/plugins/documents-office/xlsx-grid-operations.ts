@@ -64,6 +64,13 @@ export function applyGridChanges(workbook: WorkbookState, sheetIndex: number, ch
       change.row >= EXCEL_MAX_ROWS || change.col >= EXCEL_MAX_COLS) {
       throw new Error("Адрес ячейки выходит за пределы XLSX.");
     }
+    // HyperFormula expects dense row arrays. Keep intermediate rows as empty
+    // arrays when an address is visited beyond the workbook's used range.
+    if (change.row >= rows.length) {
+      const start = rows.length;
+      rows.length = change.row + 1;
+      for (let index = start; index <= change.row; index++) rows[index] = [];
+    }
     if (!touched.has(change.row)) {
       rows[change.row] = [...(rows[change.row] ?? [])];
       touched.add(change.row);
