@@ -1,6 +1,9 @@
 name: Windows Beta Release (manual)
 
 on:
+  push:
+    branches:
+      - 'release/approved-beta-*'
   workflow_dispatch:
     inputs:
       beta_number:
@@ -25,8 +28,9 @@ concurrency:
 
 jobs:
   publish:
-    # Self-hosted Windows X64 by default; alternatively funded windows-latest.
-    runs-on: ${{ fromJSON(inputs.runner == 'windows-latest' && '["windows-latest"]' || '["self-hosted","Windows","X64"]') }}
+    # Approved release branches always use the owner's Windows build runner.
+    # Manual dispatch can choose a funded hosted runner instead.
+    runs-on: ${{ fromJSON(github.event_name == 'push' && '["self-hosted","Windows","X64"]' || (inputs.runner == 'windows-latest' && '["windows-latest"]' || '["self-hosted","Windows","X64"]')) }}
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -44,4 +48,5 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node scripts/publish-windows-beta.mjs ${{ inputs.beta_number }}
+          ORION_BETA_NUMBER: ${{ github.event_name == 'push' && 'auto' || inputs.beta_number }}
+        run: node scripts/publish-windows-beta.mjs "$env:ORION_BETA_NUMBER"
