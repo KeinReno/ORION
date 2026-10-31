@@ -48,6 +48,11 @@ import {
   type WorkbookState
 } from "./codecs/xlsx-codec";
 import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
+import {
+  EXCEL_MAX_ROWS, EXCEL_MAX_COLS, addWorksheet, applyGridChanges, cellAddress,
+  cellInputText, clipboardChanges, columnLabel, parseCellAddress, renameWorksheet,
+  type GridChange
+} from "./xlsx-grid-operations";
 import { XLSX_MIME } from "./codecs/office-files";
 
 /** Parses an A1 range like "A1:D10" into header names read from its first row. */
@@ -82,19 +87,10 @@ export interface OfficeEditorInnerProps {
   onDirtyChange: (dirty: boolean) => void;
 }
 
-const MAX_DISPLAY_ROWS = 200;
-const MAX_DISPLAY_COLS = 40;
+const VISIBLE_ROWS = 60;
+const VISIBLE_COLS = 16;
 
-function colLetter(index: number): string {
-  let n = index + 1;
-  let s = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    s = String.fromCharCode(65 + rem) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
+type PendingCell = { sheetIndex: number; row: number; col: number; value: string };
 
 export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDirtyChange }: OfficeEditorInnerProps): React.ReactElement {
   const { toast } = useToast();
@@ -103,6 +99,16 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   const [dirty, setDirty] = useState(false);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [activeSheet, setActiveSheet] = useState(0);
+  const stateRef = useRef<WorkbookState | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const pendingCell = useRef<PendingCell | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [selected, setSelected] = useState({ row: 0, col: 0 });
+  const [firstRow, setFirstRow] = useState(0);
+  const [firstCol, setFirstCol] = useState(0);
+  const [addressText, setAddressText] = useState("A1");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState("");
   // F05: edit-generation / saved-generation guard. `editGeneration` bumps on
   // every user edit (cell, chart, pivot). `save()` snapshots it into
   // `savedGenerationRef` right before it sends bytes to the server. The
@@ -156,8 +162,15 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
           // may now be stale relative to it.
           return;
         }
+        stateRef.current = parsed;
+        pendingCell.current = null;
+        setDraft(null);
         setState(parsed);
         setActiveSheet(0);
+        setSelected({ row: 0, col: 0 });
+        setFirstRow(0);
+        setFirstCol(0);
+        setAddressText("A1");
         setDirty(false);
         savedGenerationRef.current = editGenerationRef.current;
       })
@@ -201,37 +214,111 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   }
 
   const sheet = state.sheets[activeSheet];
-  const rowCount = Math.min(Math.max(sheet.rows.length + 5, 20), MAX_DISPLAY_ROWS);
-  const colCount = Math.min(
-    Math.max(sheet.rows.reduce((m, r) => Math.max(m, r.length), 0) + 3, 10),
-    MAX_DISPLAY_COLS
-  );
+  const rowCount = Math.min(VISIBLE_ROWS, EXCEL_MAX_ROWS - firstRow);
+  const colCount = Math.min(VISIBLE_COLS, EXCEL_MAX_COLS - firstCol);
 
-  function cellAt(rowIdx: number, colIdx: number): { value: string | number | boolean | null; formula?: string } {
-    return sheet.rows[rowIdx]?.[colIdx] ?? { value: null };
+  function cellAt(row: number, col: number) {
+    return sheet.rows[row]?.[col];
   }
 
-  function setCell(rowIdx: number, colIdx: number, raw: string): void {
-    setState((cur) => {
-      if (!cur) return cur;
-      const next: WorkbookState = { ...cur, sheets: cur.sheets.map((s) => ({ ...s, rows: s.rows.map((r) => [...r]) })) };
-      const s = next.sheets[activeSheet];
-      while (s.rows.length <= rowIdx) s.rows.push([]);
-      const row = s.rows[rowIdx];
-      while (row.length <= colIdx) row.push({ value: null });
+  function applyChanges(sheetIndex: number, changes: readonly GridChange[]): void {
+    if (changes.length === 0 || !stateRef.current) return;
+    try {
+      const next = recalculate(applyGridChanges(stateRef.current, sheetIndex, changes));
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить таблицу", description: (error as Error).message, tone: "danger" });
+    }
+  }
 
-      if (raw.startsWith("=")) {
-        row[colIdx] = { value: null, formula: raw.slice(1) };
-      } else if (raw.trim() === "") {
-        row[colIdx] = { value: null };
-      } else {
-        const num = Number(raw);
-        row[colIdx] = { value: Number.isFinite(num) && raw.trim() !== "" ? num : raw };
-      }
-      return recalculate(next);
+  function commitDraft(): void {
+    const pending = pendingCell.current;
+    if (!pending) return;
+    pendingCell.current = null;
+    setDraft(null);
+    const before = stateRef.current?.sheets[pending.sheetIndex]?.rows[pending.row]?.[pending.col];
+    if (cellInputText(before) !== pending.value) {
+      applyChanges(pending.sheetIndex, [{ row: pending.row, col: pending.col, text: pending.value }]);
+    }
+  }
+
+  function startEdit(row: number, col: number): void {
+    const value = cellInputText(cellAt(row, col));
+    pendingCell.current = { sheetIndex: activeSheet, row, col, value };
+    setSelected({ row, col });
+    setAddressText(cellAddress(row, col));
+    setDraft(value);
+  }
+
+  function changeDraft(value: string): void {
+    if (pendingCell.current) pendingCell.current.value = value;
+    setDraft(value);
+  }
+
+  function goTo(row: number, col: number): void {
+    if (row < 0 || col < 0 || row >= EXCEL_MAX_ROWS || col >= EXCEL_MAX_COLS) return;
+    commitDraft();
+    setSelected({ row, col });
+    setAddressText(cellAddress(row, col));
+    if (row < firstRow || row >= firstRow + VISIBLE_ROWS) setFirstRow(Math.floor(row / VISIBLE_ROWS) * VISIBLE_ROWS);
+    if (col < firstCol || col >= firstCol + VISIBLE_COLS) setFirstCol(Math.floor(col / VISIBLE_COLS) * VISIBLE_COLS);
+    requestAnimationFrame(() => {
+      gridRef.current?.querySelector<HTMLInputElement>('[data-cell="' + cellAddress(row, col) + '"]')?.focus();
     });
+  }
+
+  function jumpToAddress(): void {
+    const position = parseCellAddress(addressText);
+    if (!position) {
+      toast({ title: "Неверный адрес ячейки", description: "Используйте формат A1, B27 или AA350.", tone: "danger" });
+      return;
+    }
+    goTo(position.row, position.col);
+  }
+
+  function pasteRange(row: number, col: number, text: string): void {
+    // The clipboard replaces the selected anchor cell; do not save a stale draft over it.
+    pendingCell.current = null;
+    setDraft(null);
+    try {
+      applyChanges(activeSheet, clipboardChanges(text, row, col));
+    } catch (error) {
+      toast({ title: "Не удалось вставить диапазон", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function createSheet(): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    const next = addWorksheet(stateRef.current);
+    stateRef.current = next;
+    setState(next);
+    setActiveSheet(next.sheets.length - 1);
+    setSelected({ row: 0, col: 0 });
+    setAddressText("A1");
+    setFirstRow(0);
+    setFirstCol(0);
     setDirty(true);
     bumpEditGeneration();
+  }
+
+  function applyRename(): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = recalculate(renameWorksheet(stateRef.current, activeSheet, renameName));
+      if (next === stateRef.current) return;
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setRenameOpen(false);
+    } catch (error) {
+      toast({ title: "Не удалось переименовать лист", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function insertChart(): void {
