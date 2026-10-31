@@ -50,8 +50,9 @@ import {
 import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
 import {
   EXCEL_MAX_ROWS, EXCEL_MAX_COLS, addWorksheet, applyGridChanges, cellAddress,
-  cellDisplayText, cellInputText, clipboardChanges, columnLabel, parseCellAddress, renameWorksheet,
-  type GridChange
+  cellDisplayText, cellInputText, changesForClear, clipboardChanges, columnLabel,
+  parseCellAddress, rangeToTsv, renameWorksheet,
+  type GridChange, type GridRange
 } from "./xlsx-grid-operations";
 import { XLSX_MIME } from "./codecs/office-files";
 
@@ -104,6 +105,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   const pendingCell = useRef<PendingCell | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [selected, setSelected] = useState({ row: 0, col: 0 });
+  const [range, setRange] = useState<GridRange | null>(null);
   const [firstRow, setFirstRow] = useState(0);
   const [firstCol, setFirstCol] = useState(0);
   const [addressText, setAddressText] = useState("A1");
@@ -168,6 +170,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         setState(parsed);
         setActiveSheet(0);
         setSelected({ row: 0, col: 0 });
+        setRange(null);
         setFirstRow(0);
         setFirstCol(0);
         setAddressText("A1");
@@ -249,6 +252,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
     const value = cellInputText(cellAt(row, col));
     pendingCell.current = { sheetIndex: activeSheet, row, col, value };
     setSelected({ row, col });
+    setRange(null);
     setAddressText(cellAddress(row, col));
     setDraft(value);
   }
@@ -262,6 +266,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
     if (row < 0 || col < 0 || row >= EXCEL_MAX_ROWS || col >= EXCEL_MAX_COLS) return;
     commitDraft();
     setSelected({ row, col });
+    setRange(null);
     setAddressText(cellAddress(row, col));
     if (row < firstRow || row >= firstRow + VISIBLE_ROWS) setFirstRow(Math.floor(row / VISIBLE_ROWS) * VISIBLE_ROWS);
     if (col < firstCol || col >= firstCol + VISIBLE_COLS) setFirstCol(Math.floor(col / VISIBLE_COLS) * VISIBLE_COLS);
@@ -283,10 +288,41 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
     // The clipboard replaces the selected anchor cell; do not save a stale draft over it.
     pendingCell.current = null;
     setDraft(null);
+    setRange(null);
     try {
       applyChanges(activeSheet, clipboardChanges(text, row, col));
     } catch (error) {
       toast({ title: "Не удалось вставить диапазон", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function currentRange(): GridRange {
+    return range ?? {
+      startRow: selected.row, endRow: selected.row,
+      startCol: selected.col, endCol: selected.col
+    };
+  }
+
+  function clearRange(): void {
+    commitDraft();
+    try {
+      applyChanges(activeSheet, changesForClear(currentRange()));
+      setRange(null);
+    } catch (error) {
+      toast({ title: "Не удалось очистить диапазон", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  async function copyRange(): Promise<void> {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const content = rangeToTsv(stateRef.current, activeSheet, currentRange());
+      if (!navigator.clipboard?.writeText) throw new Error("Буфер обмена недоступен; выделите диапазон и нажмите Ctrl+C.");
+      await navigator.clipboard.writeText(content);
+      toast({ title: "Диапазон скопирован", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось скопировать", description: (error as Error).message, tone: "danger" });
     }
   }
 
@@ -298,6 +334,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
     setState(next);
     setActiveSheet(next.sheets.length - 1);
     setSelected({ row: 0, col: 0 });
+    setRange(null);
     setAddressText("A1");
     setFirstRow(0);
     setFirstCol(0);
@@ -557,6 +594,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                 commitDraft();
                 setActiveSheet(index);
                 setSelected({ row: 0, col: 0 });
+                setRange(null);
                 setAddressText("A1");
                 setFirstRow(0); setFirstCol(0);
                 setRenameOpen(false);
@@ -603,6 +641,9 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         <span className="text-2xs text-subtle-foreground">
           Строки {firstRow + 1}–{firstRow + rowCount} · Столбцы {columnLabel(firstCol)}–{columnLabel(firstCol + colCount - 1)}
         </span>
+        <Button size="sm" variant="outline" onClick={() => void copyRange()}>Копировать</Button>
+        <Button size="sm" variant="outline" onClick={clearRange}>Очистить</Button>
+        {range ? <span className="text-2xs text-accent-text">Выделено {cellAddress(range.startRow, range.startCol)}:{cellAddress(range.endRow, range.endCol)}</span> : null}
       </div>
 
       <div ref={gridRef} className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
@@ -636,9 +677,23 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                           data-cell={address}
                           aria-label={"Ячейка " + address}
                           value={editing ? (draft ?? "") : cellDisplayText(cell)}
+                          onMouseDown={(event) => {
+                            if (event.shiftKey) {
+                              event.preventDefault();
+                              setRange({
+                                startRow: selected.row, startCol: selected.col,
+                                endRow: row, endCol: col
+                              });
+                            } else setRange(null);
+                          }}
                           onFocus={() => startEdit(row, col)}
                           onChange={(event) => changeDraft(event.target.value)}
                           onBlur={commitDraft}
+                          onCopy={(event) => {
+                            if (!range || !stateRef.current) return;
+                            event.preventDefault();
+                            event.clipboardData.setData("text/plain", rangeToTsv(stateRef.current, activeSheet, range));
+                          }}
                           onPaste={(event) => {
                             const text = event.clipboardData.getData("text/plain");
                             if (text.includes("\t") || text.includes("\n") || text.includes("\r")) {
@@ -651,7 +706,10 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                               event.preventDefault(); void save(); return;
                             }
                             if (event.key === "Escape") {
-                              pendingCell.current = null; setDraft(null); event.currentTarget.blur(); return;
+                              pendingCell.current = null; setDraft(null); setRange(null); event.currentTarget.blur(); return;
+                            }
+                            if (event.key === "Delete" && range) {
+                              event.preventDefault(); clearRange(); return;
                             }
                             if (event.key === "Enter" || event.key === "Tab") {
                               event.preventDefault();
@@ -664,7 +722,10 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                           }}
                           className={cx(
                             "w-28 bg-transparent px-2 py-1 text-foreground outline-none focus:bg-accent/[0.08]",
-                            selected.row === row && selected.col === col ? "bg-accent/10 ring-1 ring-inset ring-accent" : ""
+                            selected.row === row && selected.col === col ? "bg-accent/10 ring-1 ring-inset ring-accent" : "",
+                            range && row >= Math.min(range.startRow, range.endRow) && row <= Math.max(range.startRow, range.endRow) &&
+                              col >= Math.min(range.startCol, range.endCol) && col <= Math.max(range.startCol, range.endCol)
+                                ? "bg-accent/20 ring-1 ring-inset ring-accent/70" : ""
                           )}
                         />
                       </td>
