@@ -40,6 +40,11 @@ export function cellInputText(cell: CellState | undefined): string {
   return cell.value === null || cell.value === undefined ? "" : String(cell.value);
 }
 
+/** Formula result is displayed in the grid; formula source is shown on focus/in the formula bar. */
+export function cellDisplayText(cell: CellState | undefined): string {
+  return cell?.value === null || cell?.value === undefined ? "" : String(cell.value);
+}
+
 function parsedCell(text: string, previous?: CellState): CellState {
   const numFmt = previous?.numFmt;
   if (text.startsWith("=")) return { value: null, formula: text.slice(1), numFmt };
