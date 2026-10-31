@@ -6,6 +6,7 @@ import path from "node:path";
 import { BadRequestException, ConflictException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   APP_UPDATE_DEFAULT_REPO,
+  type AppUpdateChannel,
   type AppUpdateConfig,
   type AppUpdateRelease,
   type AppUpdateStatus,
@@ -20,6 +21,7 @@ interface StoredConfig {
   repo: string;
   tokenEnc: string | null;
   autoCheck: boolean;
+  channel: AppUpdateChannel;
 }
 
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -136,17 +138,25 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   }
 
   private readConfig(): StoredConfig {
+    // Existing beta installations used all releases implicitly. Preserve their
+    // behaviour; fresh stable installations start on the stable channel.
+    const fallbackChannel: AppUpdateChannel = /-windows-beta\.\d+$/.test(this.currentTag() ?? "") ? "beta" : "stable";
     try {
       const raw = JSON.parse(fs.readFileSync(this.configPath(), "utf8")) as Partial<StoredConfig>;
-      return { repo: raw.repo || APP_UPDATE_DEFAULT_REPO, tokenEnc: raw.tokenEnc ?? null, autoCheck: raw.autoCheck ?? true };
+      return {
+        repo: raw.repo || APP_UPDATE_DEFAULT_REPO,
+        tokenEnc: raw.tokenEnc ?? null,
+        autoCheck: raw.autoCheck ?? true,
+        channel: raw.channel === "stable" || raw.channel === "beta" ? raw.channel : fallbackChannel
+      };
     } catch {
-      return { repo: APP_UPDATE_DEFAULT_REPO, tokenEnc: null, autoCheck: true };
+      return { repo: APP_UPDATE_DEFAULT_REPO, tokenEnc: null, autoCheck: true, channel: fallbackChannel };
     }
   }
 
   getConfig(): AppUpdateConfig {
     const config = this.readConfig();
-    return { repo: config.repo, tokenSet: config.tokenEnc !== null, autoCheck: config.autoCheck };
+    return { repo: config.repo, tokenSet: config.tokenEnc !== null, autoCheck: config.autoCheck, channel: config.channel };
   }
 
   setConfig(input: SetAppUpdateConfigInput): AppUpdateConfig {
@@ -161,7 +171,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException(error instanceof Error ? error.message : "Не удалось зашифровать токен");
       }
     }
-    writeJsonAtomic(this.configPath(), { repo: input.repo ?? current.repo, tokenEnc, autoCheck: input.autoCheck ?? current.autoCheck });
+    writeJsonAtomic(this.configPath(), { repo: input.repo ?? current.repo, tokenEnc, autoCheck: input.autoCheck ?? current.autoCheck, channel: input.channel ?? current.channel });
     // Другая учётная запись или репозиторий — прежний результат проверки недействителен.
     this.status = { state: "idle", latest: null, progress: 0, error: null, lastCheckedAt: null };
     this.downloaded = null;
@@ -219,7 +229,8 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     const token = this.token();
     if (!token) this.fail("Токен GitHub не задан: добавьте его в настройках обновлений");
     if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Сейчас идёт проверка, скачивание или установка обновления");
-    const repo = this.readConfig().repo;
+    const config = this.readConfig();
+    const repo = config.repo;
     this.status = { ...this.status, state: "checking", error: null };
     let releases: GithubRelease[];
     try {
@@ -235,7 +246,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       if (error instanceof BadRequestException) throw error;
       this.fail("Не удалось связаться с GitHub — проверьте подключение к интернету");
     }
-    const latest = pickLatestRelease(releases, true, this.payloadBase());
+    const latest = pickLatestRelease(releases, config.channel === "beta", this.payloadBase());
     const lastCheckedAt = new Date().toISOString();
     if (!latest) {
       this.status = { state: "up_to_date", latest: null, progress: 0, error: null, lastCheckedAt };

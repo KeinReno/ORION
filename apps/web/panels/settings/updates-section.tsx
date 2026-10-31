@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge, Button, Card, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, useToast } from "@orion/ui";
+import type { AppUpdateChannel } from "@orion/shared-types";
 import { Download, RefreshCw, TriangleAlert } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -33,6 +34,7 @@ export function UpdatesSettings(): React.ReactElement {
   const [busy, setBusy] = useState<"check" | "download" | "apply" | null>(null);
   const [token, setToken] = useState("");
   const [repo, setRepo] = useState<string | null>(null);
+  const [channel, setChannel] = useState<AppUpdateChannel | null>(null);
   const status = useQuery({
     queryKey: ["updates", "status"],
     queryFn: fetchUpdateStatus,
@@ -57,8 +59,9 @@ export function UpdatesSettings(): React.ReactElement {
   async function saveConfig(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      await saveUpdateConfig({ ...(token.trim() ? { token: token.trim() } : {}), ...(repo !== null ? { repo } : {}) });
+      await saveUpdateConfig({ ...(token.trim() ? { token: token.trim() } : {}), ...(repo !== null ? { repo } : {}), ...(channel !== null ? { channel } : {}) });
       setToken("");
+      setChannel(null);
       toast({ title: "Настройки обновлений сохранены", description: "Токен хранится зашифрованным и больше не показывается.", tone: "success" });
       void queryClient.invalidateQueries({ queryKey: ["updates"] });
     } catch (error) {
@@ -133,6 +136,22 @@ export function UpdatesSettings(): React.ReactElement {
           репозиторию). Токен хранится зашифрованным на этом компьютере. {c?.tokenSet ? "Токен задан." : "Токен не задан."}
         </p>
         <label className="block space-y-1 text-sm">
+          <span>Канал обновлений</span>
+          <Select
+            aria-label="Канал обновлений"
+            value={channel ?? c?.channel ?? "stable"}
+            onChange={(event) => setChannel(event.target.value as AppUpdateChannel)}
+          >
+            <option value="stable">Stable — только стабильные релизы</option>
+            <option value="beta">Beta — экспериментальные и стабильные релизы</option>
+          </Select>
+        </label>
+        <p className="text-xs text-muted-foreground">
+          {((channel ?? c?.channel) === "beta")
+            ? "Beta: новые возможности раньше, но возможны ошибки. Версии проверяются по GitHub Releases."
+            : "Stable: только финальные релизы. Экспериментальные beta-сборки не предлагаются."}
+        </p>
+        <label className="block space-y-1 text-sm">
           <span>Репозиторий</span>
           <Input value={repo ?? c?.repo ?? ""} onChange={(event) => setRepo(event.target.value)} />
         </label>
@@ -140,7 +159,7 @@ export function UpdatesSettings(): React.ReactElement {
           <span>Токен GitHub</span>
           <Input type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} placeholder={c?.tokenSet ? "задан — введите новый, чтобы заменить" : "github_pat_…"} />
         </label>
-        <Button type="submit" disabled={!token.trim() && repo === null}>
+        <Button type="submit" disabled={!token.trim() && repo === null && channel === null}>
           Сохранить
         </Button>
       </form>
