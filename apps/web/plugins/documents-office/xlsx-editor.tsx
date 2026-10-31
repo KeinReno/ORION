@@ -101,6 +101,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [activeSheet, setActiveSheet] = useState(0);
   const stateRef = useRef<WorkbookState | null>(null);
+  const initialLoadRef = useRef(true);
   const gridRef = useRef<HTMLDivElement>(null);
   const pendingCell = useRef<PendingCell | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -168,12 +169,18 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         pendingCell.current = null;
         setDraft(null);
         setState(parsed);
-        setActiveSheet(0);
-        setSelected({ row: 0, col: 0 });
-        setRange(null);
-        setFirstRow(0);
-        setFirstCol(0);
-        setAddressText("A1");
+        if (initialLoadRef.current) {
+          setActiveSheet(0);
+          setSelected({ row: 0, col: 0 });
+          setRange(null);
+          setFirstRow(0);
+          setFirstCol(0);
+          setAddressText("A1");
+          initialLoadRef.current = false;
+        } else {
+          // Refetch after Save must not throw the user back to sheet 1 / A1.
+          setActiveSheet((index) => Math.min(index, parsed.sheets.length - 1));
+        }
         setDirty(false);
         savedGenerationRef.current = editGenerationRef.current;
       })
@@ -692,7 +699,10 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                           onCopy={(event) => {
                             if (!range || !stateRef.current) return;
                             event.preventDefault();
-                            event.clipboardData.setData("text/plain", rangeToTsv(stateRef.current, activeSheet, range));
+                            commitDraft();
+                            if (stateRef.current) {
+                              event.clipboardData.setData("text/plain", rangeToTsv(stateRef.current, activeSheet, range));
+                            }
                           }}
                           onPaste={(event) => {
                             const text = event.clipboardData.getData("text/plain");
