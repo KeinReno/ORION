@@ -50,9 +50,9 @@ import {
 import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
 import {
   EXCEL_MAX_ROWS, EXCEL_MAX_COLS, addWorksheet, applyGridChanges, cellAddress,
-  cellDisplayText, cellInputText, changesForClear, clipboardChanges, columnLabel,
-  parseCellAddress, rangeToTsv, renameWorksheet,
-  type GridChange, type GridRange
+  cellDisplayText, cellInputText, changeGridStructure, changesForClear, clipboardChanges, columnLabel,
+  parseCellAddress, rangeToTsv, renameWorksheet, setCellNumberFormat,
+  type GridChange, type GridRange, type GridStructureAction
 } from "./xlsx-grid-operations";
 import { XLSX_MIME } from "./codecs/office-files";
 
@@ -336,6 +336,35 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
       toast({ title: "Диапазон скопирован", tone: "success" });
     } catch (error) {
       toast({ title: "Не удалось скопировать", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function editStructure(action: GridStructureAction): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = changeGridStructure(stateRef.current, activeSheet, action, selected.row, selected.col);
+      if (next === stateRef.current) return;
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить структуру листа", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function setSelectedNumberFormat(format: string): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = setCellNumberFormat(stateRef.current, activeSheet, selected.row, selected.col, format);
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить формат", description: (error as Error).message, tone: "danger" });
     }
   }
 
@@ -658,6 +687,37 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         <Button size="sm" variant="outline" onClick={clearRange}>Очистить</Button>
         {range ? <span className="text-2xs text-accent-text">Выделено {cellAddress(range.startRow, range.startCol)}:{cellAddress(range.endRow, range.endCol)}</span> : null}
       </div>
+
+
+      <details className="shrink-0 border-b border-border">
+        <summary className="cursor-pointer px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+          Структура листа и форматирование ячейки
+        </summary>
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+          <Button size="sm" variant="outline" onClick={() => editStructure("insert-row")}>Вставить строку</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("delete-row")}>Удалить строку</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("insert-column")}>Вставить столбец</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("delete-column")}>Удалить столбец</Button>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Формат
+            <Select
+              aria-label="Формат числа выбранной ячейки"
+              value={cellAt(selected.row, selected.col)?.numFmt ?? "General"}
+              onChange={(event) => setSelectedNumberFormat(event.target.value)}
+            >
+              {["General", "0", "#,##0.00", "0%", "yyyy-mm-dd"].includes(cellAt(selected.row, selected.col)?.numFmt ?? "General") ? null : (
+                <option value={cellAt(selected.row, selected.col)?.numFmt}>Пользовательский</option>
+              )}
+              <option value="General">Общий</option>
+              <option value="0">Целое число</option>
+              <option value="#,##0.00">Число (2 знака)</option>
+              <option value="0%">Процент</option>
+              <option value="yyyy-mm-dd">Дата</option>
+            </Select>
+          </label>
+          <span className="text-2xs text-subtle-foreground">Структурные операции защищены от повреждения формул и объединений.</span>
+        </div>
+      </details>
 
       <div ref={gridRef} className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
         <table className="border-collapse text-xs" aria-label="Редактируемая таблица">
