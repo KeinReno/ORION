@@ -20,6 +20,15 @@
 - Added regression tests for foreign-workspace and missing-workspace mapping inputs; updated earlier mapping fixtures to include workspaceId.
 - Commits: `5eb23b5`, `28ec1f0`. Tests committed but not executed in a local Orion checkout.
 
+### 2026-11-01 — follow-up: fail-closed mapping conflicts
+
+- Re-read the current catalog, bootstrap protocol, journal and Prisma schema before editing.
+- Planner now rejects bindings for catalog project/task IDs that no longer exist instead of silently ignoring them.
+- Planner now rejects conflicting name candidates when a durable mapping points to a different project/task; no silent reuse of an ambiguous entity.
+- Added three regression tests for unknown task mappings and project/task mapping-name conflicts.
+- Commits: `12e03f5`, `88f27eb`. Tests were **not executed** in a checkout.
+- No schema migration or importer write endpoint was added; database mapping persistence remains the next implementation milestone.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. No database migrations, authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
