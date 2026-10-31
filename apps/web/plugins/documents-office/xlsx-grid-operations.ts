@@ -184,8 +184,8 @@ export function setCellNumberFormat(
   const rows = sheet.rows.slice();
   for (let index = rows.length; index <= row; index++) rows[index] = [];
   const cells = [...(rows[row] ?? [])];
-  const original = cells[col] ?? { value: null };
-  const value = { ...original };
+  const original: CellState = cells[col] ?? { value: null };
+  const value: CellState = { ...original };
   delete value.numFmt;
   cells[col] = numberFormat === "General" ? value : { ...value, numFmt: numberFormat };
   rows[row] = cells;
@@ -278,9 +278,9 @@ export function renameWorksheet(workbook: WorkbookState, sheetIndex: number, nam
   const escape = (value: string): string => value.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
   const rewrite = (formula: string): string => {
     let value = formula.replace(new RegExp(escape(quotedOld), "g"), newReference);
-    if (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(current.name)) {
-      value = value.replace(new RegExp("(^|[^A-Za-z0-9_'])" + escape(bareOld), "g"), "$1" + newReference);
-    }
+    // Bare references are valid for non-ASCII sheet names in Excel as well.
+    // Unicode property classes avoid matching a sheet name inside a longer identifier.
+    value = value.replace(new RegExp("(^|[^\\p{L}\\p{N}_'])" + escape(bareOld), "gu"), "$1" + newReference);
     return value;
   };
   return {
