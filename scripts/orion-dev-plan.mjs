@@ -41,16 +41,22 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   }
   for (const id of taskIds) visit(id);
 
-  const workspaces = snapshot.workspaces ?? [];
   const existingProjects = snapshot.projects ?? [];
   const existingTasks = snapshot.tasks ?? [];
+  const workspaces = snapshot.workspaces ?? [];
+  if (!Array.isArray(workspaces)) throw new Error("Invalid snapshot workspaces");
+  const normalize = (value) => String(value ?? "").trim().toLowerCase();
+  const matches = workspaces.filter((row) => normalize(row.name) === "orion dev");
+  if (matches.length > 1) throw new Error("Ambiguous ORION DEV workspace");
+  const workspace = matches[0] ?? null;
   const mappings = snapshot.mappings ?? [];
   if (!Array.isArray(mappings)) throw new Error("Invalid snapshot mappings");
   const mappedKeys = new Set();
   const mappedTargets = new Set();
   for (const m of mappings) {
     if (m.catalogId !== catalog.catalogId) continue;
-    if (!["project", "task"].includes(m.kind) || typeof m.externalId !== "string" || typeof m.entityId !== "string") throw new Error("Invalid mapping");
+    if (!["project", "task"].includes(m.kind) || typeof m.externalId !== "string" || !m.externalId || typeof m.entityId !== "string" || !m.entityId || typeof m.workspaceId !== "string" || !m.workspaceId) throw new Error("Invalid mapping");
+    if (!workspace || m.workspaceId !== workspace.id) throw new Error("Foreign or unresolved workspace mapping: " + m.externalId);
     const key = m.kind + ":" + m.externalId;
     const target = m.kind + ":" + m.entityId;
     if (mappedKeys.has(key) || mappedTargets.has(target)) throw new Error("Duplicate mapping");
@@ -60,10 +66,6 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   for (const rows of [workspaces, existingProjects, existingTasks]) {
     if (!Array.isArray(rows)) throw new Error("Invalid snapshot");
   }
-  const normalize = (value) => String(value ?? "").trim().toLowerCase();
-  const matches = workspaces.filter((row) => normalize(row.name) === "orion dev");
-  if (matches.length > 1) throw new Error("Ambiguous ORION DEV workspace");
-  const workspace = matches[0] ?? null;
   const actions = [];
   if (!workspace) actions.push({ kind: "workspace", action: "propose_create", name: "ORION DEV" });
   else actions.push({ kind: "workspace", action: "confirm_existing", id: workspace.id });
