@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { WorkbookState } from "./codecs/xlsx-codec";
 import {
   EXCEL_MAX_COLS, EXCEL_MAX_ROWS, addWorksheet, applyGridChanges, cellAddress,
-  cellInputText, changesForClear, clipboardChanges, columnLabel,
-  parseCellAddress, parseClipboardGrid, rangeToTsv, renameWorksheet
+  cellInputText, changeGridStructure, changesForClear, clipboardChanges, columnLabel,
+  parseCellAddress, parseClipboardGrid, rangeToTsv, renameWorksheet, setCellNumberFormat
 } from "./xlsx-grid-operations";
 
 function fixture(): WorkbookState {
@@ -80,6 +80,46 @@ describe("xlsx editor grid operations", () => {
     expect(cleared.sheets[0].rows[1][0].value).toBeNull();
     expect(cleared.sheets[0].rows[2][1].value).toBeNull();
     expect(cleared.sheets[0].rows[0][0].value).toBe(10);
+  });
+
+  it("formats cell numbers without changing the underlying value or formula", () => {
+    const original = fixture();
+    const formatted = setCellNumberFormat(original, 0, 0, 1, "0.00");
+    expect(formatted.sheets[0].rows[0][1].formula).toBe("A1*2");
+    expect(formatted.sheets[0].rows[0][1].numFmt).toBe("0.00");
+    expect(original.sheets[0].rows[0][1].numFmt).toBeUndefined();
+    expect(setCellNumberFormat(formatted, 0, 0, 1, "General").sheets[0].rows[0][1].numFmt).toBeUndefined();
+  });
+
+  it("inserts and removes rows/columns for simple sheets without damaging neighboring cells", () => {
+    const workbook: WorkbookState = {
+      sheets: [{ name: "Plain", rows: [
+        [{ value: "A" }, { value: "B" }],
+        [{ value: "C" }, { value: "D" }]
+      ], columnWidths: { 1: 10, 2: 25 } }]
+    };
+    const inserted = changeGridStructure(workbook, 0, "insert-column", 0, 1);
+    expect(inserted.sheets[0].rows[0].map((c) => c.value)).toEqual(["A", null, "B"]);
+    expect(inserted.sheets[0].columnWidths).toEqual({ 1: 10, 3: 25 });
+    const restored = changeGridStructure(inserted, 0, "delete-column", 0, 1);
+    expect(restored.sheets[0].rows[0].map((c) => c.value)).toEqual(["A", "B"]);
+    const withRow = changeGridStructure(restored, 0, "insert-row", 1, 0);
+    expect(withRow.sheets[0].rows[1]).toEqual([]);
+    expect(withRow.sheets[0].rows[2][0].value).toBe("C");
+    const afterDelete = changeGridStructure(withRow, 0, "delete-row", 1, 0);
+    expect(afterDelete.sheets[0].rows[1][0].value).toBe("C");
+    expect(() => changeGridStructure(fixture(), 0, "delete-row", 0, 0)).toThrow("отключено");
+  });
+
+  it("renames a Cyrillic sheet referenced without Excel quoting", () => {
+    const workbook: WorkbookState = {
+      sheets: [
+        { name: "Данные", rows: [[{ value: 1 }]] },
+        { name: "Итоги", rows: [[{ value: null, formula: "Данные!A1*2" }]] }
+      ]
+    };
+    const renamed = renameWorksheet(workbook, 0, "Продажи");
+    expect(renamed.sheets[1].rows[0][0].formula).toBe("'Продажи'!A1*2");
   });
 
   it("adds and renames sheets with formula, chart and pivot references kept consistent", () => {
