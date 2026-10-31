@@ -167,7 +167,7 @@ describe("UpdateService", () => {
   it("переключение Stable/Beta меняет предлагаемый релиз и сбрасывает устаревшую проверку", async () => {
     const service = configured();
     releases = [
-      release("v0.1.0-windows-beta.99"),
+      release("v0.2.0-windows-beta.99"),
       release("v0.1.0", { prerelease: false }),
       release("v0.1.0-windows-beta.999", { prerelease: false })
     ];
@@ -176,7 +176,7 @@ describe("UpdateService", () => {
     expect(service.getConfig().channel).toBe("stable");
     service.setConfig({ channel: "beta" });
     expect(service.getStatus().state).toBe("idle");
-    expect((await service.check()).latest?.tag).toBe("v0.1.0");
+    expect((await service.check()).latest?.tag).toBe("v0.2.0-windows-beta.99");
     expect(service.getConfig().channel).toBe("beta");
   });
 
