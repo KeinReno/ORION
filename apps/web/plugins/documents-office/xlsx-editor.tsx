@@ -323,25 +323,25 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
 
   function insertChart(): void {
     if (!chartRange.trim()) return;
-    setState((cur) => {
-      if (!cur) return cur;
-      try {
-        return addChart(cur, {
-          sheetId: sheet.name,
-          dataRange: chartRange.trim(),
-          chartType,
-          title: chartTitle.trim() || undefined
-        });
-      } catch (e) {
-        toast({ title: "Не удалось добавить диаграмму", description: (e as Error).message, tone: "danger" });
-        return cur;
-      }
-    });
-    setDirty(true);
-    bumpEditGeneration();
-    setChartOpen(false);
-    setChartRange("A1:B4");
-    setChartTitle("");
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = addChart(stateRef.current, {
+        sheetId: stateRef.current.sheets[activeSheet].name,
+        dataRange: chartRange.trim(),
+        chartType,
+        title: chartTitle.trim() || undefined
+      });
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setChartOpen(false);
+      setChartRange("A1:B4");
+      setChartTitle("");
+    } catch (error) {
+      toast({ title: "Не удалось добавить диаграмму", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function insertPivotTable(): void {
@@ -352,28 +352,28 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
       toast({ title: "Не удалось добавить сводную таблицу", description: "Выберите хотя бы одно поле.", tone: "danger" });
       return;
     }
-    setState((cur) => {
-      if (!cur) return cur;
-      try {
-        return addPivotTable(cur, {
-          sheetId: sheet.name,
-          sourceRange: pivotRange.trim(),
-          targetCell: pivotTarget.trim(),
-          rowFields,
-          valueFields
-        });
-      } catch (e) {
-        toast({ title: "Не удалось добавить сводную таблицу", description: (e as Error).message, tone: "danger" });
-        return cur;
-      }
-    });
-    setDirty(true);
-    bumpEditGeneration();
-    setPivotOpen(false);
-    setPivotRange("A1:B4");
-    setPivotTarget("D1");
-    setPivotRowFields(new Set());
-    setPivotValueFields({});
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = addPivotTable(stateRef.current, {
+        sheetId: stateRef.current.sheets[activeSheet].name,
+        sourceRange: pivotRange.trim(),
+        targetCell: pivotTarget.trim(),
+        rowFields,
+        valueFields
+      });
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setPivotOpen(false);
+      setPivotRange("A1:B4");
+      setPivotTarget("D1");
+      setPivotRowFields(new Set());
+      setPivotValueFields({});
+    } catch (error) {
+      toast({ title: "Не удалось добавить сводную таблицу", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function togglePivotRowField(name: string): void {
@@ -395,14 +395,17 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   }
 
   async function save(): Promise<void> {
-    if (!state) return;
+    if (replaceContent.isPending) return;
+    commitDraft();
+    const snapshot = stateRef.current;
+    if (!snapshot) return;
     // F05: snapshot the generation being saved BEFORE the (possibly slow)
     // serialize+upload, so the blob-reload effect above knows whether it is
     // safe to apply the refetched content once this save's invalidation
     // triggers a refetch (see that effect's comment).
     const generationBeingSaved = editGenerationRef.current;
     try {
-      const bytes = await workbookStateToXlsx(state);
+      const bytes = await workbookStateToXlsx(snapshot);
       const file = new File([bytes as unknown as BlobPart], doc.name, { type: XLSX_MIME });
       await replaceContent.mutateAsync({ id: doc.id, file });
       savedGenerationRef.current = generationBeingSaved;
