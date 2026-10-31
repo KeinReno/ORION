@@ -14,12 +14,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = "KeinReno/ORION";
 const numberText = process.argv[2];
-if (!/^[1-9]\d*$/.test(numberText ?? "")) {
-  throw new Error("Usage: node scripts/publish-windows-beta.mjs <beta-number>, e.g. 36");
+if (numberText !== "auto" && !/^[1-9]\d*$/.test(numberText ?? "")) {
+  throw new Error("Usage: node scripts/publish-windows-beta.mjs <beta-number|auto>, e.g. 36");
 }
-const betaNumber = Number(numberText);
-if (!Number.isSafeInteger(betaNumber) || betaNumber > 9999) throw new Error("Invalid beta number");
-const tag = "v0.1.0-windows-beta." + betaNumber;
 if (process.platform !== "win32" || process.arch !== "x64") {
   throw new Error("Requires a Windows x64 build machine (Tauri + .NET + embedded PostgreSQL)");
 }
@@ -42,6 +39,9 @@ const commit = git("rev-parse", "HEAD");
 const releases = JSON.parse(gh("release", "list", "--repo", repo, "--limit", "100", "--json", "tagName"));
 const numbers = releases.map((item) => /^v0\.1\.0-windows-beta\.(\d+)$/.exec(item.tagName)?.[1])
   .filter(Boolean).map(Number);
+const betaNumber = numberText === "auto" ? Math.max(35, ...numbers) + 1 : Number(numberText);
+if (!Number.isSafeInteger(betaNumber) || betaNumber > 9999) throw new Error("Invalid beta number");
+const tag = "v0.1.0-windows-beta." + betaNumber;
 if (numbers.some((n) => n >= betaNumber)) {
   throw new Error("Beta " + betaNumber + " is not newer than the latest published beta (" + Math.max(...numbers) + ")");
 }
