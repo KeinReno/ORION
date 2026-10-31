@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "orion-dev",
+  "title": "ORION DEV",
+  "description": "Universal development portfolio bootstrap. Import into existing Orion workspaces/projects/tasks; never create parallel task storage.",
+  "source": {"repository": "KeinReno/ORION", "branch": "master", "auditType": "code-first", "verification": "pending-local"},
+  "policies": {
+    "neverAutoAccept": true,
+    "evidenceRequired": true,
+    "humanApprovalForRelease": true,
+    "agentMayProposeTasks": true,
+    "agentMaySelfApprove": false,
+    "preserveExistingWorkspaces": true,
+    "repositoryWriteScope": "feature-branch-only"
+  },
+  "phases": [
+    {"id":"foundation","title":"Platform reliability","dependsOn":[]},
+    {"id":"architecture","title":"Extensibility and contracts","dependsOn":["foundation"]},
+    {"id":"agents","title":"Agent orchestration","dependsOn":["foundation","architecture"]},
+    {"id":"features","title":"Module completion","dependsOn":["foundation"]},
+    {"id":"product","title":"Product and release maturity","dependsOn":["features","agents"]}
+  ],
+  "projects": [
+    {"id":"core","title":"ORION CORE","phase":"foundation"},
+    {"id":"sync","title":"ORION SYNC","phase":"foundation"},
+    {"id":"security","title":"ORION SECURITY","phase":"foundation"},
+    {"id":"qa","title":"ORION QA","phase":"foundation"},
+    {"id":"data","title":"ORION DATA","phase":"foundation"},
+    {"id":"modules","title":"ORION MODULES","phase":"architecture"},
+    {"id":"plugins","title":"ORION PLUGINS","phase":"architecture"},
+    {"id":"agents","title":"ORION AGENTS","phase":"agents"},
+    {"id":"ai","title":"ORION AI","phase":"agents"},
+    {"id":"desktop","title":"ORION DESKTOP","phase":"product"},
+    {"id":"mobile","title":"ORION MOBILE","phase":"product"},
+    {"id":"ux","title":"ORION UX","phase":"product"},
+    {"id":"release","title":"ORION RELEASE","phase":"product"}
+  ],
+  "workItems": [
+    {"id":"DEV-001","project":"core","title":"Verify event and module boundaries from code","phase":"foundation","status":"planned","acceptance":["Dependency inventory generated","Cross-module violations documented with file references"]},
+    {"id":"DEV-002","project":"qa","title":"Make CI reproducible and green","phase":"foundation","status":"planned","acceptance":["CI executes all required checks","Failures are surfaced rather than bypassed"]},
+    {"id":"DEV-003","project":"sync","title":"Verify cross-device sync and conflict recovery","phase":"foundation","status":"planned","acceptance":["Two-node conflict scenarios exercised","Recovery and data integrity evidenced"]},
+    {"id":"DEV-004","project":"data","title":"Verify backup, migration and restore coverage","phase":"foundation","status":"planned","acceptance":["Restore rehearsal succeeds on disposable data","Missing entities documented"]},
+    {"id":"DEV-005","project":"security","title":"Audit workspace permissions and agent scopes","phase":"foundation","status":"planned","acceptance":["Cross-workspace access denied in tests","Agent write permissions explicitly scoped"]},
+    {"id":"DEV-006","project":"modules","title":"Complete module lifecycle and contracts","phase":"architecture","status":"planned","acceptance":["Module dependencies explicit","Disable/uninstall behavior tested"]},
+    {"id":"DEV-007","project":"plugins","title":"Define third-party plugin lifecycle","phase":"architecture","status":"planned","acceptance":["Install/update/disable/rollback contract defined","Permission boundaries tested"]},
+    {"id":"DEV-008","project":"agents","title":"Implement durable agent task dispatcher","phase":"agents","status":"planned","dependsOn":["DEV-005"],"acceptance":["Lease and retry behavior tested","No duplicate task ownership"]},
+    {"id":"DEV-009","project":"agents","title":"Connect evidence to independent acceptance","phase":"agents","status":"planned","dependsOn":["DEV-008"],"acceptance":["Agent cannot approve own execution","Test and commit evidence linked to task"]},
+    {"id":"DEV-010","project":"ai","title":"Unify IDE agent adapter contracts","phase":"agents","status":"planned","dependsOn":["DEV-008"],"acceptance":["Agent can discover and claim authorized tasks","Reconnect resumes durable state"]},
+    {"id":"DEV-011","project":"desktop","title":"Development Control Center","phase":"product","status":"planned","dependsOn":["DEV-008"],"acceptance":["Tasks, runs and evidence displayed from persisted state","No fabricated progress metrics"]},
+    {"id":"DEV-012","project":"mobile","title":"Validate Android alpha and interaction fixes","phase":"product","status":"planned","acceptance":["APK artifact built and install tested","Offline banner and draggable layers verified"]},
+    {"id":"DEV-013","project":"ux","title":"Unify development dashboard interaction design","phase":"product","status":"planned","acceptance":["Navigation and status semantics documented","Keyboard and mobile interaction reviewed"]},
+    {"id":"DEV-014","project":"release","title":"Preview-before-beta release workflow","phase":"product","status":"planned","dependsOn":["DEV-002"],"acceptance":["Preview artifacts available without publishing beta","Promotion requires human approval"]},
+    {"id":"DEV-015","project":"modules","title":"Separate urgency and importance from deadline and priority","phase":"features","status":"planned","acceptance":["Task attributes stored independently","Matrix drag-and-drop updates canonical task"]},
+    {"id":"DEV-016","project":"modules","title":"Complete document table editing","phase":"features","status":"planned","acceptance":["Insert/delete rows and columns supported","Round-trip persistence tested"]}
+  ],
+  "importRules": {
+    "idempotencyKey": "catalogId + workItem.id",
+    "createOnlyIfMissing": true,
+    "doNotOverwriteHumanChanges": true,
+    "dryRunByDefault": true,
+    "recordSourceCommit": true
+  }
+}
