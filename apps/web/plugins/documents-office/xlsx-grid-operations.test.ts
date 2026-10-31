@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { WorkbookState } from "./codecs/xlsx-codec";
 import {
   EXCEL_MAX_COLS, EXCEL_MAX_ROWS, addWorksheet, applyGridChanges, cellAddress,
-  cellInputText, clipboardChanges, columnLabel, parseCellAddress, parseClipboardGrid, renameWorksheet
+  cellInputText, changesForClear, clipboardChanges, columnLabel,
+  parseCellAddress, parseClipboardGrid, rangeToTsv, renameWorksheet
 } from "./xlsx-grid-operations";
 
 function fixture(): WorkbookState {
@@ -64,6 +65,21 @@ describe("xlsx editor grid operations", () => {
     expect(() => clipboardChanges("a\tb", 0, EXCEL_MAX_COLS - 1).map((change) =>
       applyGridChanges(state, 0, [change])
     )).toThrow("пределы");
+  });
+
+  it("copies and clears rectangular selections without corrupting adjacent cells", () => {
+    const initial = applyGridChanges(fixture(), 0, [
+      { row: 1, col: 0, text: "North" },
+      { row: 1, col: 1, text: "15" },
+      { row: 2, col: 0, text: "South" },
+      { row: 2, col: 1, text: "25" }
+    ]);
+    const rect = { startRow: 1, startCol: 0, endRow: 2, endCol: 1 };
+    expect(rangeToTsv(initial, 0, rect)).toBe("North\t15\r\nSouth\t25");
+    const cleared = applyGridChanges(initial, 0, changesForClear(rect));
+    expect(cleared.sheets[0].rows[1][0].value).toBeNull();
+    expect(cleared.sheets[0].rows[2][1].value).toBeNull();
+    expect(cleared.sheets[0].rows[0][0].value).toBe(10);
   });
 
   it("adds and renames sheets with formula, chart and pivot references kept consistent", () => {
