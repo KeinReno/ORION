@@ -69,7 +69,7 @@ describe("xlsx editor grid operations", () => {
   it("adds and renames sheets with formula, chart and pivot references kept consistent", () => {
     const original = fixture();
     const added = addWorksheet(original);
-    expect(added.sheets.at(-1)?.name).toBe("Лист 1");
+    expect(added.sheets[added.sheets.length - 1]?.name).toBe("Лист 1");
     const renamed = renameWorksheet(added, 0, "Продажи 2026");
     expect(renamed.sheets[0].name).toBe("Продажи 2026");
     expect(renamed.sheets[1].rows[0][0].formula).toBe("'Продажи 2026'!A1");
