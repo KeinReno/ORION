@@ -6,6 +6,19 @@
 
 Для приватного репозитория KeinReno/ORION требуется fine-grained GitHub token с доступом Contents: read. Токен хранится зашифрованным на локальном компьютере.
 
+## Обязательная приёмка перед релизом
+
+Новая версия не публикуется при обычных изменениях исходного кода. Сначала
+пользователь скачивает PR в отдельную папку, тестирует его на своём ПК и
+явно одобряет конкретный PR и commit — см. [REVIEW_BEFORE_BETA.md](REVIEW_BEFORE_BETA.md).
+Выпуск релиза до приёмки запрещён организационным правилом.
+
+После одобрения агент может создать ветку release/approved-beta-N из
+проверенного SHA. Появление такой ветки автоматически инициирует
+Windows Beta Release workflow на **зарегистрированном self-hosted Windows
+runner**, где номер беты выбирается автоматически (auto) и собирается
+установщик. Без runner сборка и публикация не произойдут.
+
 ## Локальный релиз Windows
 
 Рабочее окружение: Windows x64, Node 24, Corepack/pnpm 9, Rust+MSVC+Tauri build tools, .NET SDK, gh CLI. Авторизовать GitHub CLI командой gh auth login (доступ к Contents: write).
@@ -14,9 +27,14 @@
 
 Из корня репозитория выполнить в PowerShell:
 
-    node scripts/publish-windows-beta.mjs 36
+    node scripts/publish-windows-beta.mjs auto
 
-Это создаёт v0.1.0-windows-beta.36 из текущего commit, только если нет несохранённых изменений, номер новее предыдущих релизов, прошли typecheck/lint/адресные unit-тесты, сборка NSIS успешно создана. Скрипт вычисляет SHA-256 и размещает действительный установщик и контрольную сумму в GitHub Releases. Номер 36 — следующий после опубликованной beta.35; далее использовать 37, 38, и так далее.
+Эту команду разрешено запускать **только после приёмки** из точно одобренного commit.
+Она выбирает следующий номер беты автоматически (после beta.35 — beta.36),
+проверяет чистоту рабочего дерева, выполняет typecheck/lint/адресные
+unit-тесты, собирает NSIS, вычисляет SHA-256 и размещает реальный
+установщик и контрольную сумму в GitHub Releases. Если сборка не
+удастся, публикации не будет.
 
 Публикация подписанного приложения payload — отдельный механизм; приведённый скрипт выпускает полный NSIS установщик.
 
@@ -28,7 +46,14 @@
 
 На ПК зарегистрировать Windows x64 self-hosted runner через репозиторий Settings → Actions → Runners → New self-hosted runner; инструкции регистрации и одноразовый токен предоставляет GitHub. На том же ПК нужны Rust, MSVC, .NET, Node, pnpm и gh CLI.
 
-Actions → Windows Beta Release (manual) → Run workflow: выбрать beta_number и runner=self-hosted. При доступных платных GitHub-hosted minutes можно выбрать windows-latest. Токен публикации берётся из GITHUB_TOKEN GitHub Actions.
+**Вариант с одобрением:** после явного согласия пользователя агент создаёт
+ветку release/approved-beta-N из одобренного SHA. Это запускает workflow,
+использует self-hosted Windows runner и выдаёт номер новой беты автоматически.
+
+**Запасной ручной вариант:** Actions → Windows Beta Release (manual) →
+Run workflow: выбрать beta_number и runner=self-hosted. При доступных
+оплачиваемых GitHub-hosted minutes можно выбрать windows-latest. Токен
+публикации берётся из GITHUB_TOKEN GitHub Actions.
 
 Сборка НЕ запустится без действующего runner. Установка runner требует явного действия владельца Windows-компьютера.
 
