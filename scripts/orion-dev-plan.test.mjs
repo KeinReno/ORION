@@ -84,4 +84,37 @@ describe("ORION DEV dry-run planner", () => {
     })).toThrow(/Invalid mapping/);
   });
 
+  it("rejects mappings to IDs removed from the catalog", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      mappings: [{ catalogId: "orion-dev", workspaceId: "w", kind: "task", externalId: "DEV-removed", entityId: "t" }]
+    })).toThrow(/Unknown mapped task/);
+  });
+
+  it("rejects a project name collision against a different mapped entity", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      projects: [
+        { id: "p1", workspaceId: "w", name: "ORION CORE" },
+        { id: "p2", workspaceId: "w", name: "Renamed project" }
+      ],
+      mappings: [{ catalogId: "orion-dev", workspaceId: "w", kind: "project", externalId: "core", entityId: "p2" }]
+    })).toThrow(/Conflicting project name and mapping/);
+  });
+
+  it("rejects a task title collision against a different mapped entity", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
+      tasks: [
+        { id: "t1", workspaceId: "w", projectId: "p", title: "First" },
+        { id: "t2", workspaceId: "w", projectId: "p", title: "Renamed task" }
+      ],
+      mappings: [
+        { catalogId: "orion-dev", workspaceId: "w", kind: "project", externalId: "core", entityId: "p" },
+        { catalogId: "orion-dev", workspaceId: "w", kind: "task", externalId: "DEV-1", entityId: "t2" }
+      ]
+    })).toThrow(/Conflicting task name and mapping/);
+  });
+
 });
