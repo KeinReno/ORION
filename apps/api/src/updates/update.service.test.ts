@@ -148,9 +148,36 @@ describe("UpdateService", () => {
     const service = new UpdateService();
     await expect(service.check()).rejects.toThrow("Токен GitHub не задан");
     const config = service.setConfig({ repo: "o/r", token: TOKEN });
-    expect(config).toEqual({ repo: "o/r", tokenSet: true, autoCheck: true });
+    expect(config).toEqual({ repo: "o/r", tokenSet: true, autoCheck: true, channel: "beta" });
     expect(JSON.stringify(config)).not.toContain(TOKEN);
     expect(fs.readFileSync(path.join(dir, "update-config.json"), "utf8")).not.toContain(TOKEN);
+  });
+
+  it("для существующих beta-сборок сохраняет прежний канал, а для новой установки выбирает stable", () => {
+    const service = configured();
+    expect(service.getConfig().channel).toBe("beta");
+    service.setConfig({ channel: "stable" });
+    expect(service.getConfig().channel).toBe("stable");
+    expect(JSON.parse(fs.readFileSync(path.join(dir, "update-config.json"), "utf8")).channel).toBe("stable");
+    delete process.env.ORION_BUILD_TAG;
+    fs.rmSync(path.join(dir, "update-config.json"));
+    expect(service.getConfig().channel).toBe("stable");
+  });
+
+  it("переключение Stable/Beta меняет предлагаемый релиз и сбрасывает устаревшую проверку", async () => {
+    const service = configured();
+    releases = [
+      release("v0.1.0-windows-beta.99"),
+      release("v0.1.0", { prerelease: false }),
+      release("v0.1.0-windows-beta.999", { prerelease: false })
+    ];
+    service.setConfig({ channel: "stable" });
+    expect((await service.check()).latest?.tag).toBe("v0.1.0");
+    expect(service.getConfig().channel).toBe("stable");
+    service.setConfig({ channel: "beta" });
+    expect(service.getStatus().state).toBe("idle");
+    expect((await service.check()).latest?.tag).toBe("v0.1.0");
+    expect(service.getConfig().channel).toBe("beta");
   });
 
   it("находит более новый релиз, а для актуальной сборки говорит «последняя версия»", async () => {
