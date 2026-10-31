@@ -513,58 +513,166 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         </div>
       ) : null}
 
-      {state.sheets.length > 1 ? (
-        <div className="orion-scroll flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 py-2">
-          {state.sheets.map((s, i) => (
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        <Input
+          aria-label="Адрес ячейки"
+          value={addressText}
+          onChange={(event) => setAddressText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.preventDefault(); jumpToAddress(); }
+          }}
+          className="w-24"
+        />
+        <Button size="sm" variant="outline" onClick={jumpToAddress}>Перейти</Button>
+        <Input
+          aria-label="Значение или формула выбранной ячейки"
+          value={
+            pendingCell.current?.sheetIndex === activeSheet &&
+            pendingCell.current.row === selected.row &&
+            pendingCell.current.col === selected.col && draft !== null
+              ? draft : cellInputText(cellAt(selected.row, selected.col))
+          }
+          onFocus={() => startEdit(selected.row, selected.col)}
+          onChange={(event) => changeDraft(event.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.preventDefault(); commitDraft(); }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+              event.preventDefault(); void save();
+            }
+          }}
+          className="min-w-48 flex-1 font-mono"
+          placeholder="Значение или =SUM(A1:A5)"
+        />
+        <span className="text-2xs text-subtle-foreground">Enter / Tab — следующая ячейка · вставка из Excel поддерживается</span>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
+        <div className="orion-scroll flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {state.sheets.map((tab, index) => (
             <button
-              key={s.name}
+              key={index}
               type="button"
-              onClick={() => setActiveSheet(i)}
+              onClick={() => {
+                commitDraft();
+                setActiveSheet(index);
+                setSelected({ row: 0, col: 0 });
+                setAddressText("A1");
+                setFirstRow(0); setFirstCol(0);
+                setRenameOpen(false);
+              }}
               className={cx(
                 "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                i === activeSheet ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
+                index === activeSheet ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
               )}
+              aria-pressed={index === activeSheet}
             >
-              {s.name}
+              {tab.name}
             </button>
           ))}
         </div>
+        <Button size="sm" variant="outline" onClick={createSheet}>+ Лист</Button>
+        <Button size="sm" variant="outline" onClick={() => {
+          setRenameName(sheet.name); setRenameOpen((current) => !current);
+        }}>Переименовать</Button>
+      </div>
+
+      {renameOpen ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+          <Input
+            aria-label="Новое имя листа"
+            value={renameName}
+            maxLength={31}
+            onChange={(event) => setRenameName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") { event.preventDefault(); applyRename(); }
+              if (event.key === "Escape") setRenameOpen(false);
+            }}
+            className="max-w-xs"
+          />
+          <Button size="sm" onClick={applyRename}>Применить</Button>
+          <Button size="sm" variant="outline" onClick={() => setRenameOpen(false)}>Отмена</Button>
+        </div>
       ) : null}
 
-      <div className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
-        <table className="border-collapse text-xs">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
+        <Button size="sm" variant="outline" onClick={() => setFirstRow((row) => Math.max(0, row - VISIBLE_ROWS))} disabled={firstRow === 0}>← Строки</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstRow((row) => Math.min(EXCEL_MAX_ROWS - VISIBLE_ROWS, row + VISIBLE_ROWS))} disabled={firstRow + VISIBLE_ROWS >= EXCEL_MAX_ROWS}>Строки →</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstCol((col) => Math.max(0, col - VISIBLE_COLS))} disabled={firstCol === 0}>← Столбцы</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstCol((col) => Math.min(EXCEL_MAX_COLS - VISIBLE_COLS, col + VISIBLE_COLS))} disabled={firstCol + VISIBLE_COLS >= EXCEL_MAX_COLS}>Столбцы →</Button>
+        <span className="text-2xs text-subtle-foreground">
+          Строки {firstRow + 1}–{firstRow + rowCount} · Столбцы {columnLabel(firstCol)}–{columnLabel(firstCol + colCount - 1)}
+        </span>
+      </div>
+
+      <div ref={gridRef} className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
+        <table className="border-collapse text-xs" aria-label="Редактируемая таблица">
           <thead>
             <tr>
               <th className="sticky left-0 top-0 z-10 border border-border bg-card" />
               {Array.from({ length: colCount }).map((_, c) => (
-                <th key={c} className="sticky top-0 z-10 border border-border bg-card px-2 py-1 text-center font-normal text-subtle-foreground">
-                  {colLetter(c)}
+                <th key={firstCol + c} className="sticky top-0 z-10 border border-border bg-card px-2 py-1 text-center font-normal text-subtle-foreground">
+                  {columnLabel(firstCol + c)}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: rowCount }).map((_, r) => (
-              <tr key={r}>
-                <td className="sticky left-0 border border-border bg-card px-2 py-1 text-right text-subtle-foreground">{r + 1}</td>
-                {Array.from({ length: colCount }).map((_, c) => {
-                  const cell = cellAt(r, c);
-                  const editValue = cell.formula ? `=${cell.formula}` : (cell.value ?? "");
-                  return (
-                    <td key={c} className="border border-border p-0">
-                      <input
-                        defaultValue={String(editValue)}
-                        key={`${r}-${c}-${dirty ? "d" : "c"}`}
-                        onBlur={(e) => {
-                          if (e.target.value !== String(editValue)) setCell(r, c, e.target.value);
-                        }}
-                        className="w-20 bg-transparent px-2 py-1 text-foreground outline-none focus:bg-accent/[0.08]"
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {Array.from({ length: rowCount }).map((_, r) => {
+              const row = firstRow + r;
+              return (
+                <tr key={row}>
+                  <td className="sticky left-0 border border-border bg-card px-2 py-1 text-right text-subtle-foreground">{row + 1}</td>
+                  {Array.from({ length: colCount }).map((_, c) => {
+                    const col = firstCol + c;
+                    const address = cellAddress(row, col);
+                    const cell = cellAt(row, col);
+                    const editing = pendingCell.current?.sheetIndex === activeSheet &&
+                      pendingCell.current.row === row && pendingCell.current.col === col && draft !== null;
+                    return (
+                      <td key={col} className="border border-border p-0">
+                        <input
+                          type="text"
+                          data-cell={address}
+                          aria-label={"Ячейка " + address}
+                          value={editing ? draft : cellInputText(cell)}
+                          onFocus={() => startEdit(row, col)}
+                          onChange={(event) => changeDraft(event.target.value)}
+                          onBlur={commitDraft}
+                          onPaste={(event) => {
+                            const text = event.clipboardData.getData("text/plain");
+                            if (text.includes("\t") || text.includes("\n") || text.includes("\r")) {
+                              event.preventDefault();
+                              pasteRange(row, col, text);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                              event.preventDefault(); void save(); return;
+                            }
+                            if (event.key === "Escape") {
+                              pendingCell.current = null; setDraft(null); event.currentTarget.blur(); return;
+                            }
+                            if (event.key === "Enter" || event.key === "Tab") {
+                              event.preventDefault();
+                              commitDraft();
+                              goTo(
+                                row + (event.key === "Enter" ? (event.shiftKey ? -1 : 1) : 0),
+                                col + (event.key === "Tab" ? (event.shiftKey ? -1 : 1) : 0)
+                              );
+                            }
+                          }}
+                          className={cx(
+                            "w-28 bg-transparent px-2 py-1 text-foreground outline-none focus:bg-accent/[0.08]",
+                            selected.row === row && selected.col === col ? "bg-accent/10 ring-1 ring-inset ring-accent" : ""
+                          )}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
