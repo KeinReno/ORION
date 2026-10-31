@@ -128,6 +128,50 @@ export function clipboardChanges(text: string, startRow: number, startCol: numbe
   );
 }
 
+export interface GridRange {
+  startRow: number;
+  startCol: number;
+  endRow: number;
+  endCol: number;
+}
+
+export function changesForClear(range: GridRange): GridChange[] {
+  const minRow = Math.min(range.startRow, range.endRow);
+  const maxRow = Math.max(range.startRow, range.endRow);
+  const minCol = Math.min(range.startCol, range.endCol);
+  const maxCol = Math.max(range.startCol, range.endCol);
+  if ((maxRow - minRow + 1) * (maxCol - minCol + 1) > 100_000) {
+    throw new Error("Слишком большой диапазон для одной операции.");
+  }
+  const changes: GridChange[] = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) changes.push({ row, col, text: "" });
+  }
+  return changes;
+}
+
+export function rangeToTsv(workbook: WorkbookState, sheetIndex: number, range: GridRange): string {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  const minRow = Math.min(range.startRow, range.endRow);
+  const maxRow = Math.max(range.startRow, range.endRow);
+  const minCol = Math.min(range.startCol, range.endCol);
+  const maxCol = Math.max(range.startCol, range.endCol);
+  if ((maxRow - minRow + 1) * (maxCol - minCol + 1) > 100_000) {
+    throw new Error("Слишком большой диапазон для копирования.");
+  }
+  const lines: string[] = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    const cells: string[] = [];
+    for (let col = minCol; col <= maxCol; col++) {
+      const value = cellDisplayText(sheet.rows[row]?.[col]);
+      cells.push(/[\t\r\n"]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value);
+    }
+    lines.push(cells.join("\t"));
+  }
+  return lines.join("\r\n");
+}
+
 export function addWorksheet(workbook: WorkbookState): WorkbookState {
   let i = 1;
   while (workbook.sheets.some((sheet) => sheet.name.toLocaleLowerCase() === ("Лист " + i).toLocaleLowerCase())) i++;
