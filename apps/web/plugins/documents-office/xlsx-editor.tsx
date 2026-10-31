@@ -50,7 +50,7 @@ import {
 import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
 import {
   EXCEL_MAX_ROWS, EXCEL_MAX_COLS, addWorksheet, applyGridChanges, cellAddress,
-  cellInputText, clipboardChanges, columnLabel, parseCellAddress, renameWorksheet,
+  cellDisplayText, cellInputText, clipboardChanges, columnLabel, parseCellAddress, renameWorksheet,
   type GridChange
 } from "./xlsx-grid-operations";
 import { XLSX_MIME } from "./codecs/office-files";
@@ -635,7 +635,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                           type="text"
                           data-cell={address}
                           aria-label={"Ячейка " + address}
-                          value={editing ? (draft ?? "") : cellInputText(cell)}
+                          value={editing ? (draft ?? "") : cellDisplayText(cell)}
                           onFocus={() => startEdit(row, col)}
                           onChange={(event) => changeDraft(event.target.value)}
                           onBlur={commitDraft}
