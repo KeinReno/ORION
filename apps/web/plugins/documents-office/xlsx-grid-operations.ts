@@ -172,6 +172,84 @@ export function rangeToTsv(workbook: WorkbookState, sheetIndex: number, range: G
   return lines.join("\r\n");
 }
 
+/** Update a cell's Excel number format without changing its content or formula. */
+export function setCellNumberFormat(
+  workbook: WorkbookState, sheetIndex: number, row: number, col: number, numberFormat: string
+): WorkbookState {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  if (row < 0 || row >= EXCEL_MAX_ROWS || col < 0 || col >= EXCEL_MAX_COLS) {
+    throw new Error("Адрес ячейки выходит за пределы XLSX.");
+  }
+  const rows = sheet.rows.slice();
+  for (let index = rows.length; index <= row; index++) rows[index] = [];
+  const cells = [...(rows[row] ?? [])];
+  const original = cells[col] ?? { value: null };
+  const { numFmt: _previous, ...value } = original;
+  cells[col] = numberFormat === "General" ? value : { ...value, numFmt: numberFormat };
+  rows[row] = cells;
+  return { ...workbook, sheets: workbook.sheets.map((item, i) =>
+    i === sheetIndex ? { ...item, rows } : item
+  ) };
+}
+
+export type GridStructureAction = "insert-row" | "delete-row" | "insert-column" | "delete-column";
+
+/**
+ * Safe structural edits for simple tables. For workbooks with formulas, merged cells
+ * or linked charts/pivots, refuse rather than silently break their references.
+ * Such files still support ordinary cell editing and range paste.
+ */
+export function changeGridStructure(
+  workbook: WorkbookState, sheetIndex: number, action: GridStructureAction, row: number, col: number
+): WorkbookState {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  if (workbook.charts?.length || workbook.pivotTables?.length ||
+    workbook.sheets.some((item) =>
+      (item.merges?.length ?? 0) > 0 ||
+      item.rows.some((cells) => cells.some((cell) => cell.formula !== undefined))
+    )
+  ) {
+    throw new Error("Изменение структуры отключено для листов с формулами, объединёнными ячейками, диаграммами или сводными таблицами. Содержимое ячеек редактировать можно.");
+  }
+  if (row < 0 || row >= EXCEL_MAX_ROWS || col < 0 || col >= EXCEL_MAX_COLS) {
+    throw new Error("Адрес ячейки выходит за пределы XLSX.");
+  }
+  let rows = sheet.rows.slice();
+  let columnWidths = sheet.columnWidths;
+  if (action === "insert-row") {
+    if (rows.length >= EXCEL_MAX_ROWS) throw new Error("Достигнут предел строк XLSX.");
+    // A selection beyond the last used row is equivalent to appending.
+    rows.splice(Math.min(row, rows.length), 0, []);
+  } else if (action === "delete-row") {
+    if (row >= rows.length) return workbook;
+    rows.splice(row, 1);
+  } else {
+    if (action === "insert-column" && rows.some((cells) => cells.length >= EXCEL_MAX_COLS)) {
+      throw new Error("Достигнут предел столбцов XLSX.");
+    }
+    rows = rows.map((cells) => {
+      const next = cells.slice();
+      if (action === "insert-column") next.splice(col, 0, { value: null });
+      else if (col < next.length) next.splice(col, 1);
+      return next;
+    });
+    if (columnWidths) {
+      const adjusted: Record<number, number> = {};
+      for (const [key, width] of Object.entries(columnWidths)) {
+        const index = Number(key);
+        if (action === "insert-column") adjusted[index >= col + 1 ? index + 1 : index] = width;
+        else if (index !== col + 1) adjusted[index > col + 1 ? index - 1 : index] = width;
+      }
+      columnWidths = adjusted;
+    }
+  }
+  return { ...workbook, sheets: workbook.sheets.map((item, i) =>
+    i === sheetIndex ? { ...item, rows, columnWidths } : item
+  ) };
+}
+
 export function addWorksheet(workbook: WorkbookState): WorkbookState {
   let i = 1;
   while (workbook.sheets.some((sheet) => sheet.name.toLocaleLowerCase() === ("Лист " + i).toLocaleLowerCase())) i++;
