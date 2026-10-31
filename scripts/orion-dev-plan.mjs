@@ -57,6 +57,8 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     if (m.catalogId !== catalog.catalogId) continue;
     if (!["project", "task"].includes(m.kind) || typeof m.externalId !== "string" || !m.externalId || typeof m.entityId !== "string" || !m.entityId || typeof m.workspaceId !== "string" || !m.workspaceId) throw new Error("Invalid mapping");
     if (!workspace || m.workspaceId !== workspace.id) throw new Error("Foreign or unresolved workspace mapping: " + m.externalId);
+    if (m.kind === "project" && !projectIds.has(m.externalId)) throw new Error("Unknown mapped project: " + m.externalId);
+    if (m.kind === "task" && !taskIds.has(m.externalId)) throw new Error("Unknown mapped task: " + m.externalId);
     const key = m.kind + ":" + m.externalId;
     const target = m.kind + ":" + m.entityId;
     if (mappedKeys.has(key) || mappedTargets.has(target)) throw new Error("Duplicate mapping");
@@ -78,6 +80,9 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     const mapped = mappingFor("project", project.id);
     const mappedProject = mapped ? existingProjects.find((p) => p.id === mapped.entityId && p.workspaceId === workspace?.id) : null;
     if (mapped && !mappedProject) throw new Error("Stale project mapping: " + project.id);
+    if (mappedProject && candidates.length && candidates[0].id !== mappedProject.id) {
+      throw new Error("Conflicting project name and mapping: " + project.id);
+    }
     const matched = mappedProject ?? candidates[0] ?? null;
     actions.push({
       kind: "project", externalId: project.id, name: project.title,
@@ -92,6 +97,9 @@ export function planOrionDevImport(catalog, snapshot = {}) {
       const mappedTask = mappingFor("task", item.id);
       const resolvedTask = mappedTask ? existingTasks.find((t) => t.id === mappedTask.entityId && t.workspaceId === workspace?.id && t.projectId === matched?.id) : null;
       if (mappedTask && !resolvedTask) throw new Error("Stale task mapping: " + item.id);
+      if (resolvedTask && possible.some((candidate) => candidate.id !== resolvedTask.id)) {
+        throw new Error("Conflicting task name and mapping: " + item.id);
+      }
       actions.push({
         kind: "task", externalId: item.id, projectExternalId: project.id,
         title: item.title, dependsOn: item.dependsOn ?? [],
