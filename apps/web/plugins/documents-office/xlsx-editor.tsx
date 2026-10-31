@@ -264,8 +264,14 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
     setDraft(value);
   }
 
-  function changeDraft(value: string): void {
-    if (pendingCell.current) pendingCell.current.value = value;
+  function changeDraft(value: string, row: number, col: number): void {
+    // After Enter/Ctrl+S the focus may remain in an input whose previous draft
+    // was committed. A subsequent keystroke must start a new draft, not vanish.
+    if (!pendingCell.current) {
+      pendingCell.current = { sheetIndex: activeSheet, row, col, value };
+    } else {
+      pendingCell.current.value = value;
+    }
     setDraft(value);
   }
 
@@ -577,7 +583,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
               ? draft : cellInputText(cellAt(selected.row, selected.col))
           }
           onFocus={() => startEdit(selected.row, selected.col)}
-          onChange={(event) => changeDraft(event.target.value)}
+          onChange={(event) => changeDraft(event.target.value, selected.row, selected.col)}
           onBlur={commitDraft}
           onKeyDown={(event) => {
             if (event.key === "Enter") { event.preventDefault(); commitDraft(); }
@@ -694,7 +700,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                             } else setRange(null);
                           }}
                           onFocus={() => startEdit(row, col)}
-                          onChange={(event) => changeDraft(event.target.value)}
+                          onChange={(event) => changeDraft(event.target.value, row, col)}
                           onBlur={commitDraft}
                           onCopy={(event) => {
                             if (!range || !stateRef.current) return;
