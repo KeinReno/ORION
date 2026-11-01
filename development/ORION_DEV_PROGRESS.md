@@ -347,3 +347,10 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Rechecked draft PR #95 at `404dbc1`; another development pass had already added preview selection fingerprinting and orphaned mapping rejection.
 - Hardened API-side dry-run planner to reject foreign-workspace project/task rows and duplicate canonical entity IDs rather than silently ignoring them. Added regression tests for both foreign row kinds and repeated project IDs.
 - Commits: `ce43257`, `aa14422`. Tests and TypeScript checks **not executed**. No confirmation or write API added. Next: server-held one-time consent and atomic revalidation; Luna 6 acceptance pending.
+
+
+### 2026-11-01 — deterministic preview digest
+
+- Rechecked PR #95 HEAD `8c35260` and hardened `catalog-preview-digest.ts`: recursively canonicalize JSON object keys while retaining array order; reject cycles, undefined values, NaN and unsupported data rather than silently hashing an ambiguous representation.
+- Added tests for reordered object keys, changed arrays, cyclic and unsupported values. Commits: `34c91dc`, `6a0632f`.
+- Tests and TypeScript checks **not executed**. The digest remains only a comparison primitive, not authorization or one-time consent. Next: persisted one-time confirmations with transactional revalidation before any write endpoint. Luna 6 acceptance pending.
