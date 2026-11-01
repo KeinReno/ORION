@@ -323,3 +323,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added focused Vitest regression covering both unknown project and unknown task external mapping IDs.
 - Commits: `4a2b5c1`, `a4b1b3b`. **Tests and TypeScript checks not executed** in this run. No import write endpoint, consent issuance or master changes.
 - Next: run API Vitest and typecheck; verify full CLI/API planner parity and stale-preview handling before implementing confirmation/write routes.
+
+
+### 2026-11-01 — preview match review guard
+
+- Rechecked draft PR #95 HEAD `9ca32dc` and current server-side dry-run implementation.
+- Added `catalog-preview-matches.ts`: compares explicit choices with every `review_possible_match` in the preview, keyed by entity kind and external ID. Missing, extra or stale choices are rejected.
+- Added `catalog-preview-matches.test.ts` covering accepted selections and omitted/unknown/stale decisions.
+- Commits: `efaec02`, `2572fdb`. **Tests and typecheck not executed**. This is an internal review guard, NOT user authentication, a one-time confirmation token, or protection against changes between preview and commit.
+- Next: bind the reviewed decisions to an authenticated user, workspace and fresh snapshot; revalidate within the write transaction. Do not expose a public write route before that boundary is complete.
