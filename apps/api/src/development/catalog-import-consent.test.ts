@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { hashDevelopmentConsentSecret } from "./catalog-consent-secret";
 import type { Prisma } from "@prisma/client";
 import {
   consumeImportConsentTx, hashImportConsentToken, issueImportConsentTx
@@ -39,6 +40,8 @@ describe("development import consent", () => {
   });
   it("rejects malformed tokens and scope", async () => {
     expect(() => hashImportConsentToken("invalid")).toThrow();
+    expect(() => hashImportConsentToken(null as unknown as string)).toThrow();
+    expect(hashImportConsentToken("a".repeat(64))).toBe(hashDevelopmentConsentSecret("a".repeat(64)));
     const tx = { developmentImportConsent: { create: vi.fn() } } as unknown as Prisma.TransactionClient;
     await expect(issueImportConsentTx(tx, { ...scope, workspaceId: "" })).rejects.toThrow();
   });
