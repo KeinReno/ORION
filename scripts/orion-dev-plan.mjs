@@ -47,6 +47,19 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   for (const item of items) {
     if (item.phase && !phaseIds.has(item.phase)) throw new Error("Unknown task phase: " + item.phase);
   }
+  // Project names are only hints for the first import. Duplicate catalog
+  // titles make name-based review ambiguous even with unique external IDs.
+  const projectTitles = new Set();
+  for (const project of projects) {
+    if (typeof project.title !== "string" || !project.title.trim()) {
+      throw new Error("Invalid project title: " + project.id);
+    }
+    const normalizedTitle = project.title.trim().toLowerCase();
+    if (projectTitles.has(normalizedTitle)) {
+      throw new Error("Duplicate catalog project title: " + project.title);
+    }
+    projectTitles.add(normalizedTitle);
+  }
   const projectIds = unique(projects, "project");
   const taskIds = unique(items, "task");
   // Two catalog items with the same title in one project cannot be safely
