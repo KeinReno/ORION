@@ -13,7 +13,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const unique = (rows, label) => {
     const seen = new Set();
     for (const row of rows) {
-      if (typeof row.id !== "string" || !row.id || seen.has(row.id)) {
+      if (!row || typeof row.id !== "string" || !row.id || seen.has(row.id)) {
         throw new Error("Invalid or duplicate " + label + " ID");
       }
       seen.add(row.id);
@@ -25,6 +25,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const phaseIds = unique(phases, "phase");
   const byPhase = new Map(phases.map((phase) => [phase.id, phase]));
   for (const phase of phases) {
+    if (phase.dependsOn != null && !Array.isArray(phase.dependsOn)) throw new Error("Invalid phase dependencies: " + phase.id);
     for (const dependency of phase.dependsOn ?? []) {
       if (!phaseIds.has(dependency)) throw new Error("Unknown phase dependency: " + dependency);
     }
@@ -51,6 +52,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const byTask = new Map(items.map((item) => [item.id, item]));
   for (const item of items) {
     if (!projectIds.has(item.project)) throw new Error("Unknown project: " + item.project);
+    if (item.dependsOn != null && !Array.isArray(item.dependsOn)) throw new Error("Invalid task dependencies: " + item.id);
     for (const dep of item.dependsOn ?? []) {
       if (!taskIds.has(dep)) throw new Error("Unknown dependency: " + dep);
     }
