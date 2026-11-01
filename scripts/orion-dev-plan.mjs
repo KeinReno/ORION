@@ -71,6 +71,17 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const existingTasks = snapshot.tasks ?? [];
   const workspaces = snapshot.workspaces ?? [];
   if (!Array.isArray(workspaces)) throw new Error("Invalid snapshot workspaces");
+  // Snapshot rows are untrusted input: ambiguous identities must never drive an import.
+  for (const [label, rows] of [["workspace", workspaces], ["project", existingProjects], ["task", existingTasks]]) {
+    if (!Array.isArray(rows)) throw new Error("Invalid snapshot " + label);
+    const ids = new Set();
+    for (const row of rows) {
+      if (!row || typeof row.id !== "string" || !row.id || ids.has(row.id)) {
+        throw new Error("Invalid or duplicate snapshot " + label + " ID");
+      }
+      ids.add(row.id);
+    }
+  }
   const normalize = (value) => String(value ?? "").trim().toLowerCase();
   const matches = workspaces.filter((row) => normalize(row.name) === "orion dev");
   if (matches.length > 1) throw new Error("Ambiguous ORION DEV workspace");
