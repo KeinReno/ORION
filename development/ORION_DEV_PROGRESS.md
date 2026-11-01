@@ -251,3 +251,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - **Security boundary:** `workspaceConfirmed: true` is only an internal precondition, NOT authenticated proof of consent. Never pass untrusted request bodies into this function. No public API, trusted catalog equality verification, persisted confirmation token, concurrency lock, canonical task events, or UI yet. This module is not production-ready.
 - Acceptance owner changed to Luna 6 per user. Consolidated acceptance should check migration state, TypeScript, all targeted Vitest, RLS, backup/restore, concurrent imports, stale mappings, events and rollback in a disposable database; document precise commands and SHA. Do not merge or release without explicit human approval.
 - Next: implement server-controlled catalog snapshot/dry-run and one-time scoped confirmation binding before exposing the transactional composition through an authenticated endpoint. Then create a detailed Luna 6 acceptance handoff.
+
+
+### 2026-11-01 — trusted catalog declaration validation
+
+- Inspected current draft PR #95 at `2ba9957`, committed catalog, bootstrap protocol, transaction composer and task importer.
+- Added `apps/api/src/development/catalog-trust.ts`: pure fail-closed validator for a full submitted import against a **server-owned** catalog. Requires exact catalog ID, project IDs/titles, task IDs/titles/project ownership and dependency sets; rejects missing/injected/duplicate declarations, unknown dependencies and cycles. Explicit existing-entity IDs remain optional and must be checked by the transactional importer.
+- Added `apps/api/src/development/catalog-trust.test.ts` with positive, tampering, omission and cyclic-catalog cases.
+- Commits: `8a2400a`, `ac03ef9`. **Tests and typecheck not executed** in this environment. The validator is not yet called by an authenticated API or a server-side catalog loader. Never treat it as a complete authorization or confirmation mechanism.
+- Next: add trusted catalog loader, authenticated dry-run/confirmation binding, and invoke this validator before the composed transaction; avoid exposing internal import primitives directly. Luna 6 will own consolidated acceptance.
