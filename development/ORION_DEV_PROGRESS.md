@@ -120,3 +120,11 @@ Run `pnpm db:migrate` and `pnpm test:integration` on disposable PostgreSQL and r
 ### Guardrails
 
 Do not merge to `master` or publish beta without approval. Agent completion is not independent acceptance. Report actual commits and test evidence only.
+
+### 2026-11-01 — catalog task title collision validation
+
+- Re-read catalog, bootstrap protocol, planner, regression tests and current journal; PR #95 remains discoverable.
+- Planner now rejects duplicate normalized task titles within the same catalog project, and rejects blank task titles, before generating a name-based import plan. Identical titles in different projects remain permitted.
+- Added regression coverage for same-project collisions, blank titles and cross-project allowance.
+- Commits: `1c9688a4`, `090a379c`. **Tests not executed** in this GitHub-only session; PostgreSQL/RLS remains unverified.
+- Next: run targeted Vitest in a checkout and migration/RLS integration tests on disposable PostgreSQL; only then build the authorized transactional importer.
