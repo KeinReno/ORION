@@ -221,3 +221,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added PostgreSQL integration coverage for refusing unconfirmed existing-project name matches, rejecting unauthorized adoption and stale confirmation, explicitly adopting a canonical project, preserving its manual description, and idempotent retry.
 - Commit: `3e9de83`. **Not executed**: this new integration test and TypeScript typecheck. Prior Grok results do not cover it.
 - Next: implement the canonical task-import stage with dependency handling, then batch-run API typecheck and integration tests in the local checkout. Keep the public import endpoint disabled until validated catalog and explicit confirmation gates exist.
+
+
+### 2026-11-01 — canonical task import stage
+
+- Rechecked draft PR #95 at `f527fe1`, versioned catalog, bootstrap protocol, project importer and integration suite.
+- Added `apps/api/src/development/catalog-task-import.ts`: transaction-scoped canonical task creation and mapping for previously validated catalog input, using existing mapped projects; rejects missing/stale project mappings, ambiguous task titles, unconfirmed existing tasks, invalid IDs and duplicate catalog task titles. Owner/lead authorization and explicit existing-task confirmation are required. Exact mapping retries return `already_mapped`; existing task fields are never overwritten.
+- Added integration regression for task creation, idempotent retry, explicit adoption, stale confirmation and preservation of manual description.
+- Commits: `2ec3748`, `dc2984a`. **Not executed:** new TypeScript check and integration tests. No claim of runtime correctness.
+- Deliberate limits: dependencies are not imported yet, and direct Prisma task creation in this internal primitive does not emit the normal task-domain event; integrate via canonical TasksService transaction method before any public exposure. No API endpoint, confirmation UI or full importer is enabled. Next: implement dependency linking and canonical task event handling, then guarded orchestration/confirmation flow; batch local verification later.
