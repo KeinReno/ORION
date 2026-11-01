@@ -28,6 +28,11 @@ describe("development import preview controller", () => {
     await expect(controller.consent({ userId: "user", email: "test@example.com" },
       "workspace", { previewDigest: "a".repeat(64) }))
       .rejects.toThrow(/Invalid consent request/);
+    for (const previewDigest of ["short", "A".repeat(64), "g".repeat(64), "a".repeat(65)]) {
+      await expect(controller.consent({ userId: "user", email: "test@example.com" },
+        "workspace", { previewDigest, choices: {} }))
+        .rejects.toThrow(/Invalid consent request/);
+    }
     expect(withUser).not.toHaveBeenCalled();
   });
   it("fails closed for an invalid configured catalog root", async () => {
