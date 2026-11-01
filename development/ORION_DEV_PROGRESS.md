@@ -76,6 +76,14 @@
 - Commits: `18782e9`, `4a5acbe`. **Tests not executed** in an Orion checkout. No DB migration was applied and no write importer was enabled.
 - Next: run existing RLS integration tests on disposable PostgreSQL, inspect owner/admin permission conventions, and implement authorized transactional mapping writes only after verification.
 
+### 2026-11-01 — project title-match confirmation gate
+
+- Re-read the current catalog, bootstrap protocol, journal, dry-run planner and its tests.
+- Fixed an unsafe planner classification: a project with the same title in the target workspace but without a durable catalog mapping was reported as `confirm_existing`. It now reports `review_possible_match` with its candidate ID, requiring explicit approval before a future writer may bind it.
+- Strengthened the existing name-match regression test to assert the project-level confirmation gate.
+- Commits: `5571312`, `b0c9b31`. Tests **not executed** in this session. This remains a read-only planning change, not a working confirmation API.
+- Next: run targeted planner tests in a checkout, validate the PostgreSQL migration/RLS suite on a disposable instance, and implement an authenticated confirmation and transactional mapping writer.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
