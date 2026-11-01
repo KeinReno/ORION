@@ -26,6 +26,28 @@ describe("development preview digest", () => {
     expect(digestDevelopmentPreview({ ...scope, catalogSha256: "b".repeat(64) }, snapshot)).not.toBe(digest);
     expect(digestDevelopmentPreview(scope, { ...snapshot, tasks: [] })).not.toBe(digest);
   });
+  it("ignores object key insertion order but preserves array order", () => {
+    const first = digestDevelopmentPreview(scope, snapshot);
+    const reordered = {
+      mappings: [],
+      tasks: [{ title: "Review", id: "task-1" }],
+      projects: [{ name: "Core", id: "project-1" }]
+    };
+    expect(digestDevelopmentPreview(scope, reordered)).toBe(first);
+    expect(digestDevelopmentPreview(scope, {
+      ...snapshot, projects: [
+        { id: "project-1", name: "Core" },
+        { id: "project-2", name: "Sync" }
+      ]
+    })).not.toBe(first);
+  });
+  it("rejects cyclic and unsupported snapshot values", () => {
+    const cycle: Record<string, unknown> = {};
+    cycle.self = cycle;
+    expect(() => digestDevelopmentPreview(scope, cycle)).toThrow(/Cyclic/);
+    expect(() => digestDevelopmentPreview(scope, { value: undefined })).toThrow(/Undefined/);
+    expect(() => digestDevelopmentPreview(scope, { value: Number.NaN })).toThrow(/Unsupported/);
+  });
   it("rejects invalid scope and snapshot", () => {
     expect(() => digestDevelopmentPreview({ ...scope, userId: "" }, snapshot)).toThrow();
     expect(() => digestDevelopmentPreview({ ...scope, catalogSha256: "bad" }, snapshot)).toThrow();
