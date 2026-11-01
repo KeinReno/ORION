@@ -1,3 +1,4 @@
+import { linkCatalogTaskDependenciesTx } from "../src/development/catalog-task-dependencies";
 import { importConfirmedCatalogTasksTx } from "../src/development/catalog-task-import";
 import { importConfirmedCatalogProjectsTx } from "../src/development/catalog-project-import";
 import { timeCostMinor } from "@orion/shared-types";
@@ -319,6 +320,38 @@ describe("API workspace isolation", () => {
       tx.task.findUniqueOrThrow({ where: { id: manual.id } })
     );
     expect(unchanged.description).toBe("Preserve this");
+  });
+
+  it("links catalog dependencies idempotently and rejects cycles without partial writes", async () => {
+    const owner = await register("catalog-dependency-owner");
+    const ids = [`dependency-a-${runId}`, `dependency-b-${runId}`];
+    const rows = await prisma.withUser(owner.user.id, async (tx) => {
+      const tasks = await Promise.all(ids.map((title) =>
+        tx.task.create({ data: { workspaceId: owner.workspaceId, title } })
+      ));
+      await Promise.all(tasks.map((task, index) =>
+        tx.developmentCatalogMapping.create({ data: {
+          workspaceId: owner.workspaceId, catalogId: "orion-dev", kind: "task",
+          externalId: ids[index]!, entityId: task.id
+        } })
+      ));
+      return tasks;
+    });
+    const run = (declarations: { externalId: string; dependsOn: string[] }[]) =>
+      prisma.withUser(owner.user.id, (tx) =>
+        linkCatalogTaskDependenciesTx(tx, owner.user.id, owner.workspaceId, "orion-dev", declarations)
+      );
+    const edge = [{ externalId: ids[0]!, dependsOn: [ids[1]!] }];
+    expect(await run(edge)).toEqual({ created: 1, existing: 0 });
+    expect(await run(edge)).toEqual({ created: 0, existing: 1 });
+    await expect(run([{ externalId: ids[1]!, dependsOn: [ids[0]!] }]))
+      .rejects.toThrow(/cycle/);
+    const persisted = await prisma.withUser(owner.user.id, (tx) =>
+      tx.taskDependency.findMany({ where: { workspaceId: owner.workspaceId, taskId: rows[1]!.id } })
+    );
+    expect(persisted).toHaveLength(0);
+    await expect(run([{ externalId: ids[0]!, dependsOn: ["unknown-dependency"] }]))
+      .rejects.toThrow(/Missing catalog task mapping/);
   });
 
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
