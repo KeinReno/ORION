@@ -379,3 +379,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `consumeImportConsentTx`: a single conditional Prisma `updateMany` transitions `consumedAt: null` to spent only when token hash, exact scope and expiry match; count != 1 fails closed. Must execute inside the same `withUser` database transaction as fresh snapshot validation and import, so failures roll back token consumption.
 - Added focused mocked transaction tests for issue, hashed storage, expiry, conditional consumption, replay failure and malformed input. Commits: `6bbae0a`, `bd87a87`.
 - **Not executed:** tests, TypeScript checks or database migration. No public issue/consume/write endpoints are exposed yet. Next: add consent issuance endpoint only after binding explicit reviewed selections to the server-side plan, then atomic snapshot revalidation and write integration; Luna 6 acceptance pending.
+
+
+### 2026-11-01 — unify consent token primitives
+
+- Re-read current catalog, bootstrap protocol, journal, consent secret helper, transactional consent module and tests.
+- Removed duplicate random-token generation and hashing logic from `catalog-import-consent.ts`; issuance and consumption now share the fail-closed 256-bit secret helper.
+- Extended transactional consent tests for shared hash parity and malformed null token rejection.
+- Commits: `fd237a0`, `117c636`. **Tests and TypeScript checks not executed** in this GitHub-only pass.
+- Next: verify TypeScript/Vitest and PostgreSQL migration, then bind issuance to authenticated reviewed preview and enforce atomic fresh-snapshot checks before exposing write endpoints.
+- No master changes, merge or beta publication.
