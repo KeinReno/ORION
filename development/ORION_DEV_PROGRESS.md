@@ -389,3 +389,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `fd237a0`, `117c636`. **Tests and TypeScript checks not executed** in this GitHub-only pass.
 - Next: verify TypeScript/Vitest and PostgreSQL migration, then bind issuance to authenticated reviewed preview and enforce atomic fresh-snapshot checks before exposing write endpoints.
 - No master changes, merge or beta publication.
+
+
+### 2026-11-01 — fail-closed consent scope validation
+
+- Re-read catalog, bootstrap protocol, progress journal and consent transaction source/tests.
+- Extracted shared scope validation for both issuance and consumption. Rejects blank actor/workspace, incorrect catalog or malformed SHA-256 bindings and invalid timestamps before database operations.
+- Added mocked transaction regression verifying invalid consumption scope never reaches updateMany.
+- Commits: `25bbc51`, `1961827`. Tests and TypeScript checks NOT executed in this GitHub-only pass.
+- Next: run targeted tests and Prisma/PostgreSQL migration checks; bind issuance to authenticated reviewed preview and atomic fresh-snapshot revalidation before enabling a write API.
+- No master changes, merge or beta publication.
