@@ -68,6 +68,14 @@
 - Commits: `7355d73`, `d83548f`. **Tests not executed** in this session. The change affects only the read-only planner; no write API or persistent workspace ownership mapping was added.
 - Next: verify integration tests against a disposable PostgreSQL instance and design an explicit workspace ownership confirmation/mapping mechanism before enabling writes.
 
+### 2026-11-01 — snapshot identity validation
+
+- Re-read the versioned catalog, bootstrap protocol, planner, tests and progress journal.
+- Planner now rejects malformed and duplicate workspace/project/task snapshot IDs before matching entities. This avoids ambiguous identity resolution from inconsistent snapshots.
+- Added two regression tests covering duplicate IDs across all three entity types and missing/null IDs.
+- Commits: `18782e9`, `4a5acbe`. **Tests not executed** in an Orion checkout. No DB migration was applied and no write importer was enabled.
+- Next: run existing RLS integration tests on disposable PostgreSQL, inspect owner/admin permission conventions, and implement authorized transactional mapping writes only after verification.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
