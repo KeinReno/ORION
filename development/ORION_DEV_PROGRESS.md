@@ -314,3 +314,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Wired the plan into the existing JWT-protected preview response; added unit tests for create, review, mapping reuse and rejection cases.
 - Commits: `58ed4c0`, `d1b2eca`, `86f0981`. TypeScript and tests **not executed**; behavior remains unverified.
 - This is an API-side planner separate from the existing CLI `scripts/orion-dev-plan.mjs`; parity must be checked during Luna 6 acceptance. The endpoint still has no confirmation token or write operation. Next: authorization/consent token persistence, atomic stale-snapshot validation and transaction concurrency safety before import writes.
+
+
+### 2026-11-01 — reject orphaned mappings in API dry-run
+
+- Rechecked live draft PR #95 at `a0e4bc1`, current catalog, bootstrap protocol, API planner, snapshot reader, builder and progress journal.
+- Fixed `catalog-server-plan.ts`: mappings to project/task external IDs removed from the trusted catalog now fail closed instead of being silently ignored. The CLI planner already rejected these; this reduces a safety discrepancy between the two planning paths.
+- Added focused Vitest regression covering both unknown project and unknown task external mapping IDs.
+- Commits: `4a2b5c1`, `a4b1b3b`. **Tests and TypeScript checks not executed** in this run. No import write endpoint, consent issuance or master changes.
+- Next: run API Vitest and typecheck; verify full CLI/API planner parity and stale-preview handling before implementing confirmation/write routes.
