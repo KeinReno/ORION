@@ -426,3 +426,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added controller regressions for short, uppercase, non-hex and overlong digests.
 - Commits: `e8168dc`, `0c21f25`. **Tests and TypeScript checks not executed** in this connector-only pass.
 - Next: verify targeted Vitest and TypeScript in a checkout; implement transactional revalidation and single-use consent consumption before exposing the write route. No master merge or beta publication.
+
+
+### 2026-11-02 — duplicate preview identity rejection
+
+- Re-read current catalog, bootstrap protocol, journal, consent and preview-binding source.
+- Reject repeated kind/externalId action identities before computing a consent fingerprint; added focused Vitest regression.
+- Commits: `d7b9df5`, `f74e007`. Tests and TypeScript checks NOT executed in this GitHub-only run.
+- Next: verify preview binding and consent tests in local checkout, then implement atomic stale-preview revalidation before import writes. No public write endpoint enabled.
