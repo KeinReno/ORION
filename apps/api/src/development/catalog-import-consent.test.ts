@@ -38,6 +38,22 @@ describe("development import consent", () => {
     await expect(consumeImportConsentTx(tx, scope, "a".repeat(64), now))
       .rejects.toThrow(/expired, used or mismatched/);
   });
+  it("rejects malformed consume scope before touching the database", async () => {
+    const updateMany = vi.fn();
+    const tx = { developmentImportConsent: { updateMany } } as unknown as Prisma.TransactionClient;
+    for (const invalid of [
+      { ...scope, userId: " " },
+      { ...scope, workspaceId: "" },
+      { ...scope, catalogSha256: "bad" },
+      { ...scope, catalogId: "foreign" }
+    ]) {
+      await expect(consumeImportConsentTx(tx, invalid, "a".repeat(64)))
+        .rejects.toThrow(/Invalid consent scope/);
+    }
+    await expect(consumeImportConsentTx(tx, scope, "a".repeat(64), new Date(NaN)))
+      .rejects.toThrow(/Invalid consent scope/);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
   it("rejects malformed tokens and scope", async () => {
     expect(() => hashImportConsentToken("invalid")).toThrow();
     expect(() => hashImportConsentToken(null as unknown as string)).toThrow();
