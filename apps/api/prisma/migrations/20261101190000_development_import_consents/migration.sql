@@ -34,3 +34,19 @@ CREATE POLICY "development_import_consents_insert" ON "development_import_consen
       AND wm."userId" = NULLIF(current_setting('app.current_user_id', true), '')
       AND wm."role" IN ('owner', 'lead'))
   );
+
+CREATE POLICY "development_import_consents_update" ON "development_import_consents"
+  FOR UPDATE USING (
+    "userId" = NULLIF(current_setting('app.current_user_id', true), '')
+    AND EXISTS (SELECT 1 FROM "workspace_members" wm
+      WHERE wm."workspaceId" = "development_import_consents"."workspaceId"
+      AND wm."userId" = NULLIF(current_setting('app.current_user_id', true), '')
+      AND wm."role" IN ('owner', 'lead'))
+  )
+  WITH CHECK (
+    "userId" = NULLIF(current_setting('app.current_user_id', true), '')
+    AND EXISTS (SELECT 1 FROM "workspace_members" wm
+      WHERE wm."workspaceId" = "development_import_consents"."workspaceId"
+      AND wm."userId" = NULLIF(current_setting('app.current_user_id', true), '')
+      AND wm."role" IN ('owner', 'lead'))
+  );
