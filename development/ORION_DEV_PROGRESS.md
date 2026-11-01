@@ -84,6 +84,15 @@
 - Commits: `5571312`, `b0c9b31`. Tests **not executed** in this session. This remains a read-only planning change, not a working confirmation API.
 - Next: run targeted planner tests in a checkout, validate the PostgreSQL migration/RLS suite on a disposable instance, and implement an authenticated confirmation and transactional mapping writer.
 
+
+### 2026-11-01 — duplicate task title ambiguity gate
+
+- Re-read current catalog, bootstrap protocol, planner, tests, and journal; confirmed PR #95 remains discoverable.
+- Fixed a dry-run ambiguity: multiple canonical tasks in the same matched project with equivalent normalized titles previously yielded `review_possible_match` with multiple candidate IDs. The planner now fails closed with `Ambiguous task` before proposing any binding.
+- Added a regression test with two existing tasks whose titles normalize to the same catalog title.
+- Commits: `7cb73e5`, `b7af997`. **Tests not executed**; this GitHub-only session has no checked-out runtime or database.
+- Next: execute the planner Vitest suite in a local checkout, then verify migration/RLS on disposable PostgreSQL and implement authenticated transactional mapping persistence.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
