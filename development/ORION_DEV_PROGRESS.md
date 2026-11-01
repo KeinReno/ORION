@@ -213,3 +213,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `75904e8`, `9cf8acc`. **Not executed:** new TypeScript checks, Vitest and PostgreSQL integration tests. Earlier local test evidence does not cover these commits.
 - **Not a public endpoint or complete importer.** Task import, catalog validation wiring, explicit user-facing confirmation/dry-run, concurrency recovery, Agent Hub, UI and Qoder remain open. Caller must execute via `PrismaService.withUser` and enforce a confirmation gate; never invoke this primitive with untrusted client-provided project definitions.
 - Next: add atomic task import with canonical dependency links, then wire a validated dry-run/confirmation service and guarded API. Batch local verification once a coherent feature slice is ready.
+
+
+### 2026-11-01 — existing-project adoption regression
+
+- Rechecked PR #95 HEAD, catalog, bootstrap protocol, project importer and integration suite.
+- Added PostgreSQL integration coverage for refusing unconfirmed existing-project name matches, rejecting unauthorized adoption and stale confirmation, explicitly adopting a canonical project, preserving its manual description, and idempotent retry.
+- Commit: `3e9de83`. **Not executed**: this new integration test and TypeScript typecheck. Prior Grok results do not cover it.
+- Next: implement the canonical task-import stage with dependency handling, then batch-run API typecheck and integration tests in the local checkout. Keep the public import endpoint disabled until validated catalog and explicit confirmation gates exist.
