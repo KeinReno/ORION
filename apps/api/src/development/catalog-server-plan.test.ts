@@ -45,6 +45,20 @@ describe("server-side development dry-run", () => {
       ...mapped, mappings: [{ ...mapped.mappings[0]!, workspaceId: "foreign" }]
     })).toThrow(/Foreign/);
   });
+  it("rejects orphaned project and task mappings from a changed catalog", () => {
+    for (const kind of ["project", "task"] as const) {
+      expect(() => planDevelopmentImport(catalog, {
+        ...snapshot,
+        mappings: [{
+          workspaceId: "w",
+          catalogId: "orion-dev",
+          kind,
+          externalId: "removed-external-id",
+          entityId: "existing-entity"
+        }]
+      })).toThrow(/Unknown development catalog mapping/);
+    }
+  });
   it("rejects ambiguous project names and invalid catalogs", () => {
     expect(() => planDevelopmentImport(catalog, {
       ...snapshot, projects: [
