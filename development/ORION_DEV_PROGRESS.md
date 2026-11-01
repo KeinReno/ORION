@@ -146,3 +146,12 @@ Do not merge to `master` or publish beta without approval. Agent completion is n
 - Added a Vitest regression covering both blank and equivalent duplicate project titles.
 - Commits: `bcaa6518`, `aba7f6fe`. **Tests not executed**; PostgreSQL migration and RLS remain unverified.
 - Next: run Vitest and PostgreSQL integration tests in an isolated checkout; then implement transactional owner/lead-authorized mapping persistence with explicit confirmation and idempotency.
+
+
+### 2026-11-01 — explicit workspace selection for dry-run
+
+- Re-read the branch catalog, bootstrap protocol, planner, tests, journal, and owner/lead RLS migration before editing.
+- Added optional `snapshot.targetWorkspaceId` to select a known workspace when several workspaces share the name ORION DEV. Unknown or invalid IDs fail closed. Name matching alone still never authorizes writes: the workspace and project remain `review_possible_match`.
+- Added Vitest regression for ambiguous names, explicit selection, review-only actions, unknown IDs and blank IDs.
+- Commits: `ede064d`, `47b40c8`. **Tests not executed**; no local checkout, PostgreSQL migration or RLS test was run.
+- Next: execute Vitest and disposable PostgreSQL integration tests, then implement authenticated confirmation and transactional mapping persistence. No write importer or UI exists yet.
