@@ -167,4 +167,12 @@ describe("ORION DEV dry-run planner", () => {
     })).toThrow(/Ambiguous task: First/);
   });
 
+  it("rejects null catalog rows and malformed dependency collections", () => {
+    expect(() => planOrionDevImport({ ...catalog, projects: [null] })).toThrow(/Invalid or duplicate project ID/);
+    expect(() => planOrionDevImport({ ...catalog, workItems: [null] })).toThrow(/Invalid or duplicate task ID/);
+    expect(() => planOrionDevImport({ ...catalog, phases: [null] })).toThrow(/Invalid or duplicate phase ID/);
+    expect(() => planOrionDevImport({ ...catalog, phases: [{ id: "foundation", dependsOn: "oops" }] })).toThrow(/Invalid phase dependencies/);
+    expect(() => planOrionDevImport({ ...catalog, workItems: [{ ...catalog.workItems[0], dependsOn: "DEV-2" }] })).toThrow(/Invalid task dependencies/);
+  });
+
 });
