@@ -28,6 +28,13 @@ export function planDevelopmentImport(catalog: TrustedDevelopmentCatalog, snapsh
       ids.add(row.id);
     }
   }
+  // Reject partial snapshots: a task's parent must be present in this workspace.
+  const snapshotProjectIds = new Set(snapshot.projects.map((row) => row.id));
+  for (const task of snapshot.tasks) {
+    if (task.projectId !== null && !snapshotProjectIds.has(task.projectId)) {
+      throw new ConflictException("Orphaned development preview task");
+    }
+  }
   const normalize = (value: string) => value.trim().toLocaleLowerCase();
   const projectIds = new Set(catalog.projects.map((project) => project.id));
   const taskIds = new Set(catalog.workItems.map((task) => task.id));
