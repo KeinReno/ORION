@@ -175,4 +175,12 @@ describe("ORION DEV dry-run planner", () => {
     expect(() => planOrionDevImport({ ...catalog, workItems: [{ ...catalog.workItems[0], dependsOn: "DEV-2" }] })).toThrow(/Invalid task dependencies/);
   });
 
+  it("rejects null and non-object mapping rows with a controlled error", () => {
+    for (const mapping of [null, undefined, "invalid", 42, []]) {
+      expect(() => planOrionDevImport(catalog, {
+        mappings: [mapping]
+      })).toThrow("Invalid mapping");
+    }
+  });
+
 });
