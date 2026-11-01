@@ -128,3 +128,12 @@ Do not merge to `master` or publish beta without approval. Agent completion is n
 - Added regression coverage for same-project collisions, blank titles and cross-project allowance.
 - Commits: `1c9688a4`, `090a379c`. **Tests not executed** in this GitHub-only session; PostgreSQL/RLS remains unverified.
 - Next: run targeted Vitest in a checkout and migration/RLS integration tests on disposable PostgreSQL; only then build the authorized transactional importer.
+
+
+### 2026-11-01 — mapping write authorization hardening
+
+- Reviewed the live branch's bootstrap protocol, catalog planner, mapping migration, workspace role checks and API RLS test.
+- Added additive migration `20261101060000_development_catalog_write_roles`: only workspace `owner` and `lead` roles may INSERT/UPDATE development catalog mappings. Workspace members retain SELECT access. No DELETE policy.
+- Added an API/PostgreSQL integration regression covering member SELECT allowed and INSERT/UPDATE denied.
+- Commits: `a3f9cf0`, `b625ef0`. **Not executed** against PostgreSQL; SQL syntax, RLS role semantics and integration assertions remain unverified.
+- Next: run disposable PostgreSQL migrations and integration tests, then implement owner/lead-authorized mapping persistence using existing `withUser` and role gates. Do not expose writes before tests pass.
