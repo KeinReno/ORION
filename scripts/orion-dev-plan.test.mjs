@@ -31,6 +31,15 @@ describe("ORION DEV dry-run planner", () => {
     expect(plan.actions.find((a) => a.externalId === "DEV-1").candidateIds).toEqual(["t"]);
   });
 
+  it("rejects duplicate or blank catalog project titles before matching", () => {
+    const duplicate = structuredClone(catalog);
+    duplicate.projects.push({ id: "core-two", title: "  orion core  " });
+    expect(() => planOrionDevImport(duplicate)).toThrow(/Duplicate catalog project title/);
+    const blank = structuredClone(catalog);
+    blank.projects[0].title = "  ";
+    expect(() => planOrionDevImport(blank)).toThrow(/Invalid project title/);
+  });
+
   it("rejects duplicate IDs and dependency cycles", () => {
     expect(() => planOrionDevImport({ ...catalog, workItems: [...catalog.workItems, catalog.workItems[0]] })).toThrow(/duplicate/);
     const cyclic = structuredClone(catalog);
