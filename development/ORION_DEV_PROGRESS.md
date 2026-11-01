@@ -203,3 +203,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added PostgreSQL integration regression for first binding, idempotent retry, conflicting binding, outsider rejection and missing target.
 - Commits: `c4cf822`, `f4cccd9`. **New tests not executed** here; earlier Grok runs did not cover these changes.
 - This is a service-level primitive, **not** a public API or a working importer. It does not create projects/tasks or grant consent. Caller must use `PrismaService.withUser` and an explicit confirmation gate. Next: execute integration test on Grok's local PostgreSQL, check TS typecheck, then integrate into a guarded importer with explicit confirmation and safe retry.
+
+
+### 2026-11-01 — atomic canonical project import stage
+
+- Inspected current PR HEAD, canonical Prisma Project/Task schemas, project/task services, catalog, protocol and mapping primitive.
+- Added `apps/api/src/development/catalog-project-import.ts`: transaction-scoped project import for a *previously validated catalog and explicitly confirmed workspace*. Requires owner/lead, rejects duplicate catalog IDs/titles, never silently claims existing name matches, supports explicit existing-project confirmation, checks stale mappings and returns idempotent retry results. Project and mapping writes share one transaction; no manual fields are overwritten.
+- Added PostgreSQL integration regression for creation, idempotent retry, conflict rollback and existing mapping confirmation.
+- Commits: `75904e8`, `9cf8acc`. **Not executed:** new TypeScript checks, Vitest and PostgreSQL integration tests. Earlier local test evidence does not cover these commits.
+- **Not a public endpoint or complete importer.** Task import, catalog validation wiring, explicit user-facing confirmation/dry-run, concurrency recovery, Agent Hub, UI and Qoder remain open. Caller must execute via `PrismaService.withUser` and enforce a confirmation gate; never invoke this primitive with untrusted client-provided project definitions.
+- Next: add atomic task import with canonical dependency links, then wire a validated dry-run/confirmation service and guarded API. Batch local verification once a coherent feature slice is ready.
