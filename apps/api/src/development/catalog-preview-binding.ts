@@ -27,6 +27,10 @@ export function fingerprintDevelopmentPreview(input: PreviewBinding): string {
   if (keys.some((key) => typeof input.choices[key] !== "string")) {
     throw new ConflictException("Invalid development preview choices");
   }
+  const identities = input.preview.actions.map((action) => action.kind + ":" + action.externalId);
+  if (new Set(identities).size !== identities.length) {
+    throw new ConflictException("Duplicate development preview action");
+  }
   const actions = input.preview.actions.map((action) => ({
     kind: action.kind,
     externalId: action.externalId,
