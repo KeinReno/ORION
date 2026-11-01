@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
+import { bindCatalogEntityTx } from "../src/development/catalog-mappings";
 import { CalendarConnectionsService } from "../src/events/calendar-connections.service";
 import { NotificationPolicyService } from "../src/notifications/notification-policy.service";
 import { WebdavRemote } from "../src/sync/webdav-remote";
@@ -193,6 +194,31 @@ describe("API workspace isolation", () => {
       tx.developmentCatalogMapping.update({
         where: { id: created.id }, data: { entityId: `hijacked-${externalId}` }
       })
+    )).rejects.toThrow();
+  });
+
+  it("binds canonical project IDs idempotently and rejects conflicting or unauthorized bindings", async () => {
+    const owner = await register("mapping-bind-owner");
+    const outsider = await register("mapping-bind-outsider");
+    const project = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.create({ data: { workspaceId: owner.workspaceId, name: `Bind project ${runId}` } })
+    );
+    const input = {
+      workspaceId: owner.workspaceId, catalogId: "orion-dev" as const,
+      kind: "project" as const, externalId: `binding-${runId}`, entityId: project.id
+    };
+    const first = await prisma.withUser(owner.user.id, (tx) => bindCatalogEntityTx(tx, owner.user.id, input));
+    expect(first.alreadyBound).toBe(false);
+    const retry = await prisma.withUser(owner.user.id, (tx) => bindCatalogEntityTx(tx, owner.user.id, input));
+    expect(retry).toEqual({ id: first.id, alreadyBound: true });
+    await expect(prisma.withUser(owner.user.id, (tx) =>
+      bindCatalogEntityTx(tx, owner.user.id, { ...input, externalId: `other-${runId}` })
+    )).rejects.toThrow(/Conflicting catalog binding/);
+    await expect(prisma.withUser(outsider.user.id, (tx) =>
+      bindCatalogEntityTx(tx, outsider.user.id, input)
+    )).rejects.toThrow();
+    await expect(prisma.withUser(owner.user.id, (tx) =>
+      bindCatalogEntityTx(tx, owner.user.id, { ...input, externalId: `missing-${runId}`, entityId: "not-a-project" })
     )).rejects.toThrow();
   });
 
