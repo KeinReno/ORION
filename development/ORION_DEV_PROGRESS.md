@@ -260,3 +260,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `apps/api/src/development/catalog-trust.test.ts` with positive, tampering, omission and cyclic-catalog cases.
 - Commits: `8a2400a`, `ac03ef9`. **Tests and typecheck not executed** in this environment. The validator is not yet called by an authenticated API or a server-side catalog loader. Never treat it as a complete authorization or confirmation mechanism.
 - Next: add trusted catalog loader, authenticated dry-run/confirmation binding, and invoke this validator before the composed transaction; avoid exposing internal import primitives directly. Luna 6 will own consolidated acceptance.
+
+
+### 2026-11-01 — server-owned import declaration builder
+
+- Rechecked live draft PR #95 HEAD `7af9a70`, catalog, bootstrap protocol, existing import composer and trusted catalog validator.
+- Added `apps/api/src/development/catalog-import-builder.ts`: derives the complete project/task/dependency payload from a trusted catalog, accepting only workspace ID and explicitly reviewed existing-entity IDs as variable selections. Rejects unknown IDs, duplicate canonical target selections and invalid catalog graph through the existing trust validator.
+- Added focused unit tests in `catalog-import-builder.test.ts` for exact payload generation, reviewed selections, rejected invalid selections and invalid dependencies.
+- Commits: `b9be82b`, `d17ac35`. **Not executed:** TypeScript checks or Vitest. No claims of runtime verification.
+- **Not production-ready:** this builder does not authenticate users, prove confirmation, load the catalog from a trusted server path or check candidate matches against a fresh snapshot. The `workspaceConfirmed` field is an internal stage precondition, not consent evidence. No API route exposed.
+- Next: implement authenticated server-side catalog loading and dry-run snapshot, then a scoped expiring confirmation protocol; only afterward expose the transaction. Luna 6 will conduct independent acceptance.
