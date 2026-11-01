@@ -15,3 +15,22 @@ CREATE TABLE "development_import_consents" (
 );
 CREATE UNIQUE INDEX "development_import_consents_tokenHash_key" ON "development_import_consents"("tokenHash");
 CREATE INDEX "development_import_consents_workspaceId_userId_expiresAt_idx" ON "development_import_consents"("workspaceId", "userId", "expiresAt");
+
+ALTER TABLE "development_import_consents" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "development_import_consents" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "development_import_consents_read" ON "development_import_consents"
+  FOR SELECT USING (
+    "userId" = NULLIF(current_setting('app.current_user_id', true), '')
+    AND EXISTS (SELECT 1 FROM "workspace_members" wm
+      WHERE wm."workspaceId" = "development_import_consents"."workspaceId"
+      AND wm."userId" = NULLIF(current_setting('app.current_user_id', true), '')
+      AND wm."role" IN ('owner', 'lead'))
+  );
+CREATE POLICY "development_import_consents_insert" ON "development_import_consents"
+  FOR INSERT WITH CHECK (
+    "userId" = NULLIF(current_setting('app.current_user_id', true), '')
+    AND EXISTS (SELECT 1 FROM "workspace_members" wm
+      WHERE wm."workspaceId" = "development_import_consents"."workspaceId"
+      AND wm."userId" = NULLIF(current_setting('app.current_user_id', true), '')
+      AND wm."role" IN ('owner', 'lead'))
+  );
