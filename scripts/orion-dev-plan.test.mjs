@@ -25,6 +25,7 @@ describe("ORION DEV dry-run planner", () => {
       projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
       tasks: [{ id: "t", workspaceId: "w", projectId: "p", title: "First" }]
     });
+    expect(plan.actions[0]).toMatchObject({ kind: "workspace", action: "review_possible_match", candidateId: "w" });
     expect(plan.actions.find((a) => a.externalId === "DEV-1").action).toBe("review_possible_match");
     expect(plan.actions.find((a) => a.externalId === "DEV-1").candidateIds).toEqual(["t"]);
   });
