@@ -20,6 +20,32 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     }
     return seen;
   };
+  const phases = catalog.phases ?? [];
+  if (!Array.isArray(phases)) throw new Error("Invalid catalog phases");
+  const phaseIds = unique(phases, "phase");
+  const byPhase = new Map(phases.map((phase) => [phase.id, phase]));
+  for (const phase of phases) {
+    for (const dependency of phase.dependsOn ?? []) {
+      if (!phaseIds.has(dependency)) throw new Error("Unknown phase dependency: " + dependency);
+    }
+  }
+  const activePhases = new Set();
+  const completedPhases = new Set();
+  function checkPhase(id) {
+    if (activePhases.has(id)) throw new Error("Phase dependency cycle: " + id);
+    if (completedPhases.has(id)) return;
+    activePhases.add(id);
+    for (const dep of byPhase.get(id).dependsOn ?? []) checkPhase(dep);
+    activePhases.delete(id);
+    completedPhases.add(id);
+  }
+  for (const id of phaseIds) checkPhase(id);
+  for (const project of projects) {
+    if (project.phase && !phaseIds.has(project.phase)) throw new Error("Unknown project phase: " + project.phase);
+  }
+  for (const item of items) {
+    if (item.phase && !phaseIds.has(item.phase)) throw new Error("Unknown task phase: " + item.phase);
+  }
   const projectIds = unique(projects, "project");
   const taskIds = unique(items, "task");
   const byTask = new Map(items.map((item) => [item.id, item]));
