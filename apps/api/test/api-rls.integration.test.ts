@@ -162,6 +162,40 @@ describe("API workspace isolation", () => {
     )).rejects.toThrow();
   });
 
+  it("allows workspace members to read catalog mappings but denies member writes", async () => {
+    const owner = await register("mapping-owner-role");
+    const member = await register("mapping-member-role");
+    await prisma.asSystem((tx) => tx.workspaceMember.create({
+      data: { workspaceId: owner.workspaceId, userId: member.user.id, role: "member" }
+    }));
+    const externalId = `role-check-${runId}`;
+    const created = await prisma.withUser(owner.user.id, (tx) =>
+      tx.developmentCatalogMapping.create({
+        data: {
+          workspaceId: owner.workspaceId, catalogId: "orion-dev",
+          kind: "project", externalId, entityId: `entity-${externalId}`
+        }
+      })
+    );
+    const visible = await prisma.withUser(member.user.id, (tx) =>
+      tx.developmentCatalogMapping.findMany({ where: { workspaceId: owner.workspaceId } })
+    );
+    expect(visible.some((row) => row.id === created.id)).toBe(true);
+    await expect(prisma.withUser(member.user.id, (tx) =>
+      tx.developmentCatalogMapping.create({
+        data: {
+          workspaceId: owner.workspaceId, catalogId: "orion-dev",
+          kind: "task", externalId: `member-${externalId}`, entityId: `member-entity-${externalId}`
+        }
+      })
+    )).rejects.toThrow();
+    await expect(prisma.withUser(member.user.id, (tx) =>
+      tx.developmentCatalogMapping.update({
+        where: { id: created.id }, data: { entityId: `hijacked-${externalId}` }
+      })
+    )).rejects.toThrow();
+  });
+
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
     // The second safeguard (see CLAUDE.md "Postgres RLS") is only real if it is
     // installed on *every* workspace-owned table. v0.11 shipped
