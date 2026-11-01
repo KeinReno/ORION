@@ -59,6 +59,15 @@
 - Commit: `57a01dc`. **Not executed**: this session has no migrated local PostgreSQL/Orion checkout; assertions are code coverage only, not evidence of passing RLS.
 - Security follow-up: the new RLS policy currently grants INSERT/UPDATE to any workspace member. Before exposing the importer, enforce owner/admin authorization at the service layer and evaluate role-based policy hardening. Do not treat RLS membership as authorization to mutate the catalog.
 
+
+### 2026-11-01 — workspace name-match authorization gate
+
+- Re-read the current catalog, bootstrap protocol, progress journal, import planner, API RLS test suite and PostgreSQL role configuration.
+- Corrected a protocol mismatch: an existing workspace with the name `ORION DEV` is now returned as `review_possible_match` (with `candidateId`), not `confirm_existing`. A name alone must not authorize importing into a user's existing workspace.
+- Added a regression assertion for this gate.
+- Commits: `7355d73`, `d83548f`. **Tests not executed** in this session. The change affects only the read-only planner; no write API or persistent workspace ownership mapping was added.
+- Next: verify integration tests against a disposable PostgreSQL instance and design an explicit workspace ownership confirmation/mapping mechanism before enabling writes.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
