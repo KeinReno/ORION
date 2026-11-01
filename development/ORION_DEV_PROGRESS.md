@@ -332,3 +332,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `catalog-preview-matches.test.ts` covering accepted selections and omitted/unknown/stale decisions.
 - Commits: `efaec02`, `2572fdb`. **Tests and typecheck not executed**. This is an internal review guard, NOT user authentication, a one-time confirmation token, or protection against changes between preview and commit.
 - Next: bind the reviewed decisions to an authenticated user, workspace and fresh snapshot; revalidate within the write transaction. Do not expose a public write route before that boundary is complete.
+
+
+### 2026-11-01 — scoped preview fingerprint
+
+- Inspected PR #95 HEAD `febad3c` and reviewed-preview guard.
+- Added `catalog-preview-binding.ts`: deterministic SHA-256 fingerprint of authenticated-user ID (caller-supplied), workspace ID, trusted catalog digest (caller-supplied), normalized preview actions and reviewed choices. A changed preview, catalog, identity or selection changes the fingerprint.
+- Added unit tests for determinism, invalidation and workspace mismatch. Commits: `be9d21e`, `51e2647`.
+- **Not executed:** Vitest or TypeScript. Fingerprint is NOT a signed consent token and cannot by itself prevent replay, forgery or stale writes. The future server must issue and store expiring one-time confirmations and re-read/revalidate the snapshot in the same transaction as writes. No write API exposed.
