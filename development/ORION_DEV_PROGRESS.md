@@ -279,3 +279,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added integration regression for project/task visibility and nonmember denial.
 - Commits: `59d83aa`, `f928eea`. Tests and TypeScript checks **not executed**.
 - Not an API endpoint. Next: trusted server catalog loader and authenticated dry-run endpoint; then user confirmation before any write. Luna 6 acceptance remains pending.
+
+
+### 2026-11-01 — fixed-source catalog loader
+
+- Checked draft PR #95 at `bc86c36`, the versioned catalog, bootstrap protocol, snapshot reader, API TypeScript settings and progress log.
+- Added `apps/api/src/development/catalog-loader.ts`: reads the fixed repository-relative catalog path, rejects missing/malformed/unsupported version and duplicate phase IDs, and returns a SHA-256 digest of exact file bytes for future confirmation binding. The repository root must be server-controlled, not supplied by an HTTP client.
+- Added `catalog-loader.test.ts`: stable digest, changed content, missing file, malformed JSON, unsupported version/ID and duplicate phase cases.
+- Commits: `68b2032`, `91aa26c`. Tests and TypeScript checks **not executed**. This loader is not wired to an endpoint; deeper catalog validation is still delegated to the trust validator.
+- Next: integrate trusted loader, scoped snapshot and dry-run planner behind authenticated read-only API. Confirmation and writes remain disabled. Luna 6 acceptance pending.
