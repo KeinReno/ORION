@@ -35,6 +35,9 @@ export async function issueImportConsentTx(
   assertConsentScope(scope, now);
   const { token, tokenHash } = issueDevelopmentConsentSecret();
   const expiresAt = new Date(now.getTime() + 5 * 60_000);
+  if (!Number.isFinite(expiresAt.getTime())) {
+    throw new ConflictException("Invalid consent expiry");
+  }
   await tx.developmentImportConsent.create({
     data: { ...scope, tokenHash, expiresAt }
   });
