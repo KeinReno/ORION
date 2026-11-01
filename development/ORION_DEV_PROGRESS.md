@@ -137,3 +137,12 @@ Do not merge to `master` or publish beta without approval. Agent completion is n
 - Added an API/PostgreSQL integration regression covering member SELECT allowed and INSERT/UPDATE denied.
 - Commits: `a3f9cf0`, `b625ef0`. **Not executed** against PostgreSQL; SQL syntax, RLS role semantics and integration assertions remain unverified.
 - Next: run disposable PostgreSQL migrations and integration tests, then implement owner/lead-authorized mapping persistence using existing `withUser` and role gates. Do not expose writes before tests pass.
+
+
+### 2026-11-01 — catalog project-title ambiguity gate
+
+- Re-read the versioned catalog, bootstrap protocol, planner, tests, migration and journal on `feat/orion-dev-foundation`.
+- Planner now rejects blank project titles and duplicate normalized project titles (trimmed/case-folded) before constructing a dry-run. Unique external project IDs alone are insufficient to disambiguate name-based review.
+- Added a Vitest regression covering both blank and equivalent duplicate project titles.
+- Commits: `bcaa6518`, `aba7f6fe`. **Tests not executed**; PostgreSQL migration and RLS remain unverified.
+- Next: run Vitest and PostgreSQL integration tests in an isolated checkout; then implement transactional owner/lead-authorized mapping persistence with explicit confirmation and idempotency.
