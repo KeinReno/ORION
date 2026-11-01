@@ -12,6 +12,10 @@ describe("development preview fingerprint", () => {
     expect(fingerprintDevelopmentPreview(binding)).toBe(fingerprintDevelopmentPreview({ ...binding, choices: { "project:p": "p1" } }));
     expect(fingerprintDevelopmentPreview(binding)).toMatch(/^[a-f0-9]{64}$/);
   });
+  it("rejects repeated preview action identities", () => {
+    const duplicated = { ...preview, actions: [...preview.actions, preview.actions[0]!] };
+    expect(() => fingerprintDevelopmentPreview({ ...binding, preview: duplicated })).toThrow(/Duplicate development preview action/);
+  });
   it("changes with user, workspace, catalog, choices or preview", () => {
     const original = fingerprintDevelopmentPreview(binding);
     expect(fingerprintDevelopmentPreview({ ...binding, userId: "other" })).not.toBe(original);
