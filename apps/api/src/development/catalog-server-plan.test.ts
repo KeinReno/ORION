@@ -73,6 +73,17 @@ describe("server-side development dry-run", () => {
       ]
     })).toThrow(/Invalid or foreign/);
   });
+  it("rejects orphaned task project references in a partial snapshot", () => {
+    expect(() => planDevelopmentImport(catalog, {
+      ...snapshot,
+      tasks: [{ id: "t", workspaceId: "w", projectId: "missing", title: "Review" }]
+    })).toThrow(/Orphaned development preview task/);
+    expect(() => planDevelopmentImport(catalog, {
+      ...snapshot,
+      projects: [{ id: "p", workspaceId: "w", name: "Core" }],
+      tasks: [{ id: "t", workspaceId: "w", projectId: "p", title: "Review" }]
+    })).not.toThrow();
+  });
   it("rejects ambiguous project names and invalid catalogs", () => {
     expect(() => planDevelopmentImport(catalog, {
       ...snapshot, projects: [
