@@ -17,6 +17,17 @@ export function planDevelopmentImport(catalog: TrustedDevelopmentCatalog, snapsh
   if (!workspace || snapshot.workspaces.length !== 1) {
     throw new ConflictException("Development preview workspace is unresolved");
   }
+  // Fail closed if a future snapshot adapter leaks cross-workspace entities or
+  // repeats canonical IDs; a preview must not suggest adopting foreign rows.
+  for (const rows of [snapshot.projects, snapshot.tasks]) {
+    const ids = new Set<string>();
+    for (const row of rows) {
+      if (!row.id || row.workspaceId !== workspace.id || ids.has(row.id)) {
+        throw new ConflictException("Invalid or foreign development preview entity");
+      }
+      ids.add(row.id);
+    }
+  }
   const normalize = (value: string) => value.trim().toLocaleLowerCase();
   const projectIds = new Set(catalog.projects.map((project) => project.id));
   const taskIds = new Set(catalog.workItems.map((task) => task.id));
