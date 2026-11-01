@@ -53,6 +53,7 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   OpportunityFact: lww("later", "Факты с явным подтверждением владельца — подтверждение не должно появляться из слияния."),
   OpportunityTrack: lww("later", "Треки профиля."),
   Project: lww("later", "Поля LWW; проект — корень ссылок (projectId), нужна проверка целостности на узле."),
+  DevelopmentCatalogMapping: strict("Соответствие внешнего id каталога и сущности пространства: офлайн-запись создала бы вторую привязку. В резервную копию входит, пишется только на узле."),
   Milestone: lww("later", "Вехи проекта."),
   Goal: lww("later", "Цели."),
   Contact: lww("later", "Записная книжка пространства."),

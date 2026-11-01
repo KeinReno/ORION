@@ -69,6 +69,7 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   specRestoredPolicies("opportunityPolicies", (tx) => tx.opportunityPolicy),
   spec("opportunityManagerActions", (tx) => tx.opportunityManagerAction),
   spec("projects", (tx) => tx.project),
+  spec("developmentCatalogMappings", (tx) => tx.developmentCatalogMapping),
   spec("homes", (tx) => tx.home),
   spec("meters", (tx) => tx.meter),
   spec("meterReadings", (tx) => tx.meterReading),

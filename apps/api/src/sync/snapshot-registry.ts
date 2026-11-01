@@ -130,6 +130,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "OpportunityPolicy", snapshotKey: "opportunityPolicies", policy: "included", reason: "Политика автономности; при восстановлении всегда приостанавливается — полномочия не оживают из копии." },
   { model: "OpportunityManagerAction", snapshotKey: "opportunityManagerActions", policy: "included", reason: "Журнал действий менеджера (после политики и возможностей)." },
   { model: "Project", snapshotKey: "projects", policy: "included", reason: "Корень для milestones/tasks/notes/events/documents/finance/inventory через projectId." },
+  { model: "DevelopmentCatalogMapping", snapshotKey: "developmentCatalogMappings", policy: "included", reason: "Постоянные соответствия каталога разработки сущностям пространства. Без них повторный импорт снова создаст проекты и задачи." },
   { model: "Milestone", snapshotKey: "milestones", policy: "included", reason: "«План проекта» (v0.27) — веха, дочерняя к Project, родитель для Task.milestoneId." },
   { model: "MilestoneDependency", snapshotKey: "milestoneDependencies", policy: "included", reason: "Finish-to-start связи между вехами." },
   { model: "Task", snapshotKey: "tasks", policy: "included", reason: "Самоссылающееся дерево (parentId) — вставляется в топологическом порядке, не в порядке findMany." },
