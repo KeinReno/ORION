@@ -1,3 +1,4 @@
+import { applyConfirmedDevelopmentImportTx } from "../src/development/catalog-import-transaction";
 import { linkCatalogTaskDependenciesTx } from "../src/development/catalog-task-dependencies";
 import { importConfirmedCatalogTasksTx } from "../src/development/catalog-task-import";
 import { importConfirmedCatalogProjectsTx } from "../src/development/catalog-project-import";
@@ -352,6 +353,46 @@ describe("API workspace isolation", () => {
     expect(persisted).toHaveLength(0);
     await expect(run([{ externalId: ids[0]!, dependsOn: ["unknown-dependency"] }]))
       .rejects.toThrow(/Missing catalog task mapping/);
+  });
+
+  it("imports catalog projects, tasks and dependencies in one atomic transaction", async () => {
+    const owner = await register("dev-import-atomic");
+    const catalog = {
+      workspaceId: owner.workspaceId, catalogId: "orion-dev",
+      workspaceConfirmed: true as const,
+      projects: [{ externalId: `p-${runId}`, title: `Atomic project ${runId}` }],
+      tasks: [
+        { externalId: `t1-${runId}`, projectExternalId: `p-${runId}`, title: `Atomic task 1 ${runId}` },
+        { externalId: `t2-${runId}`, projectExternalId: `p-${runId}`, title: `Atomic task 2 ${runId}` }
+      ],
+      dependencies: [
+        { externalId: `t1-${runId}`, dependsOn: [`t2-${runId}`] },
+        { externalId: `t2-${runId}`, dependsOn: [] }
+      ]
+    };
+    const execute = (input: typeof catalog) => prisma.withUser(owner.user.id, (tx) =>
+      applyConfirmedDevelopmentImportTx(tx, owner.user.id, input)
+    );
+    const first = await execute(catalog);
+    expect(first.projects[0]!.outcome).toBe("created");
+    expect(first.tasks.map((task) => task.outcome)).toEqual(["created", "created"]);
+    expect(first.dependencies.created).toBe(1);
+    const retry = await execute(catalog);
+    expect(retry.projects[0]!.outcome).toBe("already_mapped");
+    expect(retry.tasks.every((task) => task.outcome === "already_mapped")).toBe(true);
+    expect(retry.dependencies).toEqual({ created: 0, existing: 1 });
+
+    const bad = {
+      ...catalog,
+      projects: [{ externalId: `rollback-p-${runId}`, title: `Rollback project ${runId}` }],
+      tasks: [{ externalId: `rollback-t-${runId}`, projectExternalId: `rollback-p-${runId}`, title: `Rollback task ${runId}` }],
+      dependencies: [{ externalId: `rollback-t-${runId}`, dependsOn: [`missing-${runId}`] }]
+    };
+    await expect(execute(bad)).rejects.toThrow(/Incomplete development import/);
+    const absent = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.findFirst({ where: { workspaceId: owner.workspaceId, name: bad.projects[0]!.title } })
+    );
+    expect(absent).toBeNull();
   });
 
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
