@@ -1,3 +1,4 @@
+import { readDevelopmentImportSnapshotTx } from "../src/development/catalog-import-snapshot";
 import { applyConfirmedDevelopmentImportTx } from "../src/development/catalog-import-transaction";
 import { linkCatalogTaskDependenciesTx } from "../src/development/catalog-task-dependencies";
 import { importConfirmedCatalogTasksTx } from "../src/development/catalog-task-import";
@@ -393,6 +394,28 @@ describe("API workspace isolation", () => {
       tx.project.findFirst({ where: { workspaceId: owner.workspaceId, name: bad.projects[0]!.title } })
     );
     expect(absent).toBeNull();
+  });
+
+  it("returns only authorized workspace import preview data", async () => {
+    const owner = await register("dev-snapshot-owner");
+    const outsider = await register("dev-snapshot-outsider");
+    const projectName = `Preview project ${runId}`;
+    const project = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.create({ data: { workspaceId: owner.workspaceId, name: projectName } })
+    );
+    await prisma.withUser(owner.user.id, (tx) =>
+      tx.task.create({ data: { workspaceId: owner.workspaceId, projectId: project.id, title: `Preview task ${runId}` } })
+    );
+    const snapshot = await prisma.withUser(owner.user.id, (tx) =>
+      readDevelopmentImportSnapshotTx(tx, owner.user.id, owner.workspaceId, "orion-dev")
+    );
+    expect(snapshot.targetWorkspaceId).toBe(owner.workspaceId);
+    expect(snapshot.projects.some((row) => row.id === project.id)).toBe(true);
+    expect(snapshot.tasks.some((row) => row.projectId === project.id)).toBe(true);
+    expect(snapshot.mappings).toEqual([]);
+    await expect(prisma.withUser(outsider.user.id, (tx) =>
+      readDevelopmentImportSnapshotTx(tx, outsider.user.id, owner.workspaceId, "orion-dev")
+    )).rejects.toThrow(/owner or lead/);
   });
 
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
