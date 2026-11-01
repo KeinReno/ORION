@@ -298,6 +298,7 @@ model Workspace {
   agentAuditEntries     AgentAuditEntry[]
   agentMessages         AgentMessage[]
   agentTasks            AgentTask[]
+  developmentCatalogMappings DevelopmentCatalogMapping[]
   agentProposals        AgentProposal[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
@@ -3402,6 +3403,25 @@ model AgentHubExecution {
   @@index([workspaceId, updatedAt])
   @@index([workspaceId, targetKind, targetId])
   @@map("agent_hub_executions")
+}
+
+/// Durable import identities for development catalogs. Never infer identity from a title.
+/// The importer must check that target entities belong to the same workspace.
+model DevelopmentCatalogMapping {
+  id          String   @id @default(uuid())
+  workspaceId String
+  catalogId   String
+  kind        String
+  externalId  String
+  entityId    String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, catalogId, kind, externalId])
+  @@unique([workspaceId, catalogId, kind, entityId])
+  @@index([workspaceId, catalogId])
+  @@map("development_catalog_mappings")
 }
 
 /// Append-only execution log; unique (executionId, revision) guards duplicate commits.
