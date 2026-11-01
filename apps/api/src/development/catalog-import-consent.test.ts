@@ -24,6 +24,13 @@ describe("development import consent", () => {
     });
     expect(JSON.stringify(create.mock.calls)).not.toContain(result.token);
   });
+  it("rejects an out-of-range expiry before inserting a consent", async () => {
+    const create = vi.fn();
+    const tx = { developmentImportConsent: { create } } as unknown as Prisma.TransactionClient;
+    await expect(issueImportConsentTx(tx, scope, new Date(8_640_000_000_000_000)))
+      .rejects.toThrow(/Invalid consent expiry/);
+    expect(create).not.toHaveBeenCalled();
+  });
   it("atomically filters by scope, token, expiry and unused state", async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const tx = { developmentImportConsent: { updateMany } } as unknown as Prisma.TransactionClient;
