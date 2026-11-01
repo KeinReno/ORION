@@ -35,6 +35,15 @@
 - Added workspace relation and two unique constraints to prevent duplicate external keys or multiple external bindings to one canonical entity within a catalog/workspace/kind.
 - Commit: `261c2ab`. **Schema only**: SQL migration, RLS policy, transactional importer and runtime tests are not implemented yet. Do not deploy this schema without reviewing migration and RLS behavior.
 
+
+### 2026-11-01 — roadmap validation
+
+- Re-read the catalog, bootstrap protocol, progress journal, Prisma schema and current planner.
+- Added fail-closed validation of phase IDs, phase dependency references, phase dependency cycles, and project/task phase references before planning.
+- Added regression tests for unknown phase references and cyclic phase dependencies.
+- Commits: `b7ce2e8`, `3fe4c90`. Tests **not executed** in a repository checkout.
+- Mapping model still lacks a reviewed SQL migration and RLS policy; no database writes or importer endpoint were added.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. No database migrations, authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
