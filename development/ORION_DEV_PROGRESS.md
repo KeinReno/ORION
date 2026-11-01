@@ -399,3 +399,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `25bbc51`, `1961827`. Tests and TypeScript checks NOT executed in this GitHub-only pass.
 - Next: run targeted tests and Prisma/PostgreSQL migration checks; bind issuance to authenticated reviewed preview and atomic fresh-snapshot revalidation before enabling a write API.
 - No master changes, merge or beta publication.
+
+
+### 2026-11-01 — reviewed preview consent scope builder
+
+- Re-read current catalog, bootstrap protocol, journal, preview review guard, fingerprint and consent transaction primitives.
+- Added `catalog-reviewed-consent.ts`: derives the consent scope from a server-side preview only when all possible name matches have exact reviewed decisions. Binds actor, workspace, catalog SHA, preview digest and selection fingerprint.
+- Added unit tests for valid scope, actor binding, missing/extra/stale decisions and malformed workspace/catalog values.
+- Commits: `4470f24`, `3b65f08`. Tests and TypeScript checks **not executed**. This helper is not yet wired to an authenticated issuance endpoint; callers must never trust client-supplied preview/user identity.
+- Next: wire authenticated server-side issuance with fresh preview, owner/lead authorization, then atomic revalidation and single-use consumption before enabling write import. Verify migration and targeted tests in a checkout.
+- No master changes, merge or beta publication.
