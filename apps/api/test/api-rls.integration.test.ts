@@ -1,3 +1,4 @@
+import { importConfirmedCatalogProjectsTx } from "../src/development/catalog-project-import";
 import { timeCostMinor } from "@orion/shared-types";
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -220,6 +221,34 @@ describe("API workspace isolation", () => {
     await expect(prisma.withUser(owner.user.id, (tx) =>
       bindCatalogEntityTx(tx, owner.user.id, { ...input, externalId: `missing-${runId}`, entityId: "not-a-project" })
     )).rejects.toThrow();
+  });
+
+  it("imports confirmed catalog projects atomically and retries without duplication", async () => {
+    const owner = await register("catalog-project-import-owner");
+    const projects = [
+      { externalId: `project-a-${runId}`, title: `Catalog A ${runId}` },
+      { externalId: `project-b-${runId}`, title: `Catalog B ${runId}` }
+    ];
+    const execute = (rows: typeof projects) => prisma.withUser(owner.user.id, (tx) =>
+      importConfirmedCatalogProjectsTx(tx, owner.user.id, owner.workspaceId, "orion-dev", rows)
+    );
+    const first = await execute(projects);
+    expect(first.map((item) => item.outcome)).toEqual(["created", "created"]);
+    const again = await execute(projects);
+    expect(again.map((item) => item.outcome)).toEqual(["already_mapped", "already_mapped"]);
+    expect(again.map((item) => item.entityId)).toEqual(first.map((item) => item.entityId));
+
+    const conflicting = [
+      { externalId: `project-rollback-${runId}`, title: `Rollback ${runId}` },
+      { externalId: `project-collision-${runId}`, title: projects[0]!.title }
+    ];
+    await expect(execute(conflicting)).rejects.toThrow(/explicit confirmation/);
+    const rolledBack = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.findFirst({ where: { workspaceId: owner.workspaceId, name: conflicting[0]!.title } })
+    );
+    expect(rolledBack).toBeNull();
+    const confirmed = await execute([{ ...projects[0]!, confirmedExistingId: first[0]!.entityId }]);
+    expect(confirmed[0]!.outcome).toBe("already_mapped");
   });
 
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
