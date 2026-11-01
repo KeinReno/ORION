@@ -156,4 +156,15 @@ describe("ORION DEV dry-run planner", () => {
     expect(() => planOrionDevImport(catalog, { tasks: [null] })).toThrow(/Invalid or duplicate snapshot task ID/);
   });
 
+  it("fails closed when multiple tasks in one project share the catalog title", () => {
+    expect(() => planOrionDevImport(catalog, {
+      workspaces: [{ id: "w", name: "ORION DEV" }],
+      projects: [{ id: "p", workspaceId: "w", name: "ORION CORE" }],
+      tasks: [
+        { id: "t1", workspaceId: "w", projectId: "p", title: "First" },
+        { id: "t2", workspaceId: "w", projectId: "p", title: " first " }
+      ]
+    })).toThrow(/Ambiguous task: First/);
+  });
+
 });
