@@ -93,6 +93,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const mappedKeys = new Set();
   const mappedTargets = new Set();
   for (const m of mappings) {
+    if (!m || typeof m !== "object" || Array.isArray(m)) throw new Error("Invalid mapping");
     if (m.catalogId !== catalog.catalogId) continue;
     if (!["project", "task"].includes(m.kind) || typeof m.externalId !== "string" || !m.externalId || typeof m.entityId !== "string" || !m.entityId || typeof m.workspaceId !== "string" || !m.workspaceId) throw new Error("Invalid mapping");
     if (!workspace || m.workspaceId !== workspace.id) throw new Error("Foreign or unresolved workspace mapping: " + m.externalId);
