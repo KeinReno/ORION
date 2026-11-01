@@ -52,13 +52,20 @@
 - Commit: `fe86c322`. SQL **not executed** against PostgreSQL. RLS policy and membership privileges require integration testing before deployment. No authenticated importer endpoint or write service exists yet.
 - Next: inspect the precise workspace-member role and RLS policy conventions, add a disposable PostgreSQL migration/RLS regression test (member vs outsider vs missing session), then implement an authorized transactional mapping writer. Do not claim production readiness.
 
+### 2026-11-01 — mapping RLS integration regression (not executed)
+
+- Verified PR #95 exists and re-read catalog, bootstrap protocol, progress journal, Prisma schema, migration SQL, app role grants and the existing API RLS integration suite.
+- Extended `apps/api/test/api-rls.integration.test.ts` with a real-PostgreSQL regression scenario for member read/write, outsider invisibility, outsider INSERT denial, missing `withUser` session invisibility, and duplicate external mapping rejection.
+- Commit: `57a01dc`. **Not executed**: this session has no migrated local PostgreSQL/Orion checkout; assertions are code coverage only, not evidence of passing RLS.
+- Security follow-up: the new RLS policy currently grants INSERT/UPDATE to any workspace member. Before exposing the importer, enforce owner/admin authorization at the service layer and evaluate role-based policy hardening. Do not treat RLS membership as authorization to mutate the catalog.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
 
 ### Next action
 
-Verify the new migration and its RLS policy on disposable PostgreSQL data, then implement transactional mapping persistence scoped to workspace and catalog. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
+Run `pnpm db:migrate` and `pnpm test:integration` on disposable PostgreSQL and resolve failures, then implement owner/admin-authorized transactional mapping persistence scoped to workspace and catalog. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
 
 ### Guardrails
 
