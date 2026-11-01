@@ -117,4 +117,26 @@ describe("ORION DEV dry-run planner", () => {
     })).toThrow(/Conflicting task name and mapping/);
   });
 
+  it("rejects unknown phase references and phase dependency cycles", () => {
+    const invalid = structuredClone(catalog);
+    invalid.phases = [{ id: "foundation", dependsOn: [] }];
+    invalid.projects[0].phase = "missing";
+    expect(() => planOrionDevImport(invalid)).toThrow(/Unknown project phase/);
+    const cycle = structuredClone(catalog);
+    cycle.phases = [
+      { id: "one", dependsOn: ["two"] },
+      { id: "two", dependsOn: ["one"] }
+    ];
+    expect(() => planOrionDevImport(cycle)).toThrow(/Phase dependency cycle/);
+  });
+
+  it("rejects unknown phase dependencies and task phase references", () => {
+    const missing = structuredClone(catalog);
+    missing.phases = [{ id: "foundation", dependsOn: ["missing"] }];
+    expect(() => planOrionDevImport(missing)).toThrow(/Unknown phase dependency/);
+    const task = structuredClone(catalog);
+    task.workItems[0].phase = "missing";
+    expect(() => planOrionDevImport(task)).toThrow(/Unknown task phase/);
+  });
+
 });
