@@ -93,6 +93,14 @@
 - Commits: `7cb73e5`, `b7af997`. **Tests not executed**; this GitHub-only session has no checked-out runtime or database.
 - Next: execute the planner Vitest suite in a local checkout, then verify migration/RLS on disposable PostgreSQL and implement authenticated transactional mapping persistence.
 
+### 2026-11-01 — malformed catalog input hardening
+
+- Re-read PR #95, catalog, bootstrap protocol, planner, tests and journal.
+- Planner now rejects null project/task/phase rows and non-array phase/task dependencies with explicit validation errors, rather than uncaught property access or iteration errors.
+- Added regression coverage for five malformed input cases.
+- Commits: `f4b6a5e`, `ba760b4`. **Tests not executed**; no local checkout or PostgreSQL verification was performed.
+- Next: run targeted Vitest tests and disposable PostgreSQL RLS integration suite; do not expose write importer until authorization and migration checks pass.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
