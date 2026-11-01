@@ -371,3 +371,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Rechecked PR #95 at `f801d8b` before edits. Added Prisma `DevelopmentImportConsent` model with actor/workspace/catalog revision/preview/selection binding, SHA-256 token hash, expiry and consumed timestamp; relations to existing workspace/user.
 - Added migration `20261101190000_development_import_consents` with foreign keys, unique token hash, lookup index and forced PostgreSQL RLS. SELECT/INSERT/UPDATE require the matching authenticated user and owner/lead workspace membership; no DELETE policy. Commits: `2dc2cf8`, `feab040`, `c1099c8`, `66b8ab8`.
 - **Not yet implemented:** token issuance/consumption code, one-time conditional update, expiry enforcement, transaction revalidation or write API. No migration or tests executed; schema/migration compatibility must be verified locally before deployment. Luna 6 acceptance pending.
+
+
+### 2026-11-01 — single-use consent transaction primitives
+
+- Rechecked live PR #95 at `05a4a3d` and the persisted consent schema/migration. Added `catalog-import-consent.ts`: server-generated 256-bit random hex bearer token, SHA-256-only storage, five-minute expiry and user/workspace/catalog/preview/selection scope binding.
+- Added `consumeImportConsentTx`: a single conditional Prisma `updateMany` transitions `consumedAt: null` to spent only when token hash, exact scope and expiry match; count != 1 fails closed. Must execute inside the same `withUser` database transaction as fresh snapshot validation and import, so failures roll back token consumption.
+- Added focused mocked transaction tests for issue, hashed storage, expiry, conditional consumption, replay failure and malformed input. Commits: `6bbae0a`, `bd87a87`.
+- **Not executed:** tests, TypeScript checks or database migration. No public issue/consume/write endpoints are exposed yet. Next: add consent issuance endpoint only after binding explicit reviewed selections to the server-side plan, then atomic snapshot revalidation and write integration; Luna 6 acceptance pending.
