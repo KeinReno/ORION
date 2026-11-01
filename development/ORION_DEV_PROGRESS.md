@@ -354,3 +354,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Rechecked PR #95 HEAD `8c35260` and hardened `catalog-preview-digest.ts`: recursively canonicalize JSON object keys while retaining array order; reject cycles, undefined values, NaN and unsupported data rather than silently hashing an ambiguous representation.
 - Added tests for reordered object keys, changed arrays, cyclic and unsupported values. Commits: `34c91dc`, `6a0632f`.
 - Tests and TypeScript checks **not executed**. The digest remains only a comparison primitive, not authorization or one-time consent. Next: persisted one-time confirmations with transactional revalidation before any write endpoint. Luna 6 acceptance pending.
+
+
+### 2026-11-01 — orphaned preview task guard
+
+- Re-read catalog, bootstrap protocol, progress journal and server-side planner before changing code.
+- Server-side dry-run now rejects a task whose non-null projectId is absent from the authorized workspace project snapshot, rather than producing a plan from an inconsistent partial snapshot.
+- Added Vitest regression for orphaned project references and a valid parent control case.
+- Commits: `b600efb`, `f801d8b`. **Tests and TypeScript checks not executed** in this GitHub-only pass; no runtime verification claimed.
+- Next: run targeted API Vitest and TypeScript checks in a checkout, then review planner parity and confirmation replay/staleness safeguards before enabling any write route.
+- No master changes, merge or beta publication.
