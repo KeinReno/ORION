@@ -364,3 +364,10 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `b600efb`, `f801d8b`. **Tests and TypeScript checks not executed** in this GitHub-only pass; no runtime verification claimed.
 - Next: run targeted API Vitest and TypeScript checks in a checkout, then review planner parity and confirmation replay/staleness safeguards before enabling any write route.
 - No master changes, merge or beta publication.
+
+
+### 2026-11-01 — durable consent schema foundation
+
+- Rechecked PR #95 at `f801d8b` before edits. Added Prisma `DevelopmentImportConsent` model with actor/workspace/catalog revision/preview/selection binding, SHA-256 token hash, expiry and consumed timestamp; relations to existing workspace/user.
+- Added migration `20261101190000_development_import_consents` with foreign keys, unique token hash, lookup index and forced PostgreSQL RLS. SELECT/INSERT/UPDATE require the matching authenticated user and owner/lead workspace membership; no DELETE policy. Commits: `2dc2cf8`, `feab040`, `c1099c8`, `66b8ab8`.
+- **Not yet implemented:** token issuance/consumption code, one-time conditional update, expiry enforcement, transaction revalidation or write API. No migration or tests executed; schema/migration compatibility must be verified locally before deployment. Luna 6 acceptance pending.
