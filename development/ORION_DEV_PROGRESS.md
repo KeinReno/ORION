@@ -409,3 +409,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `4470f24`, `3b65f08`. Tests and TypeScript checks **not executed**. This helper is not yet wired to an authenticated issuance endpoint; callers must never trust client-supplied preview/user identity.
 - Next: wire authenticated server-side issuance with fresh preview, owner/lead authorization, then atomic revalidation and single-use consumption before enabling write import. Verify migration and targeted tests in a checkout.
 - No master changes, merge or beta publication.
+
+
+### 2026-11-01 — authenticated consent issuance endpoint
+
+- Rechecked PR #95 HEAD `038352c` and reviewed consent helper. Added JWT-protected `POST /workspaces/:workspaceId/development-import/consent` to `DevelopmentImportController`.
+- Server loads its configured trusted catalog, re-reads an owner/lead authorized workspace snapshot in `withUser`, recomputes the dry-run plan and digest, rejects stale client preview digests and unreviewed/stale name matches, then persists a five-minute hashed one-time token scoped to actor/workspace/catalog/preview/choices. Returns token and expiry only to the authenticated caller; **does not import projects/tasks**.
+- Added controller fail-closed tests for missing catalog root and malformed consent request. Commits: `0851d03`, `e786a9a`.
+- **Not executed:** TypeScript, Vitest, DB migration or live endpoint tests. Issuance is not the same as consent consumption; the future write endpoint must atomically re-read and compare the current snapshot, validate choices, consume token and perform import in one transaction. Review CSRF/rate limiting and transaction consistency before release. Luna 6 acceptance pending.
