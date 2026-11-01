@@ -176,6 +176,28 @@ describe("ORION DEV dry-run planner", () => {
     })).toThrow(/Ambiguous task: First/);
   });
 
+  it("allows explicit workspace selection only as a review candidate", () => {
+    const workspaces = [
+      { id: "w1", name: "ORION DEV" },
+      { id: "w2", name: "ORION DEV" }
+    ];
+    expect(() => planOrionDevImport(catalog, { workspaces })).toThrow(/Ambiguous ORION DEV workspace/);
+    const plan = planOrionDevImport(catalog, {
+      workspaces, targetWorkspaceId: "w2",
+      projects: [{ id: "p2", workspaceId: "w2", name: "ORION CORE" }]
+    });
+    expect(plan.workspaceId).toBe("w2");
+    expect(plan.actions[0]).toMatchObject({
+      kind: "workspace", action: "review_possible_match", candidateId: "w2"
+    });
+    expect(plan.actions.find((action) => action.kind === "project" && action.externalId === "core"))
+      .toMatchObject({ action: "review_possible_match", candidateId: "p2" });
+    expect(() => planOrionDevImport(catalog, { workspaces, targetWorkspaceId: "missing" }))
+      .toThrow(/Unknown target workspace ID/);
+    expect(() => planOrionDevImport(catalog, { workspaces, targetWorkspaceId: "" }))
+      .toThrow(/Invalid target workspace ID/);
+  });
+
   it("rejects null catalog rows and malformed dependency collections", () => {
     expect(() => planOrionDevImport({ ...catalog, projects: [null] })).toThrow(/Invalid or duplicate project ID/);
     expect(() => planOrionDevImport({ ...catalog, workItems: [null] })).toThrow(/Invalid or duplicate task ID/);
