@@ -251,6 +251,33 @@ describe("API workspace isolation", () => {
     expect(confirmed[0]!.outcome).toBe("already_mapped");
   });
 
+  it("requires explicit confirmation before adopting an existing catalog project", async () => {
+    const owner = await register("catalog-project-confirm-owner");
+    const outsider = await register("catalog-project-confirm-outsider");
+    const name = `Existing catalog project ${runId}`;
+    const existing = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.create({ data: { workspaceId: owner.workspaceId, name, description: "Manual description" } })
+    );
+    const input = [{ externalId: `confirmed-${runId}`, title: name }];
+    const execute = (userId: string, rows: typeof input | Array<typeof input[number] & { confirmedExistingId: string }>) =>
+      prisma.withUser(userId, (tx) =>
+        importConfirmedCatalogProjectsTx(tx, userId, owner.workspaceId, "orion-dev", rows)
+      );
+    await expect(execute(owner.user.id, input)).rejects.toThrow(/explicit confirmation/);
+    await expect(execute(outsider.user.id, [{ ...input[0]!, confirmedExistingId: existing.id }]))
+      .rejects.toThrow();
+    await expect(execute(owner.user.id, [{ ...input[0]!, confirmedExistingId: "stale-id" }]))
+      .rejects.toThrow(/confirmation is stale/);
+    const adopted = await execute(owner.user.id, [{ ...input[0]!, confirmedExistingId: existing.id }]);
+    expect(adopted).toMatchObject([{ entityId: existing.id, outcome: "confirmed_existing" }]);
+    const unchanged = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.findUnique({ where: { id: existing.id } })
+    );
+    expect(unchanged?.description).toBe("Manual description");
+    const repeated = await execute(owner.user.id, input);
+    expect(repeated).toMatchObject([{ entityId: existing.id, outcome: "already_mapped" }]);
+  });
+
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
     // The second safeguard (see CLAUDE.md "Postgres RLS") is only real if it is
     // installed on *every* workspace-owned table. v0.11 shipped
