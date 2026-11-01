@@ -230,3 +230,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added integration regression for task creation, idempotent retry, explicit adoption, stale confirmation and preservation of manual description.
 - Commits: `2ec3748`, `dc2984a`. **Not executed:** new TypeScript check and integration tests. No claim of runtime correctness.
 - Deliberate limits: dependencies are not imported yet, and direct Prisma task creation in this internal primitive does not emit the normal task-domain event; integrate via canonical TasksService transaction method before any public exposure. No API endpoint, confirmation UI or full importer is enabled. Next: implement dependency linking and canonical task event handling, then guarded orchestration/confirmation flow; batch local verification later.
+
+
+### 2026-11-01 — canonical task dependency linking
+
+- Checked draft PR #95 at `1cd20cc`, catalog, bootstrap protocol, task import primitive, and canonical Prisma TaskDependency schema before editing.
+- Added `apps/api/src/development/catalog-task-dependencies.ts`: owner/lead-only transaction primitive to add catalog dependency edges after all tasks are mapped. Verifies catalog declarations, mapped IDs, canonical task workspace ownership and cycles against **all existing workspace dependency edges**. Existing edges are retained; exact retries return `existing` without duplicate writes.
+- Added PostgreSQL integration regression for edge creation, retry, cycle rejection and missing task mapping.
+- Commits: `155a348`, `22f5a7f`. **Not executed:** TypeScript, Vitest, PostgreSQL integration tests; previous local verification predates these changes.
+- This remains internal only. The guarded API, dry-run/confirmation flow, canonical task domain events, orchestrator, UI and Qoder integration are not complete. Concurrent dependency writers require further serialization/retry analysis.
+- Next: connect the project/task/dependency stages to an authenticated, catalog-validated, explicitly confirmed orchestration service; batch local verification when the feature slice is ready. Never expose primitives directly as public endpoints.
