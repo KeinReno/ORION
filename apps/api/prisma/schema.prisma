@@ -12,6 +12,7 @@ model User {
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
+  developmentImportConsents DevelopmentImportConsent[]
   id                String            @id @default(uuid())
   syncDevices       SyncDevice[]
   /// Optional for local accounts — invite-by-email still needs it when used.
@@ -174,6 +175,7 @@ model Workspace {
   sharedPublications SharedPublication[]
   sharedPublicationPins SharedPublicationPin[]
   sharedPublicationOperations SharedPublicationOperation[]
+  developmentImportConsents DevelopmentImportConsent[]
   id        String            @id @default(uuid())
   name      String
   /// Unguessable token for the read-only .ics subscription feed
@@ -3407,6 +3409,27 @@ model AgentHubExecution {
 
 /// Durable import identities for development catalogs. Never infer identity from a title.
 /// The importer must check that target entities belong to the same workspace.
+/// Server-issued, single-use consent for a specific catalog preview.
+model DevelopmentImportConsent {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  userId         String
+  catalogId      String
+  catalogSha256  String
+  previewDigest  String
+  selectionHash  String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, expiresAt])
+  @@map("development_import_consents")
+}
+
 model DevelopmentCatalogMapping {
   id          String   @id @default(uuid())
   workspaceId String
