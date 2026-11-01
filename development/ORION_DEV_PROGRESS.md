@@ -270,3 +270,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `b9be82b`, `d17ac35`. **Not executed:** TypeScript checks or Vitest. No claims of runtime verification.
 - **Not production-ready:** this builder does not authenticate users, prove confirmation, load the catalog from a trusted server path or check candidate matches against a fresh snapshot. The `workspaceConfirmed` field is an internal stage precondition, not consent evidence. No API route exposed.
 - Next: implement authenticated server-side catalog loading and dry-run snapshot, then a scoped expiring confirmation protocol; only afterward expose the transaction. Luna 6 will conduct independent acceptance.
+
+
+### 2026-11-01 — workspace preview snapshot
+
+- Inspected PR #95 at `4f8db3b`, catalog, protocol and dry-run planner snapshot schema.
+- Added `apps/api/src/development/catalog-import-snapshot.ts`: scoped read-only snapshot of workspace, projects, tasks and mappings; owner/lead permission check; intended for use inside `PrismaService.withUser`.
+- Added integration regression for project/task visibility and nonmember denial.
+- Commits: `59d83aa`, `f928eea`. Tests and TypeScript checks **not executed**.
+- Not an API endpoint. Next: trusted server catalog loader and authenticated dry-run endpoint; then user confirmation before any write. Luna 6 acceptance remains pending.
