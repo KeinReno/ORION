@@ -417,3 +417,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Server loads its configured trusted catalog, re-reads an owner/lead authorized workspace snapshot in `withUser`, recomputes the dry-run plan and digest, rejects stale client preview digests and unreviewed/stale name matches, then persists a five-minute hashed one-time token scoped to actor/workspace/catalog/preview/choices. Returns token and expiry only to the authenticated caller; **does not import projects/tasks**.
 - Added controller fail-closed tests for missing catalog root and malformed consent request. Commits: `0851d03`, `e786a9a`.
 - **Not executed:** TypeScript, Vitest, DB migration or live endpoint tests. Issuance is not the same as consent consumption; the future write endpoint must atomically re-read and compare the current snapshot, validate choices, consume token and perform import in one transaction. Review CSRF/rate limiting and transaction consistency before release. Luna 6 acceptance pending.
+
+
+### 2026-11-01 — consent request digest format guard
+
+- Re-read catalog, bootstrap protocol, current progress, authenticated consent controller and its tests.
+- Consent route now rejects malformed/non-lowercase/non-64-hex preview digests before loading catalog or accessing the database. This is input validation only, not proof of consent or freshness.
+- Added controller regressions for short, uppercase, non-hex and overlong digests.
+- Commits: `e8168dc`, `0c21f25`. **Tests and TypeScript checks not executed** in this connector-only pass.
+- Next: verify targeted Vitest and TypeScript in a checkout; implement transactional revalidation and single-use consent consumption before exposing the write route. No master merge or beta publication.
