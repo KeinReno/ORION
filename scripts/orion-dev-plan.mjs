@@ -107,9 +107,18 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     }
   }
   const normalize = (value) => String(value ?? "").trim().toLowerCase();
+  // An explicit selection disambiguates same-named workspaces, but is still
+  // only a dry-run candidate. It does not grant ownership or write permission.
+  const targetWorkspaceId = snapshot.targetWorkspaceId;
+  if (targetWorkspaceId !== undefined && (typeof targetWorkspaceId !== "string" || !targetWorkspaceId.trim())) {
+    throw new Error("Invalid target workspace ID");
+  }
   const matches = workspaces.filter((row) => normalize(row.name) === "orion dev");
-  if (matches.length > 1) throw new Error("Ambiguous ORION DEV workspace");
-  const workspace = matches[0] ?? null;
+  if (matches.length > 1 && !targetWorkspaceId) throw new Error("Ambiguous ORION DEV workspace");
+  const workspace = targetWorkspaceId
+    ? workspaces.find((row) => row.id === targetWorkspaceId)
+    : matches[0];
+  if (targetWorkspaceId && !workspace) throw new Error("Unknown target workspace ID");
   const mappings = snapshot.mappings ?? [];
   if (!Array.isArray(mappings)) throw new Error("Invalid snapshot mappings");
   const mappedKeys = new Set();
