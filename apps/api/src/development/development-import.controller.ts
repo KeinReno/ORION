@@ -32,6 +32,7 @@ export class DevelopmentImportController {
     const repoRoot = process.env.ORION_DEV_CATALOG_ROOT;
     if (!repoRoot) throw new ConflictException("ORION_DEV_CATALOG_ROOT is not configured");
     if (!body || typeof body.previewDigest !== "string" ||
+        !/^[a-f0-9]{64}$/.test(body.previewDigest) ||
         !body.choices || typeof body.choices !== "object" || Array.isArray(body.choices)) {
       throw new ConflictException("Invalid consent request");
     }
