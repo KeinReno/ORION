@@ -240,3 +240,14 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `155a348`, `22f5a7f`. **Not executed:** TypeScript, Vitest, PostgreSQL integration tests; previous local verification predates these changes.
 - This remains internal only. The guarded API, dry-run/confirmation flow, canonical task domain events, orchestrator, UI and Qoder integration are not complete. Concurrent dependency writers require further serialization/retry analysis.
 - Next: connect the project/task/dependency stages to an authenticated, catalog-validated, explicitly confirmed orchestration service; batch local verification when the feature slice is ready. Never expose primitives directly as public endpoints.
+
+
+### 2026-11-01 — atomic import-stage composition; Luna 6 acceptance plan
+
+- Inspected live draft PR #95, versioned catalog, bootstrap protocol, task import and dependency implementation before changes.
+- Added `apps/api/src/development/catalog-import-transaction.ts`: composes existing project, task and dependency primitives in one caller-owned `PrismaService.withUser` transaction. Rejects unconfirmed workspace and incomplete cross-stage declarations before any writes. Reuses canonical workspace-scoped mappings; stage failures roll back the transaction.
+- Added PostgreSQL integration regression for combined create, idempotent retry and fail-closed declarations.
+- Commits: `50d161d`, `a7131c6`. **Not executed:** TypeScript, Vitest, PostgreSQL integration tests. Earlier Grok evidence does not cover these commits.
+- **Security boundary:** `workspaceConfirmed: true` is only an internal precondition, NOT authenticated proof of consent. Never pass untrusted request bodies into this function. No public API, trusted catalog equality verification, persisted confirmation token, concurrency lock, canonical task events, or UI yet. This module is not production-ready.
+- Acceptance owner changed to Luna 6 per user. Consolidated acceptance should check migration state, TypeScript, all targeted Vitest, RLS, backup/restore, concurrent imports, stale mappings, events and rollback in a disposable database; document precise commands and SHA. Do not merge or release without explicit human approval.
+- Next: implement server-controlled catalog snapshot/dry-run and one-time scoped confirmation binding before exposing the transactional composition through an authenticated endpoint. Then create a detailed Luna 6 acceptance handoff.
