@@ -123,7 +123,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     const matched = mappedProject ?? candidates[0] ?? null;
     actions.push({
       kind: "project", externalId: project.id, name: project.title,
-      action: mappedProject ? "already_mapped" : matched ? "confirm_existing" : "propose_create",
+      action: mappedProject ? "already_mapped" : matched ? "review_possible_match" : "propose_create",
       candidateId: matched?.id ?? null
     });
     for (const item of items.filter((row) => row.project === project.id)) {
