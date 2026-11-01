@@ -11,6 +11,17 @@ export interface ImportConsentScope {
   selectionHash: string;
 }
 
+function assertConsentScope(scope: ImportConsentScope, now: Date): void {
+  if (!scope || typeof scope.userId !== "string" || !scope.userId.trim() ||
+      typeof scope.workspaceId !== "string" || !scope.workspaceId.trim() ||
+      scope.catalogId !== "orion-dev" ||
+      ![scope.catalogSha256, scope.previewDigest, scope.selectionHash]
+        .every((value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)) ||
+      !(now instanceof Date) || !Number.isFinite(now.getTime())) {
+    throw new ConflictException("Invalid consent scope");
+  }
+}
+
 export function hashImportConsentToken(token: string): string {
   return hashDevelopmentConsentSecret(token);
 }
@@ -21,11 +32,7 @@ export async function issueImportConsentTx(
   scope: ImportConsentScope,
   now = new Date()
 ) {
-  if (!scope.userId || !scope.workspaceId || scope.catalogId !== "orion-dev" ||
-      ![scope.catalogSha256, scope.previewDigest, scope.selectionHash]
-        .every((value) => /^[a-f0-9]{64}$/.test(value))) {
-    throw new ConflictException("Invalid consent scope");
-  }
+  assertConsentScope(scope, now);
   const { token, tokenHash } = issueDevelopmentConsentSecret();
   const expiresAt = new Date(now.getTime() + 5 * 60_000);
   await tx.developmentImportConsent.create({
@@ -43,6 +50,7 @@ export async function consumeImportConsentTx(
   token: string,
   now = new Date()
 ): Promise<void> {
+  assertConsentScope(scope, now);
   const result = await tx.developmentImportConsent.updateMany({
     where: {
       ...scope, tokenHash: hashImportConsentToken(token),
