@@ -305,3 +305,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Registered `DevelopmentImportModule` in `AppModule`; added fail-closed controller unit tests for absent/invalid server catalog configuration.
 - Commits: `8a29edf`, `34aa1ee`, `0e0dabe`, `174ff10`. Tests and TypeScript checks **not executed**; integration remains unverified.
 - This endpoint exposes raw snapshot and catalog for a client-side dry-run; it does **not yet run the planner server-side**, validate the full catalog graph at read time or issue a secure one-time confirmation. Next: wire validated planner output, tighten snapshot consistency and implement server-held confirmation before any write API. Luna 6 acceptance pending.
+
+
+### 2026-11-01 — server-side dry-run preview
+
+- Inspected live PR #95 at `7811570`, catalog, bootstrap protocol, trusted validator, controller and existing CLI planner.
+- Added `catalog-server-plan.ts`: read-only API-side planning against an authorized workspace snapshot, using trusted catalog declarations; detects name-match review candidates, already mapped entities, ambiguous names and stale/foreign mappings. It does not adopt name matches or write anything.
+- Wired the plan into the existing JWT-protected preview response; added unit tests for create, review, mapping reuse and rejection cases.
+- Commits: `58ed4c0`, `d1b2eca`, `86f0981`. TypeScript and tests **not executed**; behavior remains unverified.
+- This is an API-side planner separate from the existing CLI `scripts/orion-dev-plan.mjs`; parity must be checked during Luna 6 acceptance. The endpoint still has no confirmation token or write operation. Next: authorization/consent token persistence, atomic stale-snapshot validation and transaction concurrency safety before import writes.
