@@ -18,12 +18,18 @@ export function planDevelopmentImport(catalog: TrustedDevelopmentCatalog, snapsh
     throw new ConflictException("Development preview workspace is unresolved");
   }
   const normalize = (value: string) => value.trim().toLocaleLowerCase();
+  const projectIds = new Set(catalog.projects.map((project) => project.id));
+  const taskIds = new Set(catalog.workItems.map((task) => task.id));
   const mappings = new Map<string, string>();
   const targets = new Set<string>();
   for (const mapping of snapshot.mappings) {
     if (mapping.workspaceId !== workspace.id || mapping.catalogId !== catalog.catalogId ||
         !["project", "task"].includes(mapping.kind)) {
       throw new ConflictException("Foreign development catalog mapping");
+    }
+    if ((mapping.kind === "project" && !projectIds.has(mapping.externalId)) ||
+        (mapping.kind === "task" && !taskIds.has(mapping.externalId))) {
+      throw new ConflictException("Unknown development catalog mapping");
     }
     const key = mapping.kind + ":" + mapping.externalId;
     const target = mapping.kind + ":" + mapping.entityId;
