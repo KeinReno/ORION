@@ -140,4 +140,19 @@ describe("ORION DEV dry-run planner", () => {
     expect(() => planOrionDevImport(task)).toThrow(/Unknown task phase/);
   });
 
+  it("rejects duplicate snapshot entity IDs before proposing writes", () => {
+    for (const [field, rows] of [
+      ["workspaces", [{ id: "w", name: "ORION DEV" }, { id: "w", name: "Other" }]],
+      ["projects", [{ id: "p", workspaceId: "w" }, { id: "p", workspaceId: "other" }]],
+      ["tasks", [{ id: "t", projectId: "p" }, { id: "t", projectId: "other" }]]
+    ]) {
+      expect(() => planOrionDevImport(catalog, { [field]: rows })).toThrow(/duplicate snapshot/);
+    }
+  });
+
+  it("rejects snapshot rows without stable string IDs", () => {
+    expect(() => planOrionDevImport(catalog, { projects: [{ name: "ORION CORE" }] })).toThrow(/Invalid or duplicate snapshot project ID/);
+    expect(() => planOrionDevImport(catalog, { tasks: [null] })).toThrow(/Invalid or duplicate snapshot task ID/);
+  });
+
 });
