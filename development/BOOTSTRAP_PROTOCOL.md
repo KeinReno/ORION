@@ -26,4 +26,4 @@ Use feature branches and draft PRs. Do not merge to master or publish a beta wit
 
 ## Current state
 
-The catalog is committed. Importer, mapping persistence, orchestrator and dashboard are not yet implemented. This protocol is a development contract, not proof of working integration.
+The catalog, dry-run planner, mapping persistence, internal project/task/dependency import primitives, transactional composition, trusted-catalog declaration validator, import builder, workspace preview snapshot and fixed-source catalog loader are committed in draft PR #95. These are internal components, not an authenticated end-to-end importer. The API endpoint, server-issued expiring confirmation, concurrency controls, canonical task events, orchestrator and dashboard remain unfinished. New tests and TypeScript checks have not been run in the current development environment; this protocol is not proof of working integration.
