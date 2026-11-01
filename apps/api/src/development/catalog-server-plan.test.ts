@@ -59,6 +59,20 @@ describe("server-side development dry-run", () => {
       })).toThrow(/Unknown development catalog mapping/);
     }
   });
+  it("rejects foreign workspace entities and duplicate canonical IDs", () => {
+    expect(() => planDevelopmentImport(catalog, {
+      ...snapshot, projects: [{ id: "foreign", workspaceId: "other", name: "Core" }]
+    })).toThrow(/Invalid or foreign/);
+    expect(() => planDevelopmentImport(catalog, {
+      ...snapshot, tasks: [{ id: "foreign", workspaceId: "other", projectId: null, title: "Review" }]
+    })).toThrow(/Invalid or foreign/);
+    expect(() => planDevelopmentImport(catalog, {
+      ...snapshot, projects: [
+        { id: "same", workspaceId: "w", name: "Core" },
+        { id: "same", workspaceId: "w", name: "Other" }
+      ]
+    })).toThrow(/Invalid or foreign/);
+  });
   it("rejects ambiguous project names and invalid catalogs", () => {
     expect(() => planDevelopmentImport(catalog, {
       ...snapshot, projects: [
