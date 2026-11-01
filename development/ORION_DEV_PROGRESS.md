@@ -101,6 +101,14 @@
 - Commits: `f4b6a5e`, `ba760b4`. **Tests not executed**; no local checkout or PostgreSQL verification was performed.
 - Next: run targeted Vitest tests and disposable PostgreSQL RLS integration suite; do not expose write importer until authorization and migration checks pass.
 
+### 2026-11-01 — malformed mapping row validation
+
+- Confirmed PR #95 remains open/draft and inspected current catalog, bootstrap protocol, progress journal, planner, tests and package scripts.
+- Fixed an unhandled null/non-object mapping row: the planner now rejects it with a controlled `Invalid mapping` error before reading `catalogId`.
+- Added regression coverage for null, undefined, string, number and array mapping rows.
+- Commits: `5c4063b`, `5e1d5f4`. **Vitest not executed** in this GitHub-only session; no runtime or PostgreSQL verification is claimed.
+- Next: execute targeted Vitest in a checkout and the RLS integration suite against disposable PostgreSQL; resolve failures before implementing the authenticated transactional importer.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
