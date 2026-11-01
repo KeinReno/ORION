@@ -29,13 +29,19 @@
 - Commits: `12e03f5`, `88f27eb`. Tests were **not executed** in a checkout.
 - No schema migration or importer write endpoint was added; database mapping persistence remains the next implementation milestone.
 
+### 2026-11-01 — mapping persistence schema (partial)
+
+- Added Prisma `DevelopmentCatalogMapping` with workspace FK, catalog ID, kind, external ID and canonical entity ID.
+- Added workspace relation and two unique constraints to prevent duplicate external keys or multiple external bindings to one canonical entity within a catalog/workspace/kind.
+- Commit: `261c2ab`. **Schema only**: SQL migration, RLS policy, transactional importer and runtime tests are not implemented yet. Do not deploy this schema without reviewing migration and RLS behavior.
+
 ### Not yet verified
 
 Tests have been committed but have **not** been run in the Orion checkout. No database migrations, authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
 
 ### Next action
 
-Inspect existing migration conventions and RLS policy, then implement transactional mapping persistence scoped to workspace and catalog, with unique constraints. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
+Inspect existing migration conventions and RLS policy, generate and review the SQL migration for the new mapping model, then implement transactional mapping persistence scoped to workspace and catalog. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
 
 ### Guardrails
 
