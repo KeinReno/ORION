@@ -23,6 +23,8 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   const phases = catalog.phases ?? [];
   if (!Array.isArray(phases)) throw new Error("Invalid catalog phases");
   const phaseIds = unique(phases, "phase");
+  const projectIds = unique(projects, "project");
+  const taskIds = unique(items, "task");
   const byPhase = new Map(phases.map((phase) => [phase.id, phase]));
   for (const phase of phases) {
     if (phase.dependsOn != null && !Array.isArray(phase.dependsOn)) throw new Error("Invalid phase dependencies: " + phase.id);
@@ -60,8 +62,6 @@ export function planOrionDevImport(catalog, snapshot = {}) {
     }
     projectTitles.add(normalizedTitle);
   }
-  const projectIds = unique(projects, "project");
-  const taskIds = unique(items, "task");
   // Two catalog items with the same title in one project cannot be safely
   // matched to canonical tasks by name during an initial import.
   const normalizedTitles = new Set();
