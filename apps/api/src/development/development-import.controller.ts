@@ -6,6 +6,7 @@ import { PrismaService } from "../common/prisma.service";
 import { loadDevelopmentCatalog } from "./catalog-loader";
 import { readDevelopmentImportSnapshotTx } from "./catalog-import-snapshot";
 import { digestDevelopmentPreview } from "./catalog-preview-digest";
+import { planDevelopmentImport } from "./catalog-server-plan";
 
 /**
  * Read-only development import preview. The fixed catalog root is configured
@@ -27,6 +28,7 @@ export class DevelopmentImportController {
     const snapshot = await this.prisma.withUser(user.userId, (tx) =>
       readDevelopmentImportSnapshotTx(tx, user.userId, workspaceId, loaded.catalog.catalogId)
     );
+    const plan = planDevelopmentImport(loaded.catalog, snapshot);
     const digest = digestDevelopmentPreview({
       userId: user.userId,
       workspaceId,
@@ -39,6 +41,7 @@ export class DevelopmentImportController {
       previewDigest: digest,
       catalog: loaded.catalog,
       snapshot,
+      plan,
       readOnly: true
     };
   }
