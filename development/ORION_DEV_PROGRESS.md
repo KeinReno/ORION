@@ -288,3 +288,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `catalog-loader.test.ts`: stable digest, changed content, missing file, malformed JSON, unsupported version/ID and duplicate phase cases.
 - Commits: `68b2032`, `91aa26c`. Tests and TypeScript checks **not executed**. This loader is not wired to an endpoint; deeper catalog validation is still delegated to the trust validator.
 - Next: integrate trusted loader, scoped snapshot and dry-run planner behind authenticated read-only API. Confirmation and writes remain disabled. Luna 6 acceptance pending.
+
+
+### 2026-11-01 — preview digest and protocol correction
+
+- Rechecked draft PR #95 and corrected stale implementation status in `BOOTSTRAP_PROTOCOL.md` (`1a05e53`).
+- Added `catalog-preview-digest.ts` and focused tests (`62ec2f0`, `20686dd`): SHA-256 fingerprint changes with authenticated user ID, workspace ID, catalog digest or workspace snapshot. Intended only as a comparison primitive for future stale-preview rejection.
+- The digest is **not** a secure confirmation token and is not canonical across arbitrary object-key order; callers must supply a stable snapshot shape. A future endpoint must issue and verify server-side single-use expiring consent and re-read state before writes.
+- Tests and TypeScript checks **not executed**. No API endpoint or public importer exposed; Luna 6 acceptance pending.
