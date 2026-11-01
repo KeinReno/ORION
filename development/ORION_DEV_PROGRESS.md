@@ -434,3 +434,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Reject repeated kind/externalId action identities before computing a consent fingerprint; added focused Vitest regression.
 - Commits: `d7b9df5`, `f74e007`. Tests and TypeScript checks NOT executed in this GitHub-only run.
 - Next: verify preview binding and consent tests in local checkout, then implement atomic stale-preview revalidation before import writes. No public write endpoint enabled.
+
+
+### 2026-11-02 — consent expiry overflow guard
+
+- Read the current development catalog, bootstrap protocol, journal, consent implementation and unit tests; compared master against the feature branch before editing.
+- Added a fail-closed check that a computed five-minute consent expiry remains a valid Date before inserting its hashed token. An out-of-range clock now rejects without a database write.
+- Added a focused Vitest regression for expiry overflow and zero insert calls.
+- Commits: `2b4a721`, `d7f5710`. Tests and TypeScript checks **not executed** in this GitHub connector pass.
+- Next: execute targeted tests/typecheck and migration integration in a checkout; implement atomic snapshot revalidation and single-use consent consumption before enabling import writes. No merge or beta publication.
