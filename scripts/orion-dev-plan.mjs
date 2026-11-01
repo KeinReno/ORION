@@ -131,6 +131,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
         ? existingTasks.filter((row) => row.workspaceId === workspace.id &&
             row.projectId === matched.id && normalize(row.title) === normalize(item.title))
         : [];
+      if (possible.length > 1) throw new Error("Ambiguous task: " + item.title);
       const mappedTask = mappingFor("task", item.id);
       const resolvedTask = mappedTask ? existingTasks.find((t) => t.id === mappedTask.entityId && t.workspaceId === workspace?.id && t.projectId === matched?.id) : null;
       if (mappedTask && !resolvedTask) throw new Error("Stale task mapping: " + item.id);
