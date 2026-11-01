@@ -155,3 +155,42 @@ Do not merge to `master` or publish beta without approval. Agent completion is n
 - Added Vitest regression for ambiguous names, explicit selection, review-only actions, unknown IDs and blank IDs.
 - Commits: `ede064d`, `47b40c8`. **Tests not executed**; no local checkout, PostgreSQL migration or RLS test was run.
 - Next: execute Vitest and disposable PostgreSQL integration tests, then implement authenticated confirmation and transactional mapping persistence. No write importer or UI exists yet.
+
+### 2026-11-01 — local PostgreSQL verification
+
+Checked out `feat/orion-dev-foundation` at `826ed14`. `master` was not changed, PR #94 was not merged, and no beta was published.
+
+Commits:
+
+- `0cd4b81476c45108f47b4b12dbed0bafb627aced` — catalog id checks run before phase fields are read.
+- `c3eebaf46e5da4847c7358e09ce0c883b95b90d5` — `DevelopmentCatalogMapping` is included in backups and classified `strict` (no offline writes).
+- `d0d10de315e18141a2115540c5edc60a5e3e052a` — workspace transfer rewrites `entityId`, or drops the mapping when the target is absent.
+
+Commands and results, on this machine against Postgres `127.0.0.1:5433` database `orion`:
+
+```text
+pnpm db:up
+pnpm --filter @orion/api prisma:migrate:deploy
+```
+
+`migrate deploy` applied seven pending migrations, including `20261101050000_development_catalog_mappings` and `20261101060000_development_catalog_write_roles`. The database was also behind `master` by five earlier migrations; those were applied in the same deploy.
+
+```text
+pnpm exec vitest run scripts/orion-dev-plan.test.mjs
+```
+
+Before the planner fix: 20 passed, 1 failed (`rejects null catalog rows...` expected `/Invalid or duplicate project ID/` and got `Cannot read properties of null (reading 'phase')`). After `0cd4b81`: 21 passed.
+
+```text
+pnpm exec vitest run scripts/orion-dev-plan.test.mjs apps/api/src/sync/sync-classification.test.ts
+```
+
+27 passed (21 planner + 6 sync classification) after the backup registration.
+
+```text
+pnpm exec vitest run --config vitest.integration.config.mts apps/api/test/api-rls.integration.test.ts apps/api/test/snapshot.integration.test.ts -t "catalog mapping|explicitly classified|workspace-owned table"
+```
+
+4 passed, 29 skipped. The four are member/outsider/missing-session isolation, member write denial, RLS on every workspace-owned table, and snapshot classification of `DevelopmentCatalogMapping`.
+
+The authenticated transactional importer is still not implemented. Name matches remain review-only. PR #94 stays a separate draft.
