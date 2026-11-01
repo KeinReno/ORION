@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "node:crypto";
+import { issueDevelopmentConsentSecret, hashDevelopmentConsentSecret } from "./catalog-consent-secret";
 import { ConflictException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 
@@ -12,8 +12,7 @@ export interface ImportConsentScope {
 }
 
 export function hashImportConsentToken(token: string): string {
-  if (!/^[a-f0-9]{64}$/.test(token)) throw new ConflictException("Invalid consent token");
-  return createHash("sha256").update(token).digest("hex");
+  return hashDevelopmentConsentSecret(token);
 }
 
 /** Must run in PrismaService.withUser(userId, ...) after preview validation. */
@@ -27,10 +26,10 @@ export async function issueImportConsentTx(
         .every((value) => /^[a-f0-9]{64}$/.test(value))) {
     throw new ConflictException("Invalid consent scope");
   }
-  const token = randomBytes(32).toString("hex");
+  const { token, tokenHash } = issueDevelopmentConsentSecret();
   const expiresAt = new Date(now.getTime() + 5 * 60_000);
   await tx.developmentImportConsent.create({
-    data: { ...scope, tokenHash: hashImportConsentToken(token), expiresAt }
+    data: { ...scope, tokenHash, expiresAt }
   });
   return { token, expiresAt };
 }
