@@ -296,3 +296,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `catalog-preview-digest.ts` and focused tests (`62ec2f0`, `20686dd`): SHA-256 fingerprint changes with authenticated user ID, workspace ID, catalog digest or workspace snapshot. Intended only as a comparison primitive for future stale-preview rejection.
 - The digest is **not** a secure confirmation token and is not canonical across arbitrary object-key order; callers must supply a stable snapshot shape. A future endpoint must issue and verify server-side single-use expiring consent and re-read state before writes.
 - Tests and TypeScript checks **not executed**. No API endpoint or public importer exposed; Luna 6 acceptance pending.
+
+
+### 2026-11-01 — authenticated read-only preview route
+
+- Rechecked draft PR #95 HEAD `5a0b2e9`, catalog, protocol, preview digest, snapshot, existing JWT guard and Nest app module.
+- Added `GET /workspaces/:workspaceId/development-import/preview` guarded by JWT. Server configuration `ORION_DEV_CATALOG_ROOT` selects the fixed catalog root. Endpoint returns version/hash, authorized workspace snapshot and user/workspace/catalog-bound preview digest. No write routes, import execution or client-provided file paths.
+- Registered `DevelopmentImportModule` in `AppModule`; added fail-closed controller unit tests for absent/invalid server catalog configuration.
+- Commits: `8a29edf`, `34aa1ee`, `0e0dabe`, `174ff10`. Tests and TypeScript checks **not executed**; integration remains unverified.
+- This endpoint exposes raw snapshot and catalog for a client-side dry-run; it does **not yet run the planner server-side**, validate the full catalog graph at read time or issue a secure one-time confirmation. Next: wire validated planner output, tighten snapshot consistency and implement server-held confirmation before any write API. Luna 6 acceptance pending.
