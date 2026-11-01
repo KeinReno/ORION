@@ -194,3 +194,12 @@ pnpm exec vitest run --config vitest.integration.config.mts apps/api/test/api-rl
 4 passed, 29 skipped. The four are member/outsider/missing-session isolation, member write denial, RLS on every workspace-owned table, and snapshot classification of `DevelopmentCatalogMapping`.
 
 The authenticated transactional importer is still not implemented. Name matches remain review-only. PR #94 stays a separate draft.
+
+
+### 2026-11-01 — authenticated transactional mapping primitive
+
+- Verified PR #95 HEAD after Grok's locally tested fixes (`f8b11ed`), catalog, protocol, Prisma mapping schema and existing API services.
+- Added `apps/api/src/development/catalog-mappings.ts`: a transaction-scoped, owner/lead-only binding primitive; validates canonical project/task workspace ownership, returns existing identical mappings on retry and rejects conflicting external/target IDs. The unique database constraints remain the concurrency backstop.
+- Added PostgreSQL integration regression for first binding, idempotent retry, conflicting binding, outsider rejection and missing target.
+- Commits: `c4cf822`, `f4cccd9`. **New tests not executed** here; earlier Grok runs did not cover these changes.
+- This is a service-level primitive, **not** a public API or a working importer. It does not create projects/tasks or grant consent. Caller must use `PrismaService.withUser` and an explicit confirmation gate. Next: execute integration test on Grok's local PostgreSQL, check TS typecheck, then integrate into a guarded importer with explicit confirmation and safe retry.
