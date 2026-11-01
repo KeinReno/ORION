@@ -20,6 +20,8 @@ const POLYMORPHIC: Record<string, Array<{ type: string; id: string; drop: boolea
     { type: "targetType", id: "targetId", drop: true }
   ],
   EntityReminder: [{ type: "entityType", id: "entityId", drop: true }],
+  // kind is "project" | "task"; idMap is global, so the old entity id is enough.
+  DevelopmentCatalogMapping: [{ type: "kind", id: "entityId", drop: true }],
   Capture: [{ type: "anchorType", id: "anchorId", drop: false }],
   InboxItem: [{ type: "targetType", id: "targetId", drop: false }]
 };
