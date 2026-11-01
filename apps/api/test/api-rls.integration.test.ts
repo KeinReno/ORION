@@ -1,3 +1,4 @@
+import { importConfirmedCatalogTasksTx } from "../src/development/catalog-task-import";
 import { importConfirmedCatalogProjectsTx } from "../src/development/catalog-project-import";
 import { timeCostMinor } from "@orion/shared-types";
 import type { INestApplication } from "@nestjs/common";
@@ -276,6 +277,48 @@ describe("API workspace isolation", () => {
     expect(unchanged?.description).toBe("Manual description");
     const repeated = await execute(owner.user.id, input);
     expect(repeated).toMatchObject([{ entityId: existing.id, outcome: "already_mapped" }]);
+  });
+
+  it("imports canonical catalog tasks idempotently and rejects unconfirmed matches", async () => {
+    const owner = await register("catalog-task-import-owner");
+    const project = await prisma.withUser(owner.user.id, (tx) =>
+      tx.project.create({ data: { workspaceId: owner.workspaceId, name: `Task import project ${runId}` } })
+    );
+    await prisma.withUser(owner.user.id, (tx) => bindCatalogEntityTx(tx, owner.user.id, {
+      workspaceId: owner.workspaceId, catalogId: "orion-dev", kind: "project",
+      externalId: `task-parent-${runId}`, entityId: project.id
+    }));
+    const task = {
+      externalId: `task-import-${runId}`, projectExternalId: `task-parent-${runId}`,
+      title: `Imported task ${runId}`
+    };
+    const execute = (items: Array<typeof task & { confirmedExistingId?: string }>) =>
+      prisma.withUser(owner.user.id, (tx) =>
+        importConfirmedCatalogTasksTx(tx, owner.user.id, owner.workspaceId, "orion-dev", items)
+      );
+    const first = await execute([task]);
+    expect(first[0]?.outcome).toBe("created");
+    const retry = await execute([task]);
+    expect(retry).toEqual([{ ...first[0], outcome: "already_mapped" }]);
+    const manual = await prisma.withUser(owner.user.id, (tx) =>
+      tx.task.create({ data: {
+        workspaceId: owner.workspaceId, projectId: project.id, title: `Manual task ${runId}`,
+        description: "Preserve this"
+      } })
+    );
+    const adoption = {
+      externalId: `task-adopt-${runId}`, projectExternalId: task.projectExternalId,
+      title: manual.title
+    };
+    await expect(execute([adoption])).rejects.toThrow(/explicit confirmation/);
+    await expect(execute([{ ...adoption, confirmedExistingId: first[0]!.entityId }]))
+      .rejects.toThrow(/stale/);
+    const confirmed = await execute([{ ...adoption, confirmedExistingId: manual.id }]);
+    expect(confirmed[0]?.outcome).toBe("confirmed_existing");
+    const unchanged = await prisma.withUser(owner.user.id, (tx) =>
+      tx.task.findUniqueOrThrow({ where: { id: manual.id } })
+    );
+    expect(unchanged.description).toBe("Preserve this");
   });
 
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
