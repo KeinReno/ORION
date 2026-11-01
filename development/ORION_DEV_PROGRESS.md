@@ -340,3 +340,10 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added `catalog-preview-binding.ts`: deterministic SHA-256 fingerprint of authenticated-user ID (caller-supplied), workspace ID, trusted catalog digest (caller-supplied), normalized preview actions and reviewed choices. A changed preview, catalog, identity or selection changes the fingerprint.
 - Added unit tests for determinism, invalidation and workspace mismatch. Commits: `be9d21e`, `51e2647`.
 - **Not executed:** Vitest or TypeScript. Fingerprint is NOT a signed consent token and cannot by itself prevent replay, forgery or stale writes. The future server must issue and store expiring one-time confirmations and re-read/revalidate the snapshot in the same transaction as writes. No write API exposed.
+
+
+### 2026-11-01 — snapshot isolation guard
+
+- Rechecked draft PR #95 at `404dbc1`; another development pass had already added preview selection fingerprinting and orphaned mapping rejection.
+- Hardened API-side dry-run planner to reject foreign-workspace project/task rows and duplicate canonical entity IDs rather than silently ignoring them. Added regression tests for both foreign row kinds and repeated project IDs.
+- Commits: `ce43257`, `aa14422`. Tests and TypeScript checks **not executed**. No confirmation or write API added. Next: server-held one-time consent and atomic revalidation; Luna 6 acceptance pending.
