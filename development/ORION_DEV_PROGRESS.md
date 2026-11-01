@@ -44,13 +44,21 @@
 - Commits: `b7ce2e8`, `3fe4c90`. Tests **not executed** in a repository checkout.
 - Mapping model still lacks a reviewed SQL migration and RLS policy; no database writes or importer endpoint were added.
 
+
+### 2026-11-01 — mapping SQL migration (unverified)
+
+- Inspected the Prisma mapping model, database role separation in `infra/postgres/init/01-app-roles.sql`, and the RLS transaction contract in `CLAUDE.md`.
+- Added migration `20261101050000_development_catalog_mappings`: table, workspace foreign key, uniqueness constraints, kind check, index, FORCE RLS membership policies, and app/system grants.
+- Commit: `fe86c322`. SQL **not executed** against PostgreSQL. RLS policy and membership privileges require integration testing before deployment. No authenticated importer endpoint or write service exists yet.
+- Next: inspect the precise workspace-member role and RLS policy conventions, add a disposable PostgreSQL migration/RLS regression test (member vs outsider vs missing session), then implement an authorized transactional mapping writer. Do not claim production readiness.
+
 ### Not yet verified
 
-Tests have been committed but have **not** been run in the Orion checkout. No database migrations, authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
+Tests have been committed but have **not** been run in the Orion checkout. A SQL migration has been added but not executed; no authenticated import endpoint or user-facing import UI have been implemented. Mapping records are an input contract only; persistence is not implemented.
 
 ### Next action
 
-Inspect existing migration conventions and RLS policy, generate and review the SQL migration for the new mapping model, then implement transactional mapping persistence scoped to workspace and catalog. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
+Verify the new migration and its RLS policy on disposable PostgreSQL data, then implement transactional mapping persistence scoped to workspace and catalog. Integrate with existing workspace/project/task services behind authenticated permissions; retain dry-run default. Do not automatically accept name matches.
 
 ### Guardrails
 
