@@ -96,7 +96,7 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   }
   const actions = [];
   if (!workspace) actions.push({ kind: "workspace", action: "propose_create", name: "ORION DEV" });
-  else actions.push({ kind: "workspace", action: "confirm_existing", id: workspace.id });
+  else actions.push({ kind: "workspace", action: "review_possible_match", candidateId: workspace.id, reason: "Name match is not durable ownership; explicit confirmation required" });
 
   for (const project of projects) {
     const candidates = workspace
