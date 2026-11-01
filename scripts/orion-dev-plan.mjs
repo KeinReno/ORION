@@ -49,6 +49,15 @@ export function planOrionDevImport(catalog, snapshot = {}) {
   }
   const projectIds = unique(projects, "project");
   const taskIds = unique(items, "task");
+  // Two catalog items with the same title in one project cannot be safely
+  // matched to canonical tasks by name during an initial import.
+  const normalizedTitles = new Set();
+  for (const item of items) {
+    if (typeof item.title !== "string" || !item.title.trim()) throw new Error("Invalid task title: " + item.id);
+    const key = JSON.stringify([item.project, item.title.trim().toLowerCase()]);
+    if (normalizedTitles.has(key)) throw new Error("Duplicate catalog task title: " + item.title);
+    normalizedTitles.add(key);
+  }
   const byTask = new Map(items.map((item) => [item.id, item]));
   for (const item of items) {
     if (!projectIds.has(item.project)) throw new Error("Unknown project: " + item.project);
