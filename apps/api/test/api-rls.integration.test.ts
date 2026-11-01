@@ -104,6 +104,64 @@ describe("API workspace isolation", () => {
     expect(hiddenFromBob).toHaveLength(0);
   });
 
+  it("isolates development catalog mappings by workspace membership and missing session", async () => {
+    const alice = await register("alice-dev-mapping");
+    const bob = await register("bob-dev-mapping");
+    const externalId = `integration-${runId}`;
+
+    const mapping = await prisma.withUser(alice.user.id, (tx) =>
+      tx.developmentCatalogMapping.create({
+        data: {
+          workspaceId: alice.workspaceId,
+          catalogId: "orion-dev",
+          kind: "project",
+          externalId,
+          entityId: `project-${externalId}`
+        }
+      })
+    );
+
+    const aliceRows = await prisma.withUser(alice.user.id, (tx) =>
+      tx.developmentCatalogMapping.findMany({ where: { workspaceId: alice.workspaceId } })
+    );
+    const bobRows = await prisma.withUser(bob.user.id, (tx) =>
+      tx.developmentCatalogMapping.findMany({ where: { workspaceId: alice.workspaceId } })
+    );
+    expect(aliceRows.some((row) => row.id === mapping.id)).toBe(true);
+    expect(bobRows).toHaveLength(0);
+
+    // No withUser context: the ordinary orion_app connection must fail closed.
+    const noSession = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "development_catalog_mappings"
+      WHERE "id" = ${mapping.id}
+    `;
+    expect(noSession).toHaveLength(0);
+
+    await expect(prisma.withUser(bob.user.id, (tx) =>
+      tx.developmentCatalogMapping.create({
+        data: {
+          workspaceId: alice.workspaceId,
+          catalogId: "orion-dev",
+          kind: "task",
+          externalId: `foreign-${externalId}`,
+          entityId: `foreign-task-${externalId}`
+        }
+      })
+    )).rejects.toThrow();
+
+    await expect(prisma.withUser(alice.user.id, (tx) =>
+      tx.developmentCatalogMapping.create({
+        data: {
+          workspaceId: alice.workspaceId,
+          catalogId: "orion-dev",
+          kind: "project",
+          externalId,
+          entityId: `duplicate-${externalId}`
+        }
+      })
+    )).rejects.toThrow();
+  });
+
   it("has RLS enabled, forced and policied on every workspace-owned table", async () => {
     // The second safeguard (see CLAUDE.md "Postgres RLS") is only real if it is
     // installed on *every* workspace-owned table. v0.11 shipped
