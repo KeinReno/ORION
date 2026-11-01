@@ -183,4 +183,16 @@ describe("ORION DEV dry-run planner", () => {
     }
   });
 
+  it("rejects catalog tasks with duplicate normalized titles in one project", () => {
+    const duplicate = structuredClone(catalog);
+    duplicate.workItems[1].title = " first ";
+    expect(() => planOrionDevImport(duplicate)).toThrow(/Duplicate catalog task title/);
+    duplicate.workItems[1].title = " ";
+    expect(() => planOrionDevImport(duplicate)).toThrow(/Invalid task title/);
+    duplicate.workItems[1].title = "First";
+    duplicate.projects.push({ id: "other", title: "Other" });
+    duplicate.workItems[1].project = "other";
+    expect(() => planOrionDevImport(duplicate)).not.toThrow();
+  });
+
 });
