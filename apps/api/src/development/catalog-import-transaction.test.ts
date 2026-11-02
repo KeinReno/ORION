@@ -29,6 +29,29 @@ describe("confirmed development import declaration validation", () => {
       expect(tx.developmentCatalogMapping.create).not.toHaveBeenCalled();
     }
   );
+  it.each(["projects", "tasks"] as const)(
+    "rejects null %s declarations before accessing identifiers or writing",
+    async (stage) => {
+      const tx = {
+        developmentCatalogMapping: { findMany: vi.fn(), create: vi.fn() },
+        project: { create: vi.fn() },
+        task: { create: vi.fn() }
+      };
+      const input = {
+        workspaceId: "w", catalogId: "orion-dev", workspaceConfirmed: true as const,
+        projects: stage === "projects" ? [null] : [{ externalId: "core", title: "Core" }],
+        tasks: stage === "tasks" ? [null] : [],
+        dependencies: []
+      };
+      await expect(applyConfirmedDevelopmentImportTx(
+        tx as unknown as Prisma.TransactionClient, "user",
+        input as unknown as Parameters<typeof applyConfirmedDevelopmentImportTx>[2]
+      )).rejects.toThrow(/Duplicate or missing/);
+      expect(tx.project.create).not.toHaveBeenCalled();
+      expect(tx.task.create).not.toHaveBeenCalled();
+      expect(tx.developmentCatalogMapping.create).not.toHaveBeenCalled();
+    }
+  );
   it.each([
     null,
     { externalId: "DEV-001", dependsOn: null },
