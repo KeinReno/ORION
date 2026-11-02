@@ -479,3 +479,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added Vitest regression cases for duplicate project and task IDs, asserting no canonical create/mapping writes are attempted.
 - Commits: `c00644a`, `3a5b69f`. **Tests and TypeScript checks not executed** in this GitHub-only run; no PostgreSQL verification is claimed.
 - Next: run the new transaction test in a checkout, then add atomic stale-preview revalidation and single-use consent consumption to the authenticated import execution path. Do not expose writes before that gate is complete.
+
+
+### 2026-11-02 — malformed dependency declaration guard
+
+- Rechecked draft PR #95, feature branch (158 ahead / 0 behind before changes), catalog, bootstrap protocol, progress journal and internal transaction coordinator.
+- Rejected null dependency rows, missing/non-array `dependsOn` and non-string dependency IDs before canonical project/task/mapping writes. Previously malformed rows could throw uncontrolled TypeErrors.
+- Added four focused mocked-transaction regression cases asserting controlled rejection and zero writes.
+- Commits: `4ef7241` (guard), `286144d` (tests). **Vitest, TypeScript and PostgreSQL not executed**; these changes are not runtime-verified.
+- Next: run targeted transaction Vitest and API TypeScript checks in a checkout; then implement atomic fresh-snapshot revalidation and one-time consent consumption before enabling any write endpoint.
+- No changes to master, PR merge or beta release.
