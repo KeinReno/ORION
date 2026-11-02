@@ -498,3 +498,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `8c9e212` (guard), `18c23ca` (tests). **Vitest, TypeScript and PostgreSQL were not executed** in this GitHub-only run.
 - Next: run targeted Vitest/typecheck in a checkout, then implement atomic fresh-snapshot revalidation and single-use consent consumption before exposing a write endpoint.
 - No master changes, PR merge or beta release.
+
+
+### 2026-11-02 — self-referential dependency rejection
+
+- Rechecked open draft PR #95 (HEAD `00a819a`), catalog, bootstrap protocol, progress log and transactional import coordinator; feature branch was 164 commits ahead / 0 behind before changes.
+- Reject a task dependency that points to its own external ID before invoking any canonical project/task/mapping writes.
+- Added focused mocked-transaction Vitest regression for self-dependency and zero writes.
+- Commits: `672982c` (guard), `7a395e0` (test). **Vitest, TypeScript and PostgreSQL not executed** in this connector-only run; behavior is not runtime verified.
+- Next: run targeted Vitest/typecheck and PostgreSQL migration in a local checkout; implement atomic fresh-snapshot revalidation and single-use consent consumption before exposing any write endpoint.
+- No master changes, PR merge or beta publication.
