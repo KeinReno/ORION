@@ -38,6 +38,9 @@ unknown write outcome and success have reachable recovery paths
 retain review choices; a successful refresh resets choices because they belong to
 the prior snapshot (`rule/preserve-user-input`). After an uncertain apply response,
 refresh is mandatory; the UI does not automatically repeat a write.
+Requests have a 30-second UI deadline so a stalled transport leaves a retry path.
+The deadline does not assert server cancellation; a timed-out apply still requires
+a fresh preview. Ambiguous names and invalid bindings have explicit recovery copy.
 
 Platform API 1.12.0 / integration contract 1.11.0 adds the registered module and
 typed request/response schemas. The installer ships the fixed catalog inside its

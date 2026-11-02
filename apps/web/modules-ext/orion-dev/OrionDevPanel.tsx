@@ -42,7 +42,7 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
     mounted.current = true;
     let disposed = false;
     const initialClient = createModuleClient(api, workspaceModuleBase(workspaceId, "development-import"));
-    initialClient.get("/preview", developmentPreviewSchema).then(value => {
+    withDeadline(initialClient.get("/preview", developmentPreviewSchema)).then(value => {
       if (!disposed) setPreview(value);
     }).catch(reason => {
       if (!disposed) setError(loadError(reason));
@@ -55,7 +55,7 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
     pending.current = true;
     setBusy("preview"); setError("");
     try {
-      const value = await client().get("/preview", developmentPreviewSchema);
+      const value = await withDeadline(client().get("/preview", developmentPreviewSchema));
       if (!mounted.current) return;
       // Decisions belong to the exact reviewed snapshot, never a refreshed one.
       setPreview(value); setChoices({}); setAcknowledged(false); setNeedsRefresh(false); setResult(null);
@@ -70,10 +70,10 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
     let applying = false;
     try {
       const body = { workspaceConfirmed: true, previewDigest: preview.previewDigest, choices };
-      const consent = await client().post("/consent", body, developmentConsentSchema);
+      const consent = await withDeadline(client().post("/consent", body, developmentConsentSchema));
       if (!mounted.current) return;
       applying = true;
-      const value = await client().post("/apply", { ...body, token: consent.token }, developmentResultSchema);
+      const value = await withDeadline(client().post("/apply", { ...body, token: consent.token }, developmentResultSchema));
       if (!mounted.current) return;
       setResult(value); setNeedsRefresh(true);
       await Promise.all(["projects", "tasks"].map(key => queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
@@ -81,8 +81,9 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
       if (!mounted.current) return;
       const stale = reason instanceof ApiError && reason.status === 409;
       setNeedsRefresh(applying || stale);
-      setError(applying ? "Ответ об импорте не получен. Обновите план, чтобы проверить сохранённые данные перед повторной попыткой." :
-        stale ? "План изменился или подтверждение устарело. Обновите план и проверьте его снова." : loadError(reason));
+      setError(stale ? "План изменился, подтверждение устарело или обнаружен конфликт зависимостей. Обновите план и проверьте его снова." :
+        reason instanceof ApiError && reason.status === 403 ? loadError(reason) :
+        applying ? "Ответ об импорте не получен. Обновите план, чтобы проверить сохранённые данные перед повторной попыткой." : loadError(reason));
     } finally { pending.current = false; if (mounted.current) setBusy(null); }
   }
 
@@ -127,7 +128,7 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
             {row.action === "review_possible_match" && <label className="mt-2 flex min-h-12 cursor-pointer items-center gap-3 break-all">
               <input type="checkbox" name={key} checked={choices[key] === row.candidateId} disabled={Boolean(busy) || needsRefresh}
                 onChange={event => setChoices(previous => { const next = { ...previous }; if (event.target.checked) next[key] = row.candidateId!; else delete next[key]; return next; })} />
-              Связать с существующим {row.kind === "project" ? "проектом" : "заданием"}: {row.candidateId}
+              Связать с существующим {row.kind === "project" ? "проектом" : "задачей"}: {row.candidateId}
             </label>}
             {row.action === "review_possible_match" && row.candidateId && <Button type="button" variant="ghost" size="sm" onClick={() => row.kind === "project" ? openProject(row.candidateId!) : openTask(row.candidateId!)}>Открыть совпадение: {row.title}</Button>}
           </div>;
@@ -148,6 +149,21 @@ function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: s
 
 function loadError(reason: unknown): string {
   if (reason instanceof ApiError && reason.status === 403) return "Доступ изменился. Импорт доступен владельцу и руководителю пространства.";
-  if (reason instanceof ApiError && reason.status === 409) return "План недоступен: проверьте, что модули ORION DEV, Проекты и Задачи включены, а каталог установлен на сервере. Затем обновите план.";
+  if (reason instanceof ApiError && reason.status === 409) {
+    if (/ambiguous/i.test(reason.message)) return "Найдено несколько проектов или задач с одинаковыми названиями. Уточните названия в пространстве и обновите план; автоматический выбор заблокирован.";
+    if (/mapping|binding/i.test(reason.message)) return "Сопоставления каталога конфликтуют с данными пространства. Требуется проверить сопоставления перед импортом.";
+    return "План недоступен: проверьте, что модули ORION DEV, Проекты и Задачи включены, а каталог установлен на сервере. Затем обновите план.";
+  }
   return "Не удалось получить план или подтверждение. Проверьте соединение и повторите попытку; ваши решения сохранены.";
+}
+
+/** A stalled transport must leave a recovery path. A timed-out write may still
+ * commit, so its only recovery is a fresh preview, never an automatic retry. */
+async function withDeadline<T>(request: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([request, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Development request timed out")), 30_000);
+    })]);
+  } finally { clearTimeout(timer); }
 }

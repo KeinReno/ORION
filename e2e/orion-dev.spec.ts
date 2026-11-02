@@ -53,3 +53,46 @@ test("stale preview preserves review and requires refresh", async ({ page, reque
   await page.getByRole("button", { name: "Обновить план" }).click();
   await expect(page.getByRole("checkbox", { name: /Импортировать этот план/ })).not.toBeChecked();
 });
+
+test("lost apply response recovers from persisted mappings without duplicate writes", async ({ page, request }, testInfo) => {
+  const account = await register(request, "orion-dev-lost-response");
+  await signIn(page, account);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
+  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
+  const acknowledgement = page.getByRole("checkbox", { name: /Импортировать этот план/ });
+  await acknowledgement.focus();
+  await page.keyboard.press("Space");
+  await expect(acknowledgement).toBeChecked();
+  let applied = 0;
+  await page.route("**/development-import/apply", async route => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    applied++;
+    await route.abort("failed"); // commit succeeded, transport lost the response
+  });
+  const importButton = page.getByRole("button", { name: "Импортировать каталог", exact: true });
+  await importButton.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Ответ об импорте не получен" })).toBeVisible();
+  await expect(importButton).toBeDisabled();
+  expect(applied).toBe(1);
+  await page.unroute("**/development-import/apply");
+  await page.getByRole("button", { name: "Обновить план" }).click();
+  await expect(page.getByText(/Уже связаны: 29/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("heading", { name: /Пространство:/ }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("recovered-320.png"), fullPage: true });
+});
+
+test("stalled preview leaves a retry path", async ({ page, request }) => {
+  const account = await register(request, "orion-dev-timeout");
+  await signIn(page, account);
+  await page.route("**/development-import/preview", () => { /* leave transport pending */ });
+  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
+  await expect(page.getByText("Проверяем каталог и данные пространства…")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Не удалось получить план" })).toBeVisible({ timeout: 35_000 });
+  await expect(page.getByRole("button", { name: "Обновить план" })).toBeEnabled();
+  await page.unroute("**/development-import/preview");
+  await page.getByRole("button", { name: "Обновить план" }).click();
+  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
+});
