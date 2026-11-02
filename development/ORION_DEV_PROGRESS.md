@@ -453,3 +453,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Tests, TypeScript and PostgreSQL migration **not executed**. No write endpoint enabled.
 - Next: add an explicit transaction-boundary regression and run targeted Vitest/typecheck locally; then implement atomic snapshot revalidation and consent consumption before import.
 - No master merge or beta publication.
+
+
+### 2026-11-02 — preview transaction-boundary regression
+
+- Re-read current catalog, bootstrap protocol, progress journal, controller, snapshot reader and catalog loader; compared master and feature branch (150 ahead, zero behind before this change).
+- Added controller test using a disposable trusted-catalog fixture and mocked authorized transaction. It asserts the preview result is complete before withUser returns, membership is checked while the transaction is active, and the endpoint remains read-only.
+- Commit: `784fb09`. Tests, TypeScript checks and PostgreSQL were **not executed** in this connector-only pass; test behavior is not yet verified by Vitest.
+- Next: run targeted controller Vitest and API TypeScript checks in a local checkout; then implement transactional stale-preview revalidation and atomic one-time consent consumption before enabling import writes.
+- No master changes, PR merge or beta publication.
