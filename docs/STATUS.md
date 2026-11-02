@@ -7,10 +7,13 @@
 совпадениях; устаревший snapshot отклоняется. Критерии приёмки и фазы сохраняются
 в описаниях новых объектов, существующие поля сохраняются. Каталог включён
 в API-пакет Windows-сборки. Platform API 1.12.0 / integration 1.11.0.
-Начальные проверки: 1692 unit и 52 профильных PostgreSQL integration PASS;
-браузерный импорт/повторное открытие/повторный импорт PASS. Полный regression и
-Windows-кандидат проверяются отдельно; рабочее пространство владельца ещё не
-наполнено. [Контракт и UX](adr/ADR-0045-development-review-apply.md).
+Проверки: 1692 unit, 682 integration / 1 opt-in skip, 42 Chromium parity и
+4 ORION DEV-сценария PASS; typecheck/lint (0 errors)/architecture/contracts PASS.
+Windows NSIS собран из `08c4491`; автономный runtime на новом профиле проверен
+через импорт/перезапуск/повтор без дублей. Установленная beta.28 не заменялась,
+рабочее пространство владельца ещё не наполнено. Нативная установка/UI-приёмка
+не выполнены. [Отчёт и артефакт](../development/LOCAL_BETA_2026-11-02.md),
+[контракт и UX](adr/ADR-0045-development-review-apply.md).
 
 ## ORION DEV — локальная стабилизация 02.11.2026, вне master
 

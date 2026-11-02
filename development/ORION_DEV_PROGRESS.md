@@ -524,3 +524,8 @@ The authenticated transactional importer is still not implemented. Name matches 
 ## 2026-11-02 — reviewed apply and Workbench contribution
 
 Local continuation on `codex/orion-dev-stabilization-20261102`: added atomic consent-gated apply, explicit workspace acknowledgement, richer stale-state fingerprints, preservation of phase/acceptance descriptions and the registered ORION DEV panel. Public schemas and module registration use Platform API 1.12.0 / integration 1.11.0. Installer includes its catalog in the API package. ADR-0045 records authorization and product decisions. Initial evidence: 1692 unit PASS; 52 focused PostgreSQL integration PASS; browser review/import/reload/repeat PASS, stale-flow assertion corrected for Next route announcer. Full regression and Windows candidate are being checked; no master merge or public release.
+
+
+### Финальный локальный кандидат
+
+Исходный commit `08c449179b1994d6aa3d2524d1e163d941a66d0d`, tag `v0.1.35-orion-dev-local-08c4491`. NSIS собран, SHA-256 и путь зафиксированы в [отчёте](LOCAL_BETA_2026-11-02.md). Финальный полный PostgreSQL regression: 682 PASS / 0 FAIL / 1 opt-in skip; 1692 unit PASS; 42 panel parity и 4 итоговых import/recovery Chromium сценария PASS. Final packaged runtime на пустом отдельном профиле: migrations, импорт, restart, reimport без дублей PASS. Рабочая beta.28 и пространство владельца не изменялись. Установка и нативная UI-приёмка остаются отдельным шагом; это не опубликованный релиз и не само-приёмка агентом.
