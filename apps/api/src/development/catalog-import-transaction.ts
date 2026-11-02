@@ -33,6 +33,11 @@ export async function applyConfirmedDevelopmentImportTx(
   }
   const projectIds = new Set(input.projects.map((project) => project.externalId));
   const taskIds = new Set(input.tasks.map((task) => task.externalId));
+  if (projectIds.size !== input.projects.length || taskIds.size !== input.tasks.length ||
+      input.projects.some((project) => !project.externalId) ||
+      input.tasks.some((task) => !task.externalId)) {
+    throw new ConflictException("Duplicate or missing development import external IDs");
+  }
   if (input.tasks.some((task) => !projectIds.has(task.projectExternalId)) ||
       input.dependencies.length !== input.tasks.length ||
       input.dependencies.some((task) => !taskIds.has(task.externalId) ||
