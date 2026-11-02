@@ -48,6 +48,14 @@ describe("development preview digest", () => {
     expect(() => digestDevelopmentPreview(scope, { value: undefined })).toThrow(/Undefined/);
     expect(() => digestDevelopmentPreview(scope, { value: Number.NaN })).toThrow(/Unsupported/);
   });
+  it("binds reserved JSON property names without dropping them", () => {
+    const plain = digestDevelopmentPreview(scope, { projects: [] });
+    const special = JSON.parse('{"projects":[],"__proto__":{"role":"owner"},"constructor":"x"}') as Record<string, unknown>;
+    const bound = digestDevelopmentPreview(scope, special);
+    expect(bound).not.toBe(plain);
+    expect(bound).toBe(digestDevelopmentPreview(scope, JSON.parse(JSON.stringify(special))));
+    expect(({} as Record<string, unknown>).role).toBeUndefined();
+  });
   it("rejects invalid scope and snapshot", () => {
     expect(() => digestDevelopmentPreview({ ...scope, userId: "" }, snapshot)).toThrow();
     expect(() => digestDevelopmentPreview({ ...scope, catalogSha256: "bad" }, snapshot)).toThrow();
