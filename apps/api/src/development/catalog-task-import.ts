@@ -11,6 +11,7 @@ export interface ConfirmedCatalogTask {
   externalId: string;
   projectExternalId: string;
   title: string;
+  description?: string;
   confirmedExistingId?: string;
 }
 
@@ -94,7 +95,7 @@ export async function importConfirmedCatalogTasksTx(
       if (matches.length) throw new ConflictException("Existing task requires explicit confirmation");
       if (!commands) throw new ConflictException("Canonical TaskOperations required for import writes");
       const created = await commands.createTx(tx, userId, workspaceId, createTaskInputSchema.parse({
-        projectId: project.id, title: task.title.trim()
+        projectId: project.id, title: task.title.trim(), description: task.description ?? ""
       }));
       entityId = created.id;
       outcome = "created";

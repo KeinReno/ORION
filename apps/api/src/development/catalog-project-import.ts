@@ -7,6 +7,7 @@ import { bindCatalogEntityTx } from "./catalog-mappings";
 export interface ConfirmedCatalogProject {
   externalId: string;
   title: string;
+  description?: string;
   /** Required for an existing name match. Never infer identity from title. */
   confirmedExistingId?: string;
 }
@@ -86,7 +87,7 @@ export async function importConfirmedCatalogProjectsTx(
       outcome = "confirmed_existing";
     } else {
       if (matches.length) throw new ConflictException("Existing project requires explicit confirmation");
-      const created = await developmentProjectCatalog.createTx(tx, workspaceId, project.title.trim());
+      const created = await developmentProjectCatalog.createTx(tx, workspaceId, project.title.trim(), project.description);
       entityId = created.id;
       outcome = "created";
     }

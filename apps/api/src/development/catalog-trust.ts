@@ -1,5 +1,6 @@
 import { ConflictException } from "@nestjs/common";
 import type { ConfirmedDevelopmentImport } from "./catalog-import-transaction";
+import { developmentDescription } from "./catalog-description";
 
 export interface TrustedDevelopmentCatalog {
   schemaVersion?: 1;
@@ -11,6 +12,7 @@ export interface TrustedDevelopmentCatalog {
     project: string;
     phase?: string;
     title: string;
+    acceptance?: readonly string[];
     dependsOn?: readonly string[];
   }[];
 }
@@ -60,8 +62,10 @@ export function assertTrustedCatalogImport(
   }
   const seenProjects = new Set<string>();
   for (const project of input.projects) {
+    const source = project && catalog.projects.find(row => row.id === project.externalId);
     if (!project || seenProjects.has(project.externalId) ||
-        projects.get(project.externalId) !== project.title) {
+        projects.get(project.externalId) !== project.title ||
+        (project.description !== undefined && project.description !== developmentDescription(source!))) {
       throw new ConflictException("Project declaration differs from trusted catalog");
     }
     seenProjects.add(project.externalId);
@@ -70,7 +74,8 @@ export function assertTrustedCatalogImport(
   for (const task of input.tasks) {
     const expected = task && tasks.get(task.externalId);
     if (!expected || seenTasks.has(task.externalId) ||
-        task.projectExternalId !== expected.project || task.title !== expected.title) {
+        task.projectExternalId !== expected.project || task.title !== expected.title ||
+        (task.description !== undefined && task.description !== developmentDescription(catalog.workItems.find(row => row.id === task.externalId)!))) {
       throw new ConflictException("Task declaration differs from trusted catalog");
     }
     seenTasks.add(task.externalId);

@@ -34,6 +34,8 @@ for (const name of ['.env', '.env.example', '.data', 'apps', 'tmp', 'src', 'test
   rmSync(join(api, name), { recursive: true, force: true });
 }
 if (existsSync(join(api, '.env'))) throw new Error('Secret .env would be bundled');
+mkdirSync(join(api, 'development'), { recursive: true });
+cpSync(join(root, 'development', 'orion-dev.catalog.json'), join(api, 'development', 'orion-dev.catalog.json'));
 run(process.execPath, [join(api, 'node_modules', 'prisma', 'build', 'index.js'), 'generate', `--schema=${join(api, 'prisma', 'schema.prisma')}`], { ...process.env, DATABASE_URL: 'postgresql://placeholder:placeholder@127.0.0.1:5433/orion' });
 cpSync(process.execPath, join(stage, 'node.exe'));
 cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });

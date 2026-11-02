@@ -15,6 +15,7 @@ const apiEnv: Record<string, string> = {
   PORT: String(apiPort),
   WEB_ORIGIN: webOrigin,
   ORION_MODE: "local",
+  ORION_DEV_CATALOG_ROOT: "../..",
   STORAGE_DRIVER: "local",
   STORAGE_DIR: "../../tmp/e2e-documents",
   // Every spec registers its own accounts from 127.0.0.1; the suite outgrew the 60-per-5-minutes production cap.

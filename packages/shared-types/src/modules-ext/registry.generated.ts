@@ -5,6 +5,7 @@
 export const GENERATED_MODULE_IDS = [
   "agent-hub",
   "chat-archive",
+  "orion-dev",
   "pet-care"
 ] as const;
 
@@ -15,6 +16,16 @@ export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = {
   },
   "chat-archive": {
     "version": "1.0.0"
+  },
+  "orion-dev": {
+    "version": "1.0.0",
+    "requires": {
+      "platform": "^1.12.0",
+      "modules": [
+        "projects",
+        "tasks"
+      ]
+    }
   },
   "pet-care": {
     "version": "1.0.0"
@@ -82,6 +93,24 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
     "defaultEnabled": true
   },
   {
+    "id": "orion-dev",
+    "kind": "additional",
+    "required": false,
+    "label": "ORION DEV",
+    "summary": "Проверка и безопасный импорт каталога разработки в выбранное пространство.",
+    "owns": "Интерфейс проверки импорта; задачи и проекты принадлежат существующим модулям.",
+    "livesWithout": "Не требует запущенных агентов или внешнего AI API.",
+    "provides": [
+      "Предварительный план",
+      "Подтверждение совпадений",
+      "Атомарный импорт"
+    ],
+    "optionalDependencies": [],
+    "disableBehavior": "Скрывает панель и закрывает API импорта; проекты, задачи и сопоставления сохраняются.",
+    "panelId": "orion-dev",
+    "defaultEnabled": true
+  },
+  {
     "id": "pet-care",
     "kind": "additional",
     "required": false,
@@ -106,6 +135,7 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
 export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[number], string> = {
   "agent-hub": "execution",
   "chat-archive": "conversation",
+  "orion-dev": "development_import",
   "pet-care": "pet"
 };
 
@@ -124,6 +154,7 @@ export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[n
     "20261020222504_chat_archive",
     "20261028120000_chat_archive_auto_source"
   ],
+  "orion-dev": [],
   "pet-care": [
     "20261018120000_pet_care",
     "20261019150000_pet_care_wellbeing",
@@ -133,4 +164,5 @@ export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[n
 
 export * from "./agent-hub";
 export * from "./chat-archive";
+export * from "./orion-dev";
 export * from "./pet-care";

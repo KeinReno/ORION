@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ConflictException } from "@nestjs/common";
 import type { TrustedDevelopmentCatalog } from "./catalog-trust";
@@ -7,6 +7,14 @@ import type { TrustedDevelopmentCatalog } from "./catalog-trust";
 export interface LoadedDevelopmentCatalog {
   catalog: TrustedDevelopmentCatalog;
   sha256: string;
+}
+
+/** Bundled catalog is inside the immutable API package, including updater payloads. */
+export function configuredDevelopmentCatalogRoot(): string {
+  if (process.env.ORION_DEV_CATALOG_ROOT) return process.env.ORION_DEV_CATALOG_ROOT;
+  const bundledRoot = resolve(__dirname, "../..");
+  if (existsSync(resolve(bundledRoot, "development", "orion-dev.catalog.json"))) return bundledRoot;
+  throw new ConflictException("ORION_DEV_CATALOG_ROOT is not configured");
 }
 
 /**

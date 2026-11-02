@@ -14,10 +14,10 @@ const catalog: TrustedDevelopmentCatalog = {
 describe("trusted development import builder", () => {
   it("derives all declarations and dependency edges from catalog", () => {
     const result = buildDevelopmentImport(catalog, "workspace");
-    expect(result.projects).toEqual([{ externalId: "p", title: "Canonical project" }]);
+    expect(result.projects).toEqual([{ externalId: "p", title: "Canonical project", description: "ORION DEV" }]);
     expect(result.tasks).toEqual([
-      { externalId: "a", projectExternalId: "p", title: "First" },
-      { externalId: "b", projectExternalId: "p", title: "Second" }
+      { externalId: "a", projectExternalId: "p", title: "First", description: "ORION DEV" },
+      { externalId: "b", projectExternalId: "p", title: "Second", description: "ORION DEV" }
     ]);
     expect(result.dependencies).toEqual([
       { externalId: "a", dependsOn: ["b"] },

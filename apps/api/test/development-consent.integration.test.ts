@@ -131,7 +131,7 @@ describe("development import consent on PostgreSQL", () => {
     const response = await fetch(`${url}/preview`, { headers: headers(users.owner) });
     expect(response.status).toBe(200);
     const preview = await response.json() as { previewDigest: string };
-    const body = JSON.stringify({ previewDigest: preview.previewDigest, choices: {} });
+    const body = JSON.stringify({ workspaceConfirmed: true, previewDigest: preview.previewDigest, choices: {} });
     const consent = await fetch(`${url}/consent`, { method: "POST", headers: headers(users.owner), body });
     expect(consent.status).toBe(201);
     await prisma.asSystem(tx => tx.workspace.update({ where: { id: workspaceId }, data: { name: "Changed after preview" } }));

@@ -2,8 +2,10 @@ import type { Prisma } from "@prisma/client";
 
 /** Fixed catalog projections in the caller's existing authorization/RLS transaction. */
 export const developmentProjectCatalog = {
+  lockTx: (tx: Prisma.TransactionClient, workspaceId: string) => tx.$queryRaw`
+    SELECT id FROM projects WHERE "workspaceId" = ${workspaceId} ORDER BY id FOR UPDATE`,
   listTx: (tx: Prisma.TransactionClient, workspaceId: string) => tx.project.findMany({
-    where: { workspaceId }, select: { id: true, workspaceId: true, name: true }, orderBy: { id: "asc" }
+    where: { workspaceId }, select: { id: true, workspaceId: true, name: true, updatedAt: true }, orderBy: { id: "asc" }
   }),
   byIdTx: (tx: Prisma.TransactionClient, workspaceId: string, id: string) => tx.project.findFirst({
     where: { id, workspaceId }, select: { id: true, name: true }
@@ -11,7 +13,7 @@ export const developmentProjectCatalog = {
   byNameTx: (tx: Prisma.TransactionClient, workspaceId: string, name: string) => tx.project.findMany({
     where: { workspaceId, name: { equals: name, mode: "insensitive" } }, select: { id: true }
   }),
-  createTx: (tx: Prisma.TransactionClient, workspaceId: string, name: string) => tx.project.create({
-    data: { workspaceId, name }, select: { id: true }
+  createTx: (tx: Prisma.TransactionClient, workspaceId: string, name: string, description = "") => tx.project.create({
+    data: { workspaceId, name, description }, select: { id: true }
   })
 };

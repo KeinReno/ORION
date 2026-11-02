@@ -1,7 +1,6 @@
 import { OpportunitiesModule } from "./opportunities/opportunities.module";
 import { OpportunityExtensionsModule } from "./opportunity-extensions/opportunity-extensions.module";
 import { Module } from "@nestjs/common";
-import { DevelopmentImportModule } from "./development/development-import.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { PrismaModule } from "./common/prisma.module";
 import { BackgroundJobsModule } from "./common/background-jobs.module";
@@ -54,7 +53,6 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
   imports: [
     ScheduleModule.forRoot(),
     PrismaModule,
-    DevelopmentImportModule,
     BackgroundJobsModule,
     ProjectAggregateModule,
     DomainEventsModule,

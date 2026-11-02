@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.11.0",
+  "platformVersion": "1.12.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.4.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.10.0",
+    "integration": "1.11.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -101,6 +101,44 @@
         "ChatArchiveConversation",
         "ChatArchiveLine"
       ]
+    },
+    {
+      "id": "orion-dev",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "ORION DEV",
+      "description": "Проверка и безопасный импорт каталога разработки в выбранное пространство.",
+      "requires": {
+        "platform": "^1.12.0",
+        "modules": [
+          "projects",
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [
+        "orion-dev.development_import.read",
+        "orion-dev.development_import.create",
+        "orion-dev.development_import.update",
+        "orion-dev.development_import.delete"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "orion-dev"
+        ]
+      },
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/modules-ext/orion-dev",
+      "dataModels": []
     },
     {
       "id": "pet-care",
@@ -2516,6 +2554,10 @@
     "chat-archive.conversation.create",
     "chat-archive.conversation.update",
     "chat-archive.conversation.delete",
+    "orion-dev.development_import.read",
+    "orion-dev.development_import.create",
+    "orion-dev.development_import.update",
+    "orion-dev.development_import.delete",
     "pet-care.pet.read",
     "pet-care.pet.create",
     "pet-care.pet.update",
@@ -2558,6 +2600,8 @@
     "apps/api/src/modules-ext/agent-hub/MODULE.md",
     "apps/api/src/modules-ext/chat-archive/AI_CONTEXT.md",
     "apps/api/src/modules-ext/chat-archive/MODULE.md",
+    "apps/api/src/modules-ext/orion-dev/AI_CONTEXT.md",
+    "apps/api/src/modules-ext/orion-dev/MODULE.md",
     "apps/api/src/modules-ext/pet-care/AI_CONTEXT.md",
     "apps/api/src/modules-ext/pet-care/MODULE.md",
     "apps/api/src/notes/AI_CONTEXT.md",

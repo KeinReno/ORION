@@ -1,6 +1,7 @@
 import { ConflictException } from "@nestjs/common";
 import type { ConfirmedDevelopmentImport } from "./catalog-import-transaction";
 import { assertTrustedCatalogImport, type TrustedDevelopmentCatalog } from "./catalog-trust";
+import { developmentDescription } from "./catalog-description";
 
 export interface CatalogMatchConfirmations {
   /** Explicit user-reviewed canonical IDs, keyed by catalog external ID. */
@@ -54,12 +55,14 @@ export function buildDevelopmentImport(
     projects: catalog.projects.map((project) => ({
       externalId: project.id,
       title: project.title,
+      description: developmentDescription(project),
       ...(projectSelections[project.id] ? { confirmedExistingId: projectSelections[project.id] } : {})
     })),
     tasks: catalog.workItems.map((task) => ({
       externalId: task.id,
       projectExternalId: task.project,
       title: task.title,
+      description: developmentDescription(task),
       ...(taskSelections[task.id] ? { confirmedExistingId: taskSelections[task.id] } : {})
     })),
     dependencies: catalog.workItems.map((task) => ({

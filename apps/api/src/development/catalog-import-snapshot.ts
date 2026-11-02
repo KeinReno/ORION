@@ -25,12 +25,13 @@ export async function readDevelopmentImportSnapshotTx(
     throw new ForbiddenException("Development import preview requires owner or lead");
   }
   const workspace = await tx.workspace.findUnique({
-    where: { id: workspaceId }, select: { id: true, name: true }
+    where: { id: workspaceId }, select: { id: true, name: true, disabledModules: true, restrictedModules: true }
   });
   if (!workspace) throw new NotFoundException("Workspace not found");
   await modules.assertEnabledTx(tx, userId, workspaceId, "projects");
   await modules.assertEnabledTx(tx, userId, workspaceId, "tasks");
-  const [projects, tasks, bindings] = await Promise.all([
+  await modules.assertEnabledTx(tx, userId, workspaceId, "orion-dev");
+  const [projects, tasks, bindings, dependencies] = await Promise.all([
     developmentProjectCatalog.listTx(tx, workspaceId),
     developmentTaskCatalog.listTx(tx, workspaceId),
     tx.developmentCatalogMapping.findMany({
@@ -40,13 +41,15 @@ export async function readDevelopmentImportSnapshotTx(
         externalId: true, entityId: true
       },
       orderBy: [{ kind: "asc" }, { externalId: "asc" }]
-    })
+    }),
+    developmentTaskCatalog.edgesTx(tx, workspaceId)
   ]);
   return {
     targetWorkspaceId: workspaceId,
     workspaces: [workspace],
-    projects,
-    tasks,
+    projects: projects.map(row => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
+    tasks: tasks.map(row => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
+    dependencies,
     mappings: bindings
   };
 }

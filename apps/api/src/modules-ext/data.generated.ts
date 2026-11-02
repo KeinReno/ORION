@@ -8,6 +8,7 @@ import type { SyncClassification } from "../sync/sync-classification";
 export const GENERATED_MODULE_PROBES: Record<string, string> = {
   "agent-hub": "/agent-hub/executions",
   "chat-archive": "/chat-archive/conversations",
+  "orion-dev": "/development-import/preview",
   "pet-care": "/pet-care/pets"
 };
 

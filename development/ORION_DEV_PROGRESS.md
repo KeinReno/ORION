@@ -519,3 +519,8 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Windows results: 1692 unit PASS; 671 PostgreSQL integration PASS / 1 opt-in benchmark skipped; 42 Chromium PASS; typecheck, lint (0 errors / 39 existing warnings), architecture, plugin contracts and generators PASS; API/Web production builds PASS. All 153 migrations applied in isolated databases. Consent DDL preservation/rollback and compiled production API preview/consent/restart smoke PASS on synthetic data.
 - The owner already created Orion Dev and an ORION project. No live workspace content, installed app, master, GitHub release or automation was changed. No native installer is claimed: public atomic apply, complete stale-state fingerprint, import UI and packaging the fixed catalog remain release gates.
 - Full evidence, remote-branch inventory, commands and next implementation slice: [LOCAL_STABILIZATION_2026-11-02.md](LOCAL_STABILIZATION_2026-11-02.md).
+
+
+## 2026-11-02 — reviewed apply and Workbench contribution
+
+Local continuation on `codex/orion-dev-stabilization-20261102`: added atomic consent-gated apply, explicit workspace acknowledgement, richer stale-state fingerprints, preservation of phase/acceptance descriptions and the registered ORION DEV panel. Public schemas and module registration use Platform API 1.12.0 / integration 1.11.0. Installer includes its catalog in the API package. ADR-0045 records authorization and product decisions. Initial evidence: 1692 unit PASS; 52 focused PostgreSQL integration PASS; browser review/import/reload/repeat PASS, stale-flow assertion corrected for Next route announcer. Full regression and Windows candidate are being checked; no master merge or public release.

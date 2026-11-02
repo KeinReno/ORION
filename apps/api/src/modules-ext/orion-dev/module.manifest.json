@@ -1,0 +1,18 @@
+{
+  "id": "orion-dev",
+  "version": "1.0.0",
+  "requires": { "platform": "^1.12.0", "modules": ["projects", "tasks"] },
+  "catalog": {
+    "kind": "additional", "required": false, "label": "ORION DEV",
+    "summary": "Проверка и безопасный импорт каталога разработки в выбранное пространство.",
+    "owns": "Интерфейс проверки импорта; задачи и проекты принадлежат существующим модулям.",
+    "livesWithout": "Не требует запущенных агентов или внешнего AI API.",
+    "provides": ["Предварительный план", "Подтверждение совпадений", "Атомарный импорт"],
+    "optionalDependencies": [], "disableBehavior": "Скрывает панель и закрывает API импорта; проекты, задачи и сопоставления сохраняются.",
+    "panelId": "orion-dev", "defaultEnabled": true
+  },
+  "permissions": { "primaryResource": "development_import" },
+  "api": { "module": { "file": "orion-dev.module", "export": "OrionDevModule" }, "probePath": "/development-import/preview" },
+  "web": { "panel": { "id": "orion-dev", "label": "ORION DEV", "icon": "Code2", "group": "Инструменты", "file": "OrionDevPanel", "export": "OrionDevPanel" } },
+  "data": { "models": [] }
+}

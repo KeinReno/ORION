@@ -1,3 +1,4 @@
+import { TaskOperations } from "../tasks/public/task-operations";
 import { ModulesService } from "../modules/modules.service";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -16,33 +17,33 @@ describe("development import preview controller", () => {
   it("fails closed without a configured trusted catalog root", async () => {
     delete process.env.ORION_DEV_CATALOG_ROOT;
     const withUser = vi.fn();
-    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService);
+    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService, {} as TaskOperations);
     await expect(controller.preview({ userId: "user", email: "test@example.com" }, "workspace"))
       .rejects.toThrow(/not configured/);
     expect(withUser).not.toHaveBeenCalled();
   });
   it("does not issue consent without configured catalog or reviewed request", async () => {
     const withUser = vi.fn();
-    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService);
+    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService, {} as TaskOperations);
     delete process.env.ORION_DEV_CATALOG_ROOT;
     await expect(controller.consent({ userId: "user", email: "test@example.com" },
-      "workspace", { previewDigest: "a".repeat(64), choices: {} }))
+      "workspace", { workspaceConfirmed: true, previewDigest: "a".repeat(64), choices: {} }))
       .rejects.toThrow(/not configured/);
     process.env.ORION_DEV_CATALOG_ROOT = "/not-a-real-orion-catalog-root";
     await expect(controller.consent({ userId: "user", email: "test@example.com" },
       "workspace", { previewDigest: "a".repeat(64) }))
-      .rejects.toThrow(/Invalid consent request/);
+      .rejects.toThrow(/Explicit workspace confirmation/);
     for (const previewDigest of ["short", "A".repeat(64), "g".repeat(64), "a".repeat(65)]) {
       await expect(controller.consent({ userId: "user", email: "test@example.com" },
         "workspace", { previewDigest, choices: {} }))
-        .rejects.toThrow(/Invalid consent request/);
+        .rejects.toThrow(/Explicit workspace confirmation/);
     }
     expect(withUser).not.toHaveBeenCalled();
   });
   it("executes preview planning within withUser", async () => {
     process.env.ORION_DEV_CATALOG_ROOT = "/invalid";
     const withUser = vi.fn();
-    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService);
+    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService, {} as TaskOperations);
     await expect(controller.preview({ userId: "user", email: "test@example.com" }, "w"))
       .rejects.toThrow(/unavailable/);
     expect(withUser).not.toHaveBeenCalled();
@@ -65,6 +66,7 @@ describe("development import preview controller", () => {
         workspace: { findUnique: vi.fn(async () => ({ id: "w", name: "Workspace" })) },
         project: { findMany: vi.fn(async () => []) },
         task: { findMany: vi.fn(async () => []) },
+        taskDependency: { findMany: vi.fn(async () => []) },
         developmentCatalogMapping: { findMany: vi.fn(async () => []) }
       };
       const withUser = vi.fn(async (_userId: string, callback: (tx: unknown) => Promise<unknown>) => {
@@ -77,7 +79,7 @@ describe("development import preview controller", () => {
           active = false;
         }
       });
-      const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService);
+      const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService, {} as TaskOperations);
       const result = await controller.preview({ userId: "u", email: "u@example.com" }, "w");
       expect(result.readOnly).toBe(true);
       expect(result.plan.mode).toBe("dry-run");
@@ -91,7 +93,7 @@ describe("development import preview controller", () => {
   it("fails closed for an invalid configured catalog root", async () => {
     process.env.ORION_DEV_CATALOG_ROOT = "/not-a-real-orion-catalog-root";
     const withUser = vi.fn();
-    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService);
+    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService, { assertEnabledTx: vi.fn() } as unknown as ModulesService, {} as TaskOperations);
     await expect(controller.preview({ userId: "user", email: "test@example.com" }, "workspace"))
       .rejects.toThrow(/unavailable/);
     expect(withUser).not.toHaveBeenCalled();
