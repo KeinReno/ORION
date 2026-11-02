@@ -10,7 +10,10 @@
 dock, а в отдельном окне — через штатный маршрут single-object panel.
 1695 unit PASS; TypeScript, lint (0 errors / 39 прежних warnings), architecture
 и plugin contracts PASS. Браузерный обзор и 4 сценария импорта/recovery PASS;
-полный panel parity и новый Windows-кандидат проверяются отдельно.
+42 panel parity PASS (всего 47 Chromium); 20 PostgreSQL consent/apply PASS.
+Windows-кандидат `dd6307e` собран и установлен: обзор/этапы/открытие задачи
+проверены в рабочем профиле, исходный ORION и 16 задач сохранены. Packaged
+runtime import/restart/reimport PASS. Артефакт и SHA-256 — в UI-отчёте.
 [Решение и сценарии](../development/ORION_DEV_UI_2026-11-02.md),
 [ADR-0046](adr/ADR-0046-development-workspace-overview.md).
 
