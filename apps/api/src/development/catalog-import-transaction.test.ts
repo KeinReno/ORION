@@ -78,4 +78,25 @@ describe("confirmed development import declaration validation", () => {
     expect(tx.developmentCatalogMapping.create).not.toHaveBeenCalled();
   });
 
+  it("rejects a self-referential dependency before any import writes", async () => {
+    const tx = {
+      developmentCatalogMapping: { findMany: vi.fn(), create: vi.fn() },
+      project: { create: vi.fn() },
+      task: { create: vi.fn() }
+    };
+    const input = {
+      workspaceId: "w", catalogId: "orion-dev", workspaceConfirmed: true as const,
+      projects: [{ externalId: "core", title: "Core" }],
+      tasks: [{ externalId: "DEV-001", projectExternalId: "core", title: "Task" }],
+      dependencies: [{ externalId: "DEV-001", dependsOn: ["DEV-001"] }]
+    };
+    await expect(applyConfirmedDevelopmentImportTx(
+      tx as unknown as Prisma.TransactionClient, "user", input
+    )).rejects.toThrow(/Incomplete development import declarations/);
+    expect(tx.project.create).not.toHaveBeenCalled();
+    expect(tx.task.create).not.toHaveBeenCalled();
+    expect(tx.developmentCatalogMapping.create).not.toHaveBeenCalled();
+  });
+
+
 });
