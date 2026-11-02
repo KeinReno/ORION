@@ -68,9 +68,8 @@ export class DevelopmentImportController {
     const repoRoot = process.env.ORION_DEV_CATALOG_ROOT;
     if (!repoRoot) throw new ConflictException("ORION_DEV_CATALOG_ROOT is not configured");
     const loaded = loadDevelopmentCatalog(repoRoot);
-    const snapshot = await this.prisma.withUser(user.userId, (tx) =>
-      readDevelopmentImportSnapshotTx(tx, user.userId, workspaceId, loaded.catalog.catalogId)
-    );
+    return this.prisma.withUser(user.userId, async (tx) => {
+      const snapshot = await readDevelopmentImportSnapshotTx(tx, user.userId, workspaceId, loaded.catalog.catalogId);
     const plan = planDevelopmentImport(loaded.catalog, snapshot);
     const digest = digestDevelopmentPreview({
       userId: user.userId,
@@ -78,7 +77,7 @@ export class DevelopmentImportController {
       catalogId: loaded.catalog.catalogId,
       catalogSha256: loaded.sha256
     }, snapshot);
-    return {
+      return {
       catalogId: loaded.catalog.catalogId,
       catalogSha256: loaded.sha256,
       previewDigest: digest,
@@ -86,6 +85,7 @@ export class DevelopmentImportController {
       snapshot,
       plan,
       readOnly: true
-    };
+      };
+    });
   }
 }
