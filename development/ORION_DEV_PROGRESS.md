@@ -508,3 +508,14 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `672982c` (guard), `7a395e0` (test). **Vitest, TypeScript and PostgreSQL not executed** in this connector-only run; behavior is not runtime verified.
 - Next: run targeted Vitest/typecheck and PostgreSQL migration in a local checkout; implement atomic fresh-snapshot revalidation and single-use consent consumption before exposing any write endpoint.
 - No master changes, PR merge or beta publication.
+
+
+### 2026-11-02 — local stabilization and PostgreSQL acceptance
+
+- Source: `caa2db0a894c2a7e31947389e4d67f69ca29f5c0` on `codex/orion-dev-stabilization-20261102`, based on PR #95 `2710e64`. PR #94 is excluded from this branch; the previous local branches are preserved.
+- Fixed TypeScript failures, generated Prisma-region placement and development model ownership. Consent is explicitly excluded from backup/sync. CLI/API use one pure planner with differential regression coverage and a production runtime copy.
+- Development reads use owner public projections; Task creation/dependencies use canonical TaskOperations/events. Catalog writes serialize per workspace; graph changes use locks and revisions. Preview/consent respect disabled modules.
+- Restored ADR-0007's live token scope ceiling, including serialized concurrent policy edits. Existing integration denial checks remain intact.
+- Windows results: 1692 unit PASS; 671 PostgreSQL integration PASS / 1 opt-in benchmark skipped; 42 Chromium PASS; typecheck, lint (0 errors / 39 existing warnings), architecture, plugin contracts and generators PASS; API/Web production builds PASS. All 153 migrations applied in isolated databases. Consent DDL preservation/rollback and compiled production API preview/consent/restart smoke PASS on synthetic data.
+- The owner already created Orion Dev and an ORION project. No live workspace content, installed app, master, GitHub release or automation was changed. No native installer is claimed: public atomic apply, complete stale-state fingerprint, import UI and packaging the fixed catalog remain release gates.
+- Full evidence, remote-branch inventory, commands and next implementation slice: [LOCAL_STABILIZATION_2026-11-02.md](LOCAL_STABILIZATION_2026-11-02.md).

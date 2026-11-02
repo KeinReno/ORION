@@ -94,7 +94,39 @@ Consent покрывает owner/lead isolation, member/outsider/missing-session
 hash-only storage, expiry/scope, concurrent consume/replay, rollback и HTTP
 auth/stale-preview/role revocation. Mapping/import tests используют настоящий PG.
 
-Окончательные результаты записываются ниже после завершения прогонов.
+Проверенные исходники: `caa2db0a894c2a7e31947389e4d67f69ca29f5c0`, Windows x64,
+Node 22.14.0. Следующий документационный commit добавляет результаты и пустую
+workspace-запись Habitat в lockfile; версии зависимостей не изменяются.
+
+| Проверка | Итог |
+|---|---|
+| `install --frozen-lockfile --offline` | PASS; добавлена недостающая пустая importer-запись `packages/habitat: {}`; повторный install больше не меняет lockfile |
+| Prisma Client + 153 миграции | PASS на пустых изолированных БД |
+| Populated consent DDL rehearsal | PASS, существующий Project неизменен; rehearsal полностью откатан |
+| Typecheck всего текущего monorepo | PASS |
+| Lint | PASS: 0 errors, 39 существующих warnings |
+| Полный unit, forks / 1 worker | **1692 PASS**, 0 failed |
+| Полный PostgreSQL integration, forks / 1 worker | **671 PASS**, 0 failed, 1 opt-in measured-Hub benchmark skipped |
+| Адресные import/consent/snapshot integration | 51 PASS; входят в полный набор |
+| Architecture / registry / module-docs / platform-map | PASS |
+| Plugin contracts | 11 PASS |
+| Production API + Web build | PASS; Web — 56 статических страниц |
+| Chromium panel baseline | **42 PASS**, default-full и plugins-off |
+| Compiled production API + restart | PASS: health, JWT preview 13 проектов/16 задач, consent, restart; синтетический существующий проект ORION остался единственным и неизменным |
+| Установка native Windows / импорт через UI | NOT RUN: end-to-end import UI/apply ещё не реализованы |
+
+Полный JSON-evidence локально: `tmp/orion-dev-review/unit-final.json`,
+`integration-final.json`; browser/build/typecheck/lint и production smoke logs
+лежат рядом. Это gitignored test evidence, не содержимое рабочего пространства.
+Приложение production smoke запускалось отдельно на :4102 и было остановлено;
+его синтетические пользователь и workspace удалены из тестовой БД.
+
+Первые промежуточные прогоны не были зелёными: выявлены дефекты типов/ownership,
+stale snapshots, нарушение scope ceiling и сбои от изменения source во время
+прогона. Изменение TZ не проверяется корректно в threads pool на этой Windows;
+thread runs не используются как полный acceptance. Финальные полные fork-прогоны
+после исправлений завершились с exit code 0; проверки не выключались и не
+ослаблялись ради результата.
 
 Миграция consent дополнительно проиграна в транзакционном DDL-rehearsal на
 тестовой БД с существующим Project: содержимое проекта осталось побайтно прежним,

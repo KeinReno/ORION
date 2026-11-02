@@ -8,6 +8,10 @@ consent из backup/sync, согласованность CLI/API planner, меж
 канонические TaskOperations/events. Импортные helpers сериализуют запись и
 блокируют граф зависимостей; preview учитывает выключенные Projects/Tasks.
 153 миграции, включая consent/RLS, применены в отдельном PostgreSQL-кластере.
+На `caa2db0`: 1692 unit, 671 integration / 1 opt-in skip, 42 Chromium,
+typecheck/lint (0 errors)/architecture/contracts/generators и API/Web build PASS.
+Production API preview/consent пережили рестарт на синтетическом профиле.
+Восстановлено сужение live agent scopes по ADR-0007, включая конкурентные edits.
 Это не обновление установленного приложения и не наполнение рабочего Orion Dev:
 public apply, UI и Windows end-to-end ещё не готовы.
 [Точный объём, проверки и блокеры](../development/LOCAL_STABILIZATION_2026-11-02.md).
