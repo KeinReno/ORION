@@ -16,7 +16,10 @@ export const developmentPreviewSchema = z.object({
   catalogId: z.literal("orion-dev"), catalogSha256: digest, previewDigest: digest,
   readOnly: z.literal(true),
   snapshot: z.object({ targetWorkspaceId: z.string(), workspaces: z.array(z.object({ id: z.string(), name: z.string() })) }),
-  catalog: z.object({ workItems: z.array(z.object({ id: z.string(), phase: z.string().optional(), acceptance: z.array(z.string()).optional() })) }),
+  catalog: z.object({
+    projects: z.array(z.object({ id: z.string(), title: z.string(), phase: z.string().optional() })).optional(),
+    workItems: z.array(z.object({ id: z.string(), phase: z.string().optional(), acceptance: z.array(z.string()).optional() }))
+  }),
   plan: z.object({ workspaceId: z.string(), actions: z.array(developmentActionSchema) })
 });
 export const developmentConsentSchema = z.object({ token: digest, expiresAt: z.string().datetime() });

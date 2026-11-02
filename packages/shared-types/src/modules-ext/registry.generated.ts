@@ -18,7 +18,7 @@ export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = {
     "version": "1.0.0"
   },
   "orion-dev": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "requires": {
       "platform": "^1.12.0",
       "modules": [
@@ -97,10 +97,12 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
     "kind": "additional",
     "required": false,
     "label": "ORION DEV",
-    "summary": "Проверка и безопасный импорт каталога разработки в выбранное пространство.",
-    "owns": "Интерфейс проверки импорта; задачи и проекты принадлежат существующим модулям.",
+    "summary": "Обзор направлений и задач разработки, этапы и безопасный импорт каталога.",
+    "owns": "Обзор разработки и интерфейс проверки импорта; задачи и проекты принадлежат существующим модулям.",
     "livesWithout": "Не требует запущенных агентов или внешнего AI API.",
     "provides": [
+      "Обзор направлений и задач",
+      "Этапы разработки",
       "Предварительный план",
       "Подтверждение совпадений",
       "Атомарный импорт"

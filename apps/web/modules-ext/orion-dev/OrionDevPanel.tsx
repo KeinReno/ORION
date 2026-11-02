@@ -1,169 +1,117 @@
 "use client";
 
-import { ApiError, createModuleClient, workspaceModuleBase } from "@orion/core";
-import { useCore } from "@orion/core-react";
-import { developmentPreviewSchema, developmentConsentSchema, developmentResultSchema,
-  type DevelopmentPreviewResponse, type DevelopmentImportResult } from "@orion/shared-types";
-import { Button, EmptyState, PanelBody, PanelHeader, PanelShell } from "@orion/ui";
-import { Code2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
+import { useCore, useProjects, useTasks } from "@orion/core-react";
+import { developmentPreviewSchema } from "@orion/shared-types";
+import { Badge, Button, EmptyState, PanelBody, PanelHeader, PanelShell } from "@orion/ui";
+import { ArrowRight, Code2, Folder, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
-import { openProject, openTask } from "../../lib/panel-bus";
+import { useDevelopmentNavigation } from "./use-development-navigation";
+import { DevelopmentReview, loadError, withDeadline } from "./DevelopmentImportReview";
+import { buildOverview, phases, projectDescription, statusLabels } from "./presentation";
+import styles from "./orion-dev.module.css";
 
 export function OrionDevPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
   return <PanelShell>
-    <PanelHeader icon={Code2} title="ORION DEV" subtitle="Каталог разработки в проектах и задачах пространства" />
+    <PanelHeader icon={Code2} title="ORION DEV" subtitle={workspace ? `Разработка Orion · ${workspace.name}` : "Управление разработкой Orion"} />
     <PanelBody measure="wide">
       {!workspace ? <EmptyState icon={Code2} title="Выберите пространство" description="Откройте пространство, в котором хотите вести разработку." /> :
-        workspace.role !== "owner" && workspace.role !== "lead" ?
-          <p role="status">Импорт доступен владельцу и руководителю пространства.</p> :
-          <DevelopmentReview key={workspace.id} workspaceId={workspace.id} name={workspace.name} />}
+        workspace.role !== "owner" && workspace.role !== "lead" ? <p role="status">Обзор каталога доступен владельцу и руководителю пространства.</p> :
+          <DevelopmentWorkspace key={workspace.id} workspaceId={workspace.id} name={workspace.name} />}
     </PanelBody>
   </PanelShell>;
 }
 
-function DevelopmentReview({ workspaceId, name }: { workspaceId: string; name: string }): React.ReactElement {
+function DevelopmentWorkspace({ workspaceId, name }: { workspaceId: string; name: string }): React.ReactElement {
   const { api } = useCore();
-  const queryClient = useQueryClient();
-  const [preview, setPreview] = useState<DevelopmentPreviewResponse | null>(null);
-  const [choices, setChoices] = useState<Record<string, string>>({});
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"preview" | "import" | null>("preview");
-  const [error, setError] = useState("");
-  const [needsRefresh, setNeedsRefresh] = useState(false);
-  const [result, setResult] = useState<DevelopmentImportResult | null>(null);
-  const mounted = useRef(true);
-  const pending = useRef(false);
-  const client = () => createModuleClient(api, workspaceModuleBase(workspaceId, "development-import"));
+  const { openProject, openTask } = useDevelopmentNavigation(workspaceId);
+  const [section, setSection] = useState<"overview" | "import">("overview");
+  const [visitedImport, setVisitedImport] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [phase, setPhase] = useState("foundation");
+  const [filter, setFilter] = useState("all");
+  const preview = useQuery({
+    queryKey: ["orion-dev-overview", workspaceId], retry: false,
+    queryFn: () => withDeadline(createModuleClient(api, workspaceModuleBase(workspaceId, "development-import")).get("/preview", developmentPreviewSchema))
+  });
+  const projects = useProjects(workspaceId);
+  const archive = useProjects(workspaceId, true);
+  const tasks = useTasks(workspaceId);
+  const openImport = () => { setVisitedImport(true); setSection("import"); };
+  const refresh = () => { void preview.refetch(); void projects.refetch(); void archive.refetch(); void tasks.refetch(); };
+  const loading = preview.isPending || projects.isPending || archive.isPending || tasks.isPending;
+  const failed = preview.isError || projects.isError || archive.isError || tasks.isError;
+  const overview = preview.data && !loading && !failed ? buildOverview(preview.data, [...(projects.data ?? []), ...(archive.data ?? [])], tasks.data ?? []) : null;
+  const liveTasks = overview?.tasks.filter(row => row.entity) ?? [];
+  const done = liveTasks.filter(row => row.entity?.status === "done").length;
+  const working = liveTasks.filter(row => row.entity?.status === "in_progress").length;
+  const blocked = liveTasks.filter(row => row.entity?.blocked && row.entity.status !== "done" && row.entity.status !== "canceled").length;
+  const selectedPhase = phases.find(item => item.id === phase);
+  const phaseTasks = overview?.tasks.filter(row => phase === "all" || row.phase === phase) ?? [];
+  const visibleTasks = phaseTasks.filter(row => filter === "all" || (filter === "blocked" ? row.entity?.blocked && row.entity.status !== "done" && row.entity.status !== "canceled" : row.entity?.status === filter));
+  const phaseProjects = overview?.projects.filter(row => phase === "all" || row.phase === phase) ?? [];
+  // Include projects hosting tasks from the selected phase (e.g. modules in features).
+  const projectIds = new Set(phaseTasks.map(row => row.projectExternalId));
+  const visibleProjects = overview?.projects.filter(row => phaseProjects.includes(row) || projectIds.has(row.externalId)) ?? [];
 
-  useEffect(() => {
-    mounted.current = true;
-    let disposed = false;
-    const initialClient = createModuleClient(api, workspaceModuleBase(workspaceId, "development-import"));
-    withDeadline(initialClient.get("/preview", developmentPreviewSchema)).then(value => {
-      if (!disposed) setPreview(value);
-    }).catch(reason => {
-      if (!disposed) setError(loadError(reason));
-    }).finally(() => { if (!disposed) setBusy(null); });
-    return () => { disposed = true; mounted.current = false; };
-  }, [api, workspaceId]);
-
-  async function refresh() {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy("preview"); setError("");
-    try {
-      const value = await withDeadline(client().get("/preview", developmentPreviewSchema));
-      if (!mounted.current) return;
-      // Decisions belong to the exact reviewed snapshot, never a refreshed one.
-      setPreview(value); setChoices({}); setAcknowledged(false); setNeedsRefresh(false); setResult(null);
-    } catch (reason) { if (mounted.current) setError(loadError(reason)); }
-    finally { pending.current = false; if (mounted.current) setBusy(null); }
-  }
-
-  async function apply() {
-    if (!preview || pending.current || busy || needsRefresh || !acknowledged) return;
-    pending.current = true;
-    setBusy("import"); setError("");
-    let applying = false;
-    try {
-      const body = { workspaceConfirmed: true, previewDigest: preview.previewDigest, choices };
-      const consent = await withDeadline(client().post("/consent", body, developmentConsentSchema));
-      if (!mounted.current) return;
-      applying = true;
-      const value = await withDeadline(client().post("/apply", { ...body, token: consent.token }, developmentResultSchema));
-      if (!mounted.current) return;
-      setResult(value); setNeedsRefresh(true);
-      await Promise.all(["projects", "tasks"].map(key => queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
-    } catch (reason) {
-      if (!mounted.current) return;
-      const stale = reason instanceof ApiError && reason.status === 409;
-      setNeedsRefresh(applying || stale);
-      setError(stale ? "План изменился, подтверждение устарело или обнаружен конфликт зависимостей. Обновите план и проверьте его снова." :
-        reason instanceof ApiError && reason.status === 403 ? loadError(reason) :
-        applying ? "Ответ об импорте не получен. Обновите план, чтобы проверить сохранённые данные перед повторной попыткой." : loadError(reason));
-    } finally { pending.current = false; if (mounted.current) setBusy(null); }
-  }
-
-  const actions = preview?.plan.actions ?? [];
-  const reviews = actions.filter(row => row.action === "review_possible_match");
-  const creates = actions.filter(row => row.action === "propose_create");
-  const reviewed = reviews.every(row => choices[`${row.kind}:${row.externalId}`] === row.candidateId);
-  return <div className="min-w-0 space-y-5 text-base sm:text-sm">
-    <div>
-      <h2 className="font-semibold break-words">Пространство: {name}</h2>
-      <p className="mt-1 break-all text-xs text-muted-foreground">{workspaceId}</p>
-      <p className="mt-2 text-muted-foreground">Каталог добавляет проекты, задачи и зависимости. Существующие совпадения связываются только после вашего выбора. Описания существующих объектов сохраняются.</p>
+  return <div className={styles.workspace}>
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+      <nav aria-label="Разделы ORION DEV" className="flex flex-wrap gap-2">
+        <Button variant={section === "overview" ? "primary" : "ghost"} size="sm" aria-pressed={section === "overview"} disabled={importing} onClick={() => { setSection("overview"); refresh(); }}>Обзор разработки</Button>
+        <Button variant={section === "import" ? "primary" : "ghost"} size="sm" aria-pressed={section === "import"} disabled={importing} onClick={openImport}>Импорт каталога</Button>
+      </nav>
+      {section === "overview" && <Button variant="ghost" size="sm" disabled={preview.isFetching || projects.isFetching || archive.isFetching || tasks.isFetching} onClick={refresh}><RefreshCw size={14} aria-hidden />Обновить обзор</Button>}
     </div>
-    {error && <p role="alert" className="text-destructive">{error}</p>}
-    {busy && <p role="status">{busy === "preview" ? "Проверяем каталог и данные пространства…" : "Проверяем подтверждение и сохраняем каталог…"}</p>}
-    {result ? <section aria-label="Результат импорта" className="space-y-3">
-      <h3 className="font-semibold" tabIndex={-1}>Каталог сохранён в пространстве «{name}»</h3>
-      <p role="status">Создано проектов: {result.projects.filter(row => row.outcome === "created").length}; задач: {result.tasks.filter(row => row.outcome === "created").length}; зависимостей: {result.dependencies.created}.</p>
-      <ul className="space-y-1">{result.projects.map(row => <li key={row.externalId}>
-        <Button type="button" variant="ghost" size="sm" onClick={() => openProject(row.entityId)}>
-          Открыть {actions.find(action => action.kind === "project" && action.externalId === row.externalId)?.title ?? row.externalId}
-        </Button>
-      </li>)}</ul>
-      <details><summary className="cursor-pointer py-2">Импортированные задачи ({result.tasks.length})</summary>
-        <ul>{result.tasks.map(row => <li key={row.externalId}><Button type="button" variant="ghost" size="sm" onClick={() => openTask(row.entityId)}>Открыть {row.externalId}</Button></li>)}</ul>
-      </details>
-    </section> : preview ? <>
-      <p>Будет создано: {creates.filter(row => row.kind === "project").length} проектов, {creates.filter(row => row.kind === "task").length} задач. Требуют проверки: {reviews.length}. Уже связаны: {actions.filter(row => row.action === "already_mapped").length}.</p>
-      <section aria-label="План импорта" className="divide-y divide-border">
-        {actions.map(row => {
-          const key = `${row.kind}:${row.externalId}`;
-          const item = preview.catalog.workItems.find(item => item.id === row.externalId);
-          return <div key={key} className="min-w-0 py-3">
-            <div className="flex flex-wrap justify-between gap-2">
-              <p className="min-w-0 break-words font-medium">{row.title}</p>
-              <span className="text-muted-foreground">{row.action === "propose_create" ? "Создать" : row.action === "already_mapped" ? "Уже связано" : "Проверьте совпадение"}</span>
+    {visitedImport && <div hidden={section !== "import"}><DevelopmentReview workspaceId={workspaceId} name={name} onImportingChange={setImporting} /></div>}
+    <div hidden={section !== "overview"}>
+      {loading && <p role="status">Загружаем направления и задачи…</p>}
+      {failed && <div role="alert" className="rounded-xl border border-destructive/30 p-4"><p>{preview.isError ? loadError(preview.error) : "Не удалось загрузить проекты или задачи. Обновите обзор, чтобы увидеть актуальное состояние."}</p></div>}
+      {overview && (liveTasks.length === 0 && overview.projects.every(row => !row.entity) && !overview.missing ?
+        <EmptyState icon={Code2} title="Место для разработки Orion" description="Соберите направления, задачи и зависимости в этом пространстве. Перед добавлением вы проверите план и существующие совпадения." action={<Button onClick={openImport}>Подготовить пространство</Button>} /> : <>
+          <section aria-label="Состояние разработки" className="mb-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Рабочее пространство разработки</p><h2 className="text-2xl font-semibold tracking-tight">Разработка Orion</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Выберите направление и откройте задачу. Статусы берутся из задач пространства; выполнение и приёмка остаются отдельными шагами.</p></div>
+              <span className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">{overview.projects.filter(row => row.entity).length} направлений · {liveTasks.length} задач</span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{row.externalId}{item?.phase ? ` · ${item.phase}` : ""}</p>
-            {row.projectExternalId && <p className="mt-1 text-muted-foreground">Проект: {actions.find(project => project.kind === "project" && project.externalId === row.projectExternalId)?.title}</p>}
-            {item?.acceptance?.length ? <details className="mt-1"><summary className="cursor-pointer py-2">Критерии приёмки</summary><ul className="list-disc space-y-1 pl-5">{item.acceptance.map(value => <li key={value}>{value}</li>)}</ul></details> : null}
-            {row.dependsOn?.length ? <p className="mt-1 break-words text-muted-foreground">Зависит от: {row.dependsOn.join(", ")}</p> : null}
-            {row.action === "review_possible_match" && <label className="mt-2 flex min-h-12 cursor-pointer items-center gap-3 break-all">
-              <input type="checkbox" name={key} checked={choices[key] === row.candidateId} disabled={Boolean(busy) || needsRefresh}
-                onChange={event => setChoices(previous => { const next = { ...previous }; if (event.target.checked) next[key] = row.candidateId!; else delete next[key]; return next; })} />
-              Связать с существующим {row.kind === "project" ? "проектом" : "задачей"}: {row.candidateId}
-            </label>}
-            {row.action === "review_possible_match" && row.candidateId && <Button type="button" variant="ghost" size="sm" onClick={() => row.kind === "project" ? openProject(row.candidateId!) : openTask(row.candidateId!)}>Открыть совпадение: {row.title}</Button>}
-          </div>;
-        })}
-      </section>
-      <label className="flex min-h-12 cursor-pointer items-center gap-3">
-        <input type="checkbox" name="workspace-confirmed" checked={acknowledged} disabled={Boolean(busy) || needsRefresh} onChange={event => setAcknowledged(event.target.checked)} />
-        Импортировать этот план в пространство «{name}»
-      </label>
-      {(!acknowledged || !reviewed) && <p className="text-muted-foreground">Для импорта проверьте все совпадения и подтвердите пространство.</p>}
-    </> : null}
-    <div className="flex flex-wrap gap-3">
-      {preview && !result && <Button type="button" disabled={Boolean(busy) || !reviewed || !acknowledged || needsRefresh} onClick={() => void apply()}>Импортировать каталог</Button>}
-      <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => void refresh()}>Обновить план</Button>
+            <dl className={styles.stats}>
+              {[[working, "В работе"], [liveTasks.filter(row => row.entity?.status === "todo" || row.entity?.status === "backlog").length, "В планах"], [blocked, "Ожидают зависимостей"], [done, "Завершены"]].map(([count, label]) => <div key={label} className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-semibold tabular-nums">{count}</dd></div>)}
+            </dl>
+          </section>
+          {(overview.unmapped > 0 || overview.missing > 0) && <p role="status" className="mb-5 rounded-lg border border-border bg-muted/30 p-3 text-sm">{overview.unmapped > 0 && `В каталоге есть несвязанные объекты: ${overview.unmapped}. Проверьте раздел «Импорт каталога». `}{overview.missing > 0 && `Связанные объекты недоступны: ${overview.missing}. Обновите обзор и проверьте доступ.`}</p>}
+          <section aria-label="Этапы разработки">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Этапы разработки</h3><span className="text-xs text-muted-foreground">Сначала — надёжность платформы</span></div>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Выбрать этап">
+              {[...phases, { id: "all", title: "Все этапы" }].map(item => <Button key={item.id} size="sm" variant={phase === item.id ? "primary" : "outline"} aria-pressed={phase === item.id} onClick={() => { setPhase(item.id); setFilter("all"); }}>{item.title}</Button>)}
+            </div>
+            <p className="mb-6 mt-3 text-sm text-muted-foreground">{selectedPhase?.description ?? "Все направления и задачи каталога разработки."}</p>
+          </section>
+          <div className={styles.columns}>
+            <section aria-label="Направления" className="min-w-0">
+              <h3 className="mb-3 font-semibold">Направления <span className="ml-1 text-sm font-normal text-muted-foreground">{visibleProjects.length}</span></h3>
+              <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">{visibleProjects.map(row => <button type="button" key={row.externalId} disabled={!row.entity} onClick={() => row.entity && openProject(row.entity.id)} className="group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/40 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Folder size={17} aria-hidden /></span>
+                <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium">{row.label}</span><span className="mt-1 block break-words text-xs leading-relaxed text-muted-foreground">{row.entity?.archivedAt ? "В архиве" : !row.entity ? row.action === "already_mapped" ? "Проект недоступен" : "Не добавлено в пространство" : projectDescription(row.externalId)}</span></span><ArrowRight size={15} className="shrink-0 text-muted-foreground" aria-hidden />
+              </button>)}</div>
+              {visibleProjects.length === 0 && <p className="text-sm text-muted-foreground">В этом этапе нет направлений.</p>}
+            </section>
+            <section aria-label="Задачи этапа" className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Задачи этапа <span className="ml-1 text-sm font-normal text-muted-foreground">{phaseTasks.length}</span></h3>
+                <label className="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs text-muted-foreground">Показать<select name="development-task-status" className="min-h-9 max-w-full rounded-md border border-border bg-panel px-2 text-sm text-foreground focus-visible:outline-accent" value={filter} onChange={event => setFilter(event.target.value)}><option value="all">Все задачи</option><option value="todo">К выполнению</option><option value="in_progress">В работе</option><option value="blocked">Ожидают зависимостей</option><option value="done">Завершённые</option><option value="canceled">Отменённые</option></select></label>
+              </div>
+              <div className="divide-y divide-border border-y border-border">{visibleTasks.map(row => <button type="button" key={row.externalId} disabled={!row.entity} onClick={() => row.entity && openTask(row.entity.id)} className="block w-full py-4 text-left transition-colors hover:bg-muted/30 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2">
+                <span className="mb-2 flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{row.externalId}</span><Badge tone={row.entity?.status === "in_progress" ? "accent" : row.entity?.status === "done" ? "success" : "neutral"}>{row.entity ? statusLabels[row.entity.status] : row.action === "already_mapped" ? "Недоступна" : "Не добавлена"}</Badge>{row.entity?.blocked && row.entity.status !== "done" && row.entity.status !== "canceled" && <Badge tone="warning">Ожидает зависимостей</Badge>}</span>
+                <span className="flex items-center justify-between gap-3"><span className="min-w-0 break-words text-sm font-medium leading-relaxed">{row.label}</span><ArrowRight size={15} className="shrink-0 text-muted-foreground" aria-hidden /></span>
+                <span className="mt-2 block text-xs text-muted-foreground">{overview.projects.find(project => project.externalId === row.projectExternalId)?.label ?? "Разработка"}{row.entity?.dependencyIds.length ? ` · Зависимостей: ${row.entity.dependencyIds.length}` : ""}</span>
+              </button>)}</div>
+              {visibleTasks.length === 0 && <p role="status" className="py-8 text-sm text-muted-foreground">Нет задач с выбранным статусом. Выберите другой фильтр.</p>}
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Откройте задачу, чтобы прочитать критерии, изменить статус и добавить результаты проверки.</p>
+            </section>
+          </div>
+        </>)}
     </div>
   </div>;
-}
-
-function loadError(reason: unknown): string {
-  if (reason instanceof ApiError && reason.status === 403) return "Доступ изменился. Импорт доступен владельцу и руководителю пространства.";
-  if (reason instanceof ApiError && reason.status === 409) {
-    if (/ambiguous/i.test(reason.message)) return "Найдено несколько проектов или задач с одинаковыми названиями. Уточните названия в пространстве и обновите план; автоматический выбор заблокирован.";
-    if (/mapping|binding/i.test(reason.message)) return "Сопоставления каталога конфликтуют с данными пространства. Требуется проверить сопоставления перед импортом.";
-    return "План недоступен: проверьте, что модули ORION DEV, Проекты и Задачи включены, а каталог установлен на сервере. Затем обновите план.";
-  }
-  return "Не удалось получить план или подтверждение. Проверьте соединение и повторите попытку; ваши решения сохранены.";
-}
-
-/** A stalled transport must leave a recovery path. A timed-out write may still
- * commit, so its only recovery is a fresh preview, never an automatic retry. */
-async function withDeadline<T>(request: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([request, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Development request timed out")), 30_000);
-    })]);
-  } finally { clearTimeout(timer); }
 }
