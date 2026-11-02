@@ -2,11 +2,14 @@ import { ConflictException } from "@nestjs/common";
 import type { ConfirmedDevelopmentImport } from "./catalog-import-transaction";
 
 export interface TrustedDevelopmentCatalog {
+  schemaVersion?: 1;
+  phases?: readonly { id: string; dependsOn?: readonly string[] }[];
   catalogId: string;
-  projects: readonly { id: string; title: string }[];
+  projects: readonly { id: string; title: string; phase?: string }[];
   workItems: readonly {
     id: string;
     project: string;
+    phase?: string;
     title: string;
     dependsOn?: readonly string[];
   }[];
@@ -45,7 +48,7 @@ export function assertTrustedCatalogImport(
       throw new ConflictException("Invalid trusted catalog tasks");
     }
     const dependencies = task.dependsOn ?? [];
-    if (dependencies.some((id) => typeof id !== "string" || !id) ||
+    if (dependencies.some((id: unknown) => typeof id !== "string" || !id) ||
         new Set(dependencies).size !== dependencies.length) {
       throw new ConflictException("Invalid trusted catalog dependencies");
     }
@@ -79,7 +82,7 @@ export function assertTrustedCatalogImport(
         !Array.isArray(declaration.dependsOn) ||
         declaration.dependsOn.length !== expected.dependencies.length ||
         new Set(declaration.dependsOn).size !== expected.dependencies.length ||
-        declaration.dependsOn.some((id) => !expected.dependencies.includes(id))) {
+        declaration.dependsOn.some((id: string) => !expected.dependencies.includes(id))) {
       throw new ConflictException("Dependency declaration differs from trusted catalog");
     }
     seenDependencies.add(declaration.externalId);

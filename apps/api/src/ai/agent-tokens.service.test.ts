@@ -49,16 +49,23 @@ describe("describePolicyChange", () => {
 describe("scopesAfterPolicyEdit", () => {
   const previous = ["tasks:read", "notes:read", "links:write", "habits.habit.read"];
 
-  it("adds a write scope when the matrix newly allows it", () => {
+  it("does not add a write scope when the matrix exceeds issued permissions", () => {
     const next = scopesAfterPolicyEdit(previous, {
       permissions: { tasks: ["read", "create"], notes: ["read"], events: [], projects: [], finance: [] },
       extraScopes: ["links:write"],
       modulePermissions: ["habits.habit.read"]
     });
-    expect(next).toContain("tasks:write");
+    expect(next).not.toContain("tasks:write");
     expect(next).toContain("links:write");
     expect(next).toContain("habits.habit.read");
     expect(next).not.toContain("notes:write");
+  });
+
+  it("does not add extra or module scopes to a live token", () => {
+    const next = scopesAfterPolicyEdit(["tasks:read"], {
+      extraScopes: ["links:write"], modulePermissions: ["habits.habit.read"]
+    });
+    expect(next).toEqual(["tasks:read"]);
   });
 
   it("drops a scope the matrix no longer grants and keeps an omitted module list", () => {

@@ -161,11 +161,16 @@ export class AgentTokensService {
     return { ...toDto(row), secret };
   }
 
-  /** Mode, matrix and restrictions of a live token. A saved matrix rewrites the scopes, so rights can be widened too. */
+  /** Live policy edits may narrow issued scopes, never expand them (ADR-0007). */
   async update(userId: string, workspaceId: string, tokenId: string, input: UpdateAgentTokenInput): Promise<AgentToken> {
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       await this.assertProjectsTx(tx, workspaceId, [...(input.allowedProjectIds ?? []), ...(input.autoCommitProjectIds ?? [])]);
+      // Serialize policy edits so a concurrent save cannot restore a scope
+      // removed by another save using an older ceiling.
+      await tx.$queryRaw`SELECT id FROM agent_tokens WHERE id = ${tokenId}
+        AND "workspaceId" = ${workspaceId} AND "createdById" = ${userId}
+        AND "revokedAt" IS NULL FOR UPDATE`;
       const before = await tx.agentToken.findFirst({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null } });
       if (!before) throw new NotFoundException("Токен не найден");
       if (isServerMode()) {
@@ -491,8 +496,9 @@ function forbiddenOf(values: string[]): AgentForbidden[] {
 }
 
 /**
- * Scopes after a settings save. A provided matrix replaces the matrix scopes (wider or narrower); omitted fields
- * stay as they were. Module permissions live in the same column and are replaced only when the patch names them.
+ * A live token's existing scopes remain its ceiling (ADR-0007). Omitted fields
+ * are preserved; a broader matrix or module list cannot grant new scopes.
+ * Issue a new token when a larger scope is required.
  */
 export function scopesAfterPolicyEdit(
   previousScopes: readonly string[],
@@ -504,7 +510,8 @@ export function scopesAfterPolicyEdit(
   const matrix = patch.permissions !== undefined
     ? scopesFromPermissions(patch.permissions ?? {})
     : previousScopes.filter((scope) => agentScopeSchema.safeParse(scope).success && !isExtra(scope));
-  return [...new Set([...matrix, ...extras, ...modules])];
+  const ceiling = new Set(previousScopes);
+  return [...new Set([...matrix, ...extras, ...modules])].filter(scope => ceiling.has(scope));
 }
 
 type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds">;

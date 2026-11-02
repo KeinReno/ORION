@@ -31,9 +31,10 @@ describe("reviewed development consent scope", () => {
   });
 
   it("rejects missing, extra or stale candidate approvals", () => {
-    for (const choices of [{}, { "project:core": "wrong" }, {
+    const invalidChoices: Record<string, string>[] = [{}, { "project:core": "wrong" }, {
       "project:core": "p", "task:task": "t"
-    }]) {
+    }];
+    for (const choices of invalidChoices) {
       expect(() => buildReviewedConsentScope({ ...input, choices })).toThrow();
     }
   });

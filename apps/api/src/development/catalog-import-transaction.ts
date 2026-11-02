@@ -1,3 +1,4 @@
+import type { TaskOperations } from "../tasks/public/task-operations";
 import { ConflictException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { importConfirmedCatalogProjectsTx, type ConfirmedCatalogProject } from "./catalog-project-import";
@@ -24,7 +25,8 @@ export interface ConfirmedDevelopmentImport {
 export async function applyConfirmedDevelopmentImportTx(
   tx: Prisma.TransactionClient,
   userId: string,
-  input: ConfirmedDevelopmentImport
+  input: ConfirmedDevelopmentImport,
+  commands?: TaskOperations
 ) {
   if (input.workspaceConfirmed !== true || !input.workspaceId || !input.catalogId ||
       !Array.isArray(input.projects) || !Array.isArray(input.tasks) ||
@@ -46,7 +48,7 @@ export async function applyConfirmedDevelopmentImportTx(
       input.dependencies.length !== input.tasks.length ||
       input.dependencies.some((task) => !task || typeof task.externalId !== "string" ||
         !Array.isArray(task.dependsOn) || !taskIds.has(task.externalId) ||
-        task.dependsOn.some((id) => typeof id !== "string" || !taskIds.has(id) || id === task.externalId)) ||
+        task.dependsOn.some((id: unknown) => typeof id !== "string" || !taskIds.has(id) || id === task.externalId)) ||
       new Set(input.dependencies.map((task) => task.externalId)).size !== input.tasks.length) {
     throw new ConflictException("Incomplete development import declarations");
   }
@@ -54,10 +56,10 @@ export async function applyConfirmedDevelopmentImportTx(
     tx, userId, input.workspaceId, input.catalogId, input.projects
   );
   const tasks = await importConfirmedCatalogTasksTx(
-    tx, userId, input.workspaceId, input.catalogId, input.tasks
+    tx, userId, input.workspaceId, input.catalogId, input.tasks, commands
   );
   const dependencies = await linkCatalogTaskDependenciesTx(
-    tx, userId, input.workspaceId, input.catalogId, input.dependencies
+    tx, userId, input.workspaceId, input.catalogId, input.dependencies, commands
   );
   return { projects, tasks, dependencies };
 }

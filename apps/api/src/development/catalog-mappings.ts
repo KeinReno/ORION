@@ -1,3 +1,6 @@
+import { lockDevelopmentImportTx } from "./catalog-write-lock";
+import { developmentProjectCatalog } from "../projects/public/development-catalog";
+import { developmentTaskCatalog } from "../tasks/public/development-catalog";
 import { ConflictException, ForbiddenException, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 
@@ -25,9 +28,10 @@ export async function bindCatalogEntityTx(
   if (!membership || !["owner", "lead"].includes(membership.role)) {
     throw new ForbiddenException("Catalog mapping write not permitted");
   }
+  await lockDevelopmentImportTx(tx, userId, input.workspaceId);
   const target = input.kind === "project"
-    ? await tx.project.findFirst({ where: { id: input.entityId, workspaceId: input.workspaceId }, select: { id: true } })
-    : await tx.task.findFirst({ where: { id: input.entityId, workspaceId: input.workspaceId }, select: { id: true } });
+    ? await developmentProjectCatalog.byIdTx(tx, input.workspaceId, input.entityId)
+    : await developmentTaskCatalog.byIdTx(tx, input.workspaceId, input.entityId);
   if (!target) throw new NotFoundException("Catalog target not found in workspace");
   const existing = await tx.developmentCatalogMapping.findFirst({
     where: {

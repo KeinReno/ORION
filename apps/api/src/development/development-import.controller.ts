@@ -3,6 +3,7 @@ import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { CurrentUser } from "../common/current-user.decorator";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { PrismaService } from "../common/prisma.service";
+import { ModulesService } from "../modules/modules.service";
 import { loadDevelopmentCatalog } from "./catalog-loader";
 import { readDevelopmentImportSnapshotTx } from "./catalog-import-snapshot";
 import { digestDevelopmentPreview } from "./catalog-preview-digest";
@@ -17,7 +18,7 @@ import { issueImportConsentTx } from "./catalog-import-consent";
 @UseGuards(JwtAuthGuard)
 @Controller("workspaces/:workspaceId/development-import")
 export class DevelopmentImportController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly modules: ModulesService) {}
 
   /**
    * Issues a short-lived, single-use consent for a freshly recomputed preview.
@@ -37,9 +38,10 @@ export class DevelopmentImportController {
       throw new ConflictException("Invalid consent request");
     }
     const loaded = loadDevelopmentCatalog(repoRoot);
+    const choices = body.choices;
     return this.prisma.withUser(user.userId, async (tx) => {
       const snapshot = await readDevelopmentImportSnapshotTx(
-        tx, user.userId, workspaceId, loaded.catalog.catalogId
+        tx, user.userId, workspaceId, loaded.catalog.catalogId, this.modules
       );
       const plan = planDevelopmentImport(loaded.catalog, snapshot);
       const digest = digestDevelopmentPreview({
@@ -52,7 +54,7 @@ export class DevelopmentImportController {
       const scope = buildReviewedConsentScope({
         userId: user.userId, workspaceId,
         catalogSha256: loaded.sha256,
-        previewDigest: digest, preview: plan, choices: body.choices
+        previewDigest: digest, preview: plan, choices
       });
       const issued = await issueImportConsentTx(tx, scope);
       return { ...issued, catalogId: scope.catalogId, previewDigest: digest,
@@ -69,7 +71,7 @@ export class DevelopmentImportController {
     if (!repoRoot) throw new ConflictException("ORION_DEV_CATALOG_ROOT is not configured");
     const loaded = loadDevelopmentCatalog(repoRoot);
     return this.prisma.withUser(user.userId, async (tx) => {
-      const snapshot = await readDevelopmentImportSnapshotTx(tx, user.userId, workspaceId, loaded.catalog.catalogId);
+      const snapshot = await readDevelopmentImportSnapshotTx(tx, user.userId, workspaceId, loaded.catalog.catalogId, this.modules);
     const plan = planDevelopmentImport(loaded.catalog, snapshot);
     const digest = digestDevelopmentPreview({
       userId: user.userId,

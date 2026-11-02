@@ -1,3 +1,8 @@
+import { lockDevelopmentImportTx } from "./catalog-write-lock";
+import { developmentProjectCatalog } from "../projects/public/development-catalog";
+import { developmentTaskCatalog } from "../tasks/public/development-catalog";
+import type { TaskOperations } from "../tasks/public/task-operations";
+import { createTaskInputSchema } from "@orion/shared-types";
 import { ConflictException, ForbiddenException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { bindCatalogEntityTx } from "./catalog-mappings";
@@ -26,7 +31,8 @@ export async function importConfirmedCatalogTasksTx(
   userId: string,
   workspaceId: string,
   catalogId: string,
-  tasks: readonly ConfirmedCatalogTask[]
+  tasks: readonly ConfirmedCatalogTask[],
+  commands?: TaskOperations
 ): Promise<TaskImportResult[]> {
   if (!workspaceId || !catalogId || !Array.isArray(tasks)) throw new ConflictException("Invalid task import");
   const member = await tx.workspaceMember.findUnique({
@@ -35,6 +41,7 @@ export async function importConfirmedCatalogTasksTx(
   if (!member || (member.role !== "owner" && member.role !== "lead")) {
     throw new ForbiddenException("Task import requires owner or lead");
   }
+  await lockDevelopmentImportTx(tx, userId, workspaceId);
   const ids = new Set<string>();
   const titles = new Set<string>();
   for (const task of tasks) {
@@ -58,9 +65,7 @@ export async function importConfirmedCatalogTasksTx(
       } }
     });
     if (!projectBinding) throw new ConflictException("Project must be mapped before task import");
-    const project = await tx.project.findFirst({
-      where: { id: projectBinding.entityId, workspaceId }, select: { id: true, name: true }
-    });
+    const project = await developmentProjectCatalog.byIdTx(tx, workspaceId, projectBinding.entityId);
     if (!project) throw new ConflictException("Stale project mapping");
     const binding = await tx.developmentCatalogMapping.findUnique({
       where: { workspaceId_catalogId_kind_externalId: {
@@ -68,19 +73,14 @@ export async function importConfirmedCatalogTasksTx(
       } }
     });
     if (binding) {
-      const existing = await tx.task.findFirst({
-        where: { id: binding.entityId, workspaceId, projectId: project.id }, select: { id: true }
-      });
+      const existing = await developmentTaskCatalog.byIdTx(tx, workspaceId, binding.entityId, project.id);
       if (!existing || (task.confirmedExistingId && task.confirmedExistingId !== existing.id)) {
         throw new ConflictException("Stale or conflicting task mapping");
       }
       results.push({ externalId: task.externalId, entityId: existing.id, outcome: "already_mapped" });
       continue;
     }
-    const matches = await tx.task.findMany({
-      where: { workspaceId, projectId: project.id, title: { equals: task.title.trim(), mode: "insensitive" } },
-      select: { id: true }
-    });
+    const matches = await developmentTaskCatalog.byTitleTx(tx, workspaceId, project.id, task.title.trim());
     if (matches.length > 1) throw new ConflictException("Ambiguous existing task");
     let entityId: string;
     let outcome: TaskImportResult["outcome"];
@@ -92,10 +92,10 @@ export async function importConfirmedCatalogTasksTx(
       outcome = "confirmed_existing";
     } else {
       if (matches.length) throw new ConflictException("Existing task requires explicit confirmation");
-      const created = await tx.task.create({
-        data: { workspaceId, projectId: project.id, projectTag: project.name, title: task.title.trim() },
-        select: { id: true }
-      });
+      if (!commands) throw new ConflictException("Canonical TaskOperations required for import writes");
+      const created = await commands.createTx(tx, userId, workspaceId, createTaskInputSchema.parse({
+        projectId: project.id, title: task.title.trim()
+      }));
       entityId = created.id;
       outcome = "created";
     }

@@ -56,7 +56,7 @@ describe("server-side development dry-run", () => {
           externalId: "removed-external-id",
           entityId: "existing-entity"
         }]
-      })).toThrow(/Unknown development catalog mapping/);
+      })).toThrow(/Unknown mapped/);
     }
   });
   it("rejects foreign workspace entities and duplicate canonical IDs", () => {

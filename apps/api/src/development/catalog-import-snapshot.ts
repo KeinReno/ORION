@@ -1,5 +1,8 @@
+import { developmentProjectCatalog } from "../projects/public/development-catalog";
+import { developmentTaskCatalog } from "../tasks/public/development-catalog";
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import type { ModulesService } from "../modules/modules.service";
 
 /**
  * Read-only snapshot for the catalog dry-run planner.
@@ -11,7 +14,8 @@ export async function readDevelopmentImportSnapshotTx(
   tx: Prisma.TransactionClient,
   userId: string,
   workspaceId: string,
-  catalogId: string
+  catalogId: string,
+  modules: ModulesService
 ) {
   if (!workspaceId || !catalogId) throw new NotFoundException("Workspace or catalog not specified");
   const membership = await tx.workspaceMember.findUnique({
@@ -24,17 +28,11 @@ export async function readDevelopmentImportSnapshotTx(
     where: { id: workspaceId }, select: { id: true, name: true }
   });
   if (!workspace) throw new NotFoundException("Workspace not found");
+  await modules.assertEnabledTx(tx, userId, workspaceId, "projects");
+  await modules.assertEnabledTx(tx, userId, workspaceId, "tasks");
   const [projects, tasks, bindings] = await Promise.all([
-    tx.project.findMany({
-      where: { workspaceId },
-      select: { id: true, workspaceId: true, name: true },
-      orderBy: { id: "asc" }
-    }),
-    tx.task.findMany({
-      where: { workspaceId },
-      select: { id: true, workspaceId: true, projectId: true, title: true },
-      orderBy: { id: "asc" }
-    }),
+    developmentProjectCatalog.listTx(tx, workspaceId),
+    developmentTaskCatalog.listTx(tx, workspaceId),
     tx.developmentCatalogMapping.findMany({
       where: { workspaceId, catalogId },
       select: {

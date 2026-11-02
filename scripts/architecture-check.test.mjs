@@ -159,6 +159,14 @@ describe("plugin catalog consistency (G23)", () => {
 
 // G4: сервис модуля не берёт чужие таблицы и не импортирует чужой сервис; долг — только из списка исключений.
 describe("module boundary rule", () => {
+  it("checks development import helpers even without a service filename", () => {
+    const root = fixture();
+    const file = "apps/api/src/development/catalog-import.ts";
+    put(root, file, "export function run(tx) { return tx.task.create({}); }");
+    expect(moduleBoundaryViolations(root, {})).toEqual([expect.stringContaining("чужую модель Task")]);
+    put(root, file, 'import { C } from "../tasks/public/development-catalog"; export function run(tx) { return C.listTx(tx, "w"); }');
+    expect(moduleBoundaryViolations(root, {})).toEqual([]);
+  });
   const NOTES = "apps/api/src/notes/notes.service.ts";
   const tasksUse = 'export class S { run(tx) { return tx.task.findMany({}); } }\n';
 

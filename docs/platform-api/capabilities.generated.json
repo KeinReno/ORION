@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.10.0",
+  "platformVersion": "1.11.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.4.0",
@@ -11,7 +11,7 @@
     "theme": "1.0.0",
     "surface": "1.0.0",
     "permission": "1.3.0",
-    "integration": "1.9.0",
+    "integration": "1.10.0",
     "agentGateway": "1.0.0"
   },
   "components": [
@@ -2065,6 +2065,8 @@
       "Contact": "contacts",
       "ContactInteraction": "contacts",
       "ContactRelation": "contacts",
+      "DevelopmentCatalogMapping": "development",
+      "DevelopmentImportConsent": "development",
       "Document": "documents",
       "DocumentAnnotation": "documents",
       "DocumentVersion": "documents",
@@ -2233,6 +2235,7 @@
     "apps/api/src/notes/public/note-agent-references.ts",
     "apps/api/src/notes/public/note-operations.module.ts",
     "apps/api/src/notes/public/note-operations.ts",
+    "apps/api/src/projects/public/development-catalog.ts",
     "apps/api/src/projects/public/project-agent-reader.module.ts",
     "apps/api/src/projects/public/project-agent-reader.ts",
     "apps/api/src/projects/public/project-catalog.module.ts",
@@ -2245,6 +2248,7 @@
     "apps/api/src/projects/public/project-task-links.ts",
     "apps/api/src/search/public/search-operations.module.ts",
     "apps/api/src/search/public/search-operations.ts",
+    "apps/api/src/tasks/public/development-catalog.ts",
     "apps/api/src/tasks/public/goal-task-reader.module.ts",
     "apps/api/src/tasks/public/goal-task-reader.ts",
     "apps/api/src/tasks/public/task-closure-registry.ts",
@@ -2528,6 +2532,8 @@
     "apps/api/src/captures/MODULE.md",
     "apps/api/src/contacts/AI_CONTEXT.md",
     "apps/api/src/contacts/MODULE.md",
+    "apps/api/src/development/AI_CONTEXT.md",
+    "apps/api/src/development/MODULE.md",
     "apps/api/src/documents/AI_CONTEXT.md",
     "apps/api/src/documents/MODULE.md",
     "apps/api/src/events/AI_CONTEXT.md",

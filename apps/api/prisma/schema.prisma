@@ -3376,37 +3376,6 @@ model DomainEventDelivery {
   @@map("domain_event_deliveries")
 }
 
-// G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
-// генерирует scripts/module-registry.mjs — руками не править.
-// <module-registry:models>
-// module: agent-hub
-/// A durable execution attempt, distinct from the existing Task and AgentJob records.
-model AgentHubExecution {
-  id            String   @id @default(uuid())
-  workspaceId   String
-  targetKind    String
-  targetId      String
-  status        String   @default("queued")
-  revision      Int      @default(0)
-  attempt       Int      @default(0)
-  workerId      String?
-  runtimeId     String?
-  leaseUntil    DateTime?
-  checkpointRef String?
-  evidenceRefs  Json     @default("[]")
-  verifiedBy    String?
-  blockedReason String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  events    AgentHubEvent[]
-
-  @@index([workspaceId, updatedAt])
-  @@index([workspaceId, targetKind, targetId])
-  @@map("agent_hub_executions")
-}
-
 /// Durable import identities for development catalogs. Never infer identity from a title.
 /// The importer must check that target entities belong to the same workspace.
 /// Server-issued, single-use consent for a specific catalog preview.
@@ -3445,6 +3414,37 @@ model DevelopmentCatalogMapping {
   @@unique([workspaceId, catalogId, kind, entityId])
   @@index([workspaceId, catalogId])
   @@map("development_catalog_mappings")
+}
+
+// G5/G10: модели подключаемых модулей (modules-ext/<id>/prisma/models.prisma). Область между маркерами
+// генерирует scripts/module-registry.mjs — руками не править.
+// <module-registry:models>
+// module: agent-hub
+/// A durable execution attempt, distinct from the existing Task and AgentJob records.
+model AgentHubExecution {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  targetKind    String
+  targetId      String
+  status        String   @default("queued")
+  revision      Int      @default(0)
+  attempt       Int      @default(0)
+  workerId      String?
+  runtimeId     String?
+  leaseUntil    DateTime?
+  checkpointRef String?
+  evidenceRefs  Json     @default("[]")
+  verifiedBy    String?
+  blockedReason String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    AgentHubEvent[]
+
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, targetKind, targetId])
+  @@map("agent_hub_executions")
 }
 
 /// Append-only execution log; unique (executionId, revision) guards duplicate commits.

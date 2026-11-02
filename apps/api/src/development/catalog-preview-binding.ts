@@ -38,7 +38,7 @@ export function fingerprintDevelopmentPreview(input: PreviewBinding): string {
     action: action.action,
     candidateId: action.candidateId,
     ...("projectExternalId" in action ? { projectExternalId: action.projectExternalId } : {}),
-    ...("dependsOn" in action ? { dependsOn: [...action.dependsOn].sort() } : {})
+    ...("dependsOn" in action ? { dependsOn: [...(action.dependsOn ?? [])].sort() } : {})
   })).sort((a, b) => (a.kind + ":" + a.externalId).localeCompare(b.kind + ":" + b.externalId));
   const payload = JSON.stringify({
     userId: input.userId, workspaceId: input.workspaceId,

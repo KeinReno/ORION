@@ -22,6 +22,12 @@ Integration API **1.8.0**, Platform API **1.9.0**. Эти изменения а�
 
 ## Правила использования
 
+Дополнение 02.11.2026: Development использует фиксированные публичные catalog
+проекции Projects/Tasks и `TaskOperations.createTx/updateTx` в исходном tx.
+Integration API 1.10.0 / Platform API 1.11.0. Потребитель проверяет роли, доступность
+модулей и consent до записи; зависимости меняются канонической командой с CAS и
+outbox. См. [ADR-0044](../adr/ADR-0044-development-import-stabilization.md).
+
 - Импортировать контракты и их Nest-модули из `apps/api/src/<owner>/public`.
   Контракт не даёт дополнительных прав и не включает соседний модуль.
 - `*Tx` принимает существующий `Prisma.TransactionClient`: не открывает новую

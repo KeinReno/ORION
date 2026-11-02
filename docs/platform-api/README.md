@@ -13,11 +13,16 @@
 
 Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
 [синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
-Текущие версии: Integration API 1.9.0, Platform API 1.10.0, Event API 1.1.0. Историческая строка Integration API ниже
+Текущие версии: Integration API 1.10.0, Platform API 1.11.0, Event API 1.1.0. Историческая строка Integration API ниже
 описывает исходный срез, до появления этих контрактов.
 
 Завершение оставшихся 17 межмодульных исключений: [Owner SDKs](MODULE_BOUNDARY_SDKS.md),
 [проекции Goals](GOAL_PROJECTIONS.md), [проверки](../MODULE_BOUNDARY_COMPLETION.md).
+
+Аддитивный Development import SDK: фиксированные проекции
+`projects/public/development-catalog.ts`, `tasks/public/development-catalog.ts` и
+канонический `TaskOperations.updateTx`. Работают в исходном tx/RLS, не выдают
+разрешений сами по себе. [ADR-0044](../adr/ADR-0044-development-import-stabilization.md).
 
 | Контракт | Статус v1.0 | Источник истины (код) | Документ |
 |---|---|---|---|

@@ -182,6 +182,22 @@ describe("Agent Manager", () => {
     expect((await request("/ai/v1/tasks", { method: "POST", token: readOnly.secret, body: { title: "x" } })).status).toBe(403); // scopes never had tasks:write
   });
 
+  it("concurrent policy narrowing cannot restore a scope removed by another save", async () => {
+    const alice = await register("concurrent-matrix");
+    const token = await issue(alice, {
+      permissions: { tasks: ["read", "create"], notes: ["read", "create"] }, mode: "manager"
+    });
+    const patch = (permissions: { tasks: string[]; notes: string[] }) => request(
+      `${ws(alice)}/agent-tokens/${token.id}`, { method: "PATCH", token: alice.accessToken, body: { permissions } });
+    const results = await Promise.all([
+      patch({ tasks: ["read"], notes: ["read", "create"] }),
+      patch({ tasks: ["read", "create"], notes: ["read"] })
+    ]);
+    expect(results.map(result => result.status)).toEqual([200, 200]);
+    expect((await request("/ai/v1/tasks", { method: "POST", token: token.secret, body: { title: "denied" } })).status).toBe(403);
+    expect((await request("/ai/v1/notes", { method: "POST", token: token.secret, body: { title: "denied" } })).status).toBe(403);
+  });
+
   it("ограничение по проектам: чужой проект и «без проекта» — 403, списки фильтруются", async () => {
     const alice = await register("fence");
     const inside = (await request<{ id: string }>(`${ws(alice)}/projects`, { method: "POST", token: alice.accessToken, body: { name: "Внутри" } })).data.id;

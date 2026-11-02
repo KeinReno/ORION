@@ -1,3 +1,5 @@
+import { lockDevelopmentImportTx } from "./catalog-write-lock";
+import { developmentProjectCatalog } from "../projects/public/development-catalog";
 import { ConflictException, ForbiddenException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { bindCatalogEntityTx } from "./catalog-mappings";
@@ -39,6 +41,7 @@ export async function importConfirmedCatalogProjectsTx(
   if (!membership || !["owner", "lead"].includes(membership.role)) {
     throw new ForbiddenException("Catalog import requires owner or lead");
   }
+  await lockDevelopmentImportTx(tx, userId, workspaceId);
   const externalIds = new Set<string>();
   const normalizedTitles = new Set<string>();
   for (const project of projects) {
@@ -63,9 +66,7 @@ export async function importConfirmedCatalogProjectsTx(
       } }
     });
     if (mapped) {
-      const target = await tx.project.findFirst({
-        where: { id: mapped.entityId, workspaceId }, select: { id: true }
-      });
+      const target = await developmentProjectCatalog.byIdTx(tx, workspaceId, mapped.entityId);
       if (!target || (project.confirmedExistingId && project.confirmedExistingId !== target.id)) {
         throw new ConflictException("Stale or conflicting project mapping");
       }
@@ -73,10 +74,7 @@ export async function importConfirmedCatalogProjectsTx(
       continue;
     }
 
-    const matches = await tx.project.findMany({
-      where: { workspaceId, name: { equals: project.title.trim(), mode: "insensitive" } },
-      select: { id: true }
-    });
+    const matches = await developmentProjectCatalog.byNameTx(tx, workspaceId, project.title.trim());
     if (matches.length > 1) throw new ConflictException("Ambiguous existing project");
     let entityId: string;
     let outcome: ProjectImportResult["outcome"];
@@ -88,9 +86,7 @@ export async function importConfirmedCatalogProjectsTx(
       outcome = "confirmed_existing";
     } else {
       if (matches.length) throw new ConflictException("Existing project requires explicit confirmation");
-      const created = await tx.project.create({
-        data: { workspaceId, name: project.title.trim() }, select: { id: true }
-      });
+      const created = await developmentProjectCatalog.createTx(tx, workspaceId, project.title.trim());
       entityId = created.id;
       outcome = "created";
     }

@@ -7,6 +7,7 @@ export abstract class TaskOperations {
   abstract create(userId: string, workspaceId: string, input: CreateTaskInput, agentName?: string): Promise<Task>;
   abstract createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput): Promise<{ id: string }>;
   abstract createFromAgentTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, agentName: string): Promise<{ id: string }>;
+  abstract updateTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, taskId: string, input: UpdateTaskInput, agentName?: string): Promise<{ id: string }>;
   abstract update(userId: string, workspaceId: string, taskId: string, input: UpdateTaskInput, agentName?: string): Promise<Task>;
   abstract remove(userId: string, workspaceId: string, taskId: string): Promise<void>;
 }

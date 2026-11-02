@@ -1,3 +1,6 @@
+import { ModulesService } from "../src/modules/modules.service";
+import { TaskOperations } from "../src/tasks/public/task-operations";
+import type { ConfirmedCatalogProject } from "../src/development/catalog-project-import";
 import { readDevelopmentImportSnapshotTx } from "../src/development/catalog-import-snapshot";
 import { applyConfirmedDevelopmentImportTx } from "../src/development/catalog-import-transaction";
 import { linkCatalogTaskDependenciesTx } from "../src/development/catalog-task-dependencies";
@@ -233,7 +236,7 @@ describe("API workspace isolation", () => {
       { externalId: `project-a-${runId}`, title: `Catalog A ${runId}` },
       { externalId: `project-b-${runId}`, title: `Catalog B ${runId}` }
     ];
-    const execute = (rows: typeof projects) => prisma.withUser(owner.user.id, (tx) =>
+    const execute = (rows: ConfirmedCatalogProject[]) => prisma.withUser(owner.user.id, (tx) =>
       importConfirmedCatalogProjectsTx(tx, owner.user.id, owner.workspaceId, "orion-dev", rows)
     );
     const first = await execute(projects);
@@ -297,7 +300,7 @@ describe("API workspace isolation", () => {
     };
     const execute = (items: Array<typeof task & { confirmedExistingId?: string }>) =>
       prisma.withUser(owner.user.id, (tx) =>
-        importConfirmedCatalogTasksTx(tx, owner.user.id, owner.workspaceId, "orion-dev", items)
+        importConfirmedCatalogTasksTx(tx, owner.user.id, owner.workspaceId, "orion-dev", items, app.get(TaskOperations))
       );
     const first = await execute([task]);
     expect(first[0]?.outcome).toBe("created");
@@ -341,7 +344,7 @@ describe("API workspace isolation", () => {
     });
     const run = (declarations: { externalId: string; dependsOn: string[] }[]) =>
       prisma.withUser(owner.user.id, (tx) =>
-        linkCatalogTaskDependenciesTx(tx, owner.user.id, owner.workspaceId, "orion-dev", declarations)
+        linkCatalogTaskDependenciesTx(tx, owner.user.id, owner.workspaceId, "orion-dev", declarations, app.get(TaskOperations))
       );
     const edge = [{ externalId: ids[0]!, dependsOn: [ids[1]!] }];
     expect(await run(edge)).toEqual({ created: 1, existing: 0 });
@@ -354,6 +357,24 @@ describe("API workspace isolation", () => {
     expect(persisted).toHaveLength(0);
     await expect(run([{ externalId: ids[0]!, dependsOn: ["unknown-dependency"] }]))
       .rejects.toThrow(/Missing catalog task mapping/);
+  });
+
+  it("refuses a concurrent reverse edge without introducing a cycle", async () => {
+    const owner = await register("dev-import-cycle-race");
+    await prisma.withUser(owner.user.id, async tx => {
+      for (const externalId of ["a", "b"]) {
+        const task = await app.get(TaskOperations).createTx(tx, owner.user.id, owner.workspaceId,
+          { title: externalId, description: "", priority: "normal", checklist: [] });
+        await bindCatalogEntityTx(tx, owner.user.id, { workspaceId: owner.workspaceId,
+          catalogId: "orion-dev", kind: "task", externalId, entityId: task.id });
+      }
+    });
+    const link = (from: string, to: string) => prisma.withUser(owner.user.id, tx => linkCatalogTaskDependenciesTx(
+      tx, owner.user.id, owner.workspaceId, "orion-dev", [{ externalId: from, dependsOn: [to] }], app.get(TaskOperations)));
+    const results = await Promise.allSettled([link("a", "b"), link("b", "a")]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect(await prisma.withUser(owner.user.id, tx => tx.taskDependency.count({ where: { workspaceId: owner.workspaceId } }))).toBe(1);
   });
 
   it("imports catalog projects, tasks and dependencies in one atomic transaction", async () => {
@@ -372,7 +393,7 @@ describe("API workspace isolation", () => {
       ]
     };
     const execute = (input: typeof catalog) => prisma.withUser(owner.user.id, (tx) =>
-      applyConfirmedDevelopmentImportTx(tx, owner.user.id, input)
+      applyConfirmedDevelopmentImportTx(tx, owner.user.id, input, app.get(TaskOperations))
     );
     const first = await execute(catalog);
     expect(first.projects[0]!.outcome).toBe("created");
@@ -396,6 +417,56 @@ describe("API workspace isolation", () => {
     expect(absent).toBeNull();
   });
 
+  it("serializes parallel imports and publishes canonical task events only once", async () => {
+    const owner = await register("dev-import-concurrent");
+    const input = {
+      workspaceId: owner.workspaceId, catalogId: "orion-dev", workspaceConfirmed: true as const,
+      projects: [{ externalId: "p", title: "Parallel import" }],
+      tasks: [
+        { externalId: "a", projectExternalId: "p", title: "First parallel task" },
+        { externalId: "b", projectExternalId: "p", title: "Second parallel task" }
+      ],
+      dependencies: [{ externalId: "a", dependsOn: ["b"] }, { externalId: "b", dependsOn: [] }]
+    };
+    const execute = () => prisma.withUser(owner.user.id, tx =>
+      applyConfirmedDevelopmentImportTx(tx, owner.user.id, input, app.get(TaskOperations)));
+    const results = await Promise.all([execute(), execute()]);
+    expect(results.flatMap(result => result.projects).filter(row => row.outcome === "created")).toHaveLength(1);
+    expect(results.flatMap(result => result.tasks).filter(row => row.outcome === "created")).toHaveLength(2);
+    const before = await prisma.withUser(owner.user.id, tx => tx.domainEvent.findMany({
+      where: { workspaceId: owner.workspaceId, type: "tasks.task.changed" }
+    }));
+    expect(before).toHaveLength(3); // two creates + canonical dependency update
+    await execute();
+    const after = await prisma.withUser(owner.user.id, tx => tx.domainEvent.count({
+      where: { workspaceId: owner.workspaceId, type: "tasks.task.changed" }
+    }));
+    expect(after).toBe(before.length);
+    const commands = app.get(TaskOperations);
+    const original = commands.createTx.bind(commands);
+    const failingInput = {
+      ...input, catalogId: "rollback-fixture",
+      projects: [{ externalId: "p", title: "Rolled back parallel import" }]
+    };
+    const taskFailure = vi.spyOn(commands, "createTx").mockImplementationOnce(async (...args) => {
+      await original(...args);
+      throw new Error("forced canonical failure");
+    });
+    try {
+      await expect(prisma.withUser(owner.user.id, tx => applyConfirmedDevelopmentImportTx(
+        tx, owner.user.id, failingInput, commands))).rejects.toThrow(/forced canonical failure/);
+    } finally { taskFailure.mockRestore(); }
+    expect(await prisma.withUser(owner.user.id, tx => tx.project.count({
+      where: { workspaceId: owner.workspaceId, name: "Rolled back parallel import" }
+    }))).toBe(0);
+    expect(await prisma.withUser(owner.user.id, tx => tx.developmentCatalogMapping.count({
+      where: { workspaceId: owner.workspaceId, catalogId: "rollback-fixture" }
+    }))).toBe(0);
+    expect(await prisma.withUser(owner.user.id, tx => tx.domainEvent.count({
+      where: { workspaceId: owner.workspaceId, type: "tasks.task.changed" }
+    }))).toBe(before.length);
+  });
+
   it("returns only authorized workspace import preview data", async () => {
     const owner = await register("dev-snapshot-owner");
     const outsider = await register("dev-snapshot-outsider");
@@ -407,14 +478,14 @@ describe("API workspace isolation", () => {
       tx.task.create({ data: { workspaceId: owner.workspaceId, projectId: project.id, title: `Preview task ${runId}` } })
     );
     const snapshot = await prisma.withUser(owner.user.id, (tx) =>
-      readDevelopmentImportSnapshotTx(tx, owner.user.id, owner.workspaceId, "orion-dev")
+      readDevelopmentImportSnapshotTx(tx, owner.user.id, owner.workspaceId, "orion-dev", app.get(ModulesService))
     );
     expect(snapshot.targetWorkspaceId).toBe(owner.workspaceId);
     expect(snapshot.projects.some((row) => row.id === project.id)).toBe(true);
     expect(snapshot.tasks.some((row) => row.projectId === project.id)).toBe(true);
     expect(snapshot.mappings).toEqual([]);
     await expect(prisma.withUser(outsider.user.id, (tx) =>
-      readDevelopmentImportSnapshotTx(tx, outsider.user.id, owner.workspaceId, "orion-dev")
+      readDevelopmentImportSnapshotTx(tx, outsider.user.id, owner.workspaceId, "orion-dev", app.get(ModulesService))
     )).rejects.toThrow(/owner or lead/);
   });
 

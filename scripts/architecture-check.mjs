@@ -262,7 +262,8 @@ export function moduleBoundaryUsages(projectRoot = root) {
   const usages = new Map();
   if (!existsSync(apiSrc)) return usages;
   for (const file of sourceFiles(apiSrc)) {
-    if (!/\.service\.ts$/.test(file) || /\.test\.ts$/.test(file)) continue;
+    const developmentHelper = relative(apiSrc, file).split(sep)[0] === "development";
+    if ((!/\.service\.ts$/.test(file) && !developmentHelper) || /\.test\.ts$/.test(file)) continue;
     const dir = relative(apiSrc, file).split(sep)[0];
     if (CORE_MODULE_DIRS.has(dir)) continue;
     const self = moduleOfPath(relative(apiSrc, file));

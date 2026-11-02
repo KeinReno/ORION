@@ -55,6 +55,7 @@ export interface ModelClassification {
 export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   // G10: политики моделей подключаемых модулей объявлены их манифестами (scripts/module-registry.mjs).
   ...GENERATED_SNAPSHOT_REGISTRY,
+  { model: "DevelopmentImportConsent", snapshotKey: null, policy: "ephemeral-excluded", reason: "Краткоживущее подтверждение конкретного пользователя и состояния узла; восстановление не должно возвращать право импорта." },
   { model: "PublicationRule", snapshotKey: "publicationRules", policy: "included", reason: "Правила обмена восстанавливаются только остановленными, без возобновления разрешений." },
   { model: "SharedPublication", snapshotKey: "sharedPublications", policy: "included", reason: "Публикации восстанавливаются отозванными через specGrants." },
   { model: "SharedPublicationPin", snapshotKey: "sharedPublicationPins", policy: "included", reason: "Личные закрепления; не предоставляют доступ к публикации." },

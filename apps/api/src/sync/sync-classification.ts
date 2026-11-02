@@ -39,6 +39,7 @@ const never = (note: string): SyncClassification => ({ syncClass: "not-synced", 
 export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   // G10: классы синхронизации моделей подключаемых модулей объявлены их манифестами (scripts/module-registry.mjs).
   ...GENERATED_SYNC_CLASSIFICATION,
+  DevelopmentImportConsent: never("Одноразовое подтверждение привязано к пользователю и текущему узлу; не переносится и не восстанавливается."),
   // --- этап 2: прототип на списках ---------------------------------------------
   List: lww("stage2", "Название/вид/архив — LWW по полю; удаление — tombstone (удалить можно только архивный список или шаблон)."),
   ListItem: lww("stage2", "Поля пункта — LWW по полю; отметка — булево поле; удаление — tombstone, побеждает конкурирующую правку; порядок — поле sortOrder."),

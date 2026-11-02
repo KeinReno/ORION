@@ -10,7 +10,7 @@
 // Node resolves `require("@orion/shared-types")` from `dist/**` against
 // `dist/node_modules` first, so development resolution is untouched.
 import { createRequire } from "node:module";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,4 +46,5 @@ if (emit.emitSkipped || diagnostics.length > 0) {
   process.exit(1);
 }
 writeFileSync(join(outDir, "package.json"), JSON.stringify({ name: "@orion/shared-types", version: "0.0.0-runtime", main: "index.js" }, null, 2) + "\n");
+copyFileSync(join(sharedTypes, "development-plan.cjs"), join(outDir, "development-plan.cjs"));
 console.log(`[build-api-runtime] @orion/shared-types -> ${outDir}`);
