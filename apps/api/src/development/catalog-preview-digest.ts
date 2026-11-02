@@ -20,7 +20,7 @@ function canonicalPreview(value: unknown, active: WeakSet<object>): unknown {
   try {
     if (Array.isArray(value)) return value.map((item) => canonicalPreview(item, active));
     const record = value as Record<string, unknown>;
-    const normalized: Record<string, unknown> = {};
+    const normalized: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const key of Object.keys(record).sort()) {
       if (record[key] === undefined) {
         throw new ConflictException("Undefined development preview field");
