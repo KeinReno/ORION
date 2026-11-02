@@ -471,3 +471,11 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added regression covering `__proto__` and `constructor` keys, deterministic round trip, and absence of prototype pollution.
 - Commits: `8a7acfb` (fix), `d123028` (test). Targeted Vitest, TypeScript and PostgreSQL checks **not executed** in this connector-only run.
 - Next: run targeted Vitest/typecheck in a checkout; implement transactional revalidation and one-time consent consumption before any write endpoint. No master merge or beta publication.
+
+### 2026-11-02 — reject duplicate declarations before import writes
+
+- Verified draft PR #95, current branch head, catalog and bootstrap protocol before editing.
+- Added a fail-closed duplicate/missing external ID guard to the internal transactional import coordinator, before project/task/dependency writes.
+- Added Vitest regression cases for duplicate project and task IDs, asserting no canonical create/mapping writes are attempted.
+- Commits: `c00644a`, `3a5b69f`. **Tests and TypeScript checks not executed** in this GitHub-only run; no PostgreSQL verification is claimed.
+- Next: run the new transaction test in a checkout, then add atomic stale-preview revalidation and single-use consent consumption to the authenticated import execution path. Do not expose writes before that gate is complete.
