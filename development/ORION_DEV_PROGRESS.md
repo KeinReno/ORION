@@ -443,3 +443,13 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Added a focused Vitest regression for expiry overflow and zero insert calls.
 - Commits: `2b4a721`, `d7f5710`. Tests and TypeScript checks **not executed** in this GitHub connector pass.
 - Next: execute targeted tests/typecheck and migration integration in a checkout; implement atomic snapshot revalidation and single-use consent consumption before enabling import writes. No merge or beta publication.
+
+
+### 2026-11-02 — preview derivation inside authorized transaction
+
+- Re-read the versioned catalog, bootstrap protocol, journal, consent controller and consent primitives. Compared feature branch against master (147 commits ahead, zero behind at inspection).
+- Changed the GET preview controller to compute the plan and digest inside the `withUser` callback, rather than after the transaction callback returns. This aligns preview derivation with the consent issuance path; it does not add transaction isolation or protect against concurrent changes.
+- Commits: `e6f2253` (controller), `782b9df` (additional fail-closed configuration test). The added test checks invalid configuration, **not** transaction timing; a focused transaction-boundary regression is still needed.
+- Tests, TypeScript and PostgreSQL migration **not executed**. No write endpoint enabled.
+- Next: add an explicit transaction-boundary regression and run targeted Vitest/typecheck locally; then implement atomic snapshot revalidation and consent consumption before import.
+- No master merge or beta publication.
