@@ -7,6 +7,7 @@ import { GENERATED_MODULE_PROBES } from "../src/modules-ext/data.generated";
 import { CapabilityLifecycle } from "../src/common/capability-lifecycle";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
+import { resolve } from "node:path";
 
 /**
  * G6/G7: выключение компонента с включёнными зависимыми требует подтверждения (409 component_has_dependents),
@@ -19,8 +20,10 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
   let baseUrl: string;
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const emailPrefix = `component-deps-${runId}`;
+  const originalCatalogRoot = process.env.ORION_DEV_CATALOG_ROOT;
 
   beforeAll(async () => {
+    process.env.ORION_DEV_CATALOG_ROOT = resolve(".");
     app = await NestFactory.create(AppModule, { logger: false });
     configureApp(app);
     await app.listen(0, "127.0.0.1");
@@ -29,6 +32,8 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
   });
 
   afterAll(async () => {
+    if (originalCatalogRoot === undefined) delete process.env.ORION_DEV_CATALOG_ROOT;
+    else process.env.ORION_DEV_CATALOG_ROOT = originalCatalogRoot;
     if (prisma) {
       await prisma.asSystem(async (tx) => {
         const users = await tx.user.findMany({ where: { email: { startsWith: emailPrefix } }, select: { id: true } });
@@ -88,7 +93,8 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     expect(blocked.data.code).toBe("component_has_dependents");
     expect(blocked.data.message).toContain("перестанут работать");
     expect(blocked.data.dependents.map((item: { id: string }) => item.id).sort()).toEqual(expected);
-    expect(blocked.data.dependents[0]).toMatchObject({ kind: "plugin", relation: "requires" });
+    expect(blocked.data.dependents).toContainEqual(expect.objectContaining({ kind: "plugin", relation: "requires" }));
+    expect(blocked.data.dependents).toContainEqual(expect.objectContaining({ id: "orion-dev", kind: "module", relation: "requires" }));
     // Ничего не изменилось.
     expect((await get("/tasks")).status).toBe(200);
 
@@ -97,7 +103,10 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     expect((await get("/tasks")).status).toBe(409);
     // Зависимые плагины неактивны, но их переключатели не тронуты; сосед работает.
     const plugins = await get("/plugins");
-    for (const id of expected) expect(plugins.data.find((item: { id: string }) => item.id === id).enabled).toBe(false);
+    for (const dependent of blocked.data.dependents.filter((item: { kind: string }) => item.kind === "plugin")) {
+      expect(plugins.data.find((item: { id: string }) => item.id === dependent.id).enabled).toBe(false);
+    }
+    expect((await get("/development-import/preview")).status).toBe(409);
     expect((await get("/notes")).status).toBe(200);
 
     // Возврат: данные на месте, а повторное включение не требует подтверждения.
@@ -265,10 +274,18 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     const startEnabled = initial.data.filter((item: { enabled: boolean }) => item.enabled).map((item: { id: string }) => item.id);
     for (const target of MODULE_CATALOG.filter((item) => !item.required && startEnabled.includes(item.id))) {
       expect((await setModule(target.id, false, true)).status, `выключение ${target.id}`).toBe(200);
+      const blockedModules = new Set(enabledHardDependents(target.id, {
+        disabledModules: MODULE_CATALOG.filter(item => !startEnabled.includes(item.id)).map(item => item.id), pluginOverrides: []
+      }).filter(item => item.kind === "module").map(item => item.id));
       for (const other of startEnabled.filter((id: string) => id !== target.id)) {
         const response = await request(`/workspaces/${ws}${probes[other]}`, { method: "GET", token });
         expect(response.status, `${other} после выключения ${target.id}`).toBeLessThan(500);
-        expect(response.status, `${other} после выключения ${target.id}`).not.toBe(409);
+        if (blockedModules.has(other)) {
+          expect(response.status, `${other} требует ${target.id}`).toBe(409);
+          expect(response.data).toMatchObject({ code: "component_incompatible" });
+        } else {
+          expect(response.status, `${other} после выключения ${target.id}`).not.toBe(409);
+        }
       }
       expect((await get(probes[target.id]!)).status).toBe(409);
       expect((await setModule(target.id, true)).status).toBe(200);
