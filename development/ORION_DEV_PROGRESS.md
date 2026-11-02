@@ -489,3 +489,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commits: `4ef7241` (guard), `286144d` (tests). **Vitest, TypeScript and PostgreSQL not executed**; these changes are not runtime-verified.
 - Next: run targeted transaction Vitest and API TypeScript checks in a checkout; then implement atomic fresh-snapshot revalidation and one-time consent consumption before enabling any write endpoint.
 - No changes to master, PR merge or beta release.
+
+### 2026-11-02 — null project/task declaration guard
+
+- Verified draft PR #95 and branch head, catalog, bootstrap protocol, journal and transaction coordinator before editing.
+- Added a fail-closed null/non-object project/task row guard before external ID extraction; previously null rows could cause an uncontrolled TypeError.
+- Added two focused mocked-transaction regression cases asserting controlled rejection and no project/task/mapping writes.
+- Commits: `8c9e212` (guard), `18c23ca` (tests). **Vitest, TypeScript and PostgreSQL were not executed** in this GitHub-only run.
+- Next: run targeted Vitest/typecheck in a checkout, then implement atomic fresh-snapshot revalidation and single-use consent consumption before exposing a write endpoint.
+- No master changes, PR merge or beta release.
