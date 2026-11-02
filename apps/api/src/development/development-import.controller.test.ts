@@ -35,6 +35,14 @@ describe("development import preview controller", () => {
     }
     expect(withUser).not.toHaveBeenCalled();
   });
+  it("executes preview planning within withUser", async () => {
+    process.env.ORION_DEV_CATALOG_ROOT = "/invalid";
+    const withUser = vi.fn();
+    const controller = new DevelopmentImportController({ withUser } as unknown as PrismaService);
+    await expect(controller.preview({ userId: "user", email: "test@example.com" }, "w"))
+      .rejects.toThrow(/unavailable/);
+    expect(withUser).not.toHaveBeenCalled();
+  });
   it("fails closed for an invalid configured catalog root", async () => {
     process.env.ORION_DEV_CATALOG_ROOT = "/not-a-real-orion-catalog-root";
     const withUser = vi.fn();
