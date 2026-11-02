@@ -31,6 +31,10 @@ export async function applyConfirmedDevelopmentImportTx(
       !Array.isArray(input.dependencies)) {
     throw new ConflictException("Development import requires confirmed workspace and valid stages");
   }
+  if (input.projects.some((project) => !project || typeof project.externalId !== "string") ||
+      input.tasks.some((task) => !task || typeof task.externalId !== "string")) {
+    throw new ConflictException("Duplicate or missing development import external IDs");
+  }
   const projectIds = new Set(input.projects.map((project) => project.externalId));
   const taskIds = new Set(input.tasks.map((task) => task.externalId));
   if (projectIds.size !== input.projects.length || taskIds.size !== input.tasks.length ||
