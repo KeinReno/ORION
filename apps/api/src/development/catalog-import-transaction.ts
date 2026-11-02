@@ -40,8 +40,9 @@ export async function applyConfirmedDevelopmentImportTx(
   }
   if (input.tasks.some((task) => !projectIds.has(task.projectExternalId)) ||
       input.dependencies.length !== input.tasks.length ||
-      input.dependencies.some((task) => !taskIds.has(task.externalId) ||
-        task.dependsOn.some((id) => !taskIds.has(id))) ||
+      input.dependencies.some((task) => !task || typeof task.externalId !== "string" ||
+        !Array.isArray(task.dependsOn) || !taskIds.has(task.externalId) ||
+        task.dependsOn.some((id) => typeof id !== "string" || !taskIds.has(id))) ||
       new Set(input.dependencies.map((task) => task.externalId)).size !== input.tasks.length) {
     throw new ConflictException("Incomplete development import declarations");
   }
