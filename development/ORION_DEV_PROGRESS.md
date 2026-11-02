@@ -462,3 +462,12 @@ The authenticated transactional importer is still not implemented. Name matches 
 - Commit: `784fb09`. Tests, TypeScript checks and PostgreSQL were **not executed** in this connector-only pass; test behavior is not yet verified by Vitest.
 - Next: run targeted controller Vitest and API TypeScript checks in a local checkout; then implement transactional stale-preview revalidation and atomic one-time consent consumption before enabling import writes.
 - No master changes, PR merge or beta publication.
+
+
+### 2026-11-02 — reserved-key-safe preview digest
+
+- Inspected the current catalog, bootstrap protocol, progress, preview digest, consent transaction helper and controller; feature branch was 152 commits ahead of master and zero behind before this change.
+- Fixed canonical preview serialization to use a null-prototype output object. Previously a snapshot JSON key named `__proto__` could be silently dropped by assignment into `{}`, producing the same digest as a snapshot without that key.
+- Added regression covering `__proto__` and `constructor` keys, deterministic round trip, and absence of prototype pollution.
+- Commits: `8a7acfb` (fix), `d123028` (test). Targeted Vitest, TypeScript and PostgreSQL checks **not executed** in this connector-only run.
+- Next: run targeted Vitest/typecheck in a checkout; implement transactional revalidation and one-time consent consumption before any write endpoint. No master merge or beta publication.
