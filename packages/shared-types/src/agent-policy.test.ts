@@ -156,27 +156,20 @@ describe("decideAgentModuleOperation (G13)", () => {
   });
 });
 
-describe("remoteTokenViolations (ADR-0017)", () => {
-  it("токен на сервере: помощник со сроком ≤ 30 дней и запретом удаления допустим", () => {
-    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 30, forbidden: ["delete"] })).toEqual([]);
-    expect(remoteTokenViolations({ mode: "observer", expiresInDays: 1, forbidden: ["delete", "finance"] })).toEqual([]);
+describe("owner-selected remote token policy", () => {
+  it("does not secretly cap the administrator's expiration to 30 days", () => {
+    expect(remoteTokenViolations({ mode: "admin", expiresInDays: null, forbidden: [] })).toEqual([]);
+    expect(remoteTokenViolations({ mode: "admin", expiresInDays: 365, forbidden: [] })).toEqual([]);
   });
 
-  it("менеджер, бессрочный или долгий токен и снятый запрет удаления — нарушения", () => {
-    expect(remoteTokenViolations({ mode: "manager", expiresInDays: 7, forbidden: ["delete"] })).toHaveLength(1);
-    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: null, forbidden: ["delete"] })[0]).toContain("30 дней");
-    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 31, forbidden: ["delete"] })).toHaveLength(1);
-    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 7, forbidden: [] })[0]).toContain("запрет удаления");
-    expect(remoteTokenViolations({ mode: "manager", expiresInDays: null, forbidden: [] })).toHaveLength(3);
+  it("does not add implicit restrictions to other roles", () => {
+    expect(remoteTokenViolations({ mode: "manager", expiresInDays: null, forbidden: [] })).toEqual([]);
+    expect(remoteTokenViolations({ mode: "assistant", expiresInDays: 365, forbidden: [] })).toEqual([]);
   });
 
-  it("при обновлении срок не проверяется", () => {
-    expect(remoteTokenViolations({ mode: "assistant", forbidden: ["delete"] }, false)).toEqual([]);
-  });
-
-  it("админ — явное исключение из режимного запрета и запрета удаления, но не из срока", () => {
-    expect(remoteTokenViolations({ mode: "admin", expiresInDays: 30, forbidden: [] })).toEqual([]);
-    expect(remoteTokenViolations({ mode: "admin", expiresInDays: null, forbidden: [] })).toHaveLength(1);
-    expect(remoteTokenViolations({ mode: "admin", expiresInDays: 365, forbidden: [] })[0]).toContain("30 дней");
+  it("accepts explicit indefinite and custom lifetime in create schema", () => {
+    expect(createAgentTokenInputSchema.parse({ name: "Admin", mode: "admin" }).expiresInDays).toBeNull();
+    expect(createAgentTokenInputSchema.parse({ name: "Admin", mode: "admin", expiresInDays: 3650 }).expiresInDays).toBe(3650);
+    expect(createAgentTokenInputSchema.safeParse({ name: "Admin", mode: "admin", expiresInDays: -1 }).success).toBe(false);
   });
 });
