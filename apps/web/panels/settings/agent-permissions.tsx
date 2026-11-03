@@ -185,10 +185,15 @@ export function TokenPolicyEditor({
   const { toast } = useToast();
   const update = useUpdateAgentToken(workspaceId);
   const [draft, setDraft] = useState(() => policyFromToken(token));
+  const [expiry, setExpiry] = useState("keep");
+  const [customDays, setCustomDays] = useState("365");
+  const newExpiry = expiry === "none" ? null : expiry === "custom" ? Number(customDays) : Number(expiry);
+  const validExpiry = expiry === "keep" || newExpiry === null || (Number.isInteger(newExpiry) && newExpiry >= 1 && newExpiry <= 36_500);
 
   async function save(): Promise<void> {
     try {
-      await update.mutateAsync({ tokenId: token.id, input: policyToInput(draft) });
+      if (!validExpiry) return;
+      await update.mutateAsync({ tokenId: token.id, input: { ...policyToInput(draft), ...(expiry === "keep" ? {} : { expiresInDays: newExpiry }) } });
       toast({ title: "Настройки сохранены", description: `«${token.name}» будет работать с ними со следующего обращения.`, tone: "success" });
       onClose();
     } catch (error) {
@@ -199,8 +204,30 @@ export function TokenPolicyEditor({
   return (
     <div className="space-y-3 border-t border-border pt-3">
       <AgentPolicyFields workspaceId={workspaceId} draft={draft} onChange={setDraft} />
+      <div className="flex flex-wrap gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Изменить срок действия</span>
+          <Select value={expiry} onChange={(event) => setExpiry(event.target.value)} className="w-auto">
+            <option value="keep">Не менять</option>
+            <option value="none">Бессрочно</option>
+            <option value="7">7 дней от текущего момента</option>
+            <option value="30">30 дней</option>
+            <option value="90">90 дней</option>
+            <option value="365">1 год</option>
+            <option value="custom">Свой срок</option>
+          </Select>
+        </label>
+        {expiry === "custom" ? (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Дней (1–36500)</span>
+            <input type="number" min={1} max={36500} value={customDays}
+              onChange={(event) => setCustomDays(event.target.value)}
+              className="w-28 rounded-md border border-border bg-background px-2 py-1 text-label" />
+          </label>
+        ) : null}
+      </div>
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" disabled={update.isPending || policyIsEmpty(draft)} onClick={() => void save()}>
+        <Button size="sm" disabled={update.isPending || policyIsEmpty(draft) || !validExpiry} onClick={() => void save()}>
           Сохранить
         </Button>
         <Button size="sm" variant="ghost" disabled={update.isPending} onClick={onClose}>
