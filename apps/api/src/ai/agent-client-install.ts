@@ -65,7 +65,10 @@ export function mergeMcpJson(existing: string | null, entry: McpServerEntry): st
     config = parsed as Record<string, unknown>;
   }
   const current = config.mcpServers;
-  const servers = current && typeof current === "object" && !Array.isArray(current) ? (current as Record<string, unknown>) : {};
+  if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
+    throw new Error("mcpServers must be an object");
+  }
+  const servers = (current ?? {}) as Record<string, unknown>;
   config.mcpServers = { ...servers, [MCP_SERVER_NAME]: entry };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
