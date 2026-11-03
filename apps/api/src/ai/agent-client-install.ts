@@ -100,7 +100,6 @@ export function mergeClientConfig(client: AgentInstallClient, existing: string |
   return client === "codex" ? mergeCodexToml(existing, entry) : mergeMcpJson(existing, entry);
 }
 
-/** Writes the merged config: backup of the previous file next to it, then an atomic replace. Returns the backup path. */
 /** Credential lives outside MCP config, so Codex/Cursor settings and their backups never
  * contain the live bearer secret. The adapter already reads ORION_AGENT_TOKEN_FILE.
  * This must be the same OS user's profile as the MCP client.
@@ -116,7 +115,7 @@ export function writePrivateAgentToken(file: string, token: string): void {
   if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error("Token path is not a regular file");
   const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    fs.writeFileSync(tmp, token + "\\n", { mode: 0o600, flag: "wx" });
+    fs.writeFileSync(tmp, token + "\n", { mode: 0o600, flag: "wx" });
     if (process.platform !== "win32") fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, file);
   } finally {
@@ -124,6 +123,7 @@ export function writePrivateAgentToken(file: string, token: string): void {
   }
 }
 
+/** Writes the config atomically, retaining a private backup; returns its path. */
 export function writeClientConfig(file: string, content: string, now: Date = new Date()): string | null {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let backup: string | null = null;
@@ -132,7 +132,7 @@ export function writeClientConfig(file: string, content: string, now: Date = new
     fs.copyFileSync(file, backup);
     if (process.platform !== "win32") fs.chmodSync(backup, 0o600);
   }
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
   fs.writeFileSync(tmp, content, { mode: 0o600, flag: "wx" });
   fs.renameSync(tmp, file);
   return backup;
