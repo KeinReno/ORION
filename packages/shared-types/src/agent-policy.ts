@@ -129,6 +129,8 @@ export function decideAgentModuleOperation(subject: AgentPolicySubject, permissi
  * revocation and the user's chosen per-token permissions.
  * @deprecated Node mode no longer imposes additional token policy.
  */
+export const REMOTE_TOKEN_MAX_DAYS = 30; // Historical recommendation, no longer enforced.
+
 export function remoteTokenViolations(
   _token: { mode: AgentMode; expiresInDays?: number | null; forbidden: readonly AgentForbidden[] },
   _checkExpiry = true
