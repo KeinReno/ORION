@@ -68,18 +68,20 @@ export class AgentClientInstallService {
     );
 
     let backupPath: string | null;
+    let wroteTokenFile = false;
     try {
       // Check that the running ORION API accepts exactly the new token before changing
       // any client configuration or revoking a previously working credential.
       await verifyLocalAgentBridge(info.apiUrl, created.secret, workspaceId, created.mode);
       writePrivateAgentToken(tokenFile, created.secret);
+      wroteTokenFile = true;
       backupPath = writeClientConfig(configPath, merged);
     } catch (error) {
       try {
-        if (previousToken !== null) {
+        if (wroteTokenFile && previousToken !== null) {
           const oldSecret = previousToken.trim();
           if (oldSecret.startsWith("orion_agt_")) writePrivateAgentToken(tokenFile, oldSecret);
-        } else if (fs.existsSync(tokenFile)) {
+        } else if (wroteTokenFile && fs.existsSync(tokenFile)) {
           fs.unlinkSync(tokenFile);
         }
       } catch {
@@ -88,6 +90,7 @@ export class AgentClientInstallService {
       await this.tokens.revoke(userId, workspaceId, created.id).catch(() => undefined);
       // Never log a raw exception: some HTTP/client errors may contain credentials.
       this.logger.warn("Подключение агента не удалось; новый токен отозван");
+      if (error instanceof ConflictException || error instanceof ForbiddenException) throw error;
       throw new ConflictException("Не удалось проверить или записать подключение. Предыдущий токен не отозван.");
     }
 
