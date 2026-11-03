@@ -68,6 +68,9 @@ export class AgentConnectionController {
     @Body(new ZodValidationPipe(installAgentClientInputSchema)) body: InstallAgentClientInput
   ): Promise<InstalledAgentClient> {
     await this.workspaces.assertMember(user.userId, workspaceId);
+    if (!aiBridgeOverrideEditableBy(user.userId)) {
+      throw new ForbiddenException("Подключать локальные программы может только владелец этого узла");
+    }
     return this.installer.install(user.userId, workspaceId, body);
   }
 }
