@@ -501,7 +501,7 @@ export function scopesAfterPolicyEdit(
   return [...new Set([...matrix, ...extras, ...modules])];
 }
 
-type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds">;
+type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds"> & { expiresAt?: Date | null };
 
 /** One sentence for the journal: what actually changed, not just "обновлён". Empty when nothing did (a no-op save). */
 export function describePolicyChange(before: PolicySnapshot, after: PolicySnapshot): string {
@@ -511,6 +511,9 @@ export function describePolicyChange(before: PolicySnapshot, after: PolicySnapsh
   }
   if (JSON.stringify(before.permissions) !== JSON.stringify(after.permissions)) parts.push("права по разделам изменены");
   if (JSON.stringify([...before.forbidden].sort()) !== JSON.stringify([...after.forbidden].sort())) parts.push("запреты изменены");
+  if ((before.expiresAt?.toISOString() ?? null) !== (after.expiresAt?.toISOString() ?? null)) {
+    parts.push(`срок действия: ${before.expiresAt?.toISOString() ?? "бессрочно"} → ${after.expiresAt?.toISOString() ?? "бессрочно"}`);
+  }
   if (before.writeLimitPerHour !== after.writeLimitPerHour) {
     parts.push(`лимит записей: ${before.writeLimitPerHour ?? "без лимита"} → ${after.writeLimitPerHour ?? "без лимита"}`);
   }
