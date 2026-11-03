@@ -6,8 +6,8 @@ import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
 
 /**
- * ADR-0017: в режиме `server` (мост доступен извне) токен агента выпускается со сроком ≤ 30 дней, не `manager`
- * и всегда с запретом удаления. Режим читается на каждом запросе, поэтому один запущенный сервер переключаем env.
+ * Серверный режим больше не навязывает свои сроки и роли; ими управляет владелец.
+ * Проверяется при переключении env на одном приложении.
  */
 describe("Agent tokens in server mode (ADR-0017)", () => {
   let app: INestApplication;
@@ -102,9 +102,9 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     expect(ok.status, JSON.stringify(ok.data)).toBe(201);
     expect(ok.data).toMatchObject({ mode: "admin", forbidden: [] });
 
-    // Still capped by the 30-day rotation hygiene rule — that one wasn't an exception.
-    expect((await issue({ expiresInDays: null })).status).toBe(400);
-    expect((await issue({ expiresInDays: 31 })).status).toBe(400);
+    // The owner may deliberately issue indefinite or long-lived administrator credentials.
+    expect((await issue({ expiresInDays: null })).status).toBe(201);
+    expect((await issue({ expiresInDays: 365 })).status).toBe(201);
 
     // Updating a live token to admin on the server also isn't forced into a delete-forbid.
     const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
