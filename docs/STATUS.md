@@ -12,7 +12,10 @@ preservation, откат token-file при ошибке записи. Scope ceil
 7 focused integration PASS. 8 Chromium PASS, включая фактический stdio-MCP
 orion_get_context через созданный token-file. Windows ACL проверены отдельно:
 явные user/SYSTEM/Administrators на пустом файле до записи секрета.
-Windows beta.37 пересобирается с этими исправлениями.
+Windows beta.37 (`821e694`) собрана, опубликована и установлена локально.
+Финальный full PostgreSQL 684 PASS / 1 skip; packaged MCP/context/import/restart
+и native startup/wizard PASS. SHA-256 в release body проверен.
+[Артефакт, проверки и границы CI](../development/WINDOWS_BETA_37_2026-11-03.md).
 Platform API 1.13.0 / AgentGateway 1.1.0. [ADR-0047](adr/ADR-0047-agent-connection-owner-control.md).
 Master и XLSX PR #94 не изменены; существующий ORION DEV сохранён.
 
