@@ -30,7 +30,9 @@ test("one click writes ORION into Claude Desktop's config, keeps the rest, and s
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
   await page.getByRole("button", { name: "Настройки", exact: true }).first().click();
-  await page.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
+  const settings = page.getByRole("navigation", { name: "Разделы настроек" });
+  await settings.getByRole("button", { name: /^Пространство «/ }).click();
+  await settings.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
 
   await page.getByRole("button", { name: "Подключить Claude Desktop автоматически", exact: true }).click();
   const status = page.getByRole("status").filter({ hasText: "ORION добавлен в настройки Claude Desktop" });
@@ -58,7 +60,9 @@ test("Codex admin choice requires consent and token-file launches a real MCP ada
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
   await page.getByRole("button", { name: "Настройки", exact: true }).first().click();
-  await page.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
+  const settings = page.getByRole("navigation", { name: "Разделы настроек" });
+  await settings.getByRole("button", { name: /^Пространство «/ }).click();
+  await settings.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
   await page.getByRole("combobox", { name: "Программа", exact: true }).selectOption("codex");
   await page.getByRole("combobox", { name: "Роль", exact: true }).selectOption("admin");
   const expiry = page.getByRole("combobox", { name: "Срок действия", exact: true });

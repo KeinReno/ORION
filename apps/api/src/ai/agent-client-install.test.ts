@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ const entry: McpServerEntry = { command: "C:\\ORION\\node.exe", args: ["C:\\ORIO
 
 describe("agent client install", () => {
   it("knows where each program keeps its MCP servers", () => {
+    expect(path.isAbsolute(agentTokenFilePath("codex", "relative/config.toml"))).toBe(true);
     expect(clientConfigPath("claude-desktop", { APPDATA: "C:\\Users\\u\\AppData\\Roaming" }, "C:\\Users\\u", "win32")).toBe(path.join("C:\\Users\\u\\AppData\\Roaming", "Claude", "claude_desktop_config.json"));
     expect(clientConfigPath("claude-desktop", {}, "/Users/u", "darwin")).toBe(path.join("/Users/u", "Library", "Application Support", "Claude", "claude_desktop_config.json"));
     expect(clientConfigPath("claude-code", {}, "/home/u", "linux")).toBe(path.join("/home/u", ".claude.json"));
@@ -77,6 +79,17 @@ describe("agent client install", () => {
       expect(merged).not.toContain(secret);
       expect(fs.readFileSync(tokenPath, "utf8").trim()).toBe(secret);
       if (process.platform !== "win32") expect(fs.statSync(tokenPath).mode & 0o077).toBe(0);
+      else {
+        const aclFile = path.join(dir, "acl.txt");
+        execFileSync(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "icacls.exe"), [tokenPath, "/save", aclFile], { windowsHide: true, stdio: "pipe" });
+        const sddl = fs.readFileSync(aclFile, "utf16le");
+        expect(sddl).toContain("D:P");
+        expect(sddl.match(/\(A;/g)).toHaveLength(3);
+        expect(sddl).toContain(";;;SY)");
+        expect(sddl).toContain(";;;BA)");
+        expect(sddl).toMatch(/;;;S-1-5-21-[\d-]+\)/);
+        expect(sddl).not.toContain(";ID;");
+      }
       expect(() => writePrivateAgentToken(tokenPath, "not-a-token")).toThrow();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

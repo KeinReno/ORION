@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -121,18 +122,38 @@ export function mergeClientConfig(client: AgentInstallClient, existing: string |
  * This must be the same OS user's profile as the MCP client.
  */
 export function agentTokenFilePath(client: AgentInstallClient, configPath: string): string {
-  return path.join(path.dirname(configPath), `.orion-${client}-agent.token`);
+  // The MCP client starts in its own working directory, not the API's cwd.
+  return path.resolve(path.dirname(configPath), `.orion-${client}-agent.token`);
 }
 
-/** Atomic replacement, owner-only permissions on POSIX; Windows inherits profile ACLs. */
+let windowsUserSid: string | undefined;
+/** Restrict a newly created, still-empty file BEFORE writing any credential. */
+function writePrivateFile(file: string, content: string | Buffer): void {
+  const fd = fs.openSync(file, "wx", 0o600);
+  try {
+    if (process.platform === "win32") {
+      const system32 = path.join(process.env.SystemRoot || "C:\\Windows", "System32");
+      if (!windowsUserSid) {
+        const identity = execFileSync(path.join(system32, "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { encoding: "utf8", windowsHide: true, timeout: 10_000 });
+        windowsUserSid = /S-1-\d+(?:-\d+)+/.exec(identity)?.[0];
+        if (!windowsUserSid) throw new Error("Cannot determine Windows credential owner");
+      }
+      execFileSync(path.join(system32, "icacls.exe"), [file, "/inheritance:r", "/grant:r", `*${windowsUserSid}:(F)`, "*S-1-5-18:(F)", "*S-1-5-32-544:(F)"], {
+        windowsHide: true, stdio: "pipe", timeout: 10_000
+      });
+    } else fs.fchmodSync(fd, 0o600);
+    fs.writeFileSync(fd, content);
+  } finally { fs.closeSync(fd); }
+}
+
+/** Atomic replacement with explicit owner/SYSTEM/admin ACLs on Windows and 0600 on POSIX. */
 export function writePrivateAgentToken(file: string, token: string): void {
   if (!/^orion_agt_[A-Za-z0-9_-]{32}$/.test(token)) throw new Error("Invalid agent token");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error("Token path is not a regular file");
   const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    fs.writeFileSync(tmp, token + "\n", { mode: 0o600, flag: "wx" });
-    if (process.platform !== "win32") fs.chmodSync(tmp, 0o600);
+    writePrivateFile(tmp, token + "\n");
     fs.renameSync(tmp, file);
   } finally {
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
@@ -144,13 +165,13 @@ export function writeClientConfig(file: string, content: string, now: Date = new
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let backup: string | null = null;
   if (fs.existsSync(file)) {
-    backup = `${file}.orion-backup-${now.toISOString().replace(/[:.]/g, "-")}`;
-    fs.copyFileSync(file, backup);
-    if (process.platform !== "win32") fs.chmodSync(backup, 0o600);
+    backup = `${file}.orion-backup-${now.toISOString().replace(/[:.]/g, "-")}-${randomBytes(8).toString("hex")}`;
+    try { writePrivateFile(backup, fs.readFileSync(file)); }
+    catch (error) { if (fs.existsSync(backup)) fs.unlinkSync(backup); throw error; }
   }
   const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    fs.writeFileSync(tmp, content, { mode: 0o600, flag: "wx" });
+    writePrivateFile(tmp, content);
     fs.renameSync(tmp, file);
   } finally {
     if (fs.existsSync(tmp)) fs.unlinkSync(tmp);

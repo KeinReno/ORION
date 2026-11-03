@@ -21,7 +21,6 @@ import {
   type AgentAuditQuery,
   type AgentForbidden,
   type AgentMessage,
-  type AgentMode,
   type AgentPeer,
   type SendAgentMessageInput,
   type AgentPermissions,

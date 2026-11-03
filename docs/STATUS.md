@@ -8,7 +8,11 @@
 Добавлены защита параллельных установок и внешних правок, TOML parse/semantic
 preservation, откат token-file при ошибке записи. Scope ceiling beta.36 сохранён.
 1708 unit PASS; 7 focused PostgreSQL сценариев PASS (включая утрату owner).
-Полный PostgreSQL/browser прогон и Windows beta.37 проходят проверку.
+Полный PostgreSQL: 684 PASS / 1 opt-in skip; после ACL/path исправлений
+7 focused integration PASS. 8 Chromium PASS, включая фактический stdio-MCP
+orion_get_context через созданный token-file. Windows ACL проверены отдельно:
+явные user/SYSTEM/Administrators на пустом файле до записи секрета.
+Windows beta.37 пересобирается с этими исправлениями.
 Platform API 1.13.0 / AgentGateway 1.1.0. [ADR-0047](adr/ADR-0047-agent-connection-owner-control.md).
 Master и XLSX PR #94 не изменены; существующий ORION DEV сохранён.
 
