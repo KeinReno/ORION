@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.12.0",
+  "platformVersion": "1.13.0",
   "contractVersions": {
     "module": "1.3.0",
     "plugin": "1.4.0",
@@ -12,7 +12,7 @@
     "surface": "1.0.0",
     "permission": "1.3.0",
     "integration": "1.11.0",
-    "agentGateway": "1.0.0"
+    "agentGateway": "1.1.0"
   },
   "components": [
     {

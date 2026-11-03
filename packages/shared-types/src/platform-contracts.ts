@@ -33,7 +33,7 @@ export const PLATFORM_CONTRACT_VERSIONS: Readonly<Record<ContractId, string>> = 
   surface: "1.0.0",
   permission: "1.3.0",
   integration: "1.11.0",
-  agentGateway: "1.0.0"
+  agentGateway: "1.1.0"
 };
 
 export function isContractId(value: string): value is ContractId {

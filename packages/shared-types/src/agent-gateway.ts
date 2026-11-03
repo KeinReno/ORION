@@ -258,10 +258,13 @@ export type AgentInstallClient = z.infer<typeof agentInstallClientSchema>;
 
 export const installAgentClientInputSchema = z.object({
   client: agentInstallClientSchema,
-  scopes: z.array(agentScopeSchema).max(20),
-  /** Registry permissions of module tools (`habits.habit.read`, …; see `MODULE_AGENT_PERMISSIONS`). */
+  mode: agentModeSchema.default("assistant"),
+  /** null = no expiry. Configured by the owner, never implicitly forced to 30/90 days. */
+  expiresInDays: z.number().int().min(1).max(36_500).nullable().default(null),
+  scopes: z.array(agentScopeSchema).max(20).default([]),
+  /** Registry permissions of module tools (see MODULE_AGENT_PERMISSIONS). */
   modulePermissions: z.array(z.string().min(1)).max(100).default([])
-}).refine((value) => value.scopes.length > 0 || value.modulePermissions.length > 0, { message: "Отметьте хотя бы одно разрешение" });
+}).refine((value) => value.mode === "admin" || value.scopes.length > 0 || value.modulePermissions.length > 0, { message: "Отметьте хотя бы одно разрешение" });
 export type InstallAgentClientInput = z.input<typeof installAgentClientInputSchema>;
 
 /** What was written where; the token itself never leaves the server. */
@@ -272,6 +275,8 @@ export const installedAgentClientSchema = z.object({
   backupPath: z.string().nullable(),
   /** Earlier tokens of the same program in this workspace, revoked because the config now carries the new one. */
   revokedPrevious: z.number().int(),
+  /** True after a fresh loopback /ai/v1/me auth handshake; MCP client restart still required. */
+  apiVerified: z.boolean(),
   restartHint: z.string()
 });
 export type InstalledAgentClient = z.infer<typeof installedAgentClientSchema>;

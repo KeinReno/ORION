@@ -16,7 +16,6 @@ import {
   agentPermissionsSchema,
   agentScopeSchema,
   isExtensionAgentPermission,
-  remoteTokenViolations,
   scopesFromPermissions,
   type AgentAuditEntry,
   type AgentAuditQuery,
@@ -130,15 +129,14 @@ export class AgentTokensService {
       : [...new Set(input.scopes)];
     const unknownPermission = input.modulePermissions.find((permission) => !isExtensionAgentPermission(permission));
     if (unknownPermission) throw new BadRequestException(`Разрешение «${unknownPermission}» не объявлено ни одним модулем`);
-    // ADR-0017: на сервере токен живёт ограниченно и без удаления — кроме `admin` (явное решение владельца
-    // 2026-10-29, agent-policy.ts): этому режиму запрет удаления не навязывается принудительно.
-    const forbidden = isServerMode() && input.mode !== "admin" ? [...new Set([...input.forbidden, "delete" as const])] : [...new Set(input.forbidden)];
-    if (isServerMode()) {
-      const problems = remoteTokenViolations({ mode: input.mode, expiresInDays: input.expiresInDays, forbidden });
-      if (problems.length > 0) throw new BadRequestException(problems.join(". "));
-    }
+    // Restrictions and expiry are chosen by the token owner, not silently imposed by node mode.
+    const forbidden = [...new Set(input.forbidden)];
     const row = await this.prisma.withUser(userId, async (tx) => {
-      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      if (input.mode === "admin") {
+        await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
+      } else {
+        await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      }
       await this.assertProjectsTx(tx, workspaceId, [...input.allowedProjectIds, ...input.autoCommitProjectIds]);
       return tx.agentToken.create({
         data: {
@@ -173,16 +171,9 @@ export class AgentTokensService {
         AND "revokedAt" IS NULL FOR UPDATE`;
       const before = await tx.agentToken.findFirst({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null } });
       if (!before) throw new NotFoundException("Токен не найден");
-      if (isServerMode()) {
-        // Срок при обновлении не меняется, поэтому проверяем только режим и запрет удаления (он не снимается) —
-        // против итогового состояния ПОСЛЕ патча. Раньше недостающий `input.mode` угадывался как "assistant"
-        // независимо от реального режима токена, из-за чего PATCH {forbidden: []} на уже admin-токене отказывал,
-        // думая, что патчит воображаемого "assistant" (найдено собственным тестом, 2026-10-29).
-        const problems = remoteTokenViolations(
-          { mode: input.mode ?? (before.mode as AgentMode), forbidden: input.forbidden ?? forbiddenOf(before.forbidden) },
-          false
-        );
-        if (problems.length > 0) throw new BadRequestException(problems.join(". "));
+      // Only the workspace owner may grant, retain or modify unrestricted admin credentials.
+      if (input.mode === "admin" || before.mode === "admin") {
+        await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
       }
       const data: Prisma.AgentTokenUpdateManyMutationInput = {};
       if (input.mode !== undefined) data.mode = input.mode;
@@ -201,6 +192,9 @@ export class AgentTokensService {
       if (input.forbidden !== undefined) data.forbidden = [...new Set(input.forbidden)];
       if (input.writeLimitPerHour !== undefined) data.writeLimitPerHour = input.writeLimitPerHour;
       if (input.autoCommitProjectIds !== undefined) data.autoCommitProjectIds = [...new Set(input.autoCommitProjectIds)];
+      if (input.expiresInDays !== undefined) {
+        data.expiresAt = input.expiresInDays === null ? null : new Date(Date.now() + input.expiresInDays * DAY_MS);
+      }
       const result = await tx.agentToken.updateMany({ where: { id: tokenId, workspaceId, createdById: userId, revokedAt: null }, data });
       if (result.count === 0) throw new NotFoundException("Токен не найден");
       const after = await tx.agentToken.findUniqueOrThrow({ where: { id: tokenId } });
@@ -294,9 +288,9 @@ export class AgentTokensService {
     if (!row || row.revokedAt || (row.expiresAt && row.expiresAt.getTime() <= Date.now())) return null;
     // ТЗ-05: токен — это права его владельца в этом пространстве; вышел/удалён из пространства — токен мёртв.
     const stillMember = await this.prisma.asSystem((tx) =>
-      tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: row.workspaceId, userId: row.createdById } }, select: { id: true } })
+      tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId: row.workspaceId, userId: row.createdById } }, select: { id: true, role: true } })
     );
-    if (!stillMember) return null;
+    if (!stillMember || (row.mode === "admin" && stillMember.role !== "owner")) return null;
     if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > LAST_USED_GRANULARITY_MS) {
       await this.prisma.asSystem((tx) => tx.agentToken.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } }));
     }
@@ -514,7 +508,7 @@ export function scopesAfterPolicyEdit(
   return [...new Set([...matrix, ...extras, ...modules])].filter(scope => ceiling.has(scope));
 }
 
-type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds">;
+type PolicySnapshot = Pick<TokenRow, "mode" | "permissions" | "forbidden" | "writeLimitPerHour" | "allowedProjectIds"> & { expiresAt?: Date | null };
 
 /** One sentence for the journal: what actually changed, not just "обновлён". Empty when nothing did (a no-op save). */
 export function describePolicyChange(before: PolicySnapshot, after: PolicySnapshot): string {
@@ -524,6 +518,9 @@ export function describePolicyChange(before: PolicySnapshot, after: PolicySnapsh
   }
   if (JSON.stringify(before.permissions) !== JSON.stringify(after.permissions)) parts.push("права по разделам изменены");
   if (JSON.stringify([...before.forbidden].sort()) !== JSON.stringify([...after.forbidden].sort())) parts.push("запреты изменены");
+  if ((before.expiresAt?.toISOString() ?? null) !== (after.expiresAt?.toISOString() ?? null)) {
+    parts.push(`срок действия: ${before.expiresAt?.toISOString() ?? "бессрочно"} → ${after.expiresAt?.toISOString() ?? "бессрочно"}`);
+  }
   if (before.writeLimitPerHour !== after.writeLimitPerHour) {
     parts.push(`лимит записей: ${before.writeLimitPerHour ?? "без лимита"} → ${after.writeLimitPerHour ?? "без лимита"}`);
   }

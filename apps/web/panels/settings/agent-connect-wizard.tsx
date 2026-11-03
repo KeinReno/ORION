@@ -3,13 +3,16 @@
 import { useAgentConnection, useAgentTokens, useCreateAgentToken, useInstallAgentClient, useSetAiBridgeOverride } from "@orion/core-react";
 import {
   AGENT_INSTALL_CLIENTS,
+  AGENT_MODES,
+  AGENT_MODE_LABEL,
+  AGENT_MODE_HINT,
   AGENT_RECOMMENDED_SCOPES,
   AGENT_SCOPES,
   AGENT_SCOPE_LABEL,
-  REMOTE_TOKEN_MAX_DAYS,
   type AgentConnectionInfo,
   type AgentInstallClient,
   type AgentScope,
+  type AgentMode,
   type CreatedAgentToken,
   type InstalledAgentClient
 } from "@orion/shared-types";
@@ -33,6 +36,13 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
   const [client, setClient] = useState<AgentClient>("claude-desktop");
   const [scopes, setScopes] = useState<AgentScope[]>([...AGENT_RECOMMENDED_SCOPES]);
   const [modulePermissions, setModulePermissions] = useState<string[]>([]);
+  const [mode, setMode] = useState<AgentMode>("assistant");
+  const [expiry, setExpiry] = useState("none");
+  const [customDays, setCustomDays] = useState("365");
+  const [confirmAdmin, setConfirmAdmin] = useState<"install" | "manual" | null>(null);
+  const expiresInDays = expiry === "none" ? null : expiry === "custom" ? Number(customDays) : Number(expiry);
+  const expiryValid = expiresInDays === null || (Number.isInteger(expiresInDays) && expiresInDays >= 1 && expiresInDays <= 36_500);
+  const grantValid = mode === "admin" || scopes.length > 0 || modulePermissions.length > 0;
   const [issued, setIssued] = useState<{ token: CreatedAgentToken; client: AgentClient } | null>(null);
   const [check, setCheck] = useState<ConnectionCheck | null>(null);
   const [checking, setChecking] = useState(false);
@@ -45,27 +55,28 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
 
   async function installNow(): Promise<void> {
     try {
-      setInstalled(await install.mutateAsync({ client: client as AgentInstallClient, scopes, modulePermissions }));
+      setInstalled(await install.mutateAsync({ client: client as AgentInstallClient, scopes, modulePermissions, mode, expiresInDays }));
     } catch (error) {
       toast({ title: "Не удалось подключить автоматически", description: `${describeError(error)} Можно подключить вручную — кнопка рядом.`, tone: "danger" });
     }
   }
   const snippet = issued && info ? buildConnectSnippet(issued.client, info, issued.token.secret) : null;
 
-  // ADR-0017: a server-mode node refuses a token with no/too-long expiry outright (it never serves
-  // one that can't be revoked just by waiting it out). This wizard used to always ask for 90 days,
-  // which a server-mode node rejects on every single use — pick the server's own cap there instead.
-  const expiresInDays = info?.mode === "server" ? REMOTE_TOKEN_MAX_DAYS : 90;
-
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault();
+  async function issueManual(): Promise<void> {
     try {
-      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, modulePermissions, expiresInDays });
+      const token = await create.mutateAsync({ name: AGENT_CLIENT_LABEL[client], scopes, modulePermissions, mode, expiresInDays });
       setIssued({ token, client });
       setCheck(null);
     } catch (error) {
       toast({ title: "Не удалось выпустить токен", description: describeError(error), tone: "danger" });
     }
+  }
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    if (!expiryValid || !grantValid) return;
+    if (mode === "admin") setConfirmAdmin("manual");
+    else void issueManual();
   }
 
   async function copy(text: string): Promise<void> {
@@ -135,7 +146,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
           </Button>
         </div>
       ) : (
-        <form onSubmit={(event) => void submit(event)} className="space-y-3">
+        <form onSubmit={submit} className="space-y-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Программа</span>
             <Select value={client} onChange={(event) => setClient(event.target.value as AgentClient)} className="w-auto">
@@ -146,8 +157,43 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
               ))}
             </Select>
           </label>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Роль</span>
+              <Select value={mode} onChange={(event) => setMode(event.target.value as AgentMode)} className="w-auto">
+                {AGENT_MODES.map((value) => <option key={value} value={value}>{AGENT_MODE_LABEL[value]}</option>)}
+              </Select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Срок действия</span>
+              <Select value={expiry} onChange={(event) => setExpiry(event.target.value)} className="w-auto">
+                <option value="none">Бессрочно</option>
+                <option value="1">1 день</option>
+                <option value="7">7 дней</option>
+                <option value="30">30 дней</option>
+                <option value="90">90 дней</option>
+                <option value="365">1 год</option>
+                <option value="custom">Свой срок</option>
+              </Select>
+            </label>
+            {expiry === "custom" ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Дней (1–36500)</span>
+                <input type="number" min={1} max={36500} value={customDays} onChange={(event) => setCustomDays(event.target.value)}
+                  className="w-28 rounded-md border border-border bg-background px-2 py-1 text-label" />
+              </label>
+            ) : null}
+          </div>
+          <p className={mode === "admin" ? "text-label text-warning" : "text-2xs text-muted-foreground"}>
+            {AGENT_MODE_HINT[mode]} {expiresInDays === null ? "Доступ бессрочный до явного отзыва." : ""}
+          </p>
+          {mode === "admin" ? (
+            <p className="rounded border border-warning/40 p-2 text-label text-warning">
+              Администратор может выполнять операции без подтверждения. Выдавать эту роль вправе только владелец рабочего пространства.
+            </p>
+          ) : null}
           <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
-            <legend className="mb-1 text-xs text-muted-foreground">Что разрешить (удалять агент не может в любом случае)</legend>
+            <legend className="mb-1 text-xs text-muted-foreground">Разрешения для выбранной роли (администратор не ограничен матрицей)</legend>
             {WIZARD_SCOPES.map((scope) => (
               <label key={scope} className="flex items-center gap-1.5 text-label">
                 <input
@@ -163,25 +209,33 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
           <ModulePermissionsField value={modulePermissions} onChange={setModulePermissions} />
           <div className="flex flex-wrap gap-2">
             {canInstall ? (
-              <Button type="button" size="sm" disabled={install.isPending || (scopes.length === 0 && modulePermissions.length === 0)} onClick={() => void installNow()}>
+              <Button type="button" size="sm" disabled={install.isPending || !grantValid || !expiryValid} onClick={() => mode === "admin" ? setConfirmAdmin("install") : void installNow()}>
                 {install.isPending ? "Подключаю…" : `Подключить ${AGENT_CLIENT_LABEL[client]} автоматически`}
               </Button>
             ) : null}
-            <Button type="submit" size="sm" variant={canInstall ? "outline" : "primary"} disabled={create.isPending || (scopes.length === 0 && modulePermissions.length === 0) || connection.isLoading}>
+            <Button type="submit" size="sm" variant={canInstall ? "outline" : "primary"} disabled={create.isPending || !grantValid || !expiryValid || connection.isLoading}>
               {canInstall ? "Настроить вручную" : "Выпустить токен и показать настройку"}
             </Button>
           </div>
           {canInstall ? (
             <p className="text-xs text-muted-foreground">
-              Автоматически: ORION допишет себя в настройки {AGENT_CLIENT_LABEL[client]} на этом компьютере (прежний файл сохранится рядом
-              копией). Агент будет работать по вашей подписке в этой программе.
+              Автоматически: ORION сохранит токен в отдельном приватном файле, добавит путь к нему в настройки {AGENT_CLIENT_LABEL[client]} и проверит авторизацию API. Для завершения перезапустите клиент. Прежняя конфигурация сохраняется резервной копией.
             </p>
           ) : null}
-          {info?.mode === "server" ? (
-            <p className="text-xs text-muted-foreground">
-              Сервер доступен извне — токен выпускается на {REMOTE_TOKEN_MAX_DAYS} дней (ADR-0017), продлить его можно будет тем же мастером.
-            </p>
-          ) : null}
+          <ConfirmDialog
+            open={confirmAdmin !== null}
+            title="Выдать права администратора?"
+            description="Этот агент сможет изменять и удалять данные без дополнительных подтверждений. Бессрочный доступ сохранится до отзыва. Продолжить?"
+            confirmLabel="Выдать доступ"
+            danger
+            onConfirm={() => {
+              const action = confirmAdmin;
+              setConfirmAdmin(null);
+              if (action === "install") void installNow();
+              else if (action === "manual") void issueManual();
+            }}
+            onCancel={() => setConfirmAdmin(null)}
+          />
         </form>
       )}
     </Card>
@@ -256,7 +310,7 @@ function InstalledCard({ workspaceId, installed, onDone }: { workspaceId: string
   const token = (tokens.data ?? []).find((item) => item.name === installed.tokenName && item.revokedAt === null);
   return (
     <div className="space-y-2" role="status">
-      <p className="text-label font-medium">ORION добавлен в настройки {installed.tokenName}.</p>
+      <p className="text-label font-medium">ORION добавлен в настройки {installed.tokenName}. API-авторизация проверена; MCP-клиент нужно перезапустить.</p>
       <p className="text-xs text-muted-foreground">
         Файл: <code className="break-all">{installed.configPath}</code>
         {installed.backupPath ? (
@@ -268,7 +322,7 @@ function InstalledCard({ workspaceId, installed, onDone }: { workspaceId: string
       </p>
       <p className="text-label">{installed.restartHint}</p>
       <p className={token?.lastUsedAt ? "text-label text-success" : "text-label text-muted-foreground"}>
-        {token?.lastUsedAt ? `Подключено — последнее обращение ${relativeTime(token.lastUsedAt)}.` : "Жду первого обращения программы к ORION…"}
+        {token?.lastUsedAt ? `Последний запрос к API ${relativeTime(token.lastUsedAt)} (автопроверка или клиент).` : "Жду обращения к API ORION…"}
       </p>
       <Button size="sm" variant="ghost" onClick={onDone}>
         Готово

@@ -1,7 +1,8 @@
 import fs from "node:fs";
+import path from "node:path";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import { createAgentTokenInputSchema, type AgentInstallClient, type InstallAgentClientInput, type InstalledAgentClient } from "@orion/shared-types";
-import { CLIENT_RESTART_HINT, clientConfigPath, mergeClientConfig, writeClientConfig, type McpServerEntry } from "./agent-client-install";
+import { CLIENT_RESTART_HINT, agentTokenFilePath, clientConfigPath, mergeClientConfig, writeClientConfig, writePrivateAgentToken, type McpServerEntry } from "./agent-client-install";
 import { resolveAgentConnection } from "./agent-connection";
 import { AgentTokensService } from "./agent-tokens.service";
 
@@ -12,9 +13,12 @@ export const INSTALL_CLIENT_LABEL: Record<AgentInstallClient, string> = {
   codex: "Codex"
 };
 
+// One credential/config per client profile, shared across service instances.
+const activeInstalls = new Set<string>();
+
 /**
  * «Подключить в один клик» (see `agent-client-install.ts`): issues a token for the program and writes ORION's MCP entry
- * into the program's config on this computer. The secret goes straight into that file and is never returned.
+ * into the program's config on this computer. The secret lives in a private file, not in config.toml or JSON.
  */
 @Injectable()
 export class AgentClientInstallService {
@@ -23,6 +27,14 @@ export class AgentClientInstallService {
   constructor(private readonly tokens: AgentTokensService) {}
 
   async install(userId: string, workspaceId: string, input: InstallAgentClientInput, configPath = clientConfigPath(input.client)): Promise<InstalledAgentClient> {
+    const key = process.platform === "win32" ? path.resolve(configPath).toLowerCase() : path.resolve(configPath);
+    if (activeInstalls.has(key)) throw new ConflictException("Подключение этой программы уже выполняется. Дождитесь результата и повторите попытку.");
+    activeInstalls.add(key);
+    try { return await this.installExclusive(userId, workspaceId, input, configPath); }
+    finally { activeInstalls.delete(key); }
+  }
+
+  private async installExclusive(userId: string, workspaceId: string, input: InstallAgentClientInput, configPath: string): Promise<InstalledAgentClient> {
     const info = resolveAgentConnection();
     if (info.mode === "server") throw new ForbiddenException("Подключение в один клик работает только в локальной установке ORION");
     if (!info.command || !info.apiUrl) {
@@ -35,43 +47,119 @@ export class AgentClientInstallService {
     } catch {
       throw new BadRequestException(`Не удалось прочитать ${configPath} — подключите программу вручную`);
     }
-    const entryWith = (secret: string): McpServerEntry => ({
-      command: info.command as string,
+    const tokenFile = agentTokenFilePath(input.client, configPath);
+    const entry: McpServerEntry = {
+      command: info.command,
       args: info.args,
-      env: { ORION_AGENT_TOKEN: secret, ORION_API_URL: info.apiUrl as string }
-    });
-    // Check the file BEFORE issuing a token: a config we cannot parse is not overwritten.
+      env: { ORION_AGENT_TOKEN_FILE: tokenFile, ORION_API_URL: info.apiUrl }
+    };
+    // A damaged config must not be overwritten. Refuse symlinks for the token file.
+    let merged: string;
+    let previousToken: string | null;
     try {
-      mergeClientConfig(input.client, existing, entryWith("check"));
+      merged = mergeClientConfig(input.client, existing, entry);
+      previousToken = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8") : null;
+      if (previousToken !== null && !/^orion_agt_[A-Za-z0-9_-]{32}\s*$/.test(previousToken)) {
+        throw new Error("Unrecognized existing token file");
+      }
+      if (fs.existsSync(tokenFile) && !fs.lstatSync(tokenFile).isFile()) throw new Error("Unsafe token path");
     } catch {
-      throw new BadRequestException(`Файл настроек ${configPath} повреждён или в неожиданном формате — ORION не стал его менять. Подключите программу вручную.`);
+      throw new BadRequestException("Файл конфигурации или хранилище токена повреждены — ORION не стал их менять");
     }
 
     const label = INSTALL_CLIENT_LABEL[input.client];
     const previous = (await this.tokens.list(userId, workspaceId)).filter(
-      (token) => token.name === label && token.revokedAt === null && (token.expiresAt === null || Date.parse(token.expiresAt) > Date.now())
+      (token) => token.name === label && token.revokedAt === null &&
+        (token.expiresAt === null || Date.parse(token.expiresAt) > Date.now())
     );
-    const created = await this.tokens.create(userId, workspaceId, createAgentTokenInputSchema.parse({ name: label, scopes: input.scopes, modulePermissions: input.modulePermissions ?? [], expiresInDays: 90 }));
+    const created = await this.tokens.create(userId, workspaceId,
+      createAgentTokenInputSchema.parse({
+        name: label, mode: input.mode, scopes: input.scopes,
+        modulePermissions: input.modulePermissions ?? [], expiresInDays: input.expiresInDays
+      })
+    );
 
     let backupPath: string | null;
+    let wroteTokenFile = false;
     try {
-      backupPath = writeClientConfig(configPath, mergeClientConfig(input.client, existing, entryWith(created.secret)));
+      // Check that the running ORION API accepts exactly the new token before changing
+      // any client configuration or revoking a previously working credential.
+      await verifyLocalAgentBridge(info.apiUrl, created.secret, workspaceId, created.mode);
+      const currentConfig = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : null;
+      const currentToken = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8") : null;
+      if (currentConfig !== existing || currentToken !== previousToken) {
+        throw new ConflictException("Настройки программы изменились во время подключения. Обновите их и повторите попытку.");
+      }
+      writePrivateAgentToken(tokenFile, created.secret);
+      wroteTokenFile = true;
+      backupPath = writeClientConfig(configPath, merged);
     } catch (error) {
+      try {
+        if (wroteTokenFile && previousToken !== null) {
+          const oldSecret = previousToken.trim();
+          if (oldSecret.startsWith("orion_agt_")) writePrivateAgentToken(tokenFile, oldSecret);
+        } else if (wroteTokenFile && fs.existsSync(tokenFile)) {
+          fs.unlinkSync(tokenFile);
+        }
+      } catch {
+        this.logger.error("Не удалось восстановить прежний файл токена — требуется переподключение");
+      }
       await this.tokens.revoke(userId, workspaceId, created.id).catch(() => undefined);
-      this.logger.warn(`Не удалось записать ${configPath}: ${error instanceof Error ? error.message : String(error)}`);
-      throw new BadRequestException(`Не удалось записать ${configPath} — подключите программу вручную`);
+      // Never log a raw exception: some HTTP/client errors may contain credentials.
+      this.logger.warn("Подключение агента не удалось; новый токен отозван");
+      if (error instanceof ConflictException || error instanceof ForbiddenException) throw error;
+      throw new ConflictException("Не удалось проверить или записать подключение. Предыдущий токен не отозван.");
     }
 
-    // The config now holds the new token: the program's earlier tokens here are dead weight — revoke them.
     let revokedPrevious = 0;
     for (const token of previous) {
       try {
         await this.tokens.revoke(userId, workspaceId, token.id);
         revokedPrevious += 1;
       } catch {
-        /* a token that cannot be revoked now stays listed; the user can revoke it by hand */
+        // Unrevoked tokens remain visible to their creator for manual revocation.
       }
     }
-    return { client: input.client, tokenName: label, configPath, backupPath, revokedPrevious, restartHint: CLIENT_RESTART_HINT[input.client] };
+    return {
+      client: input.client, tokenName: label, configPath, backupPath,
+      revokedPrevious, restartHint: CLIENT_RESTART_HINT[input.client], apiVerified: true
+    };
+  }
+}
+
+/**
+ * Actual loopback REST handshake, not a fake "client connected" signal. The
+ * MCP application still needs to restart and make its own first tool call.
+ * Strict loopback validation avoids sending a bearer secret to a remote URL
+ * supplied through ORION_PUBLIC_API_URL.
+ */
+export async function verifyLocalAgentBridge(
+  apiUrl: string,
+  secret: string,
+  workspaceId: string,
+  mode: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  let address: URL;
+  try {
+    address = new URL(apiUrl);
+  } catch {
+    throw new ConflictException("Некорректный адрес локального API");
+  }
+  if (address.protocol !== "http:" ||
+      !["127.0.0.1", "localhost", "[::1]"].includes(address.hostname) ||
+      address.username || address.password || address.pathname !== "/" ||
+      address.search || address.hash) {
+    throw new ForbiddenException("Автоподключение требует локальный адрес API (loopback)");
+  }
+  const response = await fetchImpl(new URL("/ai/v1/me", address), {
+    headers: { Authorization: `Bearer ${secret}` },
+    redirect: "error",
+    signal: AbortSignal.timeout(4_000)
+  });
+  if (!response.ok) throw new ConflictException(`ORION API отклонил новый токен (HTTP ${response.status})`);
+  const result = await response.json() as { workspaceId?: string; mode?: string };
+  if (result.workspaceId !== workspaceId || result.mode !== mode) {
+    throw new ConflictException("Ответ ORION не соответствует выбранному пространству или роли");
   }
 }

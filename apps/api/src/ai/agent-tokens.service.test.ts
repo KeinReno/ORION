@@ -39,6 +39,14 @@ describe("describePolicyChange", () => {
       .toBe("Права токена изменены: лимит записей: без лимита → 50");
   });
 
+  it("audits when a token becomes indefinite or is renewed", () => {
+    const expiry = new Date("2026-11-30T00:00:00.000Z");
+    expect(describePolicyChange(snapshot({ expiresAt: expiry }), snapshot({ expiresAt: null })))
+      .toContain("срок действия:");
+    expect(describePolicyChange(snapshot({ expiresAt: expiry }), snapshot({ expiresAt: expiry })))
+      .toBe("Настройки токена сохранены без изменений");
+  });
+
   it("joins several real changes in one sentence", () => {
     const before = snapshot({ mode: "observer", allowedProjectIds: ["p1"] });
     const after = snapshot({ mode: "assistant", allowedProjectIds: ["p1", "p2"] });

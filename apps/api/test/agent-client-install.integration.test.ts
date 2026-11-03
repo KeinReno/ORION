@@ -18,6 +18,8 @@ describe("Agent client one-click install", () => {
   let baseUrl: string;
   const emailPrefix = `install-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "orion-install-it-"));
+  const previousPort = process.env.PORT;
+  const previousPublicApi = process.env.ORION_PUBLIC_API_URL;
   const previousHome = process.env.ORION_AGENT_CLIENT_HOME;
 
   beforeAll(async () => {
@@ -27,6 +29,8 @@ describe("Agent client one-click install", () => {
     await app.listen(0, "127.0.0.1");
     baseUrl = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
     prisma = app.get(PrismaService);
+    process.env.PORT = String((app.getHttpServer().address() as { port: number }).port);
+    delete process.env.ORION_PUBLIC_API_URL;
   });
 
   afterAll(async () => {
@@ -40,7 +44,9 @@ describe("Agent client one-click install", () => {
       });
     }
     await app?.close();
-    process.env.ORION_AGENT_CLIENT_HOME = previousHome;
+    for (const [key, value] of Object.entries({ ORION_AGENT_CLIENT_HOME: previousHome, PORT: previousPort, ORION_PUBLIC_API_URL: previousPublicApi })) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
     fs.rmSync(home, { recursive: true, force: true });
   });
 
@@ -91,7 +97,10 @@ describe("Agent client one-click install", () => {
       expect(written.mcpServers.github).toEqual({ command: "gh" });
       expect(installed.data.backupPath).not.toBeNull();
     }
-    const secret = written.mcpServers.orion!.env.ORION_AGENT_TOKEN!;
+    const env = written.mcpServers.orion!.env;
+    expect(env.ORION_AGENT_TOKEN).toBeUndefined();
+    const secret = fs.readFileSync(env.ORION_AGENT_TOKEN_FILE!, "utf8").trim();
+    expect(installed.text).not.toContain(secret);
     expect((await call("/ai/v1/tasks", { token: secret })).status).toBe(200);
 
     // Connecting again replaces the entry and revokes the previous token of that program.

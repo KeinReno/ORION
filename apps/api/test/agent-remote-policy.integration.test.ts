@@ -6,8 +6,8 @@ import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
 
 /**
- * ADR-0017: в режиме `server` (мост доступен извне) токен агента выпускается со сроком ≤ 30 дней, не `manager`
- * и всегда с запретом удаления. Режим читается на каждом запросе, поэтому один запущенный сервер переключаем env.
+ * Серверный режим больше не навязывает свои сроки и роли; ими управляет владелец.
+ * Проверяется при переключении env на одном приложении.
  */
 describe("Agent tokens in server mode (ADR-0017)", () => {
   let app: INestApplication;
@@ -70,25 +70,25 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     expect(created.data).toMatchObject({ mode: "manager", expiresAt: null, forbidden: [] });
   });
 
-  it("на сервере отказывает менеджеру и бессрочному или долгому токену, а запрет удаления добавляет сам", async () => {
+  it("на сервере сохраняет явно выбранные срок, роль и запреты", async () => {
     const { token, ws } = await owner();
     process.env.ORION_MODE = "server";
     process.env.ORION_AI_BRIDGE = "1";
     const issue = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens`, "POST", token, { name: "Удалённый", scopes: ["notes:read"], ...body });
 
-    expect((await issue({ mode: "manager", expiresInDays: 7 })).status).toBe(400);
-    expect((await issue({ mode: "assistant", expiresInDays: null })).status).toBe(400);
-    expect((await issue({ mode: "assistant", expiresInDays: 31 })).status).toBe(400);
+    expect((await issue({ mode: "manager", expiresInDays: 7 })).status).toBe(201);
+    expect((await issue({ mode: "assistant", expiresInDays: null })).status).toBe(201);
+    expect((await issue({ mode: "assistant", expiresInDays: 31 })).status).toBe(201);
 
     const ok = await issue({ mode: "assistant", expiresInDays: 30, forbidden: [] });
     expect(ok.status).toBe(201);
-    expect(ok.data.forbidden).toContain("delete");
+    expect(ok.data.forbidden).toEqual([]);
     expect(ok.data.expiresAt).not.toBeNull();
 
-    // Выпущенный токен нельзя «повысить» до менеджера или лишить запрета удаления.
+    // Роль и запреты меняются только явным запросом владельца.
     const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
-    expect((await patch({ mode: "manager" })).status).toBe(400);
-    expect((await patch({ forbidden: [] })).status).toBe(400);
+    expect((await patch({ mode: "manager" })).status).toBe(200);
+    expect((await patch({ forbidden: [] })).status).toBe(200);
     expect((await patch({ mode: "observer", forbidden: ["delete", "finance"] })).status).toBe(200);
   });
 
@@ -102,12 +102,54 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     expect(ok.status, JSON.stringify(ok.data)).toBe(201);
     expect(ok.data).toMatchObject({ mode: "admin", forbidden: [] });
 
-    // Still capped by the 30-day rotation hygiene rule — that one wasn't an exception.
-    expect((await issue({ expiresInDays: null })).status).toBe(400);
-    expect((await issue({ expiresInDays: 31 })).status).toBe(400);
+    // The owner may deliberately issue indefinite or long-lived administrator credentials.
+    expect((await issue({ expiresInDays: null })).status).toBe(201);
+    expect((await issue({ expiresInDays: 365 })).status).toBe(201);
 
     // Updating a live token to admin on the server also isn't forced into a delete-forbid.
     const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
     expect((await patch({ forbidden: [] })).status).toBe(200);
   });
+  it("не позволяет обычному участнику пространства выпускать админ-токен", async () => {
+    const ownerAccount = await owner();
+    const memberNumber = counter;
+    const member = await owner();
+    await prisma.asSystem(async (tx) => {
+      const account = await tx.user.findUniqueOrThrow({
+        where: { email: `${emailPrefix}-${memberNumber}@example.test` }
+      });
+      await tx.workspaceMember.create({
+        data: { workspaceId: ownerAccount.ws, userId: account.id, role: "member" }
+      });
+    });
+    const issue = (mode: string) =>
+      request(`/workspaces/${ownerAccount.ws}/agent-tokens`, "POST", member.token,
+        { name: "Другой участник", mode, scopes: ["notes:read"], expiresInDays: null });
+    expect((await issue("assistant")).status).toBe(201);
+    expect((await issue("admin")).status).toBe(403);
+  });
+
+  it("invalidates admin after owner demotion and audits renewal/removal of expiry", async () => {
+    const account = await owner();
+    const created = await request(`/workspaces/${account.ws}/agent-tokens`, "POST", account.token,
+      { name: "Owner admin", mode: "admin", expiresInDays: 7 });
+    expect(created.status).toBe(201);
+    const secret = created.data.secret;
+    expect((await request("/ai/v1/me", "GET", secret)).status).toBe(200);
+    const patch = (body: unknown) => request(`/workspaces/${account.ws}/agent-tokens/${created.data.id}`, "PATCH", account.token, body);
+    const renewed = await patch({ expiresInDays: 365 });
+    expect(renewed.status).toBe(200);
+    expect(Date.parse(renewed.data.expiresAt)).toBeGreaterThan(Date.now() + 364 * 86400_000);
+    expect((await patch({ expiresInDays: null })).data.expiresAt).toBeNull();
+    const entries = await prisma.asSystem(tx => tx.agentAuditEntry.findMany({ where: { tokenId: created.data.id, action: "policy.update" } }));
+    expect(entries).toHaveLength(2);
+    expect(entries.every(row => row.summary?.includes("срок действия") === true)).toBe(true);
+    await prisma.asSystem(async tx => {
+      const token = await tx.agentToken.findUniqueOrThrow({ where: { id: created.data.id } });
+      await tx.workspaceMember.update({ where: { workspaceId_userId: { workspaceId: account.ws, userId: token.createdById } }, data: { role: "member" } });
+    });
+    expect((await request("/ai/v1/me", "GET", secret)).status).toBe(401);
+    expect((await patch({ expiresInDays: 30 })).status).toBe(403);
+  });
+
 });

@@ -1,5 +1,17 @@
 # ORION — состояние на 30 октября 2026
 
+## Интеграция Agent connection PR #96 — beta.37, 03.11.2026
+
+В локальную beta-ветку перенесён PR #96 (`84bb0dc`): выбор роли/срока,
+включая бессрочный доступ, owner-only admin, аудит продления срока,
+приватный token-file и loopback REST handshake перед записью MCP config.
+Добавлены защита параллельных установок и внешних правок, TOML parse/semantic
+preservation, откат token-file при ошибке записи. Scope ceiling beta.36 сохранён.
+1708 unit PASS; 7 focused PostgreSQL сценариев PASS (включая утрату owner).
+Полный PostgreSQL/browser прогон и Windows beta.37 проходят проверку.
+Platform API 1.13.0 / AgentGateway 1.1.0. [ADR-0047](adr/ADR-0047-agent-connection-owner-control.md).
+Master и XLSX PR #94 не изменены; существующий ORION DEV сохранён.
+
 ## Windows beta.36 — 03.11.2026
 
 Опубликован [GitHub prerelease](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.36)

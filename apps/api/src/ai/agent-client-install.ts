@@ -1,6 +1,9 @@
 import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { parse as parseToml } from "smol-toml";
 import type { AgentInstallClient } from "@orion/shared-types";
 
 /**
@@ -64,7 +67,10 @@ export function mergeMcpJson(existing: string | null, entry: McpServerEntry): st
     config = parsed as Record<string, unknown>;
   }
   const current = config.mcpServers;
-  const servers = current && typeof current === "object" && !Array.isArray(current) ? (current as Record<string, unknown>) : {};
+  if (current !== undefined && (!current || typeof current !== "object" || Array.isArray(current))) {
+    throw new Error("mcpServers must be an object");
+  }
+  const servers = (current ?? {}) as Record<string, unknown>;
   config.mcpServers = { ...servers, [MCP_SERVER_NAME]: entry };
   return `${JSON.stringify(config, null, 2)}\n`;
 }
@@ -73,6 +79,7 @@ const tomlString = (value: string): string => JSON.stringify(value);
 
 /** Replaces the `[mcp_servers.orion]` table (and its sub-tables) of a Codex config.toml, keeping everything else. */
 export function mergeCodexToml(existing: string | null, entry: McpServerEntry): string {
+  const original = parseToml(existing ?? "");
   const lines = (existing ?? "").split(/\r?\n/);
   const kept: string[] = [];
   let skipping = false;
@@ -92,23 +99,61 @@ export function mergeCodexToml(existing: string | null, entry: McpServerEntry): 
     `args = [${entry.args.map(tomlString).join(", ")}]`,
     `env = { ${env} }`
   ];
-  return `${[...kept, ...(kept.length > 0 ? [""] : []), ...block].join("\n")}\n`;
+  const merged = `${[...kept, ...(kept.length > 0 ? [""] : []), ...block].join("\n")}\n`;
+  const parsed = parseToml(merged);
+  // Unsupported quoted/dotted or multiline layouts must fail closed rather
+  // than silently changing another server or a user's prompt/config value.
+  for (const value of [original, parsed]) {
+    const servers = value.mcp_servers;
+    if (servers && typeof servers === "object" && !Array.isArray(servers) && !(servers instanceof Date)) delete servers.orion;
+    if (servers && typeof servers === "object" && Object.keys(servers).length === 0) delete value.mcp_servers;
+  }
+  if (!isDeepStrictEqual(original, parsed)) throw new Error("Unsupported Codex TOML layout; use manual configuration");
+  return merged;
 }
 
 export function mergeClientConfig(client: AgentInstallClient, existing: string | null, entry: McpServerEntry): string {
   return client === "codex" ? mergeCodexToml(existing, entry) : mergeMcpJson(existing, entry);
 }
 
-/** Writes the merged config: backup of the previous file next to it, then an atomic replace. Returns the backup path. */
+/** Credential lives outside MCP config, so Codex/Cursor settings and their backups never
+ * contain the live bearer secret. The adapter already reads ORION_AGENT_TOKEN_FILE.
+ * This must be the same OS user's profile as the MCP client.
+ */
+export function agentTokenFilePath(client: AgentInstallClient, configPath: string): string {
+  return path.join(path.dirname(configPath), `.orion-${client}-agent.token`);
+}
+
+/** Atomic replacement, owner-only permissions on POSIX; Windows inherits profile ACLs. */
+export function writePrivateAgentToken(file: string, token: string): void {
+  if (!/^orion_agt_[A-Za-z0-9_-]{32}$/.test(token)) throw new Error("Invalid agent token");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error("Token path is not a regular file");
+  const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    fs.writeFileSync(tmp, token + "\n", { mode: 0o600, flag: "wx" });
+    if (process.platform !== "win32") fs.chmodSync(tmp, 0o600);
+    fs.renameSync(tmp, file);
+  } finally {
+    if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+  }
+}
+
+/** Writes the config atomically, retaining a private backup; returns its path. */
 export function writeClientConfig(file: string, content: string, now: Date = new Date()): string | null {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let backup: string | null = null;
   if (fs.existsSync(file)) {
     backup = `${file}.orion-backup-${now.toISOString().replace(/[:.]/g, "-")}`;
     fs.copyFileSync(file, backup);
+    if (process.platform !== "win32") fs.chmodSync(backup, 0o600);
   }
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, content, { mode: 0o600 });
-  fs.renameSync(tmp, file);
+  const tmp = `${file}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  try {
+    fs.writeFileSync(tmp, content, { mode: 0o600, flag: "wx" });
+    fs.renameSync(tmp, file);
+  } finally {
+    if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+  }
   return backup;
 }

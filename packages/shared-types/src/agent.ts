@@ -177,7 +177,7 @@ export const createAgentTokenInputSchema = z
     mode: agentModeSchema.default("assistant"),
     ...agentRestrictionFields,
     /** `null` = no expiry (the settings screen warns about it). */
-    expiresInDays: z.number().int().min(1).max(365).nullable().default(30)
+    expiresInDays: z.number().int().min(1).max(36_500).nullable().default(null)
   })
   // admin doesn't consult the matrix/modulePermissions at all (agent-policy.ts) — an empty one is
   // correct for it, not a mistake the "choose at least one permission" guard should catch.
@@ -202,7 +202,9 @@ export const updateAgentTokenInputSchema = z
     allowedProjectIds: agentRestrictionFields.allowedProjectIds,
     forbidden: agentRestrictionFields.forbidden,
     writeLimitPerHour: agentRestrictionFields.writeLimitPerHour,
-    autoCommitProjectIds: agentRestrictionFields.autoCommitProjectIds
+    autoCommitProjectIds: agentRestrictionFields.autoCommitProjectIds,
+    /** null = no expiry; a positive number resets expiry from the moment of the edit. */
+    expiresInDays: z.number().int().min(1).max(36_500).nullable()
   })
   .partial();
 export type UpdateAgentTokenInput = z.infer<typeof updateAgentTokenInputSchema>;
