@@ -110,4 +110,23 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
     expect((await patch({ forbidden: [] })).status).toBe(200);
   });
+  it("не позволяет обычному участнику пространства выпускать админ-токен", async () => {
+    const ownerAccount = await owner();
+    const memberNumber = counter;
+    const member = await owner();
+    await prisma.asSystem(async (tx) => {
+      const account = await tx.user.findUniqueOrThrow({
+        where: { email: `${emailPrefix}-${memberNumber}@example.test` }
+      });
+      await tx.workspaceMember.create({
+        data: { workspaceId: ownerAccount.ws, userId: account.id, role: "member" }
+      });
+    });
+    const issue = (mode: string) =>
+      request(`/workspaces/${ownerAccount.ws}/agent-tokens`, "POST", member.token,
+        { name: "Другой участник", mode, scopes: ["notes:read"], expiresInDays: null });
+    expect((await issue("assistant")).status).toBe(201);
+    expect((await issue("admin")).status).toBe(403);
+  });
+
 });
