@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { clientConfigPath, mergeCodexToml, mergeMcpJson, writeClientConfig, type McpServerEntry } from "./agent-client-install";
+import { agentTokenFilePath, clientConfigPath, mergeCodexToml, mergeMcpJson, writeClientConfig, writePrivateAgentToken, type McpServerEntry } from "./agent-client-install";
 
 const entry: McpServerEntry = { command: "C:\\ORION\\node.exe", args: ["C:\\ORION\\api\\dist\\mcp\\orion-mcp.js"], env: { ORION_AGENT_TOKEN: "oat_x", ORION_API_URL: "http://127.0.0.1:4000" } };
 
@@ -62,4 +62,30 @@ describe("agent client install", () => {
     expect(fs.readFileSync(file, "utf8")).toBe('{"a":1}\n');
     fs.rmSync(dir, { recursive: true, force: true });
   });
+  it("stores the live secret outside Codex MCP config and restricts the private file", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orion-credential-"));
+    try {
+      const configPath = path.join(dir, ".codex", "config.toml");
+      const tokenPath = agentTokenFilePath("codex", configPath);
+      const secret = "orion_agt_" + "a".repeat(32);
+      writePrivateAgentToken(tokenPath, secret);
+      const merged = mergeCodexToml(null, {
+        command: "node", args: ["adapter.js"],
+        env: { ORION_AGENT_TOKEN_FILE: tokenPath, ORION_API_URL: "http://127.0.0.1:4000" }
+      });
+      expect(merged).toContain("ORION_AGENT_TOKEN_FILE");
+      expect(merged).not.toContain(secret);
+      expect(fs.readFileSync(tokenPath, "utf8").trim()).toBe(secret);
+      if (process.platform !== "win32") expect(fs.statSync(tokenPath).mode & 0o077).toBe(0);
+      expect(() => writePrivateAgentToken(tokenPath, "not-a-token")).toThrow();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses invalid mcpServers values rather than silently discarding other settings", () => {
+    expect(() => mergeMcpJson('{"mcpServers":[]}', entry)).toThrow(/mcpServers/);
+    expect(() => mergeMcpJson('{"mcpServers":null}', entry)).toThrow(/mcpServers/);
+  });
+
 });
