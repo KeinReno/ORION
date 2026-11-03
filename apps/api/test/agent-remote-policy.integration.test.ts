@@ -70,25 +70,25 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     expect(created.data).toMatchObject({ mode: "manager", expiresAt: null, forbidden: [] });
   });
 
-  it("на сервере отказывает менеджеру и бессрочному или долгому токену, а запрет удаления добавляет сам", async () => {
+  it("на сервере сохраняет явно выбранные срок, роль и запреты", async () => {
     const { token, ws } = await owner();
     process.env.ORION_MODE = "server";
     process.env.ORION_AI_BRIDGE = "1";
     const issue = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens`, "POST", token, { name: "Удалённый", scopes: ["notes:read"], ...body });
 
-    expect((await issue({ mode: "manager", expiresInDays: 7 })).status).toBe(400);
-    expect((await issue({ mode: "assistant", expiresInDays: null })).status).toBe(400);
-    expect((await issue({ mode: "assistant", expiresInDays: 31 })).status).toBe(400);
+    expect((await issue({ mode: "manager", expiresInDays: 7 })).status).toBe(201);
+    expect((await issue({ mode: "assistant", expiresInDays: null })).status).toBe(201);
+    expect((await issue({ mode: "assistant", expiresInDays: 31 })).status).toBe(201);
 
     const ok = await issue({ mode: "assistant", expiresInDays: 30, forbidden: [] });
     expect(ok.status).toBe(201);
-    expect(ok.data.forbidden).toContain("delete");
+    expect(ok.data.forbidden).toEqual([]);
     expect(ok.data.expiresAt).not.toBeNull();
 
     // Выпущенный токен нельзя «повысить» до менеджера или лишить запрета удаления.
     const patch = (body: Record<string, unknown>) => request(`/workspaces/${ws}/agent-tokens/${ok.data.id}`, "PATCH", token, body);
-    expect((await patch({ mode: "manager" })).status).toBe(400);
-    expect((await patch({ forbidden: [] })).status).toBe(400);
+    expect((await patch({ mode: "manager" })).status).toBe(200);
+    expect((await patch({ forbidden: [] })).status).toBe(200);
     expect((await patch({ mode: "observer", forbidden: ["delete", "finance"] })).status).toBe(200);
   });
 
