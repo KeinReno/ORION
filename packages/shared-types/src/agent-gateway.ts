@@ -275,6 +275,8 @@ export const installedAgentClientSchema = z.object({
   backupPath: z.string().nullable(),
   /** Earlier tokens of the same program in this workspace, revoked because the config now carries the new one. */
   revokedPrevious: z.number().int(),
+  /** True after a fresh loopback /ai/v1/me auth handshake; MCP client restart still required. */
+  apiVerified: z.boolean(),
   restartHint: z.string()
 });
 export type InstalledAgentClient = z.infer<typeof installedAgentClientSchema>;
