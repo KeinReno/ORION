@@ -322,7 +322,7 @@ function InstalledCard({ workspaceId, installed, onDone }: { workspaceId: string
       </p>
       <p className="text-label">{installed.restartHint}</p>
       <p className={token?.lastUsedAt ? "text-label text-success" : "text-label text-muted-foreground"}>
-        {token?.lastUsedAt ? `Подключено — последнее обращение ${relativeTime(token.lastUsedAt)}.` : "Жду первого обращения программы к ORION…"}
+        {token?.lastUsedAt ? `Последний запрос к API ${relativeTime(token.lastUsedAt)} (автопроверка или клиент).` : "Жду обращения к API ORION…"}
       </p>
       <Button size="sm" variant="ghost" onClick={onDone}>
         Готово
