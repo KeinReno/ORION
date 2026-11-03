@@ -1,5 +1,13 @@
 # ORION — состояние на 30 октября 2026
 
+## Windows beta.36 — 03.11.2026
+
+Опубликован [GitHub prerelease](https://github.com/KeinReno/ORION/releases/tag/v0.1.0-windows-beta.36)
+из `18930a8` с ORION DEV; NSIS версия 0.1.36. SHA-256 в body и
+SHA256SUMS.txt проверен против GitHub asset digest. Master не изменён.
+Проверки, локальный outbox test failure/fresh retry и границы CI зафиксированы
+в [отчёте](../development/WINDOWS_BETA_36_2026-11-03.md).
+
 ## ORION DEV — рабочий обзор 02.11.2026, вне master
 
 Модуль 1.1.0 открывает обзор направлений и задач по этапам. Русские подписи
