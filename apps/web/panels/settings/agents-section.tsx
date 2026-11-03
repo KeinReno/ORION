@@ -259,13 +259,17 @@ function ManualToken({ workspaceId }: { workspaceId: string | undefined }): Reac
   const create = useCreateAgentToken(workspaceId);
   const [name, setName] = useState("");
   const [policy, setPolicy] = useState<PolicyDraft>(defaultPolicy);
-  const [days, setDays] = useState("30");
+  const [days, setDays] = useState("none");
+  const [customDays, setCustomDays] = useState("365");
+  const chosenDays = days === NO_EXPIRY ? null : days === "custom" ? Number(customDays) : Number(days);
+  const validDays = chosenDays === null || (Number.isInteger(chosenDays) && chosenDays >= 1 && chosenDays <= 36_500);
   const [issued, setIssued] = useState<CreatedAgentToken | null>(null);
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     try {
-      const created = await create.mutateAsync({ name, ...policyToInput(policy), expiresInDays: days === NO_EXPIRY ? null : Number(days) });
+      if (!validDays) return;
+      const created = await create.mutateAsync({ name, ...policyToInput(policy), expiresInDays: chosenDays });
       setIssued(created);
       setName("");
     } catch (error) {
@@ -315,12 +319,19 @@ function ManualToken({ workspaceId }: { workspaceId: string | undefined }): Reac
                 <option value="30">30 дней</option>
                 <option value="90">90 дней</option>
                 <option value="365">1 год</option>
-                <option value={NO_EXPIRY}>Без срока (не рекомендуется)</option>
+                <option value="custom">Свой срок</option>
+                <option value={NO_EXPIRY}>Бессрочно (до отзыва)</option>
               </Select>
             </label>
           </div>
+          {days === "custom" ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Срок (1–36500 дней)</span>
+              <Input type="number" min={1} max={36500} value={customDays} onChange={(event) => setCustomDays(event.target.value)} />
+            </label>
+          ) : null}
           <AgentPolicyFields workspaceId={workspaceId} draft={policy} onChange={setPolicy} />
-          <Button type="submit" size="sm" disabled={create.isPending || !name.trim() || policyIsEmpty(policy)}>
+          <Button type="submit" size="sm" disabled={create.isPending || !name.trim() || policyIsEmpty(policy) || !validDays}>
             Выпустить токен
           </Button>
         </form>
