@@ -47,7 +47,7 @@ export class AgentClientInstallService {
     try {
       merged = mergeClientConfig(input.client, existing, entry);
       previousToken = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8") : null;
-      if (previousToken !== null && !/^orion_agt_[A-Za-z0-9_-]{32}\\s*$/.test(previousToken)) {
+      if (previousToken !== null && !/^orion_agt_[A-Za-z0-9_-]{32}\s*$/.test(previousToken)) {
         throw new Error("Unrecognized existing token file");
       }
       if (fs.existsSync(tokenFile) && !fs.lstatSync(tokenFile).isFile()) throw new Error("Unsafe token path");
