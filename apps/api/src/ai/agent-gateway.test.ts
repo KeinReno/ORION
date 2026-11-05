@@ -123,6 +123,19 @@ describe("MCP-адаптер", () => {
     expect(agentToolModeNote(ask)).not.toContain("удаляет сразу");
   });
 
+  it("ни один инструмент удаления не обещает «всегда только запрос»: администратор удаляет сам", () => {
+    // Эффект `delete` — дверь «сделать или попросить» (ADR-0044): описание, которое обещает запрос во всех режимах,
+    // было бы ложью про администратора. `delete_request` — наоборот: он только просит.
+    const forbidden = "Всегда только";
+    const deleters = AGENT_TOOLS.filter((tool) => tool.effect === "delete");
+    expect(deleters.length).toBeGreaterThanOrEqual(19);
+    for (const tool of deleters) {
+      const text = `${tool.description}\n${agentToolModeNote(tool)}`;
+      expect(text, tool.name).not.toContain(forbidden);
+      expect(text, tool.name).toContain("администратор");
+    }
+  });
+
   it("tools/list с известным режимом токена добавляет, что будет именно с этим вызовом", async () => {
     const fetchImpl = (async () => new Response(JSON.stringify({ mode: "assistant" }), { status: 200 })) as unknown as typeof fetch;
     const result = (await handleMcpMessage({ id: 1, method: "tools/list" }, settings, { fetchImpl })) as { tools: Array<{ name: string; description: string }> };

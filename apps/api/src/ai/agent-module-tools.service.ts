@@ -58,7 +58,8 @@ export class AgentModuleToolsService {
 
   /**
    * Change or delete an existing record: a manager does it at once (counted against the write limit), an assistant files
-   * a request the human approves in Settings or right in the chat (HTTP 202), deletion is always a request.
+   * a request the human approves in Settings or right in the chat (HTTP 202). Deleting is a request in every mode except
+   * «администратор», which removes it now (ADR-0044); an observer and a token with «Никогда: удаление» are refused.
    */
   async change(
     req: AgentRequest,
@@ -95,7 +96,7 @@ export class AgentModuleToolsService {
       await this.tokens.assertWriteBudget(agent);
       const snapshot = await this.proposals.snapshot(agent.userId, agent.workspaceId, toolName, targetId);
       const result = await handler.apply(agent.userId, agent.workspaceId, targetId, args);
-      await this.tokens.record(agent, toolName, resource, 200, { ...base, summary: `Изменил ${handler.noun} «${snapshot.title}»`, wrote: true });
+      await this.tokens.record(agent, toolName, resource, 200, { ...base, summary: `${op === "update" ? "Изменил" : "Удалил"} ${handler.noun} «${snapshot.title}»`, wrote: true });
       return { proposed: false, result };
     } catch (error) {
       await this.tokens.record(agent, toolName, resource, error instanceof HttpException ? error.getStatus() : 500, base);
