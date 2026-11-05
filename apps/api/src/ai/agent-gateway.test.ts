@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { RequestMethod } from "@nestjs/common";
-import { AGENT_TOOLS, agentToolDescription, agentToolModeNote } from "@orion/shared-types";
+import { AGENT_TOOLS, agentToolDescription, agentToolModeNote, agentToolModeOutcome } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import { handleMcpMessage, loadSettings, redact } from "../mcp/orion-mcp";
 import { resolveAgentConnection } from "./agent-connection";
@@ -93,6 +93,34 @@ describe("MCP-адаптер", () => {
     expect(note).toContain("менеджер — выполняется сразу");
     expect(agentToolModeNote(AGENT_TOOLS.find((t) => t.name === "orion_list_tasks")!)).toContain("любом");
     expect(agentToolDescription(update)).toContain("Нужно разрешение: tasks:write");
+  });
+
+  // ADR-0044: deleting a task/note/event is a verb the agent has; only the token mode decides whose hand does it.
+  it("удаление задачи, заметки и события: администратор удаляет, помощник и менеджер подают запрос, наблюдатель и «Никогда» — 403", () => {
+    const expected = [
+      ["orion_delete_task", "/ai/v1/tasks/{taskId}", "tasks:write"],
+      ["orion_delete_note", "/ai/v1/notes/{noteId}", "notes:write"],
+      ["orion_delete_event", "/ai/v1/events/{eventId}", "events:write"]
+    ] as const;
+    for (const [name, path, scope] of expected) {
+      const tool = AGENT_TOOLS.find((t) => t.name === name);
+      expect(tool, `нет инструмента ${name}`).toBeTruthy();
+      expect(tool!.http).toEqual({ method: "DELETE", path });
+      expect(tool!.effect).toBe("delete");
+      expect(tool!.scopes).toEqual([scope]);
+      const note = agentToolModeNote(tool!);
+      expect(note).toContain("наблюдатель — отказ 403");
+      expect(note).toContain("помощник — удаление НЕ выполняется");
+      expect(note).toContain("менеджер — удаление НЕ выполняется");
+      expect(note).toContain("администратор — удаляет сразу");
+      // The narrowed line is what tools/list shows an administrator token.
+      expect(agentToolModeOutcome(tool!, "admin")).toContain("удаляет сразу");
+      expect(agentToolModeOutcome(tool!, "manager")).toContain("запрос");
+    }
+    // Asking a human stays a different act: that tool never deletes by itself, in any mode.
+    const ask = AGENT_TOOLS.find((t) => t.name === "orion_propose_deletion")!;
+    expect(ask.effect).toBe("delete_request");
+    expect(agentToolModeNote(ask)).not.toContain("удаляет сразу");
   });
 
   it("tools/list с известным режимом токена добавляет, что будет именно с этим вызовом", async () => {

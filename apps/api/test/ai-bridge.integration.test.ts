@@ -269,15 +269,20 @@ describe("AI Bridge (agent tokens)", () => {
     expect((await request(path, { method: "PATCH", token: giver.secret, body: { status: "canceled" } })).status).toBe(409);
   });
 
-  it("агент не удаляет сам: запрос на удаление выполняет только человек, один раз, под своими правами", async () => {
+  it("удаление менеджера — запрос: выполняет его только человек, один раз, под своими правами", async () => {
     const alice = await register("alice-del");
     const bob = await register("bob-del");
     const agent = await issue(alice, ["tasks:write", "notes:write"]);
     const ws = `/workspaces/${alice.workspaceId}`;
     const task = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Лишняя" } });
 
-    // There is no delete verb for agents, and a proposal changes nothing by itself.
-    expect((await request(`/ai/v1/tasks/${task.data.id}`, { method: "DELETE", token: agent.secret })).status).toBe(404);
+    // A manager's DELETE verb files a request; a request changes nothing by itself (ADR-0044).
+    const asked = await request<{ proposed: boolean; proposal: { id: string; action: string; status: string } }>(
+      `/ai/v1/tasks/${task.data.id}?reason=дубль`,
+      { method: "DELETE", token: agent.secret }
+    );
+    expect(asked.status).toBe(202);
+    expect(asked.data).toMatchObject({ proposed: true, proposal: { action: "task.delete", status: "pending" } });
     const proposal = await request<{ id: string; status: string; targetTitle: string }>("/ai/v1/proposals", {
       method: "POST", token: agent.secret, body: { action: "task.delete", targetId: task.data.id, reason: "дубль" }
     });
@@ -306,6 +311,71 @@ describe("AI Bridge (agent tokens)", () => {
     expect((await request(`${ws}/notes/${note.data.id}`, { method: "GET", token: alice.accessToken })).status).toBe(200);
     const readOnly = await issue(alice, ["tasks:read"]);
     expect((await request("/ai/v1/proposals", { method: "POST", token: readOnly.secret, body: { action: "task.delete", targetId: task.data.id } })).status).toBe(403);
+  });
+
+  /** ADR-0044 checks behavior per mode, so a scenario asks for the mode it needs instead of inheriting `manager`. */
+  async function issueAs(owner: RegisteredSession, scopes: string[], mode: string, forbidden: string[] = []) {
+    const created = await request<{ id: string; secret: string }>(`/workspaces/${owner.workspaceId}/agent-tokens`, {
+      method: "POST", token: owner.accessToken, body: { name: "Агент режима", scopes, expiresInDays: 30, mode, forbidden }
+    });
+    expect(created.status).toBe(201);
+    return created.data;
+  }
+
+  it("администратор удаляет сам: задача исчезает, заметка в корзине, событие целиком; наблюдатель, «Никогда» и чтение — 403", async () => {
+    const alice = await register("alice-admin-del");
+    const ws = `/workspaces/${alice.workspaceId}`;
+    const scopes = ["tasks:read", "tasks:write", "notes:read", "notes:write", "events:read", "events:write"];
+    const admin = await issueAs(alice, scopes, "admin");
+
+    const task = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "К удалению" } });
+    const note = await request<{ id: string }>(`${ws}/notes`, { method: "POST", token: alice.accessToken, body: { title: "Заметка к удалению" } });
+    const event = await request<{ id: string }>("/ai/v1/events", {
+      method: "POST", token: admin.secret, body: { title: "Встреча к удалению", startAt: "2026-11-04T09:00:00.000Z", endAt: "2026-11-04T10:00:00.000Z" }
+    });
+    expect(event.status).toBe(201);
+
+    const deleted = await request<{ deleted: boolean; objectType: string; objectId: string }>(`/ai/v1/tasks/${task.data.id}?reason=проверка`, {
+      method: "DELETE", token: admin.secret
+    });
+    expect(deleted.status).toBe(200);
+    expect(deleted.data).toMatchObject({ deleted: true, objectType: "task", objectId: task.data.id });
+    expect((await request<Array<{ id: string }>>(`${ws}/tasks`, { method: "GET", token: alice.accessToken })).data.map((t) => t.id)).not.toContain(task.data.id);
+    // No request was filed: in this mode the delete is the act, not a question.
+    const pending = await request<Array<{ id: string }>>(`${ws}/agent-tokens/proposals`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(pending.status).toBe(200);
+    expect(pending.data).toHaveLength(0);
+
+    // A note is not erased: it goes to the trash, so it leaves the active list and the agent cannot read it back.
+    expect((await request(`/ai/v1/notes/${note.data.id}`, { method: "DELETE", token: admin.secret })).status).toBe(200);
+    expect((await request<Array<{ id: string }>>("/ai/v1/notes", { method: "GET", token: admin.secret })).data.map((n) => n.id)).not.toContain(note.data.id);
+    expect((await request(`/ai/v1/notes/${note.data.id}`, { method: "GET", token: admin.secret })).status).toBe(404);
+
+    // The event leaves the person's calendar window.
+    expect((await request(`/ai/v1/events/${event.data.id}?reason=отменили`, { method: "DELETE", token: admin.secret })).status).toBe(200);
+    expect(
+      (await request<Array<{ id: string }>>(`${ws}/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, { method: "GET", token: alice.accessToken })).data.map((e) => e.id)
+    ).not.toContain(event.data.id);
+
+    // The brakes still hold in the administrator mode.
+    const neverDelete = await issueAs(alice, scopes, "admin", ["delete"]);
+    const other = await request<{ id: string }>(`${ws}/tasks`, { method: "POST", token: alice.accessToken, body: { title: "Живая" } });
+    expect((await request(`/ai/v1/tasks/${other.data.id}`, { method: "DELETE", token: neverDelete.secret })).status).toBe(403);
+    // An observer refuses to write at all; a read-only scope cannot even ask.
+    const observer = await issueAs(alice, scopes, "observer");
+    expect((await request(`/ai/v1/tasks/${other.data.id}`, { method: "DELETE", token: observer.secret })).status).toBe(403);
+    const readOnly = await issueAs(alice, ["tasks:read"], "manager");
+    expect((await request(`/ai/v1/tasks/${other.data.id}`, { method: "DELETE", token: readOnly.secret })).status).toBe(403);
+    // The assistant asks instead of deleting, and the object stays.
+    const assistant = await issueAs(alice, ["tasks:read", "tasks:write"], "assistant");
+    const asked = await request<{ proposed: boolean }>(`/ai/v1/tasks/${other.data.id}`, { method: "DELETE", token: assistant.secret });
+    expect(asked.status).toBe(202);
+    expect(asked.data.proposed).toBe(true);
+    expect((await request<Array<{ id: string }>>(`${ws}/tasks`, { method: "GET", token: alice.accessToken })).data.map((t) => t.id)).toContain(other.data.id);
+    // Removing the same task twice is not a silent success: it is gone, so the second delete is a 404.
+    expect((await request(`/ai/v1/tasks/${task.data.id}`, { method: "DELETE", token: admin.secret })).status).toBe(404);
   });
 
   it("лимит частоты: после исчерпания бюджета токена 429 с Retry-After, отказ в журнале, другой токен не задет", async () => {
@@ -373,7 +443,7 @@ describe("AI Bridge (agent tokens)", () => {
     expect(humanNote.data.createdByAgent).toBeNull();
   });
 
-  it("события: scope, окно, создание и правка безопасных полей, повторов и удаления у агента нет", async () => {
+  it("события: scope, окно, создание и правка безопасных полей, повторов у агента нет, удаление — по режиму", async () => {
     const alice = await register("alice-events");
     const reader = await issue(alice, ["events:read"]);
     const writer = await issue(alice, ["events:read", "events:write"]);
@@ -406,10 +476,17 @@ describe("AI Bridge (agent tokens)", () => {
     expect((await request("/ai/v1/events?from=nonsense", { method: "GET", token: reader.secret })).status).toBe(400);
     expect((await request("/ai/v1/events?from=2026-01-01T00:00:00Z&to=2028-01-01T00:00:00Z", { method: "GET", token: reader.secret })).status).toBe(400);
 
-    // The person sees the same event; the bridge has no delete.
+    // The person sees the same event. A manager's DELETE is a request, not a deletion (ADR-0044).
     const human = await request<Array<{ id: string }>>(`${ws}/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, { method: "GET", token: alice.accessToken });
     expect(human.data.map((e) => e.id)).toContain(created.data.id);
-    expect((await request(`/ai/v1/events/${created.data.id}`, { method: "DELETE", token: writer.secret })).status).toBe(404);
+    const asked = await request<{ proposed: boolean; proposal: { action: string; targetTitle: string } }>(
+      `/ai/v1/events/${created.data.id}?reason=встрему%20отменили`,
+      { method: "DELETE", token: writer.secret }
+    );
+    expect(asked.status).toBe(202);
+    expect(asked.data).toMatchObject({ proposed: true, proposal: { action: "event.delete", targetTitle: "Созвон (перенос)" } });
+    const afterAsk = await request<Array<{ id: string }>>(`${ws}/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, { method: "GET", token: alice.accessToken });
+    expect(afterAsk.data.map((e) => e.id)).toContain(created.data.id);
 
     // The module switch applies as for tasks and notes.
     await prisma.asSystem((tx) => tx.workspace.update({ where: { id: alice.workspaceId }, data: { disabledModules: ["calendar"] } }));

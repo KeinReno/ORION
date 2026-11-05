@@ -630,7 +630,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "name": "orion_pet_care_delete_day",
     "description": "Удалить запись дневника самочувствия за день. Всегда только запрос человеку.",
     "group": "modules",
-    "effect": "delete_request",
+    "effect": "delete",
     "scopes": null,
     "http": {
       "method": "DELETE",
@@ -665,7 +665,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "name": "orion_pet_care_delete_event",
     "description": "Удалить событие дневника питомца (смена корма, прививка и т. п.). Всегда только запрос человеку.",
     "group": "modules",
-    "effect": "delete_request",
+    "effect": "delete",
     "scopes": null,
     "http": {
       "method": "DELETE",
@@ -700,7 +700,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "name": "orion_pet_care_delete_entry",
     "description": "Удалить запись ухода (кормление, прогулка, груминг…). Всегда только запрос человеку.",
     "group": "modules",
-    "effect": "delete_request",
+    "effect": "delete",
     "scopes": null,
     "http": {
       "method": "DELETE",
@@ -735,7 +735,7 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "name": "orion_pet_care_delete_pet",
     "description": "Удалить питомца вместе со всем дневником и уходом. Всегда только запрос человеку; спрашивайте, только если человек сам этого хочет.",
     "group": "modules",
-    "effect": "delete_request",
+    "effect": "delete",
     "scopes": null,
     "http": {
       "method": "DELETE",

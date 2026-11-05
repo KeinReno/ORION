@@ -44,6 +44,7 @@ import {
   type AgentProposalBulkInput,
   type AgentProposalBulkResult,
   type AgentProposedResult,
+  type AgentDeletedResult,
   type ParsedCreateAgentTokenInput,
   type UpdateAgentTokenInput,
   type AgentEventCreate,
@@ -282,6 +283,37 @@ export class AiController {
     );
   }
 
+  /**
+   * ADR-0044. The verb exists in every writing mode; the token mode decides whose hand does it: «администратор» removes
+   * the task now, «помощник» and «менеджер» get 202 with the request a human confirms, «наблюдатель» and a token with
+   * «Никогда: удаление» get 403. A task has no trash in ORION, so this is the irreversible one — hence the reason in
+   * the journal and on the request.
+   */
+  @Delete("tasks/:taskId")
+  async deleteTask(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: ReplyStatus,
+    @Param("taskId") taskId: string,
+    @Query("reason") reason?: string
+  ): Promise<AgentDeletedResult | AgentProposedResult> {
+    return this.reply(
+      res,
+      await this.runOp(
+        req,
+        { perm: "tasks", op: "delete", module: "tasks", action: "tasks.delete", resource: `task:${taskId}`, target: { kind: "task", id: taskId } },
+        async (a: AgentContext) => {
+          await this.tasks.remove(a.userId, a.workspaceId, taskId);
+          return { deleted: true, objectType: "task", objectId: taskId };
+        },
+        {
+          meta: (r) => ({ summary: "Удалил задачу", objectType: "task", objectId: r.objectId }),
+          propose: (a: AgentContext) =>
+            this.jobs.propose(a, { action: "task.delete", targetId: taskId, reason: reason ?? "" })
+        }
+      )
+    );
+  }
+
   @Get("notes")
   listNotes(@Req() req: AgentRequest, @Query("search") search?: string): Promise<Note[]> {
     return this.runOp(req, { perm: "notes", op: "read", module: "notes", action: "notes.list" }, async (a: AgentContext) =>
@@ -339,6 +371,31 @@ export class AiController {
     );
   }
 
+  /** ADR-0044. Same door as the task: a note goes to the trash (restorable), so only the mode decides who presses it. */
+  @Delete("notes/:noteId")
+  async deleteNote(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: ReplyStatus,
+    @Param("noteId") noteId: string,
+    @Query("reason") reason?: string
+  ): Promise<AgentDeletedResult | AgentProposedResult> {
+    return this.reply(
+      res,
+      await this.runOp(
+        req,
+        { perm: "notes", op: "delete", module: "notes", action: "notes.delete", resource: `note:${noteId}`, target: { kind: "note", id: noteId } },
+        async (a: AgentContext) => {
+          await this.notes.remove(a.userId, a.workspaceId, noteId);
+          return { deleted: true, objectType: "note", objectId: noteId };
+        },
+        {
+          meta: (r) => ({ summary: "Убрал заметку в корзину", objectType: "note", objectId: r.objectId }),
+          propose: (a: AgentContext) => this.jobs.propose(a, { action: "note.delete", targetId: noteId, reason: reason ?? "" })
+        }
+      )
+    );
+  }
+
   /** Window `[from, to)`; defaults to the next 30 days, at most 366 days wide. Recurring events come expanded. */
   @Get("events")
   listEvents(@Req() req: AgentRequest, @Query("from") from?: string, @Query("to") to?: string): Promise<Event[]> {
@@ -390,6 +447,34 @@ export class AiController {
         {
           meta: (e) => ({ summary: `Изменил событие «${e.title}»: ${fieldList(body)}`, objectType: "event", objectId: e.id }),
           propose: (a: AgentContext) => this.jobs.propose(a, { action: "event.update", targetId: eventId, reason: "", patch: body as Record<string, unknown> })
+        }
+      )
+    );
+  }
+
+  /**
+   * ADR-0044. The whole event goes, every occurrence of a series — the agent names the event, not a date, and removing
+   * one occurrence of a series is not this verb (it stays with the human, as in ADR-0007).
+   */
+  @Delete("events/:eventId")
+  async deleteEvent(
+    @Req() req: AgentRequest,
+    @Res({ passthrough: true }) res: ReplyStatus,
+    @Param("eventId") eventId: string,
+    @Query("reason") reason?: string
+  ): Promise<AgentDeletedResult | AgentProposedResult> {
+    return this.reply(
+      res,
+      await this.runOp(
+        req,
+        { perm: "events", op: "delete", module: "calendar", action: "events.delete", resource: `event:${eventId}`, target: { kind: "event", id: eventId } },
+        async (a: AgentContext) => {
+          await this.events.remove(a.userId, a.workspaceId, eventId, "all");
+          return { deleted: true, objectType: "event", objectId: eventId };
+        },
+        {
+          meta: (r) => ({ summary: "Удалил событие целиком", objectType: "event", objectId: r.objectId }),
+          propose: (a: AgentContext) => this.jobs.propose(a, { action: "event.delete", targetId: eventId, reason: reason ?? "" })
         }
       )
     );

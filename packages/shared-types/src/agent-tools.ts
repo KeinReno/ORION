@@ -29,9 +29,12 @@ export type AgentToolGroup = "start" | "capture" | "tasks" | "notes" | "events" 
  * - `link`           — writes a relation between objects: observer refused.
  * - `draft`          — finance draft/refs: observer refused; a human still confirms the draft.
  * - `talk`           — agent messages and jobs: observer refused.
- * - `delete_request` — asks a human to delete: observer refused; never executed by the agent in any mode.
+ * - `delete`         — deletes an existing object (ADR-0044): observer refused, assistant and manager file a request
+ *                      for a human, the administrator deletes at once. «Никогда: удаление» refuses either way.
+ * - `delete_request` — asks a human to delete: observer refused; the request is never executed by the agent itself,
+ *                      in any mode — asking is the whole of what this tool does.
  */
-export type AgentToolEffect = "any" | "read" | "create" | "update" | "capture" | "link" | "draft" | "talk" | "delete_request";
+export type AgentToolEffect = "any" | "read" | "create" | "update" | "capture" | "link" | "draft" | "talk" | "delete" | "delete_request";
 
 export interface AgentToolDef {
   name: string;
@@ -186,7 +189,7 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
     name: "orion_update_task",
     group: "tasks",
     effect: "update",
-    description: "Изменить задачу: заголовок, описание, статус, приоритет, срок. Удалять задачи агенту нельзя.",
+    description: "Изменить задачу: заголовок, описание, статус, приоритет, срок.",
     scopes: ["tasks:write"],
     http: { method: "PATCH", path: "/ai/v1/tasks/{taskId}" },
     input: obj(
@@ -201,6 +204,16 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
       },
       ["taskId"]
     )
+  },
+  {
+    name: "orion_delete_task",
+    group: "tasks",
+    effect: "delete",
+    description: "Удалить задачу — безвозвратно: корзины задач в ORION нет. В режимах помощник и менеджер удаление НЕ выполняется, оно превращается в запрос, который подтверждает человек (ответ 202). Причина в `reason` попадает в запрос и в журнал.",
+    scopes: ["tasks:write"],
+    http: { method: "DELETE", path: "/ai/v1/tasks/{taskId}" },
+    input: obj({ taskId: str("id задачи"), reason: str("Почему удаляете") }, ["taskId"]),
+    example: { taskId: "00000000-0000-4000-8000-000000000000", reason: "дубль задачи «…»" }
   },
   {
     name: "orion_list_notes",
@@ -252,6 +265,16 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
     )
   },
   {
+    name: "orion_delete_note",
+    group: "notes",
+    effect: "delete",
+    description: "Удалить заметку: она уходит в корзину, а не исчезает навсегда (ее можно восстановить). В режимах помощник и менеджер удаление НЕ выполняется, оно превращается в запрос, который подтверждает человек (ответ 202). Причина в `reason` попадает в запрос и в журнал.",
+    scopes: ["notes:write"],
+    http: { method: "DELETE", path: "/ai/v1/notes/{noteId}" },
+    input: obj({ noteId: str("id заметки"), reason: str("Почему удаляете") }, ["noteId"]),
+    example: { noteId: "00000000-0000-4000-8000-000000000000", reason: "черновик больше не нужен" }
+  },
+  {
     name: "orion_list_events",
     group: "events",
     effect: "read",
@@ -264,7 +287,7 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
     name: "orion_create_event",
     group: "events",
     effect: "create",
-    description: "Создать событие календаря. Без повторов; удалять события агенту нельзя.",
+    description: "Создать событие календаря. Без повторов.",
     scopes: ["events:write"],
     http: { method: "POST", path: "/ai/v1/events" },
     input: obj(
@@ -302,6 +325,16 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
       },
       ["eventId"]
     )
+  },
+  {
+    name: "orion_delete_event",
+    group: "events",
+    effect: "delete",
+    description: "Удалить событие целиком: у повторяющегося события уходят все вхождения, а не одна дата — поэтому окно `occurrence` агенту не доступен. В режимах помощник и менеджер удаление НЕ выполняется, оно превращается в запрос, который подтверждает человек (ответ 202). Причина в `reason` попадает в запрос и в журнал.",
+    scopes: ["events:write"],
+    http: { method: "DELETE", path: "/ai/v1/events/{eventId}" },
+    input: obj({ eventId: str("id события"), reason: str("Почему удаляете") }, ["eventId"]),
+    example: { eventId: "00000000-0000-4000-8000-000000000000", reason: "серия встреч окончена" }
   },
   {
     name: "orion_list_projects",
@@ -416,7 +449,7 @@ const CORE_AGENT_TOOLS: readonly AgentToolDef[] = [
     group: "approvals",
     effect: "delete_request",
     description:
-      "Попросить удалить задачу, заметку или событие календаря (событие — целиком, со всеми повторами). Удаление агентом не выполняется: создаётся запрос, который человек подтверждает или отклоняет в Настройках ORION или в чате ассистента. Записи других разделов удаляются их собственными инструментами *_delete*/*_archive*.",
+      "Попросить человека удалить задачу, заметку или событие календаря (событие — целиком, со всеми повторами). Этот инструмент только подаёт запрос: сам он не удаляет ни в одном режиме, даже «администратор». Чтобы удаление выполнилось сразу, нужен глагол `orion_delete_task` / `orion_delete_note` / `orion_delete_event` — в режимах помощник и менеджер они сами приводят сюда же (ответ 202). Подтверждение человек видит в Настройках ORION или в чате ассистента. Записи подключаемых разделов удаляют их собственные инструменты *_delete*/*_archive*.",
     scopes: ["tasks:write", "notes:write", "events:write"],
     http: { method: "POST", path: "/ai/v1/proposals" },
     input: obj({ action: { type: "string", enum: ["task.delete", "note.delete", "event.delete"] }, targetId: str("id задачи, заметки или события"), reason: str("Почему") }, ["action", "targetId"])
@@ -647,7 +680,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_habits_archive",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Убрать привычку в архив (история отметок сохраняется). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/habits/{habitId}" },
@@ -680,7 +713,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_lists_delete_item",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить пункт списка. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/lists/{listId}/items/{itemId}" },
@@ -933,7 +966,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_projects_archive",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Убрать проект в архив (задачи, заметки и история сохраняются). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/projects/{projectId}" },
@@ -944,7 +977,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_goals_delete",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить цель (привязанные проекты не трогаются). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/goals/{goalId}" },
@@ -955,7 +988,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_lists_archive",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Убрать список в архив (насовсем его удаляет только человек из архива). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/lists/{listId}" },
@@ -966,7 +999,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_time_delete_entry",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить запись времени (только свою или без автора). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/time/entries/{entryId}" },
@@ -977,7 +1010,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_contacts_delete",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить контакт. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/contacts/{contactId}" },
@@ -988,7 +1021,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_contacts_delete_interaction",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить запись общения с контактом. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/contacts/{contactId}/interactions/{interactionId}" },
@@ -999,7 +1032,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_documents_delete",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Убрать файл или папку (с содержимым) в корзину «Документов» — 30 дней можно вернуть. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/documents/{documentId}" },
@@ -1010,7 +1043,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_finance_delete_transaction",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить операцию. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/finance/transactions/{transactionId}" },
@@ -1021,7 +1054,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_inventory_archive_item",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Убрать позицию склада в архив (история движений сохраняется). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/inventory/{itemId}" },
@@ -1032,7 +1065,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_health_delete_measurement",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить измерение (давление, вес и т. п.). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/measurements/{measurementId}" },
@@ -1043,7 +1076,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_health_delete_symptom",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить запись о симптоме. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/symptoms/{symptomId}" },
@@ -1054,7 +1087,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_health_delete_appointment",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить визит к врачу. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/health/{subjectId}/appointments/{appointmentId}" },
@@ -1065,7 +1098,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_home_delete_reading",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить показание счётчика (например, внесённое по ошибке). Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/home/{homeId}/meters/{meterId}/readings/{readingId}" },
@@ -1076,7 +1109,7 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
   {
     name: "orion_home_delete_meter",
     group: "modules",
-    effect: "delete_request",
+    effect: "delete",
     description: "Удалить счётчик со всеми показаниями. Всегда только запрос человеку.",
     scopes: null,
     http: { method: "DELETE", path: "/ai/v1/home/{homeId}/meters/{meterId}" },
@@ -1121,7 +1154,10 @@ const MODULE_TITLE: Record<string, string> = {
   "pet-care": "Питомцы"
 };
 
-/** Column titles of the permissions table; «удалять» is never direct — always a request to a human. */
+/**
+ * Column titles of the permissions table. The matrix is what сужает права помощника и менеджера; «удалять» в ней —
+ * всегда запрос человека (ADR-0007). Режим «администратор» матрицу не спрашивает и удаляет сразу (ADR-0044).
+ */
 export const MODULE_PERMISSION_ACTION_LABEL: Record<string, string> = {
   read: "смотреть",
   create: "добавлять",
@@ -1184,11 +1220,17 @@ const MODE_OUTCOME: Record<AgentToolEffect, Record<AgentMode, string>> = {
     admin: "создаётся только черновик, баланс не меняется — подтверждает человек"
   },
   talk: { observer: "отказ 403 (запись запрещена)", assistant: "выполняется сразу", manager: "выполняется сразу", admin: "выполняется сразу" },
+  delete: {
+    observer: "отказ 403 (запись запрещена)",
+    assistant: "удаление НЕ выполняется: создаётся запрос на подтверждение, ответ 202 {proposed:true, proposal}, применит человек",
+    manager: "удаление НЕ выполняется: создаётся запрос на подтверждение (ответ 202), применит человек; право «менять» здесь не помогает",
+    admin: "удаляет сразу; галочка «Никогда: удаление» на токене — отказ 403"
+  },
   delete_request: {
     observer: "отказ 403 (запись запрещена)",
     assistant: "удаление не выполняется: создаётся запрос, подтверждает человек",
     manager: "удаление не выполняется: создаётся запрос, подтверждает человек",
-    admin: "удаляет сразу, без запроса — если только на этом токене не включена галочка «Никогда: удаление»"
+    admin: "создаёт тот же запрос: этот инструмент только просит человека, режим его не ускоряет"
   }
 };
 
@@ -1199,9 +1241,9 @@ const MODE_OUTCOME: Record<AgentToolEffect, Record<AgentMode, string>> = {
  */
 export function agentToolModeNote(tool: AgentToolDef): string {
   const outcome = MODE_OUTCOME[tool.effect];
-  if (tool.effect === "any") return "Режимы токена: доступно в любом (наблюдатель, помощник, менеджер).";
-  if (tool.effect === "read") return "Режимы токена: доступно в любом (наблюдатель, помощник, менеджер) — только чтение, нужно соответствующее разрешение.";
-  const modes = (["observer", "assistant", "manager"] as const).map((mode) => `${MODE_NAME[mode]} — ${outcome[mode]}`);
+  if (tool.effect === "any") return "Режимы токена: доступно в любом режиме.";
+  if (tool.effect === "read") return "Режимы токена: доступно в любом режиме — только чтение, нужно соответствующее разрешение.";
+  const modes = (["observer", "assistant", "manager", "admin"] as const).map((mode) => `${MODE_NAME[mode]} — ${outcome[mode]}`);
   return `Режимы токена: ${modes.join("; ")}.`;
 }
 

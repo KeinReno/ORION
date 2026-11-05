@@ -175,7 +175,8 @@ function chatModulePermissions(enabledModules: ReadonlySet<string>): string[] {
 
 /**
  * Deleting is a request the user confirms in the same answer, never done by the model itself; on a server (ADR-0017)
- * the chat token forbids deletion, so the model does not get those tools at all.
+ * the chat token forbids deletion, so the model does not get those tools at all. Both delete shapes are gated:
+ * `delete_request` asks a human, `delete` would act at once in the administrator mode (ADR-0044).
  */
 function chatTools(modulePermissions: readonly string[], canRequestDeletion: boolean): AnthropicTool[] {
   const granted = new Set<string>(CHAT_SCOPES);
@@ -183,7 +184,7 @@ function chatTools(modulePermissions: readonly string[], canRequestDeletion: boo
   return AGENT_TOOLS.filter(
     (tool) =>
       tool.name !== "orion_get_manual" &&
-      (canRequestDeletion || tool.effect !== "delete_request") &&
+      (canRequestDeletion || (tool.effect !== "delete_request" && tool.effect !== "delete")) &&
       !["agents", "finance"].includes(tool.group) &&
       (tool.permission ? modules.has(tool.permission) : tool.scopes === null || tool.scopes.some((scope) => granted.has(scope)))
   ).map((tool) => ({ name: tool.name, description: agentToolDescription(tool, "assistant"), input_schema: tool.input as unknown as Record<string, unknown> }));

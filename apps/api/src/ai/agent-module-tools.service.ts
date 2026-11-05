@@ -73,7 +73,7 @@ export class AgentModuleToolsService {
     const base: AuditMeta = { module: tool?.moduleId, objectId: targetId };
     const resource = tool?.moduleId ? `${tool.moduleId}:${targetId}` : null;
     try {
-      if (!tool?.permission || !tool.moduleId || (tool.effect !== "update" && tool.effect !== "delete_request")) {
+      if (!tool?.permission || !tool.moduleId || (tool.effect !== "update" && tool.effect !== "delete" && tool.effect !== "delete_request")) {
         throw new ForbiddenException("Инструмент не объявлен модулем");
       }
       const op = tool.effect === "update" ? "update" : "delete";
