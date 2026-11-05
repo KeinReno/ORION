@@ -1,4 +1,9 @@
-# Документация ORION
+# Документация KAIDEN Orion
+
+> **Навигация:** [Главная](../README.md) · [Продукт](PRODUCT_DIRECTION.md) · [Текущее состояние](STATUS.md) · [Разработка и архитектура](PLATFORM.md) · [Правила для агентов](../AGENTS.md)
+
+Эта страница — **полный технический индекс**. Для первого знакомства с продуктом начните с [главной страницы](../README.md); для оценки готовности функций — с [STATUS.md](STATUS.md). Ниже сохранены подробные спецификации, контракты и исторические материалы.
+
 
 > **Порядок чтения (актуальность):** [правила жизненного цикла](DOCUMENTATION_LIFECYCLE.md) → [состояние на текущем master](STATUS.md) → [утверждённое направление](PLATFORM.md) → применимые [контракты платформы](platform-api/README.md), [ADR](adr/) и паспорт компонента `MODULE.md` / `AI_CONTEXT.md`. [Архивный индекс](archive/README.md) описывает завершённые волны без перемещения файлов и поломки ссылок.
 >
@@ -10,7 +15,8 @@
 | --- | --- |
 | Архитектурные инварианты и правила для агента | [../AGENTS.md](../AGENTS.md), [../ORION_CONSTITUTION.md](../ORION_CONSTITUTION.md) |
 | Граница Core / Module / Plugin и текущая миграция | [MODULES_AND_PLUGINS.md](MODULES_AND_PLUGINS.md), [AI_FIRST_EXTENSION_ARCHITECTURE.md](AI_FIRST_EXTENSION_ARCHITECTURE.md), [AI_REFACTOR_MIGRATION_MAP.md](AI_REFACTOR_MIGRATION_MAP.md) |
-| **Согласованные задачи UX/Workbench от 27.10.2026 (20 направлений, к сверке)** | [tasks/2026-10-27-orion-ux/README.md](tasks/2026-10-27-orion-ux/README.md) |\n| Оболочка и UX существующих модулей | [FRONTEND_WORKSPACE_SPEC.md](FRONTEND_WORKSPACE_SPEC.md), [UI_AUDIT_2026-10-11.md](UI_AUDIT_2026-10-11.md) |
+| **Согласованные задачи UX/Workbench от 27.10.2026 (20 направлений, к сверке)** | [tasks/2026-10-27-orion-ux/README.md](tasks/2026-10-27-orion-ux/README.md) |
+| Оболочка и UX существующих модулей | [FRONTEND_WORKSPACE_SPEC.md](FRONTEND_WORKSPACE_SPEC.md), [UI_AUDIT_2026-10-11.md](UI_AUDIT_2026-10-11.md) |
 | Контекстная панель ресурсов и межмодульные связи (MVP этапа A реализован; этапы B–C — нет) | [CONTEXTUAL_RESOURCES_PANEL.md](CONTEXTUAL_RESOURCES_PANEL.md), [ADR-0014](adr/ADR-0014-context-resources-panel.md) |
 | ТЗ для исполнителей: панель ресурсов, Agent Gateway/Manager, LAN, общие пространства, Hybrid Sync | [tz/README.md](tz/README.md) |
 | Гибридная синхронизация (локальные копии, очередь записи; списки → заметки и задачи) | [SYNC.md](SYNC.md), [ADR-0016](adr/ADR-0016-hybrid-sync-protocol.md), [tz/TZ-06-hybrid-sync.md](tz/TZ-06-hybrid-sync.md) |
