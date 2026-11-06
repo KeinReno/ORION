@@ -88,8 +88,11 @@ const SYNC_CLASSES = ["mergeable-text", "lww-fields", "append-only", "strict", "
 const SYNC_STAGES = ["stage2", "stage3", "later", "never"];
 const AGENT_TOOL_OPS = ["read", "create", "delete"];
 const AGENT_TOOL_METHOD = { read: "GET", create: "POST", delete: "DELETE" };
-/** `delete` is never executed by the agent: the tool files a request a human confirms (`AgentModuleToolsService.change`). */
-const AGENT_TOOL_EFFECT = { read: "read", create: "create", delete: "delete_request" };
+/**
+ * A module's `delete` tool is the act-or-request door: `AgentModuleToolsService.change` asks `decideAgentModuleOperation`,
+ * so a human confirms it in the assistant and manager modes and the administrator deletes at once (ADR-0044).
+ */
+const AGENT_TOOL_EFFECT = { read: "read", create: "create", delete: "delete" };
 const CATALOG_STRING_FIELDS = ["label", "summary", "owns", "livesWithout", "disableBehavior", "panelId"];
 
 const pascal = (id) => id.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("");

@@ -404,6 +404,17 @@ export interface AgentProposedResult {
   proposal: AgentProposal;
 }
 
+/**
+ * The reply of `DELETE /ai/v1/{tasks,notes,events}/:id` when the token's mode deleted the object itself (HTTP 200).
+ * The object is named by id only: after a delete there is nothing left to read, and the journal carries the id.
+ * ADR-0044 — the same call answers `{ proposed: true, proposal }` (202) instead when a human has to confirm.
+ */
+export interface AgentDeletedResult {
+  deleted: true;
+  objectType: "task" | "note" | "event";
+  objectId: string;
+}
+
 /** `code` of the 409 an approval gets when the object changed after the request was filed (body also has `currentDiff`). */
 export const AGENT_PROPOSAL_STALE_CODE = "agent_proposal_stale";
 
