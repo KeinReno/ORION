@@ -2,7 +2,7 @@
 
 import { useCaptureInboxItem, useCreateNote, useCreateTask, useGlobalSearch, useNotes, useTasks } from "@orion/core-react";
 import { isModuleEnabled, localDayDueAt, quickCapturePlaceholder, resolveQuickCapture } from "@orion/shared-types";
-import { Input, Kbd, Modal, isTypingTarget, useDebouncedValue, useToast } from "@orion/ui";
+import { Input, Kbd, Modal, useDebouncedValue, useToast } from "@orion/ui";
 import {
   CalendarDays,
   Bot,
@@ -20,7 +20,7 @@ import {
   UserRound,
   type LucideIcon
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useCaptureToList } from "./capture-to-list";
 import { askAssistant, openEntity, openList, openPanel, openSettings } from "./panel-bus";
 import { groupPaletteResults, selectPaletteResults, type PaletteEntry } from "./palette-results";
@@ -28,7 +28,7 @@ import { instancePanelId, isPanelAvailable, panelRegistry } from "./panel-regist
 import { placeKey } from "./extensions/places";
 import { useEnabledPlaces } from "./extensions/places-host";
 import { SETTINGS_FIELDS, settingsScopeText, settingsTabInfo } from "./settings-catalog";
-import { useShortcutHandler } from "./shortcuts/registry";
+import { useShortcutHandler, useShortcutHandlers } from "./shortcuts/registry";
 import { relativeTime, shortDate } from "./format";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "./task-labels";
 import type { ViewRef } from "@orion/shared-types";
@@ -171,7 +171,6 @@ export function CommandCenter(): React.ReactElement {
     return () => window.removeEventListener("orion:open-command-palette", open);
   }, []);
   const [gotoArmed, setGotoArmed] = useState(false);
-  const gotoArmedRef = useRef(false);
 
   // The palette is the only place that needs the debounce: the local command
   // list filters instantly, the server query waits for a pause in typing.
@@ -184,64 +183,25 @@ export function CommandCenter(): React.ReactElement {
     setCaptureOpen(true);
   });
 
+  const gotoHandlers = useMemo(() => {
+    const handlers: Record<string, () => void> = {};
+    for (const item of GOTO_PANELS) {
+      const panel = panelRegistry.find((entry) => entry.id === item.panelId);
+      if (!panel || !isPanelAvailable(panel, disabledModules, workspace?.pluginOverrides)) continue;
+      handlers[`global.goto-${item.panelId}`] = () => openPanel(item.panelId);
+    }
+    return handlers;
+  }, [disabledModules, workspace?.pluginOverrides]);
+  useShortcutHandlers(gotoHandlers);
+
   useEffect(() => {
-    let timer = 0;
-    function arm(): void {
-      gotoArmedRef.current = true;
-      setGotoArmed(true);
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        gotoArmedRef.current = false;
-        setGotoArmed(false);
-      }, 1600);
-    }
-    function disarm(): void {
-      gotoArmedRef.current = false;
-      setGotoArmed(false);
-      window.clearTimeout(timer);
-    }
-    function onKey(event: KeyboardEvent): void {
-      if (isTypingTarget(event.target)) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (paletteOpen || captureOpen) return;
-      if (gotoArmedRef.current) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          disarm();
-          return;
-        }
-        const letter = event.key.toLowerCase();
-        if (letter.length !== 1 || letter < "a" || letter > "z") return;
-        event.preventDefault();
-        event.stopPropagation();
-        disarm();
-        const target = GOTO_PANELS.find((item) => item.key === letter);
-        if (!target) return;
-        const panel = panelRegistry.find((item) => item.id === target.panelId);
-        if (panel?.moduleId && !isModuleEnabled(disabledModules, panel.moduleId)) {
-          toast({ title: `«${target.label}» выключен` });
-          return;
-        }
-        openPanel(target.panelId);
-        return;
-      }
-      if (event.key === "g" || event.key === "G") {
-        event.preventDefault();
-        arm();
-        return;
-      }
-      if (event.key === "n" || event.key === "N") {
-        event.preventDefault();
-        setCapturePrefill("");
-        setCaptureOpen(true);
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      window.clearTimeout(timer);
+    const onSequence = (event: Event): void => {
+      const armed = (event as CustomEvent<{ armed?: boolean }>).detail?.armed === true;
+      setGotoArmed(armed);
     };
-  }, [paletteOpen, captureOpen, disabledModules, toast]);
+    window.addEventListener("orion:goto-sequence", onSequence);
+    return () => window.removeEventListener("orion:goto-sequence", onSequence);
+  }, []);
 
   useEffect(() => {
     if (paletteOpen) {
@@ -578,7 +538,7 @@ export function CommandCenter(): React.ReactElement {
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[80] flex justify-center px-4">
           <div className="flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-2xl border border-border bg-background/95 px-4 py-2 text-label text-muted-foreground shadow-lg">
             <span className="text-foreground">Переход</span>
-            {GOTO_PANELS.map((item) => (
+            {GOTO_PANELS.filter((item) => gotoHandlers[`global.goto-${item.panelId}`]).map((item) => (
               <span key={item.key} className="inline-flex items-center gap-1">
                 <Kbd>{item.key.toUpperCase()}</Kbd>
                 {item.label}

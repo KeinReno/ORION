@@ -2,7 +2,7 @@
 
 import { isTypingTarget } from "@orion/ui";
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { comboMatchesEvent } from "./combo";
+import { advanceSequence, comboMatchesEvent, parseCombo, type SequenceStep } from "./combo";
 import { effectiveCombo, getShortcutDef, SHORTCUT_CATALOG } from "./catalog";
 
 /**
@@ -19,6 +19,8 @@ import { effectiveCombo, getShortcutDef, SHORTCUT_CATALOG } from "./catalog";
  *   reads the live combo with `useShortcutCombo(id)` and builds its own keymap from it (see
  *   `markdown-editor.tsx`'s `Compartment` usage). `findShortcutConflicts` (catalog.ts) still checks
  *   these the same way — it is data-level, independent of how each scope actually dispatches.
+ * Sequences ("g+d") are also global: the first plain key arms a prefix, the second fires.
+ * The shell shows that wait via `orion:goto-sequence`.
  */
 
 const ShortcutsContext = createContext<Readonly<Record<string, string>>>({});
@@ -55,6 +57,23 @@ export function useShortcutCombos<T extends string>(ids: readonly T[]): Record<T
 
 const globalHandlers = new Map<string, (event: KeyboardEvent) => void>();
 
+const SEQUENCE_TIMEOUT_MS = 800;
+
+function shellSequences(overrides: Readonly<Record<string, string>>): SequenceStep[] {
+  const steps: SequenceStep[] = [];
+  for (const def of SHORTCUT_CATALOG) {
+    if (def.scope !== "global") continue;
+    const parsed = parseCombo(effectiveCombo(def, overrides));
+    if (!("stages" in parsed) || parsed.stages.length < 2) continue;
+    steps.push({ id: def.id, stages: parsed.stages });
+  }
+  return steps;
+}
+
+function setSequenceArmed(armed: boolean): void {
+  window.dispatchEvent(new CustomEvent("orion:goto-sequence", { detail: { armed } }));
+}
+
 /** Only for `scope: "global"` catalog entries — see the module doc above for why scoped ones don't use this. */
 export function useShortcutHandler(id: string, handler: (event: KeyboardEvent) => void): void {
   const savedHandler = useRef(handler);
@@ -71,14 +90,69 @@ export function useShortcutHandler(id: string, handler: (event: KeyboardEvent) =
   }, [id]);
 }
 
+/** Several global handlers in one effect — a loop of `useShortcutHandler` would break the rules of hooks. */
+export function useShortcutHandlers(handlers: Readonly<Record<string, (event: KeyboardEvent) => void>>): void {
+  const saved = useRef(handlers);
+  saved.current = handlers;
+  const ids = Object.keys(handlers).sort().join("|");
+  useEffect(() => {
+    const wrapped = new Map<string, (event: KeyboardEvent) => void>();
+    for (const id of ids === "" ? [] : ids.split("|")) {
+      if (getShortcutDef(id)?.scope !== "global") {
+        console.warn(`useShortcutHandler("${id}"): это не global-команда — её должен диспетчеризовать владелец скоупа, не общий слушатель.`);
+      }
+      const fn = (event: KeyboardEvent) => saved.current[id]?.(event);
+      wrapped.set(id, fn);
+      globalHandlers.set(id, fn);
+    }
+    return () => {
+      for (const [id, fn] of wrapped) {
+        if (globalHandlers.get(id) === fn) globalHandlers.delete(id);
+      }
+    };
+  }, [ids]);
+}
+
 /** Mounted once near the app root — the single `keydown` listener for every `scope: "global"` entry. */
 export function GlobalShortcutDispatcher(): null {
   const overrides = useShortcutOverrides();
+  const pending = useRef<string[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
+    function disarm(): void {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      if (pending.current.length > 0) setSequenceArmed(false);
+      pending.current = [];
+    }
     function onKeyDown(event: KeyboardEvent): void {
+      const typing = isTypingTarget(event.target);
+      const plain = !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.key.length === 1;
+      if (plain && !typing) {
+        const step = advanceSequence(pending.current, event.key.toLowerCase(), shellSequences(overrides));
+        if (step.kind === "fire") {
+          event.preventDefault();
+          disarm();
+          globalHandlers.get(step.id)?.(event);
+          return;
+        }
+        if (step.kind === "prefix") {
+          event.preventDefault();
+          pending.current = step.pending;
+          setSequenceArmed(true);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(disarm, SEQUENCE_TIMEOUT_MS);
+          return;
+        }
+        if (pending.current.length > 0) disarm();
+      } else if (pending.current.length > 0) {
+        disarm();
+      }
+
       for (const def of SHORTCUT_CATALOG) {
         if (def.scope !== "global") continue;
-        if (!def.allowInInput && isTypingTarget(event.target)) continue;
+        if (!def.allowInInput && typing) continue;
         const combo = effectiveCombo(def, overrides);
         if (combo === "" || !comboMatchesEvent(combo, event)) continue;
         const handler = globalHandlers.get(def.id);
@@ -89,7 +163,10 @@ export function GlobalShortcutDispatcher(): null {
       }
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      disarm();
+    };
   }, [overrides]);
   return null;
 }

@@ -92,7 +92,7 @@ import {
   useSecondaryDock
 } from "../../lib/secondary-dock";
 import { detachSecondaryDockToWindow, useSecondaryDockHost } from "../../lib/secondary-dock-window";
-import { GlobalShortcutDispatcher, ShortcutsProvider } from "../../lib/shortcuts/registry";
+import { GlobalShortcutDispatcher, ShortcutsProvider, useShortcutHandler } from "../../lib/shortcuts/registry";
 import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
 import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -558,23 +558,25 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     },
     [namedKey, refreshLayouts]
   );
-  // Alt+1..Alt+9 apply the first nine layouts, in the order the menu shows them.
+  // Named layouts - integrate with shortcut system (Alt+1..9)
   const layoutNamesRef = useRef(layoutNames);
   layoutNamesRef.current = layoutNames;
-  const applyLayoutRef = useRef(applyLayout);
-  applyLayoutRef.current = applyLayout;
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      const index = layoutShortcutIndex(event);
-      if (index === null || event.repeat) return;
-      const name = layoutNamesRef.current[index];
-      if (name === undefined) return;
-      event.preventDefault();
-      applyLayoutRef.current(name);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  
+  // Track current index for Alt+N shortcuts
+  const [activeLayoutIndex, setActiveLayoutIndex] = useState(0);
+  
+  useShortcutHandler("global.layout-1", () => { const name = layoutNamesRef.current[0]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-2", () => { const name = layoutNamesRef.current[1]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-3", () => { const name = layoutNamesRef.current[2]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-4", () => { const name = layoutNamesRef.current[3]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-5", () => { const name = layoutNamesRef.current[4]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-6", () => { const name = layoutNamesRef.current[5]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-7", () => { const name = layoutNamesRef.current[6]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-8", () => { const name = layoutNamesRef.current[7]; if (name) applyLayout(name); });
+  useShortcutHandler("global.layout-9", () => { const name = layoutNamesRef.current[8]; if (name) applyLayout(name); });
+  
+  // Remove the old direct keyboard listener below
+  
   const closeTab = useCallback((panelId: string) => {
     if (hasUnsavedDrafts(panelId)) {
       setPendingTabClose(panelId);
@@ -829,17 +831,13 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }, [placePanel, canShowPanel]);
   const goHistoryRef = useRef(goHistory);
   goHistoryRef.current = goHistory;
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      goHistoryRef.current(event.key === "ArrowLeft" ? -1 : 1);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
+  
+  // History back/forward - integrate with shortcut system
+  useShortcutHandler("global.history-back", () => goHistory(-1));
+  useShortcutHandler("global.history-forward", () => goHistory(1));
+  
+  // Remove the old direct keyboard listener below
+  
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       const api = event.api;

@@ -14,6 +14,11 @@ export interface ParsedCombo {
   key: string;
 }
 
+/** Multi-key sequence like "g+d" for two-stage shortcuts (press g, then letter). */
+export interface ParsedSequence {
+  stages: string[];
+}
+
 export interface MinimalKeyboardEvent {
   key: string;
   metaKey: boolean;
@@ -24,12 +29,20 @@ export interface MinimalKeyboardEvent {
 
 const MODIFIER_KEYS = new Set(["Control", "Meta", "Shift", "Alt", "AltGraph", "OS"]);
 
-export function parseCombo(combo: string): ParsedCombo {
+/** Parse combo like "mod+shift+k" or sequence like "g+d" */
+export function parseCombo(combo: string): ParsedCombo | ParsedSequence {
   const parts = combo
     .toLowerCase()
     .split("+")
     .map((part) => part.trim())
     .filter((part) => part !== "");
+  
+  // If we have more than one non-modifier key, it's a sequence
+  const nonModifiers = parts.filter((part) => part !== "mod" && part !== "shift" && part !== "alt");
+  if (nonModifiers.length > 1) {
+    return { stages: parts };
+  }
+  
   return {
     mod: parts.includes("mod"),
     shift: parts.includes("shift"),
@@ -41,6 +54,9 @@ export function parseCombo(combo: string): ParsedCombo {
 /** Canonical string form — same combo written in a different modifier order compares equal. */
 export function normalizeCombo(combo: string): string {
   const parsed = parseCombo(combo);
+  if ("stages" in parsed) {
+    return parsed.stages.join("+");
+  }
   if (parsed.key === "") return "";
   const parts: string[] = [];
   if (parsed.mod) parts.push("mod");
@@ -52,12 +68,39 @@ export function normalizeCombo(combo: string): string {
 
 export function comboMatchesEvent(combo: string, event: MinimalKeyboardEvent): boolean {
   const parsed = parseCombo(combo);
+  // A sequence ("g+d") is several keydowns, not one chord. The dispatcher advances it
+  // with `advanceSequence`; matching only the last key would fire on a bare "d".
+  if ("stages" in parsed) return false;
   if (parsed.key === "") return false;
   const mod = event.metaKey || event.ctrlKey;
   if (parsed.mod !== mod) return false;
   if (parsed.shift !== event.shiftKey) return false;
   if (parsed.alt !== event.altKey) return false;
   return event.key.toLowerCase() === parsed.key;
+}
+
+export interface SequenceStep {
+  id: string;
+  stages: readonly string[];
+}
+
+export type SequenceAdvance =
+  | { kind: "none" }
+  | { kind: "prefix"; pending: string[] }
+  | { kind: "fire"; id: string };
+
+/**
+ * One plain key of a multi-key shortcut ("g", then "d").
+ * `pending` is the prefix already accepted. An exact match fires; a longer
+ * catalog entry that starts with the same keys only arms the prefix.
+ */
+export function advanceSequence(pending: readonly string[], key: string, sequences: readonly SequenceStep[]): SequenceAdvance {
+  const next = [...pending, key];
+  const exact = sequences.find((step) => step.stages.length === next.length && step.stages.every((stage, index) => stage === next[index]));
+  if (exact) return { kind: "fire", id: exact.id };
+  const isPrefix = sequences.some((step) => step.stages.length > next.length && next.every((stage, index) => step.stages[index] === stage));
+  if (isPrefix) return { kind: "prefix", pending: next };
+  return { kind: "none" };
 }
 
 /**
@@ -96,6 +139,12 @@ function keyLabel(key: string): string {
 /** Human-readable label for tooltips/settings — "mod+shift+k" → "Ctrl+Shift+K" (⌘⇧K on macOS). */
 export function describeCombo(combo: string, isMac = false): string {
   const parsed = parseCombo(combo);
+  
+  // Sequence like "g+d"
+  if ("stages" in parsed) {
+    return parsed.stages.map((stage) => (stage.length === 1 ? stage.toUpperCase() : keyLabel(stage))).join(" → ");
+  }
+  
   if (parsed.key === "") return "";
   const parts: string[] = [];
   if (parsed.mod) parts.push(isMac ? "⌘" : "Ctrl");

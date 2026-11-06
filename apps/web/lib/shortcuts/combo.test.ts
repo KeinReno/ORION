@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboFromEvent, comboMatchesEvent, describeCombo, normalizeCombo, parseCombo } from "./combo";
+import { advanceSequence, comboFromEvent, comboMatchesEvent, describeCombo, normalizeCombo, parseCombo } from "./combo";
 
 const event = (key: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) => ({
   key,
@@ -28,6 +28,39 @@ describe("normalizeCombo", () => {
 
   it("is empty for a combo with no real key", () => {
     expect(normalizeCombo("mod+shift")).toBe("");
+  });
+});
+
+describe("sequences", () => {
+  const steps = [
+    { id: "global.goto-dashboard", stages: ["g", "d"] },
+    { id: "global.goto-inbox", stages: ["g", "i"] }
+  ];
+
+  it("parses two plain keys as a sequence, not a chord", () => {
+    expect(parseCombo("g+d")).toEqual({ stages: ["g", "d"] });
+    expect(normalizeCombo("g+d")).toBe("g+d");
+    expect(describeCombo("g+d")).toBe("G → D");
+  });
+
+  it("does not treat a sequence as a single keydown", () => {
+    expect(comboMatchesEvent("g+d", event("d"))).toBe(false);
+    expect(comboMatchesEvent("g+d", event("g"))).toBe(false);
+  });
+
+  it("arms on the shared prefix and fires the matching second key", () => {
+    expect(advanceSequence([], "g", steps)).toEqual({ kind: "prefix", pending: ["g"] });
+    expect(advanceSequence(["g"], "i", steps)).toEqual({ kind: "fire", id: "global.goto-inbox" });
+    expect(advanceSequence(["g"], "d", steps)).toEqual({ kind: "fire", id: "global.goto-dashboard" });
+  });
+
+  it("ignores a second key that continues no sequence", () => {
+    expect(advanceSequence(["g"], "q", steps)).toEqual({ kind: "none" });
+  });
+
+  it("keeps alt+digit a chord, so layouts do not become sequences", () => {
+    expect(parseCombo("alt+1")).toEqual({ mod: false, shift: false, alt: true, key: "1" });
+    expect(comboMatchesEvent("alt+1", event("1", { altKey: true }))).toBe(true);
   });
 });
 
