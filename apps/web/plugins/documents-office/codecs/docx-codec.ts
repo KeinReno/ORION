@@ -252,13 +252,31 @@ function imageRunFromNode(node: Node): ImageRun | Paragraph {
   });
 }
 
+/**
+ * Cell merge lives on the Tiptap node (`colspan` / `rowspan`, integers >= 1).
+ * Mammoth emits those HTML attributes and TableCell/TableHeader parse them
+ * back into attrs, so a missing attr is an unmerged cell (span 1) — the
+ * same document `docx` wrote before merge support. Only a span above 1 is
+ * passed through: `columnSpan: 1` would still emit `w:gridSpan`.
+ */
+function cellSpan(node: Node, name: "colspan" | "rowspan"): number {
+  const raw = node.attrs?.[name];
+  const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : Number.NaN;
+  if (!Number.isInteger(value) || value < 1) return 1;
+  return value;
+}
+
 function docxTableFromNode(node: Node): DocxTable {
   const rows = (node.content ?? []).map((rowNode) => {
     const cells = (rowNode.content ?? []).map((cellNode) => {
       const cellBlocks = blocksFromNodes(cellNode.content ?? []);
+      const columnSpan = cellSpan(cellNode, "colspan");
+      const rowSpan = cellSpan(cellNode, "rowspan");
       return new DocxTableCell({
         children: cellBlocks.length ? cellBlocks : [new Paragraph({})],
-        width: { size: 100 / (rowNode.content?.length || 1), type: WidthType.PERCENTAGE }
+        width: { size: 100 / (rowNode.content?.length || 1), type: WidthType.PERCENTAGE },
+        ...(columnSpan > 1 ? { columnSpan } : {}),
+        ...(rowSpan > 1 ? { rowSpan } : {})
       });
     });
     return new DocxTableRow({ children: cells });
