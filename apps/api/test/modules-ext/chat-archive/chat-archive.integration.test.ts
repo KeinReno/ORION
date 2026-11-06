@@ -252,7 +252,10 @@ describe("Архив чатов", () => {
     const { push, call, token, ws } = await setup();
     const externalId = "gptqa-large-" + Date.now();
     const lines = Array.from({ length: 1200 }, (_, i) =>
-      userLine("Строка тестового архива #" + i + " — русский текст", 1));
+      JSON.stringify({
+        type: "user", sessionId: externalId, timestamp: at(1),
+        message: { role: "user", content: "Строка тестового архива #" + i + " — русский текст" }
+      }));
     let conversationId: string | null = null;
     const chunkSize = 250;
 
