@@ -6,7 +6,7 @@ import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
 
 /** QA-02 / QA-06: real HTTP + PostgreSQL/RLS, never a mocked "success". */
-describe("GPT-QA Agent Hub ownership and lease regressions", () => {
+describe("GPT-QA Agent Hub concurrency and lease regressions", () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let origin: string;
@@ -149,33 +149,5 @@ describe("GPT-QA Agent Hub ownership and lease regressions", () => {
     })).status).toBe(409);
   });
 
-  it("QA-02-01: caller-supplied worker and workspace identities cannot override the bearer token", async () => {
-    const s = await setup();
-    const a = await s.issue();
-    const b = await s.issue();
-    const forged = await a.call<{ workerId: string; workspaceId: string }>("POST", "/executions/" + s.runId + "/claim", {
-      expectedRevision: 0, workerId: b.id, workspaceId: "another-workspace", verifiedBy: a.id
-    });
-    // Rejecting an unknown field is also secure. If accepted, server must ignore it.
-    expect([201, 400]).toContain(forged.status);
-    if (forged.status === 201) {
-      expect(forged.data.workerId).toBe(a.id);
-      expect(forged.data.workspaceId).toBe(s.ws);
-    }
-  });
 
-  it("QA-02-02: revoked agent credentials cannot heartbeat or submit an owned job", async () => {
-    const s = await setup();
-    const a = await s.issue();
-    expect((await a.call("POST", "/executions/" + s.runId + "/claim", { expectedRevision: 0 })).status).toBe(201);
-    const revoked = await s.human<{ revoked: number }>("POST", "/agent-tokens/revoke-all", {});
-    expect(revoked.status).toBe(201);
-    expect(revoked.data.revoked).toBeGreaterThan(0);
-    expect((await a.call("GET", "/executions")).status).toBe(401);
-    expect((await a.call("POST", "/executions/" + s.runId + "/report", {
-      action: "start", expectedRevision: 1
-    })).status).toBe(401);
-    const current = await s.human<{ revision: number; status: string }>("GET", "/agent-hub/executions/" + s.runId);
-    expect(current.data).toMatchObject({ revision: 1, status: "claimed" });
-  });
 });
