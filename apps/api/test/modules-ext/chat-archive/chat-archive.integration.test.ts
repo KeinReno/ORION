@@ -247,4 +247,62 @@ describe("Архив чатов", () => {
     expect((await setModule(true)).status).toBe(200);
     expect((await call("GET", "/conversations")).data.map((item: { title: string }) => item.title)).toEqual(["Останется"]);
   });
+
+  it("QA-08-01: 1200-line transcript survives chunked transfer, replay and a corrupt tail without silent loss", async () => {
+    const { push, call, token, ws } = await setup();
+    const externalId = "gptqa-large-" + Date.now();
+    const lines = Array.from({ length: 1200 }, (_, i) =>
+      JSON.stringify({
+        type: "user", sessionId: externalId, timestamp: at(1),
+        message: { role: "user", content: "Строка тестового архива #" + i + " — русский текст" }
+      }));
+    let conversationId: string | null = null;
+    const chunkSize = 250;
+
+    for (let start = 0; start < lines.length; start += chunkSize) {
+      const chunk = lines.slice(start, start + chunkSize);
+      const added = await push(externalId, start, chunk);
+      expect(added.status, JSON.stringify(added.data)).toBe(201);
+      expect(added.data).toMatchObject({ appended: chunk.length, skipped: 0 });
+      conversationId = added.data.conversation.id;
+      // Simulates a lost response followed by exactly the same upload.
+      const replay = await push(externalId, start, chunk);
+      expect(replay.status).toBe(201);
+      expect(replay.data).toMatchObject({ appended: 0, skipped: chunk.length });
+      expect(replay.data.conversation.id).toBe(conversationId);
+    }
+    expect(conversationId).not.toBeNull();
+    const state = await call("GET", "/import-state?source=claude-code&externalId=" + externalId);
+    expect(state.status).toBe(200);
+    expect(state.data).toMatchObject({ conversationId, lineCount: 1200 });
+
+    // Raw pages are reconstructed from persisted rows; never merely compare
+    // in-memory input to itself or trust a claimed lineCount.
+    const actual: string[] = [];
+    let after = -1;
+    for (let page = 0; page < 40; page++) {
+      const result = await call("GET", "/conversations/" + conversationId + "/raw?after=" + after);
+      expect(result.status).toBe(200);
+      for (const line of result.data.lines as Array<{ seq: number; raw: string }>) {
+        expect(line.seq).toBe(actual.length);
+        actual.push(line.raw);
+      }
+      if (result.data.nextSeq === null) break;
+      expect(result.data.nextSeq).toBeGreaterThan(after);
+      after = result.data.nextSeq;
+    }
+    expect(actual).toEqual(lines);
+
+    // A rejected malformed final chunk cannot change previously committed data.
+    const torn = new FormData();
+    torn.append("lines", new Blob(["{\"type\":\"user\",\"partial\":"], { type: "application/x-ndjson" }), "torn.jsonl");
+    const bad = await request("/workspaces/" + ws +
+      "/chat-archive/import?source=claude-code&externalId=" + externalId + "&fromSeq=1200",
+      { method: "POST", token, form: torn });
+    expect(bad.status).toBe(400);
+    expect((await call("GET", "/import-state?source=claude-code&externalId=" + externalId)).data.lineCount).toBe(1200);
+    const final = await call("GET", "/conversations/" + conversationId + "/raw?only=1199");
+    expect(final.data.lines).toEqual([{ seq: 1199, raw: lines[1199] }]);
+  });
+
 });
