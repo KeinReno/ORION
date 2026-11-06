@@ -126,20 +126,26 @@ describe("GPT-QA Agent Hub ownership and lease regressions", () => {
     const s = await setup();
     const a = await s.issue();
     expect((await a.call("POST", "/executions/" + s.runId + "/claim", { expectedRevision: 0 })).status).toBe(201);
+    // Start first so heartbeat would be a LEGAL transition before lease expiry.
+    // Otherwise 409 could be caused by an unsupported action from "claimed",
+    // producing a false positive for the lease-expiration test.
+    expect((await a.call("POST", "/executions/" + s.runId + "/report", {
+      action: "start", expectedRevision: 1
+    })).status).toBe(201);
     await prisma.withUser(s.ownerId, tx => tx.agentHubExecution.update({
       where: { id: s.runId }, data: { leaseUntil: new Date(Date.now() - 1000) }
     }).then(() => undefined));
     const heartbeat = await a.call("POST", "/executions/" + s.runId + "/report", {
-      action: "heartbeat", expectedRevision: 1
+      action: "heartbeat", expectedRevision: 2
     });
     expect(heartbeat.status).toBe(409);
     const reconciliation = await s.human<{ recovered: number }>("POST", "/agent-hub/reconcile");
     expect(reconciliation.status).toBe(201);
     expect(reconciliation.data.recovered).toBe(1);
     const successor = await s.issue();
-    expect((await successor.call("POST", "/executions/" + s.runId + "/claim", { expectedRevision: 2 })).status).toBe(201);
+    expect((await successor.call("POST", "/executions/" + s.runId + "/claim", { expectedRevision: 3 })).status).toBe(201);
     expect((await a.call("POST", "/executions/" + s.runId + "/report", {
-      action: "submit", expectedRevision: 3, evidenceRefs: ["git:stale"]
+      action: "submit", expectedRevision: 4, evidenceRefs: ["git:stale"]
     })).status).toBe(409);
   });
 
