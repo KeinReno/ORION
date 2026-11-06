@@ -19,6 +19,21 @@
 
 `master` (`cf3feabc1dd4d0544c5dcbf7982734872bb6149c`) отстаёт от beta37 на 209 коммитов. Поэтому PR для Sol направлен на отдельную точную baseline-ветку, **не на master**. Sol должен переносить только QA diff на актуальную интеграционную ветку.
 
+## PR для независимой приёмки по направлениям
+
+| QA | PR | Ветка |
+|---|---|---|
+| QA-01 | [#100](https://github.com/KeinReno/ORION/pull/100) | `qa/gpt-qa-01-beta37` |
+| QA-02 | [#101](https://github.com/KeinReno/ORION/pull/101) | `qa/gpt-qa-02-beta37` |
+| QA-03 | [#102](https://github.com/KeinReno/ORION/pull/102) | `qa/gpt-qa-03-beta37` |
+| QA-04 | [#103](https://github.com/KeinReno/ORION/pull/103) | `qa/gpt-qa-04-beta37` |
+| QA-05 | [#104](https://github.com/KeinReno/ORION/pull/104) | `qa/gpt-qa-05-beta37` |
+| QA-06 | [#105](https://github.com/KeinReno/ORION/pull/105) | `qa/gpt-qa-06-beta37` |
+| QA-07 | [#106](https://github.com/KeinReno/ORION/pull/106) | `qa/gpt-qa-07-beta37` |
+| QA-08 | [#107](https://github.com/KeinReno/ORION/pull/107) | `qa/gpt-qa-08-beta37` |
+
+Сводный [draft PR #99](https://github.com/KeinReno/ORION/pull/99) содержит все 8 направлений вместе и этот отчёт. **Не сливать сводный и восемь компонентных PR одновременно:** это один и тот же набор тестов, представленный двумя способами. В качестве источника для интеграции Sol выбирает **либо** восемь независимых PR, **либо** один сводный.
+
 ## Ведомость: все восемь направлений
 
 | Направление | Итоговая оценка по доступным фактам | Новые сценарии | Уже существующее покрытие | Что не покрыто |
@@ -38,7 +53,8 @@
 
 - `scripts/qa-preflight.mjs` и `scripts/qa-preflight.test.mjs`: строгое именование `orion_qa_*`, локальные PostgreSQL URLs, подтверждение сброса.
 - `scripts/qa-local.mjs`: 6 последовательных стадий, отдельные логи каждого шага, `summary.json`, `summary.md`, корректные коды 0/1/2 и `NOT_RUN`.
-- `apps/api/test/qa-agent-hub-regression.integration.test.ts`: QA-02/06.
+- `apps/api/test/qa-agent-auth-regression.integration.test.ts`: QA-02.
+- `apps/api/test/qa-agent-hub-regression.integration.test.ts`: QA-06.
 - `apps/api/test/qa-delete-restore.integration.test.ts`: QA-03.
 - `apps/web/lib/eisenhower-independent.contract.test.ts`: QA-04.
 - `apps/web/plugins/documents-office/codecs/qa-office-roundtrip.test.ts`: QA-05.
