@@ -109,9 +109,14 @@ export function AgentPresenceFeed(): null {
   const workspaceId = workspace?.id;
   /** Last event already acted on; `null` until the first answer, which is only a baseline (nothing to reread yet). */
   const seenId = useRef<number | null>(null);
+  /** Event ids already considered for opening a record. The first snapshot only fills this set. */
+  const followedIds = useRef<Set<number>>(new Set());
+  const followReady = useRef(false);
 
   useEffect(() => {
     seenId.current = null;
+    followedIds.current = new Set();
+    followReady.current = false;
   }, [workspaceId]);
 
   useEffect(() => {
@@ -125,6 +130,21 @@ export function AgentPresenceFeed(): null {
     }
     seenId.current = Math.max(seenId.current ?? 0, latest);
   }, [data, workspaceId, queryClient]);
+
+  useEffect(() => {
+    if (!data || !workspaceId) return;
+    if (!followReady.current) {
+      for (const event of data.events) followedIds.current.add(event.id);
+      followReady.current = true;
+      return;
+    }
+    const fresh = data.events.filter((event) => !followedIds.current.has(event.id)).sort((a, b) => a.id - b.id);
+    for (const event of fresh) {
+      followedIds.current.add(event.id);
+      const target = followTarget(event);
+      if (target) openEntity(target.type, target.id);
+    }
+  }, [data, workspaceId]);
 
   useEffect(() => {
     if (!data) return publish(EMPTY);
@@ -206,7 +226,22 @@ function agentsWord(count: number): string {
   return "агентов";
 }
 
-const OPENABLE: ReadonlySet<string> = new Set(["task", "note", "event", "document", "project", "contact", "goal", "list"]);
+const FOLLOW_TYPES = ["task", "note", "event", "document", "project", "contact", "goal", "list"] as const satisfies readonly SearchableEntityType[];
+const OPENABLE: ReadonlySet<string> = new Set(FOLLOW_TYPES);
+
+function isFollowType(value: string): value is (typeof FOLLOW_TYPES)[number] {
+  return OPENABLE.has(value);
+}
+
+/**
+ * Where to look while an agent works. Only a real read or write of a record the shell can open.
+ * A refusal, a proposal, or «thinking» must not pull the open panel away from what the person is doing.
+ */
+export function followTarget(event: AgentPresenceEvent): { type: SearchableEntityType; id: string } | null {
+  if (event.activity !== "reading" && event.activity !== "writing") return null;
+  if (!event.objectId || !event.objectType || !isFollowType(event.objectType)) return null;
+  return { type: event.objectType, id: event.objectId };
+}
 
 /** The shell's pill: shown only while an agent works; opens the feed of recent actions. */
 export function AgentPresencePill({ className }: { className?: string }): React.ReactElement | null {
@@ -302,6 +337,21 @@ export function AgentPanelFrame({ moduleId, children }: { moduleId: string | nul
       ) : null}
     </div>
   );
+}
+
+/**
+ * Legal way to mark one row inside `.map`: the presence hook lives in this component,
+ * the row receives the class and the tag through the render prop.
+ */
+export function AgentTouchSlot({
+  objectId,
+  children
+}: {
+  objectId: string;
+  children: (mark: { className: string | undefined; tag: ReactNode }) => ReactNode;
+}): React.ReactElement {
+  const mark = useAgentRowMark(objectId);
+  return <>{children(mark)}</>;
 }
 
 /** For a list row: the class that lights it up and a short tag, while an agent has just touched the record. */

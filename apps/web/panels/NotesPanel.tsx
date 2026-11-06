@@ -12,6 +12,7 @@ import {
 } from "@orion/core-react";
 import { TagManager } from "./tag-manager";
 import type { Note, NoteView } from "@orion/shared-types";
+import { AgentTouchSlot } from "../lib/agent-presence";
 import { saveNoteWithRevision } from "../lib/note-save";
 import {
   Button,
@@ -573,6 +574,8 @@ export function NotesPanel(): React.ReactElement {
                     <span className="ml-2 font-mono tabular-nums">{groupCounts.get(groupKey)}</span>
                   </h3>
                 ) : null}
+                <AgentTouchSlot objectId={note.id}>
+                {(mark) => (
                 <div
                   // The whole row is clickable for the mouse; keyboard and assistive tech use the
                   // button around the text below. The row itself must not be a button: it also
@@ -595,6 +598,7 @@ export function NotesPanel(): React.ReactElement {
                   }}
                   className={cx(
                     "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
+                    mark.className,
                     trash
                       ? "border-transparent"
                       : cx(
@@ -621,6 +625,7 @@ export function NotesPanel(): React.ReactElement {
                         <span className="shrink-0 font-mono text-2xs font-normal text-subtle-foreground">{noteNumberLabel(note.number)}</span>
                       ) : null}
                       <span className="truncate">{note.title || "Без заголовка"}</span>
+                      {mark.tag}
                     </span>
                     {preview ? (
                       <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{preview}</span>
@@ -659,6 +664,8 @@ export function NotesPanel(): React.ReactElement {
                     />
                   </div>
                 </div>
+                )}
+                </AgentTouchSlot>
               </li>
             );
           })}

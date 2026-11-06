@@ -65,6 +65,7 @@ import { DocThumbnail } from "./documents/thumbnail";
 import type { DocumentCreateAction } from "../lib/extensions/contracts";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 import { PreviewPane } from "./documents/preview-pane";
+import { AgentTouchSlot } from "../lib/agent-presence";
 import { useDocumentFocusRequest } from "../lib/panel-bus";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { useViewState } from "../lib/use-view-state";
@@ -714,8 +715,9 @@ export function DocumentsPanel(): React.ReactElement {
             const active = doc.id === selectedFileId;
             const menuItems = docMenuItems(doc, isFolder);
             return (
+              <AgentTouchSlot key={doc.id} objectId={doc.id}>
+              {(mark) => (
               <div
-                key={doc.id}
                 draggable={!trash}
                 onDragStart={() => rowDragStart(doc.id)}
                 onDragOver={isFolder && !trash ? (e) => e.preventDefault() : undefined}
@@ -724,6 +726,7 @@ export function DocumentsPanel(): React.ReactElement {
                 onContextMenu={(e) => showContextMenu(e, menuItems)}
                 className={cx(
                   "group relative flex flex-col gap-1.5 rounded-xl border p-2",
+                  mark.className,
                   trash ? "border-transparent" : "cursor-pointer",
                   active ? "border-accent/40 bg-accent/[0.07]" : "border-transparent hover:border-border hover:bg-card-hover"
                 )}
@@ -761,6 +764,7 @@ export function DocumentsPanel(): React.ReactElement {
                 </div>
                 <OpenControl doc={doc} trash={trash} onOpen={() => openRow(doc)} className="block min-w-0 rounded text-left">
                   <DocName name={doc.name} className="text-xs font-medium text-foreground" />
+                  {mark.tag}
                 </OpenControl>
                 <p className="truncate text-2xs text-subtle-foreground">
                   {isFolder ? "" : formatBytes(doc.sizeBytes)}
@@ -768,6 +772,8 @@ export function DocumentsPanel(): React.ReactElement {
                   {trash && doc.deletedAt ? `удалено ${relativeTime(doc.deletedAt)}` : relativeTime(doc.updatedAt)}
                 </p>
               </div>
+              )}
+              </AgentTouchSlot>
             );
           })}
         </div>
@@ -798,6 +804,8 @@ export function DocumentsPanel(): React.ReactElement {
               const active = doc.id === selectedFileId;
               return (
                 <li key={doc.id}>
+                  <AgentTouchSlot objectId={doc.id}>
+                  {(mark) => (
                   <div
                     draggable={!trash}
                     onDragStart={() => rowDragStart(doc.id)}
@@ -810,6 +818,7 @@ export function DocumentsPanel(): React.ReactElement {
                       compactList
                         ? "grid-cols-[1.75rem_minmax(0,1fr)_2rem]"
                         : "grid-cols-[1.75rem_minmax(0,1fr)_5rem_7rem_2rem]",
+                      mark.className,
                       trash ? "" : "cursor-pointer",
                       active ? "bg-accent/[0.07]" : checked.has(doc.id) ? "bg-accent/[0.04]" : "hover:bg-card-hover"
                     )}
@@ -832,6 +841,7 @@ export function DocumentsPanel(): React.ReactElement {
                       <Icon className={cx("mt-0.5 h-4 w-4 shrink-0", isFolder ? "text-accent-text" : "text-muted-foreground")} />
                       <span className="min-w-0 flex-1">
                         <DocName name={doc.name} className="text-sm text-foreground" />
+                        {mark.tag}
                         {compactList ? (
                           <span className="block truncate text-2xs text-subtle-foreground">
                             {!isFolder && doc.sizeBytes != null ? `${formatBytes(doc.sizeBytes)} · ` : ""}
@@ -869,6 +879,8 @@ export function DocumentsPanel(): React.ReactElement {
                       />
                     </div>
                   </div>
+                  )}
+                  </AgentTouchSlot>
                 </li>
               );
             })}

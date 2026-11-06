@@ -1,6 +1,7 @@
 import type { INestApplication } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { isIP } from "node:net";
+import { AgentDeleteReasonInterceptor } from "./ai/agent-delete-reason.interceptor";
 import { HttpExceptionFilter } from "./common/http-exception.filter";
 import { RequestLoggingInterceptor } from "./common/request-logging.interceptor";
 import { configureLan } from "./lan/configure-lan";
@@ -27,7 +28,7 @@ export function configureApp(app: INestApplication): void {
   app.enableCors({ origin: origins, credentials: true });
   configureLan(app);
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(new RequestLoggingInterceptor());
+  app.useGlobalInterceptors(new RequestLoggingInterceptor(), new AgentDeleteReasonInterceptor());
   app.enableShutdownHooks();
 }
 
