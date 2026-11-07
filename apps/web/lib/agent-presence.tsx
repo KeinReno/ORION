@@ -2,7 +2,7 @@
 
 import { useAgentPresence } from "@orion/core-react";
 import type { AgentPresenceEvent, SearchableEntityType } from "@orion/shared-types";
-import { Button, Popover, StarBorder, cx } from "@orion/ui";
+import { Button, Popover, StarBorder, Switch, cx } from "@orion/ui";
 import { Bot } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -38,6 +38,49 @@ export interface PresenceSnapshot {
 const EMPTY: PresenceSnapshot = { agents: [], events: [], modules: new Map(), objects: new Map() };
 let snapshot: PresenceSnapshot = EMPTY;
 const listeners = new Set<() => void>();
+
+/** This computer only. Off until the person asks to watch: a read must not steal the open document. */
+const FOLLOW_KEY = "orion.agent.follow.v1";
+let followAgent = false;
+let followHydrated = false;
+const followListeners = new Set<() => void>();
+
+function readStoredFollow(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(FOLLOW_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function currentFollow(): boolean {
+  if (!followHydrated && typeof window !== "undefined") {
+    followAgent = readStoredFollow();
+    followHydrated = true;
+  }
+  return followAgent;
+}
+
+function subscribeFollow(listener: () => void): () => void {
+  followListeners.add(listener);
+  return () => followListeners.delete(listener);
+}
+
+export function setFollowAgent(next: boolean): void {
+  followAgent = next;
+  followHydrated = true;
+  try {
+    window.localStorage.setItem(FOLLOW_KEY, next ? "1" : "0");
+  } catch {
+    /* a private window still follows for this session */
+  }
+  for (const listener of followListeners) listener();
+}
+
+export function useFollowAgent(): boolean {
+  return useSyncExternalStore(subscribeFollow, currentFollow, () => false);
+}
 
 function publish(next: PresenceSnapshot): void {
   snapshot = next;
@@ -112,6 +155,7 @@ export function AgentPresenceFeed(): null {
   /** Event ids already considered for opening a record. The first snapshot only fills this set. */
   const followedIds = useRef<Set<number>>(new Set());
   const followReady = useRef(false);
+  const follow = useFollowAgent();
 
   useEffect(() => {
     seenId.current = null;
@@ -138,13 +182,11 @@ export function AgentPresenceFeed(): null {
       followReady.current = true;
       return;
     }
-    const fresh = data.events.filter((event) => !followedIds.current.has(event.id)).sort((a, b) => a.id - b.id);
-    for (const event of fresh) {
-      followedIds.current.add(event.id);
-      const target = followTarget(event);
-      if (target) openEntity(target.type, target.id);
-    }
-  }, [data, workspaceId]);
+    const fresh = data.events.filter((event) => !followedIds.current.has(event.id));
+    for (const event of fresh) followedIds.current.add(event.id);
+    const target = navigationTarget(fresh, follow);
+    if (target) openEntity(target.type, target.id);
+  }, [data, workspaceId, follow]);
 
   useEffect(() => {
     if (!data) return publish(EMPTY);
@@ -219,11 +261,40 @@ export function presenceTone(event: AgentPresenceEvent): "accent" | "warning" | 
   return event.activity === "proposing" ? "warning" : event.activity === "denied" ? "danger" : "accent";
 }
 
-function agentsWord(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "агента";
-  return "агентов";
+export interface AgentPresenceGroup {
+  key: string;
+  label: string;
+  events: AgentPresenceEvent[];
+}
+
+/** One trail per token. Events are newest first, so the first group is the agent who acted last. */
+export function groupPresenceByAgent(events: readonly AgentPresenceEvent[], limit = 12): AgentPresenceGroup[] {
+  const groups: AgentPresenceGroup[] = [];
+  const index = new Map<string, AgentPresenceGroup>();
+  let shown = 0;
+  for (const event of events) {
+    if (shown >= limit) break;
+    const key = event.tokenId ?? `name:${event.agentName}`;
+    let group = index.get(key);
+    if (!group) {
+      group = { key, label: agentLabel(event), events: [] };
+      index.set(key, group);
+      groups.push(group);
+    }
+    group.events.push(event);
+    shown += 1;
+  }
+  return groups;
+}
+
+/** Pill caption. Two agents are named, not collapsed into a count. */
+export function presencePillText(agents: readonly AgentPresenceEvent[]): string {
+  if (agents.length === 0) return "";
+  const lead = agents[0]!;
+  if (agents.length === 1) return `${agentLabel(lead)} · ${describePresence(lead)}`;
+  const names = agents.map((agent) => agentLabel(agent));
+  const who = names.length === 2 ? `${names[0]} и ${names[1]}` : `${names.slice(0, -1).join(", ")} и ${names[names.length - 1]}`;
+  return `${who} работают`;
 }
 
 const FOLLOW_TYPES = ["task", "note", "event", "document", "project", "contact", "goal", "list"] as const satisfies readonly SearchableEntityType[];
@@ -234,8 +305,9 @@ function isFollowType(value: string): value is (typeof FOLLOW_TYPES)[number] {
 }
 
 /**
- * Where to look while an agent works. Only a real read or write of a record the shell can open.
- * A refusal, a proposal, or «thinking» must not pull the open panel away from what the person is doing.
+ * Where a followed agent is looking. Only a real read or write of a record the shell can open.
+ * A refusal, a proposal, or «thinking» is not a place to open. The shell calls this only while
+ * «Следить за агентом» is on; highlight and the feed do not depend on it.
  */
 export function followTarget(event: AgentPresenceEvent): { type: SearchableEntityType; id: string } | null {
   if (event.activity !== "reading" && event.activity !== "writing") return null;
@@ -243,12 +315,28 @@ export function followTarget(event: AgentPresenceEvent): { type: SearchableEntit
   return { type: event.objectType, id: event.objectId };
 }
 
+/**
+ * The one record to open for a fresh batch. Off means no navigation, even when the batch
+ * contains a real read. Several records in one poll open only the latest, so a sweep of
+ * tasks does not walk the whole dock.
+ */
+export function navigationTarget(events: readonly AgentPresenceEvent[], follow: boolean): { type: SearchableEntityType; id: string } | null {
+  if (!follow) return null;
+  let target: { type: SearchableEntityType; id: string } | null = null;
+  for (const event of [...events].sort((a, b) => a.id - b.id)) {
+    const next = followTarget(event);
+    if (next) target = next;
+  }
+  return target;
+}
+
 /** The shell's pill: shown only while an agent works; opens the feed of recent actions. */
 export function AgentPresencePill({ className }: { className?: string }): React.ReactElement | null {
   const { agents, events } = useAgentPresenceNow();
+  const follow = useFollowAgent();
   if (agents.length === 0) return null;
-  const lead = agents[0]!;
-  const text = agents.length > 1 ? `${agents.length} ${agentsWord(agents.length)} работают` : `${agentLabel(lead)} · ${describePresence(lead)}`;
+  const text = presencePillText(agents);
+  const groups = groupPresenceByAgent(events);
   return (
     <Popover
       align="end"
@@ -269,10 +357,23 @@ export function AgentPresencePill({ className }: { className?: string }): React.
     >
       {({ close }) => (
         <div className="w-80 space-y-2 p-3" role="region" aria-label="Что делают агенты">
-          <p className="text-label font-medium text-foreground">Что делают агенты</p>
-          <ul className="max-h-72 space-y-1 overflow-y-auto">
-            {events.slice(0, 12).map((event) => (
-              <PresenceRow key={event.id} event={event} onOpen={close} />
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-label font-medium text-foreground">Что делают агенты</p>
+            <FollowAgentSwitch checked={follow} />
+          </div>
+          <p className="text-2xs text-muted-foreground">
+            {follow ? "Экран открывает запись, которую агент читает или меняет." : "Только подсветка и эта лента. Экран сам не переключается."}
+          </p>
+          <ul className="max-h-72 space-y-2 overflow-y-auto">
+            {groups.map((group) => (
+              <li key={group.key}>
+                <p className="px-2 text-2xs font-medium text-subtle-foreground">{group.label}</p>
+                <ul className="space-y-1">
+                  {group.events.map((event) => (
+                    <PresenceRow key={event.id} event={event} onOpen={close} hideAgent />
+                  ))}
+                </ul>
+              </li>
             ))}
           </ul>
           <Button
@@ -291,11 +392,30 @@ export function AgentPresencePill({ className }: { className?: string }): React.
   );
 }
 
-function PresenceRow({ event, onOpen }: { event: AgentPresenceEvent; onOpen: () => void }): React.ReactElement {
+function FollowAgentSwitch({ checked }: { checked: boolean }): React.ReactElement {
+  return <Switch checked={checked} onChange={setFollowAgent} label="Следить за агентом" />;
+}
+
+/** Same switch as the pill, for the settings page where no agent is working yet. */
+export function FollowAgentControl(): React.ReactElement {
+  const follow = useFollowAgent();
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-label text-foreground">Следить за агентом</p>
+        <p className="text-2xs text-muted-foreground">Открывать запись, которую агент читает или меняет. Выключено — строка подсвечивается, а открытый экран остаётся вашим.</p>
+      </div>
+      <FollowAgentSwitch checked={follow} />
+    </div>
+  );
+}
+
+function PresenceRow({ event, onOpen, hideAgent = false }: { event: AgentPresenceEvent; onOpen: () => void; hideAgent?: boolean }): React.ReactElement {
   const openable = event.objectId && event.objectType && OPENABLE.has(event.objectType) && event.activity !== "denied";
   const body = (
     <>
-      <span className="font-medium text-foreground">{agentLabel(event)}</span> <span className="text-muted-foreground">{describePresence(event)}</span>
+      {hideAgent ? null : <span className="font-medium text-foreground">{agentLabel(event)} </span>}
+      <span className="text-muted-foreground">{describePresence(event)}</span>
       <span className="block text-2xs text-subtle-foreground">{relativeTime(event.at)}</span>
     </>
   );
@@ -361,9 +481,9 @@ export function useAgentRowMark(objectId: string | null | undefined): { classNam
   return {
     className: "agent-touched",
     tag: (
-      <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-1.5 text-2xs text-accent" title={`${agentLabel(touch)}: ${describePresence(touch)}`}>
-        <Bot className="h-3 w-3" aria-hidden />
-        {agentLabel(touch)}
+      <span className="ml-1 inline-flex max-w-[16rem] shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-1.5 text-2xs text-accent" title={`${agentLabel(touch)}: ${describePresence(touch)}`}>
+        <Bot className="h-3 w-3 shrink-0" aria-hidden />
+        <span className="truncate">{agentLabel(touch)} · {describePresence(touch)}</span>
       </span>
     )
   };

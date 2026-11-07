@@ -1,6 +1,6 @@
 import type { AgentPresenceEvent } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { followTarget } from "./agent-presence";
+import { followTarget, groupPresenceByAgent, navigationTarget, presencePillText } from "./agent-presence";
 
 function event(overrides: Partial<AgentPresenceEvent> = {}): AgentPresenceEvent {
   return {
@@ -34,6 +34,25 @@ describe("followTarget", () => {
     for (const activity of ["denied", "proposing", "thinking"] as const) {
       expect(followTarget(event({ activity }))).toBeNull();
     }
+  });
+
+  it("does not open a record unless the person is following the agent", () => {
+    const read = event();
+    const write = event({ id: 2, activity: "writing", objectType: "task", objectId: "task-9" });
+    expect(navigationTarget([read, write], false)).toBeNull();
+    expect(navigationTarget([read, write], true)).toEqual({ type: "task", id: "task-9" });
+  });
+
+  it("keeps each token's trail separate and names both agents on the pill", () => {
+    const cursor = event({ id: 3, tokenId: "cursor", agentName: "Cursor", summary: "Создал задачу «Отчёт»", activity: "writing" });
+    const sol = event({ id: 2, tokenId: "sol", agentName: "Sol", module: "tasks", activity: "reading", objectType: "task", objectId: "task-1" });
+    const older = event({ id: 1, tokenId: "cursor", agentName: "Cursor", activity: "reading" });
+    const groups = groupPresenceByAgent([cursor, sol, older]);
+    expect(groups.map((group) => group.label)).toEqual(["Cursor", "Sol"]);
+    expect(groups[0]!.events.map((item) => item.id)).toEqual([3, 1]);
+    expect(groups[1]!.events.map((item) => item.id)).toEqual([2]);
+    expect(presencePillText([cursor, sol])).toBe("Cursor и Sol работают");
+    expect(presencePillText([cursor])).toBe("Cursor · Создал задачу «Отчёт»");
   });
 
   it("ignores a read that has no record, or a type the shell cannot open", () => {

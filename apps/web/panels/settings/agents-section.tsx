@@ -17,7 +17,7 @@ import {
 import { Badge, Button, Card, ConfirmDialog, Input, SegmentedControl, Select, Skeleton, useToast } from "@orion/ui";
 import { Bot } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { agentLabel, describePresence, useAgentPresenceNow } from "../../lib/agent-presence";
+import { FollowAgentControl, agentLabel, describePresence, useAgentPresenceNow } from "../../lib/agent-presence";
 import { describeError } from "../../lib/error-message";
 import { relativeTime, shortDate } from "../../lib/format";
 import { openPanel } from "../../lib/panel-bus";
@@ -70,6 +70,7 @@ export function AgentsSettings(): React.ReactElement {
 
   return (
     <div className="space-y-5">
+      <FollowAgentControl />
       <AgentProposals workspaceId={workspaceId} />
       <SegmentedControl<AiSection>
         aria-label="Раздел ИИ"
