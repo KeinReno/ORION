@@ -125,7 +125,10 @@ describe("Архив чатов — автосбор (ORION-16)", () => {
       // Дописали строку — следующий проход подхватывает только хвост.
       const line2 = JSON.stringify({ type: "assistant", sessionId: "auto-1", timestamp: "2026-10-28T10:01:00.000Z", message: { role: "assistant", content: [{ type: "text", text: "Поймал" }] } });
       writeFileSync(sessionFile, `${line1}\n${line2}\n`);
-      utimesSync(sessionFile, new Date(), new Date());
+      // На Windows mtime файла может совпасть с lastScanAt предыдущего прохода
+      // (разрешение часов / округление). Ставим время явно позже скана.
+      const newer = new Date(Date.now() + 5_000);
+      utimesSync(sessionFile, newer, newer);
       const third = await discovery.runAll();
       expect(third.appended).toBe(1);
 
@@ -133,7 +136,8 @@ describe("Архив чатов — автосбор (ORION-16)", () => {
       await prisma.asSystem((tx) => tx.chatArchiveAutoSource.updateMany({ where: { workspaceId: ws, userId, source: "claude-code" }, data: { enabled: false } }));
       const line3 = JSON.stringify({ type: "user", sessionId: "auto-1", timestamp: "2026-10-28T10:02:00.000Z", message: { role: "user", content: "Это не должно попасть в архив" } });
       writeFileSync(sessionFile, `${line1}\n${line2}\n${line3}\n`);
-      utimesSync(sessionFile, new Date(), new Date());
+      const newerStill = new Date(Date.now() + 10_000);
+      utimesSync(sessionFile, newerStill, newerStill);
       const fourth = await discovery.runAll();
       expect(fourth.scanned).toBe(0);
 
