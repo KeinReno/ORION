@@ -39,7 +39,9 @@ pub fn respond(app: &tauri::AppHandle, request: &http::Request<Vec<u8>>) -> Opti
     } else if path.ends_with("/logo.png") {
         ("image/png", include_bytes!("../../../web/public/kaiden-192.png").to_vec())
     } else {
-        ("text/html; charset=utf-8", include_bytes!("startup.html").to_vec())
+        // Shell version is the premiere key: a new installer replays the longer opening once.
+        // Payload updates do not ship this page, so they must not reset it.
+        ("text/html; charset=utf-8", include_str!("startup.html").replace("{{STARTUP_EDITION}}", env!("CARGO_PKG_VERSION")).into_bytes())
     };
     Some(http::Response::builder().header("Content-Type", mime).header("Cache-Control", "no-store")
         .header("X-Content-Type-Options", "nosniff")
@@ -59,5 +61,18 @@ mod tests {
         let failed = Status { phase: "error".into(), error: Some("<script>private path</script>".into()) };
         let value: serde_json::Value = serde_json::from_slice(&serde_json::to_vec(&failed).unwrap()).unwrap();
         assert_eq!(value["error"], "<script>private path</script>");
+    }
+    #[test]
+    fn startup_page_names_the_shell_edition_and_keeps_the_status_hooks() {
+        let html = include_str!("startup.html");
+        assert!(html.contains("data-edition=\"{{STARTUP_EDITION}}\""));
+        for id in ["main", "stage", "hint", "time", "error", "retry", "skip"] {
+            assert!(html.contains(&format!("id=\"{id}\"")), "{id}");
+        }
+        assert!(html.contains("/__orion_startup/logo.png"));
+        assert!(html.contains("prefers-reduced-motion"));
+        let served = html.replace("{{STARTUP_EDITION}}", env!("CARGO_PKG_VERSION"));
+        assert!(!served.contains("{{STARTUP_EDITION}}"));
+        assert!(served.contains(env!("CARGO_PKG_VERSION")));
     }
 }
