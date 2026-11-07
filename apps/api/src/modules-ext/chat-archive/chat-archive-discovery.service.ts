@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { BackgroundJobsService } from "../../common/background-jobs.service";
 import { resolveMode } from "../../common/orion-mode";
 import { PrismaService } from "../../common/prisma.service";
+import { chatArchiveFileChanged } from "./chat-archive-mtime";
 import { ChatArchiveService } from "./chat-archive.service";
 
 /** Меньше серверного предела импорта — запас, как в `chat-archive-push.mjs`. */
@@ -126,7 +127,7 @@ export class ChatArchiveDiscoveryService {
     const since = row.lastScanAt?.getTime() ?? 0;
     const files = candidateFiles(source, homedir(), process.env).filter((file) => {
       try {
-        return statSync(file).mtimeMs > since;
+        return chatArchiveFileChanged(statSync(file).mtimeMs, since);
       } catch {
         return false;
       }
