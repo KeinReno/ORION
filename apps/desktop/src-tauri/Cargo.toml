@@ -7,7 +7,7 @@ name = "orion-desktop"
 # script's installer step effectively no-ops and the app relaunches unchanged. A real version bump
 # takes the normal "upgrading" branch instead. ORION's own update check still keys off
 # ORION_BUILD_TAG/build.json, not this string — this only has to satisfy NSIS.
-version = "0.1.37"
+version = "0.1.38"
 description = "ORION desktop shell — thin Tauri wrapper around the Next.js web app"
 edition = "2021"
 
