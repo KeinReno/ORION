@@ -7,9 +7,11 @@
 - Клавиатура `GlideSelect` и `Combobox` (`2fcb1ff7`, уже в истории master): открытие, стрелки, Enter, Escape, Tab, фокус на кнопке у GlideSelect. Правило вынесено в `packages/ui/src/visual/list-keyboard.ts`.
 - Слежение только за выбранным агентом (`navigationTarget` требует `who`).
 - В этом цикле: `decideAgentModuleOperation` отклоняет разрешение `documents.*`, если у токена запрет `documents`, в том числе у администратора. Чужой модуль этот запрет не закрывает.
+- Сборщик установщика ждёт `phone.html` до 90 секунд. `next build` на этой машине завершался раньше, чем воркер дописывал статические страницы, и сборка обрывалась с «нет phone.html».
 
 ## Файлы этого цикла
 
+- `scripts/build-desktop-installer.mjs`
 - `packages/shared-types/src/agent-policy.ts`
 - `packages/shared-types/src/agent-policy.test.ts`
 - `development/ORION_PLATFORM_BASELINE_20261108.md`

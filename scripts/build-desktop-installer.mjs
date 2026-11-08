@@ -62,9 +62,16 @@ console.log(`Build tag: ${buildTag || '(не задана — обновлени
 // Agent Manual (TZ-02): shipped beside the runtime so the «Подключить агента» wizard can show its real path.
 cpSync(join(root, 'docs', 'AGENT_MANUAL.md'), join(stage, 'AGENT_MANUAL.md'));
 // Страница телефона отдаётся самим API (GET /phone). Экспорт Next лежит либо в out/, либо в .next-desktop/.
-const webExport = [join(root, 'apps', 'web', 'out'), join(root, 'apps', 'web', '.next-desktop')].find(
-  (dir) => existsSync(join(dir, 'phone.html')) || existsSync(join(dir, 'phone', 'index.html'))
-);
+// Next 14.2 иногда возвращает управление из `next build` раньше, чем воркер допишет phone.html
+// (на этой машине файл появлялся примерно через минуту после кода выхода). Ждём его, а не считаем сборку пустой.
+const webExportCandidates = [join(root, 'apps', 'web', 'out'), join(root, 'apps', 'web', '.next-desktop')];
+const hasPhonePage = (dir) => existsSync(join(dir, 'phone.html')) || existsSync(join(dir, 'phone', 'index.html'));
+const phoneDeadline = Date.now() + 90_000;
+let webExport = webExportCandidates.find(hasPhonePage);
+while (!webExport && Date.now() < phoneDeadline) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+  webExport = webExportCandidates.find(hasPhonePage);
+}
 if (!webExport) throw new Error('В экспорте веб-клиента нет phone.html — телефон не сможет открыть страницу узла');
 const skipExportDir = new Set(['cache', 'server', 'types', 'diagnostics', 'trace', 'standalone']);
 cpSync(webExport, join(stage, 'web'), {
