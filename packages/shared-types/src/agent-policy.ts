@@ -112,6 +112,7 @@ export function decideAgentOperation(subject: AgentPolicySubject, module: AgentP
  */
 export function decideAgentModuleOperation(subject: AgentPolicySubject, permission: string, op: "read" | "create" | "update" | "delete"): AgentDecision {
   if (op === "delete" && subject.forbidden?.includes("delete")) return deny("Этому агенту удаление запрещено");
+  if (permission.startsWith("documents.") && subject.forbidden?.includes("documents")) return deny("Документы запрещены для этого токена");
   // admin: doesn't need `permission` granted at all — same short-circuit as decideAgentOperation.
   if (subject.mode === "admin") return { kind: "allow" };
   if (!subject.modulePermissions?.includes(permission)) return deny(`У токена нет разрешения «${permission}»`);

@@ -154,6 +154,13 @@ describe("decideAgentModuleOperation (G13)", () => {
     }
     expect(decideAgentModuleOperation(subject({ mode: "admin", forbidden: ["delete"] }), "pet-care.pet.delete", "delete").kind).toBe("deny");
   });
+
+  it("запрет документов останавливает и администратора", () => {
+    const admin = subject({ mode: "admin", modulePermissions: ["documents.document.read"], forbidden: ["documents"] });
+    expect(decideAgentModuleOperation(admin, "documents.document.read", "read").kind).toBe("deny");
+    expect(decideAgentModuleOperation(admin, "documents.document.delete", "delete").kind).toBe("deny");
+    expect(decideAgentModuleOperation(subject({ mode: "admin", forbidden: ["documents"] }), "pet-care.pet.read", "read").kind).toBe("allow");
+  });
 });
 
 describe("owner-selected remote token policy", () => {
