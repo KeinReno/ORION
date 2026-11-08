@@ -35,6 +35,7 @@ import {
   Code,
   Copy,
   Download,
+  Send,
   FileStack,
   Lock,
   Unlock,
@@ -58,7 +59,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MouseEvent, type MutableRefObject } from "react";
 import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
-import { openPanel } from "../lib/panel-bus";
+import { openPanel, openSend } from "../lib/panel-bus";
 import { buildPanelDragId } from "../lib/panel-drag";
 import { panelDragHandleProps } from "../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../lib/panel-window";
@@ -497,6 +498,18 @@ export function NoteEditor({
     }
     menuItems.push(
       { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },
+      {
+        label: "Отправить копию на устройство",
+        icon: Send,
+        onSelect: () =>
+          openSend({
+            kind: "copy",
+            copyKind: "note",
+            title: note.title,
+            sourceId: note.id,
+            payload: { title: note.title, body: note.body, tags: note.tags }
+          })
+      },
       {
         label: "Копировать Markdown",
         icon: ClipboardCopy,

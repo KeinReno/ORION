@@ -22,6 +22,12 @@ import {
   lanHostStatusSchema,
   lanPendingPairSchema,
   lanPinAccountSchema,
+  sendPairingSchema,
+  sendPeerSchema,
+  sendPendingPairSchema,
+  sendStagedSchema,
+  sendStatusSchema,
+  sendTransferSchema,
   type LanApprovePairInput,
   type LanClientConnectInput,
   type LanClientPairing,
@@ -31,7 +37,18 @@ import {
   type LanLoginPolicy,
   type LanHostStatus,
   type LanPendingPair,
-  type LanPinAccount
+  type LanPinAccount,
+  type SendAcceptInput,
+  type SendCopyInput,
+  type SendDocumentsInput,
+  type SendEnableInput,
+  type SendManualInput,
+  type SendPairInput,
+  type SendPathsInput,
+  type SendPeer,
+  type SendStaged,
+  type SendStatus,
+  type SendTransfer
 } from "@orion/shared-types";
 import { extensionFetchResultSchema, extensionInfoSchema, extensionRecordSchema, extensionSecretStatusSchema, extensionsStateSchema, type ApproveExtensionInput, type ExtensionFetchInput, type ExtensionFetchResult, type ExtensionInfo, type ExtensionRecord, type ExtensionSecretStatus, type ExtensionsState, type UpdateExtensionInput } from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
@@ -2849,6 +2866,115 @@ export class ApiClient {
 
   activateLanClient(): Promise<void> {
     return this.request("POST", "/lan/client/activate", {}, z.void());
+  }
+
+  getSendStatus(): Promise<SendStatus> {
+    return this.request("GET", "/send/status", undefined, sendStatusSchema);
+  }
+
+  enableSend(input: SendEnableInput): Promise<SendStatus> {
+    return this.request("POST", "/send/enable", input, sendStatusSchema);
+  }
+
+  discoverSend(scan = false): Promise<SendPeer[]> {
+    return this.request("GET", `/send/discover?scan=${scan ? "1" : "0"}`, undefined, z.array(sendPeerSchema));
+  }
+
+  probeSend(input: SendManualInput) {
+    return this.request("POST", "/send/discover", input, z.array(sendPeerSchema));
+  }
+
+  sendPeers() {
+    return this.request("GET", "/send/peers", undefined, z.array(sendPeerSchema));
+  }
+
+  startSendPair(input: SendPairInput) {
+    return this.request("POST", "/send/peers/pair", input, sendPairingSchema);
+  }
+
+  refreshSendPair(id: string) {
+    return this.request("GET", `/send/peers/pair/${id}`, undefined, sendPairingSchema);
+  }
+
+  sendPairRequests() {
+    return this.request("GET", "/send/peers/requests", undefined, z.array(sendPendingPairSchema));
+  }
+
+  approveSendPair(id: string, code: string): Promise<{ ok: boolean }> {
+    return this.request("POST", `/send/peers/requests/${id}/approve`, { code }, z.object({ ok: z.boolean() }));
+  }
+
+  denySendPair(id: string): Promise<{ ok: boolean }> {
+    return this.request("POST", `/send/peers/requests/${id}/deny`, {}, z.object({ ok: z.boolean() }));
+  }
+
+  revokeSendPeer(id: string): Promise<{ ok: boolean }> {
+    return this.request("POST", `/send/peers/${id}/revoke`, {}, z.object({ ok: z.boolean() }));
+  }
+
+  sendTransfers(): Promise<SendTransfer[]> {
+    return this.request("GET", "/send/transfers", undefined, z.array(sendTransferSchema));
+  }
+
+  acceptSend(id: string, input: SendAcceptInput = {}): Promise<SendTransfer> {
+    return this.request("POST", `/send/transfers/${id}/accept`, input, sendTransferSchema);
+  }
+
+  rejectSend(id: string): Promise<SendTransfer> {
+    return this.request("POST", `/send/transfers/${id}/reject`, {}, sendTransferSchema);
+  }
+
+  pauseSend(id: string): Promise<SendTransfer> {
+    return this.request("POST", `/send/transfers/${id}/pause`, {}, sendTransferSchema);
+  }
+
+  resumeSend(id: string): Promise<SendTransfer> {
+    return this.request("POST", `/send/transfers/${id}/resume`, {}, sendTransferSchema);
+  }
+
+  cancelSend(id: string): Promise<SendTransfer> {
+    return this.request("POST", `/send/transfers/${id}/cancel`, {}, sendTransferSchema);
+  }
+
+  sendPaths(input: SendPathsInput): Promise<SendTransfer> {
+    return this.request("POST", "/send/paths", input, sendTransferSchema);
+  }
+
+  sendDocumentsToDevice(input: SendDocumentsInput): Promise<SendTransfer> {
+    return this.request("POST", "/send/documents", input, sendTransferSchema);
+  }
+
+  sendCopy(input: SendCopyInput): Promise<SendTransfer> {
+    return this.request("POST", "/send/copies", input, sendTransferSchema);
+  }
+
+  sendOutgoing(peerId: string, batchId: string): Promise<SendTransfer> {
+    return this.request("POST", "/send/outgoing", { peerId, batchId }, sendTransferSchema);
+  }
+
+  openSendFirewall(): Promise<{ ok: boolean }> {
+    return this.request("POST", "/send/firewall", {}, z.object({ ok: z.boolean() }));
+  }
+
+  /** Файл уходит потоком на локальный API, тот пишет его на диск и не держит целиком в памяти маршрута JSON. */
+  async stageSendFile(relativePath: string, body: Blob, batchId?: string): Promise<SendStaged> {
+    const token = await this.options.tokenStore.get();
+    const response = await fetch(`${this.options.baseUrl}/send/outbox`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-orion-relative-path": encodeURIComponent(relativePath),
+        ...(batchId ? { "x-orion-batch": batchId } : {}),
+        ...this.options.extraHeaders?.(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new ApiError(response.status, extractMessage(payload) ?? response.statusText, payload);
+    }
+    return sendStagedSchema.parse(await response.json());
   }
 
   previewPublicationRefresh(id: string) { return this.request("GET", `/publications/${encodeURIComponent(id)}/preview`, undefined, publicationPreviewSchema); }

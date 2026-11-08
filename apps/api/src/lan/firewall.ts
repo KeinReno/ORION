@@ -48,3 +48,12 @@ function runElevated(commands: string[]): Promise<boolean> {
 
 export const openFirewall = (port: number) => runElevated(firewallAddCommands(port));
 export const closeFirewall = () => runElevated(firewallRemoveCommands());
+
+const SEND_RULE = "ORION Send";
+
+/** Отдельное правило порта передачи. Правило хоста API не меняется. */
+export function sendFirewallAddCommands(port: number): string[] {
+  return [`netsh advfirewall firewall add rule name="${SEND_RULE}" dir=in action=allow protocol=TCP localport=${port} profile=private remoteip=localsubnet`];
+}
+
+export const openSendFirewall = (port: number) => runElevated(sendFirewallAddCommands(port));

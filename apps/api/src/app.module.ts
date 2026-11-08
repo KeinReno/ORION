@@ -18,6 +18,7 @@ import { SyncModule } from "./sync/sync.module";
 import { SettingsModule } from "./settings/settings.module";
 import { SystemModule } from "./system/system.module";
 import { LanModule } from "./lan/lan.module";
+import { SendModule } from "./send/send.module";
 import { UpdatesModule } from "./updates/updates.module";
 import { FeedbackModule } from "./feedback/feedback.module";
 import { ExtensionsModule } from "./extensions/extensions.module";
@@ -77,6 +78,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     SettingsModule,
     SystemModule,
     LanModule,
+    SendModule,
     UpdatesModule,
     FeedbackModule,
     ExtensionsModule,

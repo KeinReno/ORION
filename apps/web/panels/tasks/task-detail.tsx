@@ -33,11 +33,11 @@ import {
   useContextMenu,
   useToast
 } from "@orion/ui";
-import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Square, Trash2, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Send, Square, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ResizablePane } from "../../components/resizable-pane";
-import { openPanel } from "../../lib/panel-bus";
+import { openPanel, openSend } from "../../lib/panel-bus";
 import { buildPanelDragId } from "../../lib/panel-drag";
 import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../../lib/panel-window";
@@ -286,6 +286,7 @@ export function TaskDetail({
           { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`task:${task.id}`, task.title) },
           { label: "Открыть окном", icon: ExternalLink, onSelect: () => void detachPanelToWindow(`task:${task.id}`, task.title) }
         ]),
+    { label: "Отправить копию на устройство", icon: Send, onSelect: () => openSend({ kind: "copy", copyKind: "task", title: task.title, sourceId: task.id, payload: { title: task.title, description: task.description, status: task.status, dueAt: task.dueAt } }) },
     { label: "Удалить задачу", icon: Trash2, tone: "danger", onSelect: onDelete }
   ];
   const sectionContextMenu = useContextMenu(() => menuItems);

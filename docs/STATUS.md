@@ -1,5 +1,9 @@
 # ORION — состояние на 30 октября 2026
 
+## Orion Send — 08.11.2026, код без установщика
+
+Прямая передача файлов между двумя локальными узлами описана в [orion-link/IMPLEMENTATION_REPORT.md](orion-link/IMPLEMENTATION_REPORT.md). Установщик Windows этим изменением не собирался. Два физических компьютера не проверялись: [orion-link/TEST_REPORT.md](orion-link/TEST_REPORT.md).
+
 ## Интеграция Agent connection PR #96 — beta.37, 03.11.2026
 
 В локальную beta-ветку перенесён PR #96 (`84bb0dc`): выбор роли/срока,

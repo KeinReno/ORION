@@ -33,13 +33,13 @@ export class MdnsAdvertiser {
   private bonjour: Bonjour | null = null;
   private service: Service | null = null;
 
-  start(ad: Advertisement): void {
+  start(ad: Advertisement, serviceType: string = LAN_SERVICE_TYPE): void {
     this.stop();
     // Сначала дом. Если домашнего адаптера нет (компьютер только в VPN) — объявляем в VPN.
     this.bonjour = bonjourOn(primaryLanAddress() ?? primaryLanAddress(overlayInterfaces()));
     this.service = this.bonjour.publish({
       name: ad.name,
-      type: LAN_SERVICE_TYPE,
+      type: serviceType,
       protocol: "tcp",
       port: ad.port,
       txt: { v: String(LAN_PROTOCOL_VERSION), name: ad.name, id: ad.nodeId, fp: ad.fingerprint.replace(/:/g, "") }
@@ -66,7 +66,7 @@ export class MdnsAdvertiser {
  * Разовый поиск узлов: запрос уходит через КАЖДЫЙ реальный адаптер (не только через «по умолчанию»). Мультикаст режется
  * многими роутерами и брандмауэром, поэтому рядом всегда работает перебор подсети (`lan-scan.ts`) и ручной ввод адреса.
  */
-export function discoverNodes(timeoutMs = 3000): Promise<LanDiscoveredNode[]> {
+export function discoverNodes(timeoutMs = 3000, serviceType: string = LAN_SERVICE_TYPE): Promise<LanDiscoveredNode[]> {
   return new Promise((resolve) => {
     const found = new Map<string, LanDiscoveredNode>();
     const addresses = discoveryInterfaces().map((item) => item.address);
@@ -79,7 +79,7 @@ export function discoverNodes(timeoutMs = 3000): Promise<LanDiscoveredNode[]> {
       }
     }
     const browsers = instances.map((bonjour) =>
-      bonjour.find({ type: LAN_SERVICE_TYPE, protocol: "tcp" }, (service) => {
+      bonjour.find({ type: serviceType, protocol: "tcp" }, (service) => {
         const txt = (service.txt ?? {}) as Record<string, string>;
         const address = service.addresses?.find((item) => /^\d+\.\d+\.\d+\.\d+$/.test(item)) ?? service.referer?.address;
         if (!address || !txt.id || !txt.fp) return;

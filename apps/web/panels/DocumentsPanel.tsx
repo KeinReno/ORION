@@ -54,11 +54,13 @@ import {
   Search,
   Trash2,
   Upload,
+  Send,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
 import { relativeTime } from "../lib/format";
+import { openSend } from "../lib/panel-bus";
 import { FilterChip } from "../components/filter-chip";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { nextListId } from "../lib/list-nav";
@@ -557,6 +559,7 @@ export function DocumentsPanel(): React.ReactElement {
             ? []
             : [
                 { label: "Скачать", icon: Download, onSelect: () => void download(doc) },
+                { label: "Отправить на устройство", icon: Send, onSelect: () => workspaceId && openSend({ kind: "documents", workspaceId, documentIds: [doc.id] }) },
                 { label: "Заменить содержимое…", icon: Upload, onSelect: () => triggerReplace(doc) },
                 ...historyActions.map((label) => ({ label, icon: History, onSelect: () => setHistoryTarget(doc) }))
               ]),
