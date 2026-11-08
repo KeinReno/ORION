@@ -16,7 +16,7 @@ import {
   type CreatedAgentToken,
   type InstalledAgentClient
 } from "@orion/shared-types";
-import { Button, Card, ConfirmDialog, SegmentedControl, Select, useToast } from "@orion/ui";
+import { Button, Card, ConfirmDialog, SegmentedControl, Select, Steps, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { AGENT_CLIENTS, AGENT_CLIENT_LABEL, buildConnectSnippet, checkAgentConnection, type AgentClient, type ConnectionCheck } from "../../lib/agent-connect";
 import { describeError } from "../../lib/error-message";
@@ -97,6 +97,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
 
   return (
     <Card className="space-y-3 p-4">
+      <Steps items={["Программа", "Токен", "Проверка"]} current={installed || check?.ok ? 2 : issued ? 1 : 0} />
       <div>
         <h3 className="text-label font-medium">Подключить программу</h3>
         <p className="text-xs text-muted-foreground">

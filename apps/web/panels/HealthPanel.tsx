@@ -2,7 +2,7 @@
 
 import { useCreateHealthSubject, useHealthSubjects } from "@orion/core-react";
 import { healthCanWrite, type HealthSubject } from "@orion/shared-types";
-import { Button, EmptyState, Modal, PanelBody, PanelHeader, PanelShell, SegmentedControl, Select, Skeleton, useToast } from "@orion/ui";
+import { Button, Combobox, EmptyState, Modal, PanelBody, PanelHeader, PanelShell, SegmentedControl, Skeleton, useToast } from "@orion/ui";
 import { HeartPulse, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { describeError } from "../lib/error-message";
@@ -99,14 +99,17 @@ export function HealthPanel(_props: PanelComponentProps): React.ReactElement {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <Select aria-label="О ком смотрим" className="max-w-[16rem]" value={subject.id} onChange={(event) => select(event.target.value)}>
-                {list.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.kind === "dependent" ? " (веду я)" : s.access !== "own" ? " (доступ дан мне)" : ""}
-                  </option>
-                ))}
-              </Select>
+              <div className="w-56">
+                <Combobox
+                  label="О ком смотрим"
+                  value={subject.id}
+                  onChange={select}
+                  items={list.map((item) => ({
+                    id: item.id,
+                    label: `${item.name}${item.kind === "dependent" ? " (веду я)" : item.access !== "own" ? " (доступ дан мне)" : ""}`
+                  }))}
+                />
+              </div>
               {!healthCanWrite(subject.access) ? <span className="rounded-md bg-white/5 px-2 py-0.5 text-2xs text-muted-foreground">Только просмотр</span> : null}
               <SegmentedControl
                 size="sm"

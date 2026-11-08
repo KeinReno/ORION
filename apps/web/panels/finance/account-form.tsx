@@ -1,7 +1,7 @@
 "use client";
 
 import { ACCOUNT_CONTEXT_LABEL, type Account, type AccountContext, type AccountKind, type AccountVisibility } from "@orion/shared-types";
-import { Button, Input, Select } from "@orion/ui";
+import { Button, GlideSelect, Input } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { parseMoneyInput, fromKopecks } from "../../lib/format";
 
@@ -68,41 +68,49 @@ export function AccountForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Тип
-          <Select value={kind} onChange={(e) => setKind(e.target.value as AccountKind)}>
-            {ACCOUNT_KIND_ORDER.map((k) => (
-              <option key={k} value={k}>
-                {ACCOUNT_KIND_LABEL[k]}
-              </option>
-            ))}
-          </Select>
+          <GlideSelect
+            label="Тип"
+            options={ACCOUNT_KIND_ORDER.map((item) => ACCOUNT_KIND_LABEL[item])}
+            value={ACCOUNT_KIND_LABEL[kind]}
+            onChange={(label) => {
+              const next = ACCOUNT_KIND_ORDER.find((item) => ACCOUNT_KIND_LABEL[item] === label);
+              if (next) setKind(next);
+            }}
+          />
         </label>
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Валюта
-          <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {ACCOUNT_CURRENCY_ORDER.map((code) => (
-              <option key={code} value={code}>
-                {ACCOUNT_CURRENCY_LABEL[code] ?? code}
-              </option>
-            ))}
-          </Select>
+          <GlideSelect
+            label="Валюта"
+            options={ACCOUNT_CURRENCY_ORDER.map((code) => ACCOUNT_CURRENCY_LABEL[code] ?? code)}
+            value={ACCOUNT_CURRENCY_LABEL[currency] ?? currency}
+            onChange={(label) => {
+              const next = ACCOUNT_CURRENCY_ORDER.find((code) => (ACCOUNT_CURRENCY_LABEL[code] ?? code) === label);
+              if (next) setCurrency(next);
+            }}
+          />
         </label>
       </div>
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
         Чьи деньги
-        <Select value={context} onChange={(e) => setContext(e.target.value as AccountContext)}>
-          {(Object.keys(ACCOUNT_CONTEXT_LABEL) as AccountContext[]).map((value) => (
-            <option key={value} value={value}>
-              {ACCOUNT_CONTEXT_LABEL[value]}
-            </option>
-          ))}
-        </Select>
+        <GlideSelect
+          label="Чьи деньги"
+          options={(Object.keys(ACCOUNT_CONTEXT_LABEL) as AccountContext[]).map((value) => ACCOUNT_CONTEXT_LABEL[value])}
+          value={ACCOUNT_CONTEXT_LABEL[context]}
+          onChange={(label) => {
+            const next = (Object.keys(ACCOUNT_CONTEXT_LABEL) as AccountContext[]).find((value) => ACCOUNT_CONTEXT_LABEL[value] === label);
+            if (next) setContext(next);
+          }}
+        />
       </label>
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
         Кто видит счёт
-        <Select value={visibility} onChange={(e) => setVisibility(e.target.value as AccountVisibility)}>
-          <option value="workspace">Все в пространстве</option>
-          <option value="private">Только я</option>
-        </Select>
+        <GlideSelect
+          label="Кто видит счёт"
+          options={["Все в пространстве", "Только я"]}
+          value={visibility === "private" ? "Только я" : "Все в пространстве"}
+          onChange={(label) => setVisibility(label === "Только я" ? "private" : "workspace")}
+        />
         {visibility === "private" ? (
           <span className="text-subtle-foreground">
             Счёт, его операции, правила и платежи не увидит никто, кроме вас: ни участники, ни владелец пространства. Итоги и отчёты у каждого считаются по тому, что ему видно. Если вы покинете пространство, счёт снова станет виден остальным.

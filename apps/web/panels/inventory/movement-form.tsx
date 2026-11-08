@@ -1,7 +1,7 @@
 "use client";
 
 import type { InventoryMovementType } from "@orion/shared-types";
-import { AutosaveStatus, Button, Input, Select } from "@orion/ui";
+import { AutosaveStatus, Button, GlideSelect, Input } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { parseMoneyInput } from "../../lib/format";
@@ -63,13 +63,15 @@ export function InventoryMovementForm({
     <form onSubmit={submit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
         Тип движения
-        <Select value={type} onChange={(e) => setType(e.target.value as InventoryMovementType)}>
-          {(Object.keys(TYPE_LABEL) as InventoryMovementType[]).map((t) => (
-            <option key={t} value={t}>
-              {TYPE_LABEL[t]}
-            </option>
-          ))}
-        </Select>
+        <GlideSelect
+          label="Тип движения"
+          options={(Object.keys(TYPE_LABEL) as InventoryMovementType[]).map((item) => TYPE_LABEL[item])}
+          value={TYPE_LABEL[type]}
+          onChange={(label) => {
+            const next = (Object.keys(TYPE_LABEL) as InventoryMovementType[]).find((item) => TYPE_LABEL[item] === label);
+            if (next) setType(next);
+          }}
+        />
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
@@ -79,10 +81,12 @@ export function InventoryMovementForm({
         {type === "adjustment" ? (
           <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
             Направление
-            <Select value={direction} onChange={(e) => setDirection(e.target.value as "+" | "-")}>
-              <option value="+">Приход (+)</option>
-              <option value="-">Списание (−)</option>
-            </Select>
+            <GlideSelect
+              label="Направление"
+              options={["Приход (+)", "Списание (−)"]}
+              value={direction === "+" ? "Приход (+)" : "Списание (−)"}
+              onChange={(label) => setDirection(label.startsWith("Приход") ? "+" : "-")}
+            />
           </label>
         ) : type === "receipt" ? (
           costing ? <costing.UnitCostField value={unitCost} onChange={setUnitCost} /> : null

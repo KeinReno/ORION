@@ -42,6 +42,8 @@ import {
   ConfirmDialog,
   cx,
   EmptyState,
+  CountUp,
+  CircularProgress,
   Input,
   LiveDot,
   PanelBody,
@@ -408,7 +410,7 @@ function DashboardOverview(): React.ReactElement {
                 <div className="flex flex-wrap gap-2">
                   {parts.overdue.length > 0 ? (
                     <StatusChip tone="danger" onClick={() => openPanel("tasks")}>
-                      Просрочено {parts.overdue.length}
+                      Просрочено <CountUp value={parts.overdue.length} />
                     </StatusChip>
                   ) : null}
                   {running ? (
@@ -421,7 +423,7 @@ function DashboardOverview(): React.ReactElement {
                   {inboxCount > 0 ? (
                     <StatusChip tone="neutral" onClick={() => openPanel("inbox")}>
                       <Inbox className="h-3 w-3" />
-                      Инбокс {inboxCount}
+                      Инбокс <CountUp value={inboxCount} />
                     </StatusChip>
                   ) : null}
                 </div>
@@ -478,6 +480,12 @@ function DashboardOverview(): React.ReactElement {
                 {habitsOn && dueHabits.length > 0 ? (
                   <Section title="Привычки" icon={Target} onOpen={() => openPanel("habits")}>
                     <ul>
+                      <li className="mb-2">
+                        <CircularProgress
+                          label="Привычки сегодня"
+                          value={dueHabits.length === 0 ? 0 : (dueHabits.filter((habit) => habit.doneToday).length / dueHabits.length) * 100}
+                        />
+                      </li>
                       {dueHabits.map((habit) => (
                         <li key={habit.id} className="flex items-center gap-2 rounded-lg px-1 py-row">
                           <CheckToggle
@@ -498,7 +506,7 @@ function DashboardOverview(): React.ReactElement {
                           </span>
                           {habit.streak > 0 ? (
                             <span className="shrink-0 font-mono text-micro tabular-nums text-subtle-foreground">
-                              {habit.streak}
+                              <CountUp value={habit.streak} />
                             </span>
                           ) : null}
                         </li>

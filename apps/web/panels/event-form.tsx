@@ -1,7 +1,7 @@
 "use client";
 
 import type { Event, Project, RecurrenceSpec } from "@orion/shared-types";
-import { Button, Input, PALETTE_SWATCHES, Select, Textarea } from "@orion/ui";
+import { Button, CalendarPicker, Combobox, Input, PALETTE_SWATCHES, Textarea } from "@orion/ui";
 import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toDateInput } from "../lib/date-input";
@@ -177,13 +177,12 @@ export function EventForm({
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Начало
           {allDay ? (
-            <Input
-              type="date"
+            <CalendarPicker
               value={startDate}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                setStartDate(e.target.value);
-                if (lastDate < e.target.value) setLastDate(e.target.value);
+              onChange={(value) => {
+                if (value.length !== 10) return;
+                setStartDate(value);
+                if (lastDate < value) setLastDate(value);
               }}
             />
           ) : (
@@ -197,11 +196,11 @@ export function EventForm({
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Конец
           {allDay ? (
-            <Input
-              type="date"
+            <CalendarPicker
               value={lastDate}
-              min={startDate}
-              onChange={(e) => e.target.value && setLastDate(e.target.value)}
+              onChange={(value) => {
+                if (value.length === 10 && value >= startDate) setLastDate(value);
+              }}
             />
           ) : (
             <Input
@@ -225,17 +224,12 @@ export function EventForm({
       </div>
 
       {projects ? (
-      <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-        Проект
-        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-          <option value="">Без проекта</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </Select>
-      </label>
+        <Combobox
+          label="Проект"
+          value={projectId}
+          onChange={setProjectId}
+          items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+        />
       ) : null}
 
       <div className="flex flex-col gap-1 text-2xs text-subtle-foreground">

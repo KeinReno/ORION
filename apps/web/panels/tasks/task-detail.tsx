@@ -14,7 +14,6 @@ import type {
   Project,
   Task,
   TaskActivity,
-  TaskPriority,
   TaskStatus,
   UpdateTaskInput,
   WorkspaceMember
@@ -26,7 +25,8 @@ import {
   IconButton,
   Input,
   SegmentedControl,
-  Select,
+  Combobox,
+  GlideSelect,
   Skeleton,
   Textarea,
   cx,
@@ -368,13 +368,16 @@ export function TaskDetail({
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3">
           <Prop label="Статус">
             {(id) => (
-              <Select id={id} aria-label="Статус" value={fields.status} onChange={(event) => set("status", event.target.value as TaskStatus)}>
-                {TASK_STATUS_ORDER.map((status) => (
-                  <option key={status} value={status}>
-                    {TASK_STATUS_LABEL[status]}
-                  </option>
-                ))}
-              </Select>
+              <GlideSelect
+                id={id}
+                label="Статус"
+                options={TASK_STATUS_ORDER.map((status) => TASK_STATUS_LABEL[status])}
+                value={TASK_STATUS_LABEL[fields.status]}
+                onChange={(label) => {
+                  const next = TASK_STATUS_ORDER.find((status) => TASK_STATUS_LABEL[status] === label);
+                  if (next) set("status", next);
+                }}
+              />
             )}
           </Prop>
           <Prop label="Срок">
@@ -382,40 +385,41 @@ export function TaskDetail({
           </Prop>
           <Prop label="Приоритет">
             {(id) => (
-              <Select id={id} value={fields.priority} onChange={(event) => set("priority", event.target.value as TaskPriority)}>
-                {TASK_PRIORITY_ORDER.map((priority) => (
-                  <option key={priority} value={priority}>
-                    {TASK_PRIORITY_LABEL[priority]}
-                  </option>
-                ))}
-              </Select>
+              <GlideSelect
+                id={id}
+                label="Приоритет"
+                options={TASK_PRIORITY_ORDER.map((priority) => TASK_PRIORITY_LABEL[priority])}
+                value={TASK_PRIORITY_LABEL[fields.priority]}
+                onChange={(label) => {
+                  const next = TASK_PRIORITY_ORDER.find((priority) => TASK_PRIORITY_LABEL[priority] === label);
+                  if (next) set("priority", next);
+                }}
+              />
             )}
           </Prop>
           {members ? (
             <Prop label="Исполнитель">
               {(id) => (
-                <Select id={id} value={fields.assigneeId} onChange={(event) => set("assigneeId", event.target.value)}>
-                  <option value="">Не назначен</option>
-                  {members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={id}
+                  label="Исполнитель"
+                  value={fields.assigneeId}
+                  onChange={(assigneeId) => set("assigneeId", assigneeId)}
+                  items={[{ id: "", label: "Не назначен" }, ...members.map((member) => ({ id: member.id, label: member.name }))]}
+                />
               )}
             </Prop>
           ) : null}
           {projects ? (
             <Prop label="Проект" wide>
               {(id) => (
-                <Select id={id} value={fields.projectId} onChange={(event) => setProject(event.target.value)}>
-                  <option value="">Без проекта</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  id={id}
+                  label="Проект"
+                  value={fields.projectId}
+                  onChange={setProject}
+                  items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+                />
               )}
             </Prop>
           ) : null}
@@ -457,14 +461,13 @@ export function TaskDetail({
             {milestoneOptions.length > 0 ? (
               <Prop label="Веха">
                 {(id) => (
-                  <Select id={id} value={fields.milestoneId} onChange={(event) => set("milestoneId", event.target.value)}>
-                    <option value="">Без вехи</option>
-                    {milestoneOptions.map((milestone) => (
-                      <option key={milestone.id} value={milestone.id}>
-                        {milestone.title}
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    id={id}
+                    label="Веха"
+                    value={fields.milestoneId}
+                    onChange={(milestoneId) => set("milestoneId", milestoneId)}
+                    items={[{ id: "", label: "Без вехи" }, ...milestoneOptions.map((milestone) => ({ id: milestone.id, label: milestone.title }))]}
+                  />
                 )}
               </Prop>
             ) : null}

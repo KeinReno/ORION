@@ -12,7 +12,9 @@ import {
   MarkdownView,
   Popover,
   SegmentedControl,
-  Select,
+  Combobox,
+  TagsInput,
+  EmptyScene,
   cx,
   useContextMenu,
   useContextMenuApi,
@@ -160,7 +162,6 @@ export function NoteEditor({
   const [summary, setSummary] = useState(note?.summary ?? "");
   const [body, setBody] = useState(note?.body ?? "");
   const [tags, setTags] = useState<string[]>(note?.tags ?? []);
-  const [tagDraft, setTagDraft] = useState("");
   const [eventAt, setEventAt] = useState(toDatetimeLocal(note?.eventAt ?? null));
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
   const [createPrivate, setCreatePrivate] = useState(false);
@@ -428,13 +429,6 @@ export function NoteEditor({
       return;
     }
     onClose();
-  }
-
-  function addTag(raw: string): void {
-    const tag = raw.trim();
-    if (!tag || tags.includes(tag)) return;
-    setTags((cur) => [...cur, tag]);
-    setTagDraft("");
   }
 
   function jumpToHeading(slug: string): void {
@@ -748,42 +742,9 @@ export function NoteEditor({
               getWikiLinkPreview={(target) => titleLookup.get(target.toLowerCase())}
             />
           ) : (
-            <p className="min-h-[18rem] text-body text-subtle-foreground">Пусто — переключитесь на «Правку».</p>
+            <EmptyScene title="Пусто" description="Переключитесь на «Правку», чтобы написать заметку." />
           )}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                style={projectColor(tag)}
-                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-micro font-medium"
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => setTags((cur) => cur.filter((x) => x !== tag))}
-                  aria-label={`Убрать тег ${tag}`}
-                  className="opacity-60 hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              value={tagDraft}
-              onChange={(e) => setTagDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addTag(tagDraft);
-                } else if (e.key === "Backspace" && !tagDraft && tags.length > 0) {
-                  setTags((cur) => cur.slice(0, -1));
-                }
-              }}
-              onBlur={() => addTag(tagDraft)}
-              placeholder={tags.length === 0 ? "Новый тег" : "Ещё тег"}
-              className="min-w-[6rem] flex-1 bg-transparent text-micro text-foreground outline-none placeholder:text-subtle-foreground"
-            />
-          </div>
+          <TagsInput label="Теги" value={tags} onChange={setTags} placeholder={tags.length === 0 ? "Новый тег" : "Ещё тег"} chipStyle={projectColor} />
         </div>
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
@@ -836,17 +797,12 @@ export function NoteEditor({
             </p>
           ) : null}
           {projects ? (
-            <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
-              Проект
-              <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">Без проекта</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
+            <Combobox
+              label="Проект"
+              value={projectId}
+              onChange={setProjectId}
+              items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+            />
           ) : null}
 
           {note ? (

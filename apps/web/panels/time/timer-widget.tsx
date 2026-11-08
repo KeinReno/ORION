@@ -3,7 +3,7 @@
 import { ApiError } from "@orion/core";
 import { useStartTimer, useStopTimer, useUpdateTimeEntry } from "@orion/core-react";
 import { entryMinutes, formatDuration, type Project, type Task, type TimeEntry } from "@orion/shared-types";
-import { Button, Card, Input, LiveDot, Select, useToast } from "@orion/ui";
+import { Button, Card, Combobox, Input, LiveDot, useToast } from "@orion/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Play, Square } from "lucide-react";
 import { useState } from "react";
@@ -150,35 +150,25 @@ export function TimerWidget({
             {tasks ? (
               <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
                 Задача
-                <Select
-                  value={running.taskId ?? ""}
+                <Combobox
+                  label="Задача"
                   disabled={updateEntry.isPending}
-                  onChange={(event) => void bindRunning({ taskId: event.target.value || null })}
-                >
-                  <option value="">Без задачи</option>
-                  {tasks.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </Select>
+                  value={running.taskId ?? ""}
+                  onChange={(taskId) => void bindRunning({ taskId: taskId || null })}
+                  items={[{ id: "", label: "Без задачи" }, ...tasks.map((item) => ({ id: item.id, label: item.title }))]}
+                />
               </label>
             ) : null}
             {projects ? (
               <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
                 Проект
-                <Select
-                  value={running.projectId ?? ""}
+                <Combobox
+                  label="Проект"
                   disabled={updateEntry.isPending}
-                  onChange={(event) => void bindRunning({ projectId: event.target.value || null })}
-                >
-                  <option value="">Без проекта</option>
-                  {projects.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </Select>
+                  value={running.projectId ?? ""}
+                  onChange={(projectId) => void bindRunning({ projectId: projectId || null })}
+                  items={[{ id: "", label: "Без проекта" }, ...projects.map((item) => ({ id: item.id, label: item.name }))]}
+                />
               </label>
             ) : null}
           </div>
@@ -217,27 +207,23 @@ export function TimerWidget({
         {tasks ? (
         <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
           Задача
-          <Select value={taskId} onChange={(event) => setTaskId(event.target.value)}>
-            <option value="">Без задачи</option>
-            {tasks.map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            label="Задача"
+            value={taskId}
+            onChange={setTaskId}
+            items={[{ id: "", label: "Без задачи" }, ...tasks.map((task) => ({ id: task.id, label: task.title }))]}
+          />
         </label>
         ) : null}
         {projects ? (
         <label className="flex flex-col gap-1 text-micro text-subtle-foreground">
           Проект
-          <Select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-            <option value="">Без проекта</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            label="Проект"
+            value={projectId}
+            onChange={setProjectId}
+            items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+          />
         </label>
         ) : null}
       </div>

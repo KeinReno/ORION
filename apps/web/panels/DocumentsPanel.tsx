@@ -15,6 +15,8 @@ import {
 import type { DocumentItem, DocumentView } from "@orion/shared-types";
 import {
   Button,
+  ActionBar,
+  Breadcrumb,
   CallChip,
   ConfirmDialog,
   TypeToConfirmDialog,
@@ -40,7 +42,6 @@ import {
 } from "@orion/ui";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  ChevronRight,
   Download,
   FolderPlus,
   FolderOpen,
@@ -55,7 +56,7 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
 import { relativeTime } from "../lib/format";
 import { FilterChip } from "../components/filter-chip";
@@ -630,31 +631,24 @@ export function DocumentsPanel(): React.ReactElement {
       </AnimatePresence>
 
       {!trash ? (
-        <nav className="mb-2 flex flex-wrap items-center gap-0.5 px-1 text-xs text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => openFolder(null)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => dropOnto(e, null)}
-            className={cx("rounded px-1.5 py-0.5 hover:text-foreground", cwd === null && "text-foreground")}
-          >
-            Все файлы
-          </button>
-          {breadcrumbs.map((node) => (
-            <span key={node.id} className="flex items-center gap-0.5">
-              <ChevronRight className="h-3 w-3 shrink-0 opacity-50" />
-              <button
-                type="button"
-                onClick={() => openFolder(node.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => dropOnto(e, node.id)}
-                className={cx("max-w-[12rem] truncate rounded px-1.5 py-0.5 hover:text-foreground", node.id === cwd && "text-foreground")}
-              >
-                {node.name}
-              </button>
-            </span>
-          ))}
-        </nav>
+        <div className="mb-2 px-1">
+          <Breadcrumb
+            items={[
+              {
+                label: "Все файлы",
+                onClick: () => openFolder(null),
+                onDragOver: (event) => event.preventDefault(),
+                onDrop: (event) => dropOnto(event, null)
+              },
+              ...breadcrumbs.map((node) => ({
+                label: node.name,
+                onClick: () => openFolder(node.id),
+                onDragOver: (event: DragEvent<HTMLButtonElement>) => event.preventDefault(),
+                onDrop: (event: DragEvent<HTMLButtonElement>) => dropOnto(event, node.id)
+              }))
+            ]}
+          />
+        </div>
       ) : null}
 
       {groupsPresent.length > 1 ? (
@@ -895,21 +889,16 @@ export function DocumentsPanel(): React.ReactElement {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            role="toolbar"
-            aria-label="Выбранные документы"
-            className="sticky bottom-0 mt-2 flex items-center gap-0.5 rounded-xl border border-border bg-panel/95 p-1.5 text-xs backdrop-blur"
+            className="sticky bottom-0 mt-2"
           >
-            <IconButton label="Снять выбор" size="sm" className="shrink-0" onClick={() => setChecked(new Set())}>
-              <X className="h-4 w-4" />
-            </IconButton>
-            <span className="mr-auto min-w-0 truncate pr-1 text-muted-foreground">Выбрано: {checkedList.length}</span>
-            {/* The buttons keep their one-line labels; the count gives way first on a narrow list. */}
-            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => setMoveTargets(checkedList)}>
-              Переместить…
-            </Button>
-            <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => trashMany(checkedList)}>
-              В корзину
-            </Button>
+            <ActionBar count={checkedList.length} onClear={() => setChecked(new Set())}>
+              <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => setMoveTargets(checkedList)}>
+                Переместить…
+              </Button>
+              <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => trashMany(checkedList)}>
+                В корзину
+              </Button>
+            </ActionBar>
           </motion.div>
         ) : null}
       </AnimatePresence>

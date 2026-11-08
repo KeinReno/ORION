@@ -11,7 +11,7 @@ import {
   useUpdateProjectGoal,
   useUpdateProjectGoalPlan
 } from "@orion/core-react";
-import { GOAL_STATUS_LABEL, checkGoalParent, goalStatusSchema, type Goal, type GoalStatus } from "@orion/shared-types";
+import { GOAL_STATUS_LABEL, checkGoalParent, goalStatusSchema, type Goal } from "@orion/shared-types";
 import {
   Badge,
   Button,
@@ -23,7 +23,8 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
-  Select,
+  Combobox,
+  GlideSelect,
   Skeleton,
   useToast
 } from "@orion/ui";
@@ -136,23 +137,22 @@ export function GoalsPanel(): React.ReactElement {
           <Card className="space-y-3 p-4">
             <div className="flex items-start gap-2">
               <h3 className="min-w-0 flex-1 text-sm font-medium">{goal.title}</h3>
-              <Select
-                aria-label="Статус цели"
-                value={goal.status}
-                onChange={(event) =>
-                  update.mutate(
-                    { goalId: goal.id, input: { status: goalStatusSchema.parse(event.target.value) } },
-                    { onError: (error) => fail("Не удалось изменить статус", error) }
-                  )
-                }
-                className="w-auto"
-              >
-                {goalStatusSchema.options.map((status: GoalStatus) => (
-                  <option key={status} value={status}>
-                    {GOAL_STATUS_LABEL[status]}
-                  </option>
-                ))}
-              </Select>
+              <div className="w-36 shrink-0">
+                <GlideSelect
+                  label="Статус цели"
+                  options={goalStatusSchema.options.map((status) => GOAL_STATUS_LABEL[status])}
+                  value={GOAL_STATUS_LABEL[goal.status]}
+                  onChange={(label) => {
+                    const next = goalStatusSchema.options.find((status) => GOAL_STATUS_LABEL[status] === label);
+                    if (next) {
+                      update.mutate(
+                        { goalId: goal.id, input: { status: next } },
+                        { onError: (error) => fail("Не удалось изменить статус", error) }
+                      );
+                    }
+                  }}
+                />
+              </div>
               <button
                 type="button"
                 aria-label="Удалить цель"
@@ -181,26 +181,21 @@ export function GoalsPanel(): React.ReactElement {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-2xs text-subtle-foreground">
-              <label className="flex items-center gap-1">
+              <label className="flex min-w-0 items-center gap-1">
                 Родитель
-                <Select
-                  aria-label={`Родительская цель для «${goal.title}»`}
-                  value={goal.parentId ?? ""}
-                  onChange={(event) =>
-                    update.mutate(
-                      { goalId: goal.id, input: { parentId: event.target.value || null } },
-                      { onError: (error) => fail("Не удалось переместить цель", error) }
-                    )
-                  }
-                  className="w-auto"
-                >
-                  <option value="">— верхний уровень —</option>
-                  {parentOptions.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.title}
-                    </option>
-                  ))}
-                </Select>
+                <span className="w-48">
+                  <Combobox
+                    label={`Родительская цель для «${goal.title}»`}
+                    value={goal.parentId ?? ""}
+                    onChange={(parentId) =>
+                      update.mutate(
+                        { goalId: goal.id, input: { parentId: parentId || null } },
+                        { onError: (error) => fail("Не удалось переместить цель", error) }
+                      )
+                    }
+                    items={[{ id: "", label: "— верхний уровень —" }, ...parentOptions.map((item) => ({ id: item.id, label: item.title }))]}
+                  />
+                </span>
               </label>
               {goal.parentId ? (
                 <label className="flex items-center gap-1">
@@ -306,21 +301,14 @@ export function GoalsPanel(): React.ReactElement {
             </ul>
 
             {free.length > 0 ? (
-              <Select
-                aria-label="Добавить план (проект)"
+              <Combobox
+                label="Добавить план (проект)"
                 value=""
-                onChange={(event) => {
-                  const projectId = event.target.value;
+                onChange={(projectId) => {
                   if (projectId) addPlan.mutate({ goalId: goal.id, input: { projectId, weight: 1 } }, { onError: (error) => fail("Не удалось добавить план", error) });
                 }}
-              >
-                <option value="">+ Добавить план (проект)…</option>
-                {free.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </Select>
+                items={[{ id: "", label: "+ Добавить план (проект)…" }, ...free.map((project) => ({ id: project.id, label: project.name }))]}
+              />
             ) : null}
 
             <details className="group text-label">

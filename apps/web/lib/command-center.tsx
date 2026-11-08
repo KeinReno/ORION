@@ -133,6 +133,7 @@ const GOTO_PANELS: { key: string; panelId: string; label: string }[] = [
   { key: "k", panelId: "inventory", label: "Склад" },
   { key: "m", panelId: "markets", label: "Рынки" },
   { key: "b", panelId: "browser", label: "Браузер" },
+  { key: "v", panelId: "visual", label: "Визуал" },
   { key: "o", panelId: "documents", label: "Документы" },
   { key: "y", panelId: "sync", label: "Резервные копии" },
   { key: "s", panelId: "settings", label: "Настройки" }

@@ -16,7 +16,7 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
-  Select,
+  GlideSelect,
   Skeleton,
   cx,
   useToast
@@ -274,18 +274,15 @@ export function ProjectsPanel(): React.ReactElement {
 
   const viewControls = (
     <>
-      <Select
-        value={sort}
-        onChange={(event) => setSort(event.target.value as ProjectBoardSort)}
-        className="sm:w-56"
-        aria-label="Сортировка"
-      >
-        {(Object.keys(PROJECT_BOARD_SORT_LABEL) as ProjectBoardSort[]).map((value) => (
-          <option key={value} value={value}>
-            Порядок: {PROJECT_BOARD_SORT_LABEL[value]}
-          </option>
-        ))}
-      </Select>
+      <GlideSelect
+        label="Сортировка"
+        options={(Object.keys(PROJECT_BOARD_SORT_LABEL) as ProjectBoardSort[]).map((value) => `Порядок: ${PROJECT_BOARD_SORT_LABEL[value]}`)}
+        value={`Порядок: ${PROJECT_BOARD_SORT_LABEL[sort]}`}
+        onChange={(label) => {
+          const next = (Object.keys(PROJECT_BOARD_SORT_LABEL) as ProjectBoardSort[]).find((value) => `Порядок: ${PROJECT_BOARD_SORT_LABEL[value]}` === label);
+          if (next) setSort(next);
+        }}
+      />
       {!groupedByGoal ? <SegmentedControl<BoardLayout>
         value={layout}
         onChange={chooseLayout}

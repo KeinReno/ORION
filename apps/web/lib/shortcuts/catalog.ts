@@ -58,6 +58,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutDef[] = [
   { id: "global.goto-inventory", scope: "global", category: "Переходы", label: "Склад", defaultCombo: "g+k" },
   { id: "global.goto-markets", scope: "global", category: "Переходы", label: "Рынки", defaultCombo: "g+m" },
   { id: "global.goto-browser", scope: "global", category: "Переходы", label: "Браузер", defaultCombo: "g+b" },
+  { id: "global.goto-visual", scope: "global", category: "Переходы", label: "Визуал", defaultCombo: "g+v" },
   { id: "global.goto-documents", scope: "global", category: "Переходы", label: "Документы", defaultCombo: "g+o" },
   { id: "global.goto-sync", scope: "global", category: "Переходы", label: "Резервные копии", defaultCombo: "g+y" },
   { id: "global.goto-settings", scope: "global", category: "Переходы", label: "Настройки", defaultCombo: "g+s" },

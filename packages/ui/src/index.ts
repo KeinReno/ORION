@@ -43,3 +43,4 @@ export * from "./context-panel";
 export * from "./design-tokens";
 export * from "./theme-provider";
 export * from "./theme-engine";
+export * from "./visual";

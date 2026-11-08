@@ -2,7 +2,7 @@
 
 import { useCreateHealthMedication, useHealthMedications, useHealthSchedule, useMarkHealthIntake, useUpdateHealthMedication } from "@orion/core-react";
 import { doseTiming, habitLocalDayKey, healthCanWrite, type HealthDose, type HealthMedication, type HealthSubject } from "@orion/shared-types";
-import { Button, EmptyState, Input, Skeleton, Textarea, useToast } from "@orion/ui";
+import { Button, CalendarPicker, EmptyState, Input, Skeleton, Textarea, useToast } from "@orion/ui";
 import { Archive, Check, Pencil, Pill, Plus, SkipForward, Undo2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
@@ -188,8 +188,16 @@ function MedicationForm({ initial, busy, onSubmit, onCancel }: {
             ))}
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">Курс с<Input type="date" value={startOn} onChange={(e) => setStartOn(e.target.value)} /></label>
-            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">Курс по<Input type="date" value={endOn} onChange={(e) => setEndOn(e.target.value)} /></label>
+            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
+              Курс с
+              <CalendarPicker value={startOn} onChange={setStartOn} />
+              {startOn ? <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setStartOn("")}>Очистить</button> : null}
+            </label>
+            <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
+              Курс по
+              <CalendarPicker value={endOn} onChange={setEndOn} />
+              {endOn ? <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setEndOn("")}>Очистить</button> : null}
+            </label>
           </div>
         </>
       ) : null}

@@ -21,6 +21,8 @@ import {
   Sheet,
   Skeleton,
   StatCard,
+  CircularProgress,
+  CountUp,
   cx,
   useToast,
   useUiSound
@@ -282,6 +284,12 @@ export function HabitsPanel(): React.ReactElement {
             </PanelSection>
 
             <PanelSection title="Итоги">
+              <div className="mb-2">
+                <CircularProgress
+                  label="Сегодня по расписанию"
+                  value={dueHabits.length === 0 ? 0 : (doneToday / dueHabits.length) * 100}
+                />
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <StatCard label="Сегодня" value={`${doneToday} из ${dueHabits.length}`} hint="по расписанию" />
                 <StatCard

@@ -19,8 +19,8 @@ import {
   type AssistantEngineStatus,
   type AssistantStoredMessage
 } from "@orion/shared-types";
-import { Button, CallChip, EmptyState, IconButton, LatticeLoader, MarkdownView, PanelBody, PanelHeader, PanelSection, PanelShell, Select, Skeleton, StarBorder, Textarea, cx, useToast } from "@orion/ui";
-import { Bot, Check, Copy, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Send, Trash2, TriangleAlert, User, X } from "lucide-react";
+import { Button, CallChip, EmptyState, IconButton, LatticeLoader, MarkdownView, Orb, PanelBody, PanelHeader, PanelSection, PanelShell, PaperPlaneButton, Select, Skeleton, StarBorder, Textarea, ThoughtLine, cx, useToast } from "@orion/ui";
+import { Bot, Check, Copy, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Trash2, TriangleAlert, User, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
 import { attachmentFor, fitImages, imageForModel } from "../lib/assistant-attachments";
@@ -306,7 +306,12 @@ export function AssistantPanel(): React.ReactElement {
                 messages.map((message, index) => <MessageRow key={`${message.at}-${index}`} message={message} workspaceId={workspaceId} />)
               )}
               {pending ? <MessageRow message={{ role: "user", content: pending, actions: [], at: "", truncated: false }} workspaceId={workspaceId} /> : null}
-              {send.isPending ? <LatticeLoader label={working ? `Ассистент ${describePresence(working)}` : "Ассистент думает"} /> : null}
+              {send.isPending ? (
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-2"><Orb /><LatticeLoader label={working ? `Ассистент ${describePresence(working)}` : "Ассистент думает"} /></span>
+                  <ThoughtLine steps={[working ? describePresence(working) : "Собираю ответ по открытому экрану"]} />
+                </div>
+              ) : null}
               <div ref={endRef} />
             </div>
             {attached.length > 0 || uploading > 0 ? (
@@ -375,9 +380,7 @@ export function AssistantPanel(): React.ReactElement {
                   maxLength={8000}
                   className="orion-scroll flex-1 resize-none border-0 bg-transparent px-1 py-1.5 focus:ring-0"
                 />
-                <Button type="submit" disabled={(!draft.trim() && attached.length === 0) || uploading > 0 || send.isPending || !workspaceId} aria-label="Отправить">
-                  <Send className="h-4 w-4" aria-hidden />
-                </Button>
+                <PaperPlaneButton quiet type="submit" label="Отправить" disabled={(!draft.trim() && attached.length === 0) || uploading > 0 || send.isPending || !workspaceId} />
               </form>
             </StarBorder>
             <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-subtle-foreground">

@@ -1,7 +1,7 @@
 "use client";
 
 import { PROJECT_STATUS_ORDER, type Project, type ProjectStatus } from "@orion/shared-types";
-import { Button, Input, PALETTE_SWATCHES, Select, Textarea } from "@orion/ui";
+import { Button, CalendarPicker, GlideSelect, Input, PALETTE_SWATCHES, Textarea } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { fromKopecks, parseMoneyInput } from "../lib/format";
 import { projectSwatchColor } from "../lib/project-colors";
@@ -158,35 +158,49 @@ export function ProjectForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Статус
-          <Select value={status} onChange={(e) => setStatus(e.target.value as ProjectStatus)}>
-            {PROJECT_STATUS_ORDER.map((value) => (
-              <option key={value} value={value}>
-                {PROJECT_STATUS_LABEL[value]}
-              </option>
-            ))}
-          </Select>
+          <GlideSelect
+            label="Статус"
+            options={PROJECT_STATUS_ORDER.map((value) => PROJECT_STATUS_LABEL[value])}
+            value={PROJECT_STATUS_LABEL[status]}
+            onChange={(label) => {
+              const next = PROJECT_STATUS_ORDER.find((value) => PROJECT_STATUS_LABEL[value] === label);
+              if (next) setStatus(next);
+            }}
+          />
         </label>
         <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Валюта
-          <Select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {PROJECT_CURRENCY_ORDER.map((code) => (
-              <option key={code} value={code}>
-                {PROJECT_CURRENCY_LABEL[code] ?? code}
-              </option>
-            ))}
-          </Select>
+          <GlideSelect
+            label="Валюта"
+            options={PROJECT_CURRENCY_ORDER.map((code) => PROJECT_CURRENCY_LABEL[code] ?? code)}
+            value={PROJECT_CURRENCY_LABEL[currency] ?? currency}
+            onChange={(label) => {
+              const next = PROJECT_CURRENCY_ORDER.find((code) => (PROJECT_CURRENCY_LABEL[code] ?? code) === label);
+              if (next) setCurrency(next);
+            }}
+          />
         </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
+        <div className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Начало
-          <Input type="date" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-        </label>
-        <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
+          <CalendarPicker value={startAt} onChange={setStartAt} />
+          {startAt ? (
+            <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setStartAt("")}>
+              Очистить
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1 text-2xs text-subtle-foreground">
           Срок
-          <Input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-        </label>
+          <CalendarPicker value={dueAt} onChange={setDueAt} />
+          {dueAt ? (
+            <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setDueAt("")}>
+              Очистить
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

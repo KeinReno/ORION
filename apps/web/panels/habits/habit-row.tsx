@@ -1,7 +1,7 @@
 "use client";
 
 import type { Habit } from "@orion/shared-types";
-import { Button, CheckToggle, IconButton, cx } from "@orion/ui";
+import { Button, CheckToggle, CountUp, IconButton, cx } from "@orion/ui";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { habitSwatchColor } from "../../lib/habit-days";
 import { scheduleLabel, streakLabel } from "../../lib/habit-days";
@@ -60,7 +60,7 @@ export function TodayRow({
                   : "inline-flex items-center gap-0.5 text-label text-muted-foreground"
               }
             >
-              🔥 {habit.streak}
+              🔥 <CountUp value={habit.streak} />
             </span>
           ) : null}
           {habit.color ? (

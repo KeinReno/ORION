@@ -1,7 +1,7 @@
 "use client";
 
 import type { InventoryItem, Project } from "@orion/shared-types";
-import { Button, Input, Select } from "@orion/ui";
+import { Button, Combobox, Input } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { useSlotContributions } from "../../lib/extensions/slot";
 
@@ -70,17 +70,12 @@ export function InventoryItemForm({
       </div>
       {alerts ? <alerts.MinStockField value={minStock} onChange={setMinStock} /> : null}
       {projects ? (
-        <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-          Проект
-          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">Без проекта</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <Combobox
+          label="Проект"
+          value={projectId}
+          onChange={setProjectId}
+          items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+        />
       ) : null}
       <div className="mt-1 flex justify-end gap-2">
         <Button type="button" variant="subtle" size="sm" onClick={onCancel}>

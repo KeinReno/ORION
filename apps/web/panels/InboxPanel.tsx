@@ -20,7 +20,7 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
-  Select,
+  Combobox,
   Skeleton,
   useToast
 } from "@orion/ui";
@@ -344,7 +344,8 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
                   description="Здесь появятся записи, которые вы уже превратили в задачу, заметку или событие."
                 />
               ) : (
-                <section className={`${styles.emptyScene} mx-auto flex min-h-[min(68vh,620px)] w-full max-w-3xl flex-col items-center justify-center px-1 py-12 text-center sm:px-6`}>
+                <div className={styles.emptyBleed}>
+                <section className="relative z-10 mx-auto flex min-h-[min(68vh,620px)] w-full max-w-3xl flex-col items-center justify-center px-1 py-12 text-center sm:px-6">
                   <div className="relative mb-8 flex h-28 w-52 items-center justify-center" aria-hidden="true">
                     <div className="absolute inset-x-1 top-1/2 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
                     {isEnabled("tasks") ? <div className="absolute left-1 top-3 flex h-9 w-9 -rotate-12 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground"><ListTodo className="h-4 w-4" /></div> : null}
@@ -377,6 +378,7 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
                     <p className="mt-10 max-w-sm text-label text-subtle-foreground">Запись останется в Инбоксе. Чтобы разбирать её дальше, включите задачи, заметки или календарь.</p>
                   )}
                 </section>
+                </div>
               )
             ) : history ? (
               <div className="mx-auto w-full max-w-2xl">
@@ -493,17 +495,12 @@ export function InboxPanel({ params, api }: PanelComponentProps = {}): React.Rea
               </label>
             )}
             {isEnabled("projects") && (projects?.length ?? 0) > 0 ? (
-              <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-                Проект
-                <Select value={projectDraft} onChange={(e) => setProjectDraft(e.target.value)}>
-                  <option value="">Без проекта</option>
-                  {(projects ?? []).map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+              <Combobox
+                label="Проект"
+                value={projectDraft}
+                onChange={setProjectDraft}
+                items={[{ id: "", label: "Без проекта" }, ...(projects ?? []).map((project) => ({ id: project.id, label: project.name }))]}
+              />
             ) : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="subtle" size="sm" onClick={() => setPending(null)}>

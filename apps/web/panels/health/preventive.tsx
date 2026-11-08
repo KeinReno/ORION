@@ -10,7 +10,7 @@ import {
   type HealthPreventiveKind,
   type HealthSubject
 } from "@orion/shared-types";
-import { Button, EmptyState, Input, Select, Skeleton, useToast } from "@orion/ui";
+import { Button, CalendarPicker, EmptyState, GlideSelect, Input, Skeleton, useToast } from "@orion/ui";
 import { Check, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { describeError } from "../../lib/error-message";
@@ -97,14 +97,28 @@ function PreventiveForm({ busy, onSubmit, onCancel }: {
     <form onSubmit={submit} className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Что: «Стоматолог», «Прививка от гриппа»" aria-label="Название" autoFocus maxLength={200} />
       <div className="grid gap-2 sm:grid-cols-2">
-        <Select aria-label="Вид" value={kind} onChange={(event) => setKind(event.target.value as HealthPreventiveKind)}>
-          {HEALTH_PREVENTIVE_KINDS.map((k) => <option key={k} value={k}>{HEALTH_PREVENTIVE_KIND_LABEL[k]}</option>)}
-        </Select>
+        <GlideSelect
+          label="Вид"
+          options={HEALTH_PREVENTIVE_KINDS.map((item) => HEALTH_PREVENTIVE_KIND_LABEL[item])}
+          value={HEALTH_PREVENTIVE_KIND_LABEL[kind]}
+          onChange={(label) => {
+            const next = HEALTH_PREVENTIVE_KINDS.find((item) => HEALTH_PREVENTIVE_KIND_LABEL[item] === label);
+            if (next) setKind(next);
+          }}
+        />
         <Input type="number" min={1} max={600} value={every} onChange={(event) => setEvery(event.target.value)} placeholder="Раз в … месяцев (пусто — разово)" aria-label="Периодичность, месяцев" />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-2xs text-muted-foreground">Когда делали в последний раз<Input type="date" value={last} onChange={(event) => setLast(event.target.value)} /></label>
-        <label className="flex flex-col gap-1 text-2xs text-muted-foreground">Первый срок (если ещё не делали)<Input type="date" value={first} onChange={(event) => setFirst(event.target.value)} /></label>
+        <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
+          Когда делали в последний раз
+          <CalendarPicker value={last} onChange={setLast} />
+          {last ? <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setLast("")}>Очистить</button> : null}
+        </label>
+        <label className="flex flex-col gap-1 text-2xs text-muted-foreground">
+          Первый срок (если ещё не делали)
+          <CalendarPicker value={first} onChange={setFirst} />
+          {first ? <button type="button" className="self-start text-micro text-ui-subtle" onClick={() => setFirst("")}>Очистить</button> : null}
+        </label>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" variant="subtle" onClick={onCancel}>Отмена</Button>

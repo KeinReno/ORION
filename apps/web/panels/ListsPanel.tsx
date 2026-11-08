@@ -20,6 +20,8 @@ import {
   PanelShell,
   SegmentedControl,
   Select,
+  Combobox,
+  GlideSelect,
   Skeleton,
   cx,
   useContextMenuApi,
@@ -121,14 +123,19 @@ export function ListsPanel(): React.ReactElement {
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" aria-hidden />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти список или пункт" className="h-8 pl-8 text-xs" disabled={workspaceId === undefined} />
           </div>
-          <Select value={kindFilter} onChange={(e) => setKindFilter(e.target.value as ListKind | "all")} className="h-8 w-auto text-xs" aria-label="Вид списка">
-            <option value="all">Все виды</option>
-            {LIST_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {LIST_KIND_LABELS[kind]}
-              </option>
-            ))}
-          </Select>
+          <GlideSelect
+            label="Вид списка"
+            options={["Все виды", ...LIST_KINDS.map((kind) => LIST_KIND_LABELS[kind])]}
+            value={kindFilter === "all" ? "Все виды" : LIST_KIND_LABELS[kindFilter]}
+            onChange={(label) => {
+              if (label === "Все виды") {
+                setKindFilter("all");
+                return;
+              }
+              const next = LIST_KINDS.find((kind) => LIST_KIND_LABELS[kind] === label);
+              if (next) setKindFilter(next);
+            }}
+          />
         </div>
       </PanelHeader>
 
@@ -314,14 +321,16 @@ function NewListModal({
           </label>
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Из шаблона</span>
-            <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} disabled={templates.length === 0}>
-              <option value="">{templates.length === 0 ? "Шаблонов нет" : "Пустой список"}</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name} ({template.items.length})
-                </option>
-              ))}
-            </Select>
+            <Combobox
+              label="Из шаблона"
+              disabled={templates.length === 0}
+              value={templateId}
+              onChange={setTemplateId}
+              items={[
+                { id: "", label: templates.length === 0 ? "Шаблонов нет" : "Пустой список" },
+                ...templates.map((template) => ({ id: template.id, label: `${template.name} (${template.items.length})` }))
+              ]}
+            />
           </label>
         </div>
       </div>

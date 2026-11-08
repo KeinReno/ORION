@@ -12,6 +12,7 @@ import {
   Sidebar,
   Sheet,
   Workbench,
+  SkipNav,
   positionToDirection,
   useEscapeKey,
   useMediaQuery,
@@ -1073,6 +1074,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       )}
       onContextMenu={rootContextMenu.onContextMenu}
     >
+      <SkipNav />
       <GlobalShortcutDispatcher />
       <AppBackground />
       <FolderNameDialog
@@ -1342,7 +1344,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           <IconButton label="Настройки" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openPanel("settings")}><Settings className="h-4 w-4" /></IconButton>
           <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
         </header> : null}
-        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <main id="orion-workbench" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border">
             <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId} activeKind={activeDefinition?.navParent ?? activeDefinition?.id}
               projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}

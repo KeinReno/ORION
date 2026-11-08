@@ -1,7 +1,7 @@
 "use client";
 
 import type { UserPreference } from "@orion/shared-types";
-import { Input, SegmentedControl, Select, Switch } from "@orion/ui";
+import { Input, RubberSegment, SegmentedControl, Select, Slider, Switch } from "@orion/ui";
 import { useReducedMotion } from "framer-motion";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../../lib/accent-options";
 import { BackgroundEffectSettingsForm } from "./background-effect-form";
@@ -212,28 +212,10 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
           {form.surfaceStyle === "glass" ? (
             <>
               <SettingRow label={`Прозрачность панелей: ${Math.round(form.panelOpacity * 100)}%`}>
-                <input
-                  type="range"
-                  aria-label="Прозрачность панелей"
-                  min={0.1}
-                  max={1}
-                  step={0.05}
-                  value={form.panelOpacity}
-                  onChange={(e) => setForm({ ...form, panelOpacity: Number(e.target.value) })}
-                  className="w-48 accent-accent"
-                />
+                <Slider bare label="Прозрачность панелей" min={0.1} max={1} step={0.05} value={form.panelOpacity} onChange={(panelOpacity) => setForm({ ...form, panelOpacity })} />
               </SettingRow>
               <SettingRow label={`Сила блюра: ${form.panelBlur}px`}>
-                <input
-                  type="range"
-                  aria-label="Сила блюра"
-                  min={0}
-                  max={40}
-                  step={1}
-                  value={form.panelBlur}
-                  onChange={(e) => setForm({ ...form, panelBlur: Number(e.target.value) })}
-                  className="w-48 accent-accent"
-                />
+                <Slider bare label="Сила блюра" min={0} max={40} step={1} value={form.panelBlur} onChange={(panelBlur) => setForm({ ...form, panelBlur })} />
               </SettingRow>
               <SettingRow label="Цвет панелей">
                 <div className="flex items-center gap-2">
@@ -268,8 +250,8 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
               : "«Спокойные» — короткие переходы без отскока, для долгой работы. «Выразительные» — с пружиной и световыми акцентами."
           }
         >
-          <SegmentedControl<UserPreference["motionLevel"]>
-            aria-label="Анимации"
+          <RubberSegment<UserPreference["motionLevel"]>
+            label="Анимации"
             value={form.motionLevel}
             onChange={(motionLevel) => setForm({ ...form, motionLevel })}
             options={[

@@ -2,7 +2,7 @@
 
 import { ApiError } from "@orion/core";
 import type { Milestone, Project, Task, TaskChecklistItem, TaskPriority, TaskRecurrence, TaskStatus, WorkspaceMember } from "@orion/shared-types";
-import { Button, Input, Select, Textarea } from "@orion/ui";
+import { Alert, Button, Combobox, Field, GlideSelect, Input, Textarea } from "@orion/ui";
 import { Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../lib/format";
@@ -178,7 +178,9 @@ export function TaskForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <Input placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
+      <Field label="Заголовок">
+        <Input placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
+      </Field>
       <Textarea
         placeholder="Описание (необязательно)"
         rows={4}
@@ -188,62 +190,53 @@ export function TaskForm({
       <TaskChecklist items={checklist} onChange={setChecklist} />
       <div className="grid gap-3 sm:grid-cols-3">
         {planning ? <planning.StartAt variant="form" value={startAt} onChange={setStartAt} /> : null}
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Срок
+        <Field label="Срок">
           <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-        </label>
+        </Field>
         {planning ? <planning.EstimatedHours variant="form" value={estimatedHours} onChange={setEstimatedHours} /> : null}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Приоритет
-          <Select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)}>
-            {TASK_PRIORITY_ORDER.map((p) => (
-              <option key={p} value={p}>
-                {TASK_PRIORITY_LABEL[p]}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <Field label="Приоритет">
+          <GlideSelect
+            label="Приоритет"
+            options={TASK_PRIORITY_ORDER.map((item) => TASK_PRIORITY_LABEL[item])}
+            value={TASK_PRIORITY_LABEL[priority]}
+            onChange={(label) => {
+              const next = TASK_PRIORITY_ORDER.find((item) => TASK_PRIORITY_LABEL[item] === label);
+              if (next) setPriority(next);
+            }}
+          />
+        </Field>
         {projects ? (
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Проект
-          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">Без проекта</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+          <Field label="Проект">
+            <Combobox
+              label="Проект"
+              items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+              value={projectId}
+              onChange={setProjectId}
+            />
+          </Field>
         ) : null}
         {members ? (
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Исполнитель
-          <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-            <option value="">Не назначен</option>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+          <Field label="Исполнитель">
+            <Combobox
+              label="Исполнитель"
+              items={[{ id: "", label: "Не назначен" }, ...members.map((member) => ({ id: member.id, label: member.name }))]}
+              value={assigneeId}
+              onChange={setAssigneeId}
+            />
+          </Field>
         ) : null}
       </div>
       {milestoneOptions.length > 0 ? (
-        <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-          Веха
-          <Select value={effectiveMilestoneId} onChange={(e) => setMilestoneId(e.target.value)}>
-            <option value="">Без вехи</option>
-            {milestoneOptions.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>
-                {milestone.title}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <Field label="Веха">
+          <Combobox
+            label="Веха"
+            items={[{ id: "", label: "Без вехи" }, ...milestoneOptions.map((milestone) => ({ id: milestone.id, label: milestone.title }))]}
+            value={effectiveMilestoneId}
+            onChange={setMilestoneId}
+          />
+        </Field>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         {recurrenceApi ? (
@@ -256,16 +249,17 @@ export function TaskForm({
           />
         ) : null}
         {withStatus ? (
-          <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-            Статус
-            <Select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)}>
-              {TASK_STATUS_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {TASK_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <Field label="Статус">
+            <GlideSelect
+              label="Статус"
+              options={TASK_STATUS_ORDER.map((item) => TASK_STATUS_LABEL[item])}
+              value={TASK_STATUS_LABEL[status]}
+              onChange={(label) => {
+                const next = TASK_STATUS_ORDER.find((item) => TASK_STATUS_LABEL[item] === label);
+                if (next) setStatus(next);
+              }}
+            />
+          </Field>
         ) : null}
       </div>
       {planning && showParent ? <planning.Parent variant="form" value={parentId} options={parentChoices} onChange={setParentId} /> : null}
@@ -278,7 +272,7 @@ export function TaskForm({
           {initial.completedAt ? ` · завершено ${relativeTime(initial.completedAt)}` : ""}
         </p>
       ) : null}
-      {formError ? <p className="text-label text-destructive">{formError}</p> : null}
+      {formError ? <Alert tone="danger" title={formError} /> : null}
       <div className="mt-1 flex items-center justify-between gap-2">
         {onDelete ? (
           <Button type="button" variant="danger" size="sm" onClick={onDelete}>

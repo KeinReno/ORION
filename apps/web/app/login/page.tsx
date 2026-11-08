@@ -4,7 +4,7 @@ import { KaidenLogo } from "../../components/kaiden-logo";
 
 import { useAuthAccounts, useLogin, useOrionMode, useSession } from "@orion/core-react";
 import type { AccountPublic } from "@orion/shared-types";
-import { AuroraBackground, Button, Input, Spinner, SpotlightCard, useUiSound } from "@orion/ui";
+import { AuroraBackground, Button, GradientText, Input, OtpInput, PasswordInput, Spinner, SpotlightCard, useUiSound } from "@orion/ui";
 import { motion } from "framer-motion";
 import { UserPlus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -101,7 +101,7 @@ function LoginContent(): React.ReactElement {
         <SpotlightCard className="w-full">
           <div className="mb-6 flex items-center gap-2.5">
             <KaidenLogo className="h-8 w-8" />
-            <span className="text-base font-semibold tracking-tight text-foreground">ORION</span>
+            <GradientText text="ORION" />
           </div>
 
           {isServerMode ? (
@@ -122,8 +122,7 @@ function LoginContent(): React.ReactElement {
                   onChange={(e) => setServerEmail(e.target.value)}
                   required
                 />
-                <Input
-                  type="password"
+                <PasswordInput
                   name="password"
                   aria-label="Пароль"
                   autoComplete="current-password"
@@ -173,9 +172,7 @@ function LoginContent(): React.ReactElement {
                 <>
                   <label className="mb-4 block space-y-2 text-sm text-muted-foreground">
                     <span>Введите PIN</span>
-                    <Input key={selected.id} type="password" name="pin" aria-label="PIN" inputMode="numeric" autoComplete="off" autoFocus maxLength={4}
-                      value={secret} readOnly={login.isPending} onChange={(event) => onPinChange(event.target.value)}
-                      className="text-center text-xl tracking-[0.5em]" />
+                    <OtpInput value={secret} onChange={onPinChange} />
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map((key) =>
@@ -202,8 +199,7 @@ function LoginContent(): React.ReactElement {
                 </>
               ) : (
                 <form className="flex flex-col gap-3" onSubmit={(e) => void unlock(e)}>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     name="password"
                     aria-label="Пароль"
                     autoFocus

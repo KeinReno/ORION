@@ -8,7 +8,7 @@ import {
   useUpdateList
 } from "@orion/core-react";
 import { LIST_KINDS, LIST_KIND_LABELS, formatListAsText, type List, type ListKind } from "@orion/shared-types";
-import { Button, ConfirmDialog, DropdownMenu, IconButton, Input, Modal, Select, useToast, type MenuItem } from "@orion/ui";
+import { Button, ConfirmDialog, DropdownMenu, GlideSelect, IconButton, Input, Modal, useToast, type MenuItem } from "@orion/ui";
 import { Archive, Copy, FileText, MoreHorizontal, Pencil, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { describeError } from "../../lib/error-message";
@@ -164,13 +164,15 @@ export function useListMenu({
           </label>
           <label className="block space-y-1">
             <span className="text-xs text-muted-foreground">Вид</span>
-            <Select value={kind} onChange={(e) => setKind(e.target.value as ListKind)}>
-              {LIST_KINDS.map((value) => (
-                <option key={value} value={value}>
-                  {LIST_KIND_LABELS[value]}
-                </option>
-              ))}
-            </Select>
+            <GlideSelect
+              label="Вид"
+              options={LIST_KINDS.map((value) => LIST_KIND_LABELS[value])}
+              value={LIST_KIND_LABELS[kind]}
+              onChange={(label) => {
+                const next = LIST_KINDS.find((value) => LIST_KIND_LABELS[value] === label);
+                if (next) setKind(next);
+              }}
+            />
           </label>
         </div>
       </Modal>

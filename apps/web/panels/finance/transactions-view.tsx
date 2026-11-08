@@ -12,7 +12,7 @@ import {
   useUpdateTransaction
 } from "@orion/core-react";
 import { ACCOUNT_CONTEXT_LABEL, type AccountContext, type Transaction } from "@orion/shared-types";
-import { Button, ConfirmDialog, EmptyState, Input, Modal, Select, Sheet, Skeleton, useToast } from "@orion/ui";
+import { Button, Combobox, ConfirmDialog, EmptyState, GlideSelect, Input, Modal, Sheet, Skeleton, useToast } from "@orion/ui";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CheckSquare, Copy, Plus, Receipt, Search, Square, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ExtensionSlot } from "../../lib/extensions/slot";
@@ -233,41 +233,48 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
       <ExtensionSlot name="finance.transactions.top" props={{ workspaceId: workspace?.id }} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Select aria-label="Фильтр по счёту" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
-            <option value="">Все счета</option>
-            {(accounts ?? []).map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </Select>
-          <Select aria-label="Фильтр по категории" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="">Все категории</option>
-            {(categories ?? []).map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
+          <div className="w-44">
+            <Combobox
+              label="Фильтр по счёту"
+              value={accountFilter}
+              onChange={setAccountFilter}
+              items={[{ id: "", label: "Все счета" }, ...(accounts ?? []).map((account) => ({ id: account.id, label: account.name }))]}
+            />
+          </div>
+          <div className="w-44">
+            <Combobox
+              label="Фильтр по категории"
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              items={[{ id: "", label: "Все категории" }, ...(categories ?? []).map((category) => ({ id: category.id, label: category.name }))]}
+            />
+          </div>
           {usedContexts.length > 1 ? (
-            <Select aria-label="Фильтр по контексту" value={contextFilter} onChange={(e) => setContextFilter(e.target.value)}>
-              <option value="">Все деньги</option>
-              {usedContexts.map((value) => (
-                <option key={value} value={value}>
-                  {ACCOUNT_CONTEXT_LABEL[value]}
-                </option>
-              ))}
-            </Select>
+            <div className="w-40">
+              <GlideSelect
+                label="Фильтр по контексту"
+                options={["Все деньги", ...usedContexts.map((value) => ACCOUNT_CONTEXT_LABEL[value])]}
+                value={contextFilter ? ACCOUNT_CONTEXT_LABEL[contextFilter as AccountContext] ?? "Все деньги" : "Все деньги"}
+                onChange={(label) => {
+                  if (label === "Все деньги") {
+                    setContextFilter("");
+                    return;
+                  }
+                  const next = usedContexts.find((value) => ACCOUNT_CONTEXT_LABEL[value] === label);
+                  if (next) setContextFilter(next);
+                }}
+              />
+            </div>
           ) : null}
           {projectsOn ? (
-            <Select aria-label="Фильтр по проекту" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
-              <option value="">Все проекты</option>
-              {(projects ?? []).map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
+            <div className="w-44">
+              <Combobox
+                label="Фильтр по проекту"
+                value={projectFilter}
+                onChange={setProjectFilter}
+                items={[{ id: "", label: "Все проекты" }, ...(projects ?? []).map((project) => ({ id: project.id, label: project.name }))]}
+              />
+            </div>
           ) : null}
           <Input
             type="date"

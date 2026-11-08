@@ -24,7 +24,7 @@ import {
   PanelHeader,
   PanelShell,
   SegmentedControl,
-  Select,
+  Combobox,
   Skeleton,
   cx,
   isTypingTarget,
@@ -402,20 +402,18 @@ export function NotesPanel(): React.ReactElement {
           ) : null}
           {projectsOn && (projectList ?? []).length > 0 ? (
             <>
-              <Select
-                value={projectFilter ?? ""}
-                onChange={(event) => setProjectFilter(event.target.value || null)}
-                aria-label="Фильтр по проекту"
-                className="w-auto min-w-[7.5rem] max-w-[11rem] rounded-full !py-1 !text-2xs"
-              >
-                <option value="">Все проекты</option>
-                <option value={NO_PROJECT}>Без проекта</option>
-                {(projectList ?? []).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </Select>
+              <div className="w-44">
+                <Combobox
+                  label="Фильтр по проекту"
+                  value={projectFilter ?? ""}
+                  onChange={(id) => setProjectFilter(id || null)}
+                  items={[
+                    { id: "", label: "Все проекты" },
+                    { id: NO_PROJECT, label: "Без проекта" },
+                    ...(projectList ?? []).map((project) => ({ id: project.id, label: project.name }))
+                  ]}
+                />
+              </div>
               <FilterChip active={groupByProject} onClick={() => setGroupByProject((value) => !value)}>
                 Группы по проектам
               </FilterChip>

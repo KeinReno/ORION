@@ -1,9 +1,9 @@
 "use client";
 
 import type { Account, CategoryRule, FinanceCategory, Project, Transaction, TransactionType } from "@orion/shared-types";
-import { Button, IconButton, Input, Select, Textarea } from "@orion/ui";
-import { ArrowRight, Plus, X, Trash2 } from "lucide-react";
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Alert, Button, Combobox, Field, IconButton, Input, InputGroup, TagsInput, Textarea } from "@orion/ui";
+import { ArrowRight, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState, type FormEvent } from "react";
 import { formatMoney, fromDatetimeLocal, fromKopecks, relativeTime, toDatetimeLocal, toKopecks } from "../../lib/format";
 
 export interface TransactionFormValues {
@@ -80,7 +80,6 @@ export function TransactionForm({
   );
   const [note, setNote] = useState(seed?.note ?? "");
   const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
-  const [tagDraft, setTagDraft] = useState("");
   const [projectId, setProjectId] = useState(seed?.projectId ?? defaultProjectId ?? "");
   const [occurredAt, setOccurredAt] = useState(toDatetimeLocal(initial?.occurredAt ?? new Date().toISOString()));
   const [error, setError] = useState<string | null>(null);
@@ -113,25 +112,6 @@ export function TransactionForm({
     const match = categoryRules.find((rule) => lower.includes(rule.matchText.toLowerCase()));
     if (match) {
       setLines((cur) => (cur.length > 0 ? cur.map((line, i) => (i === 0 ? { ...line, categoryId: match.categoryId } : line)) : cur));
-    }
-  }
-
-  function addTag(): void {
-    const value = tagDraft.trim();
-    if (!value || tags.includes(value)) {
-      setTagDraft("");
-      return;
-    }
-    setTags((cur) => [...cur, value]);
-    setTagDraft("");
-  }
-
-  function handleTagKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key === "Enter" || event.key === ",") {
-      event.preventDefault();
-      addTag();
-    } else if (event.key === "Backspace" && !tagDraft && tags.length > 0) {
-      setTags((cur) => cur.slice(0, -1));
     }
   }
 
@@ -223,84 +203,58 @@ export function TransactionForm({
       {type === "transfer" ? (
         <>
           <div className="flex items-center gap-2">
-            <label className="flex flex-1 flex-col gap-1 text-2xs text-subtle-foreground">
-              Со счёта
-              <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
+            <Field label="Со счёта" className="min-w-0 flex-1">
+              <Combobox label="Со счёта" items={accounts.map((account) => ({ id: account.id, label: account.name }))} value={accountId} onChange={setAccountId} />
+            </Field>
             <ArrowRight className="mt-4 h-4 w-4 shrink-0 text-subtle-foreground" />
-            <label className="flex flex-1 flex-col gap-1 text-2xs text-subtle-foreground">
-              На счёт
-              <Select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} required>
-                <option value="" disabled>
-                  Выберите счёт
-                </option>
-                {toAccountOptions.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
+            <Field label="На счёт" className="min-w-0 flex-1">
+              <Combobox label="На счёт" items={toAccountOptions.map((account) => ({ id: account.id, label: account.name }))} value={toAccountId || null} onChange={setToAccountId} placeholder="Выберите счёт" />
+            </Field>
           </div>
-          <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-            Сумма, ₽
-            <Input
-              inputMode="decimal"
-              placeholder="0"
-              value={transferAmount}
-              onChange={(e) => {
-                setTransferAmount(e.target.value);
-                setError(null);
-              }}
-              autoFocus
-            />
-          </label>
+          <Field label="Сумма">
+            <InputGroup suffix="₽">
+              <Input
+                inputMode="decimal"
+                placeholder="0"
+                value={transferAmount}
+                onChange={(e) => {
+                  setTransferAmount(e.target.value);
+                  setError(null);
+                }}
+                autoFocus
+              />
+            </InputGroup>
+          </Field>
         </>
       ) : (
         <>
-          <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-            Счёт
-            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <Field label="Счёт">
+            <Combobox label="Счёт" items={accounts.map((account) => ({ id: account.id, label: account.name }))} value={accountId} onChange={setAccountId} />
+          </Field>
 
           <div className="flex flex-col gap-2">
             {lines.map((line, index) => (
               <div key={index} className="flex items-start gap-2">
-                <Select
+                <div className="min-w-0 flex-1">
+                <Combobox
+                  label="Категория"
+                  items={[{ id: "", label: "Без категории" }, ...categoryOptions.map((category) => ({ id: category.id, label: category.name }))]}
                   value={line.categoryId}
-                  onChange={(e) => updateLine(index, { categoryId: e.target.value })}
-                  className="flex-1"
-                >
-                  <option value="">Без категории</option>
-                  {categoryOptions.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
-                <Input
-                  inputMode="decimal"
-                  placeholder="Сумма, ₽"
-                  value={line.amountText}
-                  onChange={(e) => {
-                    updateLine(index, { amountText: e.target.value });
-                    setError(null);
-                  }}
-                  className="w-28 shrink-0"
-                  autoFocus={index === 0}
+                  onChange={(categoryId) => updateLine(index, { categoryId })}
                 />
+                </div>
+                <InputGroup suffix="₽" className="w-32 shrink-0">
+                  <Input
+                    inputMode="decimal"
+                    placeholder="Сумма"
+                    value={line.amountText}
+                    onChange={(e) => {
+                      updateLine(index, { amountText: e.target.value });
+                      setError(null);
+                    }}
+                    autoFocus={index === 0}
+                  />
+                </InputGroup>
                 {lines.length > 1 ? (
                   <IconButton label="Убрать строку" size="md" tone="danger" onClick={() => removeLine(index)}>
                     <Trash2 className="h-4 w-4" />
@@ -324,25 +278,21 @@ export function TransactionForm({
         </>
       )}
 
-      {error ? <p className="text-2xs text-destructive">{error}</p> : null}
+      {error ? <Alert tone="danger" title={error} /> : null}
 
-      <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-        Дата
+      <Field label="Дата">
         <Input type="datetime-local" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
-      </label>
+      </Field>
 
       {projects ? (
-        <label className="flex flex-col gap-1 text-2xs text-subtle-foreground">
-          Проект
-          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">Без проекта</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <Field label="Проект">
+          <Combobox
+            label="Проект"
+            items={[{ id: "", label: "Без проекта" }, ...projects.map((project) => ({ id: project.id, label: project.name }))]}
+            value={projectId}
+            onChange={setProjectId}
+          />
+        </Field>
       ) : null}
 
       <Textarea
@@ -352,24 +302,7 @@ export function TransactionForm({
         onChange={(e) => handleNoteChange(e.target.value)}
       />
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-white/[0.02] px-2 py-1.5">
-        {tags.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-2xs text-muted-foreground">
-            {tag}
-            <button type="button" onClick={() => setTags((cur) => cur.filter((t) => t !== tag))} aria-label={`Убрать тег ${tag}`}>
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <input
-          value={tagDraft}
-          onChange={(e) => setTagDraft(e.target.value)}
-          onKeyDown={handleTagKeyDown}
-          onBlur={addTag}
-          placeholder={tags.length === 0 ? "Теги (Enter)" : ""}
-          className="min-w-[6rem] flex-1 bg-transparent text-2xs text-foreground outline-none placeholder:text-subtle-foreground"
-        />
-      </div>
+      <TagsInput label="Теги" value={tags} onChange={setTags} />
 
       {initial ? (
         <p className="text-2xs text-subtle-foreground">

@@ -1,7 +1,7 @@
 "use client";
 
 import { CONTACT_BIRTHDAY_NO_YEAR, isValidDayKey, normalizeChannels, normalizeTags, type ContactCard, type ContactChannel, type ContactKind, type CreateContactCardInput } from "@orion/shared-types";
-import { Button, IconButton, Input, SegmentedControl, Select, Switch, Textarea, cx } from "@orion/ui";
+import { Button, CalendarPicker, Combobox, GlideSelect, IconButton, Input, SegmentedControl, Switch, Textarea, cx } from "@orion/ui";
 import { Plus, Star, X } from "lucide-react";
 import { useId, useState } from "react";
 import { EMAIL_LABEL_SUGGESTIONS, LINK_LABEL_SUGGESTIONS, PHONE_LABEL_SUGGESTIONS } from "../../lib/contacts";
@@ -154,26 +154,26 @@ export function ContactForm({
 
       <label className={LABEL}>
         Напоминать связаться
-        <Select value={cadence === null ? "" : String(cadence)} onChange={(event) => setCadence(event.target.value === "" ? null : Number(event.target.value))}>
-          {cadenceOptions.map(([days, label]) => (
-            <option key={days ?? "none"} value={days === null ? "" : String(days)}>
-              {label}
-            </option>
-          ))}
-        </Select>
+        <GlideSelect
+          label="Напоминать связаться"
+          options={cadenceOptions.map(([, label]) => label)}
+          value={cadenceOptions.find(([days]) => days === cadence)?.[1] ?? "Не напоминать"}
+          onChange={(label) => {
+            const next = cadenceOptions.find(([, item]) => item === label);
+            if (next) setCadence(next[0]);
+          }}
+        />
       </label>
 
       {homes.length > 0 || initial?.homeId ? (
         <label className={LABEL}>
           Дом
-          <Select value={homeId} onChange={(event) => setHomeId(event.target.value)}>
-            <option value="">Без дома</option>
-            {homes.map((home) => (
-              <option key={home.id} value={home.id}>
-                {home.name}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            label="Дом"
+            value={homeId}
+            onChange={setHomeId}
+            items={[{ id: "", label: "Без дома" }, ...homes.map((home) => ({ id: home.id, label: home.name }))]}
+          />
         </label>
       ) : null}
 
@@ -301,17 +301,19 @@ function BirthdayField({ value, onChange }: { value: string | null; onChange: (v
           <div className="w-20 shrink-0">
             <Input type="number" min={1} max={31} value={day} onChange={(event) => setPart(month, Number(event.target.value) || 1)} aria-label="День" />
           </div>
-          <Select value={month} onChange={(event) => setPart(Number(event.target.value), day)} aria-label="Месяц">
-            {MONTHS.map((label, index) => (
-              <option key={label} value={index + 1}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            <GlideSelect
+              label="Месяц"
+              options={MONTHS}
+              value={MONTHS[month - 1] ?? MONTHS[0]}
+              onChange={(label) => {
+                const index = MONTHS.indexOf(label);
+                if (index >= 0) setPart(index + 1, day);
+              }}
+            />
         </div>
       ) : (
         <div className="flex gap-2">
-          <Input type="date" value={value ?? ""} onChange={(event) => onChange(event.target.value || null)} aria-label="Дата рождения" max="9999-12-31" />
+          <CalendarPicker value={value ?? ""} onChange={(next) => { if (next.length === 10) onChange(next); }} />
           {value ? (
             <IconButton label="Очистить дату" onClick={() => onChange(null)}>
               <X className="h-3.5 w-3.5" />
