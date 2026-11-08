@@ -89,6 +89,7 @@ beforeEach(() => {
   process.env.SYNC_SECRET = randomBytes(32).toString("base64");
   process.env.ORION_BUILD_TAG = "v0.1.0-windows-beta.2";
   delete process.env.ORION_EDITION;
+  delete process.env.ORION_RUST_UPDATE_REPO;
   delete process.env.ORION_GITHUB_UPDATE_TOKEN;
   delete process.env.ORION_INSTALL_DIR;
   delete process.env.ORION_SHELL_RUNTIME;
@@ -166,6 +167,19 @@ describe("UpdateService", () => {
     const service = new UpdateService();
     await expect(service.check()).rejects.toThrow("классической беты");
     expect(seenAuth).toEqual([]);
+  });
+
+  it("чужой репозиторий и уже скачанный установщик тоже не применяются в ORION Rust", async () => {
+    const service = configured();
+    await service.check();
+    await service.download();
+    const callsBefore = seenAuth.length;
+    process.env.ORION_EDITION = "rust";
+    await expect(service.download()).rejects.toThrow("свой канал");
+    expect(seenAuth).toHaveLength(callsBefore);
+    await expect(service.apply()).rejects.toThrow("свой канал");
+    process.env.ORION_RUST_UPDATE_REPO = "o/r";
+    await expect(service.check()).rejects.toThrow("не принадлежит");
   });
 
   it("находит более новый релиз, а для актуальной сборки говорит «последняя версия»", async () => {

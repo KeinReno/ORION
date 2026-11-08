@@ -5,7 +5,7 @@ import { CoreProvider, setReplicaStorage } from "@orion/core-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ContextMenuProvider, ToastProvider } from "@orion/ui";
 import { useEffect, useState, type ReactNode } from "react";
-import { applyBootSnapshot, attachBootSnapshot } from "./boot-snapshot";
+import { applyBootSnapshot, attachBootSnapshot, bootLocalStorage } from "./boot-snapshot";
 import { API_BASE_URL, isLoopbackHost } from "./api-base";
 import { PHONE_DEVICE_TOKEN_KEY } from "../phone/phone-device";
 import { CrossWindowSync } from "./cross-window-sync-provider";
@@ -18,26 +18,10 @@ import { SoundPreference } from "./sound-preference";
 import { NotificationSoundBridge } from "./notification-sound-bridge";
 import { RuntimeExtensions } from "./extensions/runtime/runtime-extensions";
 
-function bootStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  const prefix = nodeStoragePrefix(readNodeMark());
-  const inner = window.localStorage;
-  return {
-    get length() {
-      return inner.length;
-    },
-    clear: () => inner.clear(),
-    key: (index) => inner.key(index),
-    getItem: (key) => inner.getItem(prefix + key),
-    setItem: (key, value) => inner.setItem(prefix + key, value),
-    removeItem: (key) => inner.removeItem(prefix + key)
-  };
-}
-
 function BootSnapshotPersist(): null {
   const client = useQueryClient();
   useEffect(() => {
-    const storage = bootStorage();
+    const storage = bootLocalStorage();
     if (!storage) return;
     applyBootSnapshot(client, storage);
     return attachBootSnapshot(client, storage);

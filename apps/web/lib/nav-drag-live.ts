@@ -4,6 +4,8 @@
  * whether the pointer is inside it.
  */
 
+import { placeBesideDisplays, type DisplayArea } from "./display-geometry";
+
 export interface ScreenRect {
   x: number;
   y: number;
@@ -39,14 +41,9 @@ export function pointInRect(x: number, y: number, rect: ScreenRect): boolean {
   return x >= rect.x && y >= rect.y && x < rect.x + rect.width && y < rect.y + rect.height;
 }
 
-/** Where a freshly detached bar should open: beside the host, on the same display. */
-export function placeBarBeside(host: ScreenRect, availWidth: number): ScreenRect {
-  const width = 280;
-  const height = Math.max(480, Math.min(820, host.height > 0 ? host.height : 820));
-  const gap = 16;
-  let x = host.x + host.width + gap;
-  if (availWidth > 0 && x + width > host.x + availWidth) x = host.x - width - gap;
-  return { x: Math.round(x), y: Math.round(host.y), width, height };
+/** Where a freshly detached bar should open: beside the host, on a connected display. */
+export function placeBarBeside(host: ScreenRect, displays: readonly DisplayArea[]): ScreenRect {
+  return placeBesideDisplays(host, displays);
 }
 
 export function parseNavDragLive(raw: unknown): NavDragLive | null {

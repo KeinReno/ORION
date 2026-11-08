@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { NAV_SURFACE_PREFIX, placeBarBeside, pointInRect, readSurfaces, surfaceAt } from "./nav-drag-live";
+import { placeBarBeside, pointInRect, readSurfaces, surfaceAt, NAV_SURFACE_PREFIX } from "./nav-drag-live";
+
+const primary = { x: 0, y: 0, width: 1920, height: 1080, scaleFactor: 1 };
 
 describe("nav drag across windows", () => {
   it("opens a new bar beside the host, on the same display", () => {
-    expect(placeBarBeside({ x: 100, y: 40, width: 1200, height: 800 }, 1920)).toEqual({ x: 1316, y: 40, width: 280, height: 800 });
+    expect(placeBarBeside({ x: 100, y: 40, width: 1200, height: 800 }, [primary])).toEqual({ x: 1316, y: 40, width: 280, height: 800 });
   });
 
-  it("keeps the bar on the host display when the right edge is full", () => {
-    const placed = placeBarBeside({ x: 0, y: 10, width: 1800, height: 400 }, 1920);
-    expect(placed.x).toBeLessThan(0);
-    expect(placed.y).toBe(10);
+  it("keeps the bar on the only display when the right edge is full", () => {
+    const placed = placeBarBeside({ x: 0, y: 10, width: 1800, height: 400 }, [primary]);
+    expect(placed.x).toBeGreaterThanOrEqual(0);
+    expect(placed.x + placed.width).toBeLessThanOrEqual(primary.width);
   });
 
   it("prefers a navigation window and ignores a stale or foreign surface", () => {

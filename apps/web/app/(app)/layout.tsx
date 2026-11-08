@@ -111,6 +111,7 @@ import { useNavSidebarHost } from "../../lib/use-nav-sidebar-windows";
 import { useNavDragBridge } from "../../lib/use-nav-drag-bridge";
 import { subscribeNavDrag } from "@orion/ui";
 import { bindSectionDrag } from "../../lib/nav-section-drag";
+import { discardBootSnapshot } from "../../lib/boot-snapshot";
 import {
   NAV_SIDEBAR_LIMIT,
   PRIMARY_SIDEBAR_ID,
@@ -125,6 +126,7 @@ import {
   renameNavFolder,
   seedPrimaryFolders,
   toggleNavFolder,
+  updateNavSidebar,
   type NavEdge,
   type NavSidebarConfig
 } from "../../lib/sidebar-instances";
@@ -416,6 +418,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       return;
     }
     if (destination === "logout") {
+      discardBootSnapshot();
       play("auth.logout");
       logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
     } else router.push("/spaces");
@@ -440,6 +443,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     updateNav((current) => seedPrimaryFolders(current, legacyFolders, sidebarOrder));
   }, [legacyFolders, sidebarOrder, updateNav]);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; sidebarId: string; panelId?: string } | { mode: "rename"; sidebarId: string; id: string; name: string } | null>(null);
+  const [barName, setBarName] = useState<{ id: string; name: string } | null>(null);
   const folderViewsFor = useCallback((sidebarId: string): SidebarFolderView[] => {
     const bar = navState.sidebars.find((sidebar) => sidebar.id === sidebarId);
     const visible = new Set(navPanels.map((panel) => panel.id));
@@ -1183,6 +1187,33 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
 
   const primaryBar = navState.sidebars.find((bar) => bar.id === PRIMARY_SIDEBAR_ID) ?? navState.sidebars[0]!;
 
+  function barMenu(bar: NavSidebarConfig): (MenuItem | "separator")[] {
+    const edges: { edge: NavEdge; label: string }[] = [
+      { edge: "left", label: "Слева" },
+      { edge: "right", label: "Справа" },
+      { edge: "top", label: "Сверху" },
+      { edge: "bottom", label: "Снизу" }
+    ];
+    return [
+      { label: "Новая папка…", onSelect: () => setFolderDialog({ mode: "create", sidebarId: bar.id }) },
+      { label: "Название сайдбара…", onSelect: () => setBarName({ id: bar.id, name: bar.name }) },
+      "separator",
+      { label: "Плотность: полная", disabled: bar.density === "full", onSelect: () => updateNav((current) => updateNavSidebar(current, bar.id, { density: "full" })) },
+      { label: "Плотность: компактная", disabled: bar.density === "compact", onSelect: () => updateNav((current) => updateNavSidebar(current, bar.id, { density: "compact" })) },
+      { label: "Плотность: значки", disabled: bar.density === "icons", onSelect: () => updateNav((current) => updateNavSidebar(current, bar.id, { density: "icons" })) },
+      ...(bar.id === PRIMARY_SIDEBAR_ID
+        ? []
+        : [
+            "separator" as const,
+            ...edges.map((item) => ({
+              label: item.label,
+              disabled: bar.edge === item.edge,
+              onSelect: () => updateNav((current) => updateNavSidebar(current, bar.id, { edge: item.edge }))
+            }))
+          ])
+    ];
+  }
+
   function edgeOf(bar: NavSidebarConfig): NavEdge {
     return bar.id === PRIMARY_SIDEBAR_ID ? sidebarPosition : bar.edge;
   }
@@ -1197,7 +1228,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         navId={bar.id}
         allIconsVisible={precision}
         folders={folderViewsFor(bar.id)}
-        surfaceMenuItems={[{ label: "Новая папка…", onSelect: () => setFolderDialog({ mode: "create", sidebarId: bar.id }) }]}
+        surfaceMenuItems={barMenu(bar)}
         onToggleFolder={(id) => updateNav((current) => toggleNavFolder(current, bar.id, id))}
         onCreateFolder={(panelId) => setFolderDialog({ mode: "create", sidebarId: bar.id, panelId })}
         onMoveLink={(panelId, folderId, beforeId) => updateNav((current) => {
@@ -1223,6 +1254,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         onDrawerClose={asDrawer ? () => setDrawerOpen(false) : undefined}
         railLabel={!asDrawer && navState.sidebars.length > 1 ? bar.name : undefined}
         defaultPinned={bar.density !== "icons"}
+        railWidth={bar.density === "compact" ? 188 : 240}
         header={primary ? ({ open }) => (
           <div className="flex flex-col gap-2 rounded-lg px-1 py-1.5">
             <div className="flex items-center gap-2" title="KAIDEN Orion">
@@ -1439,6 +1471,19 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         onImport={importLayouts}
       />
       <FolderNameDialog
+        open={barName !== null}
+        title="Название сайдбара"
+        initial={barName?.name ?? ""}
+        submitLabel="Сохранить"
+        onClose={() => setBarName(null)}
+        onSubmit={(name) => {
+          const dialog = barName;
+          setBarName(null);
+          if (!dialog) return;
+          updateNav((current) => updateNavSidebar(current, dialog.id, { name }));
+        }}
+      />
+      <FolderNameDialog
         open={folderDialog !== null}
         title={folderDialog?.mode === "rename" ? "Переименовать папку" : "Новая папка"}
         initial={folderDialog?.mode === "rename" ? folderDialog.name : ""}
@@ -1569,6 +1614,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           const destination = pendingExit;
           setPendingExit(null);
           if (destination === "logout") {
+            discardBootSnapshot();
             play("auth.logout");
             logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
           } else if (destination) router.push("/spaces");

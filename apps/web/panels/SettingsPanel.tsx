@@ -35,6 +35,7 @@ import {
 import { AlertCircle, LogOut, Settings } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { describeAuthError } from "../lib/error-message";
+import { discardBootSnapshot } from "../lib/boot-snapshot";
 import { relativeTime, shortDateTime } from "../lib/format";
 import { AccountAvatar } from "../components/account-avatar";
 import { ThemeSettings } from "./settings/theme-library";
@@ -314,6 +315,7 @@ export function SettingsPanel({ params, api: panelApi }: PanelComponentProps = {
 
   function confirmLogoutAllSessions(): void {
     setConfirmLogoutAll(false);
+    discardBootSnapshot();
     logoutAll.mutate(undefined, {
       onSuccess: () => toast({ title: "Все сессии завершены", description: "Потребуется войти заново.", tone: "default" }),
       onError: (error) => toast({ title: "Не удалось завершить сессии", description: describeAuthError(error), tone: "danger" })

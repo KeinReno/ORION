@@ -16,6 +16,7 @@ import { openSecret, sealSecret } from "../sync/sync-crypto";
 import { buildApplyScript } from "./apply-script";
 import { builtinGithubUpdateToken } from "./builtin-github-token";
 import { compareTags, extractSha256, pickInstallerAsset, pickPayloadAsset, pickLatestRelease, type GithubRelease } from "./release-feed";
+import { rustReleaseRefusal } from "./rust-update-guard";
 
 interface StoredConfig {
   repo: string;
@@ -211,6 +212,23 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     throw new BadRequestException(message);
   }
 
+  /**
+   * ORION Rust refuses a classic release here, not only while listing versions.
+   * Download and apply call the same check, so a file that was already marked
+   * ready cannot be installed by skipping the list.
+   */
+  private assertRustRelease(repo: string, assetName?: string | null, notes?: string | null, sha256?: string | null): void {
+    const message = rustReleaseRefusal({
+      edition: process.env.ORION_EDITION,
+      repo,
+      channel: process.env.ORION_RUST_UPDATE_REPO,
+      assetName,
+      notes,
+      sha256
+    });
+    if (message) this.fail(message);
+  }
+
   private async autoCheck(): Promise<void> {
     if (!this.readConfig().autoCheck || !this.token()) return;
     if (this.status.state === "downloading" || this.status.state === "applying" || this.status.state === "ready") return;
@@ -223,13 +241,16 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
 
   // ── проверка ────────────────────────────────────────────────────────────────────────────────
   async check(): Promise<AppUpdateStatus> {
+    const repo = this.readConfig().repo;
+    if (process.env.ORION_EDITION === "rust") {
+      const channel = process.env.ORION_RUST_UPDATE_REPO?.trim() ?? "";
+      if (repo.trim().toLowerCase() === APP_UPDATE_DEFAULT_REPO.toLowerCase() || channel === "" || repo.trim() !== channel) {
+        this.assertRustRelease(repo);
+      }
+    }
     const token = this.token();
     if (!token) this.fail("Токен GitHub не задан: добавьте его в настройках обновлений");
     if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Сейчас идёт проверка, скачивание или установка обновления");
-    const repo = this.readConfig().repo;
-    if (process.env.ORION_EDITION === "rust" && repo === APP_UPDATE_DEFAULT_REPO) {
-      this.fail("ORION Rust не устанавливает обновления обычного ORION. Канал классической беты для этой сборки выключен.");
-    }
     this.status = { ...this.status, state: "checking", error: null };
     let releases: GithubRelease[];
     try {
@@ -263,6 +284,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       assetName: asset.name,
       sha256: payloadAsset ? null : extractSha256(latest.body)
     };
+    this.assertRustRelease(repo, asset.name, latest.body, info.sha256);
     const current = this.currentTag();
     // Сборка без метки (старая установка) не знает своей версии — предлагаем самую новую.
     const newer = current === null || compareTags(info.tag, current) > 0;
@@ -274,6 +296,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   // ── скачивание ──────────────────────────────────────────────────────────────────────────────
   async download(): Promise<AppUpdateStatus> {
     const latest = this.status.latest;
+    if (latest) this.assertRustRelease(this.readConfig().repo, latest.assetName, latest.notes, latest.sha256);
     if (!latest || (this.status.state !== "available" && this.status.state !== "error" && this.status.state !== "ready")) {
       throw new ConflictException("Сначала проверьте наличие обновления");
     }
@@ -338,6 +361,14 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   // ── применение ──────────────────────────────────────────────────────────────────────────────
   async apply(): Promise<{ started: true }> {
     const status = this.getStatus();
+    if (process.env.ORION_EDITION === "rust" && (this.downloaded || status.latest)) {
+      const fileName = this.downloaded ? path.basename(this.downloaded.file) : status.latest?.assetName;
+      this.assertRustRelease(this.readConfig().repo, fileName, status.latest?.notes, status.latest?.sha256);
+      if (this.downloaded && status.latest?.sha256) {
+        const onDisk = createHash("sha256").update(fs.readFileSync(this.downloaded.file)).digest("hex");
+        if (onDisk !== status.latest.sha256.toLowerCase()) this.fail("Контрольная сумма файла на диске не совпала — установка отклонена");
+      }
+    }
     const installDir = this.installDir();
     if (status.state !== "ready" || !this.downloaded) throw new ConflictException("Обновление ещё не скачано");
     if (process.platform !== "win32" || !installDir) throw new ConflictException("Автоматическое применение доступно только в установленной версии для Windows");

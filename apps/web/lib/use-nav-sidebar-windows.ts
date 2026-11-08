@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "./is-tauri";
 import { openNavSidebarChannel } from "./nav-sidebar-channel";
 import { placeBarBeside } from "./nav-drag-live";
+import { readDisplays } from "./read-displays";
+import { restoreOnDisplays } from "./display-geometry";
 import {
   detachNavWindow,
   dockNavWindow,
@@ -147,23 +149,24 @@ export function useNavSidebarHost(
   return { state, detach, dock };
 }
 
-function detachedPlacement(bounds?: NavWindowBounds): NavWindowBounds {
+async function detachedPlacement(bounds?: NavWindowBounds): Promise<NavWindowBounds> {
+  const displays = await readDisplays();
   if (bounds) {
-    return {
+    return restoreOnDisplays({
       x: Math.round(bounds.x),
       y: Math.round(bounds.y),
       width: Math.max(220, Math.round(bounds.width)),
-      height: Math.max(480, Math.round(bounds.height)),
-    };
+      height: Math.max(480, Math.round(bounds.height))
+    }, displays);
   }
   return placeBarBeside(
     { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight },
-    window.screen.availWidth,
+    displays
   );
 }
 
 async function openDetachedBar(url: string, sidebarId: string, bounds?: NavWindowBounds): Promise<boolean> {
-  const placed = detachedPlacement(bounds);
+  const placed = await detachedPlacement(bounds);
   if (isTauri()) {
     const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
     const opened = new WebviewWindow(`nav-sidebar-${sidebarId}-${Date.now()}`, {

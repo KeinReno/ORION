@@ -1,6 +1,8 @@
 import { isTauri } from "./is-tauri";
 import { panelWindowUrl } from "./panel-drop";
 import { getActiveWorkspaceId } from "./use-active-workspace";
+import { readDisplays } from "./read-displays";
+import { restoreOnDisplays } from "./display-geometry";
 
 /**
  * "Открыть пространство в новом окне" — a whole new shell for another workspace
@@ -80,7 +82,10 @@ export async function detachPanelToWindow(
     });
     if (left !== undefined && top !== undefined) {
       child.once("tauri://created", () => {
-        void child.setPosition(new LogicalPosition(left, top));
+        void readDisplays().then((displays) => {
+          const fitted = restoreOnDisplays({ x: left, y: top, width: 900, height: 700 }, displays);
+          void child.setPosition(new LogicalPosition(fitted.x, fitted.y));
+        });
       });
     }
   } else {

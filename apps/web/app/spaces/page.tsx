@@ -1,6 +1,7 @@
 "use client";
 
 import { KaidenLogo } from "../../components/kaiden-logo";
+import { discardBootSnapshot } from "../../lib/boot-snapshot";
 
 import { useCreateWorkspace, useLogout, useSession, useWorkspaces } from "@orion/core-react";
 import type { WorkspaceRole } from "@orion/shared-types";
@@ -209,7 +210,10 @@ export default function SpacesPage(): React.ReactElement {
             </a>
             <button
               type="button"
-              onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
+              onClick={() => {
+                discardBootSnapshot();
+                logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+              }}
               className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <LogOut className="h-3.5 w-3.5" />

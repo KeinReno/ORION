@@ -146,6 +146,8 @@ export interface SidebarProps {
   railLabel?: string;
   /** Initial pin state. Uncontrolled after mount; omitted callers stay unpinned. */
   defaultPinned?: boolean;
+  /** Expanded width of a vertical rail. Compact bars pass a smaller number; icons stay at 60. */
+  railWidth?: number;
   /** Separates several bars on one screen: nav id and the active-item motion. */
   navId?: string;
   /** Right-click on the empty part of this bar. */
@@ -202,6 +204,7 @@ export function Sidebar({
   position = "left",
   railLabel,
   defaultPinned,
+  railWidth = 240,
   navId = "sidebar",
   surfaceMenuItems,
   fill = false
@@ -608,6 +611,24 @@ export function Sidebar({
                 <button
                   key={member.id ?? member.label}
                   type="button"
+                  draggable={Boolean(member.id && onMoveLink)}
+                  onDragStart={(event) => {
+                    if (!member.id || !onMoveLink) return;
+                    beginNavDrag(member.id);
+                    try { member.onDragStart?.(event); } catch { /* the dock payload is optional */ }
+                    try { event.dataTransfer.setData(DRAG_TYPE, member.id); } catch { /* the in-memory id still moves the shortcut */ }
+                    try { event.dataTransfer.effectAllowed = "copyMove"; } catch { /* a browser that already locked the effect keeps the first one */ }
+                  }}
+                  onDragEnd={(event) => {
+                    const cancelled = navDragCancelled();
+                    const accepted = navDragAccepted();
+                    endNavDrag();
+                    resetNavDragOutcome();
+                    if (!cancelled && !accepted) member.onDragEnd?.(event);
+                  }}
+                  onContextMenu={(event) => {
+                    if (member.menuItems && member.menuItems.length > 0) showContextMenu(event, member.menuItems);
+                  }}
                   onClick={() => {
                     close();
                     handleNavigate(member.onClick);
@@ -709,10 +730,11 @@ export function Sidebar({
   return (
     <motion.aside
       initial={false}
-      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : fill || horizontal ? { width: "100%" } : { width: open ? 240 : 60 }}
+      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : fill || horizontal ? { width: "100%" } : { width: open ? railWidth : 60 }}
       transition={{ duration, ease: "easeInOut" }}
       aria-hidden={isDrawer && !drawerOpen}
       data-orion-sidebar={navId}
+      data-orion-sidebar-icons={allIconsVisible ? "all" : undefined}
       className={clsx(
         "z-40 flex shrink-0 justify-between overflow-hidden border-border",
         horizontal ? "h-14 flex-row items-center px-3" : "h-dvh flex-col px-2.5 py-4",
@@ -756,7 +778,7 @@ export function Sidebar({
             </div>
           ) : null}
           {!grouped
-            ? allIconsVisible ? links.map(renderLink) : hasSections
+            ? hasSections
               ? renderRail()
               : links.map(renderLink)
             : [

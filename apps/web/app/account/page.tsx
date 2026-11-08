@@ -1,6 +1,7 @@
 "use client";
 
 import { KaidenLogo } from "../../components/kaiden-logo";
+import { discardBootSnapshot } from "../../lib/boot-snapshot";
 
 import {
   useChangePassword,
@@ -227,7 +228,10 @@ export default function AccountPage(): React.ReactElement {
             </a>
             <button
               type="button"
-              onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
+              onClick={() => {
+                discardBootSnapshot();
+                logout.mutate(undefined, { onSuccess: () => router.replace("/login") });
+              }}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <LogOut className="h-3.5 w-3.5" />
