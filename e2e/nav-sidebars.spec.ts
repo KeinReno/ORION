@@ -55,6 +55,24 @@ test("equal sidebars keep shortcuts, folders, and an open editor apart from the 
   await other.close();
 });
 
+test("a detached sidebar returns when its window closes and does not open a second editor", async ({ page, request }) => {
+  const account = await register(request, "nav-window");
+  await openWorkbench(page, account);
+  await page.getByRole("button", { name: "Создать второй сайдбар" }).click();
+  await page.getByRole("button", { name: "Заметки", exact: true }).click();
+  await page.getByRole("button", { name: "Заметки", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Переместить в сайдбар «Второй»" }).click();
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "В отдельное окно" }).click();
+  const popup = await popupPromise;
+  await expect(popup.getByRole("navigation", { name: "Разделы" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Разделы" })).toHaveCount(1);
+  await popup.getByRole("button", { name: "Заметки", exact: true }).click();
+  await expect(page.locator(".dv-tab", { hasText: "Заметки" })).toHaveCount(1);
+  await popup.close();
+  await expect(page.getByRole("navigation", { name: "Разделы" })).toHaveCount(2);
+});
+
 for (const size of [
   { width: 1366, height: 768 },
   { width: 1920, height: 1080 },

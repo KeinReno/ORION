@@ -107,6 +107,7 @@ import { NodeBadge } from "../../components/node-badge";
 import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { useNavSidebars } from "../../lib/use-nav-sidebars";
+import { useNavSidebarHost } from "../../lib/use-nav-sidebar-windows";
 import {
   NAV_SIDEBAR_LIMIT,
   PRIMARY_SIDEBAR_ID,
@@ -404,6 +405,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const sectionNav = orderedNav.filter((panel) => panel.group !== "Инструменты");
   const toolNav = orderedNav.filter((panel) => panel.group === "Инструменты");
   const { state: navState, update: updateNav } = useNavSidebars(user?.id, workspace?.id);
+  const openDetachedPanel = useRef<(panelId: string) => void>(() => {});
+  const navWindows = useNavSidebarHost(user?.id, workspace?.id, (panelId) => openDetachedPanel.current(panelId));
   useEffect(() => {
     updateNav((current) => seedPrimaryFolders(current, legacyFolders, sidebarOrder));
   }, [legacyFolders, sidebarOrder, updateNav]);
@@ -743,6 +746,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // A click in the menu is the only open that may replace the current tab («Заменять текущую»);
   // moving between panels from inside a panel (open a project from the list) always adds a tab.
   const openFromMenu = useCallback((panelId: string) => placePanel(panelId, undefined, undefined, true), [placePanel]);
+  openDetachedPanel.current = openFromMenu;
   /** "Переместить в основной сайдбар": close here, reopen there with the same id/params — never duplicates the record. */
   const moveOpenPanelToPrimary = useCallback(
     (panelId: string) => {
@@ -1210,7 +1214,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         footer={({ open }) => {
           const labeled = wideFooter(open);
           if (!primary) {
-            return labeled ? (
+            const detachButton = labeled ? (
+              <button
+                type="button"
+                onClick={() => navWindows.detach(bar.id)}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                В отдельное окно
+              </button>
+            ) : (
+              <IconButton label="В отдельное окно" onClick={() => navWindows.detach(bar.id)}>
+                <span aria-hidden className="text-xs">⧉</span>
+              </IconButton>
+            );
+            const removeButton = labeled ? (
               <button
                 type="button"
                 onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}
@@ -1222,6 +1239,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               <IconButton label="Убрать сайдбар" onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}>
                 <span aria-hidden className="text-xs">✕</span>
               </IconButton>
+            );
+            return labeled ? (
+              <div className="flex flex-col gap-1">{detachButton}{removeButton}</div>
+            ) : (
+              <div className="flex flex-col gap-1">{detachButton}{removeButton}</div>
             );
           }
           return (
@@ -1250,6 +1272,22 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                   }))}
                 />
               ) : null}
+              {navState.sidebars.filter((item) => navWindows.state.bars[item.id]?.detached).map((item) => (
+                labeled ? (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navWindows.dock(item.id)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    {`Вернуть «${item.name}»`}
+                  </button>
+                ) : (
+                  <IconButton key={item.id} label={`Вернуть «${item.name}»`} onClick={() => navWindows.dock(item.id)}>
+                    <span aria-hidden className="text-xs">↩</span>
+                  </IconButton>
+                )
+              ))}
               {labeled && !asDrawer && navState.sidebars.length < NAV_SIDEBAR_LIMIT ? (
                 <button
                   type="button"
@@ -1322,7 +1360,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
 
   function edgeSlot(edge: NavEdge): ReactNode {
     if (compact) return null;
-    const bars = navState.sidebars.filter((bar) => edgeOf(bar) === edge);
+    const bars = navState.sidebars.filter((bar) => edgeOf(bar) === edge && !navWindows.state.bars[bar.id]?.detached);
     if (bars.length === 0) return null;
     const vertical = edge === "left" || edge === "right";
     return (
