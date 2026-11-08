@@ -34,7 +34,16 @@ test("equal sidebars keep shortcuts, folders, and an open editor apart from the 
   await page.getByRole("button", { name: "Создать", exact: true }).click();
   await expect(primaryNav.getByRole("button", { name: "Дом 0" })).toBeVisible();
   const secondNav = page.getByRole("navigation", { name: "Разделы" }).nth(1);
-  await page.getByRole("button", { name: "Инбокс", exact: true }).dragTo(secondNav);
+  await page.evaluate(() => {
+    const source = [...document.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "Инбокс");
+    const target = document.querySelectorAll("nav[aria-label='Разделы']")[1];
+    if (!source || !target) throw new Error("drag endpoints missing");
+    const data = new DataTransfer();
+    source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: data }));
+    target.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data }));
+    target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data }));
+    source.dispatchEvent(new DragEvent("dragend", { bubbles: true, cancelable: true, dataTransfer: data }));
+  });
   await expect(secondNav.getByRole("button", { name: "Инбокс", exact: true })).toBeVisible();
   await expect(page.locator(".dv-tab", { hasText: "Заметки" })).toHaveCount(1);
 

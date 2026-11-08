@@ -220,7 +220,7 @@ async function main() {
     JWT_SECRET: config.jwtSecret, SYNC_SECRET: config.syncSecret,
     STORAGE_DRIVER: 'local', STORAGE_DIR: path.join(data, 'documents'),
     // ТЗ-04: настройки узла (режим, устройства, сертификат) лежат рядом с данными; API сам перезапускается лаунчером.
-    ORION_NODE_DIR: data, ORION_SUPERVISED: '1',
+    ORION_NODE_DIR: data, ORION_SUPERVISED: '1', ORION_EDITION: 'rust',
     // Обновления программы (apps/api/src/updates): метка сборки, каталог установки и способ штатно остановить PostgreSQL.
     // ORION_BUILD_COMMIT/ORION_BUILD_TIME (ORION-14): same build.json, surfaced in «О программе» so provenance
     // is checkable from inside a running install, not just by reading the staged runtime folder by hand.

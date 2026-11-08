@@ -30,6 +30,22 @@ export async function openWorkspaceInNewWindow(workspaceId: string, title: strin
  * dockview's own built-in popout already uses there, just reachable
  * without first placing the panel in this window's dock.
  */
+/** A path-only URL becomes the asset protocol. In `tauri dev` that protocol has no page, so the new window stays black. */
+function windowUrl(path: string): string {
+  return new URL(path, window.location.href).href;
+}
+
+/** Ask the dev server to compile this section, and load the native window API, while the drag is still in progress. */
+export function warmPanelDocument(panelId: string): void {
+  if (typeof window === "undefined") return;
+  const href = windowUrl(panelWindowUrl(panelId, getActiveWorkspaceId()));
+  void fetch(href, { credentials: "same-origin" }).catch(() => undefined);
+  if (isTauri()) {
+    void import("@tauri-apps/api/webviewWindow");
+    void import("@tauri-apps/api/dpi");
+  }
+}
+
 export async function detachPanelToWindow(
   panelId: string,
   title: string,
@@ -37,9 +53,12 @@ export async function detachPanelToWindow(
   at?: { x: number; y: number }
 ): Promise<void> {
   const workspaceId = getActiveWorkspaceId();
-  const url = panelWindowUrl(panelId, workspaceId);
+  const url = windowUrl(panelWindowUrl(panelId, workspaceId));
+  const left = at ? Math.round(at.x - 450) : undefined;
+  const top = at ? Math.round(at.y - 40) : undefined;
   if (isTauri()) {
     const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const { LogicalPosition } = await import("@tauri-apps/api/dpi");
     // U04: a detached Tauri WebviewWindow is a brand new webview instance —
     // its `sessionStorage` (and therefore its `windowId`, see
     // `window-context.ts`) starts empty, so it would have no active
@@ -49,14 +68,22 @@ export async function detachPanelToWindow(
     // imperative click handler, not a render) so the detached window opens
     // already scoped to the same workspace; from then on it is its own
     // independent window context and can be switched separately.
-    new WebviewWindow(`panel-${panelId}-${Date.now()}`, {
+    // Position is applied after the webview exists. Setting it in the
+    // constructor on a second monitor left a titled frame with a blank page.
+    const label = `panel-${panelId.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 48)}-${Date.now()}`;
+    const child = new WebviewWindow(label, {
       url,
-      title,
+      title: `ORION — ${title}`,
       width: 900,
       height: 700,
-      ...(at ? { x: Math.round(at.x - 450), y: Math.round(at.y - 40) } : {})
+      focus: true,
     });
+    if (left !== undefined && top !== undefined) {
+      child.once("tauri://created", () => {
+        void child.setPosition(new LogicalPosition(left, top));
+      });
+    }
   } else {
-    window.open(url, `orion-panel-${panelId}-${Date.now()}`, `width=900,height=700${at ? `,left=${Math.round(at.x - 450)},top=${Math.round(at.y - 40)}` : ""}`);
+    window.open(url, `orion-panel-${panelId}-${Date.now()}`, `width=900,height=700${left !== undefined && top !== undefined ? `,left=${left},top=${top}` : ""}`);
   }
 }

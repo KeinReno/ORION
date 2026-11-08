@@ -30,24 +30,20 @@ export function PanelWindow({ panelId }: { panelId: string }): React.ReactElemen
   useTaskProjectRouting();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // sessionStorage starts empty in a new webview, and a useState initializer
+  // does not run again on hydration. Seed during this client render so the
+  // hook below sees the id. On the server `window` is missing, so the HTML
+  // stays the loading screen and hydration matches.
+  if (typeof window !== "undefined" && !getActiveWorkspaceId()) {
+    const seed = searchParams.get("workspaceId");
+    if (seed) setActiveWorkspaceId(seed);
+  }
   const { user, isLoading, status, retry: retrySession } = useSession();
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   // An instanced panel (a project) arrives as `/panel/project?instance=<id>` — see `panelWindowUrl`.
   const instanceId = searchParams.get("instance");
   const definition = getPanelDefinition(instanceId ? instancePanelId(panelId, instanceId) : panelId);
   const { isEnabled } = useEnabledModules();
-
-  useEffect(() => {
-    // Seed once, and only when this window's own sessionStorage-scoped
-    // choice is truly empty (a synchronous check — not the `workspace`
-    // hook result, which is still `undefined` mid-fetch regardless). An
-    // already-detached window that reloads keeps its own prior choice
-    // rather than snapping back to whatever the opener had at reload time.
-    if (getActiveWorkspaceId()) return;
-    const seed = searchParams.get("workspaceId");
-    if (seed) setActiveWorkspaceId(seed);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     // "unavailable" must not redirect to /login — a detached panel window

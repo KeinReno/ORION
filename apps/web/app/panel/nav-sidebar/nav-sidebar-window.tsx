@@ -4,15 +4,19 @@ import { usePreferences, useSession } from "@orion/core-react";
 import { Sidebar, type SidebarFolderView, type SidebarLinkItem } from "@orion/ui";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import { isTauri } from "../../../lib/is-tauri";
 import { openNavSidebarChannel } from "../../../lib/nav-sidebar-channel";
+import { bindSectionDrag } from "../../../lib/nav-section-drag";
+import { useNavDragBridge } from "../../../lib/use-nav-drag-bridge";
 import {
+  dockNavWindow,
+  navHeartbeatKey,
   navWindowStorageKey,
   parseNavWindowState,
   rememberNavWindowBounds,
-  dockNavWindow,
 } from "../../../lib/nav-sidebar-windows";
 import { panelsForSidebar, toggleNavFolder, movePanelToSidebar } from "../../../lib/sidebar-instances";
-import { visiblePanels } from "../../../lib/panel-registry";
+import { panelSupportsSurface, visiblePanels } from "../../../lib/panel-registry";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { useNavSidebars } from "../../../lib/use-nav-sidebars";
 
@@ -28,6 +32,16 @@ export function NavSidebarWindow(): React.ReactElement | null {
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   const preferences = usePreferences();
   const { state, update } = useNavSidebars(user?.id, workspace?.id);
+  useNavDragBridge({
+    kind: "nav",
+    sidebarId,
+    onMove: (panelId, targetId, folderId, beforeId) => update((current) => movePanelToSidebar(current, panelId, targetId, { folderId, beforeId })),
+    onOpenInside: (panelId) => {
+      const channel = openNavSidebarChannel();
+      channel?.postMessage({ type: "open", panelId });
+      channel?.close();
+    },
+  });
 
   useEffect(() => {
     if (getActiveWorkspaceId()) return;
@@ -47,11 +61,25 @@ export function NavSidebarWindow(): React.ReactElement | null {
     const key = navWindowStorageKey(user.id, workspace.id);
     const channel = openNavSidebarChannel();
     const hello = () => channel?.postMessage({ type: "hello", sidebarId });
-    hello();
-    const timer = window.setInterval(hello, 2000);
+    const beatKey = navHeartbeatKey(user.id, workspace.id);
+    const beat = () => {
+      hello();
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(beatKey) ?? "{}") as Record<string, number>;
+        parsed[sidebarId] = Date.now();
+        window.localStorage.setItem(beatKey, JSON.stringify(parsed));
+      } catch {
+        // The main window docks the bar if neither the beat nor the channel arrives.
+      }
+    };
+    beat();
+    const timer = window.setInterval(beat, 2000);
     const onMessage = (event: MessageEvent<{ type?: string }>) => {
       if (event.data?.type === "ping") hello();
-      if (event.data?.type === "dock") window.close();
+      if (event.data?.type === "dock") {
+        if (isTauri()) void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => void getCurrentWindow().close());
+        else window.close();
+      }
     };
     channel?.addEventListener("message", onMessage);
     const persistBounds = () => {
@@ -78,12 +106,34 @@ export function NavSidebarWindow(): React.ReactElement | null {
       }
     };
     window.addEventListener("resize", persistBounds);
-    window.addEventListener("pagehide", giveBack);
+    // A move onto another display can reload the webview. pagehide would then
+    // pull the bar back into the main window, so only a real close docks it.
+    const stops: Array<() => void> = [];
+    let cancelled = false;
+    if (isTauri()) {
+      void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+        const current = getCurrentWindow();
+        const handles = [
+          await current.onMoved(() => persistBounds()),
+          await current.onResized(() => persistBounds()),
+          await current.onCloseRequested(() => giveBack()),
+        ];
+        if (cancelled) {
+          for (const stop of handles) stop();
+          return;
+        }
+        stops.push(...handles);
+      });
+    } else {
+      window.addEventListener("beforeunload", giveBack);
+    }
     return () => {
+      cancelled = true;
       window.clearInterval(timer);
       channel?.removeEventListener("message", onMessage);
       window.removeEventListener("resize", persistBounds);
-      window.removeEventListener("pagehide", giveBack);
+      window.removeEventListener("beforeunload", giveBack);
+      for (const stop of stops) stop();
       channel?.close();
     };
   }, [sidebarId, user, workspace]);
@@ -107,6 +157,7 @@ export function NavSidebarWindow(): React.ReactElement | null {
         channel?.postMessage({ type: "open", panelId: panel.id });
         channel?.close();
       },
+      ...bindSectionDrag(panel.id, panel.label, panelSupportsSurface(panel.id, "window")),
     }];
   });
   const folders: SidebarFolderView[] = (bar?.folders ?? []).map((folder) => ({
@@ -118,10 +169,11 @@ export function NavSidebarWindow(): React.ReactElement | null {
 
   if (!bar) return null;
   return (
-    <div className="h-dvh">
+    <div className="h-dvh w-screen">
       <Sidebar
         navId={bar.id}
         position="left"
+        fill
         defaultPinned
         railLabel={bar.name}
         links={links}

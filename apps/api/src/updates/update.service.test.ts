@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApplyScript } from "./apply-script";
+import { builtinGithubUpdateToken } from "./builtin-github-token";
 import { UpdateService } from "./update.service";
 
 const TOKEN = "github_pat_0123456789abcdefghijklmnop";
@@ -87,6 +88,8 @@ beforeEach(() => {
   process.env.ORION_NODE_DIR = dir;
   process.env.SYNC_SECRET = randomBytes(32).toString("base64");
   process.env.ORION_BUILD_TAG = "v0.1.0-windows-beta.2";
+  delete process.env.ORION_EDITION;
+  delete process.env.ORION_GITHUB_UPDATE_TOKEN;
   delete process.env.ORION_INSTALL_DIR;
   delete process.env.ORION_SHELL_RUNTIME;
   delete process.env.ORION_SHELL_BASE_TAG;
@@ -144,13 +147,25 @@ describe("UpdateService", () => {
     fs.writeFileSync(path.join(dir, "ack"), "");
     expect(service.acknowledgeUi("v0.1.0-windows-beta.2").accepted).toBe(true);
   });
-  it("без токена проверка отказывает, а токен не возвращается и хранится зашифрованным", async () => {
+  it("без своего токена уходит встроенный, а сохранённый не возвращается и лежит зашифрованным", async () => {
+    process.env.ORION_GITHUB_UPDATE_TOKEN = "github_pat_builtin_fixture_not_real";
     const service = new UpdateService();
-    await expect(service.check()).rejects.toThrow("Токен GitHub не задан");
+    expect(service.getConfig().tokenSet).toBe(true);
+    await expect(service.check()).rejects.toThrow("отклонил токен");
+    expect(seenAuth[0]).toBe(`Bearer ${builtinGithubUpdateToken()}`);
     const config = service.setConfig({ repo: "o/r", token: TOKEN });
     expect(config).toEqual({ repo: "o/r", tokenSet: true, autoCheck: true });
     expect(JSON.stringify(config)).not.toContain(TOKEN);
     expect(fs.readFileSync(path.join(dir, "update-config.json"), "utf8")).not.toContain(TOKEN);
+    expect(fs.readFileSync(path.join(dir, "update-config.json"), "utf8")).not.toContain(builtinGithubUpdateToken());
+  });
+
+  it("сборка ORION Rust не ставит релизы обычного ORION", async () => {
+    process.env.ORION_EDITION = "rust";
+    process.env.ORION_GITHUB_UPDATE_TOKEN = "github_pat_builtin_fixture_not_real";
+    const service = new UpdateService();
+    await expect(service.check()).rejects.toThrow("классической беты");
+    expect(seenAuth).toEqual([]);
   });
 
   it("находит более новый релиз, а для актуальной сборки говорит «последняя версия»", async () => {

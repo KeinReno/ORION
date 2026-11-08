@@ -2,8 +2,10 @@
 
 import { BrowserLocalStorage } from "@orion/core";
 import { CoreProvider, setReplicaStorage } from "@orion/core-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ContextMenuProvider, ToastProvider } from "@orion/ui";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { applyBootSnapshot, attachBootSnapshot } from "./boot-snapshot";
 import { API_BASE_URL, isLoopbackHost } from "./api-base";
 import { PHONE_DEVICE_TOKEN_KEY } from "../phone/phone-device";
 import { CrossWindowSync } from "./cross-window-sync-provider";
@@ -15,6 +17,33 @@ import { MotionPreference } from "./motion-preference";
 import { SoundPreference } from "./sound-preference";
 import { NotificationSoundBridge } from "./notification-sound-bridge";
 import { RuntimeExtensions } from "./extensions/runtime/runtime-extensions";
+
+function bootStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  const prefix = nodeStoragePrefix(readNodeMark());
+  const inner = window.localStorage;
+  return {
+    get length() {
+      return inner.length;
+    },
+    clear: () => inner.clear(),
+    key: (index) => inner.key(index),
+    getItem: (key) => inner.getItem(prefix + key),
+    setItem: (key, value) => inner.setItem(prefix + key, value),
+    removeItem: (key) => inner.removeItem(prefix + key)
+  };
+}
+
+function BootSnapshotPersist(): null {
+  const client = useQueryClient();
+  useEffect(() => {
+    const storage = bootStorage();
+    if (!storage) return;
+    applyBootSnapshot(client, storage);
+    return attachBootSnapshot(client, storage);
+  }, [client]);
+  return null;
+}
 
 /** Токен устройства, которым телефон подтвердил себя на узле. На этом компьютере заголовок не нужен. */
 function phoneDeviceHeaders(): Record<string, string> {
@@ -36,6 +65,7 @@ export function Providers({ children }: { children: ReactNode }): React.ReactEle
   const [storage] = useState(() => new NamespacedStorage(new BrowserLocalStorage(), nodeStoragePrefix(readNodeMark())));
   return (
     <CoreProvider baseUrl={API_BASE_URL} storage={storage} extraHeaders={phoneDeviceHeaders}>
+      <BootSnapshotPersist />
       {/* Inside CoreProvider (it needs the API client) and gated on a session,
           so the login screen never fires a doomed preferences request. */}
       <PreferencesEffect />

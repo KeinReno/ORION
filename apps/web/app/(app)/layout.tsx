@@ -99,7 +99,7 @@ import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
 import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
-import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
+import { detachPanelToWindow, openWorkspaceInNewWindow, warmPanelDocument } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
 import { orderedIds } from "../../lib/sidebar-folders";
@@ -108,6 +108,9 @@ import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWor
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { useNavSidebars } from "../../lib/use-nav-sidebars";
 import { useNavSidebarHost } from "../../lib/use-nav-sidebar-windows";
+import { useNavDragBridge } from "../../lib/use-nav-drag-bridge";
+import { subscribeNavDrag } from "@orion/ui";
+import { bindSectionDrag } from "../../lib/nav-section-drag";
 import {
   NAV_SIDEBAR_LIMIT,
   PRIMARY_SIDEBAR_ID,
@@ -292,7 +295,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
   const [moduleSettingsFor, setModuleSettingsFor] = useState<string | null>(null);
   // Precision shows the agents' pill in its own header; the legacy shell has only this strip.
   const { data: preferences } = usePreferences();
-  const precision = usesPrecisionShell(preferences?.theme);
+  const precision = preferences?.theme === "kaiden-precision";
   if (compact) return null;
   const activeId = props.activePanel?.id;
   return (
@@ -356,6 +359,24 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     const seed = new URLSearchParams(window.location.search).get("workspaceId");
     if (seed) setActiveWorkspaceId(seed);
   }, []);
+  // Compile section pages in the background so the first window on another display does not wait for that.
+  useEffect(() => {
+    let cancelled = false;
+    const ids = panelRegistry.filter((panel) => panelSupportsSurface(panel.id, "window")).map((panel) => panel.id);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const id of ids) {
+          if (cancelled) return;
+          warmPanelDocument(id);
+          await new Promise((resolve) => window.setTimeout(resolve, 200));
+        }
+      })();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   // U05 (24-CONNECTED-CORE-BACKLOG.md) — the sidebar switcher groups the
   // `<select>` by the user's own spheres via `<optgroup>` (native, keyboard-
@@ -367,7 +388,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // viewer is a plain member — see `effectiveDisabledModules`.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
-  const precision = usesPrecisionShell(preferences?.theme);
+  const precision = preferences?.theme === "kaiden-precision";
   const shortcutOverrides = useMemo(() => (preferences?.shortcutOverrides ?? {}) as Record<string, string>, [preferences?.shortcutOverrides]);
   const [contextHidden, setContextHidden] = useState(false);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
@@ -407,6 +428,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const { state: navState, update: updateNav } = useNavSidebars(user?.id, workspace?.id);
   const openDetachedPanel = useRef<(panelId: string) => void>(() => {});
   const navWindows = useNavSidebarHost(user?.id, workspace?.id, (panelId) => openDetachedPanel.current(panelId));
+  useEffect(() => subscribeNavDrag((id) => {
+    document.documentElement.toggleAttribute("data-nav-drag", id !== null);
+  }), []);
+  useNavDragBridge({
+    kind: "main",
+    onMove: (panelId, sidebarId, folderId, beforeId) => updateNav((current) => movePanelToSidebar(current, panelId, sidebarId, { folderId, beforeId })),
+    onOpenInside: (panelId) => openDetachedPanel.current(panelId),
+  });
   useEffect(() => {
     updateNav((current) => seedPrimaryFolders(current, legacyFolders, sidebarOrder));
   }, [legacyFolders, sidebarOrder, updateNav]);
@@ -803,6 +832,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               ? `просрочено в пространстве: ${overdueCount}`
               : undefined,
         onClick: () => openFromMenu(panel.id),
+        ...bindSectionDrag(panel.id, panel.label, panelSupportsSurface(panel.id, "window")),
         menuItems: [
           { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
           { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },

@@ -8,6 +8,7 @@ type Listener = (id: string | null) => void;
 
 let dragId: string | null = null;
 let cancelled = false;
+let accepted = false;
 const listeners = new Set<Listener>();
 
 function emit(): void {
@@ -24,7 +25,17 @@ export function subscribeNavDrag(listener: Listener): () => void {
 export function beginNavDrag(id: string): void {
   dragId = id;
   cancelled = false;
+  accepted = false;
   emit();
+}
+
+/** A sidebar took the drop. dragend must not also open a window. */
+export function markNavDragAccepted(): void {
+  accepted = true;
+}
+
+export function navDragAccepted(): boolean {
+  return accepted;
 }
 
 export function cancelNavDrag(): void {
@@ -39,6 +50,15 @@ export function endNavDrag(): void {
   emit();
 }
 
+export function resetNavDragOutcome(): void {
+  accepted = false;
+}
+
 export function navDragCancelled(): boolean {
   return cancelled;
+}
+
+/** Readable during dragover, before React has re-rendered the other bar. */
+export function currentNavDragId(): string | null {
+  return dragId !== null && !cancelled ? dragId : null;
 }

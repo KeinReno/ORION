@@ -458,3 +458,6 @@ html[data-motion="expressive"] .agent-frame { animation-duration: 2s; }
 @keyframes agent-pulse {
   50% { background-color: rgb(var(--orion-accent) / 0.14); }
 }
+/* While a section is dragged, the dock's drop layer must not cover the other bars. */
+html[data-nav-drag] [data-orion-sidebar] { z-index: 80; }
+html[data-nav-drag] .dv-drop-target-container { pointer-events: none; }

@@ -214,7 +214,10 @@ function writeEnvFile() {
     ORION_MODE: "local",
     STORAGE_DIR: storageDir,
     JWT_SECRET: jwtSecret,
-    SYNC_SECRET: syncSecret
+    SYNC_SECRET: syncSecret,
+    ...(previous.ORION_GITHUB_UPDATE_TOKEN?.trim()
+      ? { ORION_GITHUB_UPDATE_TOKEN: previous.ORION_GITHUB_UPDATE_TOKEN.trim() }
+      : {})
   };
   const body = [
     "# ORION Rust dev stack — scripts/orion-rust-dev.mjs",
@@ -506,7 +509,8 @@ async function up() {
     ...apiVars,
     PORT: String(apiPort),
     HOST: "127.0.0.1",
-    ORION_MODE: "local"
+    ORION_MODE: "local",
+    ORION_EDITION: "rust"
   };
   assertApiUrls(apiEnv);
   const state = { supervisorPid: process.pid, children: [] };

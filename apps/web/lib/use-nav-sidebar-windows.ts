@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "./is-tauri";
 import { openNavSidebarChannel } from "./nav-sidebar-channel";
+import { placeBarBeside } from "./nav-drag-live";
 import {
   detachNavWindow,
   dockNavWindow,
+  heartbeatIsFresh,
   initialNavWindows,
+  navHeartbeatKey,
   navWindowStorageKey,
+  parseHeartbeat,
   parseNavWindowState,
+  type NavWindowBounds,
   type NavWindowState,
 } from "./nav-sidebar-windows";
 
@@ -45,6 +50,8 @@ export function useNavSidebarHost(
   onOpenRef.current = onOpen;
   const seen = useRef<Record<string, number>>({});
   const grace = useRef<Record<string, number>>({});
+  const beatKeyRef = useRef<string | null>(null);
+  beatKeyRef.current = userId && workspaceId ? navHeartbeatKey(userId, workspaceId) : null;
 
   useEffect(() => {
     if (!scope) return;
@@ -90,11 +97,18 @@ export function useNavSidebarHost(
       channel.postMessage({ type: "ping" });
       window.setTimeout(() => {
         const now = Date.now();
+        let beats: Record<string, number> = {};
+        try {
+          beats = parseHeartbeat(JSON.parse(window.localStorage.getItem(beatKeyRef.current ?? "") ?? "null"));
+        } catch {
+          beats = {};
+        }
         setState((current) => {
           let next = current;
           for (const [id, entry] of Object.entries(current.bars)) {
             if (!entry.detached) continue;
             if ((grace.current[id] ?? 0) > now) continue;
+            if (heartbeatIsFresh(beats, id, now, STALE_MS)) continue;
             if (now - (seen.current[id] ?? 0) <= STALE_MS) continue;
             next = dockNavWindow(next, id);
           }
@@ -115,12 +129,13 @@ export function useNavSidebarHost(
   const detach = useCallback((sidebarId: string) => {
     if (!workspaceId) return;
     grace.current[sidebarId] = Date.now() + GRACE_MS;
-    setState((current) => detachNavWindow(current, sidebarId));
     const url = `/panel/nav-sidebar?id=${encodeURIComponent(sidebarId)}&workspaceId=${encodeURIComponent(workspaceId)}`;
-    void openDetachedBar(url, sidebarId).then((opened) => {
+    const saved = state.bars[sidebarId]?.bounds;
+    setState((current) => detachNavWindow(current, sidebarId));
+    void openDetachedBar(url, sidebarId, saved).then((opened) => {
       if (!opened) setState((current) => dockNavWindow(current, sidebarId));
     });
-  }, [workspaceId]);
+  }, [state.bars, workspaceId]);
 
   const dock = useCallback((sidebarId: string) => {
     const channel = openNavSidebarChannel();
@@ -132,11 +147,40 @@ export function useNavSidebarHost(
   return { state, detach, dock };
 }
 
-async function openDetachedBar(url: string, sidebarId: string): Promise<boolean> {
+function detachedPlacement(bounds?: NavWindowBounds): NavWindowBounds {
+  if (bounds) {
+    return {
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.max(220, Math.round(bounds.width)),
+      height: Math.max(480, Math.round(bounds.height)),
+    };
+  }
+  return placeBarBeside(
+    { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight },
+    window.screen.availWidth,
+  );
+}
+
+async function openDetachedBar(url: string, sidebarId: string, bounds?: NavWindowBounds): Promise<boolean> {
+  const placed = detachedPlacement(bounds);
   if (isTauri()) {
     const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-    new WebviewWindow(`nav-sidebar-${sidebarId}-${Date.now()}`, { url, title: "ORION — сайдбар", width: 280, height: 820 });
-    return true;
+    const opened = new WebviewWindow(`nav-sidebar-${sidebarId}-${Date.now()}`, {
+      url,
+      title: "ORION — сайдбар",
+      width: placed.width,
+      height: placed.height,
+      minWidth: 220,
+      minHeight: 480,
+      x: placed.x,
+      y: placed.y,
+    });
+    return new Promise((resolve) => {
+      void opened.once("tauri://created", () => resolve(true));
+      void opened.once("tauri://error", () => resolve(false));
+    });
   }
-  return window.open(url, `orion-nav-${sidebarId}`, "width=280,height=820") !== null;
+  const features = `width=${placed.width},height=${placed.height},left=${placed.x},top=${placed.y}`;
+  return window.open(url, `orion-nav-${sidebarId}`, features) !== null;
 }

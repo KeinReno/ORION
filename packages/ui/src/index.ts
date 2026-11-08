@@ -1,4 +1,5 @@
 export * from "./sidebar";
+export { beginNavDrag, cancelNavDrag, currentNavDragId, endNavDrag, markNavDragAccepted, navDragAccepted, navDragCancelled, resetNavDragOutcome, subscribeNavDrag } from "./nav-drag";
 export * from "./primitives";
 export * from "./motion";
 export * from "./motion-level";

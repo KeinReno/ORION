@@ -18,7 +18,7 @@ export default function PanelRoute({ params }: { params: { panelId: string } }):
   // `output: "export"` build fails with "should be wrapped in a suspense
   // boundary".
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-background text-sm text-muted-foreground">Открываю раздел…</div>}>
       <PanelWindow panelId={params.panelId} />
     </Suspense>
   );

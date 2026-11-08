@@ -67,6 +67,26 @@ export function dockNavWindow(state: NavWindowState, sidebarId: string): NavWind
   return { bars: { ...state.bars, [sidebarId]: { ...current, detached: false } } };
 }
 
+export function navHeartbeatKey(userId: string, workspaceId: string): string {
+  return `orion.navSidebar.heartbeat.v1.${userId}.${workspaceId}`;
+}
+
+export function parseHeartbeat(raw: unknown): Record<string, number> {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const beats: Record<string, number> = {};
+  for (const [id, at] of Object.entries(raw)) {
+    if (id === "" || id === "primary" || typeof at !== "number" || !Number.isFinite(at)) continue;
+    beats[id] = at;
+  }
+  return beats;
+}
+
+/** True while the detached window has written a recent timestamp. */
+export function heartbeatIsFresh(beats: Record<string, number>, sidebarId: string, now: number, maxAgeMs: number): boolean {
+  const at = beats[sidebarId];
+  return typeof at === "number" && now - at >= 0 && now - at <= maxAgeMs;
+}
+
 export function rememberNavWindowBounds(state: NavWindowState, sidebarId: string, bounds: NavWindowBounds): NavWindowState {
   const current = state.bars[sidebarId];
   if (!current?.detached) return state;

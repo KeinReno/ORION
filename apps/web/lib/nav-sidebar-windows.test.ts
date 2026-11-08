@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   detachNavWindow,
   dockNavWindow,
+  heartbeatIsFresh,
   initialNavWindows,
+  parseHeartbeat,
   parseNavWindowState,
   rememberNavWindowBounds,
 } from "./nav-sidebar-windows";
@@ -32,5 +34,12 @@ describe("nav window placement", () => {
       bars: { primary: { detached: true }, "side-2": { detached: true, bounds: { x: 1, y: 2, width: 3, height: 4 } }, nope: null },
     }).bars).toEqual({ "side-2": { detached: true, bounds: { x: 1, y: 2, width: 3, height: 4 } } });
     expect(parseNavWindowState(null)).toEqual(initialNavWindows());
+  });
+
+  it("treats a recent heartbeat as a live window and ignores the primary bar", () => {
+    expect(parseHeartbeat({ "side-2": 1_000, primary: 1_000, nope: "x" })).toEqual({ "side-2": 1_000 });
+    expect(heartbeatIsFresh({ "side-2": 1_000 }, "side-2", 6_000, 6_000)).toBe(true);
+    expect(heartbeatIsFresh({ "side-2": 1_000 }, "side-2", 8_000, 6_000)).toBe(false);
+    expect(heartbeatIsFresh({}, "side-2", 8_000, 6_000)).toBe(false);
   });
 });

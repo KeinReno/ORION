@@ -14,6 +14,7 @@ import {
 import { nodeDir, writeJsonAtomic } from "../lan/node-config";
 import { openSecret, sealSecret } from "../sync/sync-crypto";
 import { buildApplyScript } from "./apply-script";
+import { builtinGithubUpdateToken } from "./builtin-github-token";
 import { compareTags, extractSha256, pickInstallerAsset, pickPayloadAsset, pickLatestRelease, type GithubRelease } from "./release-feed";
 
 interface StoredConfig {
@@ -83,7 +84,9 @@ function downloadFailure(error: unknown): string {
  * GitHub Releases: prefer a signed application payload compatible with the immutable shell;
  * retain the full-installer path for old hosts and native/schema changes. Payload verification
  * and selection belong to the shell verifier, outside the replaceable application.
- * Credentials stay encrypted with sealSecret and are never returned.
+ * A built-in release token is used until this computer saves its own.
+ * A saved credential stays encrypted with sealSecret and is never returned.
+ * ORION Rust does not install releases of the classic product.
  */
 @Injectable()
 export class UpdateService implements OnModuleInit, OnModuleDestroy {
@@ -146,7 +149,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
 
   getConfig(): AppUpdateConfig {
     const config = this.readConfig();
-    return { repo: config.repo, tokenSet: config.tokenEnc !== null, autoCheck: config.autoCheck };
+    return { repo: config.repo, tokenSet: this.token() !== null, autoCheck: config.autoCheck };
   }
 
   setConfig(input: SetAppUpdateConfigInput): AppUpdateConfig {
@@ -169,13 +172,17 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   }
 
   private token(): string | null {
-    const config = this.readConfig();
-    if (!config.tokenEnc) return null;
-    try {
-      return openSecret(config.tokenEnc);
-    } catch {
-      return null;
+    const saved = this.readConfig().tokenEnc;
+    if (saved) {
+      try {
+        const opened = openSecret(saved).trim();
+        if (opened) return opened;
+      } catch {
+        // Повреждённая запись не блокирует обновление: ниже встроенный токен.
+      }
     }
+    const builtin = builtinGithubUpdateToken();
+    return builtin.length > 0 ? builtin : null;
   }
 
   // ── состояние ───────────────────────────────────────────────────────────────────────────────
@@ -220,6 +227,9 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     if (!token) this.fail("Токен GitHub не задан: добавьте его в настройках обновлений");
     if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Сейчас идёт проверка, скачивание или установка обновления");
     const repo = this.readConfig().repo;
+    if (process.env.ORION_EDITION === "rust" && repo === APP_UPDATE_DEFAULT_REPO) {
+      this.fail("ORION Rust не устанавливает обновления обычного ORION. Канал классической беты для этой сборки выключен.");
+    }
     this.status = { ...this.status, state: "checking", error: null };
     let releases: GithubRelease[];
     try {

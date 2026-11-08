@@ -77,6 +77,13 @@ describe("movePanelToSidebar", () => {
     expect(panelsForSidebar(back, PRIMARY_SIDEBAR_ID, panelIds)).toEqual(["notes", "tasks", "finance"]);
   });
 
+  it("appends a drop that has no neighbour after the shortcuts already on that bar", () => {
+    let state = createNavSidebar(initialNavSidebars());
+    state = movePanelToSidebar(state, "tasks", "side-2", { folderId: null, catalog: ["tasks"] });
+    state = movePanelToSidebar(state, "notes", "side-2", { folderId: null, catalog: ["tasks", "notes"] });
+    expect(panelsForSidebar(state, "side-2", ["finance", "tasks", "notes"])).toEqual(["tasks", "notes"]);
+  });
+
   it("leaves state unchanged for an unknown bar", () => {
     const state = initialNavSidebars();
     expect(movePanelToSidebar(state, "tasks", "missing")).toBe(state);

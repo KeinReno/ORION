@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
 import { useMotionLevel, useMotionSpring } from "./motion-level";
-import { beginNavDrag, cancelNavDrag, endNavDrag, navDragCancelled, subscribeNavDrag } from "./nav-drag";
+import { beginNavDrag, cancelNavDrag, currentNavDragId, endNavDrag, markNavDragAccepted, navDragAccepted, navDragCancelled, resetNavDragOutcome, subscribeNavDrag } from "./nav-drag";
 import { DropdownMenu, Popover, useContextMenuApi, type MenuItem } from "./overlays";
 
 export interface SidebarLinkItem {
@@ -49,6 +49,8 @@ export interface SidebarLinkItem {
    * pages (`href`-only items have nothing dockview could place).
    */
   onDragStart?: (event: React.DragEvent<HTMLElement>) => void;
+  /** Fires after a drag that started on this link, including a drop the page did not accept. */
+  onDragEnd?: (event: React.DragEvent<HTMLElement>) => void;
   /**
    * Non-mouse alternative to drag for the same destinations drag reaches
    * (split next to the current tab, open in a new window) — U06's done
@@ -148,9 +150,16 @@ export interface SidebarProps {
   navId?: string;
   /** Right-click on the empty part of this bar. */
   surfaceMenuItems?: (MenuItem | "separator")[];
+  /** Fill the window instead of the fixed rail width. Used by a bar in its own window. */
+  fill?: boolean;
 }
 
 const DRAG_TYPE = "application/x-orion-sidebar-link";
+
+type NavDropAttrs = React.HTMLAttributes<HTMLElement> & {
+  "data-orion-nav-before"?: string;
+  "data-orion-nav-folder"?: string;
+};
 
 function DefaultLink({
   href,
@@ -194,7 +203,8 @@ export function Sidebar({
   railLabel,
   defaultPinned,
   navId = "sidebar",
-  surfaceMenuItems
+  surfaceMenuItems,
+  fill = false
 }: SidebarProps): React.ReactElement {
   const [pinned, setPinned] = useState(defaultPinned ?? false);
   const showContextMenu = useContextMenuApi();
@@ -287,25 +297,29 @@ export function Sidebar({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  function dropProps(key: string, folderId: string | null, beforeId?: string, onDropped?: (id: string) => void): React.HTMLAttributes<HTMLElement> {
+  function dropProps(key: string, folderId: string | null, beforeId?: string, onDropped?: (id: string) => void): NavDropAttrs {
     if (!onMoveLink) return {};
     return {
+      ...(beforeId ? { "data-orion-nav-before": beforeId } : {}),
+      ...(folderId ? { "data-orion-nav-folder": folderId } : {}),
       onDragOver: (event) => {
-        if (!dragId || navDragCancelled()) return;
+        const active = currentNavDragId();
+        if (!active && !Array.prototype.includes.call(event.dataTransfer.types, DRAG_TYPE)) return;
+        if (navDragCancelled()) return;
         event.preventDefault();
         event.stopPropagation();
-        event.dataTransfer.dropEffect = "move";
         if (dropKey !== key) setDropKey(key);
       },
       onDragLeave: (event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropKey((cur) => (cur === key ? null : cur));
       },
       onDrop: (event) => {
-        if (!dragId || navDragCancelled()) return;
+        const id = currentNavDragId();
+        if (!id) return;
         event.preventDefault();
         event.stopPropagation();
-        const id = dragId;
-        setDragId(null);
+        markNavDragAccepted();
+        endNavDrag();
         setDropKey(null);
         if (onDropped) onDropped(id);
         else onMoveLink(id, folderId, beforeId);
@@ -320,16 +334,19 @@ export function Sidebar({
   // over the same small row.
   const [dropMode, setDropMode] = useState<"order" | "group" | null>(null);
   const ORDER_ZONE = 0.3;
-  function linkDropProps(link: SidebarLinkItem): React.HTMLAttributes<HTMLElement> {
+  function linkDropProps(link: SidebarLinkItem): NavDropAttrs {
     if (!onMoveLink || !link.id) return {};
     const key = `link:${link.id}`;
     const targetId = link.id;
     return {
+      "data-orion-nav-before": targetId,
       onDragOver: (event) => {
-        if (!dragId || navDragCancelled() || dragId === targetId) return;
+        const active = currentNavDragId();
+        const typed = Array.prototype.includes.call(event.dataTransfer.types, DRAG_TYPE);
+        if ((!active && !typed) || active === targetId) return;
+        if (navDragCancelled()) return;
         event.preventDefault();
         event.stopPropagation();
-        event.dataTransfer.dropEffect = "move";
         const rect = event.currentTarget.getBoundingClientRect();
         const span = horizontal ? rect.width : rect.height;
         const offset = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
@@ -344,12 +361,13 @@ export function Sidebar({
         }
       },
       onDrop: (event) => {
-        if (!dragId || navDragCancelled() || dragId === targetId) return;
+        const id = currentNavDragId();
+        if (!id || id === targetId) return;
         event.preventDefault();
         event.stopPropagation();
-        const id = dragId;
         const mode = dropMode;
-        setDragId(null);
+        markNavDragAccepted();
+        endNavDrag();
         setDropKey(null);
         setDropMode(null);
         if (mode === "group" && onGroupLinks) onGroupLinks(id, targetId);
@@ -440,19 +458,26 @@ export function Sidebar({
         aria-label={ariaLabel}
         draggable={Boolean(link.onDragStart) || Boolean(onMoveLink && link.id)}
         onDragStart={(event) => {
-          if (onMoveLink && link.id) {
-            event.dataTransfer.clearData();
-            event.dataTransfer.setData(DRAG_TYPE, link.id);
-            event.dataTransfer.effectAllowed = "move";
-            beginNavDrag(link.id);
-          } else {
-            link.onDragStart?.(event);
+          const windowOnly = event.ctrlKey || event.metaKey;
+          event.currentTarget.dataset.navDragMode = windowOnly ? "window" : "dock";
+          if (windowOnly && link.id) {
+            event.dataTransfer.setData("text/plain", link.id);
+            event.dataTransfer.effectAllowed = "none";
+            return;
           }
+          if (onMoveLink && link.id) beginNavDrag(link.id);
+          try { link.onDragStart?.(event); } catch { /* the dock payload is optional for a move between bars */ }
+          try { if (onMoveLink && link.id) event.dataTransfer.setData(DRAG_TYPE, link.id); } catch { /* the in-memory id still moves the shortcut */ }
+          try { event.dataTransfer.effectAllowed = onMoveLink && link.id ? "copyMove" : "copy"; } catch { /* a browser that already locked the effect keeps the first one */ }
         }}
-        onDragEnd={() => {
+        onDragEnd={(event) => {
+          const cancelled = navDragCancelled();
+          const accepted = navDragAccepted();
           endNavDrag();
+          resetNavDragOutcome();
           setDropKey(null);
           setDropMode(null);
+          if (!cancelled && !accepted) link.onDragEnd?.(event);
         }}
         onContextMenu={(event) => {
           if (link.menuItems && link.menuItems.length > 0) showContextMenu(event, link.menuItems);
@@ -514,7 +539,7 @@ export function Sidebar({
         key={link.label}
         {...(folder ? dropProps(key, folder.id, link.id) : linkDropProps(link))}
         className={clsx(
-          "rounded-lg",
+          "rounded-lg data-[orion-nav-hot]:bg-accent/15 data-[orion-nav-hot]:ring-1 data-[orion-nav-hot]:ring-accent",
           isDropTarget && folder && "bg-accent/10 ring-1 ring-accent/60",
           isDropTarget && !folder && dropMode === "group" && "bg-accent/10 ring-1 ring-accent/60",
           isDropTarget && !folder && dropMode === "order" && "border-t-2 border-accent"
@@ -684,9 +709,10 @@ export function Sidebar({
   return (
     <motion.aside
       initial={false}
-      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : horizontal ? { width: "100%" } : { width: open ? 240 : 60 }}
+      animate={isDrawer ? { x: drawerOpen ? 0 : "-100%" } : fill || horizontal ? { width: "100%" } : { width: open ? 240 : 60 }}
       transition={{ duration, ease: "easeInOut" }}
       aria-hidden={isDrawer && !drawerOpen}
+      data-orion-sidebar={navId}
       className={clsx(
         "z-40 flex shrink-0 justify-between overflow-hidden border-border",
         horizontal ? "h-14 flex-row items-center px-3" : "h-dvh flex-col px-2.5 py-4",
@@ -695,7 +721,7 @@ export function Sidebar({
         // The drawer floats over page content (phone overlay) — glass reads
         // there; the desktop rail sits flush in the flex layout with nothing
         // ever behind it, so it stays flat like the rest of the shell.
-        isDrawer ? "fixed inset-y-0 left-0 w-60 bg-background/85 shadow-2xl shadow-black/40 backdrop-blur-xl" : "bg-background"
+        isDrawer ? "fixed inset-y-0 left-0 w-60 bg-background/85 shadow-2xl shadow-black/40 backdrop-blur-xl" : fill ? "h-full w-full bg-background" : "bg-background"
       )}
       style={isDrawer ? { width: 240, pointerEvents: drawerOpen ? "auto" : "none" } : undefined}
     >
@@ -704,7 +730,7 @@ export function Sidebar({
         ref={scrollRef}
         className={clsx(
           "flex gap-3",
-          horizontal ? "min-w-0 flex-1 flex-row items-center" : "min-h-0 flex-col overflow-y-auto overflow-x-hidden",
+          horizontal ? "min-w-0 flex-1 flex-row items-center" : "min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden",
           !horizontal && (open ? "orion-scroll" : "orion-scroll-hidden")
         )}
         style={!horizontal && fadeMask ? { maskImage: fadeMask, WebkitMaskImage: fadeMask } : undefined}
@@ -712,11 +738,16 @@ export function Sidebar({
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
         <nav
           id={`${navId}-nav`}
+          data-orion-nav={navId}
           onContextMenu={(event) => {
             if (surfaceMenuItems && surfaceMenuItems.length > 0) showContextMenu(event, surfaceMenuItems);
           }}
           aria-label="Разделы"
-          className={clsx("flex gap-1", horizontal ? "min-w-0 flex-row items-center overflow-x-auto" : "flex-col")}
+          className={clsx(
+            "flex min-w-0 gap-1 data-[orion-nav-hot]:bg-accent/10",
+            horizontal ? "w-auto flex-row items-center overflow-x-auto" : "min-h-0 w-full flex-1 flex-col",
+            dropKey === "nav" && "rounded-lg bg-accent/10"
+          )}
           {...dropProps("nav", null)}
         >
           {railLabel && open && !isDrawer ? (

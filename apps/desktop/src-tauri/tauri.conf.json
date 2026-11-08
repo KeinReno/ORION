@@ -5,7 +5,7 @@
   "identifier": "com.orion.rust.desktop",
   "build": {
     "frontendDist": "../../web/.next-desktop",
-    "devUrl": "http://localhost:3010"
+    "devUrl": "http://localhost:3011"
   },
   "app": {
     "windows": [
