@@ -33,7 +33,7 @@ export function resolveAgentConnection(
     resolve(baseDir, "..", "..", "..", "..", "docs", "AGENT_MANUAL.md")
   ].filter((value): value is string => Boolean(value));
 
-  const port = env.PORT?.trim() || "4000";
+  const port = env.PORT?.trim() || "14000";
   return {
     bridgeEnabled: aiBridgeEnabled(),
     bridgeDisabledReason: aiBridgeDisabledReason(),

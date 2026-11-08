@@ -3,6 +3,7 @@
 import { usePreferences, useSession } from "@orion/core-react";
 import { ThemeProvider } from "@orion/ui";
 import { effectiveApplicationTheme } from "./effective-application-theme";
+import { usesPrecisionShell } from "./orion-edition";
 import { useActiveWorkspace } from "./use-active-workspace";
 import type { ReactNode } from "react";
 
@@ -15,7 +16,7 @@ export function ApplicationTheme({ children }: { children: ReactNode }): React.R
 function SignedInTheme({ children }: { children: ReactNode }): React.ReactElement {
   const { data } = usePreferences();
   const { workspace } = useActiveWorkspace();
-  const precision = data?.theme === "kaiden-precision";
+  const precision = usesPrecisionShell(data?.theme);
   return <ThemeProvider className="contents" flag={precision ? "kaiden-theme-v1" : undefined}
     definition={effectiveApplicationTheme(data, workspace)}>{children}</ThemeProvider>;
 }

@@ -5,6 +5,7 @@ import { Input, RubberSegment, SegmentedControl, Slider, Switch } from "@orion/u
 import { useReducedMotion } from "framer-motion";
 import { ChoiceSelect } from "../../components/choice-select";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../../lib/accent-options";
+import { PRECISION_ONLY, usesPrecisionShell } from "../../lib/orion-edition";
 import { BackgroundEffectSettingsForm } from "./background-effect-form";
 import { SettingGroup, SettingRow } from "./setting-row";
 
@@ -75,7 +76,7 @@ export function NotificationSettings({ form, setForm }: FormProps): React.ReactE
  * only — Precision draws its own calm chrome), motion, and the small display options.
  */
 export function AppearanceSettings({ form, setForm }: FormProps): React.ReactElement {
-  const precision = form.theme === "kaiden-precision";
+  const precision = usesPrecisionShell(form.theme);
   const systemReducesMotion = useReducedMotion();
   return (
     <div className="space-y-5">
@@ -89,15 +90,19 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
               : "Прежний интерфейс: свой акцент, фон и стекло. При переходе на Precision и обратно они сохраняются."
           }
         >
-          <ChoiceSelect
-            label="Оформление Orion"
-            value={form.theme}
-            options={[
-              { value: precision ? "dark" : form.theme, label: "Прежний интерфейс" },
-              { value: "kaiden-precision", label: "KAIDEN Precision" }
-            ]}
-            onChange={(theme) => setForm({ ...form, theme })}
-          />
+          {PRECISION_ONLY ? (
+            <p className="text-sm text-subtle-foreground">KAIDEN Precision — единственная оболочка этой сборки.</p>
+          ) : (
+            <ChoiceSelect
+              label="Оформление Orion"
+              value={form.theme}
+              options={[
+                { value: precision ? "dark" : form.theme, label: "Прежний интерфейс" },
+                { value: "kaiden-precision", label: "KAIDEN Precision" }
+              ]}
+              onChange={(theme) => setForm({ ...form, theme })}
+            />
+          )}
         </SettingRow>
         {!precision ? (
           <SettingRow anchor="accent" label="Акцент" description="Цвет выделения, ссылок и активных элементов." stack>

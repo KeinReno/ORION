@@ -19,17 +19,65 @@ const runtime = ordinaryWindowsPath(path.resolve(__dirname, '..', 'runtime'));
 let appRoot = runtime;
 let api = path.join(appRoot, 'api');
 let selection = null;
+// ORION Rust: порты и каталог задаёт orion-rust/edition.json. Каталог установленной beta
+// (`%LOCALAPPDATA%\ORION`) и её порты этот лаунчер не занимает.
+const edition = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'orion-rust', 'edition.json'), 'utf8'));
+const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+const productionDirs = [
+  path.join(localAppData, 'ORION'),
+  path.join(process.env.ProgramData || 'C:/ProgramData', 'ORION'),
+];
 // Кириллица в пути ломает initdb (см. ascii-path.cjs): журналы остаются там, где их ждёт оболочка, а база и бинарники
 // PostgreSQL при не-ASCII пути переезжают в `%ProgramData%\ORION`.
-const requestedData = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ORION'));
+const requestedData = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(localAppData, edition.dataDirName));
 const data = effectiveDataDir(requestedData);
 const appVersion = (() => { try { return require(path.join(api, 'package.json')).version; } catch { return 'dev'; } })();
 const pgPlan = effectivePgDir(path.join(runtime, 'postgres'), appVersion);
 const pgBin = path.join(pgPlan.dir, 'bin');
 const cluster = path.join(data, 'postgres');
 const configPath = path.join(data, 'local-runtime.json');
-const pgPort = Number(process.env.ORION_DESKTOP_PG_PORT || 55432);
-const apiPort = Number(process.env.ORION_DESKTOP_API_PORT || 4000);
+const pgPort = Number(process.env.ORION_DESKTOP_PG_PORT || edition.pgPort);
+const apiPort = Number(process.env.ORION_DESKTOP_API_PORT || edition.apiPort);
+const runtimePort = Number(process.env.ORION_RUST_RUNTIME_PORT || edition.runtimePort);
+
+function assertEditionIsolation() {
+  for (const candidate of [requestedData, data]) {
+    const resolved = path.resolve(candidate);
+    for (const production of productionDirs) {
+      const root = path.resolve(production);
+      const insideProduction = resolved.toLowerCase() === root.toLowerCase()
+        || resolved.toLowerCase().startsWith(root.toLowerCase() + path.sep);
+      if (insideProduction) {
+        throw new Error(`ORION Rust не использует каталог обычного ORION (${root}).`);
+      }
+    }
+  }
+  if (apiPort === edition.forbiddenApiPort || pgPort === edition.forbiddenPgPort) {
+    throw new Error(`ORION Rust не занимает порты обычного ORION (API ${edition.forbiddenApiPort}, PostgreSQL ${edition.forbiddenPgPort}).`);
+  }
+}
+
+function startRustRuntime() {
+  const bin = process.env.ORION_RUST_RUNTIME_BIN
+    || path.join(__dirname, '..', '..', '..', 'orion-rust', 'target', 'debug', 'orion-runtime.exe');
+  if (!fs.existsSync(bin)) {
+    log(`Rust runtime не собран (${bin}). Диагностика на 127.0.0.1:${runtimePort} появится после cargo build в orion-rust.`);
+    return;
+  }
+  const child = spawn(bin, ['serve'], {
+    env: {
+      ...process.env,
+      ORION_DESKTOP_DATA_DIR: requestedData,
+      ORION_DESKTOP_API_PORT: String(apiPort),
+      ORION_DESKTOP_PG_PORT: String(pgPort),
+      ORION_RUST_RUNTIME_PORT: String(runtimePort),
+    },
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+  child.on('error', error => log(`Rust runtime не запустился: ${error.message}`));
+  log(`Rust runtime слушает 127.0.0.1:${runtimePort}`);
+}
 
 function startupPhase(phase) {
   payload.atomic(path.join(requestedData, 'startup-state.json'), { phase });
@@ -142,6 +190,8 @@ function selectApplication() {
 }
 
 async function main() {
+  assertEditionIsolation();
+  startRustRuntime();
   if (data !== requestedData) {
     log(`Путь данных содержит не-ASCII символы (${requestedData}); данные и PostgreSQL хранятся в ${data}`);
     ensurePrivateDir(data);

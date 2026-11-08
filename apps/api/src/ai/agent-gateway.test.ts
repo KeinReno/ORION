@@ -211,7 +211,7 @@ describe("loadSettings", () => {
   it("токен из окружения; флаги побеждают; адрес без хвостового слэша", () => {
     expect(loadSettings({ ORION_AGENT_TOKEN: ` ${TOKEN} `, ORION_API_URL: "http://h:1/" }, [])).toEqual({ apiUrl: "http://h:1", token: TOKEN });
     expect(loadSettings({ ORION_API_URL: "http://env" }, ["--api-url=http://flag/"]).apiUrl).toBe("http://flag");
-    expect(loadSettings({}, []).apiUrl).toBe("http://127.0.0.1:4000");
+    expect(loadSettings({}, []).apiUrl).toBe("http://127.0.0.1:14000");
   });
 });
 

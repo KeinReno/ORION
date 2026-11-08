@@ -1,6 +1,5 @@
 import { applyNodeMode, readNodeMark } from "./node-mode";
-
-const LOCAL_API_URL = "http://localhost:4000";
+import { LOCAL_API_URL } from "./orion-edition";
 
 interface ApiBaseContext {
   /** `process.env.NEXT_PUBLIC_API_URL` — inlined by Next at build time. */

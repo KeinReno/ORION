@@ -9,7 +9,7 @@
  *
  * Settings (environment, or flags that win over it):
  *   ORION_AGENT_TOKEN       orion_agt_…           (or ORION_AGENT_TOKEN_FILE / --token-file <path>: first line is the token)
- *   ORION_API_URL           http://127.0.0.1:4000 (or --api-url <url>)
+ *   ORION_API_URL           http://127.0.0.1:14000 (or --api-url <url>; PORT if the URL is unset)
  *
  * Wire format: newline-delimited JSON-RPC 2.0 on stdin/stdout (the MCP stdio transport). Logs go to stderr only —
  * stdout is the protocol channel — and NEVER contain the token.
@@ -19,7 +19,7 @@ import { createInterface } from "node:readline";
 import { AGENT_API_VERSION, AGENT_MODE_HINT, AGENT_TOOLS, agentModeSchema, agentToolByName, agentToolDescription, buildAgentToolRequest, type AgentMode } from "@orion/shared-types";
 
 const SUPPORTED_PROTOCOLS = ["2024-11-05", "2025-03-26", "2025-06-18"];
-const DEFAULT_API_URL = "http://127.0.0.1:4000";
+const DEFAULT_API_URL = "http://127.0.0.1:14000";
 const INSTRUCTIONS =
   "ORION: личное пространство человека. Начните с orion_get_context (пространство, ваши разрешения, проекты). " +
   "Сохранять информацию — orion_capture, искать — orion_search, связывать — orion_link_objects; покажите человеку url из ответа. " +
@@ -74,7 +74,7 @@ function flag(argv: readonly string[], name: string): string | undefined {
  * readable by group/others is refused — a leaked token is a leaked workspace.
  */
 export function loadSettings(env: NodeJS.ProcessEnv, argv: readonly string[], warn: (message: string) => void = () => undefined): McpSettings {
-  const apiUrl = (flag(argv, "api-url") ?? env.ORION_API_URL ?? DEFAULT_API_URL).trim().replace(/\/+$/, "");
+  const apiUrl = (flag(argv, "api-url") ?? env.ORION_API_URL ?? (env.PORT?.trim() ? `http://127.0.0.1:${env.PORT.trim()}` : DEFAULT_API_URL)).trim().replace(/\/+$/, "");
   const file = flag(argv, "token-file") ?? env.ORION_AGENT_TOKEN_FILE;
   let token = "";
   if (file) {

@@ -4,7 +4,7 @@
 // На Windows с кириллическим именем пользователя (`C:\Users\Варвара\…`) `initdb` падает: путь передаётся в кодировке
 // ANSI (cp1251), а кластер создаётся в UTF-8, и начальная загрузка завершается `invalid byte sequence for encoding "UTF8"`.
 // Падает и каталог данных, и каталог самих бинарников PostgreSQL (проверено воспроизведением: достаточно любого из двух).
-// Поэтому оба должны лежать по ASCII-пути; если обычный путь не ASCII, берём запасной в `%ProgramData%\ORION`.
+// Поэтому оба должны лежать по ASCII-пути; если обычный путь не ASCII, берём запасной в `%ProgramData%\ORION-Rust`.
 const { execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
@@ -13,7 +13,7 @@ const path = require('node:path');
 const isAsciiPath = value => /^[\x20-\x7E]*$/.test(String(value));
 
 function programDataRoot(env = process.env) {
-  return path.join(env.ProgramData || 'C:/ProgramData', 'ORION');
+  return path.join(env.ProgramData || 'C:/ProgramData', 'ORION-Rust');
 }
 
 /** Короткий ASCII-идентификатор пользователя (хеш имени), чтобы у каждого пользователя Windows был свой каталог. */

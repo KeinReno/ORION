@@ -44,7 +44,7 @@ try {
     process.on('SIGTERM', onStop);
     try {
       const result = await superviseHabitat({
-        config, token, apiUrl: args['api-url'] ?? 'http://127.0.0.1:4000',
+        config, token, apiUrl: args['api-url'] ?? 'http://127.0.0.1:14000',
         acknowledged: args.monitoringApproved, signal: abortController.signal
       });
       console.log(JSON.stringify({ sessionId: result.sessionId, status: result.status, polls: result.polls }, null, 2));
@@ -59,7 +59,7 @@ try {
     if (!args['token-file'] || !args['execution-id'] || !args.profile || !args.workdir || !args['task-file']) throw Error('Missing --token-file, --execution-id, --profile, --workdir or --task-file');
     const token = await readAgentToken(args['token-file']);
     const result = await runAgentHubExecution({
-      config, token, executionId: args['execution-id'], apiUrl: args['api-url'] ?? 'http://127.0.0.1:4000',
+      config, token, executionId: args['execution-id'], apiUrl: args['api-url'] ?? 'http://127.0.0.1:14000',
       profileId: args.profile, workdir: args.workdir, taskFile: args['task-file'], acknowledged: args.acknowledged
     });
     console.log(JSON.stringify({ execution: result.execution, receipt: result.receipt, receiptFile: result.receiptFile }, null, 2));

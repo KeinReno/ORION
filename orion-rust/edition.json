@@ -1,0 +1,12 @@
+{
+  "edition": "orion-rust",
+  "productName": "ORION Rust",
+  "identifier": "com.orion.rust.desktop",
+  "dataDirName": "ORION-Rust",
+  "apiPort": 14000,
+  "pgPort": 55442,
+  "runtimePort": 14099,
+  "forbiddenApiPort": 4000,
+  "forbiddenPgPort": 55432,
+  "scheme": "orion-rust"
+}

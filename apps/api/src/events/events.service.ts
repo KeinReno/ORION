@@ -372,7 +372,7 @@ function newFeedToken(): string {
 /** `webcal://…` so a calendar app subscribes read-only instead of downloading once. */
 function feedUrl(token: string): string {
   // Server mode refuses to boot without PUBLIC_API_URL (server-config.ts), so this fallback is local-only.
-  const base = process.env.PUBLIC_API_URL || "http://localhost:4000";
+  const base = process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || "14000"}`;
   return `${base.replace(/^https?:\/\//, "webcal://").replace(/\/$/, "")}/calendar/${token}.ics`;
 }
 

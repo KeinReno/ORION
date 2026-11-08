@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ORION",
+  "productName": "ORION Rust",
   "version": "0.1.43",
-  "identifier": "com.orion.desktop",
+  "identifier": "com.orion.rust.desktop",
   "build": {
     "frontendDist": "../../web/.next-desktop",
     "devUrl": "http://localhost:3010"
@@ -12,7 +12,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "ORION",
+        "title": "ORION Rust",
         "width": 1280,
         "height": 800,
         "minWidth": 960,
@@ -25,7 +25,7 @@
     }
   },
   "plugins": {
-    "deep-link": { "desktop": { "schemes": ["orion"] } }
+    "deep-link": { "desktop": { "schemes": ["orion-rust"] } }
   },
   "bundle": {
     "active": true,

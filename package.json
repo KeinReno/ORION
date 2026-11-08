@@ -9,6 +9,7 @@
     "dev:web": "corepack pnpm --filter @orion/web dev",
     "dev:desktop": "corepack pnpm --filter @orion/desktop tauri dev",
     "dev:app": "node scripts/launch-desktop.mjs",
+    "dev:rust": "node scripts/orion-rust-dev.mjs up",
     "build": "corepack pnpm -r build",
     "build:desktop-export": "corepack pnpm --filter @orion/web build:desktop",
     "build:desktop-installer": "node scripts/build-desktop-installer.mjs",

@@ -24,7 +24,7 @@ if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Win
 if (!existsSync(pgPackage)) throw new Error('Embedded PostgreSQL Windows package is missing. Run pnpm install first.');
 if (!existsSync(process.execPath)) throw new Error('Node runtime is missing');
 runPnpm(['--filter', '@orion/api', 'build']);
-runPnpm(['build:desktop-export'], { ...process.env, NEXT_PUBLIC_API_URL: 'http://localhost:4000', NEXT_PUBLIC_ORION_BUILD_TAG: process.env.ORION_BUILD_TAG || '' });
+runPnpm(['build:desktop-export'], { ...process.env, NEXT_PUBLIC_API_URL: 'http://localhost:14000', NEXT_PUBLIC_ORION_BUILD_TAG: process.env.ORION_BUILD_TAG || '' });
 const expected = resolve(root, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime');
 if (resolve(stage) !== expected) throw new Error('Refusing to remove unexpected stage path');
 rmSync(stage, { recursive: true, force: true });

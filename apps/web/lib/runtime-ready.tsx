@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { LOCAL_API_URL } from "./orion-edition";
 
 /** Desktop payload trial: acknowledge root hydration. The native shell owns rollback/reload. */
 export function RuntimeReady(): null {
@@ -14,7 +15,7 @@ export function RuntimeReady(): null {
       if (checking || acknowledged) return;
       checking = true;
       try {
-        const response = await fetch("http://localhost:4000/updates/ui-ready", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag }), signal: AbortSignal.timeout(3000) });
+        const response = await fetch(`${LOCAL_API_URL}/updates/ui-ready`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag }), signal: AbortSignal.timeout(3000) });
         if (response.ok && !stopped) acknowledged = true;
       } catch { /* API may still be starting or rolling back. */ }
       finally { checking = false; }

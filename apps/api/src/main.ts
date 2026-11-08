@@ -36,7 +36,9 @@ async function bootstrap(): Promise<void> {
     }
   }
   configureApp(app);
-  const port = Number(process.env.PORT ?? 4000);
+  // This worktree is the Rust experiment. Unset PORT must not take the installed
+  // beta's 4000. An explicit PORT still wins.
+  const port = Number(process.env.PORT ?? 14000);
   const host = resolveBindHost(mode);
   await app.listen(port, host);
   console.log(`[orion-api] mode=${mode} listening on http://${host}:${port}`);

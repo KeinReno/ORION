@@ -21,6 +21,7 @@ import { useState, type FormEvent } from "react";
 import { ChoiceSelect } from "../../components/choice-select";
 import { AGENT_CLIENTS, AGENT_CLIENT_LABEL, buildConnectSnippet, checkAgentConnection, type AgentClient, type ConnectionCheck } from "../../lib/agent-connect";
 import { describeError } from "../../lib/error-message";
+import { LOCAL_API_LOOPBACK } from "../../lib/orion-edition";
 import { ModulePermissionsField } from "./agent-permissions";
 import { relativeTime } from "../../lib/format";
 
@@ -92,7 +93,7 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
   async function verify(): Promise<void> {
     if (!issued || !info) return;
     setChecking(true);
-    setCheck(await checkAgentConnection(info.apiUrl ?? "http://127.0.0.1:4000", issued.token.secret));
+    setCheck(await checkAgentConnection(info.apiUrl ?? LOCAL_API_LOOPBACK, issued.token.secret));
     setChecking(false);
   }
 

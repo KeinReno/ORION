@@ -1,4 +1,5 @@
 import type { AgentConnectionInfo } from "@orion/shared-types";
+import { LOCAL_API_LOOPBACK } from "./orion-edition";
 
 export const AGENT_CLIENTS = ["claude-desktop", "claude-code", "cursor", "codex", "other"] as const;
 export type AgentClient = (typeof AGENT_CLIENTS)[number];
@@ -18,7 +19,7 @@ export interface ConnectSnippet {
   text: string;
 }
 
-const FALLBACK_API = "http://127.0.0.1:4000";
+const FALLBACK_API = LOCAL_API_LOOPBACK;
 
 function quoteArg(value: string): string {
   return /^[\w./:\\@%+=-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`;

@@ -1,4 +1,5 @@
 import { ApiError } from "@orion/core";
+import { LOCAL_API_URL } from "./orion-edition";
 
 /**
  * Turns a thrown error from a core-react mutation into a message a user can
@@ -27,7 +28,7 @@ export function describeAuthError(error: unknown, kind?: "pin" | "password"): st
     return error.message || "Не удалось выполнить запрос.";
   }
   if (error instanceof TypeError) {
-    return "Не удалось связаться с сервером. Проверьте, что API запущен на http://localhost:4000.";
+    return `Не удалось связаться с сервером. Проверьте, что API запущен на ${LOCAL_API_URL}.`;
   }
   return error instanceof Error ? error.message : "Неизвестная ошибка.";
 }
@@ -49,7 +50,7 @@ export function describeError(error: unknown): string {
     return error.message || "Не удалось выполнить запрос.";
   }
   if (error instanceof TypeError) {
-    return "Не удалось связаться с сервером. Проверьте, что API запущен на http://localhost:4000.";
+    return `Не удалось связаться с сервером. Проверьте, что API запущен на ${LOCAL_API_URL}.`;
   }
   return error instanceof Error ? error.message : "Неизвестная ошибка.";
 }

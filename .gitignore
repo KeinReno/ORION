@@ -9,6 +9,7 @@ out
 *.tsbuildinfo
 .env
 .env.local
+apps/api/.env.rust
 # Local automation credentials and destinations.
 .autopilot.json
 target

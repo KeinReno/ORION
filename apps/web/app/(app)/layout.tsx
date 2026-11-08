@@ -41,6 +41,7 @@ import { CommandCenter, showCommandPalette } from "../../lib/command-center";
 import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspace-context";
 import { ProjectContextInspector } from "../../components/project-context-inspector";
 import { projectContextId } from "../../lib/shell-context";
+import { usesPrecisionShell } from "../../lib/orion-edition";
 import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
 import { ResourcesDock, ResourcesToggle } from "../../components/resources/resources-dock";
@@ -272,7 +273,7 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
   const [moduleSettingsFor, setModuleSettingsFor] = useState<string | null>(null);
   // Precision shows the agents' pill in its own header; the legacy shell has only this strip.
   const { data: preferences } = usePreferences();
-  const precision = preferences?.theme === "kaiden-precision";
+  const precision = usesPrecisionShell(preferences?.theme);
   if (compact) return null;
   const activeId = props.activePanel?.id;
   return (
@@ -347,7 +348,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // viewer is a plain member — see `effectiveDisabledModules`.
   const disabledModules = workspace ? effectiveDisabledModules(workspace) : NO_DISABLED_MODULES;
   const { data: preferences } = usePreferences();
-  const precision = preferences?.theme === "kaiden-precision";
+  const precision = usesPrecisionShell(preferences?.theme);
   const shortcutOverrides = useMemo(() => (preferences?.shortcutOverrides ?? {}) as Record<string, string>, [preferences?.shortcutOverrides]);
   const [contextHidden, setContextHidden] = useState(false);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "prepare-assets": "node scripts/copy-pdf-worker.mjs && node scripts/copy-modern-xlsx-wasm.mjs",
-    "dev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-modern-xlsx-wasm.mjs && next dev --port 3010",
+    "dev": "node scripts/copy-pdf-worker.mjs && node scripts/copy-modern-xlsx-wasm.mjs && next dev --port 3011",
     "build": "node scripts/copy-pdf-worker.mjs && node scripts/copy-modern-xlsx-wasm.mjs && next build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:desktop": "node scripts/copy-pdf-worker.mjs && node scripts/copy-modern-xlsx-wasm.mjs && cross-env DESKTOP_EXPORT=1 next build",

@@ -14,12 +14,20 @@ mod payload_ui_smoke;
 mod startup_smoke;
 
 #[cfg(all(windows, not(debug_assertions)))]
+fn edition_api_addr() -> std::net::SocketAddr {
+    let edition: serde_json::Value = serde_json::from_str(include_str!("../../../../orion-rust/edition.json"))
+        .expect("orion-rust/edition.json");
+    let port = edition.get("apiPort").and_then(|value| value.as_u64()).expect("apiPort");
+    format!("127.0.0.1:{port}").parse().expect("api address")
+}
+
+#[cfg(all(windows, not(debug_assertions)))]
 fn ready() -> bool {
     use std::io::{Read, Write};
     use std::net::{SocketAddr, TcpStream};
     use std::time::Duration;
 
-    let addr: SocketAddr = "127.0.0.1:4000".parse().unwrap();
+    let addr: SocketAddr = edition_api_addr();
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
         return false;
     };
@@ -181,7 +189,7 @@ fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
 /// access-checked API. Anything that is not exactly `orion://open?…` is ignored.
 fn open_orion_link(app: &tauri::AppHandle, url: &str) {
     use tauri::Manager;
-    let Some(query) = url.strip_prefix("orion://open?") else {
+    let Some(query) = url.strip_prefix("orion-rust://open?") else {
         return;
     };
     if !startup::ready(app) {

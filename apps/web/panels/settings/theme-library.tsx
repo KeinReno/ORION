@@ -6,6 +6,7 @@ import { Badge, Button, ConfirmDialog, SegmentedControl, type ThemeDocument } fr
 import { useId, useState } from "react";
 import { ChoiceSelect } from "../../components/choice-select";
 import { resolveApplicationTheme } from "../../lib/effective-application-theme";
+import { usesPrecisionShell } from "../../lib/orion-edition";
 import { describeError } from "../../lib/error-message";
 import { sameTheme, themeCopy, themeLibraryItems, type ThemeLibraryItem } from "../../lib/theme-library";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
@@ -40,7 +41,7 @@ export function ThemeSettings(): React.ReactElement {
   const data = preferences.data;
   const items = themeLibraryItems(data);
   const ownIds = items.filter(item => item.kind === "own").map(item => item.theme.id);
-  const precision = data?.theme === "kaiden-precision";
+  const precision = usesPrecisionShell(data?.theme);
   const chosenId = data?.activeThemeId ?? DEFAULT_THEME_ID;
   const resolved = resolveApplicationTheme(data, workspace);
   const busy = updatePreferences.isPending || saveTheme.isPending || deleteTheme.isPending;

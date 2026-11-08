@@ -21,7 +21,7 @@ pub const FAKE_API: &str = r#"(() => {
   const original = window.fetch.bind(window);
   window.fetch = (url, init) => {
     const target = String(url instanceof Request ? url.url : url);
-    if (/^http:\/\/(localhost|127\.0\.0\.1):4000\//.test(target)) {
+    if (/^http:\/\/(localhost|127\.0\.0\.1):14000\//.test(target)) {
       const value = target.includes('/system/mode') ? {mode:'server', loginPolicy:'strict'} : target.includes('/updates/ui-ready') ? {accepted:false} : [];
       return Promise.resolve(new Response(JSON.stringify(value), {status:200, headers:{'Content-Type':'application/json'}}));
     }

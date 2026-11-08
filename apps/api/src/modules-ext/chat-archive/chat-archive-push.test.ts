@@ -39,7 +39,7 @@ describe("chat-archive-push", () => {
       "H/.cursor/mcp.json": JSON.stringify({ mcpServers: { orion: { env: { ORION_AGENT_TOKEN: "orion_agt_c", ORION_API_URL: "http://127.0.0.1:4000/" } } } })
     };
     const read = (path: string) => files[path.replaceAll("\\", "/")] ?? null;
-    expect(resolveConnection({ ORION_AGENT_TOKEN: " t " }, "H", read)).toEqual({ apiUrl: "http://127.0.0.1:4000", token: "t", from: "окружение" });
+    expect(resolveConnection({ ORION_AGENT_TOKEN: " t " }, "H", read)).toEqual({ apiUrl: "http://127.0.0.1:14000", token: "t", from: "окружение" });
     expect(resolveConnection({}, "H", read)).toMatchObject({ apiUrl: "http://127.0.0.1:4000", token: "orion_agt_c" });
     expect(resolveConnection({}, "H", () => "{не json")).toBeNull();
   });

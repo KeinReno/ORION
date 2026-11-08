@@ -3,6 +3,7 @@
 import { usePreferences, useSession } from "@orion/core-react";
 import { TargetCursor, WEBGL_BACKGROUND_STYLES, WebglBackground, themeDocumentVariables, type WebglBackgroundStyle } from "@orion/ui";
 import { effectiveApplicationTheme } from "./effective-application-theme";
+import { usesPrecisionShell } from "./orion-edition";
 import { useActiveWorkspace } from "./use-active-workspace";
 import { useEffect, useState } from "react";
 
@@ -64,7 +65,7 @@ function AppearanceSync(): React.ReactElement | null {
     root.dataset.surface = data.surfaceStyle;
     // CSS transitions/keyframes read this (globals.css); framer-motion reads MotionLevelProvider.
     root.dataset.motion = data.motionLevel;
-    root.dataset.orionDesign = data.theme === "kaiden-precision" ? "precision" : "legacy";
+    root.dataset.orionDesign = usesPrecisionShell(data.theme) ? "precision" : "legacy";
     const effectiveTheme = effectiveApplicationTheme(data, { theme: workspaceTheme });
     const precisionVariables = effectiveTheme ? themeDocumentVariables(effectiveTheme) : {};
     if (effectiveTheme) {
@@ -94,7 +95,7 @@ function AppearanceSync(): React.ReactElement | null {
 
   if (!data) return null;
 
-  const isWebglBackground = data.theme !== "kaiden-precision" && (WEBGL_BACKGROUND_STYLES as readonly string[]).includes(data.backgroundStyle);
+  const isWebglBackground = !usesPrecisionShell(data.theme) && (WEBGL_BACKGROUND_STYLES as readonly string[]).includes(data.backgroundStyle);
 
   return (
     <>

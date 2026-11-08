@@ -24,7 +24,12 @@ import { pathToFileURL } from "node:url";
 export const MAX_BATCH_LINES = 2000;
 /** Меньше серверного предела (8 МБ): запас на заголовки multipart. */
 export const MAX_BATCH_BYTES = 7 * 1024 * 1024;
-const DEFAULT_API_URL = "http://127.0.0.1:4000";
+const DEFAULT_API_URL = "http://127.0.0.1:14000";
+
+function fallbackApiUrl(env) {
+  const port = typeof env.PORT === "string" ? env.PORT.trim() : "";
+  return port ? `http://127.0.0.1:${port}` : DEFAULT_API_URL;
+}
 
 /** Полные строки файла: последний кусок без "\n" — недописанная строка, её не берём. */
 export function completeLines(text) {
@@ -75,14 +80,14 @@ export function identify(file, lines) {
 /** Настройки подключения из окружения или из MCP-конфига клиента. */
 export function resolveConnection(env = process.env, home = homedir(), read = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null)) {
   if (env.ORION_AGENT_TOKEN?.trim()) {
-    return { apiUrl: (env.ORION_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, ""), token: env.ORION_AGENT_TOKEN.trim(), from: "окружение" };
+    return { apiUrl: (env.ORION_API_URL ?? fallbackApiUrl(env)).replace(/\/+$/, ""), token: env.ORION_AGENT_TOKEN.trim(), from: "окружение" };
   }
   for (const path of [join(home, ".claude.json"), join(home, ".cursor", "mcp.json")]) {
     const text = read(path);
     if (!text) continue;
     try {
       const orion = JSON.parse(text)?.mcpServers?.orion?.env;
-      if (orion?.ORION_AGENT_TOKEN) return { apiUrl: (orion.ORION_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, ""), token: orion.ORION_AGENT_TOKEN, from: path };
+      if (orion?.ORION_AGENT_TOKEN) return { apiUrl: (orion.ORION_API_URL ?? fallbackApiUrl(orion)).replace(/\/+$/, ""), token: orion.ORION_AGENT_TOKEN, from: path };
     } catch {
       // Чужой файл не разобрался — пробуем следующий.
     }

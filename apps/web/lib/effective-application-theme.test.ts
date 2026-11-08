@@ -19,7 +19,8 @@ describe("saved application palette", () => {
     expect(effectiveApplicationTheme(prefs({ activeThemeId: "broken", themeLibrary: [{ document: { schemaVersion: 99, id: "broken" }, updatedAt: "2026-10-17T00:00:00.000Z" }] }))).toEqual(PRECISION_THEME);
     // The single legacy slot was migrated into the library; on its own it no longer decides the palette.
     expect(effectiveApplicationTheme(prefs({ customTheme: ARCTIC_THEME, customThemeEnabled: true }))).toEqual(PRECISION_THEME);
-    expect(effectiveApplicationTheme(prefs({ theme: "dark", activeThemeId: "arctic" }))).toBeUndefined();
+    expect(effectiveApplicationTheme(prefs({ theme: "dark", activeThemeId: "arctic" }))).toEqual(ARCTIC_THEME);
+    expect(effectiveApplicationTheme(prefs({ theme: "dark", activeThemeId: "arctic" }), undefined, { precisionOnly: false })).toBeUndefined();
   });
 
   it("orders workspace override → personal choice → default, and respects «always mine»", () => {
