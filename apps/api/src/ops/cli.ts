@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { createNodeBackup, restoreNodeBackup, verifyNodeBackup } from "./node-backup";
 import { inspectMigrationBackup } from "./migration-preflight";
 import { verifyNodeBackupIntegrity } from "./backup-integrity";
+import { stageSanitizedMigration } from "./migration-stage";
 
 /**
  * Operator commands for a whole-node backup (see node-backup.ts):
@@ -22,8 +23,8 @@ function storageDir(): string {
 
 async function main(): Promise<void> {
   const [command, dirArg, migrationDir] = process.argv.slice(2);
-  if (!command || !dirArg || !["backup", "verify", "restore", "inspect-migration", "verify-migration"].includes(command)) {
-    console.error("Использование: node dist/ops/cli.js <backup|verify|restore|inspect-migration|verify-migration> <каталог>");
+  if (!command || !dirArg || !["backup", "verify", "restore", "inspect-migration", "verify-migration", "stage-migration"].includes(command)) {
+    console.error("Использование: node dist/ops/cli.js <backup|verify|restore|inspect-migration|verify-migration|stage-migration> <каталог> [второй каталог]");
     process.exitCode = 2;
     return;
   }
@@ -38,6 +39,14 @@ async function main(): Promise<void> {
     const report = await verifyNodeBackupIntegrity(dir);
     console.log(JSON.stringify(report, null, 2));
     if (report.status !== "integrity-verified") process.exitCode = 1;
+    return;
+  }
+
+  if (command === "stage-migration") {
+    if (!migrationDir) throw new Error("Для stage-migration нужен отдельный каталог копии. Исходный каталог не изменяется.");
+    const report = await stageSanitizedMigration(dir, path.resolve(migrationDir));
+    console.log(JSON.stringify(report, null, 2));
+    console.log("Копия подготовлена. Это ещё не восстановление: базу поднимайте только в пустом изолированном профиле, без фоновых задач.");
     return;
   }
 

@@ -1,10 +1,9 @@
-//! Experimental process lifecycle primitive for the ORION-Rust runtime.
+//! Experimental process lifecycle for the ORION-Rust runtime.
 //!
-//! This module is only included by tests today; it is not part of production
-//! startup or the product launcher. Windows children are created suspended,
-//! assigned to a kill-on-close Job Object, and resumed only after every
-//! containment step has succeeded. It is a process-tree cleanup primitive, not
-//! a security sandbox.
+//! `orion-runtime supervise` uses this module to own the packaged launcher.
+//! Windows children are created suspended, assigned to a kill-on-close Job
+//! Object, and resumed only after every containment step has succeeded. It is
+//! a process-tree cleanup primitive, not a security sandbox.
 
 use std::ffi::OsString;
 use std::path::PathBuf;

@@ -7,6 +7,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $OutputEncoding
 $ids = @($ProcessIds | Sort-Object -Unique)
 $start = [System.Diagnostics.Stopwatch]::StartNew()
 $previous = @{}

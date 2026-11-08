@@ -26,8 +26,15 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        #[cfg(windows)]
+        "supervise" => {
+            if let Err(error) = orion_runtime::supervise_packaged_runtime(&profile) {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
         other => {
-            eprintln!("Команды: show, serve. Неизвестно: {other}");
+            eprintln!("Команды: show, serve, supervise. Неизвестно: {other}");
             std::process::exit(2);
         }
     }

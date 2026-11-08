@@ -24,18 +24,24 @@ export class BenchmarkError extends Error {
 }
 
 export function parseArgs(argv) {
-  const result = { classic: null, rust: null, tempRoot: tmpdir(), host: defaultHost };
+  const result = { classic: null, rust: null, tempRoot: tmpdir(), host: defaultHost, runs: 1, sampleSeconds: 0 };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
     if (key === '--help' || key === '-h') return { help: true };
-    if (!['--classic', '--rust', '--temp-root', '--host'].includes(key) || !argv[i + 1] || argv[i + 1].startsWith('--')) {
+    if (!['--classic', '--rust', '--temp-root', '--host', '--runs', '--sample-seconds'].includes(key) || !argv[i + 1] || argv[i + 1].startsWith('--')) {
       throw new BenchmarkError('invalid_arguments');
     }
     const value = argv[++i];
     if (key === '--classic') result.classic = value;
     else if (key === '--rust') result.rust = value;
     else if (key === '--temp-root') result.tempRoot = value;
-    else result.host = value;
+    else if (key === '--runs') {
+      result.runs = Number(value);
+      if (!Number.isInteger(result.runs) || result.runs < 1 || result.runs > 5) throw new BenchmarkError('invalid_arguments');
+    } else if (key === '--sample-seconds') {
+      result.sampleSeconds = Number(value);
+      if (!Number.isInteger(result.sampleSeconds) || result.sampleSeconds < 0 || result.sampleSeconds > 30) throw new BenchmarkError('invalid_arguments');
+    } else result.host = value;
   }
   if (!result.classic || !result.rust) throw new BenchmarkError('invalid_arguments');
   return result;
@@ -137,14 +143,21 @@ function powershellPath(env) {
   return join(env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 }
 
+function decodePowerShell(value) {
+  const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value ?? '');
+  if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) return buffer.toString('utf16le').replace(/^\uFEFF/, '');
+  if (buffer.includes(0)) return buffer.toString('utf16le').replace(/\u0000/g, '');
+  return buffer.toString('utf8');
+}
+
 function runPowerShell(script, env, timeout = 15000) {
   const powershell = powershellPath(env);
   const result = spawnSync(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-    windowsHide: true, encoding: 'utf8', timeout, env,
+    windowsHide: true, encoding: 'buffer', timeout, env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (result.error) throw new BenchmarkError('windows_verification_failed');
-  return { status: result.status ?? 1, stdout: (result.stdout || '').trim(), stderr: (result.stderr || '').trim() };
+  return { status: result.status ?? 1, stdout: decodePowerShell(result.stdout).trim(), stderr: decodePowerShell(result.stderr).trim() };
 }
 
 function quotePs(value) { return `'${String(value).replaceAll("'", "''")}'`; }
@@ -246,7 +259,7 @@ async function waitForHealth({ child, apiPort, env, startedAt, pgProof }) {
   throw new BenchmarkError('startup_timeout');
 }
 
-async function startRuntime(host, runtime, ports) {
+async function startRuntime(host, runtime, ports, sampleSeconds = 0) {
   const setup = runtimeHostRequest(runtime, ports);
   for (const port of ports) await bindProbe(port);
   const startedAt = performance.now();
@@ -262,6 +275,7 @@ async function startRuntime(host, runtime, ports) {
   child.stderr.on('data', () => {});
   child.stdin.end();
   let elapsedMs;
+  let resources;
   let failure;
   let safeToCleanup = true;
   try {
@@ -272,6 +286,7 @@ async function startRuntime(host, runtime, ports) {
         commandIncludes: join(setup.minimalEnv.ORION_DESKTOP_DATA_DIR, 'postgres'),
       },
     });
+    if (sampleSeconds > 0) resources = await sampleProcessTree(child.pid, sampleSeconds, setup.minimalEnv);
   } catch (error) {
     failure = error instanceof BenchmarkError ? error.code : 'runtime_failed';
   } finally {
@@ -297,7 +312,7 @@ async function startRuntime(host, runtime, ports) {
     throw error;
   }
   if (child.exitCode === null && child.signalCode === null) throw new BenchmarkError('process_cleanup_failed');
-  return elapsedMs;
+  return { elapsedMs, resources };
 }
 
 export function safeChildPath(root, candidate) {
@@ -424,7 +439,54 @@ async function prepareRun(runtimeInfo, label, tempRoot, host) {
   }
 }
 
-export async function runBenchmark({ classic, rust, tempRoot = tmpdir(), host = defaultHost }) {
+async function sampleProcessTree(rootPid, seconds, env) {
+  const listed = runPowerShell(
+    `$ErrorActionPreference='Stop'; $m=@{}; foreach($p in Get-CimInstance Win32_Process){$m[[int]$p.ProcessId]=[int]$p.ParentProcessId}; $out=New-Object System.Collections.Generic.List[int]; foreach($id in @($m.Keys)){ $n=$id; for($i=0;$i -lt 64 -and $n -gt 0;$i++){ if($n -eq ${rootPid}){ $out.Add($id); break }; if(-not $m.ContainsKey($n)){break}; $n=$m[$n] } }; $out.Add(${rootPid}); ($out | Sort-Object -Unique) -join ','`,
+    env,
+    60000,
+  );
+  if (listed.status !== 0) {
+    process.stderr.write(`resource_sample:${listed.status}:${listed.stderr.slice(0, 400)}:${listed.stdout.slice(0, 200)}\n`);
+    throw new BenchmarkError('resource_sample_failed');
+  }
+  const ids = listed.stdout.split(',').map(item => Number(item)).filter(item => Number.isInteger(item) && item > 0);
+  if (ids.length === 0) {
+    process.stderr.write(`resource_sample:no_pids:${listed.stdout.slice(0, 200)}\n`);
+    throw new BenchmarkError('resource_sample_failed');
+  }
+  const measured = runPowerShell(
+    `& ${quotePs(join(repoRoot, 'scripts', 'measure-runtime.ps1'))} -ProcessIds @(${ids.join(',')}) -Seconds ${seconds} -IntervalMs 1000`,
+    env,
+    (seconds + 30) * 1000,
+  );
+  if (measured.status !== 0) {
+    process.stderr.write(`resource_sample:${measured.status}:${measured.stderr.slice(0, 400)}\n`);
+    throw new BenchmarkError('resource_sample_failed');
+  }
+  let parsed;
+  try { parsed = JSON.parse(measured.stdout); }
+  catch {
+    process.stderr.write(`resource_sample:json:${measured.stdout.slice(0, 200)}\n`);
+    throw new BenchmarkError('resource_sample_failed');
+  }
+  const latest = new Map();
+  for (const sample of parsed.samples ?? []) {
+    if (sample.available) latest.set(sample.id, sample);
+  }
+  let privateBytes = 0;
+  let cpuPercentOneCore = 0;
+  for (const sample of latest.values()) {
+    privateBytes += Number(sample.privateBytes) || 0;
+    cpuPercentOneCore += Number(sample.cpuPercentOneCore) || 0;
+  }
+  return {
+    processCount: latest.size,
+    privateBytes,
+    cpuPercentOneCore: Number(cpuPercentOneCore.toFixed(2)),
+  };
+}
+
+export async function runBenchmark({ classic, rust, tempRoot = tmpdir(), host = defaultHost, runs = 1, sampleSeconds = 0 }) {
   if (process.platform !== 'win32') throw new BenchmarkError('windows_only');
   if (![classic, rust, tempRoot, host].every(isAbsolute)) throw new BenchmarkError('paths_must_be_absolute');
   const realTempRoot = await realpath(tempRoot).catch(() => { throw new BenchmarkError('temp_root_unavailable'); });
@@ -436,35 +498,42 @@ export async function runBenchmark({ classic, rust, tempRoot = tmpdir(), host = 
   await assertTempRootIsolated(realTempRoot, runtimes.map(runtime => runtime.root));
   const portSets = await allocatePorts(runtimes.map(item => item.edition));
   const results = [];
-  for (let index = 0; index < runtimes.length; index += 1) {
-    const label = index === 0 ? 'classic' : 'rust';
-    const run = await prepareRun(runtimes[index], label, realTempRoot, host);
-    let result;
-    let errorCode;
-    let safeToCleanup = true;
-    try { result = await startRuntime(host, run, portSets[index]); }
-    catch (error) {
-      errorCode = error instanceof BenchmarkError ? error.code : 'runtime_failed';
-      safeToCleanup = error?.safeToCleanup !== false;
+  for (let attempt = 1; attempt <= runs; attempt += 1) {
+    for (let index = 0; index < runtimes.length; index += 1) {
+      const label = index === 0 ? 'classic' : 'rust';
+      const prepared = await prepareRun(runtimes[index], `${label}-${attempt}`, realTempRoot, host);
+      let result;
+      let errorCode;
+      let safeToCleanup = true;
+      try { result = await startRuntime(host, prepared, portSets[index], sampleSeconds); }
+      catch (error) {
+        errorCode = error instanceof BenchmarkError ? error.code : 'runtime_failed';
+        safeToCleanup = error?.safeToCleanup !== false;
+      }
+      let cleanupCode;
+      if (safeToCleanup) {
+        try { await removeCreatedProfile(prepared.sessionRoot, realTempRoot); }
+        catch (error) { cleanupCode = error instanceof BenchmarkError ? error.code : 'profile_cleanup_failed'; }
+      } else {
+        cleanupCode = 'cleanup_not_safe';
+      }
+      if (errorCode || cleanupCode) {
+        const error = new BenchmarkError(`${label}_${errorCode || 'measurement_complete'}`);
+        if (cleanupCode) error.cleanupCode = cleanupCode;
+        throw error;
+      }
+      results.push({
+        runtime: label,
+        run: attempt,
+        apiDatabaseHealthyMs: result.elapsedMs,
+        ...(result.resources ? { resources: result.resources } : {}),
+      });
     }
-    let cleanupCode;
-    if (safeToCleanup) {
-      try { await removeCreatedProfile(run.sessionRoot, realTempRoot); }
-      catch (error) { cleanupCode = error instanceof BenchmarkError ? error.code : 'profile_cleanup_failed'; }
-    } else {
-      cleanupCode = 'cleanup_not_safe';
-    }
-    if (errorCode || cleanupCode) {
-      const error = new BenchmarkError(`${label}_${errorCode || 'measurement_complete'}`);
-      if (cleanupCode) error.cleanupCode = cleanupCode;
-      throw error;
-    }
-    results.push({ runtime: label, apiDatabaseHealthyMs: result });
   }
   return {
     results,
     measurement: 'monotonic elapsed time from native Job host launch until an owned /system/health response with database=ok',
-    limitation: 'API and database cold-start readiness only; no Tauri/WebView GUI readiness, CPU/RAM measurement, post-start performance, or repeated-run variance. The two runtimes start sequentially with fresh empty profiles.',
+    limitation: 'Fresh empty profiles, sequential runs. resources, when present, is private memory and one-core CPU of the Job host and its descendants after health. This is not Tauri window readiness and not a post-reboot cold start.',
   };
 }
 

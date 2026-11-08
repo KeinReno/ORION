@@ -22,7 +22,8 @@ import {
 test('CLI requires both absolute runtime roots and does not accept unknown flags', () => {
   assert.throws(() => parseArgs([]), { code: 'invalid_arguments' });
   assert.throws(() => parseArgs(['--classic', 'a', '--rust', 'b', '--secret', 'x']), { code: 'invalid_arguments' });
-  assert.deepEqual(parseArgs(['--classic', 'C:\\classic', '--rust', 'C:\\rust']).classic, 'C:\\classic');
+  assert.equal(parseArgs(['--classic', 'C:\\classic', '--rust', 'C:\\rust', '--runs', '3', '--sample-seconds', '5']).runs, 3);
+  assert.throws(() => parseArgs(['--classic', 'C:\\classic', '--rust', 'C:\\rust', '--runs', '9']), { code: 'invalid_arguments' });
   assert.equal(parseArgs(['--help']).help, true);
 });
 

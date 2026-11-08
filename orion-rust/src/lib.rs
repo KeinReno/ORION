@@ -2,8 +2,9 @@
 //!
 //! Каталог данных и порты берутся из `edition.json`. Обычный ORION
 //! (`%LOCALAPPDATA%\\ORION`, API 4000, PostgreSQL 55432) этот процесс не занимает
-//! и не читает. NestJS и PostgreSQL здесь не запускаются: их по-прежнему
-//! поднимает `apps/desktop/runtime/launcher.cjs`, уже с портами этой редакции.
+//! и не читает. Команда `supervise` держит packaged runtime в Job Object:
+//! PostgreSQL и Nest по-прежнему стартуют своим `launcher.cjs`, но их дерево
+//! завершается вместе с этим процессом.
 
 use axum::{Json, Router, extract::State, routing::get};
 use serde_json::Value;
@@ -12,10 +13,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-// Experimental lifecycle primitive is exercised by tests only; production
-// startup remains on the existing launcher until parity is established.
-#[cfg(test)]
-mod supervisor;
+#[cfg(windows)]
+pub mod supervisor;
 
 const EDITION_JSON: &str = include_str!("../edition.json");
 
@@ -245,6 +244,47 @@ fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
                 ancestor = ancestor.parent().ok_or_else(|| format!("Не удалось проверить путь {}", path.display()))?;
             }
             Err(error) => return Err(format!("Не удалось проверить путь {}: {error}", path.display())),
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn supervise_packaged_runtime(profile: &Profile) -> Result<(), String> {
+    let runtime_root = std::env::var("ORION_RUNTIME_ROOT")
+        .map_err(|_| "Задайте ORION_RUNTIME_ROOT — каталог packaged runtime с node.exe и launcher.cjs".to_owned())?;
+    let root = PathBuf::from(&runtime_root);
+    if !root.is_absolute() {
+        return Err("ORION_RUNTIME_ROOT должен быть абсолютным".to_owned());
+    }
+    let node = root.join("node.exe");
+    let launcher = root.join("launcher.cjs");
+    if !node.is_file() || !launcher.is_file() {
+        return Err("В каталоге runtime нет node.exe или launcher.cjs".to_owned());
+    }
+    std::env::set_var("ORION_DESKTOP_DATA_DIR", &profile.data_dir);
+    std::env::set_var("ORION_DESKTOP_API_PORT", profile.api_port.to_string());
+    std::env::set_var("ORION_DESKTOP_PG_PORT", profile.pg_port.to_string());
+    std::env::set_var("ORION_RUST_RUNTIME_PORT", profile.runtime_port.to_string());
+    std::env::set_var("ORION_EDITION", "rust");
+    let mut owned = supervisor::Supervisor::new().map_err(|error| error.to_string())?;
+    let spec = supervisor::ProcessSpec::new(node)
+        .arg(launcher)
+        .current_dir(&root);
+    let pid = owned.spawn(spec).map_err(|error| error.to_string())?;
+    loop {
+        match owned
+            .wait_for_exit(pid, Duration::from_secs(60))
+            .map_err(|error| error.to_string())?
+        {
+            Some(code) => {
+                let _ = owned.terminate_all();
+                return if code == 0 {
+                    Ok(())
+                } else {
+                    Err(format!("runtime завершился с кодом {code}"))
+                };
+            }
+            None => continue,
         }
     }
 }
