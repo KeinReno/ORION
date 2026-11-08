@@ -6,6 +6,10 @@ import { z } from "zod";
  */
 export const APP_UPDATE_DEFAULT_REPO = "KeinReno/ORION";
 
+/** Stable receives only final releases, Beta also receives prereleases. */
+export const appUpdateChannelSchema = z.enum(["stable", "beta"]);
+export type AppUpdateChannel = z.infer<typeof appUpdateChannelSchema>;
+
 export const appUpdateReleaseSchema = z.object({
   tag: z.string(),
   name: z.string(),
@@ -43,7 +47,8 @@ export type AppUpdateStatus = z.infer<typeof appUpdateStatusSchema>;
 export const appUpdateConfigSchema = z.object({
   repo: z.string(),
   tokenSet: z.boolean(),
-  autoCheck: z.boolean()
+  autoCheck: z.boolean(),
+  channel: appUpdateChannelSchema
 });
 export type AppUpdateConfig = z.infer<typeof appUpdateConfigSchema>;
 
@@ -55,6 +60,7 @@ export const setAppUpdateConfigInputSchema = z.object({
     .optional(),
   /** Токен GitHub (доступ на чтение к релизам репозитория). `null` — удалить. Обратно не возвращается. */
   token: z.string().trim().min(20, "Токен слишком короткий").max(400).nullable().optional(),
-  autoCheck: z.boolean().optional()
+  autoCheck: z.boolean().optional(),
+  channel: appUpdateChannelSchema.optional()
 });
 export type SetAppUpdateConfigInput = z.infer<typeof setAppUpdateConfigInputSchema>;

@@ -53,7 +53,13 @@ export function pickPayloadAsset(release: Pick<GithubRelease, "assets">, baseTag
 
 /** Самый новый опубликованный релиз с разбираемой меткой и установщиком; черновики пропускаются. */
 export function pickLatestRelease(releases: readonly GithubRelease[], allowPrerelease = true, baseTag?: string): GithubRelease | null {
-  const usable = releases.filter((r) => !r.draft && (allowPrerelease || !r.prerelease) && parseTag(r.tag_name) && (pickInstallerAsset(r) || pickPayloadAsset(r, baseTag)));
+  const usable = releases.filter((r) => {
+    const tag = parseTag(r.tag_name);
+    if (r.draft || !tag) return false;
+    // A wrongly published beta tag must never leak into the Stable channel.
+    if (!allowPrerelease && (r.prerelease || Number.isFinite(tag.beta))) return false;
+    return Boolean(pickInstallerAsset(r) || pickPayloadAsset(r, baseTag));
+  });
   usable.sort((a, b) => compareTags(b.tag_name, a.tag_name));
   return usable[0] ?? null;
 }

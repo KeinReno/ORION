@@ -141,5 +141,40 @@ test("standalone XLSX dispatches to the existing office grid without rewriting b
   const after = await (await request.get(`${base}/${doc.id}/content`, { headers })).body();
   expect(after.equals(original)).toBe(true);
   expect(await (await request.get(base, { headers })).json()).toHaveLength(1);
+
+  // Real interaction: edit, navigate beyond the former 200-row viewport, save and reload.
+  const firstCell = panel.getByRole("textbox", { name: "Ячейка A1", exact: true });
+  await firstCell.fill("125");
+  await firstCell.press("Enter");
+  await expect(panel.getByRole("textbox", { name: "Ячейка A2", exact: true })).toBeFocused();
+  const address = panel.getByRole("textbox", { name: "Адрес ячейки", exact: true });
+  await address.fill("A201");
+  await address.press("Enter");
+  const distantCell = panel.getByRole("textbox", { name: "Ячейка A201", exact: true });
+  await expect(distantCell).toBeVisible();
+  await distantCell.fill("219");
+  await distantCell.press("Tab");
+
+  // Paste a 2×2 range from a typical Excel TSV clipboard.
+  await address.fill("B2");
+  await address.press("Enter");
+  const pasteAnchor = panel.getByRole("textbox", { name: "Ячейка B2", exact: true });
+  await pasteAnchor.evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "North\\t15\\nSouth\\t25".replace(/\\t/g, "\t").replace(/\\n/g, "\n"));
+    element.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(panel.getByRole("textbox", { name: "Ячейка C2", exact: true })).toHaveValue("15");
+  await expect(panel.getByRole("textbox", { name: "Ячейка B3", exact: true })).toHaveValue("South");
+  await panel.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await expect(panel.getByText("Всё сохранено", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(panel.getByRole("textbox", { name: "Ячейка A1", exact: true })).toHaveValue("125");
+  await expect(panel.getByRole("textbox", { name: "Ячейка C2", exact: true })).toHaveValue("15");
+  await expect(panel.getByRole("textbox", { name: "Ячейка B3", exact: true })).toHaveValue("South");
+  const addressAfterReload = panel.getByRole("textbox", { name: "Адрес ячейки", exact: true });
+  await addressAfterReload.fill("A201");
+  await addressAfterReload.press("Enter");
+  await expect(panel.getByRole("textbox", { name: "Ячейка A201", exact: true })).toHaveValue("219");
   await page.screenshot({ path: "tmp/redesign/document-sheet.png" });
 });

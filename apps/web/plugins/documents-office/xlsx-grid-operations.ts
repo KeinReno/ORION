@@ -1,0 +1,301 @@
+import type { CellState, WorkbookState } from "./codecs/xlsx-codec";
+
+/** XLSX worksheet coordinates are zero-based in the editor. */
+export const EXCEL_MAX_ROWS = 1_048_576;
+export const EXCEL_MAX_COLS = 16_384;
+
+export interface GridChange {
+  row: number;
+  col: number;
+  text: string;
+}
+
+export function columnLabel(index: number): string {
+  let n = index + 1;
+  let label = "";
+  while (n > 0) {
+    label = String.fromCharCode(65 + ((n - 1) % 26)) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
+export function cellAddress(row: number, col: number): string {
+  return columnLabel(col) + String(row + 1);
+}
+
+export function parseCellAddress(value: string): { row: number; col: number } | null {
+  const match = /^\$?([A-Za-z]+)\$?([1-9]\d*)$/.exec(value.trim());
+  if (!match) return null;
+  let col = 0;
+  for (const character of match[1].toUpperCase()) col = col * 26 + character.charCodeAt(0) - 64;
+  const row = Number(match[2]) - 1;
+  if (!Number.isSafeInteger(row) || row >= EXCEL_MAX_ROWS || col > EXCEL_MAX_COLS) return null;
+  return { row, col: col - 1 };
+}
+
+export function cellInputText(cell: CellState | undefined): string {
+  if (!cell) return "";
+  if (cell.formula !== undefined) return "=" + cell.formula;
+  return cell.value === null || cell.value === undefined ? "" : String(cell.value);
+}
+
+/** Formula result is displayed in the grid; formula source is shown on focus/in the formula bar. */
+export function cellDisplayText(cell: CellState | undefined): string {
+  return cell?.value === null || cell?.value === undefined ? "" : String(cell.value);
+}
+
+function parsedCell(text: string, previous?: CellState): CellState {
+  const numFmt = previous?.numFmt;
+  if (text.startsWith("=")) return { value: null, formula: text.slice(1), numFmt };
+  if (text.startsWith("'")) return { value: text.slice(1), numFmt };
+  if (text.trim() === "") return { value: null, numFmt };
+  // Preserve identifiers like 00123 and values with surrounding spaces.
+  const isNumber = /^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(text);
+  const parsed = isNumber ? Number(text) : NaN;
+  return { value: Number.isFinite(parsed) ? parsed : text, numFmt };
+}
+
+/** Immutable grid update; copy only the changed rows, keep workbook metadata. */
+export function applyGridChanges(workbook: WorkbookState, sheetIndex: number, changes: readonly GridChange[]): WorkbookState {
+  if (changes.length === 0) return workbook;
+  const oldSheet = workbook.sheets[sheetIndex];
+  if (!oldSheet) throw new Error("Лист не найден.");
+  const rows = oldSheet.rows.slice();
+  const touched = new Set<number>();
+  for (const change of changes) {
+    if (!Number.isInteger(change.row) || !Number.isInteger(change.col) ||
+      change.row < 0 || change.col < 0 ||
+      change.row >= EXCEL_MAX_ROWS || change.col >= EXCEL_MAX_COLS) {
+      throw new Error("Адрес ячейки выходит за пределы XLSX.");
+    }
+    // HyperFormula expects dense row arrays. Keep intermediate rows as empty
+    // arrays when an address is visited beyond the workbook's used range.
+    if (change.row >= rows.length) {
+      const start = rows.length;
+      rows.length = change.row + 1;
+      for (let index = start; index <= change.row; index++) rows[index] = [];
+    }
+    if (!touched.has(change.row)) {
+      rows[change.row] = [...(rows[change.row] ?? [])];
+      touched.add(change.row);
+    }
+    rows[change.row][change.col] = parsedCell(change.text, rows[change.row][change.col]);
+  }
+  return { ...workbook, sheets: workbook.sheets.map((sheet, index) =>
+    index === sheetIndex ? { ...sheet, rows } : sheet
+  ) };
+}
+
+/** Excel clipboard is TSV, optionally quoted for tabs/newlines within a cell. */
+export function parseClipboardGrid(text: string): string[][] {
+  const rows: string[][] = [[]];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' && quoted && text[i + 1] === '"') {
+      field += '"';
+      i++;
+    } else if (ch === '"' && (quoted || field === "")) {
+      quoted = !quoted;
+    } else if (!quoted && ch === "\t") {
+      rows[rows.length - 1].push(field);
+      field = "";
+    } else if (!quoted && (ch === "\n" || ch === "\r")) {
+      rows[rows.length - 1].push(field);
+      field = "";
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      rows.push([]);
+    } else {
+      field += ch;
+    }
+  }
+  rows[rows.length - 1].push(field);
+  if (rows.length > 1 && rows[rows.length - 1].length === 1 &&
+      rows[rows.length - 1][0] === "" && /[\r\n]$/.test(text)) rows.pop();
+  return rows;
+}
+
+export function clipboardChanges(text: string, startRow: number, startCol: number): GridChange[] {
+  const data = parseClipboardGrid(text);
+  if (data.length > 10_000 || data.some((row) => row.length > 500) ||
+      data.reduce((n, row) => n + row.length, 0) > 100_000) {
+    throw new Error("Диапазон вставки слишком велик (максимум 100 000 ячеек за раз).");
+  }
+  return data.flatMap((row, r) =>
+    row.map((cell, c) => ({ row: startRow + r, col: startCol + c, text: cell }))
+  );
+}
+
+export interface GridRange {
+  startRow: number;
+  startCol: number;
+  endRow: number;
+  endCol: number;
+}
+
+export function changesForClear(range: GridRange): GridChange[] {
+  const minRow = Math.min(range.startRow, range.endRow);
+  const maxRow = Math.max(range.startRow, range.endRow);
+  const minCol = Math.min(range.startCol, range.endCol);
+  const maxCol = Math.max(range.startCol, range.endCol);
+  if ((maxRow - minRow + 1) * (maxCol - minCol + 1) > 100_000) {
+    throw new Error("Слишком большой диапазон для одной операции.");
+  }
+  const changes: GridChange[] = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) changes.push({ row, col, text: "" });
+  }
+  return changes;
+}
+
+export function rangeToTsv(workbook: WorkbookState, sheetIndex: number, range: GridRange): string {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  const minRow = Math.min(range.startRow, range.endRow);
+  const maxRow = Math.max(range.startRow, range.endRow);
+  const minCol = Math.min(range.startCol, range.endCol);
+  const maxCol = Math.max(range.startCol, range.endCol);
+  if ((maxRow - minRow + 1) * (maxCol - minCol + 1) > 100_000) {
+    throw new Error("Слишком большой диапазон для копирования.");
+  }
+  const lines: string[] = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    const cells: string[] = [];
+    for (let col = minCol; col <= maxCol; col++) {
+      const value = cellDisplayText(sheet.rows[row]?.[col]);
+      cells.push(/[\t\r\n"]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value);
+    }
+    lines.push(cells.join("\t"));
+  }
+  return lines.join("\r\n");
+}
+
+/** Update a cell's Excel number format without changing its content or formula. */
+export function setCellNumberFormat(
+  workbook: WorkbookState, sheetIndex: number, row: number, col: number, numberFormat: string
+): WorkbookState {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  if (row < 0 || row >= EXCEL_MAX_ROWS || col < 0 || col >= EXCEL_MAX_COLS) {
+    throw new Error("Адрес ячейки выходит за пределы XLSX.");
+  }
+  const rows = sheet.rows.slice();
+  for (let index = rows.length; index <= row; index++) rows[index] = [];
+  const cells = [...(rows[row] ?? [])];
+  const original: CellState = cells[col] ?? { value: null };
+  const value: CellState = { ...original };
+  delete value.numFmt;
+  cells[col] = numberFormat === "General" ? value : { ...value, numFmt: numberFormat };
+  rows[row] = cells;
+  return { ...workbook, sheets: workbook.sheets.map((item, i) =>
+    i === sheetIndex ? { ...item, rows } : item
+  ) };
+}
+
+export type GridStructureAction = "insert-row" | "delete-row" | "insert-column" | "delete-column";
+
+/**
+ * Safe structural edits for simple tables. For workbooks with formulas, merged cells
+ * or linked charts/pivots, refuse rather than silently break their references.
+ * Such files still support ordinary cell editing and range paste.
+ */
+export function changeGridStructure(
+  workbook: WorkbookState, sheetIndex: number, action: GridStructureAction, row: number, col: number
+): WorkbookState {
+  const sheet = workbook.sheets[sheetIndex];
+  if (!sheet) throw new Error("Лист не найден.");
+  if (workbook.charts?.length || workbook.pivotTables?.length ||
+    workbook.sheets.some((item) =>
+      (item.merges?.length ?? 0) > 0 ||
+      item.rows.some((cells) => cells.some((cell) => cell.formula !== undefined))
+    )
+  ) {
+    throw new Error("Изменение структуры отключено для листов с формулами, объединёнными ячейками, диаграммами или сводными таблицами. Содержимое ячеек редактировать можно.");
+  }
+  if (row < 0 || row >= EXCEL_MAX_ROWS || col < 0 || col >= EXCEL_MAX_COLS) {
+    throw new Error("Адрес ячейки выходит за пределы XLSX.");
+  }
+  let rows = sheet.rows.slice();
+  let columnWidths = sheet.columnWidths;
+  if (action === "insert-row") {
+    if (rows.length >= EXCEL_MAX_ROWS) throw new Error("Достигнут предел строк XLSX.");
+    // A selection beyond the last used row is equivalent to appending.
+    rows.splice(Math.min(row, rows.length), 0, []);
+  } else if (action === "delete-row") {
+    if (row >= rows.length) return workbook;
+    rows.splice(row, 1);
+  } else {
+    if (action === "insert-column" && rows.some((cells) => cells.length >= EXCEL_MAX_COLS)) {
+      throw new Error("Достигнут предел столбцов XLSX.");
+    }
+    rows = rows.map((cells) => {
+      const next = cells.slice();
+      if (action === "insert-column") {
+        while (next.length < col) next.push({ value: null });
+        next.splice(col, 0, { value: null });
+      }
+      else if (col < next.length) next.splice(col, 1);
+      return next;
+    });
+    if (columnWidths) {
+      const adjusted: Record<number, number> = {};
+      for (const [key, width] of Object.entries(columnWidths)) {
+        const index = Number(key);
+        if (action === "insert-column") adjusted[index >= col + 1 ? index + 1 : index] = width;
+        else if (index !== col + 1) adjusted[index > col + 1 ? index - 1 : index] = width;
+      }
+      columnWidths = adjusted;
+    }
+  }
+  return { ...workbook, sheets: workbook.sheets.map((item, i) =>
+    i === sheetIndex ? { ...item, rows, columnWidths } : item
+  ) };
+}
+
+export function addWorksheet(workbook: WorkbookState): WorkbookState {
+  let i = 1;
+  while (workbook.sheets.some((sheet) => sheet.name.toLocaleLowerCase() === ("Лист " + i).toLocaleLowerCase())) i++;
+  return { ...workbook, sheets: [...workbook.sheets, { name: "Лист " + i, rows: [] }] };
+}
+
+export function renameWorksheet(workbook: WorkbookState, sheetIndex: number, name: string): WorkbookState {
+  const current = workbook.sheets[sheetIndex];
+  if (!current) throw new Error("Лист не найден.");
+  const target = name.trim();
+  if (!target || target.length > 31 || /[\\/*?:\[\]]/.test(target) || target.startsWith("'") || target.endsWith("'")) {
+    throw new Error("Имя листа: от 1 до 31 символа, без \\ / * ? : [ ].");
+  }
+  if (workbook.sheets.some((sheet, i) => i !== sheetIndex && sheet.name.toLocaleLowerCase() === target.toLocaleLowerCase())) {
+    throw new Error("Лист с таким именем уже существует.");
+  }
+  if (current.name === target) return workbook;
+  // Keep references to the renamed sheet usable in formulas.
+  const quotedOld = "'" + current.name.replace(/'/g, "''") + "'!";
+  const bareOld = current.name + "!";
+  const newReference = "'" + target.replace(/'/g, "''") + "'!";
+  const escape = (value: string): string => value.replace(/[.*+?^$()|[\]\\]/g, "\\$&");
+  const rewrite = (formula: string): string => {
+    let value = formula.replace(new RegExp(escape(quotedOld), "g"), newReference);
+    // Bare references are valid for non-ASCII sheet names in Excel as well.
+    // Unicode property classes avoid matching a sheet name inside a longer identifier.
+    value = value.replace(new RegExp("(^|[^\\p{L}\\p{N}_'])" + escape(bareOld), "gu"), "$1" + newReference);
+    return value;
+  };
+  return {
+    ...workbook,
+    sheets: workbook.sheets.map((sheet, i) => ({
+      ...sheet, name: i === sheetIndex ? target : sheet.name,
+      rows: sheet.rows.map((row) => row.map((cell) =>
+        cell.formula !== undefined ? { ...cell, formula: rewrite(cell.formula) } : cell
+      ))
+    })),
+    charts: workbook.charts?.map((chart) => ({
+      ...chart, sheetId: chart.sheetId === current.name ? target : chart.sheetId
+    })),
+    pivotTables: workbook.pivotTables?.map((pivot) => ({
+      ...pivot, sheetId: pivot.sheetId === current.name ? target : pivot.sheetId
+    }))
+  };
+}

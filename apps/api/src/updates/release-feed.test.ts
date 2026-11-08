@@ -45,6 +45,13 @@ describe("выбор релиза", () => {
     expect(pickLatestRelease([release("v0.2.0", { prerelease: false })], false)?.tag_name).toBe("v0.2.0");
   });
 
+  it("Stable никогда не выбирает beta-tag, даже если он ошибочно опубликован не как prerelease", () => {
+    const stable = release("v0.1.0", { prerelease: false });
+    const mislabeled = release("v0.2.0-windows-beta.100", { prerelease: false });
+    expect(pickLatestRelease([mislabeled, stable], false)?.tag_name).toBe("v0.1.0");
+    expect(pickLatestRelease([mislabeled, stable], true)?.tag_name).toBe("v0.2.0-windows-beta.100");
+  });
+
   it("находит установщик по имени", () => {
     expect(pickInstallerAsset(release("v0.1.0"))?.name).toBe("ORION_0.1.0_x64-setup.exe");
     expect(pickInstallerAsset({ assets: [{ id: 2, name: "notes.txt", size: 1 }] })).toBeNull();

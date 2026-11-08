@@ -1,0 +1,52 @@
+name: Windows Beta Release (manual)
+
+on:
+  push:
+    branches:
+      - 'release/approved-beta-*'
+  workflow_dispatch:
+    inputs:
+      beta_number:
+        description: "New beta number (e.g. 36 for v0.1.0-windows-beta.36)"
+        required: true
+        type: string
+      runner:
+        description: "Build machine. Self-hosted avoids paid GitHub-hosted minutes."
+        required: true
+        default: self-hosted
+        type: choice
+        options:
+          - self-hosted
+          - windows-latest
+
+permissions:
+  contents: write
+
+concurrency:
+  group: orion-windows-beta-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Approved release branches always use the owner's Windows build runner.
+    # Manual dispatch can choose a funded hosted runner instead.
+    runs-on: ${{ fromJSON(github.event_name == 'push' && '["self-hosted","Windows","X64"]' || (inputs.runner == 'windows-latest' && '["windows-latest"]' || '["self-hosted","Windows","X64"]')) }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      # Self-hosted needs Rust, MSVC, .NET SDK, WebView2, NSIS, gh CLI.
+      - name: Build, verify and publish Windows beta
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORION_BETA_NUMBER: ${{ github.event_name == 'push' && 'auto' || inputs.beta_number }}
+        run: node scripts/publish-windows-beta.mjs "$env:ORION_BETA_NUMBER"

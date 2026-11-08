@@ -48,6 +48,12 @@ import {
   type WorkbookState
 } from "./codecs/xlsx-codec";
 import { shouldAcceptRefetchedBlob } from "./codecs/editor-generation-guard";
+import {
+  EXCEL_MAX_ROWS, EXCEL_MAX_COLS, addWorksheet, applyGridChanges, cellAddress,
+  cellDisplayText, cellInputText, changeGridStructure, changesForClear, clipboardChanges, columnLabel,
+  parseCellAddress, rangeToTsv, renameWorksheet, setCellNumberFormat,
+  type GridChange, type GridRange, type GridStructureAction
+} from "./xlsx-grid-operations";
 import { XLSX_MIME } from "./codecs/office-files";
 
 /** Parses an A1 range like "A1:D10" into header names read from its first row. */
@@ -82,19 +88,10 @@ export interface OfficeEditorInnerProps {
   onDirtyChange: (dirty: boolean) => void;
 }
 
-const MAX_DISPLAY_ROWS = 200;
-const MAX_DISPLAY_COLS = 40;
+const VISIBLE_ROWS = 60;
+const VISIBLE_COLS = 16;
 
-function colLetter(index: number): string {
-  let n = index + 1;
-  let s = "";
-  while (n > 0) {
-    const rem = (n - 1) % 26;
-    s = String.fromCharCode(65 + rem) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
-}
+type PendingCell = { sheetIndex: number; row: number; col: number; value: string };
 
 export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDirtyChange }: OfficeEditorInnerProps): React.ReactElement {
   const { toast } = useToast();
@@ -103,6 +100,18 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   const [dirty, setDirty] = useState(false);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [activeSheet, setActiveSheet] = useState(0);
+  const stateRef = useRef<WorkbookState | null>(null);
+  const initialLoadRef = useRef(true);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const pendingCell = useRef<PendingCell | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [selected, setSelected] = useState({ row: 0, col: 0 });
+  const [range, setRange] = useState<GridRange | null>(null);
+  const [firstRow, setFirstRow] = useState(0);
+  const [firstCol, setFirstCol] = useState(0);
+  const [addressText, setAddressText] = useState("A1");
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState("");
   // F05: edit-generation / saved-generation guard. `editGeneration` bumps on
   // every user edit (cell, chart, pivot). `save()` snapshots it into
   // `savedGenerationRef` right before it sends bytes to the server. The
@@ -156,8 +165,22 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
           // may now be stale relative to it.
           return;
         }
+        stateRef.current = parsed;
+        pendingCell.current = null;
+        setDraft(null);
         setState(parsed);
-        setActiveSheet(0);
+        if (initialLoadRef.current) {
+          setActiveSheet(0);
+          setSelected({ row: 0, col: 0 });
+          setRange(null);
+          setFirstRow(0);
+          setFirstCol(0);
+          setAddressText("A1");
+          initialLoadRef.current = false;
+        } else {
+          // Refetch after Save must not throw the user back to sheet 1 / A1.
+          setActiveSheet((index) => Math.min(index, parsed.sheets.length - 1));
+        }
         setDirty(false);
         savedGenerationRef.current = editGenerationRef.current;
       })
@@ -201,60 +224,203 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   }
 
   const sheet = state.sheets[activeSheet];
-  const rowCount = Math.min(Math.max(sheet.rows.length + 5, 20), MAX_DISPLAY_ROWS);
-  const colCount = Math.min(
-    Math.max(sheet.rows.reduce((m, r) => Math.max(m, r.length), 0) + 3, 10),
-    MAX_DISPLAY_COLS
-  );
+  const rowCount = Math.min(VISIBLE_ROWS, EXCEL_MAX_ROWS - firstRow);
+  const colCount = Math.min(VISIBLE_COLS, EXCEL_MAX_COLS - firstCol);
 
-  function cellAt(rowIdx: number, colIdx: number): { value: string | number | boolean | null; formula?: string } {
-    return sheet.rows[rowIdx]?.[colIdx] ?? { value: null };
+  function cellAt(row: number, col: number) {
+    return sheet.rows[row]?.[col];
   }
 
-  function setCell(rowIdx: number, colIdx: number, raw: string): void {
-    setState((cur) => {
-      if (!cur) return cur;
-      const next: WorkbookState = { ...cur, sheets: cur.sheets.map((s) => ({ ...s, rows: s.rows.map((r) => [...r]) })) };
-      const s = next.sheets[activeSheet];
-      while (s.rows.length <= rowIdx) s.rows.push([]);
-      const row = s.rows[rowIdx];
-      while (row.length <= colIdx) row.push({ value: null });
+  function applyChanges(sheetIndex: number, changes: readonly GridChange[]): void {
+    if (changes.length === 0 || !stateRef.current) return;
+    try {
+      const next = recalculate(applyGridChanges(stateRef.current, sheetIndex, changes));
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить таблицу", description: (error as Error).message, tone: "danger" });
+    }
+  }
 
-      if (raw.startsWith("=")) {
-        row[colIdx] = { value: null, formula: raw.slice(1) };
-      } else if (raw.trim() === "") {
-        row[colIdx] = { value: null };
-      } else {
-        const num = Number(raw);
-        row[colIdx] = { value: Number.isFinite(num) && raw.trim() !== "" ? num : raw };
-      }
-      return recalculate(next);
+  function commitDraft(): void {
+    const pending = pendingCell.current;
+    if (!pending) return;
+    pendingCell.current = null;
+    setDraft(null);
+    const before = stateRef.current?.sheets[pending.sheetIndex]?.rows[pending.row]?.[pending.col];
+    if (cellInputText(before) !== pending.value) {
+      applyChanges(pending.sheetIndex, [{ row: pending.row, col: pending.col, text: pending.value }]);
+    }
+  }
+
+  function startEdit(row: number, col: number): void {
+    const value = cellInputText(cellAt(row, col));
+    pendingCell.current = { sheetIndex: activeSheet, row, col, value };
+    setSelected({ row, col });
+    setRange(null);
+    setAddressText(cellAddress(row, col));
+    setDraft(value);
+  }
+
+  function changeDraft(value: string, row: number, col: number): void {
+    // After Enter/Ctrl+S the focus may remain in an input whose previous draft
+    // was committed. A subsequent keystroke must start a new draft, not vanish.
+    if (!pendingCell.current) {
+      pendingCell.current = { sheetIndex: activeSheet, row, col, value };
+    } else {
+      pendingCell.current.value = value;
+    }
+    setDraft(value);
+  }
+
+  function goTo(row: number, col: number): void {
+    if (row < 0 || col < 0 || row >= EXCEL_MAX_ROWS || col >= EXCEL_MAX_COLS) return;
+    commitDraft();
+    setSelected({ row, col });
+    setRange(null);
+    setAddressText(cellAddress(row, col));
+    if (row < firstRow || row >= firstRow + VISIBLE_ROWS) setFirstRow(Math.floor(row / VISIBLE_ROWS) * VISIBLE_ROWS);
+    if (col < firstCol || col >= firstCol + VISIBLE_COLS) setFirstCol(Math.floor(col / VISIBLE_COLS) * VISIBLE_COLS);
+    requestAnimationFrame(() => {
+      gridRef.current?.querySelector<HTMLInputElement>('[data-cell="' + cellAddress(row, col) + '"]')?.focus();
     });
+  }
+
+  function jumpToAddress(): void {
+    const position = parseCellAddress(addressText);
+    if (!position) {
+      toast({ title: "Неверный адрес ячейки", description: "Используйте формат A1, B27 или AA350.", tone: "danger" });
+      return;
+    }
+    goTo(position.row, position.col);
+  }
+
+  function pasteRange(row: number, col: number, text: string): void {
+    // The clipboard replaces the selected anchor cell; do not save a stale draft over it.
+    pendingCell.current = null;
+    setDraft(null);
+    setRange(null);
+    try {
+      applyChanges(activeSheet, clipboardChanges(text, row, col));
+    } catch (error) {
+      toast({ title: "Не удалось вставить диапазон", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function currentRange(): GridRange {
+    return range ?? {
+      startRow: selected.row, endRow: selected.row,
+      startCol: selected.col, endCol: selected.col
+    };
+  }
+
+  function clearRange(): void {
+    commitDraft();
+    try {
+      applyChanges(activeSheet, changesForClear(currentRange()));
+      setRange(null);
+    } catch (error) {
+      toast({ title: "Не удалось очистить диапазон", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  async function copyRange(): Promise<void> {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const content = rangeToTsv(stateRef.current, activeSheet, currentRange());
+      if (!navigator.clipboard?.writeText) throw new Error("Буфер обмена недоступен; выделите диапазон и нажмите Ctrl+C.");
+      await navigator.clipboard.writeText(content);
+      toast({ title: "Диапазон скопирован", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось скопировать", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function editStructure(action: GridStructureAction): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = changeGridStructure(stateRef.current, activeSheet, action, selected.row, selected.col);
+      if (next === stateRef.current) return;
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить структуру листа", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function setSelectedNumberFormat(format: string): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = setCellNumberFormat(stateRef.current, activeSheet, selected.row, selected.col, format);
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+    } catch (error) {
+      toast({ title: "Не удалось изменить формат", description: (error as Error).message, tone: "danger" });
+    }
+  }
+
+  function createSheet(): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    const next = addWorksheet(stateRef.current);
+    stateRef.current = next;
+    setState(next);
+    setActiveSheet(next.sheets.length - 1);
+    setSelected({ row: 0, col: 0 });
+    setRange(null);
+    setAddressText("A1");
+    setFirstRow(0);
+    setFirstCol(0);
     setDirty(true);
     bumpEditGeneration();
+  }
+
+  function applyRename(): void {
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = recalculate(renameWorksheet(stateRef.current, activeSheet, renameName));
+      if (next === stateRef.current) return;
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setRenameOpen(false);
+    } catch (error) {
+      toast({ title: "Не удалось переименовать лист", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function insertChart(): void {
     if (!chartRange.trim()) return;
-    setState((cur) => {
-      if (!cur) return cur;
-      try {
-        return addChart(cur, {
-          sheetId: sheet.name,
-          dataRange: chartRange.trim(),
-          chartType,
-          title: chartTitle.trim() || undefined
-        });
-      } catch (e) {
-        toast({ title: "Не удалось добавить диаграмму", description: (e as Error).message, tone: "danger" });
-        return cur;
-      }
-    });
-    setDirty(true);
-    bumpEditGeneration();
-    setChartOpen(false);
-    setChartRange("A1:B4");
-    setChartTitle("");
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = addChart(stateRef.current, {
+        sheetId: stateRef.current.sheets[activeSheet].name,
+        dataRange: chartRange.trim(),
+        chartType,
+        title: chartTitle.trim() || undefined
+      });
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setChartOpen(false);
+      setChartRange("A1:B4");
+      setChartTitle("");
+    } catch (error) {
+      toast({ title: "Не удалось добавить диаграмму", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function insertPivotTable(): void {
@@ -265,28 +431,28 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
       toast({ title: "Не удалось добавить сводную таблицу", description: "Выберите хотя бы одно поле.", tone: "danger" });
       return;
     }
-    setState((cur) => {
-      if (!cur) return cur;
-      try {
-        return addPivotTable(cur, {
-          sheetId: sheet.name,
-          sourceRange: pivotRange.trim(),
-          targetCell: pivotTarget.trim(),
-          rowFields,
-          valueFields
-        });
-      } catch (e) {
-        toast({ title: "Не удалось добавить сводную таблицу", description: (e as Error).message, tone: "danger" });
-        return cur;
-      }
-    });
-    setDirty(true);
-    bumpEditGeneration();
-    setPivotOpen(false);
-    setPivotRange("A1:B4");
-    setPivotTarget("D1");
-    setPivotRowFields(new Set());
-    setPivotValueFields({});
+    commitDraft();
+    if (!stateRef.current) return;
+    try {
+      const next = addPivotTable(stateRef.current, {
+        sheetId: stateRef.current.sheets[activeSheet].name,
+        sourceRange: pivotRange.trim(),
+        targetCell: pivotTarget.trim(),
+        rowFields,
+        valueFields
+      });
+      stateRef.current = next;
+      setState(next);
+      setDirty(true);
+      bumpEditGeneration();
+      setPivotOpen(false);
+      setPivotRange("A1:B4");
+      setPivotTarget("D1");
+      setPivotRowFields(new Set());
+      setPivotValueFields({});
+    } catch (error) {
+      toast({ title: "Не удалось добавить сводную таблицу", description: (error as Error).message, tone: "danger" });
+    }
   }
 
   function togglePivotRowField(name: string): void {
@@ -308,14 +474,17 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   }
 
   async function save(): Promise<void> {
-    if (!state) return;
+    if (replaceContent.isPending) return;
+    commitDraft();
+    const snapshot = stateRef.current;
+    if (!snapshot) return;
     // F05: snapshot the generation being saved BEFORE the (possibly slow)
     // serialize+upload, so the blob-reload effect above knows whether it is
     // safe to apply the refetched content once this save's invalidation
     // triggers a refetch (see that effect's comment).
     const generationBeingSaved = editGenerationRef.current;
     try {
-      const bytes = await workbookStateToXlsx(state);
+      const bytes = await workbookStateToXlsx(snapshot);
       const file = new File([bytes as unknown as BlobPart], doc.name, { type: XLSX_MIME });
       await replaceContent.mutateAsync({ id: doc.id, file });
       savedGenerationRef.current = generationBeingSaved;
@@ -423,58 +592,224 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
         </div>
       ) : null}
 
-      {state.sheets.length > 1 ? (
-        <div className="orion-scroll flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 py-2">
-          {state.sheets.map((s, i) => (
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+        <Input
+          aria-label="Адрес ячейки"
+          value={addressText}
+          onChange={(event) => setAddressText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.preventDefault(); jumpToAddress(); }
+          }}
+          className="w-24"
+        />
+        <Button size="sm" variant="outline" onClick={jumpToAddress}>Перейти</Button>
+        <Input
+          aria-label="Значение или формула выбранной ячейки"
+          value={
+            pendingCell.current?.sheetIndex === activeSheet &&
+            pendingCell.current.row === selected.row &&
+            pendingCell.current.col === selected.col && draft !== null
+              ? draft : cellInputText(cellAt(selected.row, selected.col))
+          }
+          onFocus={() => startEdit(selected.row, selected.col)}
+          onChange={(event) => changeDraft(event.target.value, selected.row, selected.col)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") { event.preventDefault(); commitDraft(); }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+              event.preventDefault(); void save();
+            }
+          }}
+          className="min-w-48 flex-1 font-mono"
+          placeholder="Значение или =SUM(A1:A5)"
+        />
+        <span className="text-2xs text-subtle-foreground">Enter / Tab — следующая ячейка · вставка из Excel поддерживается</span>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-3 py-2">
+        <div className="orion-scroll flex min-w-0 flex-1 gap-1 overflow-x-auto">
+          {state.sheets.map((tab, index) => (
             <button
-              key={s.name}
+              key={index}
               type="button"
-              onClick={() => setActiveSheet(i)}
+              onClick={() => {
+                commitDraft();
+                setActiveSheet(index);
+                setSelected({ row: 0, col: 0 });
+                setRange(null);
+                setAddressText("A1");
+                setFirstRow(0); setFirstCol(0);
+                setRenameOpen(false);
+              }}
               className={cx(
                 "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                i === activeSheet ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
+                index === activeSheet ? "bg-accent/15 text-accent-text" : "text-muted-foreground hover:text-foreground"
               )}
+              aria-pressed={index === activeSheet}
             >
-              {s.name}
+              {tab.name}
             </button>
           ))}
         </div>
+        <Button size="sm" variant="outline" onClick={createSheet}>+ Лист</Button>
+        <Button size="sm" variant="outline" onClick={() => {
+          setRenameName(sheet.name); setRenameOpen((current) => !current);
+        }}>Переименовать</Button>
+      </div>
+
+      {renameOpen ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+          <Input
+            aria-label="Новое имя листа"
+            value={renameName}
+            maxLength={31}
+            onChange={(event) => setRenameName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") { event.preventDefault(); applyRename(); }
+              if (event.key === "Escape") setRenameOpen(false);
+            }}
+            className="max-w-xs"
+          />
+          <Button size="sm" onClick={applyRename}>Применить</Button>
+          <Button size="sm" variant="outline" onClick={() => setRenameOpen(false)}>Отмена</Button>
+        </div>
       ) : null}
 
-      <div className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
-        <table className="border-collapse text-xs">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
+        <Button size="sm" variant="outline" onClick={() => setFirstRow((row) => Math.max(0, row - VISIBLE_ROWS))} disabled={firstRow === 0}>← Строки</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstRow((row) => Math.min(EXCEL_MAX_ROWS - VISIBLE_ROWS, row + VISIBLE_ROWS))} disabled={firstRow + VISIBLE_ROWS >= EXCEL_MAX_ROWS}>Строки →</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstCol((col) => Math.max(0, col - VISIBLE_COLS))} disabled={firstCol === 0}>← Столбцы</Button>
+        <Button size="sm" variant="outline" onClick={() => setFirstCol((col) => Math.min(EXCEL_MAX_COLS - VISIBLE_COLS, col + VISIBLE_COLS))} disabled={firstCol + VISIBLE_COLS >= EXCEL_MAX_COLS}>Столбцы →</Button>
+        <span className="text-2xs text-subtle-foreground">
+          Строки {firstRow + 1}–{firstRow + rowCount} · Столбцы {columnLabel(firstCol)}–{columnLabel(firstCol + colCount - 1)}
+        </span>
+        <Button size="sm" variant="outline" onClick={() => void copyRange()}>Копировать</Button>
+        <Button size="sm" variant="outline" onClick={clearRange}>Очистить</Button>
+        {range ? <span className="text-2xs text-accent-text">Выделено {cellAddress(range.startRow, range.startCol)}:{cellAddress(range.endRow, range.endCol)}</span> : null}
+      </div>
+
+
+      <details className="shrink-0 border-b border-border">
+        <summary className="cursor-pointer px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+          Структура листа и форматирование ячейки
+        </summary>
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+          <Button size="sm" variant="outline" onClick={() => editStructure("insert-row")}>Вставить строку</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("delete-row")}>Удалить строку</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("insert-column")}>Вставить столбец</Button>
+          <Button size="sm" variant="outline" onClick={() => editStructure("delete-column")}>Удалить столбец</Button>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Формат
+            <Select
+              aria-label="Формат числа выбранной ячейки"
+              value={cellAt(selected.row, selected.col)?.numFmt ?? "General"}
+              onChange={(event) => setSelectedNumberFormat(event.target.value)}
+            >
+              {["General", "0", "#,##0.00", "0%", "yyyy-mm-dd"].includes(cellAt(selected.row, selected.col)?.numFmt ?? "General") ? null : (
+                <option value={cellAt(selected.row, selected.col)?.numFmt}>Пользовательский</option>
+              )}
+              <option value="General">Общий</option>
+              <option value="0">Целое число</option>
+              <option value="#,##0.00">Число (2 знака)</option>
+              <option value="0%">Процент</option>
+              <option value="yyyy-mm-dd">Дата</option>
+            </Select>
+          </label>
+          <span className="text-2xs text-subtle-foreground">Структурные операции защищены от повреждения формул и объединений.</span>
+        </div>
+      </details>
+
+      <div ref={gridRef} className="orion-scroll min-h-0 flex-1 overflow-auto p-3">
+        <table className="border-collapse text-xs" aria-label="Редактируемая таблица">
           <thead>
             <tr>
               <th className="sticky left-0 top-0 z-10 border border-border bg-card" />
               {Array.from({ length: colCount }).map((_, c) => (
-                <th key={c} className="sticky top-0 z-10 border border-border bg-card px-2 py-1 text-center font-normal text-subtle-foreground">
-                  {colLetter(c)}
+                <th key={firstCol + c} className="sticky top-0 z-10 border border-border bg-card px-2 py-1 text-center font-normal text-subtle-foreground">
+                  {columnLabel(firstCol + c)}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: rowCount }).map((_, r) => (
-              <tr key={r}>
-                <td className="sticky left-0 border border-border bg-card px-2 py-1 text-right text-subtle-foreground">{r + 1}</td>
-                {Array.from({ length: colCount }).map((_, c) => {
-                  const cell = cellAt(r, c);
-                  const editValue = cell.formula ? `=${cell.formula}` : (cell.value ?? "");
-                  return (
-                    <td key={c} className="border border-border p-0">
-                      <input
-                        defaultValue={String(editValue)}
-                        key={`${r}-${c}-${dirty ? "d" : "c"}`}
-                        onBlur={(e) => {
-                          if (e.target.value !== String(editValue)) setCell(r, c, e.target.value);
-                        }}
-                        className="w-20 bg-transparent px-2 py-1 text-foreground outline-none focus:bg-accent/[0.08]"
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {Array.from({ length: rowCount }).map((_, r) => {
+              const row = firstRow + r;
+              return (
+                <tr key={row}>
+                  <td className="sticky left-0 border border-border bg-card px-2 py-1 text-right text-subtle-foreground">{row + 1}</td>
+                  {Array.from({ length: colCount }).map((_, c) => {
+                    const col = firstCol + c;
+                    const address = cellAddress(row, col);
+                    const cell = cellAt(row, col);
+                    const editing = pendingCell.current?.sheetIndex === activeSheet &&
+                      pendingCell.current.row === row && pendingCell.current.col === col && draft !== null;
+                    return (
+                      <td key={col} className="border border-border p-0">
+                        <input
+                          type="text"
+                          data-cell={address}
+                          aria-label={"Ячейка " + address}
+                          value={editing ? (draft ?? "") : cellDisplayText(cell)}
+                          onMouseDown={(event) => {
+                            if (event.shiftKey) {
+                              event.preventDefault();
+                              setRange({
+                                startRow: selected.row, startCol: selected.col,
+                                endRow: row, endCol: col
+                              });
+                            } else setRange(null);
+                          }}
+                          onFocus={() => startEdit(row, col)}
+                          onChange={(event) => changeDraft(event.target.value, row, col)}
+                          onBlur={commitDraft}
+                          onCopy={(event) => {
+                            if (!range || !stateRef.current) return;
+                            event.preventDefault();
+                            commitDraft();
+                            if (stateRef.current) {
+                              event.clipboardData.setData("text/plain", rangeToTsv(stateRef.current, activeSheet, range));
+                            }
+                          }}
+                          onPaste={(event) => {
+                            const text = event.clipboardData.getData("text/plain");
+                            if (text.includes("\t") || text.includes("\n") || text.includes("\r")) {
+                              event.preventDefault();
+                              pasteRange(row, col, text);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                              event.preventDefault(); void save(); return;
+                            }
+                            if (event.key === "Escape") {
+                              pendingCell.current = null; setDraft(null); setRange(null); event.currentTarget.blur(); return;
+                            }
+                            if (event.key === "Delete" && range) {
+                              event.preventDefault(); clearRange(); return;
+                            }
+                            if (event.key === "Enter" || event.key === "Tab") {
+                              event.preventDefault();
+                              commitDraft();
+                              goTo(
+                                row + (event.key === "Enter" ? (event.shiftKey ? -1 : 1) : 0),
+                                col + (event.key === "Tab" ? (event.shiftKey ? -1 : 1) : 0)
+                              );
+                            }
+                          }}
+                          className={cx(
+                            "w-28 bg-transparent px-2 py-1 text-foreground outline-none focus:bg-accent/[0.08]",
+                            selected.row === row && selected.col === col ? "bg-accent/10 ring-1 ring-inset ring-accent" : "",
+                            range && row >= Math.min(range.startRow, range.endRow) && row <= Math.max(range.startRow, range.endRow) &&
+                              col >= Math.min(range.startCol, range.endCol) && col <= Math.max(range.startCol, range.endCol)
+                                ? "bg-accent/20 ring-1 ring-inset ring-accent/70" : ""
+                          )}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
