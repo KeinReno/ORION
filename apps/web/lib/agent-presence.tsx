@@ -39,24 +39,36 @@ const EMPTY: PresenceSnapshot = { agents: [], events: [], modules: new Map(), ob
 let snapshot: PresenceSnapshot = EMPTY;
 const listeners = new Set<() => void>();
 
-/** This computer only. Off until the person asks to watch: a read must not steal the open document. */
+/** This computer only. Off until the person asks to watch one named agent. */
 const FOLLOW_KEY = "orion.agent.follow.v1";
-let followAgent = false;
+export interface FollowAgentPrefs {
+  on: boolean;
+  /** Token id, or `name:<agent>` when the event has no token. Null means nobody is chosen. */
+  who: string | null;
+}
+const FOLLOW_OFF: FollowAgentPrefs = { on: false, who: null };
+let followAgent: FollowAgentPrefs = FOLLOW_OFF;
 let followHydrated = false;
 const followListeners = new Set<() => void>();
 
-function readStoredFollow(): boolean {
-  if (typeof window === "undefined") return false;
+export function readStoredFollow(raw: string | null): FollowAgentPrefs {
+  if (raw === "1") return { on: true, who: null };
+  if (!raw || raw === "0") return FOLLOW_OFF;
   try {
-    return window.localStorage.getItem(FOLLOW_KEY) === "1";
+    const parsed = JSON.parse(raw) as { on?: unknown; who?: unknown };
+    return { on: parsed.on === true, who: typeof parsed.who === "string" && parsed.who.length > 0 ? parsed.who : null };
   } catch {
-    return false;
+    return FOLLOW_OFF;
   }
 }
 
-function currentFollow(): boolean {
+function currentFollow(): FollowAgentPrefs {
   if (!followHydrated && typeof window !== "undefined") {
-    followAgent = readStoredFollow();
+    try {
+      followAgent = readStoredFollow(window.localStorage.getItem(FOLLOW_KEY));
+    } catch {
+      followAgent = FOLLOW_OFF;
+    }
     followHydrated = true;
   }
   return followAgent;
@@ -67,19 +79,27 @@ function subscribeFollow(listener: () => void): () => void {
   return () => followListeners.delete(listener);
 }
 
-export function setFollowAgent(next: boolean): void {
+function writeFollow(next: FollowAgentPrefs): void {
   followAgent = next;
   followHydrated = true;
   try {
-    window.localStorage.setItem(FOLLOW_KEY, next ? "1" : "0");
+    window.localStorage.setItem(FOLLOW_KEY, JSON.stringify(next));
   } catch {
     /* a private window still follows for this session */
   }
   for (const listener of followListeners) listener();
 }
 
-export function useFollowAgent(): boolean {
-  return useSyncExternalStore(subscribeFollow, currentFollow, () => false);
+export function setFollowAgent(on: boolean): void {
+  writeFollow({ ...currentFollow(), on });
+}
+
+export function setFollowedAgent(who: string): void {
+  writeFollow({ on: true, who });
+}
+
+export function useFollowAgent(): FollowAgentPrefs {
+  return useSyncExternalStore(subscribeFollow, currentFollow, () => FOLLOW_OFF);
 }
 
 function publish(next: PresenceSnapshot): void {
@@ -102,7 +122,7 @@ export function presenceSnapshot(events: readonly AgentPresenceEvent[], serverNo
   const modules = new Map<string, AgentPresenceEvent>();
   const objects = new Map<string, AgentPresenceEvent>();
   for (const event of newest) {
-    const key = event.tokenId ?? event.agentName;
+    const key = presenceAgentKey(event);
     if (age(event) < ACTIVE_MS && !seen.has(key)) {
       seen.add(key);
       agents.push(event);
@@ -274,7 +294,7 @@ export function groupPresenceByAgent(events: readonly AgentPresenceEvent[], limi
   let shown = 0;
   for (const event of events) {
     if (shown >= limit) break;
-    const key = event.tokenId ?? `name:${event.agentName}`;
+    const key = presenceAgentKey(event);
     let group = index.get(key);
     if (!group) {
       group = { key, label: agentLabel(event), events: [] };
@@ -320,10 +340,15 @@ export function followTarget(event: AgentPresenceEvent): { type: SearchableEntit
  * contains a real read. Several records in one poll open only the latest, so a sweep of
  * tasks does not walk the whole dock.
  */
-export function navigationTarget(events: readonly AgentPresenceEvent[], follow: boolean): { type: SearchableEntityType; id: string } | null {
-  if (!follow) return null;
+export function presenceAgentKey(event: Pick<AgentPresenceEvent, "tokenId" | "agentName">): string {
+  return event.tokenId ?? `name:${event.agentName}`;
+}
+
+export function navigationTarget(events: readonly AgentPresenceEvent[], follow: FollowAgentPrefs): { type: SearchableEntityType; id: string } | null {
+  if (!follow.on || !follow.who) return null;
   let target: { type: SearchableEntityType; id: string } | null = null;
   for (const event of [...events].sort((a, b) => a.id - b.id)) {
+    if (presenceAgentKey(event) !== follow.who) continue;
     const next = followTarget(event);
     if (next) target = next;
   }
@@ -334,6 +359,7 @@ export function navigationTarget(events: readonly AgentPresenceEvent[], follow: 
 export function AgentPresencePill({ className }: { className?: string }): React.ReactElement | null {
   const { agents, events } = useAgentPresenceNow();
   const follow = useFollowAgent();
+  const followed = events.find((event) => presenceAgentKey(event) === follow.who);
   if (agents.length === 0) return null;
   const text = presencePillText(agents);
   const groups = groupPresenceByAgent(events);
@@ -359,15 +385,23 @@ export function AgentPresencePill({ className }: { className?: string }): React.
         <div className="w-80 space-y-2 p-3" role="region" aria-label="Что делают агенты">
           <div className="flex items-start justify-between gap-3">
             <p className="text-label font-medium text-foreground">Что делают агенты</p>
-            <FollowAgentSwitch checked={follow} />
+            <FollowAgentSwitch checked={follow.on} />
           </div>
-          <p className="text-2xs text-muted-foreground">
-            {follow ? "Экран открывает запись, которую агент читает или меняет." : "Только подсветка и эта лента. Экран сам не переключается."}
-          </p>
+          <p className="text-2xs text-muted-foreground">{followHint(follow, followed ? agentLabel(followed) : null)}</p>
           <ul className="max-h-72 space-y-2 overflow-y-auto">
             {groups.map((group) => (
               <li key={group.key}>
-                <p className="px-2 text-2xs font-medium text-subtle-foreground">{group.label}</p>
+                <div className="flex items-center justify-between gap-2 px-2">
+                  <p className="text-2xs font-medium text-subtle-foreground">{group.label}</p>
+                  <button
+                    type="button"
+                    className="text-2xs text-accent hover:underline"
+                    aria-pressed={follow.on && follow.who === group.key}
+                    onClick={() => setFollowedAgent(group.key)}
+                  >
+                    {follow.on && follow.who === group.key ? "Слежу" : "Следить"}
+                  </button>
+                </div>
                 <ul className="space-y-1">
                   {group.events.map((event) => (
                     <PresenceRow key={event.id} event={event} onOpen={close} hideAgent />
@@ -392,6 +426,12 @@ export function AgentPresencePill({ className }: { className?: string }): React.
   );
 }
 
+function followHint(follow: FollowAgentPrefs, whoLabel: string | null): string {
+  if (!follow.on) return "Только подсветка и эта лента. Экран сам не переключается.";
+  if (!follow.who || !whoLabel) return "Слежение включено, агент не выбран. Нажмите «Следить» у нужного имени — чужие действия экран не откроют.";
+  return `Экран открывает записи агента «${whoLabel}». Остальные остаются в ленте.`;
+}
+
 function FollowAgentSwitch({ checked }: { checked: boolean }): React.ReactElement {
   return <Switch checked={checked} onChange={setFollowAgent} label="Следить за агентом" />;
 }
@@ -399,13 +439,15 @@ function FollowAgentSwitch({ checked }: { checked: boolean }): React.ReactElemen
 /** Same switch as the pill, for the settings page where no agent is working yet. */
 export function FollowAgentControl(): React.ReactElement {
   const follow = useFollowAgent();
+  const { events } = useAgentPresenceNow();
+  const followed = events.find((event) => presenceAgentKey(event) === follow.who);
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
       <div className="min-w-0">
         <p className="text-label text-foreground">Следить за агентом</p>
-        <p className="text-2xs text-muted-foreground">Открывать запись, которую агент читает или меняет. Выключено — строка подсвечивается, а открытый экран остаётся вашим.</p>
+        <p className="text-2xs text-muted-foreground">{followHint(follow, followed ? agentLabel(followed) : null)} Кого именно — кнопка «Следить» в ленте.</p>
       </div>
-      <FollowAgentSwitch checked={follow} />
+      <FollowAgentSwitch checked={follow.on} />
     </div>
   );
 }

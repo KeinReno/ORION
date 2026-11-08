@@ -1,6 +1,6 @@
 import type { AgentPresenceEvent } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
-import { followTarget, groupPresenceByAgent, navigationTarget, presencePillText } from "./agent-presence";
+import { followTarget, groupPresenceByAgent, navigationTarget, presencePillText, readStoredFollow } from "./agent-presence";
 
 function event(overrides: Partial<AgentPresenceEvent> = {}): AgentPresenceEvent {
   return {
@@ -36,11 +36,19 @@ describe("followTarget", () => {
     }
   });
 
-  it("does not open a record unless the person is following the agent", () => {
-    const read = event();
-    const write = event({ id: 2, activity: "writing", objectType: "task", objectId: "task-9" });
-    expect(navigationTarget([read, write], false)).toBeNull();
-    expect(navigationTarget([read, write], true)).toEqual({ type: "task", id: "task-9" });
+  it("opens only the chosen agent's latest record", () => {
+    const cursor = event({ id: 1, tokenId: "cursor", agentName: "Cursor", objectType: "note", objectId: "note-1" });
+    const sol = event({ id: 2, tokenId: "sol", agentName: "Sol", activity: "writing", objectType: "task", objectId: "task-9" });
+    expect(navigationTarget([cursor, sol], { on: false, who: "sol" })).toBeNull();
+    expect(navigationTarget([cursor, sol], { on: true, who: null })).toBeNull();
+    expect(navigationTarget([cursor, sol], { on: true, who: "sol" })).toEqual({ type: "task", id: "task-9" });
+    expect(navigationTarget([cursor, sol], { on: true, who: "cursor" })).toEqual({ type: "note", id: "note-1" });
+  });
+
+  it("keeps an older on-switch from opening every agent", () => {
+    expect(readStoredFollow("1")).toEqual({ on: true, who: null });
+    expect(readStoredFollow("0")).toEqual({ on: false, who: null });
+    expect(readStoredFollow(JSON.stringify({ on: true, who: "sol" }))).toEqual({ on: true, who: "sol" });
   });
 
   it("keeps each token's trail separate and names both agents on the pill", () => {

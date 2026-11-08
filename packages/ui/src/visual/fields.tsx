@@ -2,8 +2,9 @@
 
 import clsx from "clsx";
 import { Check, ChevronDown, Eye, EyeOff, Minus, Plus, X } from "lucide-react";
-import { useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
 import { useMotionLevel } from "../motion-level";
+import { clampIndex, comboboxMenuAction, glideMenuAction, stepIndex, typeaheadIndex } from "./list-keyboard";
 
 export const visualFieldClass =
   "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary outline-none transition placeholder:text-ui-subtle focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25";
@@ -99,38 +100,80 @@ export function Combobox<T extends { id: string; label: string }>({
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
   const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? items.filter((item) => item.label.toLowerCase().includes(q)) : items;
   }, [items, query]);
   const selected = items.find((item) => item.id === value);
+  const active = clampIndex(cursor, filtered.length);
+  const optionId = (index: number): string => `${listId}-opt-${index}`;
+  const reveal = (): void => {
+    if (disabled) return;
+    const selectedIndex = Math.max(0, filtered.findIndex((item) => item.id === value));
+    setCursor(selectedIndex);
+    setOpen(true);
+  };
+  const choose = (itemId: string): void => {
+    onChange(itemId);
+    setOpen(false);
+    setQuery("");
+    inputRef.current?.focus();
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointer = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [open]);
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <input
+        ref={inputRef}
         id={id}
         aria-label={label}
         aria-expanded={open}
         aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && filtered[active] ? optionId(active) : undefined}
         role="combobox"
         className={visualFieldClass}
         placeholder={placeholder}
         disabled={disabled}
         value={open ? query : selected?.label ?? ""}
-        onFocus={() => { if (disabled) return; setOpen(true); setQuery(""); }}
+        onFocus={() => { if (disabled) return; setQuery(""); setOpen(true); }}
         onChange={(event) => { setQuery(event.target.value); setOpen(true); setCursor(0); }}
         onKeyDown={(event) => {
-          if (event.key === "ArrowDown") { event.preventDefault(); setCursor((index) => Math.min(filtered.length - 1, index + 1)); }
-          if (event.key === "ArrowUp") { event.preventDefault(); setCursor((index) => Math.max(0, index - 1)); }
-          if (event.key === "Enter" && filtered[cursor]) { event.preventDefault(); onChange(filtered[cursor].id); setOpen(false); }
-          if (event.key === "Escape") setOpen(false);
+          const action = comboboxMenuAction(event.key, open);
+          if (action === "none") return;
+          if (action === "tab") { setOpen(false); setQuery(""); return; }
+          event.preventDefault();
+          if (action === "close") {
+            event.stopPropagation();
+            setOpen(false);
+            setQuery("");
+            return;
+          }
+          if (action === "open") { reveal(); return; }
+          if (action === "next") setCursor((index) => stepIndex(index, filtered.length, 1));
+          if (action === "prev") setCursor((index) => stepIndex(index, filtered.length, -1));
+          if (action === "first") setCursor(0);
+          if (action === "last") setCursor(Math.max(0, filtered.length - 1));
+          if (action === "choose" && filtered[active]) choose(filtered[active].id);
         }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onBlur={(event) => {
+          if (rootRef.current?.contains(event.relatedTarget as Node)) return;
+          window.setTimeout(() => setOpen(false), 120);
+        }}
       />
       {open ? (
         <ul id={listId} role="listbox" className="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-ui-border bg-card py-1 shadow-lg">
           {filtered.length === 0 ? <li className="px-3 py-2 text-label text-ui-subtle">Ничего не нашлось</li> : filtered.map((item, index) => (
-            <li key={item.id} role="option" aria-selected={item.id === value}>
-              <button type="button" className={clsx("block w-full px-3 py-1.5 text-left text-body", index === cursor ? "bg-ui-hover text-ui-primary" : "text-ui-secondary")} onMouseDown={() => onChange(item.id)}>
+            <li key={item.id} id={optionId(index)} role="option" aria-selected={index === active}>
+              <button type="button" className={clsx("block w-full px-3 py-1.5 text-left text-body", index === active ? "bg-ui-hover text-ui-primary" : "text-ui-secondary")} onMouseDown={(event) => { event.preventDefault(); choose(item.id); }}>
                 {item.label}
               </button>
             </li>
@@ -408,19 +451,73 @@ export function Listbox({ label, options, value, onChange }: { label: string; op
 }
 
 export function GlideSelect({ label, options, value, onChange, id }: { label: string; options: string[]; value: string; onChange: (value: string) => void; id?: string }): React.ReactElement {
+  const selected = Math.max(0, options.indexOf(value));
   const [open, setOpen] = useState(false);
-  const index = Math.max(0, options.indexOf(value));
+  const [active, setActive] = useState(selected);
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const optionId = (index: number): string => `${listId}-opt-${index}`;
+  const openAt = (index: number): void => {
+    setActive(clampIndex(index, options.length));
+    setOpen(true);
+  };
+  const close = (restoreFocus: boolean): void => {
+    setOpen(false);
+    if (restoreFocus) buttonRef.current?.focus();
+  };
+  const choose = (option: string): void => {
+    onChange(option);
+    close(true);
+  };
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointer = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [open]);
   return (
-    <div className="relative">
-      <button id={id} type="button" aria-label={label} aria-expanded={open} className={clsx(visualFieldClass, "flex items-center justify-between")} onClick={() => setOpen((item) => !item)}>
+    <div className="relative" ref={rootRef}>
+      <button
+        ref={buttonRef}
+        id={id}
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open ? optionId(active) : undefined}
+        className={clsx(visualFieldClass, "flex items-center justify-between")}
+        onClick={() => (open ? close(false) : openAt(selected))}
+        onKeyDown={(event) => {
+          const action = glideMenuAction(event.key, open);
+          if (action === "none" && open && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault();
+            setActive((index) => typeaheadIndex(options, index, event.key));
+            return;
+          }
+          if (action === "none") return;
+          if (action === "tab") { setOpen(false); return; }
+          event.preventDefault();
+          if (action === "close") { event.stopPropagation(); close(true); return; }
+          if (action === "open") { openAt(selected); return; }
+          if (action === "next") setActive((index) => stepIndex(index, options.length, 1));
+          if (action === "prev") setActive((index) => stepIndex(index, options.length, -1));
+          if (action === "first") setActive(0);
+          if (action === "last") setActive(Math.max(0, options.length - 1));
+          if (action === "choose" && options[active]) choose(options[active]);
+        }}
+      >
         {value} <ChevronDown className="h-4 w-4 text-ui-subtle" />
       </button>
       {open ? (
-        <ul className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-ui-border bg-card py-1">
-          <li aria-hidden className="pointer-events-none absolute left-1 right-1 h-8 rounded-md bg-ui-hover transition-transform" style={{ transform: `translateY(${index * 32}px)` }} />
-          {options.map((option) => (
-            <li key={option} className="relative">
-              <button type="button" className="relative z-10 block h-8 w-full px-3 text-left text-body text-ui-primary" onClick={() => { onChange(option); setOpen(false); }}>{option}</button>
+        <ul id={listId} role="listbox" aria-label={label} className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-ui-border bg-card py-1">
+          <li aria-hidden className="pointer-events-none absolute left-1 right-1 h-8 rounded-md bg-ui-hover transition-transform" style={{ transform: `translateY(${active * 32}px)` }} />
+          {options.map((option, index) => (
+            <li key={option} id={optionId(index)} role="option" aria-selected={option === value} className="relative">
+              <button type="button" tabIndex={-1} className="relative z-10 block h-8 w-full px-3 text-left text-body text-ui-primary" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)} onMouseEnter={() => setActive(index)}>{option}</button>
             </li>
           ))}
         </ul>
