@@ -42,6 +42,7 @@ cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'launcher.cjs'), join(stage, 'launcher.cjs'));
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'ascii-path.cjs'), join(stage, 'ascii-path.cjs'));
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'payload.cjs'), join(stage, 'payload.cjs'));
+cpSync(join(root, 'orion-rust', 'edition.json'), join(stage, 'edition.json'));
 // Optional, operator-initiated Habitat. The native host is built from source and
 // smoke-tested on this Windows machine before it enters the installer.
 run('dotnet', ['publish', 'packages/habitat-windows-host/Kaiden.Habitat.WindowsHost.csproj', '--configuration', 'Release', '--runtime', 'win-x64', '--self-contained', 'true', '-p:PublishSingleFile=true', '-p:PublishTrimmed=false', '--output', habitatHostOutput]);
@@ -81,7 +82,7 @@ cpSync(webExport, join(stage, 'web'), {
     return !top || !skipExportDir.has(top);
   }
 });
-const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js', 'habitat/src/cli.mjs', 'habitat/Kaiden.Habitat.WindowsHost.exe'];
+const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'edition.json', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js', 'habitat/src/cli.mjs', 'habitat/Kaiden.Habitat.WindowsHost.exe'];
 for (const name of mustExist) if (!existsSync(join(stage, name))) throw new Error(`Missing bundled runtime file: ${name}`);
 writeShellContract(root, stage);
 const total = (directory) => readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => sum + (item.isDirectory() ? total(join(directory, item.name)) : statSync(join(directory, item.name)).size), 0);

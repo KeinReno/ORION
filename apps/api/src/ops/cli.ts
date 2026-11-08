@@ -2,6 +2,8 @@ import "dotenv/config";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { createNodeBackup, restoreNodeBackup, verifyNodeBackup } from "./node-backup";
+import { inspectMigrationBackup } from "./migration-preflight";
+import { verifyNodeBackupIntegrity } from "./backup-integrity";
 
 /**
  * Operator commands for a whole-node backup (see node-backup.ts):
@@ -19,13 +21,25 @@ function storageDir(): string {
 }
 
 async function main(): Promise<void> {
-  const [command, dirArg] = process.argv.slice(2);
-  if (!command || !dirArg || !["backup", "verify", "restore"].includes(command)) {
-    console.error("Использование: node dist/ops/cli.js <backup|verify|restore> <каталог>");
+  const [command, dirArg, migrationDir] = process.argv.slice(2);
+  if (!command || !dirArg || !["backup", "verify", "restore", "inspect-migration", "verify-migration"].includes(command)) {
+    console.error("Использование: node dist/ops/cli.js <backup|verify|restore|inspect-migration|verify-migration> <каталог>");
     process.exitCode = 2;
     return;
   }
   const dir = path.resolve(dirArg);
+
+  if (command === "inspect-migration") {
+    console.log(JSON.stringify(await inspectMigrationBackup(dir, migrationDir ? path.resolve(migrationDir) : undefined), null, 2));
+    return;
+  }
+
+  if (command === "verify-migration") {
+    const report = await verifyNodeBackupIntegrity(dir);
+    console.log(JSON.stringify(report, null, 2));
+    if (report.status !== "integrity-verified") process.exitCode = 1;
+    return;
+  }
 
   if (command === "verify") {
     const problems = await verifyNodeBackup(dir);

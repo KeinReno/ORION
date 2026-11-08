@@ -12,6 +12,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+// Experimental lifecycle primitive is exercised by tests only; production
+// startup remains on the existing launcher until parity is established.
+#[cfg(test)]
+mod supervisor;
+
 const EDITION_JSON: &str = include_str!("../edition.json");
 
 #[derive(Clone, Debug)]
@@ -72,31 +77,37 @@ pub fn load_profile() -> Result<Profile, String> {
     let profile = Profile {
         edition: edition.edition,
         product_name: edition.product_name,
-        data_dir,
+        data_dir: resolve_existing_ancestor(&data_dir)?,
         api_port: env_port("ORION_DESKTOP_API_PORT", edition.api_port)?,
         pg_port: env_port("ORION_DESKTOP_PG_PORT", edition.pg_port)?,
         runtime_port: env_port("ORION_RUST_RUNTIME_PORT", edition.runtime_port)?,
     };
     assert_isolated(&profile, &production, edition.forbidden_api_port, edition.forbidden_pg_port)?;
+    assert_isolated(&profile, &base.join("com.orion.desktop"), edition.forbidden_api_port, edition.forbidden_pg_port)?;
+    #[cfg(windows)]
+    {
+        let program_data = std::env::var_os("ProgramData").unwrap_or_else(|| "C:\\ProgramData".into());
+        assert_isolated(&profile, &PathBuf::from(program_data).join("ORION"), edition.forbidden_api_port, edition.forbidden_pg_port)?;
+    }
     Ok(profile)
 }
 
 pub fn assert_isolated(profile: &Profile, production: &Path, forbidden_api: u16, forbidden_pg: u16) -> Result<(), String> {
-    let data = norm(&profile.data_dir);
-    let prod = norm(production);
+    let data = norm(&resolve_existing_ancestor(&profile.data_dir)?);
+    let prod = norm(&resolve_existing_ancestor(production)?);
     if data == prod || data.starts_with(&(prod.clone() + "\\")) {
         return Err(format!(
             "ORION Rust не использует каталог обычного ORION ({}).",
             production.display()
         ));
     }
-    if profile.api_port == forbidden_api || profile.pg_port == forbidden_pg {
+    if [profile.api_port, profile.pg_port, profile.runtime_port].iter().any(|port| *port == forbidden_api || *port == forbidden_pg || *port == 5433) {
         return Err(format!(
-            "ORION Rust не занимает порты обычного ORION (API {forbidden_api}, PostgreSQL {forbidden_pg})."
+            "ORION Rust не занимает порты обычного ORION (API {forbidden_api}, PostgreSQL {forbidden_pg} или dev 5433)."
         ));
     }
-    if profile.runtime_port == profile.api_port || profile.runtime_port == profile.pg_port {
-        return Err("Порт диагностики ORION Rust совпал с портом API или PostgreSQL.".to_owned());
+    if profile.runtime_port == profile.api_port || profile.runtime_port == profile.pg_port || profile.api_port == profile.pg_port {
+        return Err("Порты API, PostgreSQL и диагностики ORION Rust должны различаться.".to_owned());
     }
     if profile.api_port == 0 || profile.pg_port == 0 || profile.runtime_port == 0 {
         return Err("В orion-rust/edition.json не задан порт.".to_owned());
@@ -203,7 +214,39 @@ fn env_port(name: &str, default: u16) -> Result<u16, String> {
 }
 
 fn norm(path: &Path) -> String {
-    path.to_string_lossy().replace('/', "\\").trim_end_matches('\\').to_ascii_lowercase()
+    path.to_string_lossy().replace('/', "\\").trim_start_matches("\\\\?\\").trim_end_matches('\\').to_ascii_lowercase()
+}
+
+// Resolve links in the longest existing prefix, including when the destination
+// itself has not been created yet. Never create anything during validation.
+fn resolve_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err(format!("Каталог данных должен быть абсолютным: {}", path.display()));
+    }
+    let mut lexical = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {},
+            std::path::Component::ParentDir => { if !lexical.pop() { return Err("Недопустимый путь данных.".into()); } },
+            other => lexical.push(other.as_os_str()),
+        }
+    }
+    let mut ancestor = lexical.as_path();
+    let mut suffix = Vec::new();
+    loop {
+        match std::fs::canonicalize(ancestor) {
+            Ok(mut resolved) => {
+                for part in suffix.iter().rev() { resolved.push(part); }
+                return Ok(resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let Some(name) = ancestor.file_name() else { return Err(format!("Не удалось проверить путь {}: {error}", path.display())); };
+                suffix.push(name.to_os_string());
+                ancestor = ancestor.parent().ok_or_else(|| format!("Не удалось проверить путь {}", path.display()))?;
+            }
+            Err(error) => return Err(format!("Не удалось проверить путь {}: {error}", path.display())),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -257,5 +300,20 @@ mod tests {
         let pg = sample(r"C:\Users\Reno\AppData\Local\ORION-Rust", 14000, 55432, 14099);
         assert!(assert_isolated(&api, &production, 4000, 55432).is_err());
         assert!(assert_isolated(&pg, &production, 4000, 55432).is_err());
+    }
+
+    #[test]
+    fn port_collisions_and_classic_ports_in_any_role_are_refused() {
+        let production = PathBuf::from(r"C:\Users\Reno\AppData\Local\ORION");
+        for (api, pg, runtime) in [(14000, 14000, 14099), (55432, 55442, 14099), (14000, 4000, 14099), (14000, 55442, 4000), (14000, 5433, 14099)] {
+            assert!(assert_isolated(&sample(r"C:\Users\Reno\AppData\Local\ORION-Rust", api, pg, runtime), &production, 4000, 55432).is_err());
+        }
+    }
+
+    #[test]
+    fn dot_segments_cannot_escape_into_classic_directory() {
+        let production = PathBuf::from(r"C:\Users\Reno\AppData\Local\ORION");
+        let profile = sample(r"C:\Users\Reno\AppData\Local\ORION-Rust\..\ORION\postgres", 14000, 55442, 14099);
+        assert!(assert_isolated(&profile, &production, 4000, 55432).is_err());
     }
 }

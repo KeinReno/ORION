@@ -21,16 +21,41 @@ let api = path.join(appRoot, 'api');
 let selection = null;
 // ORION Rust: порты и каталог задаёт orion-rust/edition.json. Каталог установленной beta
 // (`%LOCALAPPDATA%\ORION`) и её порты этот лаунчер не занимает.
-const edition = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'orion-rust', 'edition.json'), 'utf8'));
+// The edition is an immutable packaged runtime resource, not a path into the
+// developer checkout (which does not exist on an installed system).
+const edition = JSON.parse(fs.readFileSync(path.join(runtime, 'edition.json'), 'utf8'));
 const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
 const productionDirs = [
   path.join(localAppData, 'ORION'),
+  path.join(localAppData, 'com.orion.desktop'),
   path.join(process.env.ProgramData || 'C:/ProgramData', 'ORION'),
 ];
+// Resolve existing junctions/symlinks before both validation and use. Missing
+// suffixes are appended to their real existing ancestor without creating them.
+function resolvedPath(value) {
+  let current = path.resolve(value);
+  const suffix = [];
+  for (;;) {
+    try {
+      return ordinaryWindowsPath(path.join(fs.realpathSync.native(current), ...suffix));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      try {
+        if (fs.lstatSync(current).isSymbolicLink()) throw new Error('Refusing a dangling data-path link');
+      } catch (statError) {
+        if (statError.code !== 'ENOENT') throw statError;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      suffix.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
 // Кириллица в пути ломает initdb (см. ascii-path.cjs): журналы остаются там, где их ждёт оболочка, а база и бинарники
 // PostgreSQL при не-ASCII пути переезжают в `%ProgramData%\ORION`.
-const requestedData = ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(localAppData, edition.dataDirName));
-const data = effectiveDataDir(requestedData);
+const requestedData = resolvedPath(ordinaryWindowsPath(process.env.ORION_DESKTOP_DATA_DIR || path.join(localAppData, edition.dataDirName)));
+const data = resolvedPath(effectiveDataDir(requestedData));
 const appVersion = (() => { try { return require(path.join(api, 'package.json')).version; } catch { return 'dev'; } })();
 const pgPlan = effectivePgDir(path.join(runtime, 'postgres'), appVersion);
 const pgBin = path.join(pgPlan.dir, 'bin');
@@ -44,7 +69,7 @@ function assertEditionIsolation() {
   for (const candidate of [requestedData, data]) {
     const resolved = path.resolve(candidate);
     for (const production of productionDirs) {
-      const root = path.resolve(production);
+      const root = resolvedPath(production);
       const insideProduction = resolved.toLowerCase() === root.toLowerCase()
         || resolved.toLowerCase().startsWith(root.toLowerCase() + path.sep);
       if (insideProduction) {
@@ -52,8 +77,11 @@ function assertEditionIsolation() {
       }
     }
   }
-  if (apiPort === edition.forbiddenApiPort || pgPort === edition.forbiddenPgPort) {
-    throw new Error(`ORION Rust не занимает порты обычного ORION (API ${edition.forbiddenApiPort}, PostgreSQL ${edition.forbiddenPgPort}).`);
+  const ports = [apiPort, pgPort, runtimePort];
+  if (ports.some(port => !Number.isInteger(port) || port <= 0 || port > 65535)
+      || new Set(ports).size !== ports.length
+      || ports.some(port => port === edition.forbiddenApiPort || port === edition.forbiddenPgPort || port === 5433)) {
+    throw new Error(`ORION Rust не занимает порты обычного ORION (API ${edition.forbiddenApiPort}, PostgreSQL ${edition.forbiddenPgPort} или dev 5433); порты должны быть разными и допустимыми.`);
   }
 }
 
@@ -334,7 +362,14 @@ function superviseApi(baseEnv, hostFailed) {
   });
 }
 
-main().catch(async error => {
+// Validate before the normal error handler: log() writes in requestedData and
+// must never run when that very path was rejected as a Classic profile.
+let isolationError = null;
+try { assertEditionIsolation(); } catch (error) { isolationError = error; }
+if (isolationError) {
+  process.stderr.write(`Startup refused: ${isolationError.message}\n`);
+  process.exitCode = 1;
+} else main().catch(async error => {
   log(`Startup failed: ${error.message}`);
   if (selection?.trial) {
     payload.settle(data, false); selection.trial = false;

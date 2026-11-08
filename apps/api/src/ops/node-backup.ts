@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { PrismaClient } from "@prisma/client";
+import { verifyNodeBackupIntegrity } from "./backup-integrity";
 
 /**
  * Whole-node backup and restore: every table of the database plus the document
@@ -285,6 +286,12 @@ export async function verifyNodeBackup(dir: string): Promise<string[]> {
 
 export async function restoreNodeBackup(prisma: PrismaClient, options: RestoreOptions): Promise<RestoreReport> {
   const { dir, storageDir } = options;
+  // Validate the manifest and every referenced path before the existing restore
+  // reads a table or writes to the target. This is not migration sanitization.
+  const integrity = await verifyNodeBackupIntegrity(dir);
+  if (integrity.status !== "integrity-verified") {
+    throw new Error(`Резервная копия повреждена или содержит небезопасные пути: ${integrity.issues.join(", ")}`);
+  }
   const manifest = await readManifest(dir);
   const warnings: string[] = [];
 
