@@ -31,6 +31,14 @@ export function buildMiniMonth(year: number, month: number, today: Date): MiniMo
   return cells;
 }
 
+/** The Monday–Sunday row that contains `today`. */
+export function currentWeekCells(today: Date): MiniMonthCell[] {
+  const cells = buildMiniMonth(today.getFullYear(), today.getMonth(), today);
+  const index = cells.findIndex((cell) => cell.isToday);
+  const start = Math.floor(Math.max(index, 0) / 7) * 7;
+  return cells.slice(start, start + 7);
+}
+
 /** The ISO window the widget fetches: from the first visible cell to the day after the last. */
 export function miniMonthRange(cells: MiniMonthCell[]): { from: string; to: string } {
   const [y1, m1, d1] = cells[0].key.split("-").map(Number);

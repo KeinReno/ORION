@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMiniMonth, localDayKey, markDays, miniMonthRange } from "./mini-month";
+import { buildMiniMonth, currentWeekCells, localDayKey, markDays, miniMonthRange } from "./mini-month";
 
 describe("buildMiniMonth", () => {
   it("is always 42 cells, starts on Monday and flags today and the month", () => {
@@ -16,6 +16,17 @@ describe("buildMiniMonth", () => {
     const cells = buildMiniMonth(2026, 5, new Date(2026, 0, 1)); // June 2026 starts on Monday
     expect(cells[0].key).toBe("2026-06-01");
     expect(cells[0].inMonth).toBe(true);
+  });
+});
+
+describe("currentWeekCells", () => {
+  it("returns the Monday–Sunday row that contains today", () => {
+    // 13 October 2026 is a Tuesday → that week is 12–18 October.
+    const week = currentWeekCells(new Date(2026, 9, 13, 15, 0));
+    expect(week).toHaveLength(7);
+    expect(week[0].key).toBe("2026-10-12");
+    expect(week[6].key).toBe("2026-10-18");
+    expect(week.filter((cell) => cell.isToday).map((cell) => cell.key)).toEqual(["2026-10-13"]);
   });
 });
 
