@@ -117,6 +117,7 @@ const LazyMarketsPanel = dynamic(() => import("../panels/MarketsPanel").then((mo
 const LazyDocumentsPanel = dynamic(() => import("../panels/DocumentsPanel").then((module) => module.DocumentsPanel), { ssr: false });
 const LazyDocumentPanel = dynamic(() => import("../panels/DocumentPanel").then((module) => module.DocumentPanel), { ssr: false });
 const LazySyncPanel = dynamic(() => import("../panels/SyncPanel").then((module) => module.SyncPanel), { ssr: false });
+const LazySendPanel = dynamic(() => import("../panels/SendPanel").then((module) => module.SendPanel), { ssr: false });
 const LazyExtensionPanelHost = dynamic(() => import("./extensions/places-host").then((module) => module.ExtensionPanelHost), { ssr: false });
 const LazySettingsPanel = dynamic(() => import("../panels/SettingsPanel").then((module) => module.SettingsPanel), { ssr: false });
 
@@ -157,6 +158,7 @@ const BrowserPagePanel: FunctionComponent<PanelComponentProps> = (props) => crea
 const DocumentsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentsPanel as ComponentType<PanelComponentProps>, props);
 const DocumentPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyDocumentPanel as ComponentType<PanelComponentProps>, props);
 const SyncPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySyncPanel as ComponentType<PanelComponentProps>, props);
+const SendPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySendPanel as ComponentType<PanelComponentProps>, props);
 const SettingsPanel: FunctionComponent<PanelComponentProps> = (props) => createElement(LazySettingsPanel as ComponentType<PanelComponentProps>, props);
 const ExtensionPanelHost: FunctionComponent<PanelComponentProps> = (props) => createElement(LazyExtensionPanelHost as ComponentType<PanelComponentProps>, props);
 
@@ -292,6 +294,7 @@ const panelEntries: PanelEntry[] = [
   { id: "documents", label: "Документы", icon: FolderOpen, component: DocumentsPanel, moduleId: "documents", group: "Файлы и система" },
   { id: "document", label: "Документ", icon: FolderOpen, component: DocumentPanel, moduleId: "documents", hideFromNav: true, instanced: true, navParent: "documents" },
   { id: "sync", label: "Резервные копии", icon: RefreshCw, component: SyncPanel, group: "Файлы и система" },
+  { id: "send", label: "Orion Send", icon: Share2, component: SendPanel, group: "Файлы и система" },
   { id: "settings", label: "Настройки", icon: Settings, component: SettingsPanel, hideFromNav: true },
   // G5: панели модулей, подключённых манифестом (modules-ext/<id>/) — список генерирует scripts/module-registry.mjs.
   ...generatedPanelDefinitions,

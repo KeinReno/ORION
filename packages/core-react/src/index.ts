@@ -55,6 +55,7 @@ export * from "./use-overview";
 export * from "./use-shared";
 export * from "./use-opportunities";
 export * from "./use-lan";
+export * from "./use-send";
 export * from "./use-replica";
 export * from "./object-context";
 export * from "./use-assistant";

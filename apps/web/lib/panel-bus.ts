@@ -47,6 +47,24 @@ export function openPanel(panelId: string, title?: string): void {
   bus?.openPanel(panelId, title);
 }
 
+export type SendIntent =
+  | { kind: "documents"; workspaceId: string; documentIds: string[] }
+  | { kind: "copy"; copyKind: "note" | "task"; title: string; sourceId: string; payload: Record<string, unknown> };
+
+let sendIntent: SendIntent | null = null;
+
+/** Открывает Orion Send. Копия заметки или задачи — это файл, не синхронизация того же объекта. */
+export function openSend(intent?: SendIntent): void {
+  sendIntent = intent ?? null;
+  openPanel("send", "Orion Send");
+}
+
+export function takeSendIntent(): SendIntent | null {
+  const intent = sendIntent;
+  sendIntent = null;
+  return intent;
+}
+
 /** Explicit standalone opening. Existing openEntity/focus behavior stays compatible. */
 export function openObject(view: ViewRef, mode: ObjectOpenMode = "tab", title?: string): void {
   bus?.openObject?.(view, mode, title);
