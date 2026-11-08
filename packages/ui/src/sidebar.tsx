@@ -135,6 +135,14 @@ export interface SidebarProps {
   onGroupLinks?: (linkId: string, targetId: string) => void;
   /** Which window edge the menu sits on. top/bottom make a horizontal icon bar. Ignored for the phone drawer. */
   position?: "left" | "right" | "top" | "bottom";
+  /**
+   * One line above the link list while the vertical rail is expanded.
+   * Hidden when collapsed, on the phone drawer, and on horizontal top/bottom bars.
+   * The caller supplies the text.
+   */
+  railLabel?: string;
+  /** Initial pin state. Uncontrolled after mount; omitted callers stay unpinned. */
+  defaultPinned?: boolean;
 }
 
 const DRAG_TYPE = "application/x-orion-sidebar-link";
@@ -177,9 +185,11 @@ export function Sidebar({
   onMoveLink,
   onGroupLinks,
   allIconsVisible = false,
-  position = "left"
+  position = "left",
+  railLabel,
+  defaultPinned
 }: SidebarProps): React.ReactElement {
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinned] = useState(defaultPinned ?? false);
   const isDrawer = variant === "drawer";
   const horizontal = !isDrawer && (position === "top" || position === "bottom");
   const open = isDrawer || (pinned && !horizontal);
@@ -676,6 +686,11 @@ export function Sidebar({
           className={clsx("flex gap-1", horizontal ? "min-w-0 flex-row items-center overflow-x-auto" : "flex-col")}
           {...dropProps("nav", null)}
         >
+          {railLabel && open && !isDrawer ? (
+            <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground">
+              {railLabel}
+            </div>
+          ) : null}
           {!grouped
             ? allIconsVisible ? links.map(renderLink) : hasSections
               ? renderRail()

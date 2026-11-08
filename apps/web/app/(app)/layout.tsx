@@ -11,6 +11,7 @@ import {
   IconButton,
   Sidebar,
   Sheet,
+  type SidebarLinkItem,
   Workbench,
   SkipNav,
   positionToDirection,
@@ -32,7 +33,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -106,6 +107,17 @@ import { addFolder, deleteFolder, folderOf, groupOnto, moveFolder, moveToFolder,
 import { NodeBadge } from "../../components/node-badge";
 import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
+import { useNavSidebars } from "../../lib/use-nav-sidebars";
+import {
+  NAV_SIDEBAR_LIMIT,
+  PRIMARY_SIDEBAR_ID,
+  createNavSidebar,
+  movePanelToSidebar,
+  panelsForSidebar,
+  removeNavSidebar,
+  type NavEdge,
+  type NavSidebarConfig
+} from "../../lib/sidebar-instances";
 import { buildSwitcherGroups } from "../../lib/workspace-order";
 
 // The context panel names the section of whichever dock panel is active (ADR-0014).
@@ -382,6 +394,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }, [logout, play, router]);
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
+  // «Инструменты» is a footer menu on the primary bar, not a list of ordinary sections.
+  const sectionNav = orderedNav.filter((panel) => panel.group !== "Инструменты");
+  const toolNav = orderedNav.filter((panel) => panel.group === "Инструменты");
+  const { state: navState, update: updateNav } = useNavSidebars();
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
   const folderViews = useMemo<SidebarFolderView[]>(() => {
     const visible = new Set(navPanels.map((panel) => panel.id));
@@ -749,6 +765,69 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     [placePanel]
   );
 
+  const navLinksFor = (sidebarId: string): SidebarLinkItem[] => {
+    const ids = panelsForSidebar(navState, sidebarId, sectionNav.map((panel) => panel.id));
+    const byId = new Map(sectionNav.map((panel) => [panel.id, panel]));
+    const otherBars = navState.sidebars.filter((bar) => bar.id !== sidebarId);
+    return ids.flatMap((id) => {
+      const panel = byId.get(id);
+      if (!panel) return [];
+      return [{
+        id: panel.id,
+        label: panel.label,
+        icon: panel.icon,
+        isActive: panel.id === activeNavId,
+        group: panel.group,
+        badge:
+          panel.id === "inbox" && inboxCount > 0
+            ? inboxCount
+            : panel.id === "tasks" && overdueCount > 0
+              ? overdueCount
+              : undefined,
+        badgeLabel:
+          panel.id === "inbox" && inboxCount > 0
+            ? `к разбору: ${inboxCount}`
+            : panel.id === "tasks" && overdueCount > 0
+              ? `просрочено в пространстве: ${overdueCount}`
+              : undefined,
+        onClick: () => openFromMenu(panel.id),
+        onDragStart: (event: React.DragEvent<HTMLElement>) => {
+          event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, panel.id);
+          event.dataTransfer.effectAllowed = "copy";
+        },
+        menuItems: [
+          { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
+          { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
+          { label: "Открыть в соседней области", onSelect: () => openInSecondaryDock(panel.id, panel.label) },
+          ...(panelSupportsSurface(panel.id, "window")
+            ? [{ label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) }]
+            : []),
+          ...(otherBars.length > 0
+            ? [
+                "separator" as const,
+                ...otherBars.map((bar) => ({
+                  label: `Переместить в сайдбар «${bar.name}»`,
+                  onSelect: () => updateNav((current) => movePanelToSidebar(current, panel.id, bar.id))
+                }))
+              ]
+            : []),
+          "separator",
+          ...sidebarFolders
+            .filter((folder) => folder.id !== folderOf(sidebarFolders, panel.id)?.id)
+            .map((folder) => ({
+              label: `В папку «${folder.name}»`,
+              icon: Folder,
+              onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, folder.id))
+            })),
+          ...(folderOf(sidebarFolders, panel.id)
+            ? [{ label: "Убрать из папки", onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, null)) }]
+            : []),
+          { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", panelId: panel.id }) }
+        ] satisfies (MenuItem | "separator")[]
+      }];
+    });
+  };
+
   /**
    * U04: loads the saved layout for `key` into `api` (or falls back to just
    * the dashboard panel), then re-applies the disabled-modules/compact
@@ -1015,6 +1094,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   if (isLoading || !user || workspacesLoading || !workspace) {
     return <LoadingScreen />;
   }
+  const accountUser = user;
 
   const secondaryDockColumn = secondaryDock.detachedElsewhere ? (
     <div
@@ -1061,17 +1141,197 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     </div>
   );
 
+  const primaryBar = navState.sidebars.find((bar) => bar.id === PRIMARY_SIDEBAR_ID) ?? navState.sidebars[0]!;
+
+  function edgeOf(bar: NavSidebarConfig): NavEdge {
+    return bar.id === PRIMARY_SIDEBAR_ID ? sidebarPosition : bar.edge;
+  }
+
+  function sidebarNode(bar: NavSidebarConfig, asDrawer: boolean): React.ReactElement {
+    const primary = bar.id === PRIMARY_SIDEBAR_ID;
+    const position = primary ? sidebarPosition : bar.edge;
+    const wideFooter = (open: boolean) => open || (!asDrawer && (position === "top" || position === "bottom"));
+    return (
+      <Sidebar
+        key={`${bar.id}:${bar.density}:${asDrawer ? "drawer" : position}`}
+        allIconsVisible={primary && precision}
+        folders={primary ? folderViews : []}
+        onToggleFolder={primary ? (id) => saveFolders(toggleFolder(sidebarFolders, id)) : undefined}
+        onCreateFolder={primary ? (panelId) => setFolderDialog({ mode: "create", panelId }) : undefined}
+        onMoveLink={primary ? (panelId, folderId, beforeId) => {
+          const nextFolders = placeInFolder(sidebarFolders, panelId, folderId, beforeId);
+          if (nextFolders.some((folder, index) => folder.items.join() !== sidebarFolders[index]?.items.join())) saveFolders(nextFolders);
+          if (folderId === null && beforeId) saveOrder(reorderPanels(defaultNavIds, sidebarOrder, panelId, beforeId));
+        } : undefined}
+        onGroupLinks={primary ? (panelId, targetId) => {
+          const targetLabel = navPanels.find((panel) => panel.id === targetId)?.label ?? "";
+          const draggedLabel = navPanels.find((panel) => panel.id === panelId)?.label ?? "";
+          const before = sidebarFolders;
+          const existingFolder = folderOf(before, targetId);
+          const next = groupOnto(before, panelId, targetId, newFolderId(), [targetLabel, draggedLabel].filter(Boolean).join(", "));
+          if (!next) return;
+          saveFolders(next);
+          toast({
+            title: existingFolder ? `Добавлено в «${existingFolder.name}»` : `Группа «${next[next.length - 1]?.name ?? ""}» создана`,
+            action: { label: "Отменить", onClick: () => saveFolders(before) }
+          });
+        } : undefined}
+        variant={asDrawer ? "drawer" : "rail"}
+        position={position}
+        drawerOpen={asDrawer ? drawerOpen : false}
+        onDrawerClose={asDrawer ? () => setDrawerOpen(false) : undefined}
+        railLabel={!asDrawer && navState.sidebars.length > 1 ? bar.name : undefined}
+        defaultPinned={bar.density !== "icons"}
+        header={primary ? ({ open }) => (
+          <div className="flex flex-col gap-2 rounded-lg px-1 py-1.5">
+            <div className="flex items-center gap-2" title="KAIDEN Orion">
+              <KaidenLogo className="h-7 w-7" />
+              {open ? <span className="text-sm font-semibold tracking-tight text-foreground">ORION</span> : <span className="sr-only">ORION</span>}
+            </div>
+            {!precision ? <WorkspaceSwitcher
+              groups={switcherGroups}
+              active={workspace}
+              expanded={open}
+              onSelect={requestWorkspaceSwitch}
+              onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
+              onOpenSpaces={() => leaveWorkbench("spaces")}
+            /> : null}
+          </div>
+        ) : undefined}
+        links={navLinksFor(bar.id)}
+        LinkComponent={NextLink}
+        footer={({ open }) => {
+          const labeled = wideFooter(open);
+          if (!primary) {
+            return labeled ? (
+              <button
+                type="button"
+                onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+              >
+                Убрать сайдбар
+              </button>
+            ) : (
+              <IconButton label="Убрать сайдбар" onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}>
+                <span aria-hidden className="text-xs">✕</span>
+              </IconButton>
+            );
+          }
+          return (
+            <div className={position === "top" || position === "bottom" ? "flex flex-row items-center gap-2" : "flex flex-col gap-2"}>
+              {toolNav.length > 0 ? (
+                <DropdownMenu
+                  align="start"
+                  trigger={({ toggle }) => labeled ? (
+                    <button
+                      type="button"
+                      onClick={toggle}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                    >
+                      <Wrench className="h-4 w-4 shrink-0" aria-hidden />
+                      Инструменты
+                    </button>
+                  ) : (
+                    <IconButton label="Инструменты" onClick={toggle}>
+                      <Wrench className="h-4 w-4" />
+                    </IconButton>
+                  )}
+                  items={toolNav.map((panel) => ({
+                    label: panel.label,
+                    icon: panel.icon,
+                    onSelect: () => openFromMenu(panel.id)
+                  }))}
+                />
+              ) : null}
+              {labeled && !asDrawer && navState.sidebars.length < NAV_SIDEBAR_LIMIT ? (
+                <button
+                  type="button"
+                  onClick={() => updateNav(createNavSidebar)}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                >
+                  {navState.sidebars.some((item) => item.id === "side-2") ? "Создать третий сайдбар" : "Создать второй сайдбар"}
+                </button>
+              ) : null}
+              {open ? (
+                <>
+                  <DropdownMenu
+                    align="start"
+                    trigger={({ toggle }) => (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                      >
+                        <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden />
+                        Раскладки
+                      </button>
+                    )}
+                    items={[
+                      { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
+                      ...(layoutNames.length > 0 ? ["separator" as const] : []),
+                      ...layoutNames.map((name, index) => ({
+                        label: `${index < LAYOUT_SHORTCUT_COUNT ? `Alt+${index + 1}  ` : ""}${name}${name === layoutDefault ? "  ★" : ""}`,
+                        onSelect: () => applyLayout(name)
+                      })),
+                      "separator" as const,
+                      { label: "Управление: название, вход, перенос…", onSelect: () => setLayoutsManagerOpen(true) }
+                    ]}
+                  />
+                  <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
+                  <button
+                    type="button"
+                    onClick={() => openSettings("profile")}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
+                  >
+                    <AccountAvatar userId={accountUser.id} name={accountUser.name} hasAvatar={accountUser.hasAvatar} size={28} />
+                    <span className="min-w-0 truncate text-2xs text-subtle-foreground">{accountUser.name || accountUser.email || "Учётка"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => leaveWorkbench("spaces")}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    Сменить пространство
+                  </button>
+                  <button
+                    onClick={() => leaveWorkbench("logout")}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    <LogOut className="h-5 w-5 shrink-0" aria-hidden />
+                    Выйти
+                  </button>
+                </>
+              ) : (
+                <IconButton label="Выйти" onClick={() => leaveWorkbench("logout")}>
+                  <LogOut className="h-4 w-4" />
+                </IconButton>
+              )}
+            </div>
+          );
+        }}
+      />
+    );
+  }
+
+  function edgeSlot(edge: NavEdge): ReactNode {
+    if (compact) return null;
+    const bars = navState.sidebars.filter((bar) => edgeOf(bar) === edge);
+    if (bars.length === 0) return null;
+    const vertical = edge === "left" || edge === "right";
+    return (
+      <div className={vertical ? "flex shrink-0 self-stretch" : "flex w-full shrink-0 flex-col"}>
+        {bars.map((bar) => sidebarNode(bar, false))}
+      </div>
+    );
+  }
+
   return (
     <ShortcutsProvider overrides={shortcutOverrides}>
     <div
       className={cx(
         "flex h-dvh bg-background",
         precision && "orion-shell--precision",
-        compact && "orion-shell--compact",
-        // The phone always uses the left drawer; the menu's own edge applies to the desktop shell.
-        !compact && sidebarPosition === "right" && "flex-row-reverse",
-        !compact && sidebarPosition === "top" && "flex-col",
-        !compact && sidebarPosition === "bottom" && "flex-col-reverse"
+        compact && "orion-shell--compact"
       )}
       onContextMenu={rootContextMenu.onContextMenu}
     >
@@ -1128,172 +1388,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           onClick={() => setDrawerOpen(false)}
         />
       ) : null}
-      <Sidebar
-        allIconsVisible={precision}
-        folders={folderViews}
-        onToggleFolder={(id) => saveFolders(toggleFolder(sidebarFolders, id))}
-        onCreateFolder={(panelId) => setFolderDialog({ mode: "create", panelId })}
-        onMoveLink={(panelId, folderId, beforeId) => {
-          const nextFolders = placeInFolder(sidebarFolders, panelId, folderId, beforeId);
-          if (nextFolders.some((folder, index) => folder.items.join() !== sidebarFolders[index]?.items.join())) saveFolders(nextFolders);
-          // Dropped among the free sections: it also takes that place in the user's own order.
-          if (folderId === null && beforeId) saveOrder(reorderPanels(defaultNavIds, sidebarOrder, panelId, beforeId));
-        }}
-        onGroupLinks={(panelId, targetId) => {
-          const targetLabel = navPanels.find((panel) => panel.id === targetId)?.label ?? "";
-          const draggedLabel = navPanels.find((panel) => panel.id === panelId)?.label ?? "";
-          const before = sidebarFolders;
-          const existingFolder = folderOf(before, targetId);
-          const next = groupOnto(before, panelId, targetId, newFolderId(), [targetLabel, draggedLabel].filter(Boolean).join(", "));
-          if (!next) return;
-          saveFolders(next);
-          toast({
-            title: existingFolder ? `Добавлено в «${existingFolder.name}»` : `Группа «${next[next.length - 1]?.name ?? ""}» создана`,
-            action: { label: "Отменить", onClick: () => saveFolders(before) }
-          });
-        }}
-        variant={compact ? "drawer" : "rail"}
-        position={sidebarPosition}
-        drawerOpen={drawerOpen}
-        onDrawerClose={() => setDrawerOpen(false)}
-        header={({ open }) => (
-          <div className="flex flex-col gap-2 rounded-lg px-1 py-1.5">
-            <div className="flex items-center gap-2" title="KAIDEN Orion">
-              <KaidenLogo className="h-7 w-7" />
-              {open ? <span className="text-sm font-semibold tracking-tight text-foreground">ORION</span> : <span className="sr-only">ORION</span>}
-            </div>
-            {/*
-             * Collapsed rail = avatar only (it still opens the list); expanded adds the
-             * previous/next arrows and the name. Notifications live in the dockview tab
-             * strip — the bell used to be clipped out of the 60px rail here.
-             */}
-            {!precision ? <WorkspaceSwitcher
-              groups={switcherGroups}
-              active={workspace}
-              expanded={open}
-              onSelect={requestWorkspaceSwitch}
-              onOpenInNewWindow={(id) => void openWorkspaceInNewWindow(id, workspaces.find((w) => w.id === id)?.name ?? "ORION")}
-              onOpenSpaces={() => leaveWorkbench("spaces")}
-            /> : null}
-          </div>
-        )}
-        links={orderedNav.map((panel) => ({
-          id: panel.id,
-          label: panel.label,
-          icon: panel.icon,
-          isActive: panel.id === activeNavId,
-          group: panel.group,
-          badge:
-            panel.id === "inbox" && inboxCount > 0
-              ? inboxCount
-              : panel.id === "tasks" && overdueCount > 0
-                ? overdueCount
-                : undefined,
-          badgeLabel:
-            panel.id === "inbox" && inboxCount > 0
-              ? `к разбору: ${inboxCount}`
-              : panel.id === "tasks" && overdueCount > 0
-                ? `просрочено в пространстве: ${overdueCount}`
-                : undefined,
-          onClick: () => openFromMenu(panel.id),
-          // U06: drag the icon/label straight onto Dockview — the custom
-          // mime type is how onReady's onWillShowOverlay/onDidDrop (above)
-          // recognize this as a sidebar drag rather than dockview's own
-          // internal tab-reorder drag or a stray OS file drop.
-          onDragStart: (event: React.DragEvent<HTMLElement>) => {
-            event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, panel.id);
-            event.dataTransfer.effectAllowed = "copy";
-          },
-          // Mouse-free alternatives to drag, reaching the same destinations
-          // (U06 done-criterion): plain click already opens/focuses
-          // (`onClick` above); this menu adds split and new-window.
-          menuItems: [
-            { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
-            { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
-            { label: "Открыть во втором сайдбаре", onSelect: () => openInSecondaryDock(panel.id, panel.label) },
-            ...(panelSupportsSurface(panel.id, "window")
-              ? [{ label: "Открыть в новом окне", onSelect: () => void detachPanelToWindow(panel.id, panel.label) }]
-              : []),
-            "separator",
-            // Folders: the same list a user sees, reachable without dragging anything.
-            ...sidebarFolders
-              .filter((folder) => folder.id !== folderOf(sidebarFolders, panel.id)?.id)
-              .map((folder) => ({
-                label: `В папку «${folder.name}»`,
-                icon: Folder,
-                onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, folder.id))
-              })),
-            ...(folderOf(sidebarFolders, panel.id)
-              ? [{ label: "Убрать из папки", onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, null)) }]
-              : []),
-            { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", panelId: panel.id }) }
-          ] satisfies (MenuItem | "separator")[]
-        }))}
-        LinkComponent={NextLink}
-        footer={({ open }) =>
-          open ? (
-            <div className="flex flex-col gap-2">
-              <DropdownMenu
-                align="start"
-                trigger={({ toggle }) => (
-                  <button
-                    type="button"
-                    onClick={toggle}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                  >
-                    <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden />
-                    Раскладки
-                  </button>
-                )}
-                items={[
-                  { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
-                  ...(layoutNames.length > 0 ? ["separator" as const] : []),
-                  ...layoutNames.map((name, index) => ({
-                    label: `${index < LAYOUT_SHORTCUT_COUNT ? `Alt+${index + 1}  ` : ""}${name}${name === layoutDefault ? "  ★" : ""}`,
-                    onSelect: () => applyLayout(name)
-                  })),
-                  "separator" as const,
-                  { label: "Управление: название, вход, перенос…", onSelect: () => setLayoutsManagerOpen(true) }
-                ]}
-              />
-              <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
-              <button
-                type="button"
-                // The profile opens inside the workbench: leaving for /account dropped the open tabs' context.
-                onClick={() => openSettings("profile")}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-white/5"
-              >
-                <AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={28} />
-                <span className="min-w-0 truncate text-2xs text-subtle-foreground">{user.name || user.email || "Учётка"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => leaveWorkbench("spaces")}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-              >
-                Сменить пространство
-              </button>
-              <button
-                onClick={() => leaveWorkbench("logout")}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-              >
-                <LogOut className="h-5 w-5 shrink-0" aria-hidden />
-                Выйти
-              </button>
-            </div>
-          ) : (
-            // Collapsed rail: same icon-only rule as the header — email/chip
-            // text used to render at full width here and wrap across several
-            // lines inside the 60px column instead of being clipped.
-            <IconButton
-              label="Выйти"
-              onClick={() => leaveWorkbench("logout")}
-            >
-              <LogOut className="h-4 w-4" />
-            </IconButton>
-          )
-        }
-      />
+      {compact ? sidebarNode(primaryBar, true) : null}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-row">
+        {edgeSlot("left")}
+        <div className="flex min-h-[240px] min-w-[24rem] flex-1 flex-col">
+          {edgeSlot("top")}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Precision has its own single top bar (below) — the floating corner is only for the legacy
             shell, which has no header of its own: there the dock's per-split tab-strip action bar used
@@ -1362,6 +1461,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           {precision && inspectorOpen && !editorContext && activeProjectId && wideInspector ? <div className="w-72 shrink-0 border-l border-border"><ProjectContextInspector key={`${workspace.id}:${activeProjectId}`} workspaceId={workspace.id} workspaceName={workspace.name} projectId={activeProjectId} views={projectViews} onOpen={(id, title) => openContextProject(id, title, "open")} onClose={() => { document.getElementById("orion-inspector-toggle")?.focus(); setInspectorOpen(false); }} /></div> : null}
           <ResourcesDock />
         </main>
+      </div>
+          {edgeSlot("bottom")}
+        </div>
+        {edgeSlot("right")}
       </div>
       <Sheet open={Boolean(precision && compact && mobileContextOpen)} onClose={() => setMobileContextOpen(false)} title="Навигация пространства" bare width="22rem">
         <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId} activeKind={activeDefinition?.navParent ?? activeDefinition?.id}
