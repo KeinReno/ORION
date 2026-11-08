@@ -1,47 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { loadNavSidebars, navSidebarStorageKey } from "./nav-sidebar-storage";
 import { initialNavSidebars, parseNavSidebarState, type NavSidebarState } from "./sidebar-instances";
 
-const STORAGE_KEY = "orion.navSidebars.v1";
-
-function readStoredNavSidebars(): NavSidebarState {
-  if (typeof window === "undefined") return initialNavSidebars();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return initialNavSidebars();
-    return parseNavSidebarState(JSON.parse(raw));
-  } catch {
-    // Missing or corrupt JSON keeps the single primary bar.
-    return initialNavSidebars();
-  }
-}
-
 /**
- * Which navigation bars exist, and which panel sits on which bar.
- * Saved on this computer only — placement never enables or disables a module.
+ * Which navigation bars exist for this person in this workspace.
+ * Saved on this computer only. Another window of the same pair hears the change.
  */
-export function useNavSidebars(): {
+export function useNavSidebars(userId: string | undefined, workspaceId: string | undefined): {
   state: NavSidebarState;
   update: (updater: (current: NavSidebarState) => NavSidebarState) => void;
 } {
+  const scope = userId && workspaceId ? navSidebarStorageKey(userId, workspaceId) : null;
   const [state, setState] = useState<NavSidebarState>(initialNavSidebars);
-  const [ready, setReady] = useState(false);
-  const untouched = useRef(state);
+  const [readyScope, setReadyScope] = useState<string | null>(null);
 
   useEffect(() => {
-    setState((current) => (current === untouched.current ? readStoredNavSidebars() : current));
-    setReady(true);
-  }, []);
+    if (!scope || !userId || !workspaceId) return;
+    setState(loadNavSidebars(window.localStorage, userId, workspaceId));
+    setReadyScope(scope);
+  }, [scope, userId, workspaceId]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!scope || readyScope !== scope) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const next = JSON.stringify(state);
+      if (window.localStorage.getItem(scope) === next) return;
+      window.localStorage.setItem(scope, next);
     } catch {
       // A blocked or full store keeps the bars for this visit.
     }
-  }, [ready, state]);
+  }, [readyScope, scope, state]);
+
+  useEffect(() => {
+    if (!scope) return;
+    function onStorage(event: StorageEvent): void {
+      if (event.key !== scope || event.newValue === null) return;
+      try {
+        const parsed = parseNavSidebarState(JSON.parse(event.newValue));
+        setState((current) => (JSON.stringify(current) === event.newValue ? current : parsed));
+      } catch {
+        setState(initialNavSidebars());
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [scope]);
 
   const update = useCallback((updater: (current: NavSidebarState) => NavSidebarState) => {
     setState((current) => updater(current));

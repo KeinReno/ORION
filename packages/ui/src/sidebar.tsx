@@ -7,7 +7,8 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { useMounted } from "./hooks";
 import { useMotionLevel, useMotionSpring } from "./motion-level";
-import { DropdownMenu, Popover, type MenuItem } from "./overlays";
+import { beginNavDrag, cancelNavDrag, endNavDrag, navDragCancelled, subscribeNavDrag } from "./nav-drag";
+import { DropdownMenu, Popover, useContextMenuApi, type MenuItem } from "./overlays";
 
 export interface SidebarLinkItem {
   /** Stable id (the panel id) — what a user folder refers to. Optional: a link without one cannot sit in a folder. */
@@ -143,6 +144,10 @@ export interface SidebarProps {
   railLabel?: string;
   /** Initial pin state. Uncontrolled after mount; omitted callers stay unpinned. */
   defaultPinned?: boolean;
+  /** Separates several bars on one screen: nav id and the active-item motion. */
+  navId?: string;
+  /** Right-click on the empty part of this bar. */
+  surfaceMenuItems?: (MenuItem | "separator")[];
 }
 
 const DRAG_TYPE = "application/x-orion-sidebar-link";
@@ -187,9 +192,12 @@ export function Sidebar({
   allIconsVisible = false,
   position = "left",
   railLabel,
-  defaultPinned
+  defaultPinned,
+  navId = "sidebar",
+  surfaceMenuItems
 }: SidebarProps): React.ReactElement {
   const [pinned, setPinned] = useState(defaultPinned ?? false);
+  const showContextMenu = useContextMenuApi();
   const isDrawer = variant === "drawer";
   const horizontal = !isDrawer && (position === "top" || position === "bottom");
   const open = isDrawer || (pinned && !horizontal);
@@ -271,11 +279,19 @@ export function Sidebar({
   // in this sidebar, so files or dock tabs dragged over it are ignored. `dropKey` marks the target.
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
+  useEffect(() => subscribeNavDrag(setDragId), []);
+  useEffect(() => {
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === "Escape") cancelNavDrag();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   function dropProps(key: string, folderId: string | null, beforeId?: string, onDropped?: (id: string) => void): React.HTMLAttributes<HTMLElement> {
     if (!onMoveLink) return {};
     return {
       onDragOver: (event) => {
-        if (!dragId) return;
+        if (!dragId || navDragCancelled()) return;
         event.preventDefault();
         event.stopPropagation();
         event.dataTransfer.dropEffect = "move";
@@ -285,7 +301,7 @@ export function Sidebar({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropKey((cur) => (cur === key ? null : cur));
       },
       onDrop: (event) => {
-        if (!dragId) return;
+        if (!dragId || navDragCancelled()) return;
         event.preventDefault();
         event.stopPropagation();
         const id = dragId;
@@ -310,12 +326,14 @@ export function Sidebar({
     const targetId = link.id;
     return {
       onDragOver: (event) => {
-        if (!dragId || dragId === targetId) return;
+        if (!dragId || navDragCancelled() || dragId === targetId) return;
         event.preventDefault();
         event.stopPropagation();
         event.dataTransfer.dropEffect = "move";
         const rect = event.currentTarget.getBoundingClientRect();
-        const mode: "order" | "group" = onGroupLinks && (event.clientY - rect.top) / rect.height > ORDER_ZONE ? "group" : "order";
+        const span = horizontal ? rect.width : rect.height;
+        const offset = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
+        const mode: "order" | "group" = onGroupLinks && span > 0 && offset / span > ORDER_ZONE ? "group" : "order";
         if (dropKey !== key) setDropKey(key);
         if (dropMode !== mode) setDropMode(mode);
       },
@@ -326,7 +344,7 @@ export function Sidebar({
         }
       },
       onDrop: (event) => {
-        if (!dragId || dragId === targetId) return;
+        if (!dragId || navDragCancelled() || dragId === targetId) return;
         event.preventDefault();
         event.stopPropagation();
         const id = dragId;
@@ -361,7 +379,7 @@ export function Sidebar({
       <>
         {isActive ? (
           <motion.span
-            layoutId={isDrawer ? "orion-sidebar-pill-drawer" : "orion-sidebar-pill"}
+            layoutId={isDrawer ? `${navId}-pill-drawer` : `${navId}-pill`}
             className="absolute inset-0 rounded-lg bg-accent/12"
             transition={smooth}
             aria-hidden
@@ -369,7 +387,7 @@ export function Sidebar({
         ) : null}
         {isActive ? (
           <motion.span
-            layoutId={isDrawer ? "orion-sidebar-bar-drawer" : "orion-sidebar-bar"}
+            layoutId={isDrawer ? `${navId}-bar-drawer` : `${navId}-bar`}
             className={clsx("absolute rounded-full bg-accent", horizontal ? "inset-x-2 bottom-0 h-0.5" : "inset-y-1.5 left-0 w-0.5")}
             transition={smooth}
             aria-hidden
@@ -422,16 +440,22 @@ export function Sidebar({
         aria-label={ariaLabel}
         draggable={Boolean(link.onDragStart) || Boolean(onMoveLink && link.id)}
         onDragStart={(event) => {
-          link.onDragStart?.(event);
           if (onMoveLink && link.id) {
+            event.dataTransfer.clearData();
             event.dataTransfer.setData(DRAG_TYPE, link.id);
-            event.dataTransfer.effectAllowed = "copyMove";
-            setDragId(link.id);
+            event.dataTransfer.effectAllowed = "move";
+            beginNavDrag(link.id);
+          } else {
+            link.onDragStart?.(event);
           }
         }}
         onDragEnd={() => {
-          setDragId(null);
+          endNavDrag();
           setDropKey(null);
+          setDropMode(null);
+        }}
+        onContextMenu={(event) => {
+          if (link.menuItems && link.menuItems.length > 0) showContextMenu(event, link.menuItems);
         }}
         onClick={() => handleNavigate(link.onClick)}
         onMouseEnter={(e) => handleEnter(link.label, e)}
@@ -534,6 +558,9 @@ export function Sidebar({
             onClick={toggle}
             aria-haspopup="menu"
             aria-expanded={isOpen}
+            onContextMenu={(event) => {
+              if (folder.menuItems && folder.menuItems.length > 0) showContextMenu(event, folder.menuItems);
+            }}
             aria-label={`Папка «${folder.name}», разделов: ${members.length}`}
             title={`${folder.name} · ${members.length}`}
             {...dropProps(`folder:${folder.id}`, folder.id)}
@@ -589,6 +616,9 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => onToggleFolder?.(folder.id)}
+            onContextMenu={(event) => {
+              if (folder.menuItems && folder.menuItems.length > 0) showContextMenu(event, folder.menuItems);
+            }}
             aria-expanded={!folder.collapsed}
             className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
@@ -681,7 +711,10 @@ export function Sidebar({
       >
         {header ? <div className="px-1">{typeof header === "function" ? header({ open }) : header}</div> : null}
         <nav
-          id="orion-sidebar-nav"
+          id={`${navId}-nav`}
+          onContextMenu={(event) => {
+            if (surfaceMenuItems && surfaceMenuItems.length > 0) showContextMenu(event, surfaceMenuItems);
+          }}
           aria-label="Разделы"
           className={clsx("flex gap-1", horizontal ? "min-w-0 flex-row items-center overflow-x-auto" : "flex-col")}
           {...dropProps("nav", null)}
@@ -769,7 +802,7 @@ export function Sidebar({
           <button
             type="button"
             aria-expanded={open}
-            aria-controls="orion-sidebar-nav"
+            aria-controls={`${navId}-nav`}
             aria-label={pinned ? "Открепить меню" : "Закрепить меню"}
             title={pinned ? "Открепить меню" : "Закрепить меню"}
             onClick={() => setPinned((value) => !value)}

@@ -71,7 +71,6 @@ import { LayoutsDialog } from "../../components/layouts-dialog";
 import { isTauri } from "../../lib/is-tauri";
 import { useLocalNow } from "../../lib/use-day-boundary";
 import {
-  ORION_PANEL_DRAG_MIME,
   isOrionPanelDragEvent,
   readDraggedPanelId,
   resolveDropAction
@@ -103,7 +102,7 @@ import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
-import { addFolder, deleteFolder, folderOf, groupOnto, moveFolder, moveToFolder, orderedIds, placeInFolder, renameFolder, reorderPanels, toggleFolder } from "../../lib/sidebar-folders";
+import { orderedIds } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
 import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
@@ -111,10 +110,17 @@ import { useNavSidebars } from "../../lib/use-nav-sidebars";
 import {
   NAV_SIDEBAR_LIMIT,
   PRIMARY_SIDEBAR_ID,
+  addNavFolder,
   createNavSidebar,
+  deleteNavFolder,
+  groupPanelOnto,
+  moveNavFolder,
   movePanelToSidebar,
   panelsForSidebar,
   removeNavSidebar,
+  renameNavFolder,
+  seedPrimaryFolders,
+  toggleNavFolder,
   type NavEdge,
   type NavSidebarConfig
 } from "../../lib/sidebar-instances";
@@ -377,7 +383,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const navPanels = [...visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides), ...extensionNav];
 
   // The user's own sidebar folders: personal, saved with their preferences.
-  const { folders: sidebarFolders, save: saveFolders, order: sidebarOrder, saveOrder } = useSidebarFolders();
+  const { folders: legacyFolders, order: sidebarOrder } = useSidebarFolders();
   const sidebarPosition = preferences?.sidebarPosition ?? "left";
   const pendingSwitch = usePendingSwitch();
   const [pendingExit, setPendingExit] = useState<"spaces" | "logout" | null>(null);
@@ -397,27 +403,29 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // «Инструменты» is a footer menu on the primary bar, not a list of ordinary sections.
   const sectionNav = orderedNav.filter((panel) => panel.group !== "Инструменты");
   const toolNav = orderedNav.filter((panel) => panel.group === "Инструменты");
-  const { state: navState, update: updateNav } = useNavSidebars();
-  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
-  const folderViews = useMemo<SidebarFolderView[]>(() => {
+  const { state: navState, update: updateNav } = useNavSidebars(user?.id, workspace?.id);
+  useEffect(() => {
+    updateNav((current) => seedPrimaryFolders(current, legacyFolders, sidebarOrder));
+  }, [legacyFolders, sidebarOrder, updateNav]);
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; sidebarId: string; panelId?: string } | { mode: "rename"; sidebarId: string; id: string; name: string } | null>(null);
+  const folderViewsFor = useCallback((sidebarId: string): SidebarFolderView[] => {
+    const bar = navState.sidebars.find((sidebar) => sidebar.id === sidebarId);
     const visible = new Set(navPanels.map((panel) => panel.id));
-    return sidebarFolders.map((folder, index) => ({
+    return (bar?.folders ?? []).map((folder, index, folders) => ({
       id: folder.id,
       name: folder.name,
       collapsed: folder.collapsed,
-      // A hidden or switched-off module stays recorded in the folder, it just isn't drawn.
       linkIds: folder.items.filter((id) => visible.has(id)),
       menuItems: [
-        { label: "Переименовать…", onSelect: () => setFolderDialog({ mode: "rename", id: folder.id, name: folder.name }) },
-        { label: "Выше", disabled: index === 0, onSelect: () => saveFolders(moveFolder(sidebarFolders, folder.id, -1)) },
-        { label: "Ниже", disabled: index === sidebarFolders.length - 1, onSelect: () => saveFolders(moveFolder(sidebarFolders, folder.id, 1)) },
+        { label: "Переименовать…", onSelect: () => setFolderDialog({ mode: "rename", sidebarId, id: folder.id, name: folder.name }) },
+        { label: "Выше", disabled: index === 0, onSelect: () => updateNav((current) => moveNavFolder(current, sidebarId, folder.id, -1)) },
+        { label: "Ниже", disabled: index === folders.length - 1, onSelect: () => updateNav((current) => moveNavFolder(current, sidebarId, folder.id, 1)) },
         "separator",
-        { label: "Удалить папку", tone: "danger", onSelect: () => saveFolders(deleteFolder(sidebarFolders, folder.id)) }
+        { label: "Удалить папку", tone: "danger", onSelect: () => updateNav((current) => deleteNavFolder(current, sidebarId, folder.id)) }
       ] satisfies (MenuItem | "separator")[]
     }));
-    // navPanels is rebuilt every render; its ids are what matter, so key the memo on them.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarFolders, navPanels.map((panel) => panel.id).join("|"), saveFolders]);
+  }, [navPanels, navState.sidebars, updateNav]);
+  const folderViews = folderViewsFor(PRIMARY_SIDEBAR_ID);
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
   useDesktopDueReminders(tasks);
@@ -791,10 +799,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               ? `просрочено в пространстве: ${overdueCount}`
               : undefined,
         onClick: () => openFromMenu(panel.id),
-        onDragStart: (event: React.DragEvent<HTMLElement>) => {
-          event.dataTransfer.setData(ORION_PANEL_DRAG_MIME, panel.id);
-          event.dataTransfer.effectAllowed = "copy";
-        },
         menuItems: [
           { label: "Открыть", onSelect: () => openFromMenu(panel.id) },
           { label: "Открыть рядом (сплит)", onSelect: () => openPanelSplit(panel.id) },
@@ -812,17 +816,19 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               ]
             : []),
           "separator",
-          ...sidebarFolders
-            .filter((folder) => folder.id !== folderOf(sidebarFolders, panel.id)?.id)
-            .map((folder) => ({
-              label: `В папку «${folder.name}»`,
-              icon: Folder,
-              onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, folder.id))
-            })),
-          ...(folderOf(sidebarFolders, panel.id)
-            ? [{ label: "Убрать из папки", onSelect: () => saveFolders(moveToFolder(sidebarFolders, panel.id, null)) }]
+          ...navState.sidebars.flatMap((bar) =>
+            bar.folders
+              .filter((folder) => !folder.items.includes(panel.id))
+              .map((folder) => ({
+                label: bar.id === sidebarId ? `В папку «${folder.name}»` : `В папку «${folder.name}» сайдбара «${bar.name}»`,
+                icon: Folder,
+                onSelect: () => updateNav((current) => movePanelToSidebar(current, panel.id, bar.id, { folderId: folder.id }))
+              }))
+          ),
+          ...(navState.sidebars.some((bar) => bar.folders.some((folder) => folder.items.includes(panel.id)))
+            ? [{ label: "Убрать из папки", onSelect: () => updateNav((current) => movePanelToSidebar(current, panel.id, sidebarId, { folderId: null })) }]
             : []),
-          { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", panelId: panel.id }) }
+          { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", sidebarId, panelId: panel.id }) }
         ] satisfies (MenuItem | "separator")[]
       }];
     });
@@ -1154,28 +1160,29 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     return (
       <Sidebar
         key={`${bar.id}:${bar.density}:${asDrawer ? "drawer" : position}`}
-        allIconsVisible={primary && precision}
-        folders={primary ? folderViews : []}
-        onToggleFolder={primary ? (id) => saveFolders(toggleFolder(sidebarFolders, id)) : undefined}
-        onCreateFolder={primary ? (panelId) => setFolderDialog({ mode: "create", panelId }) : undefined}
-        onMoveLink={primary ? (panelId, folderId, beforeId) => {
-          const nextFolders = placeInFolder(sidebarFolders, panelId, folderId, beforeId);
-          if (nextFolders.some((folder, index) => folder.items.join() !== sidebarFolders[index]?.items.join())) saveFolders(nextFolders);
-          if (folderId === null && beforeId) saveOrder(reorderPanels(defaultNavIds, sidebarOrder, panelId, beforeId));
-        } : undefined}
-        onGroupLinks={primary ? (panelId, targetId) => {
+        navId={bar.id}
+        allIconsVisible={precision}
+        folders={folderViewsFor(bar.id)}
+        surfaceMenuItems={[{ label: "Новая папка…", onSelect: () => setFolderDialog({ mode: "create", sidebarId: bar.id }) }]}
+        onToggleFolder={(id) => updateNav((current) => toggleNavFolder(current, bar.id, id))}
+        onCreateFolder={(panelId) => setFolderDialog({ mode: "create", sidebarId: bar.id, panelId })}
+        onMoveLink={(panelId, folderId, beforeId) => updateNav((current) => {
+          const visible = panelsForSidebar(current, bar.id, sectionNav.map((panel) => panel.id));
+          const catalog = visible.includes(panelId) ? visible : [...visible, panelId];
+          return movePanelToSidebar(current, panelId, bar.id, { folderId, beforeId, catalog });
+        })}
+        onGroupLinks={(panelId, targetId) => {
           const targetLabel = navPanels.find((panel) => panel.id === targetId)?.label ?? "";
           const draggedLabel = navPanels.find((panel) => panel.id === panelId)?.label ?? "";
-          const before = sidebarFolders;
-          const existingFolder = folderOf(before, targetId);
-          const next = groupOnto(before, panelId, targetId, newFolderId(), [targetLabel, draggedLabel].filter(Boolean).join(", "));
-          if (!next) return;
-          saveFolders(next);
+          const before = navState;
+          const next = groupPanelOnto(before, bar.id, panelId, targetId, newFolderId(), [targetLabel, draggedLabel].filter(Boolean).join(", "));
+          if (next === before) return;
+          updateNav(() => next);
           toast({
-            title: existingFolder ? `Добавлено в «${existingFolder.name}»` : `Группа «${next[next.length - 1]?.name ?? ""}» создана`,
-            action: { label: "Отменить", onClick: () => saveFolders(before) }
+            title: `Группа создана`,
+            action: { label: "Отменить", onClick: () => updateNav(() => before) }
           });
-        } : undefined}
+        }}
         variant={asDrawer ? "drawer" : "rail"}
         position={position}
         drawerOpen={asDrawer ? drawerOpen : false}
@@ -1373,11 +1380,11 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           const dialog = folderDialog;
           setFolderDialog(null);
           if (!dialog) return;
-          const next =
+          updateNav((current) =>
             dialog.mode === "rename"
-              ? renameFolder(sidebarFolders, dialog.id, name)
-              : addFolder(sidebarFolders, name, newFolderId(), dialog.panelId);
-          if (next) saveFolders(next);
+              ? renameNavFolder(current, dialog.sidebarId, dialog.id, name)
+              : addNavFolder(current, dialog.sidebarId, name, newFolderId(), dialog.panelId)
+          );
         }}
       />
       {compact && drawerOpen ? (
@@ -1404,7 +1411,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               type="button"
               aria-label="Открыть меню"
               aria-expanded={drawerOpen}
-              aria-controls="orion-sidebar-nav"
+              aria-controls="primary-nav"
               className="flex h-11 w-11 items-center justify-center rounded-lg text-foreground hover:bg-white/5"
               onClick={() => setDrawerOpen(true)}
             >
