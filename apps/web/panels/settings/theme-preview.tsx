@@ -3,11 +3,12 @@
 import { useSaveTheme, useUpdatePreferences } from "@orion/core-react";
 import type { UserPreference } from "@orion/shared-types";
 import {
-  Button, Input, MAX_THEME_JSON_LENGTH, Modal, Select, Textarea, ThemeProvider, Tooltip, exportThemeDocument,
+  Button, Input, MAX_THEME_JSON_LENGTH, Modal, Textarea, ThemeProvider, Tooltip, exportThemeDocument,
   parseThemeDocument, themeBlockingContrastIssue, themeContrastChecks, useToast, withThemeColor,
   type ThemeColor, type ThemeDocument
 } from "@orion/ui";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { describeError } from "../../lib/error-message";
 import { importedTheme, themeConflict, themeCopy } from "../../lib/theme-library";
 
@@ -39,6 +40,7 @@ export interface ThemeDraft {
 function ThemeSample({ preview, onCancel }: { preview: boolean; onCancel: () => void }): React.ReactElement {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [sampleStatus, setSampleStatus] = useState("active");
   const fieldId = useId();
   return (
     <div className="space-y-4 rounded-lg p-4" style={{ backgroundColor: "rgb(var(--kaiden-bg-surface))" }}>
@@ -53,9 +55,13 @@ function ThemeSample({ preview, onCancel }: { preview: boolean; onCancel: () => 
       </label>
       <label className="block space-y-1" htmlFor={`${fieldId}-status`}>
         <span className="text-label">Статус образца</span>
-        <Select id={`${fieldId}-status`} name="theme-sample-status" defaultValue="active" className="w-full">
-          <option value="active">В работе</option><option value="done">Готово</option>
-        </Select>
+        <ChoiceSelect
+          id={`${fieldId}-status`}
+          label="Статус образца"
+          value={sampleStatus}
+          options={[{ value: "active", label: "В работе" }, { value: "done", label: "Готово" }]}
+          onChange={setSampleStatus}
+        />
       </label>
       <p className="flex flex-wrap gap-x-3 gap-y-1 text-label">
         <span className="text-success">Готово</span><span className="text-warning">Скоро срок</span><span className="text-destructive">Просрочено</span>
@@ -212,10 +218,13 @@ export function ThemeEditor({ draft, takenIds, onChange, onClose }: {
           </label>
           <label className="block min-w-0 space-y-1" htmlFor={`${ids}-base`}>
             <span className="text-label">Основа</span>
-            <Select id={`${ids}-base`} value={theme.baseMode} className="w-full"
-              onChange={event => edit({ ...theme, baseMode: event.target.value === "light" ? "light" : "dark" })}>
-              <option value="dark">Тёмная</option><option value="light">Светлая</option>
-            </Select>
+            <ChoiceSelect
+              id={`${ids}-base`}
+              label="Основа"
+              value={theme.baseMode}
+              options={[{ value: "dark", label: "Тёмная" }, { value: "light", label: "Светлая" }]}
+              onChange={(baseMode) => edit({ ...theme, baseMode })}
+            />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { apiUrl, disableAllPlugins, register, signIn } from "./support";
+import { apiUrl, chooseMenu, disableAllPlugins, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -20,7 +20,7 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await page.getByRole("textbox", { name: "Быстрый ввод", exact: true }).fill("Черновик переживает смену оформления");
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
   await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await page.getByRole("combobox", { name: "Оформление Orion", exact: true }).selectOption("kaiden-precision");
+  await chooseMenu(page, "Оформление Orion", "KAIDEN Precision");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
   await page.getByRole("button", { name: "Темы", exact: true }).click();
   await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «Arctic» в редакторе", exact: true }).click();
@@ -75,7 +75,7 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   // Roll back through the same saved preference; other personal choices are retained.
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
   await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await page.getByRole("combobox", { name: "Оформление Orion", exact: true }).selectOption("dark");
+  await chooseMenu(page, "Оформление Orion", "Прежний интерфейс");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "legacy");
   await expect(detached.locator("html")).toHaveAttribute("data-orion-design", "legacy");
   await detached.close();

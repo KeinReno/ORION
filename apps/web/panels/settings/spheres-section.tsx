@@ -8,9 +8,10 @@ import {
   useUpdateSphere,
   useWorkspaceOrganization
 } from "@orion/core-react";
-import { Button, Card, Input, Select, useToast } from "@orion/ui";
+import { Button, Card, Input, useToast } from "@orion/ui";
 import { Star, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { describeAuthError } from "../../lib/error-message";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
@@ -163,18 +164,13 @@ export function SpheresSettings(): React.ReactElement {
           {workspaces.map((workspace) => (
             <li key={workspace.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
               <span className="min-w-[140px] flex-1 truncate text-sm text-foreground">{workspace.name}</span>
-              <Select
+              <ChoiceSelect
+                className="min-w-[160px] flex-1"
+                label={`Сфера: ${workspace.name}`}
                 value={sphereOfWorkspace.get(workspace.id) ?? ""}
-                onChange={(e) => void onAssign(workspace.id, e.target.value || null)}
-                className="min-w-[160px]"
-              >
-                <option value="">Без сферы</option>
-                {spheres.map((sphere) => (
-                  <option key={sphere.id} value={sphere.id}>
-                    {sphere.name}
-                  </option>
-                ))}
-              </Select>
+                options={[{ value: "", label: "Без сферы" }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
+                onChange={(next) => void onAssign(workspace.id, next || null)}
+              />
               <Button
                 type="button"
                 variant="outline"

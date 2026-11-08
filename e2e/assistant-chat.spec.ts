@@ -54,7 +54,7 @@ test("the assistant sees the open task, proposes a rename applied in the chat, a
   await page.getByRole("button", { name: "Ассистент", exact: true }).first().click();
   const composer = page.getByRole("textbox", { name: "Сообщение ассистенту", exact: true });
   // Who answers: the key here; Codex / Cursor are listed and say what is missing when not installed.
-  await expect(page.getByRole("combobox", { name: "Кто отвечает", exact: true })).toHaveValue("anthropic");
+  await expect(page.getByRole("button", { name: "Кто отвечает", exact: true })).toContainText("Свой ключ Anthropic · claude-test");
   await composer.click();
   await expect(page.getByText(/Учитывать открытое: .*Купить корм коту/)).toBeVisible();
   await composer.fill("переименуй эту задачу");

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Select, Skeleton, useToast } from "@orion/ui";
+import { ChoiceSelect } from "../../components/choice-select";
 import { useEffect, useState } from "react";
 import { api } from "../../lib/compass/api";
 import type { AiProviderId, Settings } from "../../lib/compass/types";
@@ -118,15 +119,16 @@ export function CompassSettingsTab({ workspaceId }: { workspaceId: string | unde
 
       <Group title="AI-пояснения">
         <Row label="Провайдер">
-          <Select aria-label="Провайдер AI" value={draft.ai_provider} onChange={(event) => set("ai_provider", event.target.value as AiProviderId)} className="w-56">
-            <option value="off">Выключен</option>
-            {(providers.data ?? []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-                {item.cloud ? " (облако)" : " (локально)"}
-              </option>
-            ))}
-          </Select>
+          <ChoiceSelect
+            className="w-56"
+            label="Провайдер AI"
+            value={draft.ai_provider}
+            options={[
+              { value: "off" as AiProviderId, label: "Выключен" },
+              ...(providers.data ?? []).map((item) => ({ value: item.id, label: `${item.name}${item.cloud ? " (облако)" : " (локально)"}` }))
+            ]}
+            onChange={(next) => set("ai_provider", next)}
+          />
         </Row>
         {provider?.cloud ? (
           <Row label="Согласие">

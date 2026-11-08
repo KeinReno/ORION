@@ -1,8 +1,9 @@
 "use client";
 
 import type { UserPreference } from "@orion/shared-types";
-import { Input, RubberSegment, SegmentedControl, Select, Slider, Switch } from "@orion/ui";
+import { Input, RubberSegment, SegmentedControl, Slider, Switch } from "@orion/ui";
 import { useReducedMotion } from "framer-motion";
+import { ChoiceSelect } from "../../components/choice-select";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../../lib/accent-options";
 import { BackgroundEffectSettingsForm } from "./background-effect-form";
 import { SettingGroup, SettingRow } from "./setting-row";
@@ -88,14 +89,15 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
               : "Прежний интерфейс: свой акцент, фон и стекло. При переходе на Precision и обратно они сохраняются."
           }
         >
-          <Select
-            aria-label="Оформление Orion"
+          <ChoiceSelect
+            label="Оформление Orion"
             value={form.theme}
-            onChange={(event) => setForm({ ...form, theme: event.target.value as UserPreference["theme"] })}
-          >
-            <option value={precision ? "dark" : form.theme}>Прежний интерфейс</option>
-            <option value="kaiden-precision">KAIDEN Precision</option>
-          </Select>
+            options={[
+              { value: precision ? "dark" : form.theme, label: "Прежний интерфейс" },
+              { value: "kaiden-precision", label: "KAIDEN Precision" }
+            ]}
+            onChange={(theme) => setForm({ ...form, theme })}
+          />
         </SettingRow>
         {!precision ? (
           <SettingRow anchor="accent" label="Акцент" description="Цвет выделения, ссылок и активных элементов." stack>

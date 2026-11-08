@@ -10,9 +10,10 @@ import {
   useWorkspaceMembers
 } from "@orion/core-react";
 import type { WorkspaceInvite, WorkspaceMember, WorkspaceRole } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, Input, Select, Skeleton, useToast } from "@orion/ui";
+import { Badge, Button, Card, ConfirmDialog, Input, Skeleton, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
+import { ChoiceSelect } from "../../components/choice-select";
 import { ExportWorkspaceCard } from "../../components/workspace-transfer";
 import { describeAuthError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
@@ -129,10 +130,13 @@ export function MembersSettings(): React.ReactElement {
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-muted-foreground">Роль</span>
-                <Select className="w-36" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "member" | "lead")}>
-                  <option value="member">{ROLE_LABEL.member}</option>
-                  {isOwner ? <option value="lead">{ROLE_LABEL.lead}</option> : null}
-                </Select>
+                <ChoiceSelect
+                  className="w-36"
+                  label="Роль"
+                  value={inviteRole}
+                  options={isOwner ? [{ value: "member", label: ROLE_LABEL.member }, { value: "lead", label: ROLE_LABEL.lead }] : [{ value: "member", label: ROLE_LABEL.member }]}
+                  onChange={setInviteRole}
+                />
               </label>
               <Button
                 type="submit"
@@ -181,16 +185,14 @@ export function MembersSettings(): React.ReactElement {
                 </div>
                 <div className="flex items-center gap-2">
                   {isOwner && member.role !== "owner" ? (
-                    <Select
+                    <ChoiceSelect
                       className="w-32"
-                      aria-label={`Роль: ${member.name}`}
-                      value={member.role}
+                      label={`Роль: ${member.name}`}
+                      value={member.role === "lead" ? "lead" : "member"}
                       disabled={setRole.isPending}
-                      onChange={(e) => void onSetRole(member, e.target.value as WorkspaceRole)}
-                    >
-                      <option value="member">{ROLE_LABEL.member}</option>
-                      <option value="lead">{ROLE_LABEL.lead}</option>
-                    </Select>
+                      options={[{ value: "member", label: ROLE_LABEL.member }, { value: "lead", label: ROLE_LABEL.lead }]}
+                      onChange={(role) => void onSetRole(member, role)}
+                    />
                   ) : (
                     <Badge tone={member.role === "owner" ? "accent" : "neutral"}>{ROLE_LABEL[member.role]}</Badge>
                   )}

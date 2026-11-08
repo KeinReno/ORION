@@ -3,10 +3,11 @@
 import { createModuleClient, workspaceModuleBase } from "@orion/core";
 import { useCore, useTasks } from "@orion/core-react";
 import { agentHubExecutionSchema, agentHubEventSchema, agentHubReconcileResultSchema, agentHubRuntimeSessionSchema, type AgentHubExecution } from "@orion/shared-types";
-import { Button, EmptyState, PanelBody, PanelHeader, PanelShell, Select, Skeleton } from "@orion/ui";
+import { Button, EmptyState, PanelBody, PanelHeader, PanelShell, Skeleton } from "@orion/ui";
 import { Network } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 const statusLabel: Record<AgentHubExecution["status"], string> = {
@@ -69,12 +70,15 @@ export function AgentHubPanel(): React.ReactElement {
           <h2 className="text-sm font-semibold">Поставить задачу в очередь</h2>
           <p className="mt-1 text-xs text-muted-foreground">Исполнение появится в ручной очереди. Агент не запускается автоматически. После отмены Habitat проверяет состояние и останавливает локальный процесс; запись не подтверждает, что процесс уже завершён.</p>
           {canManage ? <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); if (taskId) create.mutate(taskId); }}>
-            <label className="min-w-56 flex-1 text-xs">Задача
-              <Select className="mt-1 w-full" value={taskId} onChange={event => setTaskId(event.target.value)} required>
-                <option value="">Выберите открытую задачу</option>
-                {openTasks.map(task => <option key={task.id} value={task.id}>{task.title}</option>)}
-              </Select>
-            </label>
+            <div className="min-w-56 flex-1 text-xs">Задача
+              <ChoiceSelect
+                className="mt-1"
+                label="Задача"
+                value={taskId}
+                options={[{ value: "", label: "Выберите открытую задачу" }, ...openTasks.map((task) => ({ value: task.id, label: task.title }))]}
+                onChange={setTaskId}
+              />
+            </div>
             <Button type="submit" size="sm" disabled={!taskId || create.isPending}>Поставить в очередь</Button>
           </form> : <p className="mt-2 text-xs text-muted-foreground">Создавать исполнения могут владелец и руководитель пространства.</p>}
           {canManage && openTasks.length === 0 ? <p className="mt-2 text-xs text-muted-foreground">Сначала создайте открытую задачу в разделе «Задачи».</p> : null}

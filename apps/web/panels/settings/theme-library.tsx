@@ -2,8 +2,9 @@
 
 import { useDeleteTheme, usePreferences, useSaveTheme, useSetWorkspaceTheme, useUpdatePreferences } from "@orion/core-react";
 import { DEFAULT_THEME_ID, THEME_LIBRARY_MAX, type WorkspaceThemeMode } from "@orion/shared-types";
-import { Badge, Button, ConfirmDialog, SegmentedControl, Select, type ThemeDocument } from "@orion/ui";
+import { Badge, Button, ConfirmDialog, SegmentedControl, type ThemeDocument } from "@orion/ui";
 import { useId, useState } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { resolveApplicationTheme } from "../../lib/effective-application-theme";
 import { describeError } from "../../lib/error-message";
 import { sameTheme, themeCopy, themeLibraryItems, type ThemeLibraryItem } from "../../lib/theme-library";
@@ -177,15 +178,21 @@ function WorkspaceThemeSection(): React.ReactElement | null {
     <section data-setting="workspace-theme" role="region" aria-label="Тема пространства" className="min-w-0 space-y-3 border-t border-border pt-4">
       <p className="text-title">Тема пространства «<span className="break-words">{workspace.name}</span>»</p>
       {owner ? (
-        <label className="block min-w-0 space-y-1" htmlFor={`${ids}-workspace`}>
-          <span className="text-label">Тема для всех участников</span>
-          <Select id={`${ids}-workspace`} value={selectValue} disabled={setWorkspaceTheme.isPending} className="w-full"
-            onChange={event => void choose(event.target.value)}>
-            <option value="">Без темы пространства</option>
-            {selectValue === "workspace" && workspace.theme ? <option value="workspace">{workspace.theme.name} (сохранённая копия)</option> : null}
-            {items.map(item => <option key={`${item.kind}:${item.theme.id}`} value={`${item.kind}:${item.theme.id}`}>{item.theme.name}{item.kind === "own" ? " (своя)" : ""}</option>)}
-          </Select>
-        </label>
+        <div className="block min-w-0 space-y-1">
+          <span className="text-label" id={`${ids}-workspace-label`}>Тема для всех участников</span>
+          <ChoiceSelect
+            id={`${ids}-workspace`}
+            label="Тема для всех участников"
+            value={selectValue}
+            disabled={setWorkspaceTheme.isPending}
+            options={[
+              { value: "", label: "Без темы пространства" },
+              ...(selectValue === "workspace" && workspace.theme ? [{ value: "workspace", label: `${workspace.theme.name} (сохранённая копия)` }] : []),
+              ...items.map((item) => ({ value: `${item.kind}:${item.theme.id}`, label: `${item.theme.name}${item.kind === "own" ? " (своя)" : ""}` }))
+            ]}
+            onChange={(next) => void choose(next)}
+          />
+        </div>
       ) : (
         <p className="text-xs text-muted-foreground">
           {workspace.theme ? `Владелец выбрал для пространства тему «${workspace.theme.name}».` : "Владелец не выбирал тему для этого пространства."} Менять её может только владелец.

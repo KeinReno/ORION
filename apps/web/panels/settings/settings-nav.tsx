@@ -1,8 +1,9 @@
 "use client";
 
-import { DropdownMenu, IconButton, Input, Select, cx } from "@orion/ui";
+import { DropdownMenu, IconButton, Input, cx } from "@orion/ui";
 import { ChevronRight, ExternalLink, PanelRight, Puzzle, Search, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ChoiceSelect, type ChoiceOption } from "../../components/choice-select";
 import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { openPanel } from "../../lib/panel-bus";
 import { detachPanelToWindow } from "../../lib/panel-window";
@@ -18,9 +19,21 @@ import {
 
 const BASE_ID = "settings";
 
+function sectionChoices(
+  groups: readonly { label: string; tabs: readonly { value: SettingsTab | ExtensionSettingsTab["value"]; label: string }[] }[]
+): ChoiceOption<SettingsTab | ExtensionSettingsTab["value"]>[] {
+  const flat = groups.flatMap((group) => group.tabs.map((tab) => ({ value: tab.value, label: tab.label, group: group.label })));
+  const counts = new Map<string, number>();
+  for (const item of flat) counts.set(item.label, (counts.get(item.label) ?? 0) + 1);
+  return flat.map((item) => ({
+    value: item.value,
+    label: (counts.get(item.label) ?? 0) > 1 ? `${item.group} — ${item.label}` : item.label
+  }));
+}
+
 /**
  * Navigation of the settings panel: a search over every parameter, then the tabs grouped by who a
- * change affects (a sidebar list on wide, a <select> with groups on narrow). Every tab can be its own
+ * change affects (a sidebar list on wide, one menu on narrow). Every tab can be its own
  * dock panel / OS window: Ctrl/Cmd+drag an entry into the dock, or use the «⧉» menu for the current one.
  */
 /** A settings section added by a plugin or extension (ADR-0022): tab value `ext:<pluginId>.<id>`. */
@@ -132,17 +145,13 @@ export function SettingsNav({
         {search}
         {results}
         <div className="flex items-center gap-1">
-          <Select value={value} onChange={(event) => onChange(event.target.value as SettingsTab)} className="min-w-0 flex-1" aria-label="Раздел настроек">
-            {groups.map((group) => (
-              <optgroup key={group.id} label={group.label}>
-                {group.tabs.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
+          <ChoiceSelect
+            className="min-w-0 flex-1"
+            label="Раздел настроек"
+            value={value}
+            options={sectionChoices(groups)}
+            onChange={onChange}
+          />
           {activeId ? <DetachMenu activeId={activeId} name={name} /> : null}
         </div>
       </div>
@@ -158,7 +167,7 @@ export function SettingsNav({
                     type="button"
                     onClick={() => toggleGroup(group.id)}
                     aria-expanded={expanded}
-                    className="flex items-center gap-1 rounded-lg px-3 py-1 text-left text-micro uppercase text-subtle-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                    className="flex items-center gap-1 rounded-lg px-3 py-1 text-left text-micro uppercase text-subtle-foreground transition-colors hover:bg-ui-hover hover:text-ui-primary"
                   >
                     <ChevronRight className={cx("h-3 w-3 shrink-0 transition-transform", expanded && "rotate-90")} aria-hidden />
                     <span className="truncate" title={group.label}>{group.label}</span>
@@ -178,7 +187,7 @@ export function SettingsNav({
                             {...(id ? { "data-panel-drag": id, "data-panel-title": `Настройки · ${item.label}` } : {})}
                             className={cx(
                               "flex items-center gap-2 rounded-lg px-3 py-row text-left text-label transition-colors",
-                              value === item.value ? "bg-accent/15 text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                              value === item.value ? "bg-ui-hover text-ui-primary" : "text-ui-secondary hover:bg-ui-hover hover:text-ui-primary"
                             )}
                           >
                             <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />

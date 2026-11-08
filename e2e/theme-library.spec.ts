@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { apiUrl, register, signIn } from "./support";
+import { apiUrl, chooseMenu, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -58,10 +58,10 @@ test("workspace theme applies only in its workspace, and «always mine» keeps t
   const second = await (await request.post(`${apiUrl()}/workspaces`, { headers, data: { name: "Второе пространство" } })).json();
   await signIn(page, account); await page.setViewportSize({ width: 390, height: 860 });
   await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
+  await chooseMenu(page, "Раздел настроек", "Темы");
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "emerald");
   const section = page.getByRole("region", { name: "Тема пространства", exact: true });
-  await section.getByRole("combobox", { name: "Тема для всех участников", exact: true }).selectOption({ label: "Arctic" });
+  await chooseMenu(section, "Тема для всех участников", "Arctic");
   await expect(section.getByRole("status")).toContainText("Для пространства выбрана тема «Arctic»");
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "arctic");
   await expect(page.getByRole("region", { name: "Библиотека тем", exact: true })).toContainText("тема пространства");
@@ -78,7 +78,7 @@ test("workspace theme applies only in its workspace, and «always mine» keeps t
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "arctic");
 
   await page.goto(`/panel/settings?workspaceId=${account.workspaceId}`);
-  await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
+  await chooseMenu(page, "Раздел настроек", "Темы");
   await page.getByRole("tab", { name: "Всегда мою тему", exact: true }).click();
   await expect(palette(page)).toHaveAttribute("data-orion-palette", "emerald");
   const prefs = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();

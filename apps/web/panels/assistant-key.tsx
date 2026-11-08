@@ -2,8 +2,9 @@
 
 import { useClearAssistantKey, useSaveAssistantKey, useSetAssistantModel } from "@orion/core-react";
 import { ASSISTANT_DEFAULT_MODEL, ASSISTANT_MODELS } from "@orion/shared-types";
-import { Button, Input, Select, useToast } from "@orion/ui";
+import { Button, Input, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
+import { ChoiceSelect } from "../components/choice-select";
 import { describeAuthError } from "../lib/error-message";
 
 const OTHER = "__other";
@@ -18,22 +19,19 @@ function ModelField({ value, onChange }: { value: string; onChange: (model: stri
   const hint = ASSISTANT_MODELS.find((model) => model.id === value)?.hint;
   return (
     <div className="space-y-1">
-      <Select
-        aria-label="Модель"
+      <ChoiceSelect
+        label="Модель"
         value={custom ? OTHER : value}
-        onChange={(event) => {
-          if (event.target.value === OTHER) return setCustom(true);
+        options={[
+          ...ASSISTANT_MODELS.map((model) => ({ value: model.id, label: model.label })),
+          { value: OTHER, label: "Другая — указать id" }
+        ]}
+        onChange={(next) => {
+          if (next === OTHER) return setCustom(true);
           setCustom(false);
-          onChange(event.target.value);
+          onChange(next);
         }}
-      >
-        {ASSISTANT_MODELS.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.label}
-          </option>
-        ))}
-        <option value={OTHER}>Другая — указать id</option>
-      </Select>
+      />
       {custom ? <Input aria-label="id модели" value={value} onChange={(event) => onChange(event.target.value)} placeholder="claude-…" /> : null}
       {hint && !custom ? <p className="text-2xs text-subtle-foreground">{hint}</p> : null}
     </div>

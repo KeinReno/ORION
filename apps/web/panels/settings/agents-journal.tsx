@@ -2,8 +2,9 @@
 
 import { useAgentAuditLog, useAgentTokens, useUndoAgentCreation } from "@orion/core-react";
 import { AGENT_AUDIT_RESULT_LABEL, AGENT_AUDIT_RESULTS, agentAuditResultOf, toCsv, type AgentAuditQuery, type AgentAuditResult } from "@orion/shared-types";
-import { Button, Select, useToast } from "@orion/ui";
+import { Button, useToast } from "@orion/ui";
 import { useMemo, useState } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { describeError } from "../../lib/error-message";
 import { shortDateTime } from "../../lib/format";
 
@@ -70,29 +71,34 @@ export function AgentJournal({ workspaceId }: { workspaceId: string | undefined 
     <section className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-label font-medium">Журнал действий агентов</h3>
-        <Select aria-label="Токен" value={tokenId} onChange={(e) => setTokenId(e.target.value)} className="w-auto">
-          <option value="">Все токены</option>
-          {(tokens.data ?? []).map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </Select>
-        <Select aria-label="Модуль" value={module} onChange={(e) => setModule(e.target.value)} className="w-auto">
-          <option value="">Все модули</option>
-          {MODULES.map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
-          ))}
-        </Select>
-        <Select aria-label="Результат" value={result} onChange={(e) => setResult(e.target.value)} className="w-auto">
-          <option value="">Любой результат</option>
-          {AGENT_AUDIT_RESULTS.map((r) => (
-            <option key={r} value={r}>{AGENT_AUDIT_RESULT_LABEL[r]}</option>
-          ))}
-        </Select>
-        <Select aria-label="Период" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-auto">
-          {PERIODS.map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
-          ))}
-        </Select>
+        <ChoiceSelect
+          className="min-w-[11rem] flex-1"
+          label="Токен"
+          value={tokenId}
+          options={[{ value: "", label: "Все токены" }, ...(tokens.data ?? []).map((token) => ({ value: token.id, label: token.name }))]}
+          onChange={setTokenId}
+        />
+        <ChoiceSelect
+          className="min-w-[11rem] flex-1"
+          label="Модуль"
+          value={module}
+          options={[{ value: "", label: "Все модули" }, ...MODULES.map(([id, label]) => ({ value: id, label }))]}
+          onChange={setModule}
+        />
+        <ChoiceSelect
+          className="min-w-[11rem] flex-1"
+          label="Результат"
+          value={result}
+          options={[{ value: "", label: "Любой результат" }, ...AGENT_AUDIT_RESULTS.map((item) => ({ value: item, label: AGENT_AUDIT_RESULT_LABEL[item] }))]}
+          onChange={setResult}
+        />
+        <ChoiceSelect
+          className="min-w-[11rem] flex-1"
+          label="Период"
+          value={period}
+          options={PERIODS.map(([id, label]) => ({ value: id, label }))}
+          onChange={setPeriod}
+        />
         <Button size="sm" variant="outline" className="ml-auto" disabled={entries.length === 0} onClick={exportCsv}>
           Экспорт CSV
         </Button>

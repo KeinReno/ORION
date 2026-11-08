@@ -25,8 +25,9 @@ import {
   type AgentToken,
   type CreateAgentTokenInput
 } from "@orion/shared-types";
-import { Button, Select, useToast } from "@orion/ui";
+import { Button, Input, useToast } from "@orion/ui";
 import { useState } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { describeError } from "../../lib/error-message";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 
@@ -205,24 +206,27 @@ export function TokenPolicyEditor({
     <div className="space-y-3 border-t border-border pt-3">
       <AgentPolicyFields workspaceId={workspaceId} draft={draft} onChange={setDraft} />
       <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col gap-1">
+        <div className="min-w-[14rem] space-y-1">
           <span className="text-xs text-muted-foreground">Изменить срок действия</span>
-          <Select value={expiry} onChange={(event) => setExpiry(event.target.value)} className="w-auto">
-            <option value="keep">Не менять</option>
-            <option value="none">Бессрочно</option>
-            <option value="7">7 дней от текущего момента</option>
-            <option value="30">30 дней</option>
-            <option value="90">90 дней</option>
-            <option value="365">1 год</option>
-            <option value="custom">Свой срок</option>
-          </Select>
-        </label>
+          <ChoiceSelect
+            label="Изменить срок действия"
+            value={expiry}
+            options={[
+              { value: "keep", label: "Не менять" },
+              { value: "none", label: "Бессрочно" },
+              { value: "7", label: "7 дней от текущего момента" },
+              { value: "30", label: "30 дней" },
+              { value: "90", label: "90 дней" },
+              { value: "365", label: "1 год" },
+              { value: "custom", label: "Свой срок" }
+            ]}
+            onChange={setExpiry}
+          />
+        </div>
         {expiry === "custom" ? (
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Дней (1–36500)</span>
-            <input type="number" min={1} max={36500} value={customDays}
-              onChange={(event) => setCustomDays(event.target.value)}
-              className="w-28 rounded-md border border-border bg-background px-2 py-1 text-label" />
+            <Input type="number" min={1} max={36500} value={customDays} onChange={(event) => setCustomDays(event.target.value)} className="w-28" />
           </label>
         ) : null}
       </div>
@@ -345,15 +349,16 @@ export function AgentPolicyFields({
         </div>
       </fieldset>
 
-      <label className="flex flex-col gap-1">
+      <div className="max-w-xs space-y-1">
         <span className="text-xs text-muted-foreground">Режим автономности</span>
-        <Select value={draft.mode} onChange={(e) => set({ mode: e.target.value as AgentMode })} className="w-auto">
-          {AGENT_MODES.map((mode) => (
-            <option key={mode} value={mode}>{AGENT_MODE_LABEL[mode]}</option>
-          ))}
-        </Select>
+        <ChoiceSelect
+          label="Режим автономности"
+          value={draft.mode}
+          options={AGENT_MODES.map((mode) => ({ value: mode, label: AGENT_MODE_LABEL[mode] }))}
+          onChange={(mode) => set({ mode })}
+        />
         <span className="text-2xs text-muted-foreground">{AGENT_MODE_HINT[draft.mode]}</span>
-      </label>
+      </div>
 
       {draft.mode === "admin" ? (
         <p className="rounded-md border border-warning/30 bg-warning/[0.06] px-3 py-2 text-label text-warning">

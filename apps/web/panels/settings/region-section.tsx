@@ -1,8 +1,9 @@
 "use client";
 
 import type { UserPreference } from "@orion/shared-types";
-import { Button, Card, Input, Select } from "@orion/ui";
+import { Button, Card, Input } from "@orion/ui";
 import { useEffect, useId, useMemo, useState } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 
 /** IANA zones the runtime knows; empty on an engine without `Intl.supportedValuesOf` (validation still works). */
 function knownTimeZones(): string[] {
@@ -107,10 +108,13 @@ export function RegionSettings({
         <label htmlFor={`${ids}-week`} className="text-xs text-muted-foreground">
           Начало недели
         </label>
-        <Select id={`${ids}-week`} value={weekStartsOn} onChange={(event) => onChange({ weekStartsOn: Number(event.target.value) })}>
-          <option value={1}>С понедельника</option>
-          <option value={0}>С воскресенья</option>
-        </Select>
+        <ChoiceSelect
+          id={`${ids}-week`}
+          label="Начало недели"
+          value={weekStartsOn === 0 ? "0" : "1"}
+          options={[{ value: "1", label: "С понедельника" }, { value: "0", label: "С воскресенья" }]}
+          onChange={(next) => onChange({ weekStartsOn: next === "0" ? 0 : 1 })}
+        />
       </div>
     </Card>
   );

@@ -10,11 +10,10 @@ import {
   ASSISTANT_CHAT_TOKEN_NAME,
   describeAgentPermissions,
   effectiveAgentPermissions,
-  type AgentMode,
   type AgentToken,
   type CreatedAgentToken
 } from "@orion/shared-types";
-import { Badge, Button, Card, ConfirmDialog, Input, SegmentedControl, Select, Skeleton, useToast } from "@orion/ui";
+import { Badge, Button, Card, ConfirmDialog, Input, SegmentedControl, Skeleton, useToast } from "@orion/ui";
 import { Bot } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { FollowAgentControl, agentLabel, describePresence, useAgentPresenceNow } from "../../lib/agent-presence";
@@ -22,6 +21,7 @@ import { describeError } from "../../lib/error-message";
 import { relativeTime, shortDate } from "../../lib/format";
 import { openPanel } from "../../lib/panel-bus";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { ChoiceSelect } from "../../components/choice-select";
 import { AssistantKeyForm, AssistantModelPicker, ClearAssistantKeyButton } from "../assistant-key";
 import { AgentConnectWizard } from "./agent-connect-wizard";
 import { AgentPolicyFields, TokenPolicyEditor, defaultPolicy, describeModulePermissions, policyIsEmpty, policyToInput, type PolicyDraft } from "./agent-permissions";
@@ -210,24 +210,18 @@ function ConnectionCard({ workspaceId, token }: { workspaceId: string | undefine
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Select
-                aria-label={`Режим: ${token.name}`}
+              <ChoiceSelect
+                className="w-44"
+                label={`Режим: ${token.name}`}
                 value={token.mode}
-                title={AGENT_MODE_HINT[token.mode]}
-                onChange={(event) =>
+                options={AGENT_MODES.map((mode) => ({ value: mode, label: AGENT_MODE_LABEL[mode] }))}
+                onChange={(mode) =>
                   update.mutate(
-                    { tokenId: token.id, input: { mode: event.target.value as AgentMode } },
+                    { tokenId: token.id, input: { mode } },
                     { onError: (error) => toast({ title: "Не удалось сменить режим", description: describeError(error), tone: "danger" }) }
                   )
                 }
-                className="w-auto"
-              >
-                {AGENT_MODES.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {AGENT_MODE_LABEL[mode]}
-                  </option>
-                ))}
-              </Select>
+              />
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                 Настроить
               </Button>
@@ -315,14 +309,20 @@ function ManualToken({ workspaceId }: { workspaceId: string | undefined }): Reac
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Срок</span>
-              <Select value={days} onChange={(event) => setDays(event.target.value)} className="w-auto">
-                <option value="7">7 дней</option>
-                <option value="30">30 дней</option>
-                <option value="90">90 дней</option>
-                <option value="365">1 год</option>
-                <option value="custom">Свой срок</option>
-                <option value={NO_EXPIRY}>Бессрочно (до отзыва)</option>
-              </Select>
+              <ChoiceSelect
+                className="w-56"
+                label="Срок"
+                value={days}
+                options={[
+                  { value: "7", label: "7 дней" },
+                  { value: "30", label: "30 дней" },
+                  { value: "90", label: "90 дней" },
+                  { value: "365", label: "1 год" },
+                  { value: "custom", label: "Свой срок" },
+                  { value: NO_EXPIRY, label: "Бессрочно (до отзыва)" }
+                ]}
+                onChange={setDays}
+              />
             </label>
           </div>
           {days === "custom" ? (

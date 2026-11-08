@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { register, signIn } from "./support";
+import { chooseMenu, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -36,7 +36,7 @@ test("settings: grouped by who a change affects, search lands on the field, prof
 
   // Appearance no longer carries the time zone, dashboard widget ids or the theme library.
   await nav.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Оформление Orion", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Оформление Orion", exact: true })).toBeVisible();
   await expect(page.getByText("Часовой пояс", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Библиотека тем", exact: true })).toHaveCount(0);
 
@@ -52,10 +52,10 @@ test("settings: grouped by who a change affects, search lands on the field, prof
   await expect(sheet.getByRole("switch", { name: "Номера заметок", exact: true })).toBeVisible();
   await expect(sheet.getByText("Акцент", { exact: true })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Внешний вид приложения", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Оформление Orion", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Оформление Orion", exact: true })).toBeVisible();
 
   // The account opens as the profile tab, without leaving the workbench (Precision header avatar).
-  await page.getByRole("combobox", { name: "Оформление Orion", exact: true }).selectOption("kaiden-precision");
+  await chooseMenu(page, "Оформление Orion", "KAIDEN Precision");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
   await nav.getByRole("button", { name: "Обновления", exact: true }).click();
   await page.getByRole("button", { name: "Учётная запись", exact: true }).click();

@@ -16,8 +16,9 @@ import {
   type CreatedAgentToken,
   type InstalledAgentClient
 } from "@orion/shared-types";
-import { Button, Card, ConfirmDialog, SegmentedControl, Select, Steps, useToast } from "@orion/ui";
+import { Button, Card, ConfirmDialog, Input, SegmentedControl, Steps, useToast } from "@orion/ui";
 import { useState, type FormEvent } from "react";
+import { ChoiceSelect } from "../../components/choice-select";
 import { AGENT_CLIENTS, AGENT_CLIENT_LABEL, buildConnectSnippet, checkAgentConnection, type AgentClient, type ConnectionCheck } from "../../lib/agent-connect";
 import { describeError } from "../../lib/error-message";
 import { ModulePermissionsField } from "./agent-permissions";
@@ -148,40 +149,46 @@ export function AgentConnectWizard({ workspaceId }: { workspaceId: string | unde
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-3">
-          <label className="flex flex-col gap-1">
+          <div className="space-y-1">
             <span className="text-xs text-muted-foreground">Программа</span>
-            <Select value={client} onChange={(event) => setClient(event.target.value as AgentClient)} className="w-auto">
-              {AGENT_CLIENTS.map((item) => (
-                <option key={item} value={item}>
-                  {AGENT_CLIENT_LABEL[item]}
-                </option>
-              ))}
-            </Select>
-          </label>
+            <ChoiceSelect
+              label="Программа"
+              value={client}
+              options={AGENT_CLIENTS.map((item) => ({ value: item, label: AGENT_CLIENT_LABEL[item] }))}
+              onChange={setClient}
+            />
+          </div>
           <div className="flex flex-wrap gap-3">
-            <label className="flex flex-col gap-1">
+            <div className="min-w-[10rem] space-y-1">
               <span className="text-xs text-muted-foreground">Роль</span>
-              <Select value={mode} onChange={(event) => setMode(event.target.value as AgentMode)} className="w-auto">
-                {AGENT_MODES.map((value) => <option key={value} value={value}>{AGENT_MODE_LABEL[value]}</option>)}
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1">
+              <ChoiceSelect
+                label="Роль"
+                value={mode}
+                options={AGENT_MODES.map((value) => ({ value, label: AGENT_MODE_LABEL[value] }))}
+                onChange={setMode}
+              />
+            </div>
+            <div className="min-w-[12rem] space-y-1">
               <span className="text-xs text-muted-foreground">Срок действия</span>
-              <Select value={expiry} onChange={(event) => setExpiry(event.target.value)} className="w-auto">
-                <option value="none">Бессрочно</option>
-                <option value="1">1 день</option>
-                <option value="7">7 дней</option>
-                <option value="30">30 дней</option>
-                <option value="90">90 дней</option>
-                <option value="365">1 год</option>
-                <option value="custom">Свой срок</option>
-              </Select>
-            </label>
+              <ChoiceSelect
+                label="Срок действия"
+                value={expiry}
+                options={[
+                  { value: "none", label: "Бессрочно" },
+                  { value: "1", label: "1 день" },
+                  { value: "7", label: "7 дней" },
+                  { value: "30", label: "30 дней" },
+                  { value: "90", label: "90 дней" },
+                  { value: "365", label: "1 год" },
+                  { value: "custom", label: "Свой срок" }
+                ]}
+                onChange={setExpiry}
+              />
+            </div>
             {expiry === "custom" ? (
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Дней (1–36500)</span>
-                <input type="number" min={1} max={36500} value={customDays} onChange={(event) => setCustomDays(event.target.value)}
-                  className="w-28 rounded-md border border-border bg-background px-2 py-1 text-label" />
+                <Input type="number" min={1} max={36500} value={customDays} onChange={(event) => setCustomDays(event.target.value)} className="w-28" />
               </label>
             ) : null}
           </div>

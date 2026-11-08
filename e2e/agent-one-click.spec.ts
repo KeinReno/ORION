@@ -7,7 +7,7 @@ interface McpEntry { command: string; args: string[]; env: Record<string, string
 interface RpcResponse { id: number; error?: unknown; result: { isError?: boolean; [key: string]: unknown } }
 const { parse: parseToml } = createRequire(path.resolve("apps/api/package.json"))("smol-toml") as { parse: (value: string) => { mcp_servers: Record<string, McpEntry> } };
 import { expect, test } from "@playwright/test";
-import { apiUrl, register, signIn } from "./support";
+import { apiUrl, chooseMenu, register, signIn } from "./support";
 
 /**
  * «Подключить в один клик»: the API runs with ORION_AGENT_CLIENT_HOME=tmp/e2e-agent-home (a scratch profile), so the
@@ -63,16 +63,15 @@ test("Codex admin choice requires consent and token-file launches a real MCP ada
   const settings = page.getByRole("navigation", { name: "Разделы настроек" });
   await settings.getByRole("button", { name: /^Пространство «/ }).click();
   await settings.getByRole("button", { name: "ИИ и агенты", exact: true }).click();
-  await page.getByRole("combobox", { name: "Программа", exact: true }).selectOption("codex");
-  await page.getByRole("combobox", { name: "Роль", exact: true }).selectOption("admin");
-  const expiry = page.getByRole("combobox", { name: "Срок действия", exact: true });
-  await expiry.selectOption("custom");
+  await chooseMenu(page, "Программа", "Codex");
+  await chooseMenu(page, "Роль", "Администратор");
+  await chooseMenu(page, "Срок действия", "Свой срок");
   const days = page.getByRole("spinbutton", { name: "Дней (1–36500)", exact: true });
   await days.fill("0");
   const install = page.getByRole("button", { name: "Подключить Codex автоматически", exact: true });
   await expect(install).toBeDisabled();
   await days.fill("730"); await expect(install).toBeEnabled();
-  await expiry.selectOption("none");
+  await chooseMenu(page, "Срок действия", "Бессрочно");
   await page.setViewportSize({ width: 390, height: 844 });
   await install.click();
   const dialog = page.getByRole("dialog", { name: "Выдать права администратора?" });

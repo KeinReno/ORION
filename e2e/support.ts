@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 /** Shared by the e2e specs: fresh accounts through the API and a signed-in browser page. */
 
@@ -39,6 +39,12 @@ export async function disableAllPlugins(request: APIRequestContext, account: Acc
     });
     expect(response.ok(), `disable ${plugin.id}: ${await response.text()}`).toBe(true);
   }
+}
+
+/** Open a label menu (GlideSelect) and pick the visible option. */
+export async function chooseMenu(scope: Page | Locator, name: string, option: string): Promise<void> {
+  await scope.getByRole("button", { name, exact: true }).click();
+  await scope.getByRole("option", { name: option, exact: true }).click();
 }
 
 export async function signIn(page: Page, account: Account): Promise<void> {

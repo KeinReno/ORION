@@ -21,7 +21,7 @@ function Slider({ value, min, max, step, onChange }: { value: number; min: numbe
       step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full accent-accent"
+      className="w-full accent-ui-button"
     />
   );
 }

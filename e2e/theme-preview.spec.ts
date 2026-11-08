@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { apiUrl, disableAllPlugins, register, signIn } from "./support";
+import { apiUrl, chooseMenu, disableAllPlugins, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -15,7 +15,7 @@ function recordThemeWrites(page: Page): string[] {
 
 async function openThemes(page: Page, workspaceId: string, width: number): Promise<void> {
   await page.goto(`/panel/settings?workspaceId=${workspaceId}`);
-  if (width < 640) await page.getByRole("combobox", { name: "Раздел настроек", exact: true }).selectOption("themes");
+  if (width < 640) await chooseMenu(page, "Раздел настроек", "Темы");
   else await page.getByRole("button", { name: "Темы", exact: true }).click();
 }
 

@@ -19,9 +19,10 @@ import {
   type AssistantEngineStatus,
   type AssistantStoredMessage
 } from "@orion/shared-types";
-import { Button, CallChip, EmptyState, IconButton, LatticeLoader, MarkdownView, Orb, PanelBody, PanelHeader, PanelSection, PanelShell, PaperPlaneButton, Select, Skeleton, StarBorder, Textarea, ThoughtLine, cx, useToast } from "@orion/ui";
+import { Button, CallChip, EmptyState, IconButton, LatticeLoader, MarkdownView, Orb, PanelBody, PanelHeader, PanelSection, PanelShell, PaperPlaneButton, Skeleton, StarBorder, Textarea, ThoughtLine, cx, useToast } from "@orion/ui";
 import { Bot, Check, Copy, FileText, KeyRound, Loader2, MessageSquarePlus, Paperclip, Trash2, TriangleAlert, User, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ChoiceSelect } from "../components/choice-select";
 import { describePresence, useAgentPresenceNow } from "../lib/agent-presence";
 import { attachmentFor, fitImages, imageForModel } from "../lib/assistant-attachments";
 import { currentAssistantView, describeAssistantView } from "../lib/assistant-context";
@@ -395,23 +396,21 @@ export function AssistantPanel(): React.ReactElement {
               <span className="flex items-center gap-2">
                 <label className="flex items-center gap-1.5">
                   Отвечает:
-                  <Select
-                    aria-label="Кто отвечает"
+                  <ChoiceSelect
+                    className="w-52"
+                    label="Кто отвечает"
                     value={engine}
-                    className="h-7 w-auto py-0 text-2xs"
-                    onChange={(event) => {
-                      const next = event.target.value as AssistantEngine;
+                    options={(engines.data ?? []).map((item) => ({
+                      value: item.engine,
+                      label: `${item.engine === "anthropic" && key.data?.model ? `${item.label} · ${key.data.model}` : item.label}${item.available ? "" : ` — ${item.reason ?? "недоступно"}`}`
+                    }))}
+                    onChange={(next) => {
+                      const item = (engines.data ?? []).find((candidate) => candidate.engine === next);
+                      if (!item?.available) return;
                       setChosenEngine(next);
                       rememberEngine(next);
                     }}
-                  >
-                    {(engines.data ?? []).map((item) => (
-                      <option key={item.engine} value={item.engine} disabled={!item.available} title={item.available ? undefined : [item.reason, item.hint].filter(Boolean).join(". ")}>
-                        {item.engine === "anthropic" && key.data.model ? `${item.label} · ${key.data.model}` : item.label}
-                        {item.available ? "" : ` — ${item.reason ?? "недоступно"}`}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 </label>
                 <Button size="sm" variant="ghost" onClick={() => openSettings("agents", "agents")}>
                   Настройки ИИ
