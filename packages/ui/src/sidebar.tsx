@@ -146,6 +146,8 @@ export interface SidebarProps {
   railLabel?: string;
   /** Initial pin state. Uncontrolled after mount; omitted callers stay unpinned. */
   defaultPinned?: boolean;
+  /** Keep the primary desktop rail's pin control icon-only while expanded. */
+  compactPinControl?: boolean;
   /** Expanded width of a vertical rail. Compact bars pass a smaller number; icons stay at 60. */
   railWidth?: number;
   /** Separates several bars on one screen: nav id and the active-item motion. */
@@ -204,6 +206,7 @@ export function Sidebar({
   position = "left",
   railLabel,
   defaultPinned,
+  compactPinControl = false,
   railWidth = 240,
   navId = "sidebar",
   surfaceMenuItems,
@@ -862,7 +865,7 @@ export function Sidebar({
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             {pinned ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeft className="h-5 w-5 shrink-0" aria-hidden />}
-            <span className={clsx("whitespace-nowrap", !open && "sr-only")}>{pinned ? "Открепить" : "Закрепить"}</span>
+            <span className={clsx("whitespace-nowrap", (!open || compactPinControl) && "sr-only")}>{pinned ? "Открепить" : "Закрепить"}</span>
           </button>
         )}
         {footer ? <div>{typeof footer === "function" ? footer({ open }) : footer}</div> : null}

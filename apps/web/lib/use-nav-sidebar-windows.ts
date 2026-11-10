@@ -5,7 +5,7 @@ import { isTauri } from "./is-tauri";
 import { openNavSidebarChannel } from "./nav-sidebar-channel";
 import { placeBarBeside } from "./nav-drag-live";
 import { readDisplays } from "./read-displays";
-import { restoreOnDisplays } from "./display-geometry";
+import { monitorIdentity, restoreOnDisplays } from "./display-geometry";
 import {
   detachNavWindow,
   dockNavWindow,
@@ -61,6 +61,36 @@ export function useNavSidebarHost(
     setReadyScope(scope);
   }, [scope]);
 
+  // Keep detached windows in sync with the host's current monitor and bounds.
+  // The original URL is only a bootstrap snapshot; the owner window can move.
+  useEffect(() => {
+    if (!scope || !Object.values(state.bars).some((entry) => entry.detached)) return;
+    const channel = openNavSidebarChannel();
+    const publish = async () => {
+      const bounds = { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight };
+      let monitorId: string | undefined;
+      if (isTauri()) {
+        try {
+          const { currentMonitor } = await import("@tauri-apps/api/window");
+          monitorId = monitorIdentity(await currentMonitor()) ?? undefined;
+        } catch (error) { console.warn("[nav-sidebar] Could not publish host monitor identity; detached sidebar routing will pause.", error); }
+      }
+      for (const [sidebarId, entry] of Object.entries(state.bars)) {
+        if (entry.detached) channel?.postMessage({ type: "host-bounds", sidebarId, bounds, ...(monitorId ? { monitorId } : {}) });
+      }
+    };
+    void publish();
+    const timer = window.setInterval(() => void publish(), 1000);
+    window.addEventListener("resize", publish);
+    window.addEventListener("focus", publish);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("resize", publish);
+      window.removeEventListener("focus", publish);
+      channel?.close();
+    };
+  }, [scope, state.bars]);
+
   useEffect(() => {
     if (!scope || readyScope !== scope) return;
     const next = JSON.stringify(state);
@@ -91,6 +121,7 @@ export function useNavSidebarHost(
       if (!data || typeof data.type !== "string") return;
       if (data.type === "hello" && data.sidebarId) seen.current[data.sidebarId] = Date.now();
       if (data.type === "dock" && data.sidebarId) setState((current) => dockNavWindow(current, data.sidebarId as string));
+      if (data.type === "dock-cancelled" && data.sidebarId) setState((current) => detachNavWindow(current, data.sidebarId as string, current.bars[data.sidebarId as string]?.bounds));
       if (data.type === "open" && data.panelId) onOpenRef.current(data.panelId);
       if (data.type === "ping") channel.postMessage({ type: "ping" });
     };
@@ -132,7 +163,7 @@ export function useNavSidebarHost(
     if (!workspaceId) return;
     grace.current[sidebarId] = Date.now() + GRACE_MS;
     const url = `/panel/nav-sidebar?id=${encodeURIComponent(sidebarId)}&workspaceId=${encodeURIComponent(workspaceId)}`;
-    const saved = state.bars[sidebarId]?.bounds;
+    const saved = state.bars[sidebarId]?.workspaceBounds ?? state.bars[sidebarId]?.bounds;
     setState((current) => detachNavWindow(current, sidebarId));
     void openDetachedBar(url, sidebarId, saved).then((opened) => {
       if (!opened) setState((current) => dockNavWindow(current, sidebarId));
@@ -149,28 +180,24 @@ export function useNavSidebarHost(
   return { state, detach, dock };
 }
 
-async function detachedPlacement(bounds?: NavWindowBounds): Promise<NavWindowBounds> {
-  const displays = await readDisplays();
-  if (bounds) {
-    return restoreOnDisplays({
-      x: Math.round(bounds.x),
-      y: Math.round(bounds.y),
-      width: Math.max(220, Math.round(bounds.width)),
-      height: Math.max(480, Math.round(bounds.height))
-    }, displays);
-  }
-  return placeBarBeside(
-    { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight },
-    displays
-  );
-}
-
 async function openDetachedBar(url: string, sidebarId: string, bounds?: NavWindowBounds): Promise<boolean> {
-  const placed = await detachedPlacement(bounds);
+  const host = { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight };
+  const displays = await readDisplays();
+  const placed = bounds
+    ? restoreOnDisplays({ ...bounds, width: Math.max(220, Math.round(bounds.width)), height: Math.max(480, Math.round(bounds.height)) }, displays)
+    : placeBarBeside(host, displays);
+  let hostMonitorId: string | undefined;
+  if (isTauri()) {
+    try {
+      const { currentMonitor } = await import("@tauri-apps/api/window");
+      hostMonitorId = monitorIdentity(await currentMonitor()) ?? undefined;
+    } catch (error) { console.warn("[nav-sidebar] Host monitor identity could not be read; detached sidebar routing will pause.", error); }
+  }
+  const withHost = `${url}&hostX=${encodeURIComponent(host.x)}&hostY=${encodeURIComponent(host.y)}&hostWidth=${encodeURIComponent(host.width)}&hostHeight=${encodeURIComponent(host.height)}${hostMonitorId ? `&hostMonitor=${encodeURIComponent(hostMonitorId)}` : ""}`;
   if (isTauri()) {
     const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
     const opened = new WebviewWindow(`nav-sidebar-${sidebarId}-${Date.now()}`, {
-      url,
+      url: withHost,
       title: "ORION — сайдбар",
       width: placed.width,
       height: placed.height,
@@ -185,5 +212,5 @@ async function openDetachedBar(url: string, sidebarId: string, bounds?: NavWindo
     });
   }
   const features = `width=${placed.width},height=${placed.height},left=${placed.x},top=${placed.y}`;
-  return window.open(url, `orion-nav-${sidebarId}`, features) !== null;
+  return window.open(withHost, `orion-nav-${sidebarId}`, features) !== null;
 }

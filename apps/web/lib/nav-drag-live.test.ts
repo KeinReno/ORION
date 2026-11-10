@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeBarBeside, pointInRect, readSurfaces, surfaceAt, NAV_SURFACE_PREFIX } from "./nav-drag-live";
+import { placeBarBeside, pointInRect, readSurfaces, resolveNavDropTarget, surfaceAt, NAV_SURFACE_PREFIX } from "./nav-drag-live";
 
 const primary = { x: 0, y: 0, width: 1920, height: 1080, scaleFactor: 1 };
 
@@ -12,6 +12,12 @@ describe("nav drag across windows", () => {
     const placed = placeBarBeside({ x: 0, y: 10, width: 1800, height: 400 }, [primary]);
     expect(placed.x).toBeGreaterThanOrEqual(0);
     expect(placed.x + placed.width).toBeLessThanOrEqual(primary.width);
+  });
+
+  it("treats the detached workspace as an open target while preserving compact-bar drops", () => {
+    expect(resolveNavDropTarget({ windowKind: "nav", currentSidebarId: "side-2", hasWorkbench: true })).toEqual({ kind: "open" });
+    expect(resolveNavDropTarget({ windowKind: "nav", currentSidebarId: "side-2", hasWorkbench: true, hitSidebarId: "side-2" })).toEqual({ kind: "move", sidebarId: "side-2" });
+    expect(resolveNavDropTarget({ windowKind: "nav", currentSidebarId: "side-2", hasWorkbench: false })).toEqual({ kind: "move", sidebarId: "side-2" });
   });
 
   it("prefers a navigation window and ignores a stale or foreign surface", () => {

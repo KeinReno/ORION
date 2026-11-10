@@ -139,6 +139,96 @@ async function tableNames(prisma: Pick<PrismaClient, "$queryRawUnsafe">): Promis
   return rows.map((row) => row.tablename);
 }
 
+async function tableColumns(prisma: Pick<PrismaClient, "$queryRawUnsafe">, table: string): Promise<string[]> {
+  const rows = await prisma.$queryRawUnsafe<{ column_name: string }[]>(
+    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position",
+    table
+  );
+  return rows.map((row) => row.column_name);
+}
+
+/**
+ * json_populate_recordset ignores unknown keys and treats missing columns as
+ * NULL. Reject those lossy conversions before computing a schema-normalized
+ * digest so restore still requires every archived row to match the table shape.
+ */
+export function assertBackupRowsMatchColumns(lines: readonly string[], table: string, columns: readonly string[]): void {
+  const expected = new Set(columns);
+  for (const line of lines) {
+    let value: unknown;
+    try {
+      value = JSON.parse(line) as unknown;
+    } catch {
+      throw new Error(`Таблица ${table} содержит некорректную строку резервной копии.`);
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value) || hasDuplicateJsonKeys(line)) {
+      throw new Error(`Таблица ${table} содержит неподдерживаемую строку резервной копии.`);
+    }
+    const actual = Object.keys(value);
+    if (actual.length !== expected.size || actual.some((column) => !expected.has(column))) {
+      throw new Error(`Столбцы строки резервной копии ${table} не совпадают со схемой.`);
+    }
+  }
+}
+
+function hasDuplicateJsonKeys(json: string): boolean {
+  let offset = 0;
+  const whitespace = (): void => {
+    while (/\s/.test(json[offset] ?? "")) offset += 1;
+  };
+  const string = (): string => {
+    const start = offset;
+    offset += 1;
+    while (offset < json.length) {
+      const character = json[offset]!;
+      offset += 1;
+      if (character === "\\") offset += 1;
+      else if (character === '"') break;
+    }
+    return JSON.parse(json.slice(start, offset)) as string;
+  };
+  const value = (): boolean => {
+    whitespace();
+    const token = json[offset];
+    if (token === '"') {
+      string();
+      return false;
+    }
+    if (token === "[") {
+      offset += 1;
+      whitespace();
+      if (json[offset] === "]") { offset += 1; return false; }
+      for (;;) {
+        if (value()) return true;
+        whitespace();
+        if (json[offset] === "]") { offset += 1; return false; }
+        offset += 1;
+      }
+    }
+    if (token === "{") {
+      offset += 1;
+      whitespace();
+      const keys = new Set<string>();
+      if (json[offset] === "}") { offset += 1; return false; }
+      for (;;) {
+        whitespace();
+        const key = string();
+        if (keys.has(key)) return true;
+        keys.add(key);
+        whitespace();
+        offset += 1; // colon
+        if (value()) return true;
+        whitespace();
+        if (json[offset] === "}") { offset += 1; return false; }
+        offset += 1; // comma
+      }
+    }
+    while (offset < json.length && !/[\s,\]}]/.test(json[offset]!)) offset += 1;
+    return false;
+  };
+  return value();
+}
+
 async function appliedMigrations(prisma: Pick<PrismaClient, "$queryRawUnsafe">): Promise<string[]> {
   const rows = await prisma.$queryRawUnsafe<{ migration_name: string }[]>(
     `SELECT migration_name FROM ${MIGRATIONS_TABLE} WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`
@@ -331,8 +421,20 @@ export async function restoreNodeBackup(prisma: PrismaClient, options: RestoreOp
       for (const [table, entry] of Object.entries(manifest.tables)) {
         const body = await readFile(path.join(dir, "tables", `${table}.ndjson`), "utf8");
         const lines = body === "" ? [] : body.split("\n").slice(0, -1);
+        const columns = await tableColumns(tx, table);
+        assertBackupRowsMatchColumns(lines, table, columns);
+        const normalizedDigest = new RowsDigest();
+        let normalizedCount = 0;
         for (let start = 0; start < lines.length; start += INSERT_BATCH) {
           const payload = `[${lines.slice(start, start + INSERT_BATCH).join(",")}]`;
+          const normalized = await tx.$queryRawUnsafe<{ j: string }[]>(
+            `SELECT row_to_json(r)::text AS j FROM json_populate_recordset(NULL::${quoteIdent(table)}, $1::json) AS r`,
+            payload
+          );
+          for (const row of normalized) {
+            normalizedDigest.add(row.j);
+            normalizedCount += 1;
+          }
           await tx.$executeRawUnsafe(
             `INSERT INTO ${quoteIdent(table)} SELECT * FROM json_populate_recordset(NULL::${quoteIdent(table)}, $1::json)`,
             payload
@@ -346,7 +448,7 @@ export async function restoreNodeBackup(prisma: PrismaClient, options: RestoreOp
           digest.add(line);
           count += 1;
         }
-        if (count !== entry.rows || digest.hex() !== entry.rowsDigest) {
+        if (normalizedCount !== lines.length || count !== entry.rows || digest.hex() !== normalizedDigest.hex()) {
           throw new Error(`Таблица ${table} после восстановления не совпала с копией (${count} из ${entry.rows} строк).`);
         }
       }

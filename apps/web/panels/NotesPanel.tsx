@@ -2,12 +2,16 @@
 
 import {
   useCreateNote,
+  useCreateNoteStack,
   useDeleteNote,
+  useDeleteNoteStack,
+  useMoveNotesToStack,
   useNotes,
   usePreferences,
   useProjects,
   usePurgeNote,
   useRestoreNote,
+  useReorderNoteStack,
   useUpdateNote
 } from "@orion/core-react";
 import { TagManager } from "./tag-manager";
@@ -38,6 +42,8 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
   ClipboardCopy,
   Copy,
   Download,
@@ -45,6 +51,7 @@ import {
   PanelRight,
   FileStack,
   FileText,
+  Layers2,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -106,6 +113,10 @@ export function NotesPanel(): React.ReactElement {
   const { data: projectList } = useProjects(projectsOn ? workspace?.id : undefined);
   const showIds = usePreferences().data?.showNoteIds ?? false;
   const createNote = useCreateNote(workspace?.id);
+  const createStack = useCreateNoteStack(workspace?.id);
+  const reorderStack = useReorderNoteStack(workspace?.id);
+  const deleteStack = useDeleteNoteStack(workspace?.id);
+  const moveToStack = useMoveNotesToStack(workspace?.id);
   const updateNote = useUpdateNote(workspace?.id);
   const deleteNote = useDeleteNote(workspace?.id);
   const restoreNote = useRestoreNote(workspace?.id);
@@ -147,6 +158,9 @@ export function NotesPanel(): React.ReactElement {
   const [pendingPurge, setPendingPurge] = useState<Note | null>(null);
   // Bumped after a revision restore to remount NoteEditor on the fresh note.
   const [editorReloadKey, setEditorReloadKey] = useState(0);
+  const [stackSelection, setStackSelection] = useState<string[]>([]);
+  const [stackTitleDraft, setStackTitleDraft] = useState("");
+  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(new Set());
 
   // A project filter must not keep narrowing the list after Projects is turned off.
   useEffect(() => {
@@ -204,13 +218,27 @@ export function NotesPanel(): React.ReactElement {
   // Stable Array#sort preserves the selected ordering within each project group.
   const groupingActive = groupByProject && !trash && projectsOn;
   const displayed = useMemo(() => {
-    if (!groupingActive) return visible;
-    const names = new Map((projectList ?? []).map((project) => [project.id, project.name]));
-    const label = (note: Note): string => note.projectId ? names.get(note.projectId) ?? "Проект недоступен" : "Без проекта";
-    return [...visible].sort((a, b) =>
-      label(a).localeCompare(label(b), "ru") || (a.projectId ?? "").localeCompare(b.projectId ?? "")
-    );
+    let result = visible;
+    if (groupingActive) {
+      const names = new Map((projectList ?? []).map((project) => [project.id, project.name]));
+      const label = (note: Note): string => note.projectId ? names.get(note.projectId) ?? "Проект недоступен" : "Без проекта";
+      result = [...result].sort((a, b) => label(a).localeCompare(label(b), "ru") || (a.projectId ?? "").localeCompare(b.projectId ?? ""));
+    }
+    const members = new Map<string, Note[]>();
+    for (const note of result) if (note.stackId) members.set(note.stackId, [...(members.get(note.stackId) ?? []), note]);
+    for (const stack of members.values()) stack.sort((a, b) => (a.stackOrder ?? 0) - (b.stackOrder ?? 0));
+    const emitted = new Map<string, number>();
+    return result.map((note) => {
+      if (!note.stackId) return note;
+      const position = emitted.get(note.stackId) ?? 0;
+      emitted.set(note.stackId, position + 1);
+      return members.get(note.stackId)?.[position] ?? note;
+    });
   }, [visible, groupingActive, projectList]);
+  const renderedNotes = useMemo(() => displayed.filter((note, index) => {
+    if (!note.stackId || expandedStacks.has(note.stackId)) return true;
+    return displayed.findIndex((candidate) => candidate.stackId === note.stackId) === index;
+  }), [displayed, expandedStacks]);
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>();
     if (groupingActive) for (const note of displayed) {
@@ -219,6 +247,15 @@ export function NotesPanel(): React.ReactElement {
     }
     return counts;
   }, [displayed, groupingActive]);
+  const noteStacks = useMemo(() => {
+    const map = new Map<string, { id: string; title: string; count: number }>();
+    for (const note of notes ?? []) if (note.stackId) {
+      const group = map.get(note.stackId);
+      if (group) group.count += 1;
+      else map.set(note.stackId, { id: note.stackId, title: note.stackTitle || "Стопка без названия", count: 1 });
+    }
+    return [...map.values()].sort((a, b) => a.title.localeCompare(b.title, "ru"));
+  }, [notes]);
 
   const filtersOn = activeFilterCount({ tags: tagFilters, tagMode, projectId: projectFilter, pinnedOnly });
   const projectName = (id: string): string => (projectList ?? []).find((p) => p.id === id)?.name ?? "проект";
@@ -382,6 +419,57 @@ export function NotesPanel(): React.ReactElement {
     purgeNote.mutate(note.id, { onSuccess: () => toast({ title: "Удалено навсегда", tone: "default" }) });
   }
 
+  async function groupSelectedNotes(): Promise<void> {
+    const title = stackTitleDraft.trim();
+    if (!title || stackSelection.length < 2) return;
+    try {
+      await createStack.mutateAsync({ title, noteIds: stackSelection });
+      setStackSelection([]);
+      setStackTitleDraft("");
+      toast({ title: "Стопка создана", tone: "success" });
+    } catch (error) {
+      toast({ title: "Не удалось создать стопку", description: describeError(error), tone: "danger" });
+    }
+  }
+
+  function moveSelectionIntoStack(stackId: string): void {
+    moveToStack.mutate({ stackId, noteIds: stackSelection }, {
+      onSuccess: () => {
+        setStackSelection([]);
+        toast({ title: "Заметки перемещены", tone: "success" });
+      },
+      onError: (error) => toast({ title: "Не удалось переместить заметки", description: describeError(error), tone: "danger" })
+    });
+  }
+
+  function shiftStackNote(note: Note, delta: -1 | 1): void {
+    if (!note.stackId) return;
+    if (query.trim()) {
+      toast({ title: "Сбросьте поиск, чтобы изменить порядок всей стопки", tone: "default" });
+      return;
+    }
+    const members = (notes ?? []).filter((item) => item.stackId === note.stackId).sort((a, b) => (a.stackOrder ?? 0) - (b.stackOrder ?? 0));
+    const index = members.findIndex((item) => item.id === note.id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= members.length) return;
+    const reordered = [...members];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    reorderStack.mutate({ stackId: note.stackId, noteIds: reordered.map((item) => item.id) }, {
+      onError: (error) => toast({ title: "Не удалось изменить порядок", description: describeError(error), tone: "danger" })
+    });
+  }
+
+  function dissolveStack(note: Note): void {
+    if (!note.stackId) return;
+    deleteStack.mutate(note.stackId, {
+      onSuccess: () => {
+        setExpandedStacks((current) => new Set(current).add(note.stackId!));
+        toast({ title: "Стопка удалена. Заметки сохранены.", tone: "success" });
+      },
+      onError: (error) => toast({ title: "Не удалось удалить стопку", description: describeError(error), tone: "danger" })
+    });
+  }
+
   const list = (
     <div className="orion-scroll flex-1 overflow-y-auto p-3">
       {!trash && (activeView || (projectList ?? []).length > 0) ? (
@@ -448,6 +536,33 @@ export function NotesPanel(): React.ReactElement {
             <Tags className="h-4 w-4" />
           </IconButton>
         </div>
+      ) : null}
+      {!trash && !templatesView && stackSelection.length > 0 ? (
+        <form
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card/50 px-2 py-2"
+          onSubmit={(event) => { event.preventDefault(); void groupSelectedNotes(); }}
+        >
+          <span className="text-xs text-subtle-foreground">Выбрано: {stackSelection.length}</span>
+          <Input value={stackTitleDraft} onChange={(event) => setStackTitleDraft(event.target.value)} placeholder="Название стопки" aria-label="Название новой стопки" className="h-8 min-w-32 flex-1" />
+          <Button size="sm" type="submit" disabled={stackSelection.length < 2 || !stackTitleDraft.trim() || createStack.isPending}>
+            <Layers2 className="h-3.5 w-3.5" /> Объединить
+          </Button>
+          {noteStacks.length > 0 ? (
+            <DropdownMenu
+              trigger={({ toggle }) => (
+                <Button size="sm" variant="outline" type="button" onClick={toggle} disabled={moveToStack.isPending}>
+                  Переместить в стопку
+                </Button>
+              )}
+              items={noteStacks.map((stack) => ({
+                label: `${stack.title} · ${stack.count}`,
+                icon: Layers2,
+                onSelect: () => moveSelectionIntoStack(stack.id)
+              }))}
+            />
+          ) : null}
+          <Button size="sm" variant="subtle" type="button" onClick={() => setStackSelection([])}>Снять выбор</Button>
+        </form>
       ) : null}
       {filtersOn > 0 && !trash ? (
         <div className="mb-2 flex flex-wrap items-center gap-1 px-1 text-2xs text-subtle-foreground" aria-live="polite">
@@ -531,7 +646,7 @@ export function NotesPanel(): React.ReactElement {
         </div>
       ) : (
         <ul className="space-y-1">
-          {displayed.map((note, index) => {
+          {renderedNotes.map((note, index) => {
             const active = note.id === selectedId;
             const project = note.projectId ? (projectList ?? []).find((p) => p.id === note.projectId) : undefined;
             const groupKey = note.projectId ?? NO_PROJECT;
@@ -545,6 +660,12 @@ export function NotesPanel(): React.ReactElement {
                   { label: "Удалить навсегда", icon: Trash2, tone: "danger", onSelect: () => setPendingPurge(note) }
                 ]
               : [
+                  ...(note.stackId ? [
+                    { label: "Выше в стопке", icon: ArrowUp, onSelect: () => shiftStackNote(note, -1) },
+                    { label: "Ниже в стопке", icon: ArrowDown, onSelect: () => shiftStackNote(note, 1) },
+                    { label: "Удалить стопку", icon: Layers2, onSelect: () => dissolveStack(note) },
+                    "separator" as const
+                  ] : []),
                   { label: note.pinnedAt ? "Открепить" : "Закрепить", icon: note.pinnedAt ? PinOff : Pin, onSelect: () => handleTogglePin(note) },
                   { label: note.archivedAt ? "Из архива" : "В архив", icon: note.archivedAt ? ArchiveRestore : Archive, onSelect: () => requestLeave(() => handleToggleArchive(note)) },
                   { label: "Открыть панелью", icon: PanelRight, onSelect: () => openPanel(`note:${note.id}`, note.title) },
@@ -564,6 +685,9 @@ export function NotesPanel(): React.ReactElement {
                   "separator",
                   { label: "Удалить", icon: Trash2, tone: "danger", onSelect: () => requestLeave(() => setPendingDelete(note)) }
                 ];
+            const stackFirstIndex = note.stackId ? displayed.findIndex((item) => item.stackId === note.stackId) : -1;
+            const stackMembers = note.stackId ? displayed.filter((item) => item.stackId === note.stackId) : [];
+            const stackCollapsed = Boolean(note.stackId && !expandedStacks.has(note.stackId));
             return (
               <li key={note.id}>
                 {startsGroup ? (
@@ -595,7 +719,8 @@ export function NotesPanel(): React.ReactElement {
                     if (outside) void detachPanelToWindow(`note:${note.id}`, note.title, { x: screenX, y: screenY });
                   }}
                   className={cx(
-                    "group flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
+                    "group relative flex items-start gap-2 rounded-xl border px-3 py-2.5 transition-colors",
+                    stackCollapsed && stackFirstIndex === index ? "before:absolute before:inset-x-2 before:-bottom-1 before:-z-10 before:h-2 before:rounded-b-lg before:border before:border-border before:bg-card-hover after:absolute after:inset-x-4 after:-bottom-2 after:-z-20 after:h-2 after:rounded-b-lg after:border after:border-border/70 after:bg-card" : "",
                     mark.className,
                     trash
                       ? "border-transparent"
@@ -607,6 +732,16 @@ export function NotesPanel(): React.ReactElement {
                         )
                   )}
                 >
+                  {!trash && !templatesView ? (
+                    <input
+                      type="checkbox"
+                      checked={stackSelection.includes(note.id)}
+                      aria-label={`Выбрать заметку «${note.title}» для стопки`}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => setStackSelection((current) => event.target.checked ? [...current, note.id] : current.filter((id) => id !== note.id))}
+                      className="mt-1 h-3.5 w-3.5 shrink-0 accent-[hsl(var(--accent))]"
+                    />
+                  ) : null}
                   <button
                     type="button"
                     disabled={trash}
@@ -619,6 +754,11 @@ export function NotesPanel(): React.ReactElement {
                   >
                     <span className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
                       {!trash && note.pinnedAt ? <Pin className="h-3 w-3 shrink-0 text-accent-text" /> : null}
+                      {note.stackId && stackFirstIndex === index ? (
+                        <span className="mr-0.5 inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0 text-2xs text-subtle-foreground">
+                          <Layers2 className="h-3 w-3" />{note.stackTitle || "Стопка"} · {stackMembers.length}
+                        </span>
+                      ) : null}
                       {showIds && note.number !== null ? (
                         <span className="shrink-0 font-mono text-2xs font-normal text-subtle-foreground">{noteNumberLabel(note.number)}</span>
                       ) : null}
@@ -644,6 +784,22 @@ export function NotesPanel(): React.ReactElement {
                       </span>
                     </span>
                   </button>
+                  {note.stackId && stackFirstIndex === index ? (
+                    <button
+                      type="button"
+                      aria-label={stackCollapsed ? `Раскрыть стопку «${note.stackTitle || "Без названия"}»` : "Свернуть стопку"}
+                      title={stackCollapsed ? "Раскрыть стопку" : "Свернуть стопку"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedStacks((current) => {
+                          const next = new Set(current);
+                          if (next.has(note.stackId!)) next.delete(note.stackId!); else next.add(note.stackId!);
+                          return next;
+                        });
+                      }}
+                      className="mt-1 rounded px-1 text-2xs text-subtle-foreground hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    >{stackCollapsed ? "Раскрыть" : "Свернуть"}</button>
+                  ) : null}
                   <div className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
                     <DropdownMenu
                       trigger={({ toggle }) => (

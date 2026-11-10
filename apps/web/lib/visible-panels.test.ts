@@ -17,4 +17,8 @@ describe("visiblePanels", () => {
     expect(visiblePanels([], ["notes"]).map((panel) => panel.id)).not.toContain("notes");
     expect(visiblePanels([], ["notes"]).map((panel) => panel.id)).toContain("dashboard");
   });
+
+  it("places cross-workspace shared items in the tools menu", () => {
+    expect(visiblePanels([], []).find((panel) => panel.id === "shared")?.group).toBe("Инструменты");
+  });
 });

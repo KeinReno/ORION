@@ -11,6 +11,8 @@ import { AgentModuleToolsService } from "./agent-module-tools.service";
 import { AgentPresenceService } from "./agent-presence.service";
 import { AgentTokenGuard } from "./agent-token.guard";
 import { AgentTokensService } from "./agent-tokens.service";
+import { AgentCredentialQueries } from "./agent-credential-reader.service";
+import { AgentCredentialReader } from "./public/agent-credential-reader";
 
 /**
  * The part of the AI bridge a domain module needs to expose its own agent tools (`ai/v1/<module>/*`, G13): token check,
@@ -19,7 +21,8 @@ import { AgentTokensService } from "./agent-tokens.service";
  */
 @Module({
   imports: [ProjectAgentReaderModule, TaskIntegrationReaderModule, NoteAgentReferencesModule, EventAgentReferencesModule, WorkspacesModule, ModulesModule, NotificationsModule],
-  providers: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService],
-  exports: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService]
+  providers: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService,
+    AgentCredentialQueries, { provide: AgentCredentialReader, useExisting: AgentCredentialQueries }],
+  exports: [AgentPresenceService, AgentTokensService, AgentTokenGuard, AgentModuleProposalsService, AgentModuleToolsService, AgentCredentialReader]
 })
 export class AgentCoreModule {}

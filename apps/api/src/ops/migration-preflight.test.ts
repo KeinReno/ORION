@@ -31,6 +31,9 @@ describe("offline migration inspection", () => {
     expect(report.claimedCounts).toMatchObject({ users: 2, tasks: 3, projects: null });
     expect(report.source.documentFileCount).toBe(1);
     expect(report.snapshotInventory.restoreAuthorized).toBe(false);
+    expect(report.migrationTableInventory.status).toBe("blocked");
+    expect(report.migrationTableInventory.tablesWithoutMigrationDisposition).toBeGreaterThan(0);
+    expect(report.migrationTableInventory.restoreAuthorized).toBe(false);
     expect(report.blockers.length).toBeGreaterThan(0);
     expect(JSON.stringify(report)).not.toContain("do-not-report");
     expect(JSON.stringify(report)).not.toContain("private.txt");

@@ -1,5 +1,6 @@
 import { readKnowledgeSourceTitle as readNoteTitle } from "../notes/public";
 import { readKnowledgeSourceTitle as readDocumentTitle } from "../documents/public";
+import { ProjectReferences } from "../projects/public/project-references";
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import type {
@@ -28,6 +29,7 @@ const itemInclude = {
 @Injectable()
 export class KnowledgeService {
   constructor(
+    private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService
   ) {}
@@ -153,6 +155,7 @@ export class KnowledgeService {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       if (input.categoryId) await this.assertCategory(tx, workspaceId, input.categoryId);
+      await this.assertProject(tx, workspaceId, input.projectId ?? null);
       const row = await tx.knowledgeItem.create({
         data: {
           workspaceId,
@@ -160,6 +163,7 @@ export class KnowledgeService {
           summary: input.summary ?? "",
           body: input.body ?? "",
           categoryId: input.categoryId ?? null,
+          projectId: input.projectId ?? null,
           status: input.status ?? "captured",
           visibility: input.visibility ?? "workspace",
           kind: input.kind ?? "fact",
@@ -186,8 +190,10 @@ export class KnowledgeService {
         throw new ForbiddenException("Скрыть материал может только его автор");
       }
       if (input.categoryId) await this.assertCategory(tx, workspaceId, input.categoryId);
+      if (input.projectId !== undefined) await this.assertProject(tx, workspaceId, input.projectId);
       const expected = input.expectedRevision ?? current.revision;
-      const { expectedRevision: _ignored, ...patch } = input;
+      const patch = { ...input };
+      delete patch.expectedRevision;
       const written = await tx.knowledgeItem.updateMany({
         where: { id: itemId, revision: expected },
         data: { ...patch, revision: { increment: 1 } }
@@ -303,6 +309,11 @@ export class KnowledgeService {
     if (!row) throw new BadRequestException("Раздел не найден в этом пространстве");
   }
 
+  private async assertProject(tx: Prisma.TransactionClient, workspaceId: string, projectId: string | null): Promise<void> {
+    if (!projectId) return;
+    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
+  }
+
   /** Родитель раздела — только верхний уровень, чтобы дерево не ушло глубже двух. */
   private async assertParentCategory(
     tx: Prisma.TransactionClient,
@@ -334,6 +345,7 @@ type ItemRow = {
   id: string;
   workspaceId: string;
   categoryId: string | null;
+  projectId: string | null;
   title: string;
   summary: string;
   body: string;
@@ -386,6 +398,7 @@ function toItem(row: ItemRow): KnowledgeItem {
     id: row.id,
     workspaceId: row.workspaceId,
     categoryId: row.categoryId,
+    projectId: row.projectId,
     title: row.title,
     summary: row.summary,
     body: row.body,

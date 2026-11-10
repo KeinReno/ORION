@@ -3,31 +3,67 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod browser;
-mod startup;
+#[cfg(debug_assertions)]
+mod browser_smoke;
 #[cfg_attr(debug_assertions, allow(dead_code))]
 mod payload_ui;
 #[cfg(debug_assertions)]
-mod browser_smoke;
-#[cfg(debug_assertions)]
 mod payload_ui_smoke;
+mod startup;
 #[cfg(debug_assertions)]
 mod startup_smoke;
 
+#[cfg(windows)]
+#[path = "../../../../orion-rust/src/supervisor.rs"]
+mod process_supervisor;
+
 #[cfg(all(windows, not(debug_assertions)))]
-fn edition_api_addr() -> std::net::SocketAddr {
-    let edition: serde_json::Value = serde_json::from_str(include_str!("../../../../orion-rust/edition.json"))
-        .expect("orion-rust/edition.json");
-    let port = edition.get("apiPort").and_then(|value| value.as_u64()).expect("apiPort");
-    format!("127.0.0.1:{port}").parse().expect("api address")
+static RUNTIME_STDIN: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
+#[cfg(all(windows, not(debug_assertions)))]
+static RUNTIME_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(all(windows, not(debug_assertions)))]
+static EXIT_ALLOWED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(all(windows, not(debug_assertions)))]
+static EXIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(all(windows, not(debug_assertions)))]
+fn runtime_pipe() -> Result<(std::fs::File, std::fs::File), String> {
+    use std::os::windows::io::FromRawHandle;
+    use std::ffi::c_void;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreatePipe(read: *mut *mut c_void, write: *mut *mut c_void, attributes: *mut c_void, size: u32) -> i32;
+    }
+    let (mut read, mut write) = (std::ptr::null_mut(), std::ptr::null_mut());
+    if unsafe { CreatePipe(&mut read, &mut write, std::ptr::null_mut(), 0) } == 0 {
+        return Err(format!("Не удалось создать канал остановки runtime: {}", std::io::Error::last_os_error()));
+    }
+    Ok(unsafe { (std::fs::File::from_raw_handle(read), std::fs::File::from_raw_handle(write)) })
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
-fn ready() -> bool {
+fn edition_ports() -> (u16, u16) {
+    let edition: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../orion-rust/edition.json"))
+            .expect("orion-rust/edition.json");
+    let api = edition
+        .get("apiPort")
+        .and_then(|value| value.as_u64())
+        .expect("apiPort") as u16;
+    let pg = edition
+        .get("pgPort")
+        .and_then(|value| value.as_u64())
+        .expect("pgPort") as u16;
+    (api, pg)
+}
+
+#[cfg(all(windows, not(debug_assertions)))]
+fn health_responds(api_port: u16) -> bool {
     use std::io::{Read, Write};
-    use std::net::{SocketAddr, TcpStream};
+    use std::net::TcpStream;
     use std::time::Duration;
 
-    let addr: SocketAddr = edition_api_addr();
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], api_port));
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
         return false;
     };
@@ -44,108 +80,147 @@ fn ready() -> bool {
         && body.contains("\"database\":\"ok\"")
 }
 
-// Windows does not kill a process's children when it exits — `node.exe` (the launcher) and, through it,
-// the API's own `node.exe` and `postgres.exe` used to keep running in the background after ORION was
-// closed, crashed, or was ended from Task Manager (see docs/DESKTOP_STARTUP_2026-10-26.md). A leftover
-// `postgres.exe`/API process on the same ports also made the `ready()` check below silently reuse that
-// stale instance on the next launch instead of actually starting the freshly installed one.
-//
-// A Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE fixes this at the OS level: every process this
-// launcher spawns (and anything *they* spawn — Windows nests child processes into the parent's job by
-// default) is terminated the moment the job handle closes, which Windows does automatically when this
-// process exits for any reason. The handle is intentionally never closed by hand: it must outlive this
-// function, and letting the OS reclaim it on process exit is exactly the trigger we want.
 #[cfg(all(windows, not(debug_assertions)))]
-fn bind_launcher_lifetime(child: &std::process::Child) {
+fn listener_pids(port: u16) -> Result<Vec<u32>, String> {
     use std::ffi::c_void;
-    use std::os::windows::io::AsRawHandle;
 
-    #[repr(C)]
-    struct BasicLimitInformation {
-        per_process_user_time_limit: i64,
-        per_job_user_time_limit: i64,
-        limit_flags: u32,
-        minimum_working_set_size: usize,
-        maximum_working_set_size: usize,
-        active_process_limit: u32,
-        affinity: usize,
-        priority_class: u32,
-        scheduling_class: u32,
-    }
-    #[repr(C)]
-    struct IoCounters {
-        read_operation_count: u64,
-        write_operation_count: u64,
-        other_operation_count: u64,
-        read_transfer_count: u64,
-        write_transfer_count: u64,
-        other_transfer_count: u64,
-    }
-    #[repr(C)]
-    struct ExtendedLimitInformation {
-        basic: BasicLimitInformation,
-        io_info: IoCounters,
-        process_memory_limit: usize,
-        job_memory_limit: usize,
-        peak_process_memory_used: usize,
-        peak_job_memory_used: usize,
+    const AF_INET: i32 = 2;
+    const TCP_TABLE_OWNER_PID_LISTENER: i32 = 3;
+    const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
+
+    #[link(name = "iphlpapi")]
+    unsafe extern "system" {
+        fn GetExtendedTcpTable(
+            table: *mut c_void,
+            size: *mut u32,
+            order: i32,
+            family: i32,
+            table_class: i32,
+            reserved: u32,
+        ) -> u32;
     }
 
-    const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x2000;
-    const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
+    for _ in 0..3 {
+        let mut bytes = 0u32;
+        let status = unsafe {
+            GetExtendedTcpTable(
+                std::ptr::null_mut(),
+                &mut bytes,
+                0,
+                AF_INET,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
+        };
+        if status != ERROR_INSUFFICIENT_BUFFER || bytes < 4 {
+            return Err(format!(
+                "Не удалось проверить владельца порта {port} (TCP table status {status})."
+            ));
+        }
+        let mut buffer = vec![0u8; bytes as usize];
+        let mut actual = bytes;
+        let status = unsafe {
+            GetExtendedTcpTable(
+                buffer.as_mut_ptr().cast(),
+                &mut actual,
+                0,
+                AF_INET,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
+        };
+        if status == 0 {
+            let count = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast::<u32>()) as usize };
+            if 4usize.saturating_add(count.saturating_mul(24)) > buffer.len() {
+                return Err(format!("Таблица владельцев TCP-порта {port} повреждена."));
+            }
+            let mut pids = Vec::new();
+            for index in 0..count {
+                let row = unsafe { buffer.as_ptr().add(4 + index * 24) };
+                let address = unsafe { (*row.add(4), *row.add(5), *row.add(6), *row.add(7)) };
+                let local_port = unsafe { (*row.add(8) as u16) << 8 | *row.add(9) as u16 };
+                let loopback_or_wildcard = address == (127, 0, 0, 1) || address == (0, 0, 0, 0);
+                if local_port == port && loopback_or_wildcard {
+                    let pid = unsafe { std::ptr::read_unaligned(row.add(20).cast::<u32>()) };
+                    pids.push(pid);
+                }
+            }
+            pids.sort_unstable();
+            pids.dedup();
+            return Ok(pids);
+        }
+        if status != ERROR_INSUFFICIENT_BUFFER {
+            return Err(format!(
+                "Не удалось проверить владельца порта {port} (TCP table status {status})."
+            ));
+        }
+    }
+    Err(format!(
+        "Таблица TCP менялась во время проверки порта {port}."
+    ))
+}
 
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn CreateJobObjectW(attrs: *const c_void, name: *const u16) -> *mut c_void;
-        fn SetInformationJobObject(job: *mut c_void, class: i32, info: *const c_void, len: u32) -> i32;
-        fn AssignProcessToJobObject(job: *mut c_void, process: *mut c_void) -> i32;
+fn listeners_owned_by_job(
+    pids: &[u32],
+    mut owns_pid: impl FnMut(u32) -> Result<bool, String>,
+) -> Result<bool, String> {
+    if pids.is_empty() {
+        return Ok(false);
     }
+    for pid in pids {
+        if !owns_pid(*pid)? {
+            return Err(format!(
+                "Listener PID {pid} не принадлежит экземпляру ORION Rust, запущенному сейчас."
+            ));
+        }
+    }
+    Ok(true)
+}
 
-    let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-    if job.is_null() {
-        return;
+fn reject_occupied_port(name: &str, port: u16, pids: &[u32]) -> Result<(), String> {
+    if pids.is_empty() {
+        return Ok(());
     }
-    let mut info: ExtendedLimitInformation = unsafe { std::mem::zeroed() };
-    info.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    let configured = unsafe {
-        SetInformationJobObject(
-            job,
-            JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
-            &info as *const _ as *const c_void,
-            std::mem::size_of::<ExtendedLimitInformation>() as u32,
-        )
-    };
-    if configured == 0 {
-        return;
-    }
-    unsafe { AssignProcessToJobObject(job, child.as_raw_handle() as *mut c_void) };
+    let owners = pids
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!("Порт {name} {port} уже занят (PID: {owners}). ORION Rust не подключался и ничего не останавливал."))
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
-fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
+fn start_local_runtime(
+    app: &tauri::AppHandle,
+) -> Result<(process_supervisor::Supervisor, u32), String> {
     use std::fs::{self, OpenOptions};
-    use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
+    use std::io::Write;
+    use std::os::windows::io::AsRawHandle;
     use std::thread;
     use std::time::{Duration, Instant};
     use tauri::Manager;
 
-    if ready() {
-        return Ok(());
+    let (api_port, pg_port) = edition_ports();
+    for (name, port) in [("API", api_port), ("PostgreSQL", pg_port)] {
+        let pids = listener_pids(port)?;
+        reject_occupied_port(name, port, &pids)?;
     }
     let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
     let runtime = resource_dir.join("runtime");
-    let node = runtime.join("node.exe");
-    let launcher = runtime.join("launcher.cjs");
-    if !node.is_file() || !launcher.is_file() {
+    let runtime_exe = runtime.join("orion-runtime.exe");
+    if !runtime_exe.is_file() {
         return Err(format!(
-            "Установщик неполный: нет {} или {}",
-            node.display(),
-            launcher.display()
+            "Установщик неполный: нет {}",
+            runtime_exe.display()
         ));
     }
     let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let shutdown_nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| format!("Не удалось подготовить сигнал завершения: {error}"))?
+        .as_nanos();
+    let shutdown_marker = data_dir.join(format!("runtime-stopped-{}-{shutdown_nonce}.marker", std::process::id()));
     let phase_file = data_dir.join("startup-state.json");
     let _ = fs::remove_file(&phase_file);
     let log_file = data_dir.join("launcher.log");
@@ -154,23 +229,71 @@ fn start_local_runtime(app: &tauri::AppHandle) -> Result<(), String> {
         .append(true)
         .open(&log_file)
         .map_err(|e| e.to_string())?;
-    let mut child = Command::new(node)
-        .arg(launcher)
+    let (stdin, shutdown_writer) = runtime_pipe()?;
+    {
+        let mut writer = RUNTIME_STDIN.lock().map_err(|e| e.to_string())?;
+        if !EXIT_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) {
+            *writer = Some(shutdown_writer);
+        }
+    }
+    let process_spec = process_supervisor::ProcessSpec::new(runtime_exe)
+        .arg("supervise-direct")
         .current_dir(&runtime)
-        .env("ORION_DESKTOP_DATA_DIR", &data_dir)
-        .stdout(Stdio::from(log.try_clone().map_err(|e| e.to_string())?))
-        .stderr(Stdio::from(log))
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    bind_launcher_lifetime(&child);
+        .env_inherited("ORION_RUNTIME_ROOT", runtime.as_os_str())
+        .env_inherited("ORION_SHUTDOWN_ON_STDIN_EOF", "1")
+        .env_inherited("ORION_SHELL_PID", std::process::id().to_string())
+        .env_inherited("ORION_SHUTDOWN_MARKER", shutdown_marker.as_os_str())
+        .env_inherited("ORION_DESKTOP_DATA_DIR", data_dir.as_os_str())
+        .stdio_handles(
+            stdin.as_raw_handle() as usize,
+            log.as_raw_handle() as usize,
+            log.as_raw_handle() as usize,
+        );
+    let mut supervisor = process_supervisor::Supervisor::new()
+        .map_err(|error| format!("Не удалось создать Job для локального runtime: {error}"))?;
+    let pid = supervisor
+        .spawn(process_spec)
+        .map_err(|error| format!("Не удалось безопасно запустить Rust runtime: {error}"))?;
+    let started = Instant::now();
+    let mut last_phase = String::new();
     let deadline = Instant::now() + Duration::from_secs(360);
     while Instant::now() < deadline {
         startup::update_phase(app, &phase_file);
-        if ready() {
-            return Ok(());
+        let phase = fs::read(&phase_file).ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|value| value.get("phase").and_then(|phase| phase.as_str()).map(str::to_owned));
+        if let Some(phase) = phase.filter(|phase| matches!(phase.as_str(), "preparing" | "database" | "migrations" | "server")) {
+            if phase != last_phase {
+                last_phase = phase;
+                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file) {
+                    let _ = writeln!(timing, "[startup] phase={} elapsed_ms={}", last_phase, started.elapsed().as_millis());
+                }
+            }
         }
-        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+        if health_responds(api_port) {
+            let api_pids = listener_pids(api_port)?;
+            let pg_pids = listener_pids(pg_port)?;
+            let api_owned = listeners_owned_by_job(&api_pids, |listener_pid| {
+                supervisor
+                    .owns_pid(listener_pid)
+                    .map_err(|error| error.to_string())
+            })?;
+            let pg_owned = listeners_owned_by_job(&pg_pids, |listener_pid| {
+                supervisor
+                    .owns_pid(listener_pid)
+                    .map_err(|error| error.to_string())
+            })?;
+            if api_owned && pg_owned {
+                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file) {
+                    let _ = writeln!(timing, "[startup] phase=ready elapsed_ms={}", started.elapsed().as_millis());
+                }
+                return Ok((supervisor, pid));
+            }
+        }
+        if let Some(status) = supervisor
+            .wait_for_exit(pid, Duration::ZERO)
+            .map_err(|error| error.to_string())?
+        {
             return Err(format!(
                 "Локальный сервер завершился ({status}). Журнал: {}",
                 log_file.display()
@@ -193,7 +316,9 @@ fn open_orion_link(app: &tauri::AppHandle, url: &str) {
         return;
     };
     if !startup::ready(app) {
-        if let Ok(mut pending) = PENDING_LINK.lock() { *pending = Some(url.to_owned()); }
+        if let Ok(mut pending) = PENDING_LINK.lock() {
+            *pending = Some(url.to_owned());
+        }
         return;
     }
     if let Some(webview) = app.get_webview("main") {
@@ -211,20 +336,50 @@ fn open_orion_link(app: &tauri::AppHandle, url: &str) {
 /// A link that LAUNCHED the app (cold start): the window is not loaded yet, so it waits here until the first page load.
 static PENDING_LINK: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
+#[cfg(test)]
+mod runtime_ownership_tests {
+    use super::{listeners_owned_by_job, reject_occupied_port};
+
+    #[test]
+    fn occupied_port_is_reported_without_claiming_or_stopping_its_owner() {
+        let error = reject_occupied_port("API", 14000, &[73]).unwrap_err();
+        assert!(error.contains("14000"));
+        assert!(error.contains("73"));
+        assert!(error.contains("не останавливал"));
+        assert!(reject_occupied_port("API", 14000, &[]).is_ok());
+    }
+
+    #[test]
+    fn readiness_requires_every_listener_to_belong_to_the_current_job() {
+        assert!(!listeners_owned_by_job(&[], |_| Ok(true)).unwrap());
+        assert!(listeners_owned_by_job(&[12, 13], |pid| Ok(pid == 12 || pid == 13)).unwrap());
+        let error = listeners_owned_by_job(&[12, 99], |pid| Ok(pid == 12)).unwrap_err();
+        assert!(error.contains("99"));
+        assert!(listeners_owned_by_job(&[12], |_| Err("IsProcessInJob failed".into())).is_err());
+    }
+}
+
 fn main() {
     let builder = tauri::Builder::default();
     #[cfg(all(windows, not(debug_assertions)))]
-    let builder = builder.register_asynchronous_uri_scheme_protocol("tauri", |ctx, request, responder| {
-        let app = ctx.app_handle().clone();
-        tauri::async_runtime::spawn_blocking(move || responder.respond(payload_ui::respond(&app, request)));
-    });
+    let builder =
+        builder.register_asynchronous_uri_scheme_protocol("tauri", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(payload_ui::respond(&app, request))
+            });
+        });
     #[cfg(debug_assertions)]
     let builder = if payload_ui_smoke::enabled() || startup::smoke_enabled() {
         builder.register_asynchronous_uri_scheme_protocol("tauri", |ctx, request, responder| {
             let app = ctx.app_handle().clone();
-            tauri::async_runtime::spawn_blocking(move || responder.respond(payload_ui::respond(&app, request)));
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(payload_ui::respond(&app, request))
+            });
         })
-    } else { builder };
+    } else {
+        builder
+    };
     builder
         .manage(startup::State::default())
         .invoke_handler(tauri::generate_handler![browser::browser_open, browser::browser_control])
@@ -287,12 +442,27 @@ fn main() {
             {
                 let handle = app.handle().clone();
                 // setup must return immediately so Windows can paint and process input.
-                std::thread::spawn(move || match start_local_runtime(&handle) {
-                    Ok(()) => {
+                std::thread::spawn(move || { match start_local_runtime(&handle) {
+                    Ok((supervisor, pid)) => {
                         startup::set(&handle, "ready", None);
-                        payload_ui::watch_selection(handle);
+                        payload_ui::watch_selection(handle.clone());
+                        loop {
+                            match supervisor.wait_for_exit(pid, std::time::Duration::from_secs(1)) {
+                                Ok(Some(code)) => {
+                                    startup::set(&handle, "error", Some(format!("Локальный launcher завершился ({code}); дочерние процессы остановлены.")));
+                                    break;
+                                }
+                                Ok(None) => {}
+                                Err(error) => {
+                                    startup::set(&handle, "error", Some(format!("Не удалось наблюдать за локальным launcher: {error}")));
+                                    break;
+                                }
+                            }
+                        }
                     }
                     Err(message) => startup::set(&handle, "error", Some(message)),
+                }
+                RUNTIME_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
                 });
             }
             #[cfg(debug_assertions)]
@@ -314,6 +484,33 @@ fn main() {
             if payload_ui_smoke::enabled() { payload_ui::watch_selection(app.handle().clone()); }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running orion desktop shell");
+        .build(tauri::generate_context!())
+        .expect("error while building orion desktop shell")
+        .run(|app, event| {
+            #[cfg(all(windows, not(debug_assertions)))]
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                use std::sync::atomic::Ordering;
+                if EXIT_ALLOWED.load(Ordering::SeqCst) { return; }
+                api.prevent_exit();
+                if EXIT_REQUESTED.swap(true, Ordering::SeqCst) { return; }
+                if let Ok(mut writer) = RUNTIME_STDIN.lock() { writer.take(); }
+                let handle = app.clone();
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(540);
+                    let mut reported = false;
+                    // Never close the Job while PostgreSQL is still checkpointing.
+                    while !RUNTIME_DONE.load(Ordering::SeqCst) {
+                        if !reported && std::time::Instant::now() >= deadline {
+                            reported = true;
+                            startup::set(&handle, "error", Some("База данных ещё завершает работу. ORION остаётся открытым, чтобы не прервать сохранение.".into()));
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    EXIT_ALLOWED.store(true, Ordering::SeqCst);
+                    handle.exit(0);
+                });
+            }
+            #[cfg(not(all(windows, not(debug_assertions))))]
+            let _ = (app, event);
+        });
 }

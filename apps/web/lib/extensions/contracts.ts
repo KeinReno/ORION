@@ -55,6 +55,18 @@ export interface TasksViewsBarSlotProps {
   onApply: (criteria: TaskViewCriteria) => void;
 }
 
+/** `tasks.context.actions` — one task-specific dialog/action opened from either task context menu. */
+export interface TaskContextActionsSlotProps {
+  workspaceId: string | undefined;
+  task: Task;
+  /** Where the user opened the action; the task itself remains owned by Tasks. */
+  surface: "tasks" | "project-tasks";
+  /** The host's workspace role allows this person to manage Agent Hub assignments. */
+  canManage: boolean;
+  open: boolean;
+  onClose: () => void;
+}
+
 /**
  * documents.history — a dialog the host opens for one file. The host adds the menu entry
  * (label from `meta`) and keeps `doc` (null = closed); the plugin draws the dialog itself.
@@ -421,6 +433,7 @@ export interface SlotContracts {
   "habits.detail": HabitDetailSlotProps;
   "finance.tabs": FinanceTabSlotProps;
   "tasks.views.bar": TasksViewsBarSlotProps;
+  "tasks.context.actions": TaskContextActionsSlotProps;
   "documents.history": DocumentsHistorySlotProps;
   "documents.editor": DocumentsEditorSlotProps;
   "documents.create": DocumentsCreateSlotProps;
@@ -469,6 +482,7 @@ export interface SlotMeta {
   "time.billing": { api: TimeBillingApi };
   /** `before`: the tab goes before the built-in ones (default after them). */
   "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
+  "tasks.context.actions": { actionId: string; label: string };
   "tasks.views": TasksViewMeta;
   "notes.templates": { toggleLabel: (note: Note) => string };
   "tasks.recurrence": { api: TaskRecurrenceApi };
@@ -500,6 +514,7 @@ export const CORE_SLOT_NAMES = [
   "habits.detail",
   "finance.tabs",
   "tasks.views.bar",
+  "tasks.context.actions",
   "documents.history",
   "documents.editor",
   "documents.create",

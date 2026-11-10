@@ -8,6 +8,8 @@
 
 Tasks использует публичные `ProjectTaskLinks` и `MilestoneReferences` для проектов и вех. Команда создания проекта остаётся в исходной транзакции задачи; SDK не загружают полные соседние модули. [Контракт](../../../../docs/platform-api/TASK_PLANNING_LINKS.md).
 
+Projects читает заголовок/статус/проект существующей задачи через публичный read-only `TaskReferenceReader`; он принимает текущую транзакцию/RLS и не меняет Task. [PROJECT_LOGBOOK](../../../../docs/platform-api/PROJECT_LOGBOOK.md).
+
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
 <!-- generated:manifest:start -->

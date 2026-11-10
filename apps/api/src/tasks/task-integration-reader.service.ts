@@ -6,7 +6,7 @@ import { TaskIntegrationReader, type DatedTask, type TaskReference } from "./pub
 @Injectable()
 export class TaskIntegrationQueries extends TaskIntegrationReader {
   referenceTx(tx: Prisma.TransactionClient, workspaceId: string, taskId: string): Promise<TaskReference | null> {
-    return tx.task.findFirst({ where: { id: taskId, workspaceId }, select: { id: true, projectId: true } });
+    return tx.task.findFirst({ where: { id: taskId, workspaceId }, select: { id: true, projectId: true, assigneeId: true } });
   }
   datedTx(tx: Prisma.TransactionClient, workspaceId: string): Promise<DatedTask[]> {
     return tx.task.findMany({ where: { workspaceId, dueAt: { not: null } },

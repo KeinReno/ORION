@@ -15,6 +15,11 @@ Optional module for persistent execution attempts. First waves store queue recor
 - Runtime registry is exposed to humans via GET /runtime-sessions and to agents via register/pulse/close MCP tools; no background scheduler.
 - Runtime unavailable means `queued`, never `online`; manual MCP remains distinct.
 - Disabling the module preserves all records.
+- Stable `AgentHubAgentProfile` identities are distinct from AI Bridge credentials and runtime sessions. A human owner/lead explicitly links their own eligible credential; names do not merge credentials into an identity.
+- A task's executor assignment points to a profile. It does not create an execution attempt, wake an IDE, or dispatch work. Explicit execution creation remains a separate action.
+- Tasks and Agent Hub serialize agent/human assignment through the public `TaskAgentAssignmentRegistry` and a row lock on the canonical Task. A claimed or working run prevents reassignment to a different profile until it stops.
+- Profiles and task assignments are included in backup; credential bindings are excluded. Restore preserves assignment and reports `missing` until the owner explicitly rebinds a credential to the same profile.
+- Hard-deleted Task references remain historical Agent Hub rows; API reads first verify the Task through `TaskIntegrationReader`, so an orphan is not shown as a live assignment.
 
 See `docs/adr/ADR-0036-agent-hub-execution-foundation.md` and `docs/agent-hub/ROADMAP.md`.
 
@@ -34,8 +39,8 @@ See `docs/adr/ADR-0036-agent-hub-execution-foundation.md` and `docs/agent-hub/RO
 | Панели веба | `agent-hub` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/agent-hub` |
-| Плагины, расширяющие модуль | — |
-| Миграции в манифесте | `20261029202000_agent_hub_executions`, `20261029223000_agent_hub_runtime_sessions` |
+| Плагины, расширяющие модуль | `agent-hub-task-assignment` |
+| Миграции в манифесте | `20261029202000_agent_hub_executions`, `20261029223000_agent_hub_runtime_sessions`, `20261110140000_agent_hub_agent_assignments` |
 | Код на сервере | `apps/api/src/modules-ext/agent-hub/` |
 | При выключении | Останавливает доступ к API/панели, но не удаляет исполнения и журнал. Автодиспетчер пока отсутствует. |
 <!-- generated:manifest:end -->

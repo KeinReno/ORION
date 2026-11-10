@@ -23,6 +23,7 @@ import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { assertAssigneeInWorkspace } from "./task-refs.util";
 import { TaskClosureRegistry } from "./public/task-closure-registry";
+import { TaskAgentAssignmentRegistry } from "./public/task-agent-assignment-registry";
 
 const taskInclude = {
   dependsOn: { include: { dependsOn: { select: { status: true } } } }
@@ -38,7 +39,8 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly events: DomainEventBus,
-    private readonly closures: TaskClosureRegistry
+    private readonly closures: TaskClosureRegistry,
+    private readonly agentAssignments: TaskAgentAssignmentRegistry
   ) {}
 
   async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean): Promise<Task[]> {
@@ -154,6 +156,9 @@ export class TasksService {
   /** Тело `update()` без обёртки `withUser` — им пользуется гибридная синхронизация (ADR-0016); членство проверил вызывающий. */
   async updateTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, taskId: string, rawInput: UpdateTaskInput, agentName?: string): Promise<TaskModel> {
     const { expectedRevision, ...input } = rawInput;
+    if (input.assigneeId !== undefined) {
+      await this.agentAssignments.lockTaskTx(tx, workspaceId, taskId);
+    }
     {
       const current = await this.assertOwnedTx(tx, workspaceId, taskId);
       const data: Prisma.TaskUncheckedUpdateInput = {};
@@ -177,6 +182,7 @@ export class TasksService {
         data.projectTag = project?.name ?? input.projectTag ?? null;
       }
       if (input.assigneeId !== undefined) {
+        if (input.assigneeId !== current.assigneeId && input.assigneeId !== null) await this.agentAssignments.assertHumanAssignmentAllowedTx(tx, { workspaceId, taskId });
         await this.assertAssigneeWriteTx(tx, userId, workspaceId, input.assigneeId);
         data.assigneeId = input.assigneeId;
       }

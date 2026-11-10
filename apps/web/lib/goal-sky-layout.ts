@@ -1,15 +1,37 @@
-import { CONSTELLATION_H, CONSTELLATION_W, type Constellation } from "./goal-constellation";
+import type { Constellation } from "./goal-constellation";
 
 /** Hand-placed stars: star id -> position in layout coordinates. A personal arrangement, kept in the browser. */
 export type SkyPins = Record<string, { x: number; y: number }>;
 
-const MARGIN = 14;
+export interface SkyView { k: number; x: number; y: number }
+export const HOME_VIEW: SkyView = { k: 1, x: 0, y: 0 };
+/** Zoom floor kept low enough for large constellations to fit as a whole. */
+export const MIN_SKY_ZOOM = 0.005;
 
-export function clampToSky(x: number, y: number): { x: number; y: number } {
+/** Keep a newly selected world point in view; preserve the current framing when it is already visible. */
+export function keepSkyPointVisible(
+  view: SkyView,
+  point: { x: number; y: number },
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 64
+): SkyView {
+  const screenX = view.x + point.x * view.k;
+  const screenY = view.y + point.y * view.k;
+  if (
+    screenX >= padding && screenX <= viewportWidth - padding &&
+    screenY >= padding && screenY <= viewportHeight - padding
+  ) return view;
   return {
-    x: Math.min(CONSTELLATION_W - MARGIN, Math.max(MARGIN, x)),
-    y: Math.min(CONSTELLATION_H - MARGIN, Math.max(MARGIN, y))
+    k: view.k,
+    x: viewportWidth / 2 - point.x * view.k,
+    y: viewportHeight / 2 - point.y * view.k
   };
+}
+
+/** World coordinates are deliberately unbounded; only reject invalid pointer values. */
+export function worldPoint(x: number, y: number): { x: number; y: number } {
+  return { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
 }
 
 /** The constellation with pinned stars moved to where the person put them; links follow because they only name star ids. */
@@ -19,7 +41,7 @@ export function applyPins(constellation: Constellation, pins: SkyPins): Constell
     ...constellation,
     stars: constellation.stars.map((star) => {
       const pin = pins[star.id];
-      return pin ? { ...star, ...clampToSky(pin.x, pin.y) } : star;
+      return pin ? { ...star, ...worldPoint(pin.x, pin.y) } : star;
     })
   };
 }
@@ -31,6 +53,26 @@ export function pinsOf(constellation: Constellation, pins: SkyPins): string[] {
 
 const STORAGE_PREFIX = "orion.goals.sky.pins.v1:";
 const VISIBLE_LINKS_PREFIX = "orion.goals.sky.links.v1:";
+const VIEWS_PREFIX = "orion.goals.sky.views.v2:";
+
+export function loadViews(workspaceId: string): Record<string, SkyView> {
+  try {
+    const raw: unknown = JSON.parse(window.localStorage.getItem(VIEWS_PREFIX + workspaceId) ?? "{}");
+    if (!raw || typeof raw !== "object") return {};
+    const result: Record<string, SkyView> = {};
+    for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+      const view = value as Partial<SkyView>;
+      if (Number.isFinite(view.k) && Number.isFinite(view.x) && Number.isFinite(view.y)) {
+        result[id] = { k: Math.min(4, Math.max(MIN_SKY_ZOOM, view.k!)), x: view.x!, y: view.y! };
+      }
+    }
+    return result;
+  } catch { return {}; }
+}
+
+export function saveViews(workspaceId: string, views: Record<string, SkyView>): void {
+  try { window.localStorage.setItem(VIEWS_PREFIX + workspaceId, JSON.stringify(views)); } catch { /* view remains usable for this session */ }
+}
 
 /** Personal presentation choice: links remain in the workspace, but map pins stay on this device. */
 export function loadVisibleLinks(workspaceId: string): string[] {

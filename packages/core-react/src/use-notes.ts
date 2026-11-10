@@ -2,7 +2,9 @@
 
 import type {
   CreateNoteInput,
+  CreateNoteStackInput,
   Note,
+  NoteStack,
   NoteBacklink,
   NoteRevision,
   NoteRevisionSummary,
@@ -101,6 +103,58 @@ export function useUpdateNote(workspaceId: string | undefined) {
       return api.updateNote(workspaceId as string, noteId, input);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] })
+  });
+}
+
+export function useCreateNoteStack(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const replica = useHybridReplica(workspaceId);
+  return useMutation({
+    mutationFn: (input: CreateNoteStackInput): Promise<NoteStack> => api.createNoteStack(workspaceId as string, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] });
+      void replica?.engine.sync();
+    }
+  });
+}
+
+export function useReorderNoteStack(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const replica = useHybridReplica(workspaceId);
+  return useMutation({
+    mutationFn: ({ stackId, noteIds }: { stackId: string; noteIds: string[] }) => api.reorderNoteStack(workspaceId as string, stackId, noteIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] });
+      void replica?.engine.sync();
+    }
+  });
+}
+
+export function useMoveNotesToStack(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const replica = useHybridReplica(workspaceId);
+  return useMutation({
+    mutationFn: ({ stackId, noteIds }: { stackId: string; noteIds: string[] }) => api.moveNotesToStack(workspaceId as string, stackId, { noteIds }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] });
+      void replica?.engine.sync();
+    }
+  });
+}
+
+export function useDeleteNoteStack(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const replica = useHybridReplica(workspaceId);
+  return useMutation({
+    mutationFn: (stackId: string) => api.deleteNoteStack(workspaceId as string, stackId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notes", workspaceId] });
+      void replica?.engine.sync();
+    }
   });
 }
 

@@ -64,3 +64,56 @@ model AgentHubRuntimeSession {
   @@index([workspaceId, tokenId])
   @@map("agent_hub_runtime_sessions")
 }
+
+/// Stable logical agent identity. Credentials and runtime sessions are separate, replaceable records.
+model AgentHubAgentProfile {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  credentials AgentHubAgentCredential[]
+  assignments AgentHubTaskAssignment[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, name])
+  @@index([workspaceId, name])
+  @@map("agent_hub_agent_profiles")
+}
+
+/// Explicit binding of an AI Bridge credential to a stable profile. Excluded from snapshots.
+model AgentHubAgentCredential {
+  id          String   @id @default(uuid())
+  workspaceId String
+  profileId   String
+  tokenId     String   @unique
+  createdById String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  profile   AgentHubAgentProfile @relation(fields: [workspaceId, profileId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@index([workspaceId, profileId])
+  @@map("agent_hub_agent_credentials")
+}
+
+/// Current task executor. One profile per task; this does not create an execution or dispatch work.
+model AgentHubTaskAssignment {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskId      String
+  profileId   String
+  assignedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  profile   AgentHubAgentProfile @relation(fields: [workspaceId, profileId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@unique([workspaceId, taskId])
+  @@index([workspaceId, profileId])
+  @@map("agent_hub_task_assignments")
+}

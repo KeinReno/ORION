@@ -1,47 +1,210 @@
 "use client";
 
 import { usePreferences, useSession } from "@orion/core-react";
-import { Sidebar, type SidebarFolderView, type SidebarLinkItem } from "@orion/ui";
+import { ConfirmDialog, LoadingScreen, Sidebar, Workbench, type DockviewApi, type DockviewReadyEvent, type SidebarFolderView, type SidebarLinkItem } from "@orion/ui";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AgentPresenceFeed } from "../../../lib/agent-presence";
+import { dockLayoutStorageKey } from "../../../lib/dock-layout-key";
+import { sanitizeDockLayout } from "../../../lib/dock-layout-sanitize";
+import { buildPanelComponents } from "../../../lib/panel-components";
 import { isTauri } from "../../../lib/is-tauri";
 import { openNavSidebarChannel } from "../../../lib/nav-sidebar-channel";
 import { bindSectionDrag } from "../../../lib/nav-section-drag";
 import { useNavDragBridge } from "../../../lib/use-nav-drag-bridge";
 import {
   dockNavWindow,
+  dockMessageTargetsSidebar,
   navHeartbeatKey,
   navWindowStorageKey,
   parseNavWindowState,
   rememberNavWindowBounds,
+  rememberNavWorkspaceBounds,
 } from "../../../lib/nav-sidebar-windows";
 import { panelsForSidebar, toggleNavFolder, movePanelToSidebar } from "../../../lib/sidebar-instances";
-import { panelSupportsSurface, visiblePanels } from "../../../lib/panel-registry";
+import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelSupportsSurface, visiblePanels } from "../../../lib/panel-registry";
+import { registerPanelBus } from "../../../lib/panel-bus";
+import { objectViewPanel } from "../../../lib/object-view";
+import { monitorIdentity, windowDisplayRelation } from "../../../lib/display-geometry";
+import { readDisplays } from "../../../lib/read-displays";
+import { useEnabledModules } from "../../../lib/use-enabled-modules";
+import { hasUnsavedDrafts } from "../../../lib/unsaved-drafts";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { useNavSidebars } from "../../../lib/use-nav-sidebars";
 
+const panelComponents = buildPanelComponents();
+
 /**
- * One navigation bar in its own window. A click asks the main window to focus
- * the section. This window has no workbench of its own.
+ * A detached navigation bar gets a local Workbench only on a different
+ * display. On the same display it retains the compact behavior and routes
+ * clicks to the existing host Workbench.
  */
 export function NavSidebarWindow(): React.ReactElement | null {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sidebarId = searchParams.get("id") ?? "";
-  const { user, status } = useSession();
+  const { user, status, isLoading, retry: retrySession } = useSession();
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   const preferences = usePreferences();
+  const { disabledModules } = useEnabledModules();
+  const pluginOverrides = useMemo(() => workspace?.pluginOverrides ?? [], [workspace]);
+  const [displayRelation, setDisplayRelation] = useState<"same" | "different" | "unknown">("unknown");
+  const lastKnownRelationRef = useRef<"same" | "different" | null>(null);
+  const [hasLocalWorkbench, setHasLocalWorkbench] = useState(false);
+  const [pendingPanelClose, setPendingPanelClose] = useState<string | null>(null);
+  const [confirmWindowClose, setConfirmWindowClose] = useState(false);
+  const allowCloseRef = useRef(false);
+  const dockCloseRef = useRef(false);
+  const apiRef = useRef<DockviewApi | null>(null);
+  const pendingOpenRef = useRef<{ panelId: string; title?: string } | null>(null);
   const { state, update } = useNavSidebars(user?.id, workspace?.id);
+  const openPanel = useCallback((panelId: string, title?: string) => {
+    const definition = getPanelDefinition(panelId);
+    if (!definition || !isPanelAvailable(definition, disabledModules, pluginOverrides)) return;
+    const api = apiRef.current;
+    if (!api) {
+      pendingOpenRef.current = { panelId, ...(title ? { title } : {}) };
+      return;
+    }
+    const existing = api.getPanel(panelId);
+    if (existing) return void existing.api.setActive();
+    const instanceId = panelInstanceId(panelId);
+    api.addPanel({ id: panelId, component: definition.id, title: title ?? definition.label, ...(instanceId ? { params: { instanceId } } : {}) });
+  }, [disabledModules, pluginOverrides]);
   useNavDragBridge({
     kind: "nav",
     sidebarId,
+    hasWorkbench: displayRelation === "different",
     onMove: (panelId, targetId, folderId, beforeId) => update((current) => movePanelToSidebar(current, panelId, targetId, { folderId, beforeId })),
     onOpenInside: (panelId) => {
-      const channel = openNavSidebarChannel();
-      channel?.postMessage({ type: "open", panelId });
-      channel?.close();
+      if (displayRelation === "different") openPanel(panelId);
+      else if (displayRelation === "same") {
+        const channel = openNavSidebarChannel();
+        channel?.postMessage({ type: "open", panelId });
+        channel?.close();
+      }
     },
   });
+
+  useEffect(() => registerPanelBus({
+    openPanel,
+    openObject: (view, _mode, title) => {
+      const panelId = objectViewPanel(view, getActiveWorkspaceId());
+      if (panelId) openPanel(panelId, title);
+    }
+  }), [openPanel]);
+
+  const onWorkbenchReady = useCallback((event: DockviewReadyEvent) => {
+    apiRef.current = event.api;
+    if (!user || !workspace) return;
+    const key = dockLayoutStorageKey(user.id, workspace.id, `nav-${sidebarId}`);
+    try {
+      const raw = window.localStorage.getItem(key);
+      const clean = raw ? sanitizeDockLayout(JSON.parse(raw), (id) => Boolean(getPanelDefinition(id)), { width: window.innerWidth, height: window.innerHeight }) : null;
+      if (clean) event.api.fromJSON(clean.layout as unknown as Parameters<DockviewApi["fromJSON"]>[0]);
+    } catch {
+      /* a damaged saved layout starts empty */
+    }
+    event.api.onDidLayoutChange(() => {
+      try { window.localStorage.setItem(key, JSON.stringify(event.api.toJSON())); } catch { /* retry on the next layout change */ }
+    });
+    const pending = pendingOpenRef.current;
+    pendingOpenRef.current = null;
+    if (pending) openPanel(pending.panelId, pending.title);
+  }, [openPanel, sidebarId, user, workspace]);
+
+  // The detached window carries the host's screen rectangle in its URL. On
+  // another monitor it expands into its own workspace; moving it back shrinks
+  // it to the original navigation-only behavior. Tauri uses native monitor
+  // identity so mixed-DPI virtual desktop origins are never compared here.
+  useEffect(() => {
+    let host = {
+      x: Number(searchParams.get("hostX")), y: Number(searchParams.get("hostY")),
+      width: Number(searchParams.get("hostWidth")), height: Number(searchParams.get("hostHeight"))
+    };
+    if (!Object.values(host).every(Number.isFinite) || host.width <= 0 || host.height <= 0) return;
+    let hostMonitor = searchParams.get("hostMonitor");
+    let cancelled = false;
+    let checkSequence = 0;
+    let resizeWindow: ((remote: boolean) => Promise<void>) | null = null;
+    const check = async () => {
+      const sequence = ++checkSequence;
+      const hostSnapshot = host;
+      const hostMonitorSnapshot = hostMonitor;
+      const displays = await readDisplays();
+      if (cancelled || sequence !== checkSequence) return;
+      const own = { x: window.screenX, y: window.screenY, width: window.outerWidth, height: window.outerHeight };
+      let relation = windowDisplayRelation(hostSnapshot, own, displays);
+      if (isTauri()) {
+        if (!hostMonitorSnapshot) {
+          relation = "unknown";
+        } else try {
+          const { currentMonitor } = await import("@tauri-apps/api/window");
+          const ownMonitor = monitorIdentity(await currentMonitor());
+          if (cancelled || sequence !== checkSequence) return;
+          if (ownMonitor) relation = ownMonitor === hostMonitorSnapshot ? "same" : "different";
+          else {
+            relation = "unknown";
+            console.warn("[nav-sidebar] Native monitor identity is unavailable; sidebar routing is paused.");
+          }
+        } catch (error) {
+          if (cancelled || sequence !== checkSequence) return;
+          relation = "unknown";
+          console.warn("[nav-sidebar] Could not read native monitor identity; sidebar routing is paused.", error);
+        }
+      }
+      if (relation === "unknown") {
+        if (!isTauri()) relation = lastKnownRelationRef.current ?? relation;
+      } else {
+        lastKnownRelationRef.current = relation;
+        if (relation === "different") setHasLocalWorkbench(true);
+      }
+      setDisplayRelation(relation);
+      if (relation !== "unknown") {
+        try { await resizeWindow?.(relation === "different"); }
+        catch (error) { console.warn("[nav-sidebar] Could not apply display-specific window size.", error); }
+      }
+    };
+    void check();
+    if (isTauri()) {
+      let stopMoved: (() => void) | null = null;
+      const stopsForHost: Array<() => void> = [];
+      void Promise.all([import("@tauri-apps/api/window"), import("@tauri-apps/api/dpi")]).then(async ([windowApi, dpi]) => {
+        const current = windowApi.getCurrentWindow();
+        resizeWindow = async (remote) => {
+          const monitor = await windowApi.currentMonitor();
+          const scale = monitor?.scaleFactor || 1;
+          const maxWidth = monitor?.workArea ? monitor.workArea.size.width / scale - 48 : window.screen.availWidth - 48;
+          const maxHeight = monitor?.workArea ? monitor.workArea.size.height / scale - 48 : window.screen.availHeight - 48;
+          const width = remote
+            ? Math.min(Math.max(280, window.outerWidth < 800 ? 1280 : window.outerWidth), Math.max(280, maxWidth))
+            : 280;
+          const height = Math.min(Math.max(480, window.outerHeight), Math.max(480, maxHeight));
+          if (Math.abs(window.outerWidth - width) > 8 || Math.abs(window.outerHeight - height) > 8) {
+            await current.setSize(new dpi.LogicalSize(width, height));
+          }
+        };
+        stopMoved = await current.onMoved(() => void check());
+        const channel = openNavSidebarChannel();
+        const onHostBounds = (event: MessageEvent<{ type?: string; sidebarId?: string; bounds?: { x: number; y: number; width: number; height: number }; monitorId?: string }>) => {
+          const next = event.data;
+          if (next?.type !== "host-bounds" || next.sidebarId !== sidebarId || !next.bounds) return;
+          if (!Object.values(next.bounds).every(Number.isFinite) || next.bounds.width <= 0 || next.bounds.height <= 0) return;
+          host = next.bounds;
+          hostMonitor = next.monitorId ?? null;
+          void check();
+        };
+        channel?.addEventListener("message", onHostBounds);
+        if (cancelled) stopMoved();
+        else await check();
+        if (cancelled) channel?.close();
+        else stopsForHost.push(() => { channel?.removeEventListener("message", onHostBounds); channel?.close(); });
+      });
+      return () => { cancelled = true; stopMoved?.(); for (const stop of stopsForHost) stop(); };
+    }
+    window.addEventListener("resize", check);
+    return () => { cancelled = true; window.removeEventListener("resize", check); };
+  }, [searchParams, sidebarId]);
 
   useEffect(() => {
     if (getActiveWorkspaceId()) return;
@@ -74,9 +237,14 @@ export function NavSidebarWindow(): React.ReactElement | null {
     };
     beat();
     const timer = window.setInterval(beat, 2000);
-    const onMessage = (event: MessageEvent<{ type?: string }>) => {
+    const onMessage = (event: MessageEvent<{ type?: string; sidebarId?: string }>) => {
       if (event.data?.type === "ping") hello();
-      if (event.data?.type === "dock") {
+      if (dockMessageTargetsSidebar(event.data ?? {}, sidebarId)) {
+        if (hasUnsavedDrafts()) {
+          dockCloseRef.current = true;
+          setConfirmWindowClose(true);
+          return;
+        }
         if (isTauri()) void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => void getCurrentWindow().close());
         else window.close();
       }
@@ -85,12 +253,15 @@ export function NavSidebarWindow(): React.ReactElement | null {
     const persistBounds = () => {
       try {
         const parsed = parseNavWindowState(JSON.parse(window.localStorage.getItem(key) ?? "null"));
-        const next = rememberNavWindowBounds(parsed, sidebarId, {
+        const currentBounds = {
           x: window.screenX,
           y: window.screenY,
           width: window.outerWidth,
           height: window.outerHeight,
-        });
+        };
+        const next = displayRelation === "different"
+          ? rememberNavWorkspaceBounds(parsed, sidebarId, currentBounds)
+          : rememberNavWindowBounds(parsed, sidebarId, currentBounds);
         if (next !== parsed) window.localStorage.setItem(key, JSON.stringify(next));
       } catch {
         // A blocked store keeps the bar; the main window still reclaims it on silence.
@@ -116,7 +287,18 @@ export function NavSidebarWindow(): React.ReactElement | null {
         const handles = [
           await current.onMoved(() => persistBounds()),
           await current.onResized(() => persistBounds()),
-          await current.onCloseRequested(() => giveBack()),
+          await current.onCloseRequested((event) => {
+            if (allowCloseRef.current) {
+              giveBack();
+              return;
+            }
+            if (hasUnsavedDrafts()) {
+              event.preventDefault();
+              setConfirmWindowClose(true);
+              return;
+            }
+            giveBack();
+          }),
         ];
         if (cancelled) {
           for (const stop of handles) stop();
@@ -125,7 +307,24 @@ export function NavSidebarWindow(): React.ReactElement | null {
         stops.push(...handles);
       });
     } else {
-      window.addEventListener("beforeunload", giveBack);
+      const beforeUnload = (event: BeforeUnloadEvent) => {
+        if (hasUnsavedDrafts()) {
+          event.preventDefault();
+          event.returnValue = "";
+          return;
+        }
+        giveBack();
+      };
+      window.addEventListener("beforeunload", beforeUnload);
+      return () => {
+        cancelled = true;
+        window.clearInterval(timer);
+        channel?.removeEventListener("message", onMessage);
+        window.removeEventListener("resize", persistBounds);
+        window.removeEventListener("beforeunload", beforeUnload);
+        for (const stop of stops) stop();
+        channel?.close();
+      };
     }
     return () => {
       cancelled = true;
@@ -136,7 +335,7 @@ export function NavSidebarWindow(): React.ReactElement | null {
       for (const stop of stops) stop();
       channel?.close();
     };
-  }, [sidebarId, user, workspace]);
+  }, [displayRelation, sidebarId, user, workspace]);
 
   const disabled = workspace?.disabledModules;
   const hidden = preferences.data?.hiddenModules;
@@ -153,9 +352,12 @@ export function NavSidebarWindow(): React.ReactElement | null {
       label: panel.label,
       icon: panel.icon,
       onClick: () => {
-        const channel = openNavSidebarChannel();
-        channel?.postMessage({ type: "open", panelId: panel.id });
-        channel?.close();
+        if (displayRelation === "different") openPanel(panel.id);
+        else if (displayRelation === "same") {
+          const channel = openNavSidebarChannel();
+          channel?.postMessage({ type: "open", panelId: panel.id });
+          channel?.close();
+        }
       },
       ...bindSectionDrag(panel.id, panel.label, panelSupportsSurface(panel.id, "window")),
     }];
@@ -167,9 +369,25 @@ export function NavSidebarWindow(): React.ReactElement | null {
     linkIds: folder.items,
   }));
 
+  const requestPanelClose = (panelId: string) => {
+    if (hasUnsavedDrafts(panelId)) setPendingPanelClose(panelId);
+    else apiRef.current?.getPanel(panelId)?.api.close();
+  };
+
+  const closeWindowAfterConfirm = () => {
+    allowCloseRef.current = true;
+    if (isTauri()) void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => void getCurrentWindow().close());
+    else window.close();
+  };
+
+  if (status === "unavailable") return <div className="flex h-screen flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground"><p>Не удаётся связаться с сервером.</p><button type="button" onClick={retrySession} className="rounded-lg border border-border px-3 py-1.5 text-foreground hover:bg-white/5">Повторить</button></div>;
+  if (isLoading || !user || workspacesLoading || !workspace) return <LoadingScreen />;
+
   if (!bar) return null;
   return (
-    <div className="h-dvh w-screen">
+    <div data-display-route={displayRelation} className={displayRelation === "different" ? "flex h-dvh w-full overflow-hidden" : "h-dvh w-screen"}>
+      {displayRelation === "different" ? <AgentPresenceFeed /> : null}
+      <div className={displayRelation === "different" ? "h-full w-[280px] shrink-0" : "h-dvh w-screen"}>
       <Sidebar
         navId={bar.id}
         position="left"
@@ -181,6 +399,10 @@ export function NavSidebarWindow(): React.ReactElement | null {
         onToggleFolder={(id) => update((current) => toggleNavFolder(current, bar.id, id))}
         onMoveLink={(panelId, folderId, beforeId) => update((current) => movePanelToSidebar(current, panelId, bar.id, { folderId, beforeId }))}
       />
+      </div>
+      {hasLocalWorkbench ? <main className={displayRelation === "different" ? "min-w-0 flex-1 overflow-hidden" : "hidden"} aria-hidden={displayRelation !== "different"}><Workbench components={panelComponents} onReady={onWorkbenchReady} onRequestClose={requestPanelClose} /></main> : null}
+      <ConfirmDialog open={pendingPanelClose !== null} title="Закрыть вкладку без сохранения?" description="В этой вкладке есть изменения, которые ещё не сохранены. При закрытии они пропадут." confirmLabel="Закрыть" onConfirm={() => { const panelId = pendingPanelClose; setPendingPanelClose(null); if (panelId) apiRef.current?.getPanel(panelId)?.api.close(); }} onCancel={() => setPendingPanelClose(null)} />
+      <ConfirmDialog open={confirmWindowClose} title="Закрыть сайдбар с несохранёнными изменениями?" description="В рабочей области есть несохранённые изменения. При закрытии окна они пропадут." confirmLabel="Закрыть окно" onConfirm={() => { dockCloseRef.current = false; setConfirmWindowClose(false); closeWindowAfterConfirm(); }} onCancel={() => { setConfirmWindowClose(false); if (dockCloseRef.current) { dockCloseRef.current = false; const channel = openNavSidebarChannel(); channel?.postMessage({ type: "dock-cancelled", sidebarId }); channel?.close(); } }} />
     </div>
   );
 }

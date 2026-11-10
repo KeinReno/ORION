@@ -19,6 +19,8 @@ TimeEntry и не импортирует Time. Пустой registry допус�
 
 Tasks использует публичные `ProjectTaskLinks` и `MilestoneReferences` для проектов и вех. Команда создания проекта остаётся в исходной транзакции задачи; SDK не загружают полные соседние модули. [Контракт](../../../../docs/platform-api/TASK_PLANNING_LINKS.md).
 
+Projects использует read-only `TaskReferenceReader` для показа существующих задач в бортовом журнале. Чтение выполняется через предоставленную Projects транзакцию/RLS; контракт не предоставляет команды изменения задачи. [PROJECT_LOGBOOK](../../../../docs/platform-api/PROJECT_LOGBOOK.md).
+
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
 Автопубликация Tasks использует тот же PublicationRegistry: `ruleCandidates` фильтрует

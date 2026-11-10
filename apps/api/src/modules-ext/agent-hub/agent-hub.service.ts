@@ -105,6 +105,7 @@ export class AgentHubService {
         }
         const task = await this.tasks.referenceTx(tx, workspaceId, input.taskId);
         if (!task) throw new NotFoundException("Задача не найдена");
+        if (task.assigneeId) throw new ConflictException("Снимите назначение участника команды перед созданием исполнения ИИ-агента");
         const now = new Date();
         const row = await tx.agentHubExecution.create({
           data: {

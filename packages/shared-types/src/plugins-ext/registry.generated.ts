@@ -4,11 +4,15 @@ import type { OrionModuleId } from "../modules";
 
 /** Идентификаторы плагинов, подключённых манифестом; ядро дописывает их в закрытый `z.enum` (plugins.ts). */
 export const GENERATED_PLUGIN_IDS = [
+  "agent-hub-task-assignment",
   "habits-insights"
 ] as const;
 
 import type { ComponentMetadata } from "../component-manifest";
 export const GENERATED_PLUGIN_METADATA: Record<string, ComponentMetadata> = {
+  "agent-hub-task-assignment": {
+    "version": "1.0.0"
+  },
   "habits-insights": {
     "version": "1.0.0"
   }
@@ -27,6 +31,17 @@ export interface GeneratedPluginCatalogEntry {
 
 /** Записи каталога плагинов; `PLUGIN_CATALOG` добавляет их к встроенным. */
 export const GENERATED_PLUGIN_CATALOG: readonly GeneratedPluginCatalogEntry[] = [
+  {
+    "id": "agent-hub-task-assignment",
+    "extendsModuleId": "agent-hub",
+    "label": "Назначение задач ИИ-агентам",
+    "summary": "Назначение существующего профиля ИИ-агента на задачу.",
+    "provides": [
+      "Действие назначения агента в меню задачи"
+    ],
+    "disableBehavior": "Действие скрывается при выключении плагина или Agent Hub; существующее назначение сохраняется.",
+    "defaultEnabled": true
+  },
   {
     "id": "habits-insights",
     "extendsModuleId": "habits",

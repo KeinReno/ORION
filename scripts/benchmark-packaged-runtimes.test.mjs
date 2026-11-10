@@ -10,7 +10,7 @@ import {
   assertTempRootIsolated,
   checkPortAvailable,
   inspectRuntime,
-  listenerOwnershipScript,
+  parseJobHostReady,
   makeMinimalEnv,
   parseArgs,
   removeCreatedProfile,
@@ -90,16 +90,20 @@ test('minimal launch environment drops inherited runtime and credential override
   assert.ok(!Object.keys(env).some(key => /SECRET|DATABASE_URL|STORAGE_|NODE_OPTIONS/.test(key)));
 });
 
-test('postgres ownership accepts this run cluster when pg_ctl has already exited', () => {
-  const script = listenerOwnershipScript(43210, 9876, {
-    executablePrefix: 'C:\\runtime\\postgres\\bin\\',
-    commandIncludes: 'C:\\temp\\profile\\postgres',
-  });
-  assert.match(script, /if\(\$n -eq 9876\)\{exit 0\}/);
-  assert.match(script, /\$exe\.StartsWith\('C:\\runtime\\postgres\\bin\\'/);
-  assert.match(script, /EndsWith\('postgres.exe'/);
-  assert.match(script, /exit 3/);
-  assert.throws(() => listenerOwnershipScript(43210, 9876, { executablePrefix: 'C:\\bin\\' }), { code: 'health_not_owned' });
+test('benchmark accepts only explicit exact-Job membership attestation', () => {
+  assert.deepEqual(parseJobHostReady(JSON.stringify({
+    kind: 'runtime_ready', apiJobOwned: true, postgresJobOwned: true,
+    launcherPid: 1234, jobProcessIds: [1234, 2345],
+  })).jobProcessIds, [1234, 2345]);
+  assert.throws(() => parseJobHostReady(JSON.stringify({
+    kind: 'runtime_ready', apiJobOwned: true, postgresJobOwned: false,
+    launcherPid: 1234, jobProcessIds: [1234],
+  })), { code: 'listener_not_owned' });
+  assert.throws(() => parseJobHostReady(JSON.stringify({
+    kind: 'runtime_ready', apiJobOwned: true, postgresJobOwned: true,
+    launcherPid: 9999, jobProcessIds: [1234],
+  })), { code: 'listener_not_owned' });
+  assert.throws(() => parseJobHostReady('not-json'), { code: 'job_host_protocol_invalid' });
 });
 
 test('Classic launch spec does not request Rust diagnostics', () => {
@@ -109,6 +113,8 @@ test('Classic launch spec does not request Rust diagnostics', () => {
   }, [45101, 45102]);
   const request = JSON.parse(Buffer.from(launch.request, 'base64').toString('utf8'));
   assert.equal(request.Executable, join('C:\\classic-runtime', 'node.exe'));
+  assert.equal(request.ApiPort, 45101);
+  assert.equal(request.PgPort, 45102);
   assert.equal(launch.minimalEnv.ORION_DESKTOP_API_PORT, '45101');
   assert.equal(launch.minimalEnv.ORION_DESKTOP_PG_PORT, '45102');
   assert.equal('ORION_RUST_RUNTIME_PORT' in launch.minimalEnv, false);

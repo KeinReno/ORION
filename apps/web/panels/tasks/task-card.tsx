@@ -1,13 +1,16 @@
 import type { Task, TaskPriority, TaskStatus } from "@orion/shared-types";
 import { isTaskClosed } from "@orion/shared-types";
 import { CheckToggle, cx, DropdownMenu, IconButton, type MenuItem, Tooltip, StatusMark, StrikeText, useContextMenu } from "@orion/ui";
-import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CalendarClock, MoreHorizontal, Pencil, Trash2, UserRound } from "lucide-react";
+import { useState } from "react";
 import { AccountAvatar } from "../../components/account-avatar";
 import { useSlotContributions } from "../../lib/extensions/slot";
 import { projectColor, shortDateTime } from "../../lib/format";
 import type { SubtaskProgress } from "../../lib/task-structure";
 import { TASK_PRIORITY_LABEL, TASK_STATUS_LABEL, TASK_STATUS_ORDER } from "../task-form";
 import { useAgentRowMark } from "../../lib/agent-presence";
+import { TaskAssignmentDialog } from "./task-assignment-dialog";
+import { useTaskContextActions } from "./task-context-actions";
 
 /** Just enough of `WorkspaceMember` for the assignee avatar + tooltip. */
 export interface TaskAssignee {
@@ -23,6 +26,7 @@ const PRIORITY_DOT: Partial<Record<TaskPriority, string>> = {
 
 export function TaskCard({
   task,
+  workspaceId,
   draggable,
   focused,
   selected,
@@ -36,9 +40,14 @@ export function TaskCard({
   onMoveDown,
   onDropTask,
   assignee,
+  assignmentMembers,
+  assignmentAvailable = false,
+  canManageAgentAssignments = false,
+  onAssign,
   hideProject = false
 }: {
   task: Task;
+  workspaceId?: string;
   draggable: boolean;
   focused: boolean;
   /** Клавиатурное выделение (Shift+←/→ между колонками) — не то же, что `focused` с панели. */
@@ -57,9 +66,16 @@ export function TaskCard({
   onDropTask?: (draggedId: string) => void;
   /** Исполнитель — только когда плагин «Команда» включён и задача назначена (см. TasksPanel). */
   assignee?: TaskAssignee;
+  /** Разрешённые варианты назначения из workspace ACL; пустой массив — загрузка/ошибка списка. */
+  assignmentMembers?: { id: string; name: string }[];
+  assignmentAvailable?: boolean;
+  canManageAgentAssignments?: boolean;
+  /** Реальное изменение assigneeId через Tasks API. */
+  onAssign?: (assigneeId: string | null) => Promise<void>;
   /** Внутри проекта чип проекта повторяет заголовок вкладки — не показываем. */
   hideProject?: boolean;
 }): React.ReactElement {
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
   // The repeat mark belongs to the tasks-recurrence plugin.
   const recurrence = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
   // Subtask marks, the «blocked» mark and hand-made order belong to the tasks-planning plugin.
@@ -71,6 +87,17 @@ export function TaskCard({
   const overdue = !closed && task.dueAt !== null && new Date(task.dueAt).getTime() < Date.now();
 
   const items: (MenuItem | "separator")[] = [{ label: "Открыть", icon: Pencil, onSelect: onOpen }];
+  const taskContextActions = useTaskContextActions(workspaceId, hideProject ? "project-tasks" : "tasks", canManageAgentAssignments);
+  const extensionItems = taskContextActions.itemsForTask(task);
+  if (extensionItems.length > 0) items.push("separator", ...extensionItems);
+  if (onAssign) {
+    items.push("separator", {
+      label: "Исполнитель…",
+      icon: UserRound,
+      disabled: !assignmentAvailable,
+      onSelect: () => setAssignmentOpen(true)
+    });
+  }
   if (onMoveUp || onMoveDown) {
     items.push(
       "separator",
@@ -93,11 +120,16 @@ export function TaskCard({
   const contextMenu = useContextMenu(() => items);
 
   return (
+    <>
+    {taskContextActions.dialogs}
     <div
       id={`task-${task.id}`}
       tabIndex={0}
       draggable={draggable}
-      onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)}
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", task.id);
+        event.dataTransfer.setData("application/x-orion-task", task.id);
+      }}
       onDragOver={(event) => {
         if (onDropTask) event.preventDefault();
       }}
@@ -191,5 +223,16 @@ export function TaskCard({
         {TASK_STATUS_ORDER.filter((status) => status !== task.status).map((status) => <button key={status} type="button" onClick={() => onMove(status)} className="rounded-md border border-border px-1.5 py-0.5 text-micro text-muted-foreground hover:bg-white/5 hover:text-foreground">→ {TASK_STATUS_LABEL[status]}</button>)}
       </div>
     </div>
+      {onAssign && assignmentMembers ? (
+        <TaskAssignmentDialog
+          open={assignmentOpen}
+          task={task}
+          members={assignmentMembers}
+          available={assignmentAvailable}
+          onClose={() => setAssignmentOpen(false)}
+          onAssign={onAssign}
+        />
+      ) : null}
+    </>
   );
 }

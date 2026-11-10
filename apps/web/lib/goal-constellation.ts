@@ -17,8 +17,9 @@ import {
  * Pure functions, no React: the view only draws what is computed here.
  */
 
-export const CONSTELLATION_W = 560;
-export const CONSTELLATION_H = 420;
+/** Screen-space viewport dimensions. World coordinates are not bounded by these values. */
+export const SKY_VIEWPORT_W = 960;
+export const SKY_VIEWPORT_H = 640;
 
 /** A plan with open work and no change for this long is "стоит". */
 export const STALLED_DAYS = 14;
@@ -282,18 +283,17 @@ export function buildConstellations(goals: ReadonlyArray<Goal>, now: Date = new 
 function layout(root: Item): Constellation {
   const stars: Star[] = [];
   const links: Link[] = [];
-  const maxDepth = depthOf(root);
-  // Sparse trees stay composed near the centre instead of stretching two stars
-  // to opposite edges of the canvas. Dense trees can use the full height.
-  const span = Math.min(CONSTELLATION_H - 106, Math.max(138, maxDepth * 94));
-  const top = (CONSTELLATION_H - span) / 2;
-  const bottom = top + span;
-  const left = 48;
-  const width = CONSTELLATION_W - left * 2;
+  // Reserve enough horizontal room for every leaf label plus its hit target.
+  // The resulting world grows with the data instead of compressing a large tree.
+  const columnGap = 230;
+  const rowGap = 148;
+  const width = Math.max(SKY_VIEWPORT_W, root.leaves * columnGap);
+  const left = Math.max(0, (SKY_VIEWPORT_W - width) / 2);
+  const top = 120;
 
   function place(item: Item, parent: Star | null, depth: number, start: number, end: number, share: number): void {
     const x = left + ((start + end) / 2) * width;
-    const y = maxDepth === 0 ? CONSTELLATION_H / 2 : top + (depth / maxDepth) * (bottom - top);
+    const y = top + depth * rowGap;
     const star: Star = {
       id: item.id,
       kind: item.kind,
@@ -328,10 +328,6 @@ function layout(root: Item): Constellation {
 
   place(root, null, 0, 0, 1, 1);
   return { rootId: root.id, stars, links };
-}
-
-function depthOf(item: Item): number {
-  return item.children.reduce((max, child) => Math.max(max, depthOf(child) + 1), 0);
 }
 
 /** Ids from the root down to `id` (inclusive); [] for an unknown id. This is "the path" the view highlights. */
@@ -418,22 +414,20 @@ export function starAt(stars: ReadonlyArray<Star>, x: number, y: number, slack =
 
 /** Suggest a clear location for keyboard/toolbar creation. A direct canvas click keeps its exact position. */
 export function suggestCanvasPoint(stars: ReadonlyArray<Star>, parent: Star): { x: number; y: number } {
-  const x = Math.min(460, Math.max(100, parent.x));
-  const y = Math.min(350, Math.max(210, parent.y + 95));
-  const candidates = [
-    { x, y }, { x: Math.max(100, x - 180), y }, { x: Math.min(460, x + 180), y },
-    { x: 100, y: 245 }, { x: 460, y: 245 }, { x: 280, y: 350 },
-    { x: 100, y: 350 }, { x: 460, y: 350 }
-  ];
-  const clear = (candidate: { x: number; y: number }, star: Star): boolean =>
-    Math.hypot(candidate.x - star.x, candidate.y - star.y) >= 82 &&
-    !(Math.abs(candidate.y - star.y) < 38 && Math.abs(candidate.x - star.x) < 155);
-  return candidates.find((candidate) => stars.every((star) => clear(candidate, star))) ??
-    candidates.reduce((best, candidate) => {
-      const score = Math.min(...stars.map((star) => Math.hypot(candidate.x - star.x, candidate.y - star.y)));
-      const bestScore = Math.min(...stars.map((star) => Math.hypot(best.x - star.x, best.y - star.y)));
-      return score > bestScore ? candidate : best;
-    });
+  const clear = (candidate: { x: number; y: number }): boolean => stars.every((star) => {
+    const dx = Math.abs(candidate.x - star.x);
+    const dy = Math.abs(candidate.y - star.y);
+    return Math.hypot(dx, dy) > 74 && (dx > 180 || dy > 50);
+  });
+  for (let ring = 1; ring < 80; ring += 1) {
+    const count = Math.max(8, ring * 8);
+    for (let index = 0; index < count; index += 1) {
+      const angle = index * (Math.PI * 2 / count) + ring * 0.31;
+      const candidate = { x: parent.x + Math.cos(angle) * ring * 105, y: parent.y + Math.sin(angle) * ring * 82 };
+      if (clear(candidate)) return candidate;
+    }
+  }
+  return { x: parent.x + 8400, y: parent.y + 6560 };
 }
 
 /** Neighbour for keyboard travel: up = parent, down = first child, left/right = previous/next sibling. */
@@ -452,8 +446,8 @@ export function neighbour(constellation: Constellation, id: string, direction: "
 /** Deterministic background dust for a constellation, so the sky does not flicker on re-render. */
 export function backgroundStars(seed: string, count = 34): Array<{ x: number; y: number; r: number; o: number }> {
   return Array.from({ length: count }, (_, i) => ({
-    x: unit(`${seed}x${i}`) * CONSTELLATION_W,
-    y: unit(`${seed}y${i}`) * CONSTELLATION_H,
+    x: (unit(`${seed}x${i}`) - 0.5) * SKY_VIEWPORT_W * 2,
+    y: (unit(`${seed}y${i}`) - 0.5) * SKY_VIEWPORT_H * 2,
     r: 0.5 + unit(`${seed}r${i}`) * 0.9,
     o: 0.15 + unit(`${seed}o${i}`) * 0.35
   }));

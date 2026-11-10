@@ -1,8 +1,10 @@
 import type { Goal, GoalHistory } from "@orion/shared-types";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildConstellations } from "./goal-constellation";
 import { goalsAt, progressDelta } from "./goal-history";
-import { applyPins, clampToSky, loadPins, pinsOf } from "./goal-sky-layout";
+import { applyPins, keepSkyPointVisible, loadPins, loadViews, MIN_SKY_ZOOM, pinsOf, saveViews, worldPoint } from "./goal-sky-layout";
+
+afterEach(() => vi.unstubAllGlobals());
 
 const plan = (id: string, projectId: string, weight = 1) => ({
   id,
@@ -83,11 +85,12 @@ describe("goalsAt", () => {
 describe("sky pins", () => {
   const c = buildConstellations([goal("g", { plans: [plan("p", "A")] })])[0]!;
 
-  it("moves only pinned stars, clamped into the sky", () => {
+  it("moves pinned stars to unbounded world coordinates", () => {
     const moved = applyPins(c, { "g:p": { x: 9999, y: -50 } });
     const star = moved.stars.find((s) => s.id === "g:p")!;
-    expect(star.x).toBe(clampToSky(9999, -50).x);
-    expect(star.y).toBe(clampToSky(9999, -50).y);
+    expect(star.x).toBe(9999);
+    expect(star.y).toBe(-50);
+    expect(worldPoint(-99999, 99999)).toEqual({ x: -99999, y: 99999 });
     expect(moved.stars.find((s) => s.id === "g")).toEqual(c.stars.find((s) => s.id === "g"));
     expect(moved.links).toBe(c.links);
   });
@@ -100,5 +103,32 @@ describe("sky pins", () => {
 
   it("loads nothing (not a crash) when storage is unavailable", () => {
     expect(loadPins("ws")).toEqual({}); // node: no window
+  });
+});
+
+describe("sky camera", () => {
+  it("centers a selected star outside the viewport and preserves the framing for visible stars", () => {
+    const view = { k: 1, x: 0, y: 0 };
+    const centered = keepSkyPointVisible(view, { x: 1400, y: -250 }, 960, 640);
+    expect(centered).toEqual({ k: 1, x: -920, y: 570 });
+    expect(keepSkyPointVisible(centered, { x: 1400, y: -250 }, 960, 640)).toBe(centered);
+    expect(keepSkyPointVisible(view, { x: 300, y: 250 }, 960, 640)).toBe(view);
+  });
+
+  it("restores the viewport per workspace and constellation without bounding world position", () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value)
+    } });
+    saveViews("ws", { goal: { k: 0.08, x: -1300, y: 2400 } });
+    expect(loadViews("ws")).toEqual({ goal: { k: 0.08, x: -1300, y: 2400 } });
+  });
+
+  it("keeps zoom levels low enough to restore a fitted large constellation", () => {
+    const values = new Map<string, string>([["orion.goals.sky.views.v2:ws", JSON.stringify({ goal: { k: 0.01, x: -1300, y: 2400 } })]]);
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => values.get(key) ?? null } });
+    expect(MIN_SKY_ZOOM).toBeLessThan(0.01);
+    expect(loadViews("ws").goal?.k).toBe(0.01);
   });
 });

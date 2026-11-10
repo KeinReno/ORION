@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayFromWorkArea, placeBesideDisplays, restoreOnDisplays } from "./display-geometry";
+import { displayFromWorkArea, monitorIdentity, placeBesideDisplays, restoreOnDisplays, windowDisplayRelation } from "./display-geometry";
 
 const primary = { x: 0, y: 0, width: 1920, height: 1080, scaleFactor: 1 };
 const left = { x: -1920, y: 0, width: 1920, height: 1080, scaleFactor: 1 };
@@ -36,5 +36,28 @@ describe("display geometry", () => {
     const placed = placeBesideDisplays({ x: 0, y: 10, width: 1800, height: 400 }, [primary]);
     expect(placed.x).toBeGreaterThanOrEqual(0);
     expect(placed.x + placed.width).toBeLessThanOrEqual(primary.width);
+  });
+
+  it("routes a detached bar locally only when its center is on a different display", () => {
+    const displays = [left, primary];
+    const host = { x: 100, y: 60, width: 1400, height: 800 };
+    expect(windowDisplayRelation(host, { x: 1500, y: 60, width: 280, height: 800 }, displays)).toBe("same");
+    expect(windowDisplayRelation(host, { x: -1800, y: 60, width: 1280, height: 800 }, displays)).toBe("different");
+  });
+
+  it("does not guess a route when monitor geometry cannot identify a window", () => {
+    expect(windowDisplayRelation(
+      { x: 100, y: 60, width: 1400, height: 800 },
+      { x: -4000, y: 60, width: 1280, height: 800 },
+      [primary]
+    )).toBe("unknown");
+  });
+
+  it("uses native physical monitor bounds and scale as a distinct monitor identity", () => {
+    const same = { position: { x: 0, y: 0 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 };
+    const other = { position: { x: -2560, y: 0 }, size: { width: 2560, height: 1440 }, scaleFactor: 1.5 };
+    expect(monitorIdentity(same)).toBe(monitorIdentity({ ...same }));
+    expect(monitorIdentity(other)).not.toBe(monitorIdentity(same));
+    expect(monitorIdentity(null)).toBeNull();
   });
 });

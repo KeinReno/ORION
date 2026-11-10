@@ -13,6 +13,7 @@ function rows(): RiskyMigrationSideEffectRows {
     extension_secrets: [{ id: "secret", userId: "user", valueEnc: "stored-secret" }],
     agent_hub_executions: [{ id: "run", workspaceId: "workspace", status: "queued", workerId: "worker", leaseUntil: when }],
     agent_hub_runtime_sessions: [{ id: "session", workspaceId: "workspace", status: "active", closedAt: null, expiresAt: "2030-01-01T00:00:00.000Z" }],
+    agent_hub_agent_credentials: [{ id: "binding", workspaceId: "workspace", profileId: "profile", tokenId: "token", enabled: true }],
     agent_proposals: [{ id: "proposal", workspaceId: "workspace", status: "pending" }],
     opportunity_attempts: [{ id: "attempt", leaseHash: "lease", leaseRunnerId: "runner", leaseExpiresAt: when, submitReserved: true, cancelRequested: false }],
     domain_event_deliveries: [{ id: "delivery", status: "pending", lastError: null, completedAt: null }]
@@ -34,11 +35,19 @@ describe("migration side-effect sanitizer", () => {
     expect(result.extension_secrets[0]!.valueEnc).toBe("");
     expect(result.agent_hub_executions[0]).toMatchObject({ id: "run", status: "blocked", workerId: null, leaseUntil: null });
     expect(result.agent_hub_runtime_sessions[0]).toMatchObject({ status: "closed", closedAt: when, expiresAt: when });
+    expect(result.agent_hub_agent_credentials).toEqual([]);
     expect(result.agent_proposals[0]).toMatchObject({ status: "rejected", decidedAt: when });
     expect(result.opportunity_attempts[0]).toMatchObject({ leaseHash: null, leaseRunnerId: null, leaseExpiresAt: null, cancelRequested: true });
     expect(result.domain_event_deliveries[0]).toMatchObject({ status: "failed", completedAt: when });
     expect(JSON.stringify(result)).not.toContain("ciphertext");
     expect(JSON.stringify(result)).not.toContain("stored-secret");
     expect(JSON.stringify(result)).not.toContain("old-consent-hash");
+    expect(JSON.stringify(result)).not.toContain('"tokenId":"token"');
+  });
+
+  it("rejects malformed profile credential bindings before removing them", () => {
+    const source = rows();
+    source.agent_hub_agent_credentials = [{ id: "binding", workspaceId: "workspace", tokenId: "token" }];
+    expect(() => sanitizeMigrationSideEffectRows(source, when)).toThrow("Invalid agent_hub_agent_credentials.profileId");
   });
 });

@@ -52,6 +52,7 @@ import {
 } from "@orion/shared-types";
 import { extensionFetchResultSchema, extensionInfoSchema, extensionRecordSchema, extensionSecretStatusSchema, extensionsStateSchema, type ApproveExtensionInput, type ExtensionFetchInput, type ExtensionFetchResult, type ExtensionInfo, type ExtensionRecord, type ExtensionSecretStatus, type ExtensionsState, type UpdateExtensionInput } from "@orion/shared-types";
 import { opportunitySchema, opportunityPageSchema, type Opportunity, type OpportunityPage, type CreateOpportunityInput, type UpdateOpportunityInput, type OpportunityListQuery, type SelectOpportunityResumeInput } from "@orion/shared-types";
+import { projectLogEntrySchema, projectRelationSchema, type CreateProjectLogEntryInput, type CreateProjectRelationInput, type ProjectLogEntry, type ProjectRelation } from "@orion/shared-types";
 import { policySchema, policyReportSchema, tickResultSchema, type CreatePolicyInput, type PolicyActionInput } from "@orion/shared-types";
 import { connectionSchema, createdConnectionSchema, attemptSchema, attemptPageSchema, type CreateConnectionInput, type ConnectionActionInput, type CreateAttemptInput, type ApproveAttemptInput, type CancelAttemptInput, type ReconcileAttemptInput } from "@orion/shared-types";
 import { assessmentSchema, assessmentPageSchema, assistantStatusSchema, draftSchema, draftPageSchema, dryRunSchema, type CreateAssessmentInput, type CreateDraftInput, type UpdateDraftInput, type ReviewDraftInput, type RejectDraftInput } from "@orion/shared-types";
@@ -125,6 +126,7 @@ import {
   noteRevisionSchema,
   noteRevisionSummarySchema,
   noteSchema,
+  noteStackSchema,
   noteTitleRefSchema,
   orionModeInfoSchema,
   recurringTransactionSchema,
@@ -432,6 +434,9 @@ import {
   type WorkspaceTransferPreview,
   type Note,
   type NoteAttachment,
+  type CreateNoteStackInput,
+  type NoteStack,
+  type MoveNotesToStackInput,
   type NoteBacklink,
   type NoteRevision,
   type NoteRevisionSummary,
@@ -755,6 +760,22 @@ export class ApiClient {
     return this.request("GET", `/workspaces/${workspaceId}/notes${query}`, undefined, z.array(noteSchema));
   }
 
+  createNoteStack(workspaceId: string, input: CreateNoteStackInput): Promise<NoteStack> {
+    return this.request("POST", `/workspaces/${workspaceId}/notes/stacks`, input, noteStackSchema);
+  }
+
+  async reorderNoteStack(workspaceId: string, stackId: string, noteIds: string[]): Promise<void> {
+    await this.request("PATCH", `/workspaces/${workspaceId}/notes/stacks/${stackId}/order`, { noteIds }, z.unknown());
+  }
+
+  async moveNotesToStack(workspaceId: string, stackId: string, input: MoveNotesToStackInput): Promise<void> {
+    await this.request("POST", `/workspaces/${workspaceId}/notes/stacks/${stackId}/members`, input, z.unknown());
+  }
+
+  async deleteNoteStack(workspaceId: string, stackId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/notes/stacks/${stackId}`, undefined, z.unknown());
+  }
+
   getNote(workspaceId: string, noteId: string): Promise<Note> {
     return this.request("GET", `/workspaces/${workspaceId}/notes/${noteId}`, undefined, noteSchema);
   }
@@ -884,6 +905,7 @@ export class ApiClient {
   uploadNoteAttachments(workspaceId: string, noteId: string, files: File[]): Promise<NoteAttachment[]> {
     const form = new FormData();
     for (const file of files) form.append("files", file, file.name);
+    form.append("relativePaths", JSON.stringify(files.map((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name)));
     return this.request(
       "POST",
       `/workspaces/${workspaceId}/notes/${noteId}/attachments/upload`,
@@ -1060,6 +1082,30 @@ export class ApiClient {
 
   async deleteProjectUpdate(workspaceId: string, projectId: string, updateId: string): Promise<void> {
     await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/updates/${updateId}`, undefined, z.unknown());
+  }
+
+  listProjectLogEntries(workspaceId: string, projectId: string): Promise<ProjectLogEntry[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/projects/${projectId}/logbook`, undefined, z.array(projectLogEntrySchema));
+  }
+
+  createProjectLogEntry(workspaceId: string, projectId: string, input: CreateProjectLogEntryInput): Promise<ProjectLogEntry> {
+    return this.request("POST", `/workspaces/${workspaceId}/projects/${projectId}/logbook`, input, projectLogEntrySchema);
+  }
+
+  async deleteProjectLogEntry(workspaceId: string, projectId: string, entryId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/logbook/${entryId}`, undefined, z.unknown());
+  }
+
+  listProjectRelations(workspaceId: string, projectId: string): Promise<ProjectRelation[]> {
+    return this.request("GET", `/workspaces/${workspaceId}/projects/${projectId}/relations`, undefined, z.array(projectRelationSchema));
+  }
+
+  createProjectRelation(workspaceId: string, projectId: string, input: CreateProjectRelationInput): Promise<ProjectRelation> {
+    return this.request("POST", `/workspaces/${workspaceId}/projects/${projectId}/relations`, input, projectRelationSchema);
+  }
+
+  async deleteProjectRelation(workspaceId: string, projectId: string, relationId: string): Promise<void> {
+    await this.request("DELETE", `/workspaces/${workspaceId}/projects/${projectId}/relations/${relationId}`, undefined, z.unknown());
   }
 
   // --- универсальные Capture: идея / проблема / заметка с якорем на любой объект или без него ---

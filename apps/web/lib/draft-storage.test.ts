@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DRAFT_MAX_LENGTH, draftStorageKey, hasStoredDraft, readDraft, writeDraft } from "./draft-storage";
+import { DRAFT_MAX_LENGTH, draftStorageKey, hasAnyStoredDraft, hasStoredDraft, readDraft, writeDraft } from "./draft-storage";
 
 function memory(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -54,5 +54,15 @@ describe("hasStoredDraft", () => {
     expect(hasStoredDraft(s, "ws1")).toBe(true);
     expect(hasStoredDraft(s, "ws2")).toBe(false);
     expect(hasStoredDraft(s, "ws3")).toBe(false);
+  });
+
+  it("finds a persisted draft in any workspace before the whole app closes", () => {
+    const s = storage({
+      [draftStorageKey("ws1", "capture")]: JSON.stringify({ text: "   " }),
+      [draftStorageKey("ws2", "comment:task-2")]: JSON.stringify({ text: "Черновик" })
+    });
+    expect(hasAnyStoredDraft(s)).toBe(true);
+    const cleared = storage({ [draftStorageKey("ws1", "capture")]: JSON.stringify({ text: "  " }) });
+    expect(hasAnyStoredDraft(cleared)).toBe(false);
   });
 });

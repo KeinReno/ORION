@@ -4,7 +4,6 @@ import { PrismaClient } from "@prisma/client";
 import { createNodeBackup, restoreNodeBackup, verifyNodeBackup } from "./node-backup";
 import { inspectMigrationBackup } from "./migration-preflight";
 import { verifyNodeBackupIntegrity } from "./backup-integrity";
-import { stageSanitizedMigration } from "./migration-stage";
 
 /**
  * Operator commands for a whole-node backup (see node-backup.ts):
@@ -43,11 +42,7 @@ async function main(): Promise<void> {
   }
 
   if (command === "stage-migration") {
-    if (!migrationDir) throw new Error("Для stage-migration нужен отдельный каталог копии. Исходный каталог не изменяется.");
-    const report = await stageSanitizedMigration(dir, path.resolve(migrationDir));
-    console.log(JSON.stringify(report, null, 2));
-    console.log("Копия подготовлена. Это ещё не восстановление: базу поднимайте только в пустом изолированном профиле, без фоновых задач.");
-    return;
+    throw new Error("stage-migration пока недоступна: защита временной копии и полнота очистки полномочий не подтверждены. Данные не изменялись.");
   }
 
   if (command === "verify") {

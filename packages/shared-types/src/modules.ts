@@ -199,9 +199,9 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     label: "База знаний",
     summary: "Материалы со статусом, источниками и связями. Это не заметки.",
     owns: "Разделы, материалы, источники и связи между материалами.",
-    livesWithout: "Работает без заметок, документов и задач.",
-    provides: ["Панель «База знаний»", "Разделы", "Источники отдельно от текста", "Связи между материалами"],
-    optionalDependencies: ["notes", "documents"],
+    livesWithout: "Работает без заметок, документов, проектов и задач. Привязка к проекту необязательна.",
+    provides: ["Панель «База знаний»", "Коллекции", "Источники отдельно от текста", "Связи между материалами", "Необязательная связь с проектом"],
+    optionalDependencies: ["notes", "documents", "projects"],
     disableBehavior: "Панель и API скрываются. Материалы, источники и связи сохраняются.",
     panelId: "knowledge",
     defaultEnabled: true
@@ -243,7 +243,7 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     owns: "Проекты и их собственные поля (имя, статус, сроки, бюджет, ставка).",
     livesWithout: "Работает без задач, финансов и учёта времени — связанные показатели просто не показываются.",
     provides: ["Панель «Проекты»", "Привязка других сущностей"],
-    optionalDependencies: ["tasks", "notes", "calendar", "documents", "time", "finance"],
+    optionalDependencies: ["tasks", "notes", "calendar", "documents", "knowledge", "time", "finance"],
     disableBehavior: "Панель скрывается. Проекты сохраняются; чужие сущности продолжают хранить projectId.",
     panelId: "projects",
     defaultEnabled: true

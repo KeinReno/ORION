@@ -109,7 +109,7 @@ describe("API workspace isolation", () => {
     const hiddenFromBob = await prisma.withUser(bob.user.id, (tx) =>
       tx.note.findMany({ where: { workspaceId: alice.workspaceId } })
     );
-    expect(visibleToAlice).toHaveLength(1);
+    expect(visibleToAlice).toHaveLength(2);
     expect(hiddenFromBob).toHaveLength(0);
   });
 
@@ -592,6 +592,18 @@ describe("API workspace isolation", () => {
     expect(folder?.name).toBe("Вложения заметок");
     expect(documents.data.find((doc) => doc.id === documentId)?.parentId).toBe(folder?.id);
 
+    const nestedUpload = await uploadAttachment(alice.workspaceId, note.data.id, alice.accessToken, "Смета.csv", "x,y\n1,2\n", "Проект/Контракты/Смета.csv");
+    expect(nestedUpload.status).toBe(201);
+    const nestedDocs = await request<Array<{ id: string; name: string; kind: string; parentId: string | null }>>(
+      `/workspaces/${alice.workspaceId}/documents`, { method: "GET", token: alice.accessToken }
+    );
+    const projectFolder = nestedDocs.data.find((doc) => doc.kind === "folder" && doc.name === "Проект");
+    const contractsFolder = nestedDocs.data.find((doc) => doc.kind === "folder" && doc.name === "Контракты");
+    const nestedFile = nestedDocs.data.find((doc) => doc.id === nestedUpload.data[0].documentId);
+    expect(projectFolder?.parentId).toBe(folder?.id);
+    expect(contractsFolder?.parentId).toBe(projectFolder?.id);
+    expect(nestedFile?.parentId).toBe(contractsFolder?.id);
+
     // Re-attaching the same pair is a conflict, not a silent duplicate.
     const duplicate = await request(`/workspaces/${alice.workspaceId}/notes/${note.data.id}/attachments`, {
       method: "POST",
@@ -619,7 +631,12 @@ describe("API workspace isolation", () => {
     const hiddenFromBob = await prisma.withUser(bob.user.id, (tx) =>
       tx.noteAttachment.findMany({ where: { workspaceId: alice.workspaceId } })
     );
-    expect(visibleToAlice).toHaveLength(1);
+    expect(visibleToAlice.map(({ noteId, documentId: linkedDocumentId }) => ({ noteId, documentId: linkedDocumentId })))
+      .toEqual(expect.arrayContaining([
+        { noteId: note.data.id, documentId },
+        { noteId: note.data.id, documentId: nestedUpload.data[0].documentId }
+      ]));
+    expect(visibleToAlice).toHaveLength(2);
     expect(hiddenFromBob).toHaveLength(0);
 
     // A void handler answers 200 with an empty body, so this can't go through
@@ -634,7 +651,7 @@ describe("API workspace isolation", () => {
       method: "GET",
       token: alice.accessToken
     });
-    expect(afterDetach.data).toHaveLength(0);
+    expect(afterDetach.data).toHaveLength(1);
 
     // Detaching removes only the link: the file is still in Документы and can be re-attached.
     const documentsAfter = await request<Array<{ id: string }>>(`/workspaces/${alice.workspaceId}/documents`, {
@@ -649,6 +666,56 @@ describe("API workspace isolation", () => {
       body: { documentId }
     });
     expect(reattach.status).toBe(201);
+  });
+
+  it("groups selected notes into a reorderable stack and removes only the stack", async () => {
+    const alice = await register("alice-note-stacks");
+    const first = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/notes`, {
+      method: "POST", token: alice.accessToken, body: { title: "Стопка — первая" }
+    });
+    const second = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/notes`, {
+      method: "POST", token: alice.accessToken, body: { title: "Стопка — вторая" }
+    });
+    const third = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/notes`, {
+      method: "POST", token: alice.accessToken, body: { title: "Стопка — третья" }
+    });
+    const created = await request<{ id: string; title: string; noteIds: string[] }>(`/workspaces/${alice.workspaceId}/notes/stacks`, {
+      method: "POST", token: alice.accessToken,
+      body: { title: "Материалы", noteIds: [first.data.id, second.data.id] }
+    });
+    expect(created.status).toBe(201);
+    expect(created.data.noteIds).toEqual([first.data.id, second.data.id]);
+
+    const moved = await request(`/workspaces/${alice.workspaceId}/notes/stacks/${created.data.id}/members`, {
+      method: "POST", token: alice.accessToken, body: { noteIds: [third.data.id] }
+    });
+    expect(moved.status).toBe(201);
+
+    const duplicateOrder = await request(`/workspaces/${alice.workspaceId}/notes/stacks/${created.data.id}/order`, {
+      method: "PATCH", token: alice.accessToken, body: { noteIds: [first.data.id, first.data.id, third.data.id] }
+    });
+    expect(duplicateOrder.status).toBe(400);
+
+    const reversed = await request(`/workspaces/${alice.workspaceId}/notes/stacks/${created.data.id}/order`, {
+      method: "PATCH", token: alice.accessToken, body: { noteIds: [second.data.id, first.data.id, third.data.id] }
+    });
+    expect(reversed.status).toBe(200);
+    const grouped = await request<Array<{ id: string; stackId: string | null; stackTitle: string | null; stackOrder: number }>>(
+      `/workspaces/${alice.workspaceId}/notes`, { method: "GET", token: alice.accessToken }
+    );
+    const members = grouped.data.filter((note) => note.stackId === created.data.id).sort((a, b) => a.stackOrder - b.stackOrder);
+    expect(members.map((note) => note.id)).toEqual([second.data.id, first.data.id, third.data.id]);
+    expect(members.map((note) => note.stackTitle)).toEqual(["Материалы", "Материалы", "Материалы"]);
+
+    const removed = await fetch(`${baseUrl}/workspaces/${alice.workspaceId}/notes/stacks/${created.data.id}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${alice.accessToken}` }
+    });
+    expect(removed.status).toBe(200);
+    const remaining = await request<Array<{ id: string; stackId: string | null }>>(
+      `/workspaces/${alice.workspaceId}/notes`, { method: "GET", token: alice.accessToken }
+    );
+    expect(remaining.data).toHaveLength(3);
+    expect(remaining.data.every((note) => note.stackId === null)).toBe(true);
   });
 
   it("versions a document's content: replace archives the old bytes, restore reverts, isolated by workspace", async () => {
@@ -2399,13 +2466,15 @@ describe("API workspace isolation", () => {
     noteId: string,
     token: string,
     name: string,
-    content: string
+    content: string,
+    relativePath = name
   ): Promise<{
     status: number;
     data: Array<{ id: string; noteId: string; documentId: string; name: string; mimeType: string | null; sizeBytes: number | null }>;
   }> {
     const form = new FormData();
     form.append("files", new Blob([content], { type: "text/csv" }), name);
+    form.append("relativePaths", JSON.stringify([relativePath]));
     const response = await fetch(`${baseUrl}/workspaces/${workspaceId}/notes/${noteId}/attachments/upload`, {
       method: "POST",
       // No Content-Type: the browser/undici sets it with the multipart boundary.

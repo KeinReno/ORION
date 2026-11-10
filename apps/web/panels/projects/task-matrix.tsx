@@ -5,6 +5,7 @@ import { CheckToggle, cx, DropdownMenu, IconButton, SegmentedControl, StrikeText
 import { MoreHorizontal } from "lucide-react";
 import { useId, useState } from "react";
 import { shortDate } from "../../lib/format";
+import { useTaskContextActions } from "../tasks/task-context-actions";
 import {
   EISENHOWER_IMPORTANCE_HINT,
   EISENHOWER_IMPORTANCE_LABEL,
@@ -56,6 +57,8 @@ const ROW_EDGE: Record<UrgencyRow, string> = {
  * The view choice is a personal display setting (localStorage), not project data.
  */
 export function TaskMatrix({
+  workspaceId,
+  canManageAgentAssignments,
   tasks,
   milestones,
   includeClosed,
@@ -64,6 +67,8 @@ export function TaskMatrix({
   onMove,
   onPriorityChange
 }: {
+  workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   tasks: readonly Task[];
   milestones: readonly Milestone[];
   includeClosed: boolean;
@@ -188,6 +193,8 @@ export function TaskMatrix({
                     >
                       {list.map((task) => (
                         <MatrixCard
+                          workspaceId={workspaceId}
+                          canManageAgentAssignments={canManageAgentAssignments}
                           key={task.id}
                           task={task}
                           row={row === "urgent" ? "overdue" : row === "closed" ? "closed" : "later"}
@@ -224,6 +231,8 @@ export function TaskMatrix({
               {matrix.columns.flatMap((column) =>
                 (matrix.cells[row]?.[column.key] ?? []).map((task) => (
                   <MatrixCard
+                    workspaceId={workspaceId}
+                    canManageAgentAssignments={canManageAgentAssignments}
                     key={task.id}
                     task={task}
                     row={row}
@@ -286,6 +295,8 @@ export function TaskMatrix({
                     >
                       {list.map((task) => (
                         <MatrixCard
+                          workspaceId={workspaceId}
+                          canManageAgentAssignments={canManageAgentAssignments}
                           key={task.id}
                           task={task}
                           row={row}
@@ -323,6 +334,8 @@ function ColumnHeader({ column }: { column: MatrixColumn }): React.ReactElement 
 }
 
 function MatrixCard({
+  workspaceId,
+  canManageAgentAssignments,
   task,
   row,
   milestoneTitle,
@@ -331,6 +344,8 @@ function MatrixCard({
   onOpen,
   onMove
 }: {
+  workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   task: Task;
   row: UrgencyRow;
   /** Shown only in the stacked layout, where there is no column header to say it. */
@@ -342,14 +357,19 @@ function MatrixCard({
 }): React.ReactElement {
   const cardId = useId();
   const closed = isTaskClosed(task.status);
+  const taskContextActions = useTaskContextActions(workspaceId, "project-tasks", canManageAgentAssignments);
+  const extensionItems = taskContextActions.itemsForTask(task);
   // ORION-07: "Открыть" mirrors the row's own click target; the rest is the same "⋯" menu below.
   const contextMenu = useContextMenu(() => [
     { label: "Открыть", onSelect: onOpen },
     ...(destinations.length > 0
       ? (["separator", ...destinations.map((destination) => ({ label: `В «${destination.title}»`, onSelect: () => onMove(destination.id) }))] as const)
-      : [])
+      : []),
+    ...(extensionItems.length > 0 ? (["separator", ...extensionItems] as const) : [])
   ]);
   return (
+    <>
+    {taskContextActions.dialogs}
     <div
       onContextMenu={contextMenu.onContextMenu}
       draggable
@@ -409,5 +429,6 @@ function MatrixCard({
         </div>
       ) : null}
     </div>
+    </>
   );
 }

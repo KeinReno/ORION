@@ -13,10 +13,16 @@ export interface NavWindowBounds {
 export interface NavWindowEntry {
   detached: boolean;
   bounds?: NavWindowBounds;
+  workspaceBounds?: NavWindowBounds;
 }
 
 export interface NavWindowState {
   bars: Record<string, NavWindowEntry>;
+}
+
+/** A dock request closes only the detached window it names. */
+export function dockMessageTargetsSidebar(message: { type?: string; sidebarId?: string }, sidebarId: string): boolean {
+  return message.type === "dock" && message.sidebarId === sidebarId;
 }
 
 export function navWindowStorageKey(userId: string, workspaceId: string): string {
@@ -44,6 +50,7 @@ export function parseNavWindowState(raw: unknown): NavWindowState {
     bars[id] = {
       detached: record.detached === true,
       ...(isBounds(record.bounds) ? { bounds: record.bounds } : {}),
+      ...(isBounds(record.workspaceBounds) ? { workspaceBounds: record.workspaceBounds } : {}),
     };
   }
   return { bars };
@@ -55,7 +62,7 @@ export function detachNavWindow(state: NavWindowState, sidebarId: string, bounds
   return {
     bars: {
       ...state.bars,
-      [sidebarId]: { detached: true, ...(bounds ? { bounds } : state.bars[sidebarId]?.bounds ? { bounds: state.bars[sidebarId]?.bounds } : {}) },
+      [sidebarId]: { ...state.bars[sidebarId], detached: true, ...(bounds ? { bounds } : state.bars[sidebarId]?.bounds ? { bounds: state.bars[sidebarId]?.bounds } : {}) },
     },
   };
 }
@@ -91,4 +98,10 @@ export function rememberNavWindowBounds(state: NavWindowState, sidebarId: string
   const current = state.bars[sidebarId];
   if (!current?.detached) return state;
   return { bars: { ...state.bars, [sidebarId]: { ...current, bounds } } };
+}
+
+export function rememberNavWorkspaceBounds(state: NavWindowState, sidebarId: string, bounds: NavWindowBounds): NavWindowState {
+  const current = state.bars[sidebarId];
+  if (!current?.detached) return state;
+  return { bars: { ...state.bars, [sidebarId]: { ...current, workspaceBounds: bounds } } };
 }

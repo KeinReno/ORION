@@ -1,13 +1,14 @@
 "use client";
 
 import { isTaskClosed, type Task } from "@orion/shared-types";
-import { Badge, CheckToggle, cx, IconButton, StrikeText, useContextMenuApi, useToast } from "@orion/ui";
+import { Badge, CheckToggle, cx, IconButton, StrikeText, useContextMenuApi, useToast, type MenuItem } from "@orion/ui";
 import { ChevronDown, ChevronRight, Pencil, Plus, TriangleAlert } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { shortDate } from "../../lib/format";
 import { descendantIds } from "../../lib/task-structure";
 import { Meter } from "../../components/project-bits";
 import { GRAPH_NODE_H, GRAPH_NODE_W, buildTaskTree, flattenTree, layoutDependencyGraph } from "../../lib/task-graph";
+import { useTaskContextActions } from "../tasks/task-context-actions";
 
 /** The same `text/plain` task-id convention `TaskCard`/the board drag already use — one MIME, not a new one per view. */
 const TASK_DRAG_MIME = "text/plain";
@@ -24,6 +25,8 @@ const TASK_DRAG_MIME = "text/plain";
  * `onCreateChild`/`onRename` the caller already uses for every other task mutation here.
  */
 export function TaskTree({
+  workspaceId,
+  canManageAgentAssignments,
   tasks,
   showClosed,
   openTaskId,
@@ -33,6 +36,8 @@ export function TaskTree({
   onCreateChild,
   onRename
 }: {
+  workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   tasks: Task[];
   showClosed: boolean;
   openTaskId: string | null;
@@ -45,6 +50,7 @@ export function TaskTree({
 }): React.ReactElement {
   const { toast } = useToast();
   const showContextMenu = useContextMenuApi();
+  const taskContextActions = useTaskContextActions(workspaceId, "project-tasks", canManageAgentAssignments);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -69,6 +75,8 @@ export function TaskTree({
   if (rows.length === 0) return <p className="text-label text-subtle-foreground">Нет задач для показа.</p>;
 
   return (
+    <>
+      {taskContextActions.dialogs}
     <ul role="tree" aria-label="Иерархия задач" className="flex max-w-4xl flex-col">
       {rows.map(({ task, depth, children, blockedBy, childTotal, childClosed, isLast, guides, hasBlockedDescendant }) => {
         const closed = isTaskClosed(task.status);
@@ -78,12 +86,14 @@ export function TaskTree({
         // A branch that hides its own trouble: the task is fine, but something inside its (collapsed)
         // subtree is blocked — the per-task "ждёт" badge below is invisible while the branch is folded.
         const hidesProblem = hasChildren && isCollapsed && blockedBy.length === 0 && hasBlockedDescendant;
-        const rowMenuItems = [
+        const rowMenuItems: (MenuItem | "separator")[] = [
           { label: "Открыть", onSelect: () => onOpen(task) },
           { label: "Переименовать", icon: Pencil, onSelect: () => setRenamingId(task.id) },
           { label: "Добавить подзадачу", icon: Plus, onSelect: () => setAddingChildFor(task.id) },
           ...(task.parentId ? ["separator" as const, { label: "Сделать верхнего уровня", onSelect: () => onReparent(task.id, null) }] : [])
         ];
+        const extensionItems = taskContextActions.itemsForTask(task);
+        if (extensionItems.length > 0) rowMenuItems.push("separator", ...extensionItems);
         return (
           <li key={task.id} className="flex flex-col">
             <div
@@ -222,6 +232,7 @@ export function TaskTree({
         );
       })}
     </ul>
+    </>
   );
 }
 

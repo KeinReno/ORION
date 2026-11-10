@@ -1,0 +1,22 @@
+{
+  "id": "agent-hub-task-assignment",
+  "version": "1.0.0",
+  "extends": "agent-hub",
+  "catalog": {
+    "label": "Назначение задач ИИ-агентам",
+    "summary": "Назначение существующего профиля ИИ-агента на задачу.",
+    "provides": ["Действие назначения агента в меню задачи"],
+    "disableBehavior": "Действие скрывается при выключении плагина или Agent Hub; существующее назначение сохраняется.",
+    "defaultEnabled": true
+  },
+  "web": {
+    "contributions": [
+      {
+        "slot": "tasks.context.actions",
+        "file": "task-assignment",
+        "export": "AgentHubTaskAssignmentAction",
+        "meta": { "actionId": "assign-agent", "label": "Назначить ИИ-агента…" }
+      }
+    ]
+  }
+}

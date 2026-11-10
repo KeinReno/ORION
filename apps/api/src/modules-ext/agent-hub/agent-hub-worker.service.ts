@@ -10,6 +10,7 @@ import { ModulesService } from "../../modules/modules.service";
 import { TaskIntegrationReader } from "../../tasks/public/task-integration-reader";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { executionDto } from "./agent-hub.service";
+import { AgentHubAssignmentService } from "./agent-hub-assignment.service";
 
 const LEASE_MS = 120_000;
 /** This is a manual MCP adapter, not a process identity or proof of a live IDE. */
@@ -21,7 +22,8 @@ export class AgentHubWorkerService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TaskIntegrationReader
+    private readonly tasks: TaskIntegrationReader,
+    private readonly assignments: AgentHubAssignmentService
   ) {}
 
   /** Project fences and task read scope are mandatory even if the caller has the Agent Hub tool permission. */
@@ -52,6 +54,7 @@ export class AgentHubWorkerService {
       const visible: AgentHubExecution[] = [];
       for (const row of rows) {
         if (row.targetKind !== "task") continue;
+        if (row.status === "queued" && !await this.assignments.workerMayClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId)) continue;
         const task = await this.tasks.referenceTx(tx, agent.workspaceId, row.targetId);
         if (!task) continue;
         if (agent.allowedProjectIds.length > 0 && (!task.projectId || !agent.allowedProjectIds.includes(task.projectId))) continue;
@@ -105,6 +108,7 @@ export class AgentHubWorkerService {
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "tasks");
       const row = await tx.agentHubExecution.findFirst({ where: { id: executionId, workspaceId: agent.workspaceId } });
       if (!row) throw new NotFoundException("Исполнение не найдено");
+      if (row.targetKind === "task") await this.assignments.lockTaskForWorkerClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId);
       await this.accessibleTx(tx, agent, row);
       const command = {
         type: "claim" as const, expectedRevision, at: new Date().toISOString(),

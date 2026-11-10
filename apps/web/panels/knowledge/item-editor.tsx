@@ -11,6 +11,7 @@ import {
   useDocuments,
   useKnowledgeItem,
   useNotes,
+  useProjects,
   useUpdateKnowledgeItem
 } from "@orion/core-react";
 import {
@@ -32,6 +33,8 @@ import { BookOpen, Check, ChevronDown, Library, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { KIND_ICON, KIND_LABEL, RELATION_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, VISIBILITY_LABEL } from "./knowledge-labels";
 import { KnowledgeReadingView } from "./reading-view";
+import { useEnabledModules } from "../../lib/use-enabled-modules";
+import { openEntity } from "../../lib/panel-bus";
 
 interface Draft {
   id: string;
@@ -42,6 +45,7 @@ interface Draft {
   visibility: KnowledgeVisibility;
   kind: KnowledgeKind;
   categoryId: string | null;
+  projectId: string | null;
   tags: string;
   revision: number;
 }
@@ -56,6 +60,7 @@ function fromDetail(item: KnowledgeItemDetail): Draft {
     visibility: item.visibility,
     kind: item.kind,
     categoryId: item.categoryId,
+    projectId: item.projectId,
     tags: item.tags.join(", "),
     revision: item.revision
   };
@@ -66,6 +71,13 @@ function conflictOf(error: unknown): KnowledgeItemDetail | null {
   const details = error.details as { code?: string; current?: KnowledgeItemDetail };
   if (details.code !== "knowledge_revision_conflict" || !details.current?.id) return null;
   return details.current;
+}
+
+function httpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch { return null; }
 }
 
 /**
@@ -92,6 +104,8 @@ export function KnowledgeItemEditor({
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const detail = useKnowledgeItem(workspaceId, itemId);
+  const { isEnabled } = useEnabledModules();
+  const projects = useProjects(isEnabled("projects") ? workspaceId : undefined);
   const update = useUpdateKnowledgeItem(workspaceId);
   const remove = useDeleteKnowledgeItem(workspaceId);
   const deleteSource = useDeleteKnowledgeSource(workspaceId);
@@ -153,6 +167,7 @@ export function KnowledgeItemEditor({
           visibility: snapshot.visibility,
           kind: snapshot.kind,
           categoryId: snapshot.categoryId,
+          projectId: snapshot.projectId,
           tags,
           expectedRevision: snapshot.revision
         }
@@ -168,7 +183,8 @@ export function KnowledgeItemEditor({
           current.status !== snapshot.status ||
           current.visibility !== snapshot.visibility ||
           current.kind !== snapshot.kind ||
-          current.categoryId !== snapshot.categoryId;
+          current.categoryId !== snapshot.categoryId ||
+          current.projectId !== snapshot.projectId;
         setUnsaved(changed);
         const next = changed ? { ...current, revision: saved.revision } : fromDetail(saved);
         draftRef.current = next;
@@ -215,7 +231,7 @@ export function KnowledgeItemEditor({
   if (!draft || !detail.data) return <p className="text-label text-subtle-foreground">Загрузка материала…</p>;
 
   const item = detail.data;
-  const contextCount = item.sources.length + item.relations.length + item.backlinks.length;
+  const contextCount = item.sources.length + item.relations.length + item.backlinks.length + (item.projectId ? 1 : 0);
 
   if (reading) return <KnowledgeReadingView item={item} onExit={() => setReading(false)} />;
 
@@ -319,6 +335,13 @@ export function KnowledgeItemEditor({
                 ))}
             </Select>
           </label>
+          {isEnabled("projects") ? <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
+            Проект <span className="text-micro text-subtle-foreground">Необязательно — библиотека работает и без проекта.</span>
+            <Select value={draft.projectId ?? ""} onChange={(event) => edit({ projectId: event.target.value || null })}>
+              <option value="">Без проекта</option>
+              {(projects.data ?? []).filter((project) => !project.archivedAt).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </Select>
+          </label> : null}
           <label className="flex flex-col gap-1.5 text-label text-subtle-foreground">
             Теги
             <Input value={draft.tags} placeholder="через запятую" onChange={(event) => edit({ tags: event.target.value })} />
@@ -334,8 +357,9 @@ export function KnowledgeItemEditor({
                   {source.sourceTitle ? ` · ${source.sourceTitle}` : ""}
                   {source.sourceAuthor ? ` · ${source.sourceAuthor}` : ""}
                 </div>
-                {source.sourceUrl ? <div className="break-all">{source.sourceUrl}</div> : null}
+                {httpUrl(source.sourceUrl) ? <a href={httpUrl(source.sourceUrl) ?? undefined} target="_blank" rel="noreferrer" className="block break-all text-accent-text underline-offset-2 hover:underline">{source.sourceUrl}</a> : null}
                 {source.originalText ? <div className="whitespace-pre-wrap">{source.originalText}</div> : null}
+                {source.documentId ? <Button size="sm" variant="outline" onClick={() => openEntity("document", source.documentId!)}><BookOpen className="h-3.5 w-3.5" /> Открыть документ</Button> : null}
                 <Button size="sm" variant="ghost" onClick={() => deleteSource.mutate(source.id, { onError: () => toast({ title: "Не удалось убрать источник", tone: "danger" }) })}>
                   Убрать источник
                 </Button>

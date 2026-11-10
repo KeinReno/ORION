@@ -12,6 +12,7 @@ export interface RiskyMigrationSideEffectRows {
   extension_secrets: readonly MigrationSideEffectRow[];
   agent_hub_executions: readonly MigrationSideEffectRow[];
   agent_hub_runtime_sessions: readonly MigrationSideEffectRow[];
+  agent_hub_agent_credentials: readonly MigrationSideEffectRow[];
   agent_proposals: readonly MigrationSideEffectRow[];
   opportunity_attempts: readonly MigrationSideEffectRow[];
   domain_event_deliveries: readonly MigrationSideEffectRow[];
@@ -35,6 +36,11 @@ export function sanitizeMigrationSideEffectRows(
   deactivatedAt: string
 ): RiskyMigrationSideEffectRows {
   if (Number.isNaN(Date.parse(deactivatedAt))) throw new Error("Invalid deactivation time");
+  for (const row of rows.agent_hub_agent_credentials) {
+    assertString(row, "agent_hub_agent_credentials", "id");
+    assertString(row, "agent_hub_agent_credentials", "workspaceId");
+    assertString(row, "agent_hub_agent_credentials", "profileId");
+  }
   return {
     sync_remotes: rows.sync_remotes.map((row) => {
       assertString(row, "sync_remotes", "id");
@@ -84,6 +90,10 @@ export function sanitizeMigrationSideEffectRows(
       assertString(row, "agent_hub_runtime_sessions", "id");
       return { ...row, status: "closed", closedAt: row.closedAt ?? deactivatedAt, expiresAt: deactivatedAt };
     }),
+    // Credential bindings grant a token authority over a durable profile.
+    // Do not carry that authority into a different installation; profiles and
+    // task assignments are durable and remain in their own tables.
+    agent_hub_agent_credentials: [],
     agent_proposals: rows.agent_proposals.map((row) => {
       assertString(row, "agent_proposals", "id");
       if (row.status !== "pending") return row;

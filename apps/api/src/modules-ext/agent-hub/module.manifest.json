@@ -5,15 +5,16 @@
     "kind": "additional",
     "required": false,
     "label": "Agent Hub",
-    "summary": "История и жизненный цикл исполнений задач агентами. Первый срез: долговременная очередь, события, отмена и просмотр.",
-    "owns": "Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.",
+    "summary": "Стабильные профили ИИ-агентов, назначения исполнителей и история исполнений.",
+    "owns": "Стабильные профили, назначение профиля на задачу, исполнения и атомарная история; задачи остаются у Tasks, учетные данные — у AI Bridge.",
     "livesWithout": "Работает как журнал и очередь без запущенных агентов; не требует облачного inference API или открытой IDE.",
     "provides": [
       "Панель исполнений и состояний",
       "Создание исполнения для существующей задачи",
       "Отмена исполнения владельцем/руководителем",
       "История изменений с ревизиями",
-      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности"
+      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности",
+      "Именованные профили агентов и назначение конкретного профиля существующей задаче без запуска"
     ],
     "optionalDependencies": [
       "tasks"
@@ -55,7 +56,10 @@
     "workspaceBackRelations": [
       "  agentHubExecutions AgentHubExecution[]",
       "  agentHubEvents AgentHubEvent[]",
-      "  agentHubRuntimeSessions AgentHubRuntimeSession[]"
+      "  agentHubRuntimeSessions AgentHubRuntimeSession[]",
+      "  agentHubAgentProfiles AgentHubAgentProfile[]",
+      "  agentHubAgentCredentials AgentHubAgentCredential[]",
+      "  agentHubTaskAssignments AgentHubTaskAssignment[]"
     ],
     "migrations": [
       {
@@ -66,6 +70,11 @@
       {
         "name": "20261029223000_agent_hub_runtime_sessions",
         "file": "prisma/migration-runtime.sql",
+        "rls": "workspace-member"
+      },
+      {
+        "name": "20261110140000_agent_hub_agent_assignments",
+        "file": "prisma/migration-agent-assignments.sql",
         "rls": "workspace-member"
       }
     ]
@@ -106,6 +115,29 @@
           "stage": "never",
           "note": "Эфемерный lease runtime привязан к конкретному узлу и токену; не копировать между устройствами."
         }
+      },
+      {
+        "model": "AgentHubAgentProfile",
+        "delegate": "agentHubAgentProfile",
+        "snapshotKey": "agentHubAgentProfiles",
+        "snapshotPolicy": "included",
+        "reason": "Профиль — стабильная пользовательская identity; требуется сохранить назначения при переносе.",
+        "sync": { "syncClass": "not-synced", "stage": "later", "note": "Профили пока принадлежат локальному источнику workspace." }
+      },
+      {
+        "model": "AgentHubAgentCredential",
+        "delegate": "agentHubAgentCredential",
+        "snapshotPolicy": "secret-excluded",
+        "reason": "Связь с credential предоставляет полномочия и не должна переноситься в восстановленную среду.",
+        "sync": { "syncClass": "not-synced", "stage": "never", "note": "Требуется явная повторная привязка credential после восстановления." }
+      },
+      {
+        "model": "AgentHubTaskAssignment",
+        "delegate": "agentHubTaskAssignment",
+        "snapshotKey": "agentHubTaskAssignments",
+        "snapshotPolicy": "included",
+        "reason": "Назначение является пользовательским состоянием и должно сохраняться даже при потере credential.",
+        "sync": { "syncClass": "not-synced", "stage": "later", "note": "Назначения пока принадлежат локальному источнику workspace." }
       }
     ]
   },

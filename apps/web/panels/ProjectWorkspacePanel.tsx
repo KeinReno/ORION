@@ -208,16 +208,18 @@ export function ProjectWorkspacePanel({ params, api }: PanelComponentProps): Rea
     );
   }
 
-  return <ProjectWorkspace key={project.id} workspaceId={workspaceId} project={project} params={params} api={api} />;
+  return <ProjectWorkspace key={project.id} workspaceId={workspaceId} canManageAgentAssignments={workspace?.role === "owner" || workspace?.role === "lead"} project={project} params={params} api={api} />;
 }
 
 function ProjectWorkspace({
   workspaceId,
+  canManageAgentAssignments,
   project,
   params,
   api
 }: {
   workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   project: ProjectDetail;
   params: PanelComponentProps["params"];
   api: PanelComponentProps["api"];
@@ -541,6 +543,7 @@ function ProjectWorkspace({
         {!section.missing && tab === "overview" ? (
           <OverviewTab
             workspaceId={workspaceId}
+            canManageAgentAssignments={canManageAgentAssignments}
             project={project}
             focus={focus}
             milestones={milestoneList}
@@ -658,6 +661,7 @@ function ProjectWorkspace({
 
 function OverviewTab({
   workspaceId,
+  canManageAgentAssignments,
   project,
   focus,
   milestones,
@@ -676,6 +680,7 @@ function OverviewTab({
   onAddTask
 }: {
   workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   project: ProjectDetail;
   focus: ReturnType<typeof projectFocus>;
   milestones: Milestone[];
@@ -730,7 +735,7 @@ function OverviewTab({
             <Card className="border-destructive/30 px-2 py-1">
               <ul className="flex flex-col">
                 {fire.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
+                  <TaskRow key={task.id} workspaceId={workspaceId} canManageAgentAssignments={canManageAgentAssignments} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
                 ))}
               </ul>
             </Card>
@@ -768,7 +773,7 @@ function OverviewTab({
             ) : (
               <ul className="flex flex-col">
                 {upNext.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
+                  <TaskRow key={task.id} workspaceId={workspaceId} canManageAgentAssignments={canManageAgentAssignments} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpenTask(task)} />
                 ))}
               </ul>
             )}

@@ -6,6 +6,9 @@ import { contribute } from "../lib/extensions/registry";
 
 /** Вклады и места плагинов, подключённых манифестом; импорт этого файла (lib/extensions/slot.tsx) их регистрирует. */
 
+const AgentHubTaskAssignmentAgentHubTaskAssignmentAction = dynamic<SlotContracts["tasks.context.actions"]>(() => import("./agent-hub-task-assignment/task-assignment").then((module) => module.AgentHubTaskAssignmentAction), { ssr: false });
+contribute("tasks.context.actions", { pluginId: "agent-hub-task-assignment", component: AgentHubTaskAssignmentAgentHubTaskAssignmentAction, meta: {"actionId":"assign-agent","label":"Назначить ИИ-агента…"} });
+
 const HabitsInsightsHabitsInsights = dynamic<SlotContracts["habits.insights"]>(() => import("./habits-insights/insights").then((module) => module.HabitsInsights), { ssr: false });
 contribute("habits.insights", { pluginId: "habits-insights", component: HabitsInsightsHabitsInsights });
 

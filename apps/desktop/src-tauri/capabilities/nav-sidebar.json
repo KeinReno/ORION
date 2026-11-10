@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "nav-sidebar",
+  "description": "Monitor-aware sizing and routing for detached navigation sidebar windows",
+  "webviews": ["nav-sidebar-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-current-monitor",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position"
+  ]
+}

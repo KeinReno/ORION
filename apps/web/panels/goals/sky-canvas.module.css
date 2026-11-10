@@ -103,6 +103,7 @@
 .canvasLinkBar { display: flex; align-items: center; gap: .65rem; padding: .55rem .7rem; border: 1px solid #655437; border-radius: .6rem; background: rgb(191 151 84 / .09); color: #e4d3b1; font-size: .72rem; }
 .canvasLinkBar span { flex: 1; }
 .atlasCompactRoute { display: none; }
+.atlasRouteAlways { display: block; max-height: 22rem; overflow: auto; border: 1px solid #333947; border-radius: .85rem; padding: .9rem; background: #0e131d; }
 .atlasRouteHeading { margin: 0 0 .75rem; color: #bda479; font-size: .62rem; font-weight: 650; letter-spacing: .14em; }
 .atlasRouteStar { display: flex; align-items: center; gap: .75rem; width: 100%; padding: .72rem .45rem; border-top: 1px solid rgb(255 255 255 / .085); color: #dfe0e3; text-align: left; }
 .atlasRouteStar[data-selected="true"] { background: rgb(213 178 117 / .11); }

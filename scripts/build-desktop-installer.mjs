@@ -23,6 +23,7 @@ function runPnpm(args, env = process.env) {
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Windows x64 build host required');
 if (!existsSync(pgPackage)) throw new Error('Embedded PostgreSQL Windows package is missing. Run pnpm install first.');
 if (!existsSync(process.execPath)) throw new Error('Node runtime is missing');
+run('cargo', ['build', '--release', '--locked', '--manifest-path', join(root, 'orion-rust', 'Cargo.toml')]);
 runPnpm(['--filter', '@orion/api', 'build']);
 runPnpm(['build:desktop-export'], { ...process.env, NEXT_PUBLIC_API_URL: 'http://localhost:14000', NEXT_PUBLIC_ORION_BUILD_TAG: process.env.ORION_BUILD_TAG || '' });
 const expected = resolve(root, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime');
@@ -38,6 +39,7 @@ mkdirSync(join(api, 'development'), { recursive: true });
 cpSync(join(root, 'development', 'orion-dev.catalog.json'), join(api, 'development', 'orion-dev.catalog.json'));
 run(process.execPath, [join(api, 'node_modules', 'prisma', 'build', 'index.js'), 'generate', `--schema=${join(api, 'prisma', 'schema.prisma')}`], { ...process.env, DATABASE_URL: 'postgresql://placeholder:placeholder@127.0.0.1:5433/orion' });
 cpSync(process.execPath, join(stage, 'node.exe'));
+cpSync(join(root, 'orion-rust', 'target', 'release', 'orion-runtime.exe'), join(stage, 'orion-runtime.exe'));
 cpSync(pgPackage, join(stage, 'postgres'), { recursive: true });
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'launcher.cjs'), join(stage, 'launcher.cjs'));
 cpSync(join(root, 'apps', 'desktop', 'runtime', 'ascii-path.cjs'), join(stage, 'ascii-path.cjs'));
@@ -82,7 +84,7 @@ cpSync(webExport, join(stage, 'web'), {
     return !top || !skipExportDir.has(top);
   }
 });
-const mustExist = ['node.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'edition.json', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js', 'habitat/src/cli.mjs', 'habitat/Kaiden.Habitat.WindowsHost.exe'];
+const mustExist = ['node.exe', 'orion-runtime.exe', 'postgres/bin/initdb.exe', 'postgres/bin/pg_ctl.exe', 'api/dist/main.js', 'api/prisma/schema.prisma', 'api/node_modules/prisma/build/index.js', 'launcher.cjs', 'ascii-path.cjs', 'edition.json', 'AGENT_MANUAL.md', 'api/dist/mcp/orion-mcp.js', 'habitat/src/cli.mjs', 'habitat/Kaiden.Habitat.WindowsHost.exe'];
 for (const name of mustExist) if (!existsSync(join(stage, name))) throw new Error(`Missing bundled runtime file: ${name}`);
 writeShellContract(root, stage);
 const total = (directory) => readdirSync(directory, { withFileTypes: true }).reduce((sum, item) => sum + (item.isDirectory() ? total(join(directory, item.name)) : statSync(join(directory, item.name)).size), 0);

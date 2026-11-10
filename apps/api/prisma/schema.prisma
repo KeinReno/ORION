@@ -43,6 +43,8 @@ model User {
   notifications     Notification[]
   taskComments      TaskComment[]
   projectStatusUpdates ProjectStatusUpdate[]
+  projectLogEntries ProjectLogEntry[]
+  createdProjectRelations ProjectRelation[] @relation("ProjectRelationCreator")
   taskActivities    TaskActivity[]
   ownedReminders    EntityReminder[] @relation("EntityReminderOwner")
   receivedReminders EntityReminder[] @relation("EntityReminderRecipient")
@@ -231,6 +233,9 @@ model Workspace {
   taskDependencies TaskDependency[]
   taskComments  TaskComment[]
   projectStatusUpdates ProjectStatusUpdate[]
+  projectLogEntries ProjectLogEntry[]
+  projectLogEntryTasks ProjectLogEntryTask[]
+  projectRelations ProjectRelation[]
   taskActivities TaskActivity[]
   entityLinks   EntityLink[]
   entityReminders EntityReminder[]
@@ -322,6 +327,9 @@ model Workspace {
     agentHubExecutions AgentHubExecution[]
     agentHubEvents AgentHubEvent[]
     agentHubRuntimeSessions AgentHubRuntimeSession[]
+    agentHubAgentProfiles AgentHubAgentProfile[]
+    agentHubAgentCredentials AgentHubAgentCredential[]
+    agentHubTaskAssignments AgentHubTaskAssignment[]
   chatArchiveConversations ChatArchiveConversation[]
   chatArchiveLines         ChatArchiveLine[]
   chatArchiveAutoSources   ChatArchiveAutoSource[]
@@ -371,10 +379,14 @@ model Project {
   events       Event[]
   transactions Transaction[]
   documents    Document[]
+  knowledgeItems KnowledgeItem[]
   timeEntries  TimeEntry[]
   inventoryItems InventoryItem[]
   milestones   Milestone[]
   projectStatusUpdates ProjectStatusUpdate[]
+  projectLogEntries ProjectLogEntry[]
+  projectRelationsFrom ProjectRelation[] @relation("ProjectRelationFrom")
+  projectRelationsTo ProjectRelation[] @relation("ProjectRelationTo")
   captures     Capture[]
   goalPlans    GoalPlan[]
 
@@ -445,6 +457,10 @@ model Note {
   id          String    @id @default(uuid())
   workspaceId String
   projectId   String?
+  /// Visual stack membership. The stack metadata lives on member notes so RLS and sync stay note-owned.
+  stackId     String?
+  stackTitle  String?
+  stackOrder  Int       @default(0)
   title       String
   /// Short stable id within the workspace ("N-104"). Assigned by the `notes_assign_number`
   /// trigger on insert (migration 20261010100000_note_number) — never set by application code.
@@ -524,6 +540,7 @@ model Note {
   @@index([eventAt])
   @@index([deletedAt])
   @@index([privateToUserId])
+  @@index([workspaceId, stackId, stackOrder])
   @@map("notes")
 }
 
@@ -645,6 +662,7 @@ model Task {
   comments   TaskComment[]
   activities TaskActivity[]
   captures   Capture[]
+  projectLogEntries ProjectLogEntryTask[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -1971,6 +1989,80 @@ model ProjectStatusUpdate {
   @@index([workspaceId])
   @@index([projectId, createdAt])
   @@map("project_status_updates")
+}
+
+enum ProjectLogKind {
+  observation
+  decision
+  change
+}
+
+enum ProjectRelationType {
+  continues
+  replaces
+  based_on
+  depends_on
+  related
+}
+
+/// Narrative project history, separate from structured health reports.
+model ProjectLogEntry {
+  id          String        @id @default(uuid())
+  workspaceId String
+  projectId   String
+  authorId    String
+  kind        ProjectLogKind
+  text        String
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tasks     ProjectLogEntryTask[]
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+  @@map("project_log_entries")
+}
+
+/// A live reference to a Task plus commentary scoped to this journal entry.
+model ProjectLogEntryTask {
+  id                String   @id @default(uuid())
+  workspaceId       String
+  entryId           String
+  taskId            String
+  comment           String   @default("")
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entry     ProjectLogEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  task      Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, taskId])
+  @@index([workspaceId])
+  @@index([taskId])
+  @@map("project_log_entry_tasks")
+}
+
+/// Directed edge: `fromProject` has the named relationship to `toProject`.
+model ProjectRelation {
+  id              String              @id @default(uuid())
+  workspaceId     String
+  fromProjectId   String
+  toProjectId     String
+  type            ProjectRelationType
+  createdById     String
+  createdAt       DateTime            @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromProject Project   @relation("ProjectRelationFrom", fields: [fromProjectId], references: [id], onDelete: Cascade)
+  toProject   Project   @relation("ProjectRelationTo", fields: [toProjectId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("ProjectRelationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([fromProjectId, toProjectId, type])
+  @@index([workspaceId])
+  @@index([fromProjectId])
+  @@index([toProjectId])
+  @@map("project_relations")
 }
 
 /// Ключ владельца к языковой модели для чата внутри ORION (ADR-0017, вариант C). Ключ лежит только в зашифрованном виде
@@ -3487,6 +3579,59 @@ model AgentHubRuntimeSession {
   @@map("agent_hub_runtime_sessions")
 }
 
+/// Stable logical agent identity. Credentials and runtime sessions are separate, replaceable records.
+model AgentHubAgentProfile {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  credentials AgentHubAgentCredential[]
+  assignments AgentHubTaskAssignment[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, name])
+  @@index([workspaceId, name])
+  @@map("agent_hub_agent_profiles")
+}
+
+/// Explicit binding of an AI Bridge credential to a stable profile. Excluded from snapshots.
+model AgentHubAgentCredential {
+  id          String   @id @default(uuid())
+  workspaceId String
+  profileId   String
+  tokenId     String   @unique
+  createdById String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  profile   AgentHubAgentProfile @relation(fields: [workspaceId, profileId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@index([workspaceId, profileId])
+  @@map("agent_hub_agent_credentials")
+}
+
+/// Current task executor. One profile per task; this does not create an execution or dispatch work.
+model AgentHubTaskAssignment {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskId      String
+  profileId   String
+  assignedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  profile   AgentHubAgentProfile @relation(fields: [workspaceId, profileId], references: [workspaceId, id], onDelete: Cascade)
+
+  @@unique([workspaceId, taskId])
+  @@index([workspaceId, profileId])
+  @@map("agent_hub_task_assignments")
+}
+
 // module: chat-archive
 model ChatArchiveConversation {
   id           String    @id @default(uuid())
@@ -3686,6 +3831,7 @@ model KnowledgeItem {
   id          String   @id @default(uuid())
   workspaceId String
   categoryId  String?
+  projectId   String?
   title       String
   summary     String   @default("")
   body        String   @default("")
@@ -3703,12 +3849,14 @@ model KnowledgeItem {
 
   workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   category  KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   sources   KnowledgeSource[]
   fromRelations KnowledgeRelation[] @relation("KnowledgeRelationFrom")
   toRelations   KnowledgeRelation[] @relation("KnowledgeRelationTo")
 
   @@index([workspaceId])
   @@index([workspaceId, status])
+  @@index([projectId])
   @@map("knowledge_items")
 }
 

@@ -47,10 +47,12 @@ function errorText(error: unknown): string {
  */
 export function NoteAttachmentsSection({
   workspaceId,
-  noteId
+  noteId,
+  onAddLink
 }: {
   workspaceId: string | undefined;
   noteId: string;
+  onAddLink?: (markdown: string) => void;
 }): React.ReactElement {
   const { isEnabled } = useEnabledModules();
   const documentsOn = isEnabled("documents");
@@ -62,10 +64,17 @@ export function NoteAttachmentsSection({
   const { toast } = useToast();
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<NoteAttachment | null>(null);
   const [preview, setPreview] = useState<NoteAttachment | null>(null);
+  const [linkDraft, setLinkDraft] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const busy = upload.isPending || attach.isPending || detach.isPending;
+
+  useEffect(() => {
+    folderInputRef.current?.setAttribute("webkitdirectory", "");
+  }, []);
 
   // Files of this workspace that are not attached yet — the "прикрепить
   // существующий" menu never offers a duplicate (the API answers 409 for one).
@@ -74,14 +83,26 @@ export function NoteAttachmentsSection({
 
   async function uploadFiles(files: File[]): Promise<void> {
     if (files.length === 0) return;
+    let uploadedCount = 0;
+    setUploadProgress({ done: 0, total: files.length });
     try {
-      const created = await upload.mutateAsync(files);
+      for (let offset = 0; offset < files.length; offset += 20) {
+        const created = await upload.mutateAsync(files.slice(offset, offset + 20));
+        uploadedCount += created.length;
+        setUploadProgress({ done: uploadedCount, total: files.length });
+      }
       toast({
-        title: created.length > 1 ? `Загружено файлов: ${created.length}` : "Файл прикреплён",
+        title: uploadedCount > 1 ? `Загружено файлов: ${uploadedCount}` : "Файл прикреплён",
         tone: "success"
       });
     } catch (error) {
-      toast({ title: "Не удалось загрузить", description: errorText(error), tone: "danger" });
+      toast({
+        title: uploadedCount ? `Загружено ${uploadedCount} из ${files.length}` : "Не удалось загрузить",
+        description: errorText(error),
+        tone: "danger"
+      });
+    } finally {
+      setUploadProgress(null);
     }
   }
 
@@ -115,7 +136,11 @@ export function NoteAttachmentsSection({
     <div
       onDragOver={(event) => {
         event.preventDefault();
-        if (!documentsOn || busy) return;
+        if (!documentsOn || busy) {
+          setDragging(false);
+          return;
+        }
+        setDragging(event.dataTransfer.files.length > 0);
       }}
       onDragLeave={(event) => {
         // Entering a child fires dragleave on the wrapper too — only clear the
@@ -198,6 +223,17 @@ export function NoteAttachmentsSection({
           >
             <Upload className="h-3.5 w-3.5" /> Загрузить
           </Button>
+          <Button
+            type="button"
+            variant="subtle"
+            size="sm"
+            className="h-6 px-2 text-2xs"
+            disabled={busy}
+            onClick={() => folderInputRef.current?.click()}
+            title="Добавить папку с сохранением структуры"
+          >
+            <FileUp className="h-3.5 w-3.5" /> Папку
+          </Button>
         </div>
         ) : (
           <span className="text-2xs text-subtle-foreground">Модуль «Документы» выключен</span>
@@ -212,6 +248,48 @@ export function NoteAttachmentsSection({
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           // Reset first: picking the same file twice in a row must fire change again.
+          event.target.value = "";
+          void uploadFiles(files);
+        }}
+      />
+
+      {onAddLink ? (
+        <form
+          className="flex items-center gap-1.5 px-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = linkDraft.trim();
+            try {
+              const url = new URL(value);
+              if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("protocol");
+              const label = url.hostname.replace(/^www\./, "");
+              onAddLink(`[${label}](${url.toString()})`);
+              setLinkDraft("");
+            } catch {
+              toast({ title: "Введите ссылку, начинающуюся с http:// или https://", tone: "danger" });
+            }
+          }}
+        >
+          <input
+            type="url"
+            value={linkDraft}
+            onChange={(event) => setLinkDraft(event.target.value)}
+            placeholder="Добавить веб-ссылку"
+            aria-label="Веб-ссылка"
+            className="h-7 min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-subtle-foreground focus:border-accent"
+          />
+          <IconButton label="Добавить ссылку в текст заметки" size="sm" type="submit" disabled={!linkDraft.trim()}>
+            <Link2 className="h-3.5 w-3.5" />
+          </IconButton>
+        </form>
+      ) : null}
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
           event.target.value = "";
           void uploadFiles(files);
         }}
@@ -260,6 +338,12 @@ export function NoteAttachmentsSection({
           })}
         </ul>
       )}
+
+      {uploadProgress ? (
+        <p className="px-1 text-2xs text-subtle-foreground" role="status" aria-live="polite">
+          Загружается: {uploadProgress.done} из {uploadProgress.total}
+        </p>
+      ) : null}
 
       <ConfirmDialog
         open={pendingDelete !== null}

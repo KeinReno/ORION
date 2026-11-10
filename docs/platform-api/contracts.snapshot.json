@@ -21,7 +21,7 @@
     ]
   },
   "plugin": {
-    "version": "1.4.0",
+    "version": "1.5.0",
     "surface": [
       "host:ENTITY_TYPE_LABEL",
       "host:FilterChip",
@@ -132,6 +132,7 @@
       "slot:projects.tabs",
       "slot:shell.context.resources",
       "slot:shell.sidebar.widgets",
+      "slot:tasks.context.actions",
       "slot:tasks.detail.tabs",
       "slot:tasks.planning",
       "slot:tasks.recurrence",

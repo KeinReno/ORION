@@ -1,4 +1,5 @@
 import { APP_UPDATE_DEFAULT_REPO } from "@orion/shared-types";
+import { parseRustTag } from "./release-feed";
 
 /** Установщик этой редакции. Обычный `ORION_*setup.exe` сюда не подходит. */
 export const RUST_INSTALLER_NAME = /^ORION-Rust_.+-setup\.exe$/i;
@@ -10,6 +11,7 @@ export interface RustReleaseCheck {
   /** Репозиторий, из которого ORION Rust имеет право брать релизы. Пусто — канала нет. */
   channel?: string | null;
   assetName?: string | null;
+  tag?: string | null;
   notes?: string | null;
   sha256?: string | null;
 }
@@ -21,12 +23,12 @@ export interface RustReleaseCheck {
  */
 export function rustReleaseRefusal(input: RustReleaseCheck): string | null {
   if (input.edition !== "rust") return null;
-  if (input.repo.trim().toLowerCase() === APP_UPDATE_DEFAULT_REPO.toLowerCase()) {
-    return "ORION Rust не устанавливает обновления обычного ORION. Канал классической беты для этой сборки выключен.";
+  const channel = input.channel?.trim() || APP_UPDATE_DEFAULT_REPO;
+  if (input.repo.trim() !== channel) {
+    return "Запрошенный репозиторий находится вне разрешённого канала ORION Rust. Релиз не будет скачан и установлен.";
   }
-  const channel = input.channel?.trim() ?? "";
-  if (channel === "" || input.repo.trim() !== channel) {
-    return "Для ORION Rust не задан свой канал обновлений. Чужой релиз не будет скачан и не будет установлен.";
+  if (!input.tag || !parseRustTag(input.tag)) {
+    return "Метка релиза не принадлежит каналу ORION Rust. Релиз классической версии отклонён.";
   }
   if (!input.assetName || !RUST_INSTALLER_NAME.test(input.assetName)) {
     return "Установщик не принадлежит ORION Rust. Файл отклонён.";

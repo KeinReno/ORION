@@ -1,6 +1,6 @@
 "use client";
 
-import { useCaptureInboxItem, useCreateAndLink, usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences } from "@orion/core-react";
+import { useCaptureInboxItem, useCreateAndLink, usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences, useUploadNoteAttachments } from "@orion/core-react";
 import { noteNumberLabel, type Note, type Project } from "@orion/shared-types";
 import {
   AutosaveStatus,
@@ -173,6 +173,7 @@ export function NoteEditor({
   const editorApi = useRef<MarkdownEditorApi | null>(null);
   const inspectorButtonId = useId();
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [filesOverEditor, setFilesOverEditor] = useState(false);
   const [editorRef, editorWidth] = useResizeWidth<HTMLFormElement>();
   const wideInspector = editorWidth >= 1000;
   // A phone-width editor has no room for the word count beside the mode switch and the tools.
@@ -199,6 +200,7 @@ export function NoteEditor({
   const convertToTaskCombo = useShortcutCombo("notes.convert-to-task");
   const createAndLink = useCreateAndLink(workspaceId);
   const captureInbox = useCaptureInboxItem(workspaceId);
+  const uploadAttachments = useUploadNoteAttachments(workspaceId, note?.id);
   const showContextMenu = useContextMenuApi();
 
   async function convertSelectionToTask(selectedText: string): Promise<void> {
@@ -221,6 +223,15 @@ export function NoteEditor({
     } catch (error) {
       toast({ title: "Не удалось создать задачу", description: describeError(error), tone: "danger" });
     }
+  }
+
+  function appendMaterialLink(markdown: string): void {
+    const next = `${body.trimEnd()}${body.trim() ? "\n\n" : ""}${markdown}`;
+    if (next.length > 20_000) {
+      toast({ title: "Ссылка не добавлена: заметка достигла предельной длины", tone: "danger" });
+      return;
+    }
+    setBody(next);
   }
 
   function onSelectionContextMenu(event: MouseEvent): void {
@@ -726,6 +737,51 @@ export function NoteEditor({
               <div
                 className="min-w-0 flex-1 space-y-2 rounded-xl border border-border-strong bg-card/60 px-3 py-2 transition-colors focus-within:border-accent/70 focus-within:ring-2 focus-within:ring-accent/25"
                 onContextMenu={onSelectionContextMenu}
+                onDragOver={(event) => {
+                  const hasUrl = Array.from(event.dataTransfer.types).includes("text/uri-list");
+                  if (event.dataTransfer.files.length || hasUrl) {
+                    event.preventDefault();
+                    setFilesOverEditor(event.dataTransfer.files.length > 0);
+                  }
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFilesOverEditor(false);
+                }}
+                onDrop={(event) => {
+                  const files = Array.from(event.dataTransfer.files);
+                  if (!files.length) {
+                    const droppedUrl = (event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain")).trim().split(/\r?\n/).find((line) => line && !line.startsWith("#"));
+                    if (!droppedUrl) return;
+                    event.preventDefault();
+                    try {
+                      const url = new URL(droppedUrl);
+                      if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("protocol");
+                      const label = url.hostname.replace(/^www\./, "");
+                      appendMaterialLink(`[${label}](${url.toString()})`);
+                    } catch {
+                      toast({ title: "Можно добавить только веб-ссылки http или https", tone: "danger" });
+                    }
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setFilesOverEditor(false);
+                  if (!note || !isEnabled("documents")) {
+                    toast({ title: note ? "Включите модуль «Документы»" : "Сначала сохраните заметку", tone: "default" });
+                    return;
+                  }
+                  void (async () => {
+                    let uploadedCount = 0;
+                    try {
+                      for (let offset = 0; offset < files.length; offset += 20) {
+                        uploadedCount += (await uploadAttachments.mutateAsync(files.slice(offset, offset + 20))).length;
+                      }
+                      toast({ title: `Прикреплено файлов: ${uploadedCount}`, tone: "success" });
+                    } catch (error) {
+                      toast({ title: uploadedCount ? `Прикреплено ${uploadedCount} из ${files.length}` : "Не удалось прикрепить файлы", description: describeError(error), tone: "danger" });
+                    }
+                  })();
+                }}
               >
                 <MarkdownEditor
                   apiRef={editorApi}
@@ -739,6 +795,11 @@ export function NoteEditor({
                   convertToTaskCombo={convertToTaskCombo}
                   onConvertToTask={(text) => void convertSelectionToTask(text)}
                 />
+                {filesOverEditor ? (
+                  <div className="pointer-events-none rounded-md border border-dashed border-accent/60 bg-accent/[0.06] px-3 py-2 text-center text-xs text-foreground" aria-live="polite">
+                    Отпустите файлы, чтобы прикрепить к заметке
+                  </div>
+                ) : null}
               </div>
               {!narrow && !compact && !toolbarPrefs.hidden && toolbarPrefs.side === "right" ? (
                 <div className="sticky top-2 shrink-0 self-start rounded-xl border border-border-strong bg-card/60 py-1">
@@ -832,7 +893,11 @@ export function NoteEditor({
 
           {note ? (
             <div className="border-t border-border pt-3">
-              <NoteAttachmentsSection workspaceId={workspaceId} noteId={note.id} />
+              <NoteAttachmentsSection
+                workspaceId={workspaceId}
+                noteId={note.id}
+                onAddLink={appendMaterialLink}
+              />
             </div>
           ) : null}
 

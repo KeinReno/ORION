@@ -1,26 +1,27 @@
 "use client";
 
-import { useCreateEvent, useDocuments, useNotes, useRenameOrMoveDocument, useUploadDocuments } from "@orion/core-react";
+import { useCreateEvent, useDocuments, useKnowledgeItems, useNotes, useRenameOrMoveDocument, useUploadDocuments } from "@orion/core-react";
 import type { ProjectActivity, ProjectDetail, ViewRef } from "@orion/shared-types";
 import { Button, DropdownMenu, EmptyState, Input, Modal, PanelSection, SegmentedControl, Skeleton, cx, useToast } from "@orion/ui";
-import { CalendarDays, FileText, FolderOpen, Package, Plus, Receipt } from "lucide-react";
+import { BookOpen, CalendarDays, FileText, FolderOpen, Package, Plus, Receipt } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FilterChip } from "../../components/filter-chip";
 import { ObjectOpenMenu } from "../../components/object-open-menu";
 import { describeError } from "../../lib/error-message";
 import { fromDatetimeLocal, relativeTime, toDatetimeLocal } from "../../lib/format";
-import { openEntity, openPanel } from "../../lib/panel-bus";
+import { focusKnowledge, openEntity, openPanel } from "../../lib/panel-bus";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 
-type Kind = "note" | "file" | "event" | "operation" | "stock";
+type Kind = "note" | "file" | "knowledge" | "event" | "operation" | "stock";
 type Layout = "feed" | "columns";
 const LAYOUT_KEY = "orion.project-materials-layout";
 
-const KIND_LABEL: Record<Kind, string> = { note: "Заметка", file: "Файл", event: "Событие", operation: "Операция", stock: "Склад" };
-const KIND_PLURAL: Record<Kind, string> = { note: "Заметки", file: "Файлы", event: "События", operation: "Операции", stock: "Склад" };
+const KIND_LABEL: Record<Kind, string> = { note: "Заметка", file: "Файл", knowledge: "Материал базы знаний", event: "Событие", operation: "Операция", stock: "Склад" };
+const KIND_PLURAL: Record<Kind, string> = { note: "Заметки", file: "Файлы", knowledge: "База знаний", event: "События", operation: "Операции", stock: "Склад" };
 const KIND_ICON: Record<Kind, React.ComponentType<{ className?: string }>> = {
   note: FileText,
   file: FolderOpen,
+  knowledge: BookOpen,
   event: CalendarDays,
   operation: Receipt,
   stock: Package
@@ -70,6 +71,8 @@ export function ProjectMaterials({
   const { toast } = useToast();
   const { data: notes, isLoading: notesLoading } = useNotes(notesOn ? workspaceId : undefined);
   const { data: documents, isLoading: documentsLoading } = useDocuments(documentsOn ? workspaceId : undefined);
+  const knowledgeOn = isEnabled("knowledge");
+  const { data: knowledge, isLoading: knowledgeLoading } = useKnowledgeItems(knowledgeOn ? workspaceId : undefined);
   const upload = useUploadDocuments(workspaceId);
   const attach = useRenameOrMoveDocument(workspaceId);
   const createEvent = useCreateEvent(eventsOn ? workspaceId : undefined);
@@ -104,6 +107,10 @@ export function ProjectMaterials({
       if (doc.projectId !== project.id || doc.kind !== "file" || doc.deletedAt) continue;
       out.push({ key: `file:${doc.id}`, kind: "file", title: doc.name, at: doc.updatedAt, open: () => openEntity("document", doc.id), view: { object: { workspaceId: workspaceId ?? "", entityType: "document", entityId: doc.id }, viewId: "detail" } });
     }
+    for (const item of knowledge ?? []) {
+      if (item.projectId !== project.id || item.status === "archived") continue;
+      out.push({ key: `knowledge:${item.id}`, kind: "knowledge", title: item.title, at: item.updatedAt, open: () => focusKnowledge(item.id) });
+    }
     for (const item of project.activity) {
       const kind = activityKind(item.type);
       if (!kind) continue;
@@ -119,16 +126,16 @@ export function ProjectMaterials({
       });
     }
     return out.sort((a, b) => b.at.localeCompare(a.at));
-  }, [notes, documents, project.activity, project.id, workspaceId]);
+  }, [notes, documents, knowledge, project.activity, project.id, workspaceId]);
 
   const counts = useMemo(() => {
-    const c: Record<Kind, number> = { note: 0, file: 0, event: 0, operation: 0, stock: 0 };
+    const c: Record<Kind, number> = { note: 0, file: 0, knowledge: 0, event: 0, operation: 0, stock: 0 };
     for (const item of items) c[item.kind] += 1;
     return c;
   }, [items]);
   const kinds = (Object.keys(counts) as Kind[]).filter((kind) => counts[kind] > 0);
   const visible = filter === "all" ? items : items.filter((item) => item.kind === filter);
-  const loading = (notesOn && notesLoading) || (documentsOn && documentsLoading);
+  const loading = (notesOn && notesLoading) || (documentsOn && documentsLoading) || (knowledgeOn && knowledgeLoading);
 
   async function onFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;

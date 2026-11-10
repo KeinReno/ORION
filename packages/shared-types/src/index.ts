@@ -1,6 +1,7 @@
 export * from "./auth";
 export * from "./agent";
 export * from "./agent-hub";
+export * from "./agent-hub-assignment";
 export * from "./agent-hub-lifecycle";
 export * from "./agent-gateway";
 export * from "./agent-tools";
@@ -37,6 +38,7 @@ export * from "./sync";
 export * from "./settings";
 export * from "./project";
 export * from "./project-update";
+export * from "./project-logbook";
 export * from "./project-capture";
 export * from "./anchored-capture";
 export * from "./goal";

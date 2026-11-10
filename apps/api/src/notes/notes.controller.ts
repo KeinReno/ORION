@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,12 +14,17 @@ import {
 import { FilesInterceptor } from "@nestjs/platform-express";
 import {
   attachNoteDocumentInputSchema,
+  createNoteStackInputSchema,
+  moveNotesToStackInputSchema,
   createNoteInputSchema,
   noteViewSchema,
   renameNoteTagInputSchema,
   restoreNoteRevisionInputSchema,
+  reorderNoteStackInputSchema,
   updateNoteInputSchema,
   type AttachNoteDocumentInput,
+  type CreateNoteStackInput,
+  type MoveNotesToStackInput,
   type CreateNoteInput,
   type Note,
   type NoteAttachment,
@@ -27,6 +33,7 @@ import {
   type NoteRevisionSummary,
   type NoteTitleRef,
   type NoteView,
+  type ReorderNoteStackInput,
   type RenameNoteTagInput,
   type RestoreNoteRevisionInput,
   type UpdateNoteInput
@@ -47,6 +54,45 @@ export class NotesController {
     private readonly notes: NotesService,
     private readonly attachments: NoteAttachmentsService
   ) {}
+
+  @Post("stacks")
+  createStack(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(createNoteStackInputSchema)) body: CreateNoteStackInput
+  ) {
+    return this.notes.createStack(user.userId, workspaceId, body.title, body.noteIds);
+  }
+
+  @Patch("stacks/:stackId/order")
+  reorderStack(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("stackId") stackId: string,
+    @Body(new ZodValidationPipe(reorderNoteStackInputSchema)) body: ReorderNoteStackInput
+  ): Promise<void> {
+    return this.notes.reorderStack(user.userId, workspaceId, stackId, body.noteIds);
+  }
+
+  @Post("stacks/:stackId/members")
+  moveNotesToStack(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("stackId") stackId: string,
+    @Body(new ZodValidationPipe(moveNotesToStackInputSchema)) body: MoveNotesToStackInput
+  ): Promise<void> {
+    return this.notes.moveNotesToStack(user.userId, workspaceId, stackId, body.noteIds);
+  }
+
+  /** Removes only stack membership and metadata; the notes themselves remain. */
+  @Delete("stacks/:stackId")
+  removeStack(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("stackId") stackId: string
+  ): Promise<void> {
+    return this.notes.removeStack(user.userId, workspaceId, stackId);
+  }
 
   @Get()
   list(
@@ -125,9 +171,27 @@ export class NotesController {
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
     @Param("noteId") noteId: string,
-    @UploadedFiles() files: UploadedDocumentFile[]
+    @UploadedFiles() files: UploadedDocumentFile[],
+    @Body("relativePaths") relativePaths?: string
   ): Promise<NoteAttachment[]> {
-    const decoded = (files ?? []).map((f) => ({ ...f, originalname: fixMultipartFilename(f.originalname) }));
+    let paths: unknown = undefined;
+    if (relativePaths) {
+      try {
+        paths = JSON.parse(relativePaths) as unknown;
+      } catch {
+        throw new BadRequestException("Не удалось прочитать структуру папки");
+      }
+      if (!Array.isArray(paths) || paths.length !== (files ?? []).length || paths.some((path) =>
+        typeof path !== "string" || path.length > 2048 || path.split(/[\\/]/).filter(Boolean).length > 32
+      )) {
+        throw new BadRequestException("Некорректная структура папки");
+      }
+    }
+    const decoded = (files ?? []).map((f, index) => ({
+      ...f,
+      originalname: fixMultipartFilename(f.originalname),
+      relativePath: Array.isArray(paths) ? paths[index] as string : f.originalname
+    }));
     return this.attachments.upload(user.userId, workspaceId, noteId, decoded);
   }
 

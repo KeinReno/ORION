@@ -20,6 +20,13 @@ describe("dockLayoutStorageKey (pure)", () => {
     expect(dockLayoutStorageKey("user-1", "ws-1", "popout")).toBe("orion.dockLayout:popout:user-1:ws-1");
   });
 
+  it("keeps each detached sidebar workspace separate from the main and sibling layouts", () => {
+    const main = dockLayoutStorageKey("user-1", "ws-1", "main");
+    const second = dockLayoutStorageKey("user-1", "ws-1", "nav-side-2");
+    const third = dockLayoutStorageKey("user-1", "ws-1", "nav-side-3");
+    expect(new Set([main, second, third]).size).toBe(3);
+  });
+
   it("different users produce different keys for the same workspace", () => {
     expect(dockLayoutStorageKey("user-1", "ws-1")).not.toBe(dockLayoutStorageKey("user-2", "ws-1"));
   });

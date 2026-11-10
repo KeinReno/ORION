@@ -22,7 +22,7 @@ Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneR
 - Точки входа: API `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/projects` (за `@RequireModule("projects")`); панель веба `projects`; код `apps/api/src/projects/`.
 - Права: `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete`.
 - Модуль владеет: Проекты и их собственные поля (имя, статус, сроки, бюджет, ставка).
-- Соседи: жёсткие: —; мягкие: `tasks`, `notes`, `calendar`, `documents`, `time`, `finance`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
-- Расширения: плагины: `projects-planning`, `projects-ideas`, `projects-problems`, `projects-goals`.
+- Соседи: жёсткие: —; мягкие: `tasks`, `notes`, `calendar`, `documents`, `knowledge`, `time`, `finance`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
+- Расширения: плагины: `projects-planning`, `projects-ideas`, `projects-problems`, `projects-logbook`, `projects-goals`.
 - Выключение модуля не удаляет данные; новые таблицы — только с ENABLE + FORCE RLS и записью в реестре снапшота.
 <!-- generated:manifest:end -->

@@ -33,6 +33,24 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
     "reason": "Статус присутствия runtime недостоверен после восстановления из снапшота; не переносить как живую сессию."
   },
   {
+    "model": "AgentHubAgentProfile",
+    "snapshotKey": "agentHubAgentProfiles",
+    "policy": "included",
+    "reason": "Профиль — стабильная пользовательская identity; требуется сохранить назначения при переносе."
+  },
+  {
+    "model": "AgentHubAgentCredential",
+    "snapshotKey": null,
+    "policy": "secret-excluded",
+    "reason": "Связь с credential предоставляет полномочия и не должна переноситься в восстановленную среду."
+  },
+  {
+    "model": "AgentHubTaskAssignment",
+    "snapshotKey": "agentHubTaskAssignments",
+    "policy": "included",
+    "reason": "Назначение является пользовательским состоянием и должно сохраняться даже при потере credential."
+  },
+  {
     "model": "ChatArchiveConversation",
     "snapshotKey": null,
     "policy": "derived",
@@ -80,6 +98,8 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
 export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prisma.TransactionClient) => unknown }> = [
   { key: "agentHubExecutions", delegate: (tx) => tx.agentHubExecution },
   { key: "agentHubEvents", delegate: (tx) => tx.agentHubEvent },
+  { key: "agentHubAgentProfiles", delegate: (tx) => tx.agentHubAgentProfile },
+  { key: "agentHubTaskAssignments", delegate: (tx) => tx.agentHubTaskAssignment },
   { key: "chatArchiveAutoSources", delegate: (tx) => tx.chatArchiveAutoSource },
   { key: "petCarePets", delegate: (tx) => tx.petCarePet },
   { key: "petCareEntries", delegate: (tx) => tx.petCareEntry },
@@ -103,6 +123,21 @@ export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> =
     "syncClass": "not-synced",
     "stage": "never",
     "note": "Эфемерный lease runtime привязан к конкретному узлу и токену; не копировать между устройствами."
+  },
+  "AgentHubAgentProfile": {
+    "syncClass": "not-synced",
+    "stage": "later",
+    "note": "Профили пока принадлежат локальному источнику workspace."
+  },
+  "AgentHubAgentCredential": {
+    "syncClass": "not-synced",
+    "stage": "never",
+    "note": "Требуется явная повторная привязка credential после восстановления."
+  },
+  "AgentHubTaskAssignment": {
+    "syncClass": "not-synced",
+    "stage": "later",
+    "note": "Назначения пока принадлежат локальному источнику workspace."
   },
   "ChatArchiveConversation": {
     "syncClass": "not-synced",

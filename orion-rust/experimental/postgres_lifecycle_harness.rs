@@ -49,11 +49,29 @@ mod windows_harness {
         remove_on_drop: bool,
     }
 
+    // Windows canonicalize may return `\\?\C:\...`; bundled PostgreSQL
+    // APIs can mishandle that spelling even though CreateProcess accepts it.
+    // Match the packaged launcher by passing ordinary drive paths to initdb.
+    fn ordinary_windows_path(path: PathBuf) -> Result<PathBuf, String> {
+        let Some(text) = path.to_str() else {
+            return Err("path is not valid Unicode".into());
+        };
+        if let Some(rest) = text.strip_prefix(r"\\?\") {
+            if rest.as_bytes().get(1) == Some(&b':') {
+                return Ok(PathBuf::from(rest));
+            }
+            return Err("only ordinary drive paths are allowed in this disposable harness".into());
+        }
+        Ok(path)
+    }
+
     impl DisposableProfile {
         fn create() -> Result<Self, String> {
             let temp = std::env::temp_dir();
-            let canonical_temp = fs::canonicalize(&temp)
-                .map_err(|error| format!("cannot canonicalize temporary directory: {error}"))?;
+            let canonical_temp =
+                ordinary_windows_path(fs::canonicalize(&temp).map_err(|error| {
+                    format!("cannot canonicalize temporary directory: {error}")
+                })?)?;
             if !canonical_temp.to_string_lossy().is_ascii() {
                 return Err("temporary directory is not ASCII; refusing initdb path".into());
             }
@@ -67,9 +85,10 @@ mod windows_harness {
                 let root = temp.join(format!("orion-rust-pg-lifecycle-{nonce}"));
                 match fs::create_dir(&root) {
                     Ok(()) => {
-                        let root = fs::canonicalize(&root).map_err(|error| {
-                            format!("cannot canonicalize disposable root: {error}")
-                        })?;
+                        let root =
+                            ordinary_windows_path(fs::canonicalize(&root).map_err(|error| {
+                                format!("cannot canonicalize disposable root: {error}")
+                            })?)?;
                         if !root.starts_with(&canonical_temp)
                             || !root.to_string_lossy().is_ascii()
                             || !root
@@ -119,8 +138,10 @@ mod windows_harness {
         }
 
         fn allow_cleanup_after_verified_shutdown(&mut self) -> Result<(), String> {
-            let canonical_root = fs::canonicalize(&self.root)
-                .map_err(|error| format!("cannot recheck profile root before cleanup: {error}"))?;
+            let canonical_root =
+                ordinary_windows_path(fs::canonicalize(&self.root).map_err(|error| {
+                    format!("cannot recheck profile root before cleanup: {error}")
+                })?)?;
             if canonical_root != self.root
                 || !canonical_root.starts_with(&self.canonical_temp)
                 || !fs::read_to_string(canonical_root.join(".orion-harness-owner"))
@@ -158,13 +179,17 @@ mod windows_harness {
             let pg_ctl = bin.join("pg_ctl.exe");
             let postgres = bin.join("postgres.exe");
             if initdb.is_file() && pg_ctl.is_file() && postgres.is_file() {
-                let bin = fs::canonicalize(bin).map_err(|error| {
+                let bin = ordinary_windows_path(fs::canonicalize(bin).map_err(|error| {
                     format!("cannot canonicalize bundled PostgreSQL bin: {error}")
-                })?;
-                let initdb = fs::canonicalize(initdb)
-                    .map_err(|error| format!("cannot canonicalize bundled initdb: {error}"))?;
-                let pg_ctl = fs::canonicalize(pg_ctl)
-                    .map_err(|error| format!("cannot canonicalize bundled pg_ctl: {error}"))?;
+                })?)?;
+                let initdb =
+                    ordinary_windows_path(fs::canonicalize(initdb).map_err(|error| {
+                        format!("cannot canonicalize bundled initdb: {error}")
+                    })?)?;
+                let pg_ctl =
+                    ordinary_windows_path(fs::canonicalize(pg_ctl).map_err(|error| {
+                        format!("cannot canonicalize bundled pg_ctl: {error}")
+                    })?)?;
                 if !bin.to_string_lossy().is_ascii()
                     || !initdb.starts_with(&bin)
                     || !pg_ctl.starts_with(&bin)
@@ -371,6 +396,7 @@ mod windows_harness {
         start_attempted: bool,
         postgres_pid: Option<u32>,
         graceful_stop_ok: bool,
+        force_stop_failure: bool,
     }
 
     fn exercise(
@@ -470,10 +496,19 @@ mod windows_harness {
             return Ok(());
         }
 
+        let stop_cluster = if state.force_stop_failure {
+            let missing = profile.root.join("intentionally-missing-cluster");
+            if missing.exists() {
+                return Err("fallback test stop target unexpectedly exists".into());
+            }
+            missing
+        } else {
+            profile.cluster()
+        };
         let stop_args = vec![
             "stop".into(),
             "-D".into(),
-            profile.cluster().into_os_string(),
+            stop_cluster.into_os_string(),
             "-m".into(),
             "fast".into(),
             "-w".into(),
@@ -502,7 +537,7 @@ mod windows_harness {
         Ok(())
     }
 
-    fn run_experiment() -> Result<String, String> {
+    fn run_experiment(force_stop_failure: bool) -> Result<String, String> {
         if std::env::var("ORION_RUN_POSTGRES_LIFECYCLE_HARNESS").as_deref() != Ok(OPT_IN) {
             return Err(format!(
                 "explicit opt-in required: set ORION_RUN_POSTGRES_LIFECYCLE_HARNESS={OPT_IN}"
@@ -517,6 +552,7 @@ mod windows_harness {
             start_attempted: false,
             postgres_pid: None,
             graceful_stop_ok: false,
+            force_stop_failure,
         };
 
         // Always attempt pg_ctl stop before the Job Object is terminated.
@@ -553,11 +589,17 @@ mod windows_harness {
         if let Err(error) = experiment_result {
             failures.push(format!("exercise failed: {error}"));
         }
-        if let Err(error) = stop_result {
-            failures.push(format!("graceful pg_ctl stop failed: {error}"));
-        }
-        if !state.graceful_stop_ok {
-            failures.push("pg_ctl stop was not verified before Job shutdown".into());
+        if force_stop_failure {
+            if stop_result.is_ok() || state.graceful_stop_ok {
+                failures.push("simulated pg_ctl stop failure did not fail closed".into());
+            }
+        } else {
+            if let Err(error) = stop_result {
+                failures.push(format!("graceful pg_ctl stop failed: {error}"));
+            }
+            if !state.graceful_stop_ok {
+                failures.push("pg_ctl stop was not verified before Job shutdown".into());
+            }
         }
         if let Err(error) = job_result {
             failures.push(format!("bounded Job shutdown failed: {error}"));
@@ -577,18 +619,32 @@ mod windows_harness {
             return Err(format!("{}; {cleanup_note}", failures.join("; ")));
         }
 
-        let report = format!(
-            "bundled initdb, pg_ctl and PostgreSQL completed in disposable profile; pg_ctl and PostgreSQL were observed in the supervisor Job; pg_ctl stop completed before bounded Job shutdown; PID {} stopped; ephemeral loopback port {} verified",
-            state.postgres_pid.unwrap_or_default(),
-            state.port
-        );
+        let report = if force_stop_failure {
+            format!(
+                "simulated pg_ctl stop failure used an absent cluster path inside disposable profile; bounded Job shutdown stopped PostgreSQL PID {}; ephemeral loopback port {} verified",
+                state.postgres_pid.unwrap_or_default(),
+                state.port
+            )
+        } else {
+            format!(
+                "bundled initdb, pg_ctl and PostgreSQL completed in disposable profile; pg_ctl and PostgreSQL were observed in the supervisor Job; pg_ctl stop completed before bounded Job shutdown; PID {} stopped; ephemeral loopback port {} verified",
+                state.postgres_pid.unwrap_or_default(),
+                state.port
+            )
+        };
         drop(profile);
         Ok(report)
     }
 
     #[test]
     fn bundled_postgres_lifecycle_is_contained_and_stops_gracefully() {
-        let result = run_experiment();
+        let result = run_experiment(false);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+
+    #[test]
+    fn failed_pg_ctl_stop_falls_back_to_bounded_job_shutdown() {
+        let result = run_experiment(true);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 }

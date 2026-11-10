@@ -1,6 +1,6 @@
 "use client";
 
-import { useCreateTask, useDeleteTask, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
+import { useCreateTask, useDeleteTask, useSession, useUpdateTask, useWorkspaceMembers } from "@orion/core-react";
 import type { Milestone, Project, Task, TaskStatus, UpdateTaskInput } from "@orion/shared-types";
 import { Button, ConfirmDialog, EmptyState, PanelSection, SegmentedControl, Skeleton, cx, useResizeWidth, useToast } from "@orion/ui";
 import { ListTodo, Milestone as MilestoneIcon, Plus } from "lucide-react";
@@ -17,6 +17,8 @@ import { DetailSlot, TaskDetail } from "../tasks/task-detail";
 import { TaskMatrix } from "./task-matrix";
 import { TaskRow } from "./task-row";
 import { TaskDependencyGraph, TaskTree } from "./task-tree";
+import { taskAssignmentOptions } from "../../lib/task-assignment-options";
+import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 type TasksLayout = "matrix" | "board" | "list" | "tree" | "graph";
 const LAYOUT_KEY = "orion.project-tasks-layout";
@@ -72,7 +74,23 @@ export function ProjectTasks({
   const deleteTask = useDeleteTask(workspaceId);
   const { isEnabled: isPluginEnabled } = useEnabledPlugins();
   const teamOn = isPluginEnabled("team");
-  const { data: members } = useWorkspaceMembers(teamOn ? workspaceId : undefined);
+  const { data: members, isLoading: membersLoading, isError: membersError } = useWorkspaceMembers(teamOn ? workspaceId : undefined);
+  const { user: sessionUser } = useSession();
+  const { workspace } = useActiveWorkspace();
+  const myMemberId = useMemo(
+    () => (members ?? []).find((member) => member.userId === sessionUser?.id)?.id ?? null,
+    [members, sessionUser?.id]
+  );
+  const canAssignOthers = Boolean(workspace && workspace.id === workspaceId && (workspace.role === "owner" || workspace.role === "lead"));
+  const assignmentAvailable = teamOn && Boolean(members) && !membersLoading && !membersError;
+  function assignmentMembersFor(task: Task): { id: string; name: string }[] {
+    return taskAssignmentOptions(members ?? [], canAssignOthers, myMemberId, task.assigneeId);
+  }
+  async function assignTask(task: Task, assigneeId: string | null): Promise<void> {
+    await updateTask.mutateAsync({ taskId: task.id, input: { assigneeId } });
+    onChanged();
+    toast({ title: assigneeId ? "Исполнитель задачи изменён" : "Исполнитель снят", tone: "success" });
+  }
 
   const [layout, setLayout] = useState<TasksLayout>("matrix");
   const [showClosed, setShowClosed] = useState(false);
@@ -245,6 +263,8 @@ export function ProjectTasks({
 
           {layout === "matrix" ? (
             <TaskMatrix
+              workspaceId={workspaceId}
+              canManageAgentAssignments={canAssignOthers}
               tasks={tasks}
               milestones={milestones}
               includeClosed={showClosed}
@@ -255,6 +275,8 @@ export function ProjectTasks({
             />
           ) : layout === "tree" ? (
             <TaskTree
+              workspaceId={workspaceId}
+              canManageAgentAssignments={canAssignOthers}
               tasks={tasks}
               showClosed={showClosed}
               openTaskId={openTaskId}
@@ -275,6 +297,8 @@ export function ProjectTasks({
             />
           ) : layout === "board" ? (
             <ProjectBoard
+              workspaceId={workspaceId}
+              canManageAgentAssignments={canAssignOthers}
               tasks={tasks}
               showClosed={showClosed}
               openTaskId={openTaskId}
@@ -282,9 +306,23 @@ export function ProjectTasks({
               onToggle={onToggle}
               onStatus={setStatus}
               onDelete={setPendingDelete}
+              assignmentAvailable={assignmentAvailable}
+              assignmentMembersFor={assignmentMembersFor}
+              onAssign={teamOn ? assignTask : undefined}
             />
           ) : (
-            <ProjectList tasks={tasks} milestones={milestones} showClosed={showClosed} onToggle={onToggle} onOpen={(task) => onOpenTask(task.id)} />
+            <ProjectList
+              workspaceId={workspaceId}
+              canManageAgentAssignments={canAssignOthers}
+              tasks={tasks}
+              milestones={milestones}
+              showClosed={showClosed}
+              onToggle={onToggle}
+              onOpen={(task) => onOpenTask(task.id)}
+              assignmentAvailable={assignmentAvailable}
+              assignmentMembersFor={assignmentMembersFor}
+              onAssign={teamOn ? assignTask : undefined}
+            />
           )}
         </div>
       ) : null}
@@ -332,14 +370,21 @@ export function ProjectTasks({
 // ---------------------------------------------------------------------------
 
 function ProjectBoard({
+  workspaceId,
+  canManageAgentAssignments,
   tasks,
   showClosed,
   openTaskId,
   onOpen,
   onToggle,
   onStatus,
-  onDelete
+  onDelete,
+  assignmentAvailable,
+  assignmentMembersFor,
+  onAssign
 }: {
+  workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   tasks: Task[];
   showClosed: boolean;
   openTaskId: string | null;
@@ -347,6 +392,9 @@ function ProjectBoard({
   onToggle: (task: Task) => void;
   onStatus: (task: Task, status: TaskStatus) => void;
   onDelete: (task: Task) => void;
+  assignmentAvailable: boolean;
+  assignmentMembersFor: (task: Task) => { id: string; name: string }[];
+  onAssign?: (task: Task, assigneeId: string | null) => Promise<void>;
 }): React.ReactElement {
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
   const [expandedDone, setExpandedDone] = useState(false);
@@ -403,6 +451,8 @@ function ProjectBoard({
                   <TaskCard
                     key={task.id}
                     task={task}
+                    workspaceId={workspaceId}
+                    canManageAgentAssignments={canManageAgentAssignments}
                     draggable
                     focused={task.id === openTaskId}
                     subtasks={progress.get(task.id)}
@@ -410,6 +460,9 @@ function ProjectBoard({
                     onToggleDone={() => onToggle(task)}
                     onMove={(next) => onStatus(task, next)}
                     onDelete={() => onDelete(task)}
+                    assignmentMembers={assignmentMembersFor(task)}
+                    assignmentAvailable={assignmentAvailable}
+                    onAssign={onAssign ? (assigneeId) => onAssign(task, assigneeId) : undefined}
                     hideProject
                   />
                 ))
@@ -436,17 +489,27 @@ function ProjectBoard({
 // ---------------------------------------------------------------------------
 
 function ProjectList({
+  workspaceId,
+  canManageAgentAssignments,
   tasks,
   milestones,
   showClosed,
   onToggle,
-  onOpen
+  onOpen,
+  assignmentAvailable,
+  assignmentMembersFor,
+  onAssign
 }: {
+  workspaceId: string | undefined;
+  canManageAgentAssignments: boolean;
   tasks: Task[];
   milestones: Milestone[];
   showClosed: boolean;
   onToggle: (task: Task) => void;
   onOpen: (task: Task) => void;
+  assignmentAvailable: boolean;
+  assignmentMembersFor: (task: Task) => { id: string; name: string }[];
+  onAssign?: (task: Task, assigneeId: string | null) => Promise<void>;
 }): React.ReactElement {
   const groups = useMemo(() => groupTasksByMilestone(tasks, milestones, showClosed), [tasks, milestones, showClosed]);
   const now = new Date();
@@ -473,7 +536,18 @@ function ProjectList({
             ) : (
               <ul className="flex flex-col">
                 {group.tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} now={now} onToggle={() => onToggle(task)} onOpen={() => onOpen(task)} />
+                  <TaskRow
+                    key={task.id}
+                    workspaceId={workspaceId}
+                    canManageAgentAssignments={canManageAgentAssignments}
+                    task={task}
+                    now={now}
+                    onToggle={() => onToggle(task)}
+                    onOpen={() => onOpen(task)}
+                    assignmentMembers={assignmentMembersFor(task)}
+                    assignmentAvailable={assignmentAvailable}
+                    onAssign={onAssign ? (assigneeId) => onAssign(task, assigneeId) : undefined}
+                  />
                 ))}
               </ul>
             )}

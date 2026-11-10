@@ -1,8 +1,8 @@
 import type { Goal, GoalMilestone, Task } from "@orion/shared-types";
 import { describe, expect, it } from "vitest";
 import {
-  CONSTELLATION_H,
-  CONSTELLATION_W,
+  SKY_VIEWPORT_H,
+  SKY_VIEWPORT_W,
   buildConstellations,
   lensVisible,
   neighbour,
@@ -87,18 +87,23 @@ describe("buildConstellations", () => {
     expect(a.links.find((l) => l.to === "a:2")?.lit).toBe(false);
   });
 
-  it("keeps every star inside the canvas", () => {
+  it("keeps sparse layouts composed and grows the world for dense trees", () => {
     const goals = [
       goal("root", { plans: [plan("1", 10), plan("2", 90), plan("3", 0), plan("4", null)] }),
       goal("s1", { parentId: "root", plans: [plan("5", 30)] }),
       goal("s2", { parentId: "s1", plans: [plan("6", 100), plan("7", 20)] })
     ];
     for (const star of buildConstellations(goals, NOW)[0]!.stars) {
-      expect(star.x).toBeGreaterThan(0);
-      expect(star.x).toBeLessThan(CONSTELLATION_W);
-      expect(star.y).toBeGreaterThan(0);
-      expect(star.y).toBeLessThan(CONSTELLATION_H);
+      expect(Number.isFinite(star.x)).toBe(true);
+      expect(Number.isFinite(star.y)).toBe(true);
     }
+    const many = Array.from({ length: 100 }, (_, index) => goal(`child-${index}`, { parentId: "root" }));
+    const dense = buildConstellations([goal("root"), ...many], NOW)[0]!;
+    const leaves = dense.stars.filter((star) => star.parentId === "root").sort((a, b) => a.x - b.x);
+    expect(leaves).toHaveLength(100);
+    expect(leaves[99]!.x - leaves[0]!.x).toBeGreaterThan(SKY_VIEWPORT_W);
+    expect(Math.min(...leaves.map((star) => star.y))).toBeGreaterThan(0);
+    expect(SKY_VIEWPORT_H).toBeGreaterThan(0);
   });
 
   it("is deterministic", () => {

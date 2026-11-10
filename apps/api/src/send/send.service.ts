@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import type { SendCopyInput, SendDocumentsInput, SendEnableInput, SendPairInput, SendPathsInput, SendStaged, SendTransfer } from "@orion/shared-types";
 import { safeRelativePath } from "@orion/shared-types";
-import { DocumentsService } from "../documents/documents.service";
+import { DocumentContentReader } from "../documents/public/document-content-reader";
 import { SendLink } from "./send-link";
 
 /** Петля Nest вокруг узла передачи. По умолчанию слушатель выключен и сеть не открыта. */
@@ -10,7 +10,7 @@ import { SendLink } from "./send-link";
 export class SendService implements OnModuleInit, OnModuleDestroy {
   readonly link = new SendLink({ advertise: process.env.NODE_ENV !== "test" });
 
-  constructor(private readonly documents: DocumentsService) {}
+  constructor(private readonly documents: DocumentContentReader) {}
 
   async onModuleInit(): Promise<void> {
     if (this.link.status().enabled) await this.link.enable({ enabled: true });

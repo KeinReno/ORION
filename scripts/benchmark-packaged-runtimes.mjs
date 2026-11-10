@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Explicit, isolated cold-start measurement for two packaged ORION runtimes.
- * Windows only: the child is created through the native Habitat Job Object host.
+ * Windows only: the child is created through the dedicated benchmark Job host.
  * Usage: node scripts/benchmark-packaged-runtimes.mjs --classic <absolute-runtime-dir> --rust <absolute-runtime-dir>
- * Output contains only labels, elapsed milliseconds, and fixed error codes.
+ * Output contains aggregate measurements, process counts, and fixed error codes.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, lstat, realpath, readdir, rm, stat } from 'node:fs/promises';
@@ -14,10 +14,9 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const defaultHost = join(repoRoot, 'packages', 'habitat-windows-host', 'out', 'Kaiden.Habitat.WindowsHost.exe');
+const defaultHost = join(repoRoot, 'scripts', 'benchmark-job-host', 'bin', 'Release', 'net9.0', 'BenchmarkJobHost.exe');
 const SYSTEM_PORTS = new Set([4000, 5433, 55432, 55442]);
 const STARTUP_TIMEOUT_MS = 15 * 60 * 1000;
-const HEALTH_INTERVAL_MS = 250;
 
 export class BenchmarkError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -146,7 +145,7 @@ function powershellPath(env) {
 function decodePowerShell(value) {
   const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value ?? '');
   if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) return buffer.toString('utf16le').replace(/^\uFEFF/, '');
-  if (buffer.includes(0)) return buffer.toString('utf16le').replace(/\u0000/g, '');
+  if (buffer.includes(0)) return buffer.toString('utf16le').replaceAll(String.fromCharCode(0), '');
   return buffer.toString('utf8');
 }
 
@@ -199,23 +198,6 @@ async function setAndVerifyPrivateAcl(directory, descendants, env) {
   if (result.status !== 0) throw new BenchmarkError('private_profile_acl_failed');
 }
 
-export function listenerOwnershipScript(port, hostPid, proof = null) {
-  if (!Number.isInteger(port) || !Number.isInteger(hostPid)) throw new BenchmarkError('health_not_owned');
-  if (proof && (!proof.executablePrefix || !proof.commandIncludes)) throw new BenchmarkError('health_not_owned');
-  // pg_ctl exits after start, so the postmaster's parent is gone and a parent walk cannot reach the Job host.
-  // The command line must name this run's cluster, and the executable must be that runtime's postgres.
-  const commandProof = proof
-    ? `$proc=Get-CimInstance Win32_Process -Filter ('ProcessId=' + [int]$l.OwningProcess); $exe=if($proc){[string]$proc.ExecutablePath}else{''}; $hit=if($proc -and $proc.CommandLine){$proc.CommandLine.IndexOf(${quotePs(proof.commandIncludes)}, [StringComparison]::OrdinalIgnoreCase) -ge 0}else{$false}; if($exe.StartsWith(${quotePs(proof.executablePrefix)}, [StringComparison]::OrdinalIgnoreCase) -and ($hit -or $exe.EndsWith('postgres.exe', [StringComparison]::OrdinalIgnoreCase))){exit 0}; `
-    : '';
-  return `$ErrorActionPreference='Stop'; $l=Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue | Where-Object {$_.LocalAddress -in @('127.0.0.1','0.0.0.0','::1','::')} | Select-Object -First 1; if(-not $l){exit 2}; $m=@{}; foreach($p in Get-CimInstance Win32_Process){$m[[int]$p.ProcessId]=[int]$p.ParentProcessId}; $n=[int]$l.OwningProcess; for($i=0;$i -lt 64 -and $n -gt 0;$i++){if($n -eq ${hostPid}){exit 0}; if(-not $m.ContainsKey($n)){break}; $n=$m[$n]}; ${commandProof}exit 3`;
-}
-
-export async function listenerOwnedByHost(port, hostPid, env, proof = null) {
-  const result = runPowerShell(listenerOwnershipScript(port, hostPid, proof), env);
-  if (result.status !== 0 && proof) process.stderr.write(`listener_check:${port}:${result.status}:${result.stdout}:${result.stderr.slice(0, 400)}\n`);
-  return result.status === 0;
-}
-
 export function runtimeHostRequest(runtime, ports) {
   const [apiPort, pgPort, runtimePort] = ports;
   const env = {
@@ -229,32 +211,34 @@ export function runtimeHostRequest(runtime, ports) {
     Executable: join(runtime.runtimeRoot, 'node.exe'),
     Cwd: runtime.runtimeRoot,
     Args: [join(runtime.runtimeRoot, 'launcher.cjs')],
+    ApiPort: apiPort,
+    PgPort: pgPort,
   }), 'utf8').toString('base64');
   return { request, minimalEnv, apiPort };
 }
 
-async function waitForHealth({ child, apiPort, env, startedAt, pgProof }) {
+export function parseJobHostReady(value) {
+  let event;
+  try { event = JSON.parse(value); } catch { throw new BenchmarkError('job_host_protocol_invalid'); }
+  if (event?.kind !== 'runtime_ready' || event.apiJobOwned !== true || event.postgresJobOwned !== true
+      || !Number.isInteger(event.launcherPid) || event.launcherPid <= 0
+      || !Array.isArray(event.jobProcessIds) || !event.jobProcessIds.includes(event.launcherPid)
+      || event.jobProcessIds.some(pid => !Number.isInteger(pid) || pid <= 0)) {
+    throw new BenchmarkError('listener_not_owned');
+  }
+  return event;
+}
+
+async function waitForOwnedHealth({ child, startedAt, readOutput }) {
   const deadline = performance.now() + STARTUP_TIMEOUT_MS;
   while (performance.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) throw new BenchmarkError('runtime_exited');
-    try {
-      const response = await fetch(`http://127.0.0.1:${apiPort}/system/health`, { signal: AbortSignal.timeout(1500) });
-      if (response.ok) {
-        const body = await response.json();
-        if (body?.database === 'ok') {
-          const elapsedMs = Number((performance.now() - startedAt).toFixed(2));
-          const pgPort = env.ORION_DESKTOP_PG_PORT ? Number(env.ORION_DESKTOP_PG_PORT) : NaN;
-          if (!(await listenerOwnedByHost(apiPort, child.pid, env)) || !Number.isInteger(pgPort)
-              || !(await listenerOwnedByHost(pgPort, child.pid, env, pgProof))) {
-            throw new BenchmarkError('listener_not_owned');
-          }
-          return elapsedMs;
-        }
-      }
-    } catch (error) {
-      if (error instanceof BenchmarkError) throw error;
+    const lineEnd = readOutput().indexOf('\n');
+    if (lineEnd >= 0) {
+      const event = parseJobHostReady(readOutput().slice(0, lineEnd).trim());
+      return { elapsedMs: Number((performance.now() - startedAt).toFixed(2)), jobProcessIds: event.jobProcessIds };
     }
-    await delay(HEALTH_INTERVAL_MS);
+    await delay(25);
   }
   throw new BenchmarkError('startup_timeout');
 }
@@ -271,7 +255,8 @@ async function startRuntime(host, runtime, ports, sampleSeconds = 0) {
   child.on('error', () => { spawnFailed = true; });
   const closePromise = new Promise(resolveClose => child.once('close', resolveClose));
   // The launcher emits operational logs, which are intentionally drained and discarded.
-  child.stdout.on('data', () => {});
+  let hostOutput = '';
+  child.stdout.on('data', chunk => { hostOutput += chunk.toString('utf8'); });
   child.stderr.on('data', () => {});
   child.stdin.end();
   let elapsedMs;
@@ -279,14 +264,9 @@ async function startRuntime(host, runtime, ports, sampleSeconds = 0) {
   let failure;
   let safeToCleanup = true;
   try {
-    elapsedMs = await waitForHealth({
-      child, apiPort: setup.apiPort, env: setup.minimalEnv, startedAt,
-      pgProof: {
-        executablePrefix: join(runtime.runtimeRoot, 'postgres', 'bin') + sep,
-        commandIncludes: join(setup.minimalEnv.ORION_DESKTOP_DATA_DIR, 'postgres'),
-      },
-    });
-    if (sampleSeconds > 0) resources = await sampleProcessTree(child.pid, sampleSeconds, setup.minimalEnv);
+    const ready = await waitForOwnedHealth({ child, startedAt, readOutput: () => hostOutput });
+    elapsedMs = ready.elapsedMs;
+    if (sampleSeconds > 0) resources = await sampleProcessTree(child.pid, sampleSeconds, setup.minimalEnv, ready.jobProcessIds);
   } catch (error) {
     failure = error instanceof BenchmarkError ? error.code : 'runtime_failed';
   } finally {
@@ -439,9 +419,11 @@ async function prepareRun(runtimeInfo, label, tempRoot, host) {
   }
 }
 
-async function sampleProcessTree(rootPid, seconds, env) {
+async function sampleProcessTree(rootPid, seconds, env, seedProcessIds = []) {
+  if (seedProcessIds.some(pid => !Number.isInteger(pid) || pid <= 0)) throw new BenchmarkError('resource_sample_failed');
+  const seeds = seedProcessIds.join(',');
   const listed = runPowerShell(
-    `$ErrorActionPreference='Stop'; $m=@{}; foreach($p in Get-CimInstance Win32_Process){$m[[int]$p.ProcessId]=[int]$p.ParentProcessId}; $out=New-Object System.Collections.Generic.List[int]; foreach($id in @($m.Keys)){ $n=$id; for($i=0;$i -lt 64 -and $n -gt 0;$i++){ if($n -eq ${rootPid}){ $out.Add($id); break }; if(-not $m.ContainsKey($n)){break}; $n=$m[$n] } }; $out.Add(${rootPid}); ($out | Sort-Object -Unique) -join ','`,
+    `$ErrorActionPreference='Stop'; $m=@{}; foreach($p in Get-CimInstance Win32_Process){$m[[int]$p.ProcessId]=[int]$p.ParentProcessId}; $out=New-Object System.Collections.Generic.List[int]; foreach($id in @($m.Keys)){ $n=$id; for($i=0;$i -lt 64 -and $n -gt 0;$i++){ if($n -eq ${rootPid}){ $out.Add($id); break }; if(-not $m.ContainsKey($n)){break}; $n=$m[$n] } }; $out.Add(${rootPid}); foreach($id in @(${seeds})){if($id -gt 0){$out.Add($id)}}; ($out | Sort-Object -Unique) -join ','`,
     env,
     60000,
   );
@@ -532,7 +514,7 @@ export async function runBenchmark({ classic, rust, tempRoot = tmpdir(), host = 
   }
   return {
     results,
-    measurement: 'monotonic elapsed time from native Job host launch until an owned /system/health response with database=ok',
+    measurement: 'monotonic elapsed time from Node spawning the isolated benchmark Job host until its exact-Job checks confirm /system/health database=ok and both API and PostgreSQL listener processes are in that Job; includes helper startup and launcher creation/resume',
     limitation: 'Fresh empty profiles, sequential runs. resources, when present, is private memory and one-core CPU of the Job host and its descendants after health. This is not Tauri window readiness and not a post-reboot cold start.',
   };
 }

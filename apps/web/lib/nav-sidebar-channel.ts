@@ -10,7 +10,9 @@ export type NavSidebarMessage =
   | { type: "hello"; sidebarId: string }
   | { type: "ping" }
   | { type: "open"; panelId: string }
-  | { type: "dock"; sidebarId: string };
+  | { type: "dock"; sidebarId: string }
+  | { type: "dock-cancelled"; sidebarId: string }
+  | { type: "host-bounds"; sidebarId: string; bounds: { x: number; y: number; width: number; height: number }; monitorId?: string };
 
 const CHANNEL_NAME = "orion.navSidebar.window";
 

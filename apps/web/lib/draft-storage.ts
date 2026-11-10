@@ -73,3 +73,16 @@ export function hasStoredDraft(storage: Pick<Storage, "length" | "key" | "getIte
   }
   return false;
 }
+
+/** Does any workspace have a persisted non-empty draft? Used before closing the whole app. */
+export function hasAnyStoredDraft(storage: Pick<Storage, "length" | "key" | "getItem">): boolean {
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(DRAFTS_PREFIX) && readDraft(storage, key).trim() !== "") return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}

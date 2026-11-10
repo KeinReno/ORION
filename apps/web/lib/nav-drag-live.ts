@@ -30,6 +30,22 @@ export interface NavDragLive {
   mode: "dock" | "window";
 }
 
+export type NavDropTarget = { kind: "move"; sidebarId: string } | { kind: "open" };
+
+/** A compact nav window is one drop surface; a workspace window has separate nav and Workbench surfaces. */
+export function resolveNavDropTarget(args: {
+  windowKind: "main" | "nav";
+  currentSidebarId?: string;
+  hitSidebarId?: string | null;
+  hasWorkbench?: boolean;
+}): NavDropTarget {
+  if (args.hitSidebarId) return { kind: "move", sidebarId: args.hitSidebarId };
+  if (args.windowKind === "nav" && !args.hasWorkbench && args.currentSidebarId) {
+    return { kind: "move", sidebarId: args.currentSidebarId };
+  }
+  return { kind: "open" };
+}
+
 export const NAV_DRAG_LIVE_KEY = "orion.navDrag.live.v1";
 export const NAV_SURFACE_PREFIX = "orion.navSurface.v1.";
 

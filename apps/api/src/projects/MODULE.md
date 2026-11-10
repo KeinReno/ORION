@@ -14,6 +14,8 @@ Tasks использует публичные `ProjectTaskLinks` и `MilestoneRe
 
 Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneReader`: расчёт прогресса проектов остаётся каноническим, история и вехи читаются у владельцев. [Контракты](../../../../docs/platform-api/GOAL_PROJECTIONS.md).
 
+Бортовой журнал — default-enabled plugin `projects-logbook`; ссылки на задачи читаются только через публичный Tasks `TaskReferenceReader`, а комментарий принадлежит join-связи журнала. Направленные связи проектов живут в проектном пространстве. [Контракт](../../../../docs/platform-api/PROJECT_LOGBOOK.md), [ADR-0048](../../../../docs/adr/ADR-0048-project-logbook.md).
+
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
 <!-- generated:manifest:start -->
@@ -26,13 +28,13 @@ Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneR
 | id / версия | `projects` / 1.0.0 (платформа ^1.0.0) |
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
-| Мягкие зависимости | `tasks`, `notes`, `calendar`, `documents`, `time`, `finance` |
+| Мягкие зависимости | `tasks`, `notes`, `calendar`, `documents`, `knowledge`, `time`, `finance` |
 | Права (permissions) | `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete` |
 | События | публикует: —; слушает: — |
 | Панели веба | `projects` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/projects` |
-| Плагины, расширяющие модуль | `projects-planning`, `projects-ideas`, `projects-problems`, `projects-goals` |
+| Плагины, расширяющие модуль | `projects-planning`, `projects-ideas`, `projects-problems`, `projects-logbook`, `projects-goals` |
 | Миграции в манифесте | — |
 | Код на сервере | `apps/api/src/projects/` |
 | При выключении | Панель скрывается. Проекты сохраняются; чужие сущности продолжают хранить projectId. |

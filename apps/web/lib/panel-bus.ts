@@ -154,6 +154,7 @@ function makeFocusChannel(panelId: string): {
 let focusNonce = 0;
 const taskChannel = makeFocusChannel("tasks");
 const noteChannel = makeFocusChannel("notes");
+const knowledgeChannel = makeFocusChannel("knowledge");
 export interface EntityFocusRequest { id: string; nonce: number; workspaceId: string | null }
 const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
@@ -189,6 +190,10 @@ export const useTaskFocusRequest = taskChannel.useFocusRequest;
 /** Open the Notes panel and select a note by id (e.g. from the ⌘K palette or dashboard). */
 export const focusNote = noteChannel.focus;
 export const useNoteFocusRequest = noteChannel.useFocusRequest;
+
+/** Open the Knowledge panel and select a material (project materials, search, etc.). */
+export const focusKnowledge = knowledgeChannel.focus;
+export const useKnowledgeFocusRequest = knowledgeChannel.useFocusRequest;
 
 /** Open the Calendar panel and select an event (notification bell, inbox). */
 export function focusEvent(id: string): void { eventChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }

@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put } from "@nestjs/common";
 import {
   agentHubCreateExecutionInputSchema, agentHubCancelInputSchema,
   type AgentHubCreateExecutionInput, type AgentHubCancelInput,
-  type AgentHubExecution, type AgentHubEvent, type AgentHubRuntimeSession
+  type AgentHubExecution, type AgentHubEvent, type AgentHubRuntimeSession,
+  agentHubCreateAgentProfileInputSchema, agentHubSetTaskAssignmentInputSchema, agentHubBindAgentCredentialsInputSchema,
+  type AgentHubCreateAgentProfileInput, type AgentHubSetTaskAssignmentInput, type AgentHubBindAgentCredentialsInput,
+  type AgentHubAgentProfile, type AgentHubTaskAssignment, type AgentHubCredentialOption
 } from "@orion/shared-types";
 import type { RequestUser } from "../../auth/jwt.strategy";
 import { CurrentUser } from "../../common/current-user.decorator";
@@ -12,12 +15,52 @@ import { RequireModule } from "../../modules/require-module";
 import { AgentHubRuntimeRegistryService } from "./agent-hub-runtime-registry.service";
 import { AgentHubWorkerService } from "./agent-hub-worker.service";
 import { AgentHubService } from "./agent-hub.service";
+import { AgentHubAssignmentService } from "./agent-hub-assignment.service";
 
 /** Human routes only. Autonomous claim/heartbeat are intentionally NOT exposed. */
 @RequireModule("agent-hub")
 @Controller("workspaces/:workspaceId/agent-hub")
 export class AgentHubController {
-  constructor(private readonly hub: AgentHubService, private readonly workers: AgentHubWorkerService, private readonly runtimes: AgentHubRuntimeRegistryService) {}
+  constructor(private readonly hub: AgentHubService, private readonly workers: AgentHubWorkerService, private readonly runtimes: AgentHubRuntimeRegistryService, private readonly assignments: AgentHubAssignmentService) {}
+
+  @Get("agents")
+  @RequirePermission("agent-hub.execution.read")
+  agents(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<{ agents: AgentHubAgentProfile[] }> {
+    return this.assignments.agentsFor(user.userId, workspaceId);
+  }
+
+  @Get("agent-credentials")
+  @RequirePermission("agent-hub.execution.read")
+  credentials(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<{ credentials: AgentHubCredentialOption[] }> {
+    return this.assignments.credentialsFor(user.userId, workspaceId);
+  }
+
+  @Post("agents")
+  @RequirePermission("agent-hub.execution.create")
+  createAgent(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(agentHubCreateAgentProfileInputSchema)) body: AgentHubCreateAgentProfileInput): Promise<AgentHubAgentProfile> {
+    return this.assignments.createAgent(user.userId, workspaceId, body);
+  }
+
+  @Put("agents/:agentId/credentials")
+  @RequirePermission("agent-hub.execution.update")
+  rebindAgent(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("agentId") agentId: string,
+    @Body(new ZodValidationPipe(agentHubBindAgentCredentialsInputSchema)) body: AgentHubBindAgentCredentialsInput): Promise<AgentHubAgentProfile> {
+    return this.assignments.rebindAgent(user.userId, workspaceId, agentId, body);
+  }
+
+  @Get("task-assignments/:taskId")
+  @RequirePermission("agent-hub.execution.read")
+  getTaskAssignment(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("taskId") taskId: string): Promise<AgentHubTaskAssignment> {
+    return this.assignments.getAssignment(user.userId, workspaceId, taskId);
+  }
+
+  @Put("task-assignments/:taskId")
+  @RequirePermission("agent-hub.execution.update")
+  setTaskAssignment(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("taskId") taskId: string,
+    @Body(new ZodValidationPipe(agentHubSetTaskAssignmentInputSchema)) body: AgentHubSetTaskAssignmentInput): Promise<AgentHubTaskAssignment> {
+    return this.assignments.setAssignment(user.userId, workspaceId, taskId, body.agentId);
+  }
 
   /** Server-side lease expiration; only human owner/lead can invoke it. */
   @Post("reconcile")

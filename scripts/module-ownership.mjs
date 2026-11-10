@@ -44,7 +44,7 @@ export const MODEL_OWNERS = new Map([
   ...GENERATED_MODEL_OWNERS,
   ...owned("development", "DevelopmentCatalogMapping DevelopmentImportConsent"),
   ...owned("shared", "SharedPublication SharedPublicationPin SharedPublicationOperation PublicationRule"),
-  ...owned("projects", "Project ProjectStatusUpdate"),
+  ...owned("projects", "Project ProjectStatusUpdate ProjectLogEntry ProjectLogEntryTask ProjectRelation"),
   ...owned("milestones", "Milestone MilestoneDependency"),
   ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),
   ...owned("tasks", "Task TaskComment TaskActivity TaskDependency SavedTaskView"),

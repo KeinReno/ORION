@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, readFile, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, realpath, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { verifyNodeBackupIntegrity } from "./backup-integrity";
 import {
@@ -22,7 +22,8 @@ const EXCHANGE_TABLES = ["publication_rules", "shared_publications", "cross_work
 const SIDE_EFFECT_TABLES = [
   "sync_remotes", "sync_devices", "sync_restore_operations", "health_grants",
   "development_import_consents", "extension_secrets", "agent_hub_executions",
-  "agent_hub_runtime_sessions", "agent_proposals", "opportunity_attempts", "domain_event_deliveries"
+  "agent_hub_runtime_sessions", "agent_hub_agent_credentials",
+  "agent_proposals", "opportunity_attempts", "domain_event_deliveries"
 ] as const;
 
 export interface MigrationStageReport {
@@ -39,11 +40,51 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function isSameOrNested(candidate: string, parent: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+async function assertNoLinkedPathComponents(target: string): Promise<void> {
+  const resolved = path.resolve(target);
+  const parsed = path.parse(resolved);
+  let cursor = parsed.root;
+  for (const segment of resolved.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    cursor = path.join(cursor, segment);
+    let info;
+    try {
+      info = await lstat(cursor);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("stage_path_missing");
+      throw error;
+    }
+    if (info.isSymbolicLink()) throw new Error("stage_path_link_refused");
+  }
+}
+
+async function assertNoLinksInBackupTree(root: string): Promise<void> {
+  async function walk(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      const info = await lstat(target);
+      if (info.isSymbolicLink()) throw new Error("stage_path_link_refused");
+      if (info.isDirectory()) await walk(target);
+      else if (!info.isFile()) throw new Error("stage_path_type_refused");
+    }
+  }
+  await walk(root);
+}
+
 function assertIsolatedDestination(destination: string): void {
   const resolved = path.resolve(destination).toLowerCase();
   const local = process.env.LOCALAPPDATA;
   const program = process.env.ProgramData ?? "C:\\ProgramData";
-  const forbidden = [local ? path.join(local, "ORION") : "", path.join(program, "ORION")]
+  const forbidden = [
+    local ? path.join(local, "ORION") : "",
+    path.join(program, "ORION"),
+    local ? path.join(local, "ORION-Rust", "com.orion.rust.desktop") : "",
+    path.join(program, "ORION-Rust", "com.orion.rust.desktop")
+  ]
     .filter(Boolean)
     .map((dir) => path.resolve(dir).toLowerCase());
   if (forbidden.some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`)) || resolved.includes("com.orion.desktop")) {
@@ -73,13 +114,42 @@ function encodeRows(rows: readonly Record<string, unknown>[]): { body: string; r
  * the resulting rows are checked.
  */
 export async function stageSanitizedMigration(source: string, destination: string, now = new Date()): Promise<MigrationStageReport> {
-  const sourceRoot = path.resolve(source);
-  const destinationRoot = path.resolve(destination);
-  if (sourceRoot.toLowerCase() === destinationRoot.toLowerCase()) throw new Error("stage_must_be_a_copy");
-  assertIsolatedDestination(destinationRoot);
+  const sourcePath = path.resolve(source);
+  const destinationPath = path.resolve(destination);
+  // Preserve the stable refusal for known Classic identities even when the
+  // final destination (or an intermediate directory) has not been created.
+  assertIsolatedDestination(destinationPath);
+  await assertNoLinkedPathComponents(sourcePath);
+  const sourceRoot = await realpath(sourcePath);
+  const destinationParent = path.dirname(destinationPath);
+  await assertNoLinkedPathComponents(destinationParent);
+  const canonicalDestination = path.join(await realpath(destinationParent), path.basename(destinationPath));
+  const samePath = process.platform === "win32"
+    ? (left: string, right: string) => left.toLowerCase() === right.toLowerCase()
+    : (left: string, right: string) => left === right;
+  if (samePath(sourceRoot, canonicalDestination) || isSameOrNested(sourceRoot, canonicalDestination) || isSameOrNested(canonicalDestination, sourceRoot)) {
+    throw new Error("stage_paths_overlap");
+  }
+  assertIsolatedDestination(canonicalDestination);
+  try {
+    await lstat(canonicalDestination);
+    throw new Error("stage_destination_exists");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await assertNoLinksInBackupTree(sourceRoot);
   const checked = await verifyNodeBackupIntegrity(sourceRoot);
   if (checked.status !== "integrity-verified") throw new Error("source_backup_invalid");
-  await cp(sourceRoot, destinationRoot, { recursive: true, errorOnExist: true });
+  // Claim the destination exclusively, then copy with collision refusal so a
+  // concurrent entry cannot be silently overwritten by cp's default behavior.
+  await mkdir(canonicalDestination);
+  const destinationRoot = canonicalDestination;
+  const sourceEntries = await readdir(sourceRoot);
+  await Promise.all(sourceEntries.map((entry) => cp(path.join(sourceRoot, entry), path.join(destinationRoot, entry), {
+    recursive: true,
+    force: false,
+    errorOnExist: true
+  })));
 
   const manifestPath = path.join(destinationRoot, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
@@ -128,7 +198,8 @@ export async function stageSanitizedMigration(source: string, destination: strin
   const sideEffects: RiskyMigrationSideEffectRows = {
     sync_remotes: [], sync_devices: [], sync_restore_operations: [], health_grants: [],
     development_import_consents: [], extension_secrets: [], agent_hub_executions: [],
-    agent_hub_runtime_sessions: [], agent_proposals: [], opportunity_attempts: [], domain_event_deliveries: []
+    agent_hub_runtime_sessions: [], agent_hub_agent_credentials: [],
+    agent_proposals: [], opportunity_attempts: [], domain_event_deliveries: []
   };
   for (const name of sideNames) sideEffects[name] = await readRows(path.join(tablesDir, `${name}.ndjson`));
   const sanitizedSideEffects = sanitizeMigrationSideEffectRows(sideEffects, now.toISOString());

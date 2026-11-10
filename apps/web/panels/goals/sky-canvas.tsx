@@ -1,11 +1,11 @@
 "use client";
 
 import type { EntityLink, Goal } from "@orion/shared-types";
-import { Minus, Plus, Scan } from "lucide-react";
+import { Locate, Minus, Plus, Scan } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  CONSTELLATION_H,
-  CONSTELLATION_W,
+  SKY_VIEWPORT_H,
+  SKY_VIEWPORT_W,
   backgroundStars,
   lensVisible,
   neighbour,
@@ -17,7 +17,7 @@ import {
   type Star,
   type StarState
 } from "../../lib/goal-constellation";
-import { applyPins, clampToSky } from "../../lib/goal-sky-layout";
+import { applyPins, HOME_VIEW, keepSkyPointVisible, MIN_SKY_ZOOM, worldPoint, type SkyView } from "../../lib/goal-sky-layout";
 import { openEntity } from "../../lib/panel-bus";
 import styles from "./sky-canvas.module.css";
 
@@ -48,16 +48,21 @@ function starClasses(state: StarState, kind: Star["kind"]): string {
 
 export const KIND_LABEL = { goal: "Цель", plan: "План", milestone: "Веха", task: "Задача" } as const;
 
-const MIN_ZOOM = 0.6;
+const MIN_ZOOM = MIN_SKY_ZOOM;
 const MAX_ZOOM = 4;
 const DRAG_THRESHOLD_PX = 6;
 
-interface View {
-  k: number;
-  x: number;
-  y: number;
+function fitConstellation(stars: ReadonlyArray<Star>): SkyView {
+  if (!stars.length) return HOME_VIEW;
+  const xs = stars.map((star) => star.x);
+  const ys = stars.map((star) => star.y);
+  const minX = Math.min(...xs) - 180; const maxX = Math.max(...xs) + 180;
+  const minY = Math.min(...ys) - 72; const maxY = Math.max(...ys) + 112;
+  const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(SKY_VIEWPORT_W / (maxX - minX), SKY_VIEWPORT_H / (maxY - minY))));
+  return { k, x: SKY_VIEWPORT_W / 2 - ((minX + maxX) / 2) * k, y: SKY_VIEWPORT_H / 2 - ((minY + maxY) / 2) * k };
 }
-const HOME: View = { k: 1, x: 0, y: 0 };
+
+type View = SkyView;
 
 interface Gesture {
   kind: "pan" | "star" | "pin";
@@ -111,6 +116,8 @@ export interface SkyCanvasProps {
   /** Arrange mode (or Shift held): a drag moves the star itself; the new position is reported here. */
   arrange?: boolean;
   onPin?: (starId: string, x: number, y: number) => void;
+  initialView?: SkyView;
+  onViewChange?: (view: SkyView) => void;
   dependencyLinks?: ReadonlyArray<{ from: string; to: string }>;
   /** A short primary click on free space clears the selection. */
   onCanvasPrimaryClick?: () => void;
@@ -123,18 +130,40 @@ export interface SkyCanvasProps {
  * (`buildConstellations`); this only draws it and turns pointer / keyboard input into
  * select / pan / zoom / drop callbacks. Editing itself is the caller's job.
  */
-export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onActivate, onReparent, onDropProject, onInvalidDropProject, arrange = false, onPin, dependencyLinks = [], onCanvasPrimaryClick, onCanvasContextMenu }: SkyCanvasProps): React.ReactElement {
+export function SkyCanvas({ constellation: base, goals, lens, selectedId, selectedLinks = [], visibleLinkIds, mode, onSelect, onActivate, onReparent, onDropProject, onInvalidDropProject, arrange = false, onPin, initialView, onViewChange, dependencyLinks = [], onCanvasPrimaryClick, onCanvasContextMenu }: SkyCanvasProps): React.ReactElement {
   const full = mode === "full";
+  const fittedBaseView = useMemo(() => fitConstellation(base.stars), [base.stars]);
+  const savedViewK = initialView?.k;
+  const savedViewX = initialView?.x;
+  const savedViewY = initialView?.y;
   const glowId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const worldRef = useRef<SVGGElement>(null);
   const gestureRef = useRef<Gesture | null>(null);
-  const [view, setView] = useState<View>(HOME);
+  const manualViewRef = useRef(false);
+  const [view, setView] = useState<View>(() => initialView ?? fittedBaseView);
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(() => new Set(selectedId ? [selectedId] : []));
   const [dragging, setDragging] = useState<{ id: string; x: number; y: number } | null>(null);
   const [hoverDrop, setHoverDrop] = useState<string | null>(null);
   // While a star is being arranged it follows the pointer and its links follow it.
-  const [draft, setDraft] = useState<{ id: string; x: number; y: number } | null>(null);
-  const constellation = useMemo(() => (draft ? applyPins(base, { [draft.id]: { x: draft.x, y: draft.y } }) : base), [base, draft]);
+  const [draft, setDraft] = useState<Record<string, { x: number; y: number }> | null>(null);
+  const draftRef = useRef<Record<string, { x: number; y: number }> | null>(null);
+  const onViewChangeRef = useRef(onViewChange);
+  useEffect(() => { onViewChangeRef.current = onViewChange; }, [onViewChange]);
+  useEffect(() => {
+    if (!manualViewRef.current) return undefined;
+    const timer = window.setTimeout(() => onViewChangeRef.current?.(view), 250);
+    return () => window.clearTimeout(timer);
+  }, [view]);
+  const constellation = useMemo(() => (draft ? applyPins(base, draft) : base), [base, draft]);
+  useEffect(() => {
+    if (savedViewK !== undefined && savedViewX !== undefined && savedViewY !== undefined && !manualViewRef.current) {
+      setView({ k: savedViewK, x: savedViewX, y: savedViewY });
+    }
+  }, [savedViewK, savedViewX, savedViewY]);
+  useEffect(() => {
+    if (savedViewK === undefined && !manualViewRef.current) setView(fittedBaseView);
+  }, [fittedBaseView, savedViewK]);
 
   const dust = useMemo(() => backgroundStars(constellation.rootId), [constellation.rootId]);
   const byId = useMemo(() => new Map(constellation.stars.map((s) => [s.id, s])), [constellation.stars]);
@@ -142,8 +171,23 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
   const hot = useMemo(() => new Set(selectedId ? pathToRoot(constellation, selectedId) : []), [constellation, selectedId]);
   const legalParents = useMemo(() => (dragging ? validParents(goals, byId.get(dragging.id)?.goalId ?? null) : null), [dragging, goals, byId]);
   const selectedStar = selectedId ? byId.get(selectedId) : undefined;
+  const selectedX = selectedStar?.x;
+  const selectedY = selectedStar?.y;
   const prerequisites = selectedStar?.kind === "goal" ? selectedLinks.filter((link) => link.kind === "goal_prerequisite") : [];
   const mapRecords = selectedStar?.kind === "goal" ? selectedLinks.filter((link) => link.kind !== "goal_prerequisite" && visibleLinkIds?.has(link.id)).slice(0, 4) : [];
+  useEffect(() => {
+    if (!full || selectedX === undefined || selectedY === undefined) return;
+    setView((current) => {
+      const next = keepSkyPointVisible(current, { x: selectedX, y: selectedY }, SKY_VIEWPORT_W, SKY_VIEWPORT_H);
+      if (next === current) return current;
+      manualViewRef.current = true;
+      return next;
+    });
+  }, [full, selectedId, selectedX, selectedY]);
+  const miniView = useMemo(() => {
+    return fitConstellation(constellation.stars);
+  }, [constellation]);
+  const drawView = full ? view : miniView;
 
   /** Client pixels -> layout coordinates (undoes the pan / zoom group). */
   function toLayout(clientX: number, clientY: number): { x: number; y: number } | null {
@@ -166,8 +210,9 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
       const rect = svg.getBoundingClientRect();
-      const sx = ((event.clientX - rect.left) / rect.width) * CONSTELLATION_W;
-      const sy = ((event.clientY - rect.top) / rect.height) * CONSTELLATION_H;
+      const sx = ((event.clientX - rect.left) / rect.width) * SKY_VIEWPORT_W;
+      const sy = ((event.clientY - rect.top) / rect.height) * SKY_VIEWPORT_H;
+      manualViewRef.current = true;
       setView((v) => {
         const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * Math.exp(-event.deltaY * 0.0015)));
         const ratio = k / v.k;
@@ -179,11 +224,12 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
   }, [full]);
 
   function zoomBy(factor: number): void {
+    manualViewRef.current = true;
     setView((v) => {
       const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * factor));
       const ratio = k / v.k;
-      const cx = CONSTELLATION_W / 2;
-      const cy = CONSTELLATION_H / 2;
+      const cx = SKY_VIEWPORT_W / 2;
+      const cy = SKY_VIEWPORT_H / 2;
       return { k, x: cx - (cx - v.x) * ratio, y: cy - (cy - v.y) * ratio };
     });
   }
@@ -214,7 +260,20 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
     gesture.moved = true;
     if (gesture.kind === "pin" && gesture.starId) {
       const p = toLayout(event.clientX, event.clientY);
-      if (p) setDraft({ id: gesture.starId, ...clampToSky(p.x, p.y) });
+      if (p) {
+        const origin = base.stars.find((star) => star.id === gesture.starId);
+        if (!origin) return;
+        const ids = arrange && multiSelected.has(gesture.starId) ? multiSelected : new Set([gesture.starId]);
+        const dx = p.x - origin.x;
+        const dy = p.y - origin.y;
+        const next: Record<string, { x: number; y: number }> = {};
+        for (const id of ids) {
+          const star = base.stars.find((item) => item.id === id);
+          if (star) next[id] = worldPoint(star.x + dx, star.y + dy);
+        }
+        draftRef.current = next;
+        setDraft(next);
+      }
       return;
     }
     if (gesture.kind === "star" && gesture.starId) {
@@ -226,7 +285,8 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
       return;
     }
     const rect = svgRef.current!.getBoundingClientRect();
-    setView({ k: gesture.view.k, x: gesture.view.x + (dx * CONSTELLATION_W) / rect.width, y: gesture.view.y + (dy * CONSTELLATION_H) / rect.height });
+    manualViewRef.current = true;
+    setView({ k: gesture.view.k, x: gesture.view.x + (dx * SKY_VIEWPORT_W) / rect.width, y: gesture.view.y + (dy * SKY_VIEWPORT_H) / rect.height });
   }
 
   function onPointerUp(event: ReactPointerEvent<SVGSVGElement>): void {
@@ -235,9 +295,10 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
     if (!gesture) return;
     if (svgRef.current?.hasPointerCapture(event.pointerId)) svgRef.current.releasePointerCapture(event.pointerId);
     if (gesture.kind === "pin" && gesture.moved && gesture.starId) {
-      const placed = draft;
+      const placed = draftRef.current;
+      draftRef.current = null;
       setDraft(null);
-      if (placed) onPin?.(placed.id, placed.x, placed.y);
+      if (placed) for (const [id, point] of Object.entries(placed)) onPin?.(id, point.x, point.y);
       return;
     }
     if (gesture.kind === "star" && gesture.moved && gesture.starId) {
@@ -247,8 +308,19 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
       if (target) onReparent?.(gesture.starId, target);
       return;
     }
-    if (!gesture.moved && gesture.starId) onSelect?.(gesture.starId);
-    else if (!gesture.moved) onCanvasPrimaryClick?.();
+    if (!gesture.moved && gesture.starId) {
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        setMultiSelected((previous) => {
+          const next = new Set(previous);
+          if (next.has(gesture.starId!)) next.delete(gesture.starId!); else next.add(gesture.starId!);
+          return next;
+        });
+        onSelect?.(gesture.starId);
+      } else {
+        setMultiSelected(new Set([gesture.starId]));
+        onSelect?.(gesture.starId);
+      }
+    } else if (!gesture.moved) { setMultiSelected(new Set()); onCanvasPrimaryClick?.(); }
   }
 
   function onContextMenu(event: ReactMouseEvent<SVGSVGElement>): void {
@@ -269,6 +341,13 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
   function onStarKey(event: KeyboardEvent<SVGGElement>, star: Star): void {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        setMultiSelected((previous) => {
+          const next = new Set(previous);
+          if (next.has(star.id)) next.delete(star.id); else next.add(star.id);
+          return next;
+        });
+      } else setMultiSelected(new Set([star.id]));
       onSelect?.(star.id);
       return;
     }
@@ -322,11 +401,12 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
     >
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${CONSTELLATION_W} ${CONSTELLATION_H}`}
+        viewBox={`0 0 ${SKY_VIEWPORT_W} ${SKY_VIEWPORT_H}`}
         role="group"
+        aria-multiselectable={full ? true : undefined}
         aria-label={`Созвездие ${byId.get(constellation.rootId)?.label ?? ""}`}
         className={`block h-auto w-full ${styles.atlasInk} ${full ? `${styles.fullMap} ${dragging ? "cursor-grabbing touch-pan-y" : "cursor-grab touch-pan-y"}` : `pointer-events-none ${styles.miniMap}`}`}
-        style={{ aspectRatio: `${CONSTELLATION_W} / ${CONSTELLATION_H}` }}
+        style={{ aspectRatio: `${SKY_VIEWPORT_W} / ${SKY_VIEWPORT_H}` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -335,7 +415,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
           const starId = (event.target as Element).closest("[data-star]")?.getAttribute("data-star");
           if (starId) { event.preventDefault(); onActivate?.(starId); }
         }}
-        onPointerCancel={() => { gestureRef.current = null; setDraft(null); setDragging(null); setHoverDrop(null); }}
+        onPointerCancel={() => { gestureRef.current = null; draftRef.current = null; setDraft(null); setDragging(null); setHoverDrop(null); }}
       >
         <defs>
           <filter id={glowId} x="-100%" y="-100%" width="300%" height="300%">
@@ -351,11 +431,11 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
         {full && constellation.stars.length > 1 ? (
           <g aria-hidden="true" className="fill-subtle-foreground text-[9px] tracking-[0.24em]">
             <text x={22} y={27}>РЕЗУЛЬТАТ</text>
-            <text x={22} y={CONSTELLATION_H - 22}>С ЧЕГО НАЧАТЬ · ДВИГАЙТЕСЬ ВВЕРХ</text>
+            <text x={22} y={SKY_VIEWPORT_H - 22}>С ЧЕГО НАЧАТЬ · ДВИГАЙТЕСЬ ВВЕРХ</text>
           </g>
         ) : null}
 
-        <g ref={worldRef} transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
+        <g ref={worldRef} transform={`translate(${drawView.x} ${drawView.y}) scale(${drawView.k})`}>
           {/* Routes first, so the stars sit on top of the lines. */}
           {constellation.links.map((link) => {
             const a = byId.get(link.from)!;
@@ -400,7 +480,7 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
 
           {constellation.stars.map((star) => {
             const lit = star.state === "done" || star.state === "lit";
-            const isSelected = star.id === selectedId;
+            const isSelected = multiSelected.has(star.id) || star.id === selectedId;
             const faded = visible !== null && !visible.has(star.id);
             const legal = dragging !== null && star.kind === "goal" && legalParents?.has(star.id);
             const dropHot = (dragging !== null || hoverDrop !== null) && hoverDrop === star.id && star.kind === "goal";
@@ -493,9 +573,9 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
             const other = link.sourceType === "goal" && link.sourceId === selectedStar.goalId
               ? { type: link.targetType, id: link.targetId }
               : { type: link.sourceType, id: link.sourceId };
-            const left = selectedStar.x > CONSTELLATION_W / 2;
+            const left = selectedStar.x > (view.x + SKY_VIEWPORT_W / 2) / view.k;
             const x = left ? selectedStar.x - 164 : selectedStar.x + 24;
-            const y = Math.min(CONSTELLATION_H - 18, Math.max(34, selectedStar.y - 10 + index * 28));
+            const y = selectedStar.y - 10 + index * 28;
             const title = link.title.length > 19 ? `${link.title.slice(0, 18)}…` : link.title;
             const open = (): void => openEntity(other.type, other.id, link.title);
             return <g key={`record-${link.id}`} role="button" tabIndex={0} aria-label={`Открыть ${link.title}`} onClick={(event) => { event.stopPropagation(); open(); }} onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } }} className="cursor-pointer outline-none focus-visible:opacity-70">
@@ -510,11 +590,21 @@ export function SkyCanvas({ constellation: base, goals, lens, selectedId, select
 
       {full ? (
         <div className="absolute right-2 top-2 flex flex-col gap-1">
+          {multiSelected.size > 1 ? <span className="rounded-md border border-accent/50 bg-card/90 px-2 py-1 text-center text-2xs text-foreground">Выбрано {multiSelected.size}</span> : null}
           {(
             [
               { label: "Приблизить", icon: Plus, run: () => zoomBy(1.4) },
               { label: "Отдалить", icon: Minus, run: () => zoomBy(1 / 1.4) },
-              { label: "Вернуть вид", icon: Scan, run: () => setView(HOME) }
+              { label: "К выбранному", icon: Locate, run: () => {
+                if (!selectedStar) return;
+                manualViewRef.current = true;
+                const k = Math.max(view.k, 0.8);
+                setView({ k, x: SKY_VIEWPORT_W / 2 - selectedStar.x * k, y: SKY_VIEWPORT_H / 2 - selectedStar.y * k });
+              } },
+              { label: "Вписать всё", icon: Scan, run: () => {
+                manualViewRef.current = true;
+                setView(fitConstellation(constellation.stars));
+              } }
             ] as const
           ).map(({ label, icon: Icon, run }) => (
             <button

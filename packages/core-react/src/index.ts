@@ -42,6 +42,7 @@ export * from "./use-lists-finance";
 export * from "./use-contacts";
 export * from "./use-milestones";
 export * from "./use-project-updates";
+export * from "./use-project-logbook";
 export * from "./use-project-captures";
 export * from "./use-captures";
 export * from "./use-agent-tokens";

@@ -1,4 +1,5 @@
 import { ProjectReferences } from "../projects/public/project-references";
+import { randomUUID } from "node:crypto";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Note as DbNote, NoteRevision as DbNoteRevision, Prisma } from "@prisma/client";
 import {
@@ -123,6 +124,79 @@ export class NotesService {
       });
     });
     return notes.map(toDto);
+  }
+
+  /** Create or replace a visual stack. Removing notes from prior stacks never removes the notes themselves. */
+  async createStack(userId: string, workspaceId: string, title: string, noteIds: string[]): Promise<{ id: string; title: string; noteIds: string[] }> {
+    const stackId = randomUUID();
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const notes = await tx.note.findMany({
+        where: { workspaceId, id: { in: noteIds }, deletedAt: null, archivedAt: null, isTemplate: false },
+        select: { id: true, stackId: true, privateToUserId: true }
+      });
+      if (notes.length !== noteIds.length) throw new NotFoundException("Часть заметок недоступна для стопки");
+      if (new Set(notes.map((note) => note.privateToUserId ?? "shared")).size > 1) {
+        throw new ConflictException("Личные и общие заметки нельзя объединить в одну стопку");
+      }
+      const priorStackIds = [...new Set(notes.flatMap((note) => note.stackId ? [note.stackId] : []))];
+      for (const [index, noteId] of noteIds.entries()) {
+        await tx.note.update({ where: { id: noteId }, data: { stackId, stackTitle: title, stackOrder: index } });
+      }
+      for (const priorId of priorStackIds) {
+        const remaining = await tx.note.findMany({ where: { workspaceId, stackId: priorId, deletedAt: null }, select: { id: true } });
+        if (remaining.length < 2) await tx.note.updateMany({ where: { workspaceId, stackId: priorId }, data: { stackId: null, stackTitle: null, stackOrder: 0 } });
+      }
+      return { id: stackId, title, noteIds };
+    });
+  }
+
+  /** Persist the order of every member, in the caller's intended order. */
+  async reorderStack(userId: string, workspaceId: string, stackId: string, noteIds: string[]): Promise<void> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const members = await tx.note.findMany({ where: { workspaceId, stackId }, select: { id: true } });
+      if (members.length !== noteIds.length || members.some((member) => !noteIds.includes(member.id))) {
+        throw new ConflictException("Состав стопки изменился. Обновите заметки и повторите.");
+      }
+      for (const [index, noteId] of noteIds.entries()) await tx.note.update({ where: { id: noteId }, data: { stackOrder: index } });
+    });
+  }
+
+  /** Move selected notes into an existing stack, preserving the existing order and appending the new members. */
+  async moveNotesToStack(userId: string, workspaceId: string, stackId: string, noteIds: string[]): Promise<void> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const target = await tx.note.findFirst({ where: { workspaceId, stackId, deletedAt: null }, select: { stackTitle: true, privateToUserId: true } });
+      if (!target) throw new NotFoundException("Стопка не найдена");
+      const targetMembers = await tx.note.findMany({ where: { workspaceId, stackId, deletedAt: null }, orderBy: { stackOrder: "asc" }, select: { id: true } });
+      const candidates = await tx.note.findMany({
+        where: { workspaceId, id: { in: noteIds }, deletedAt: null, archivedAt: null, isTemplate: false },
+        select: { id: true, stackId: true, privateToUserId: true }
+      });
+      if (candidates.length !== noteIds.length) throw new NotFoundException("Часть заметок недоступна для перемещения");
+      if (candidates.some((note) => (note.privateToUserId ?? "shared") !== (target.privateToUserId ?? "shared"))) {
+        throw new ConflictException("Личные и общие заметки нельзя объединить в одну стопку");
+      }
+      const moving = candidates.filter((note) => note.stackId !== stackId);
+      const priorStackIds = [...new Set(moving.flatMap((note) => note.stackId ? [note.stackId] : []))];
+      const orderedIds = [...targetMembers.map((note) => note.id), ...moving.map((note) => note.id)];
+      for (const [index, noteId] of orderedIds.entries()) {
+        await tx.note.update({ where: { id: noteId }, data: { stackId, stackTitle: target.stackTitle, stackOrder: index } });
+      }
+      for (const priorId of priorStackIds) {
+        const remaining = await tx.note.findMany({ where: { workspaceId, stackId: priorId, deletedAt: null }, select: { id: true } });
+        if (remaining.length < 2) await tx.note.updateMany({ where: { workspaceId, stackId: priorId }, data: { stackId: null, stackTitle: null, stackOrder: 0 } });
+      }
+    });
+  }
+
+  /** Delete only stack metadata. Every member note remains intact and visible. */
+  async removeStack(userId: string, workspaceId: string, stackId: string): Promise<void> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await tx.note.updateMany({ where: { workspaceId, stackId }, data: { stackId: null, stackTitle: null, stackOrder: 0 } });
+    });
   }
 
   /** `{ id, title, snippet }` for every live non-template note — feeds the `[[wiki link]]` autocomplete and its hover preview. */
@@ -594,6 +668,9 @@ type NoteRow = {
   id: string;
   workspaceId: string;
   projectId: string | null;
+  stackId: string | null;
+  stackTitle: string | null;
+  stackOrder: number;
   title: string;
   number: number | null;
   summary: string;
@@ -671,6 +748,9 @@ function toDto(note: NoteRow): Note {
     id: note.id,
     workspaceId: note.workspaceId,
     projectId: note.projectId,
+    stackId: note.stackId,
+    stackTitle: note.stackTitle,
+    stackOrder: note.stackOrder,
     title: note.title,
     number: note.number,
     summary: note.summary,

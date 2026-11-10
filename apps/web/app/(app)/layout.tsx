@@ -33,7 +33,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, Settings, SlidersHorizontal, PanelLeft, PanelRight, Search, Wrench } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, SlidersHorizontal, PanelLeft, PanelRight, Search, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -43,7 +43,6 @@ import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspa
 import { ProjectContextInspector } from "../../components/project-context-inspector";
 import { projectContextId } from "../../lib/shell-context";
 import { usesPrecisionShell } from "../../lib/orion-edition";
-import { NotificationBell } from "../../components/notification-bell";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
 import { ResourcesDock, ResourcesToggle } from "../../components/resources/resources-dock";
 import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
@@ -79,7 +78,6 @@ import { openEntity, openSettings, registerPanelBus } from "../../lib/panel-bus"
 import { useTaskProjectRouting } from "../../lib/task-project-routing";
 import { rememberAssistantView } from "../../lib/assistant-context";
 import { AgentPresenceFeed, AgentPresencePill } from "../../lib/agent-presence";
-import { FeedbackButton } from "../../components/feedback-dialog";
 import { GlobalCorner } from "../../components/global-corner";
 import { resourceContextActions, setSectionResolver } from "../../lib/resource-context-store";
 import { objectViewPanel } from "../../lib/object-view";
@@ -99,7 +97,7 @@ import { DEFAULT_PLACE_GROUP, placeKey } from "../../lib/extensions/places";
 import { useEnabledPlaces } from "../../lib/extensions/places-host";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../lib/use-active-workspace";
 import { ExtensionSlot } from "../../lib/extensions/slot";
-import { detachPanelToWindow, openWorkspaceInNewWindow, warmPanelDocument } from "../../lib/panel-window";
+import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
 import { orderedIds } from "../../lib/sidebar-folders";
@@ -286,11 +284,9 @@ function FloatHeaderAction({ containerApi, api, activePanel }: IDockviewHeaderAc
 }
 
 /**
- * Top-right of the panel group tab strip — the one persistent "top of the
- * app" spot regardless of which panel is active. Settings lives here instead
- * of the sidebar link list: it's account/workspace config, not a domain you
- * switch into during work, so it shouldn't compete with Tasks/Notes/etc. for
- * a nav slot (see panel-registry.ts `hideFromNav`).
+ * Actions attached to a dock tab strip. Global shell actions (notifications,
+ * feedback, settings, layouts, tools and workspace switching) live once in
+ * GlobalCorner so they do not multiply across split groups.
  */
 function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement | null {
   const compact = useMediaQuery("(max-width: 767px)");
@@ -328,7 +324,6 @@ function HeaderActions(props: IDockviewHeaderActionsProps): React.ReactElement |
       <DetachHeaderAction {...props} />
       {precision ? null : <AgentPresencePill />}
       <RunningTimerChip />
-      <NotificationBell size="sm" />
     </div>
   );
 }
@@ -360,24 +355,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
     if (getActiveWorkspaceId()) return;
     const seed = new URLSearchParams(window.location.search).get("workspaceId");
     if (seed) setActiveWorkspaceId(seed);
-  }, []);
-  // Compile section pages in the background so the first window on another display does not wait for that.
-  useEffect(() => {
-    let cancelled = false;
-    const ids = panelRegistry.filter((panel) => panelSupportsSurface(panel.id, "window")).map((panel) => panel.id);
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const id of ids) {
-          if (cancelled) return;
-          warmPanelDocument(id);
-          await new Promise((resolve) => window.setTimeout(resolve, 200));
-        }
-      })();
-    }, 1500);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
   }, []);
   const { workspace, workspaces, isLoading: workspacesLoading } = useActiveWorkspace();
   // U05 (24-CONNECTED-CORE-BACKLOG.md) — the sidebar switcher groups the
@@ -425,7 +402,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   }, [logout, play, router]);
   const defaultNavIds = navPanels.map((panel) => panel.id);
   const orderedNav = orderedIds(defaultNavIds, sidebarOrder).map((id) => navPanels.find((panel) => panel.id === id)!);
-  // «Инструменты» is a footer menu on the primary bar, not a list of ordinary sections.
+  // Keep tools separate from ordinary sections; they are exposed in the global action row.
   const sectionNav = orderedNav.filter((panel) => panel.group !== "Инструменты");
   const toolNav = orderedNav.filter((panel) => panel.group === "Инструменты");
   const { state: navState, update: updateNav } = useNavSidebars(user?.id, workspace?.id);
@@ -1255,6 +1232,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         railLabel={!asDrawer && navState.sidebars.length > 1 ? bar.name : undefined}
         defaultPinned={bar.density !== "icons"}
         railWidth={bar.density === "compact" ? 188 : 240}
+        compactPinControl={primary}
         header={primary ? ({ open }) => (
           <div className="flex flex-col gap-2 rounded-lg px-1 py-1.5">
             <div className="flex items-center gap-2" title="KAIDEN Orion">
@@ -1310,30 +1288,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           }
           return (
             <div className={position === "top" || position === "bottom" ? "flex flex-row items-center gap-2" : "flex flex-col gap-2"}>
-              {toolNav.length > 0 ? (
-                <DropdownMenu
-                  align="start"
-                  trigger={({ toggle }) => labeled ? (
-                    <button
-                      type="button"
-                      onClick={toggle}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                    >
-                      <Wrench className="h-4 w-4 shrink-0" aria-hidden />
-                      Инструменты
-                    </button>
-                  ) : (
-                    <IconButton label="Инструменты" onClick={toggle}>
-                      <Wrench className="h-4 w-4" />
-                    </IconButton>
-                  )}
-                  items={toolNav.map((panel) => ({
-                    label: panel.label,
-                    icon: panel.icon,
-                    onSelect: () => openFromMenu(panel.id)
-                  }))}
-                />
-              ) : null}
               {navState.sidebars.filter((item) => navWindows.state.bars[item.id]?.detached).map((item) => (
                 labeled ? (
                   <button
@@ -1361,29 +1315,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               ) : null}
               {open ? (
                 <>
-                  <DropdownMenu
-                    align="start"
-                    trigger={({ toggle }) => (
-                      <button
-                        type="button"
-                        onClick={toggle}
-                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                      >
-                        <LayoutTemplate className="h-4 w-4 shrink-0" aria-hidden />
-                        Раскладки
-                      </button>
-                    )}
-                    items={[
-                      { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
-                      ...(layoutNames.length > 0 ? ["separator" as const] : []),
-                      ...layoutNames.map((name, index) => ({
-                        label: `${index < LAYOUT_SHORTCUT_COUNT ? `Alt+${index + 1}  ` : ""}${name}${name === layoutDefault ? "  ★" : ""}`,
-                        onSelect: () => applyLayout(name)
-                      })),
-                      "separator" as const,
-                      { label: "Управление: название, вход, перенос…", onSelect: () => setLayoutsManagerOpen(true) }
-                    ]}
-                  />
                   <ExtensionSlot name="shell.sidebar.widgets" props={{ workspaceId: workspace?.id, open, onOpenCalendar: () => openFromMenu("calendar") }} />
                   <button
                     type="button"
@@ -1392,13 +1323,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                   >
                     <AccountAvatar userId={accountUser.id} name={accountUser.name} hasAvatar={accountUser.hasAvatar} size={28} />
                     <span className="min-w-0 truncate text-2xs text-subtle-foreground">{accountUser.name || accountUser.email || "Учётка"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => leaveWorkbench("spaces")}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                  >
-                    Сменить пространство
                   </button>
                   <button
                     onClick={() => leaveWorkbench("logout")}
@@ -1431,6 +1355,35 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       </div>
     );
   }
+
+  const globalShellActions = (
+    <>
+      {toolNav.length > 0 ? (
+        <DropdownMenu
+          align="end"
+          trigger={({ toggle }) => <IconButton label="Инструменты" onClick={toggle}><Wrench className="h-4 w-4" /></IconButton>}
+          items={toolNav.map((panel) => ({ label: panel.label, icon: panel.icon, onSelect: () => openFromMenu(panel.id) }))}
+        />
+      ) : null}
+      <DropdownMenu
+        align="end"
+        trigger={({ toggle }) => <IconButton label="Раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>}
+        items={[
+          { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
+          ...(layoutNames.length > 0 ? ["separator" as const] : []),
+          ...layoutNames.map((name, index) => ({
+            label: `${index < LAYOUT_SHORTCUT_COUNT ? `Alt+${index + 1}  ` : ""}${name}${name === layoutDefault ? "  ★" : ""}`,
+            onSelect: () => applyLayout(name)
+          })),
+          "separator" as const,
+          { label: "Управление: название, вход, перенос…", onSelect: () => setLayoutsManagerOpen(true) }
+        ]}
+      />
+      <IconButton label="Сменить пространство" onClick={() => leaveWorkbench("spaces")}>
+        <ArrowLeftRight className="h-4 w-4" />
+      </IconButton>
+    </>
+  );
 
   return (
     <ShortcutsProvider overrides={shortcutOverrides}>
@@ -1514,10 +1467,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         <div className="flex min-h-[240px] min-w-[24rem] flex-1 flex-col">
           {edgeSlot("top")}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Precision has its own single top bar (below) — the floating corner is only for the legacy
-            shell, which has no header of its own: there the dock's per-split tab-strip action bar used
-            to carry its own «Настройки», multiplying with every split. */}
-        {!compact && !precision ? <GlobalCorner /> : null}
+        <GlobalCorner>{globalShellActions}</GlobalCorner>
         {compact ? (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 pt-[env(safe-area-inset-top)]">
             <button
@@ -1536,11 +1486,6 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             <AgentPresencePill className="min-w-0" />
             <RunningTimerChip />
             <ResourcesToggle size="md" />
-            <NotificationBell />
-            <FeedbackButton />
-            <IconButton label="Настройки" onClick={() => openPanel("settings")}>
-              <Settings className="h-4 w-4" />
-            </IconButton>
           </header>
         ) : null}
         {precision ? <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-1.5" aria-label="Рабочая область">
@@ -1553,15 +1498,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           {editorContext ? <div role="status" aria-label={`Сохранение ${editorContext.entityType === "note" ? "заметки" : editorContext.entityType === "document" ? "документа" : "задачи"}`} className="hidden shrink-0 sm:block">{editorContext.saveState === "conflict" ? <span className="text-label text-warning">Конфликт версий</span> : <AutosaveStatus errorText="Не удалось сохранить — оставьте редактор открытым" state={editorContext.saveState} explicit={editorContext.saveMode === "explicit"} />}</div> : null}
           <AgentPresencePill />
           <IconButton label="Поиск и команды" className="h-11 w-11 sm:h-8 sm:w-8" onClick={showCommandPalette}><Search className="h-4 w-4" /></IconButton>
-          <DropdownMenu align="end" trigger={({ toggle }) => <IconButton label="Рабочие раскладки" onClick={toggle}><LayoutTemplate className="h-4 w-4" /></IconButton>} items={[
-            { label: "Сохранить текущую…", onSelect: () => setLayoutDialogOpen(true) },
-            ...layoutNames.map(name => ({ label: name, onSelect: () => applyLayout(name) })),
-            { label: "Управление раскладками", onSelect: () => setLayoutsManagerOpen(true) }
-          ]} />
           {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
           <IconButton label="Второй сайдбар" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={secondaryDock.open} onClick={secondaryDock.toggle}><Columns2 className="h-4 w-4" /></IconButton>
-          <FeedbackButton className="h-11 w-11 sm:h-8 sm:w-8" />
-          <IconButton label="Настройки" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => openPanel("settings")}><Settings className="h-4 w-4" /></IconButton>
           <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
         </header> : null}
         <main id="orion-workbench" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">

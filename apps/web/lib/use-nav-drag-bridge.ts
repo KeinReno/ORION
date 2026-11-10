@@ -6,6 +6,7 @@ import {
   navSurfaceKey,
   parseNavDragLive,
   pointInRect,
+  resolveNavDropTarget,
   type NavDragLive,
   type ScreenRect,
 } from "./nav-drag-live";
@@ -53,6 +54,7 @@ export function useNavDragBridge(options: {
   sidebarId?: string;
   onMove: (panelId: string, sidebarId: string, folderId: string | null, beforeId?: string) => void;
   onOpenInside: (panelId: string) => void;
+  hasWorkbench?: boolean;
 }): void {
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -102,11 +104,16 @@ export function useNavDragBridge(options: {
       }
       const hit = document.elementFromPoint(local.x, local.y);
       const nav = hit?.closest("[data-orion-nav]");
-      const sidebarId = nav?.getAttribute("data-orion-nav") ?? (current.kind === "nav" ? current.sidebarId ?? null : null);
-      if (sidebarId) {
+      const target = resolveNavDropTarget({
+        windowKind: current.kind,
+        currentSidebarId: current.sidebarId,
+        hitSidebarId: nav?.getAttribute("data-orion-nav"),
+        hasWorkbench: current.hasWorkbench,
+      });
+      if (target.kind === "move") {
         const before = hit?.closest("[data-orion-nav-before]")?.getAttribute("data-orion-nav-before") ?? undefined;
         const folder = hit?.closest("[data-orion-nav-folder]")?.getAttribute("data-orion-nav-folder") ?? null;
-        current.onMove(live.panelId, sidebarId, folder, before === live.panelId ? undefined : before);
+        current.onMove(live.panelId, target.sidebarId, folder, before === live.panelId ? undefined : before);
         return;
       }
       current.onOpenInside(live.panelId);

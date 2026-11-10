@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { compareMigrationFiles, type MigrationCompatibility } from "./migration-compatibility";
 import { classifyWholeNodeManifestTables, type WholeNodeSnapshotInventory } from "./whole-node-snapshot-inventory";
+import { inspectMigrationTableInventory, type MigrationTableInventory } from "./migration-table-inventory";
 
 // This only reads a backup manifest. Counts are claims in that manifest, not
 // evidence of integrity, a consistent snapshot, or permission to restore it.
@@ -20,6 +21,7 @@ export interface MigrationPreflightReport {
   claimedCounts: Record<"users" | "workspaces" | "projects" | "tasks" | "notes" | "documents", number | null>;
   migrationFiles: MigrationCompatibility | null;
   snapshotInventory: WholeNodeSnapshotInventory;
+  migrationTableInventory: MigrationTableInventory;
   blockers: string[];
 }
 
@@ -40,6 +42,7 @@ export async function inspectMigrationBackup(directory: string, migrationDirecto
   if (!result.success) throw new Error("Неподдерживаемый или повреждённый манифест резервной копии.");
   const manifest = result.data;
   const count = (table: string): number | null => manifest.tables[table]?.rows ?? null;
+  const migrationTableInventory = inspectMigrationTableInventory(Object.keys(manifest.tables));
   return {
     status: "inspection-only",
     source: {
@@ -55,7 +58,9 @@ export async function inspectMigrationBackup(directory: string, migrationDirecto
     },
     migrationFiles: migrationDirectory ? await compareMigrationFiles(manifest.migrations, migrationDirectory) : null,
     snapshotInventory: classifyWholeNodeManifestTables(Object.keys(manifest.tables)),
+    migrationTableInventory,
     blockers: [
+      "Политика переноса не разобрана для всех таблиц; это только диагностический отчёт и не разрешение на восстановление.",
       "Контрольные суммы и полнота резервной копии не проверены.",
       "Совместимость миграций с целевой установкой не проверена.",
       "Согласованность снимка базы и файлов не подтверждена.",

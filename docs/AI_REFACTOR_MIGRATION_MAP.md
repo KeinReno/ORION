@@ -430,6 +430,18 @@ Current source includes:
 - milestone-related UI/data;
 - `plan` tab in `ProjectWorkspacePanel.tsx`.
 
+### `projects-logbook`
+
+- project chronology for observations, decisions, and change reasons;
+- live links to existing tasks with comments scoped to the journal link;
+- directed project relations (`continues`, `replaces`, `based_on`,
+  `depends_on`) and symmetric `related` pairs.
+
+This is a default-enabled plugin attached through the existing `projects.tabs`
+slot. It does not replace `ProjectStatusUpdate`, update Tasks, or copy Projects.
+Contract and accepted ownership: [ADR-0048](adr/ADR-0048-project-logbook.md)
+and [PROJECT_LOGBOOK](platform-api/PROJECT_LOGBOOK.md).
+
 ### `projects-insights`
 
 Potential ownership for advanced project rollups, risk/forecast/analytics that are not universal project CRUD.

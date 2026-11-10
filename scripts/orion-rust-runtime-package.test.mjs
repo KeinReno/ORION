@@ -103,11 +103,14 @@ describe('packaged ORION-R runtime configuration', () => {
     const native = path.join(dir, 'apps/desktop/src-tauri');
     for (const name of ['Cargo.toml', 'Cargo.lock', 'tauri.conf.json', 'src/startup.html']) put(native, name, name);
     put(dir, 'apps/web/public/kaiden-192.png', 'icon');
+    put(dir, 'orion-rust/src/supervisor.rs', 'supervisor source');
     put(native, 'src/main.rs', 'source');
     put(native, 'capabilities/main.json', '{}');
     const runtime = path.join(dir, 'runtime');
-    for (const name of ['node.exe', 'launcher.cjs', 'ascii-path.cjs', 'payload.cjs', 'edition.json', 'postgres/bin/pg_ctl.exe']) put(runtime, name, name);
+    for (const name of ['node.exe', 'orion-runtime.exe', 'launcher.cjs', 'ascii-path.cjs', 'payload.cjs', 'edition.json', 'postgres/bin/pg_ctl.exe']) put(runtime, name, name);
     const first = writeShellContract(dir, runtime);
+    put(dir, 'orion-rust/src/supervisor.rs', 'changed supervisor source');
+    expect(writeShellContract(dir, runtime).nativeHash).not.toBe(first.nativeHash);
     put(runtime, 'edition.json', 'changed');
     expect(writeShellContract(dir, runtime).runtimeHash).not.toBe(first.runtimeHash);
     fs.rmSync(path.join(runtime, 'edition.json'));

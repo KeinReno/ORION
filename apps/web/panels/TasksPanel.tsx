@@ -64,6 +64,7 @@ import {
 } from "../lib/task-structure";
 import { DetailSlot, TaskDetail } from "./tasks/task-detail";
 import { matchesTaskView } from "../lib/task-view-filter";
+import { taskAssignmentOptions } from "../lib/task-assignment-options";
 
 type GroupBy = "status" | "project" | "due" | "priority";
 /** "list" is the module's own layout; any other id (the board) comes from a `tasks.views` plugin. */
@@ -168,7 +169,7 @@ export function TasksPanel(): React.ReactElement {
   }, [view]);
   const { data: projectList } = useProjects(isEnabled("projects") ? workspace?.id : undefined);
   const { data: milestoneList } = useMilestones(isEnabled("projects") ? workspace?.id : undefined);
-  const { data: memberList } = useWorkspaceMembers(teamOn ? workspace?.id : undefined);
+  const { data: memberList, isLoading: membersLoading, isError: membersError } = useWorkspaceMembers(teamOn ? workspace?.id : undefined);
   const createTask = useCreateTask(workspace?.id);
   const updateTask = useUpdateTask(workspace?.id);
   const deleteTask = useDeleteTask(workspace?.id);
@@ -743,11 +744,24 @@ export function TasksPanel(): React.ReactElement {
                         >
                           <TaskCard
                             task={task}
+                            workspaceId={workspace?.id}
+                            canManageAgentAssignments={workspace?.role === "owner" || workspace?.role === "lead"}
                             draggable={column.droppable}
                             focused={task.id === focusedTaskId}
                             selected={task.id === selectedId}
                             subtasks={childProgress.get(task.id)}
                             assignee={assigneeOf(task)}
+                            assignmentMembers={taskAssignmentOptions(
+                              memberList ?? [],
+                              workspace?.role === "owner" || workspace?.role === "lead",
+                              myMemberId,
+                              task.assigneeId
+                            )}
+                            assignmentAvailable={teamOn && Boolean(memberList) && !membersLoading && !membersError}
+                            onAssign={teamOn ? async (assigneeId) => {
+                              await updateTask.mutateAsync({ taskId: task.id, input: { assigneeId } });
+                              toast({ title: assigneeId ? "Исполнитель задачи изменён" : "Исполнитель снят", tone: "success" });
+                            } : undefined}
                             onSelect={() => setSelectedId(task.id)}
                             onOpen={() => setEditingId(task.id)}
                             onToggleDone={() =>

@@ -176,7 +176,7 @@ const panelEntries: PanelEntry[] = [
   { id: "overview", label: "Обзор", icon: Globe2, component: OverviewPanel },
   // U09 — cross-workspace grantee list, same reasoning as "overview" for why
   // it isn't gated by any single workspace's module state (see SharedPanel).
-  { id: "shared", label: "Доступно мне", icon: Share2, component: SharedPanel },
+  { id: "shared", label: "Доступно мне", icon: Share2, component: SharedPanel, group: "Инструменты" },
   { id: "tasks", label: "Задачи", icon: ListTodo, component: TasksPanel, moduleId: "tasks", group: "Работа" },
   { id: "calendar", label: "Календарь", icon: CalendarDays, component: CalendarPanel, moduleId: "calendar", group: "Работа" },
   { id: "notes", label: "Заметки", icon: StickyNote, component: NotesPanel, moduleId: "notes", group: "Работа" },

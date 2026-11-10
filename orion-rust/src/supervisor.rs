@@ -14,6 +14,9 @@ pub enum EnvironmentPolicy {
     /// Preserve the caller's environment. This is the explicit default for
     /// [`ProcessSpec::new`].
     Inherit,
+    /// Preserve the complete Windows environment block, including drive-current
+    /// directory entries, while replacing or appending named variables.
+    InheritWithValues { values: Vec<(OsString, OsString)> },
     /// Start with an empty environment, copy only named inherited variables,
     /// then apply explicit values from [`ProcessSpec::env`].
     Isolated {
@@ -35,6 +38,9 @@ pub struct ProcessSpec {
     pub args: Vec<OsString>,
     pub current_dir: Option<PathBuf>,
     pub environment: EnvironmentPolicy,
+    /// Optional stdin/stdout/stderr parent handles. Windows duplicates and
+    /// explicitly allowlists only these handles for the child process.
+    pub stdio_handles: Option<[usize; 3]>,
 }
 
 impl ProcessSpec {
@@ -44,6 +50,7 @@ impl ProcessSpec {
             args: Vec::new(),
             current_dir: None,
             environment: EnvironmentPolicy::Inherit,
+            stdio_handles: None,
         }
     }
 
@@ -54,6 +61,12 @@ impl ProcessSpec {
 
     pub fn current_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.current_dir = Some(dir.into());
+        self
+    }
+
+    /// Redirect child standard streams through an explicit inherited handle list.
+    pub fn stdio_handles(mut self, stdin: usize, stdout: usize, stderr: usize) -> Self {
+        self.stdio_handles = Some([stdin, stdout, stderr]);
         self
     }
 
@@ -88,16 +101,39 @@ impl ProcessSpec {
         self
     }
 
+    /// Override child variables while preserving the complete parent environment.
+    pub fn env_inherited(mut self, name: impl Into<OsString>, value: impl Into<OsString>) -> Self {
+        let pair = (name.into(), value.into());
+        match &mut self.environment {
+            EnvironmentPolicy::Inherit => {
+                self.environment = EnvironmentPolicy::InheritWithValues { values: vec![pair] };
+            }
+            EnvironmentPolicy::InheritWithValues { values }
+            | EnvironmentPolicy::Isolated { values, .. } => values.push(pair),
+        }
+        self
+    }
+
     fn isolated_parts_mut(&mut self) -> (&mut Vec<OsString>, &mut Vec<(OsString, OsString)>) {
-        if matches!(self.environment, EnvironmentPolicy::Inherit) {
+        if !matches!(self.environment, EnvironmentPolicy::Isolated { .. }) {
+            let values = match std::mem::replace(
+                &mut self.environment,
+                EnvironmentPolicy::Isolated {
+                    allowlist: Vec::new(),
+                    values: Vec::new(),
+                },
+            ) {
+                EnvironmentPolicy::InheritWithValues { values } => values,
+                EnvironmentPolicy::Inherit | EnvironmentPolicy::Isolated { .. } => Vec::new(),
+            };
             self.environment = EnvironmentPolicy::Isolated {
                 allowlist: Vec::new(),
-                values: Vec::new(),
+                values,
             };
         }
         match &mut self.environment {
             EnvironmentPolicy::Isolated { allowlist, values } => (allowlist, values),
-            EnvironmentPolicy::Inherit => unreachable!("isolated mode was selected above"),
+            _ => unreachable!("isolated mode was selected above"),
         }
     }
 }
@@ -252,6 +288,26 @@ impl Supervisor {
             ))
         }
     }
+
+    /// Return whether a PID belongs to this exact Job Object.
+    pub fn owns_pid(&self, pid: u32) -> Result<bool, SupervisorError> {
+        #[cfg(windows)]
+        {
+            if self.job.is_unusable() {
+                return Err(SupervisorError(
+                    "cannot query a terminated or failed Job Object".into(),
+                ));
+            }
+            self.job.owns_pid(pid)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = pid;
+            Err(SupervisorError(
+                "the experimental supervisor currently requires Windows".into(),
+            ))
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -272,6 +328,10 @@ mod windows {
 
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x0008_0000;
+    const STARTF_USESTDHANDLES: u32 = 0x0000_0100;
+    const PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 0x0002_0002;
+    const DUPLICATE_SAME_ACCESS: u32 = 0x0000_0002;
     const CREATE_UNICODE_ENVIRONMENT: u32 = 0x0000_0400;
     const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
     const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
@@ -279,6 +339,7 @@ mod windows {
     const WAIT_TIMEOUT: u32 = 258;
     const WAIT_FAILED: u32 = 0xFFFF_FFFF;
     const JOB_TERMINATION_TIMEOUT_MS: u32 = 10_000;
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 
     #[cfg(test)]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -379,6 +440,12 @@ mod windows {
     }
 
     #[repr(C)]
+    struct StartupInfoExW {
+        startup: StartupInfoW,
+        attribute_list: Handle,
+    }
+
+    #[repr(C)]
     struct ProcessInformation {
         h_process: Handle,
         h_thread: Handle,
@@ -444,6 +511,36 @@ mod windows {
         fn CloseHandle(handle: Handle) -> i32;
         fn GetLastError() -> u32;
         fn GetExitCodeProcess(process: Handle, exit_code: *mut u32) -> i32;
+        fn OpenProcess(access: u32, inherit: i32, process_id: u32) -> Handle;
+        fn IsProcessInJob(process: Handle, job: Handle, result: *mut i32) -> i32;
+        fn GetEnvironmentStringsW() -> *mut u16;
+        fn FreeEnvironmentStringsW(environment: *mut u16) -> i32;
+        fn GetCurrentProcess() -> Handle;
+        fn DuplicateHandle(
+            source_process: Handle,
+            source: Handle,
+            target_process: Handle,
+            target: *mut Handle,
+            desired_access: u32,
+            inherit: i32,
+            options: u32,
+        ) -> i32;
+        fn InitializeProcThreadAttributeList(
+            list: Handle,
+            count: u32,
+            flags: u32,
+            size: *mut usize,
+        ) -> i32;
+        fn UpdateProcThreadAttribute(
+            list: Handle,
+            flags: u32,
+            attribute: usize,
+            value: Handle,
+            size: usize,
+            previous: Handle,
+            return_size: *mut usize,
+        ) -> i32;
+        fn DeleteProcThreadAttributeList(list: Handle);
     }
 
     pub struct Job {
@@ -588,6 +685,31 @@ mod windows {
                 self.handle = null_mut();
             }
         }
+
+        pub fn owns_pid(&self, pid: u32) -> Result<bool, SupervisorError> {
+            if pid == 0 {
+                return Ok(false);
+            }
+            let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+            if process.is_null() {
+                return Err(last_error("OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)"));
+            }
+            let mut in_job = 0;
+            let ok = unsafe { IsProcessInJob(process, self.handle, &mut in_job) };
+            let query_error = if ok == 0 {
+                Some(last_error("IsProcessInJob"))
+            } else {
+                None
+            };
+            let close_ok = unsafe { CloseHandle(process) };
+            if let Some(error) = query_error {
+                return Err(error);
+            }
+            if close_ok == 0 {
+                return Err(last_error("CloseHandle(process query)"));
+            }
+            Ok(in_job != 0)
+        }
     }
 
     impl Drop for Job {
@@ -615,6 +737,94 @@ mod windows {
         pub pid: u32,
         #[cfg(test)]
         hooks: Option<Arc<TestHooks>>,
+    }
+
+    struct InheritedHandleGuard(Vec<Handle>);
+
+    impl Drop for InheritedHandleGuard {
+        fn drop(&mut self) {
+            for handle in self.0.drain(..) {
+                if !handle.is_null() {
+                    unsafe { CloseHandle(handle) };
+                }
+            }
+        }
+    }
+
+    struct AttributeListGuard {
+        storage: Vec<usize>,
+        pointer: Handle,
+    }
+
+    impl AttributeListGuard {
+        fn with_handles(handles: &[Handle]) -> Result<Self, SupervisorError> {
+            let mut bytes = 0usize;
+            unsafe {
+                InitializeProcThreadAttributeList(null_mut(), 1, 0, &mut bytes);
+            }
+            if bytes == 0 {
+                return Err(last_error("InitializeProcThreadAttributeList(size)"));
+            }
+            let mut storage = vec![0usize; bytes.div_ceil(std::mem::size_of::<usize>())];
+            let pointer = storage.as_mut_ptr().cast::<c_void>();
+            if unsafe { InitializeProcThreadAttributeList(pointer, 1, 0, &mut bytes) } == 0 {
+                return Err(last_error("InitializeProcThreadAttributeList"));
+            }
+            let guard = Self { storage, pointer };
+            if unsafe {
+                UpdateProcThreadAttribute(
+                    guard.pointer,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                    handles.as_ptr().cast_mut().cast(),
+                    std::mem::size_of_val(handles),
+                    null_mut(),
+                    null_mut(),
+                )
+            } == 0
+            {
+                return Err(last_error("UpdateProcThreadAttribute(HANDLE_LIST)"));
+            }
+            Ok(guard)
+        }
+    }
+
+    impl Drop for AttributeListGuard {
+        fn drop(&mut self) {
+            if !self.pointer.is_null() {
+                unsafe { DeleteProcThreadAttributeList(self.pointer) };
+            }
+            let _ = &self.storage;
+        }
+    }
+
+    fn duplicate_inheritable_handles(
+        source: [usize; 3],
+    ) -> Result<InheritedHandleGuard, SupervisorError> {
+        let process = unsafe { GetCurrentProcess() };
+        let mut guard = InheritedHandleGuard(Vec::with_capacity(source.len()));
+        for handle in source {
+            if handle == 0 {
+                return Err(SupervisorError("standard stream handle is null".into()));
+            }
+            let mut duplicate = null_mut();
+            if unsafe {
+                DuplicateHandle(
+                    process,
+                    handle as Handle,
+                    process,
+                    &mut duplicate,
+                    0,
+                    1,
+                    DUPLICATE_SAME_ACCESS,
+                )
+            } == 0
+            {
+                return Err(last_error("DuplicateHandle(standard stream)"));
+            }
+            guard.0.push(duplicate);
+        }
+        Ok(guard)
     }
 
     impl ManagedChild {
@@ -677,19 +887,53 @@ mod windows {
                 None => (null_mut(), 0),
             };
 
-            let created = unsafe {
-                CreateProcessW(
-                    app_name.as_ptr(),
-                    command_line.as_mut_ptr(),
-                    null_mut(),
-                    null_mut(),
-                    0,
-                    CREATE_SUSPENDED | CREATE_NO_WINDOW | environment_flags,
-                    environment_ptr,
-                    current_dir_ptr,
-                    &mut startup,
-                    &mut info,
-                )
+            let created = if let Some(source_handles) = spec.stdio_handles {
+                let inherited_handles = duplicate_inheritable_handles(source_handles)?;
+                startup.dw_flags = STARTF_USESTDHANDLES;
+                startup.h_std_input = inherited_handles.0[0];
+                startup.h_std_output = inherited_handles.0[1];
+                startup.h_std_error = inherited_handles.0[2];
+                let attributes = AttributeListGuard::with_handles(&inherited_handles.0)?;
+                let mut extended = StartupInfoExW {
+                    startup,
+                    attribute_list: attributes.pointer,
+                };
+                extended.startup.cb = std::mem::size_of::<StartupInfoExW>() as u32;
+                let created = unsafe {
+                    CreateProcessW(
+                        app_name.as_ptr(),
+                        command_line.as_mut_ptr(),
+                        null_mut(),
+                        null_mut(),
+                        1,
+                        CREATE_SUSPENDED
+                            | CREATE_NO_WINDOW
+                            | EXTENDED_STARTUPINFO_PRESENT
+                            | environment_flags,
+                        environment_ptr,
+                        current_dir_ptr,
+                        &mut extended.startup,
+                        &mut info,
+                    )
+                };
+                drop(attributes);
+                drop(inherited_handles);
+                created
+            } else {
+                unsafe {
+                    CreateProcessW(
+                        app_name.as_ptr(),
+                        command_line.as_mut_ptr(),
+                        null_mut(),
+                        null_mut(),
+                        0,
+                        CREATE_SUSPENDED | CREATE_NO_WINDOW | environment_flags,
+                        environment_ptr,
+                        current_dir_ptr,
+                        &mut startup,
+                        &mut info,
+                    )
+                }
             };
             if created == 0 {
                 return Err(last_error("CreateProcessW(CREATE_SUSPENDED)"));
@@ -873,8 +1117,15 @@ mod windows {
     pub(super) fn build_environment_block(
         policy: &EnvironmentPolicy,
     ) -> Result<Option<Vec<u16>>, SupervisorError> {
+        match policy {
+            EnvironmentPolicy::Inherit => return Ok(None),
+            EnvironmentPolicy::InheritWithValues { values } => {
+                return build_inherited_environment_block(values).map(Some);
+            }
+            EnvironmentPolicy::Isolated { .. } => {}
+        }
         let EnvironmentPolicy::Isolated { allowlist, values } = policy else {
-            return Ok(None);
+            unreachable!()
         };
 
         fn validate_name(name: &OsStr) -> Result<String, SupervisorError> {
@@ -949,6 +1200,112 @@ mod windows {
             block.push(0);
         }
         Ok(Some(block))
+    }
+
+    fn build_inherited_environment_block(
+        overrides: &[(OsString, OsString)],
+    ) -> Result<Vec<u16>, SupervisorError> {
+        fn validate_name(name: &OsStr) -> Result<String, SupervisorError> {
+            let name = name.to_str().ok_or_else(|| {
+                SupervisorError("environment variable name must be valid Unicode".into())
+            })?;
+            if name.is_empty() || name.contains('=') || name.contains('\0') {
+                return Err(SupervisorError(
+                    "invalid environment variable name (value omitted)".into(),
+                ));
+            }
+            Ok(name.to_lowercase())
+        }
+        fn validate_value(value: &OsStr) -> Result<(), SupervisorError> {
+            if value.encode_wide().any(|unit| unit == 0) {
+                return Err(SupervisorError(
+                    "environment variable value contains NUL (value omitted)".into(),
+                ));
+            }
+            Ok(())
+        }
+
+        let block = unsafe { GetEnvironmentStringsW() };
+        if block.is_null() {
+            return Err(last_error("GetEnvironmentStringsW"));
+        }
+        let mut raw_entries = Vec::<Vec<u16>>::new();
+        let mut offset = 0usize;
+        loop {
+            let first = unsafe { *block.add(offset) };
+            if first == 0 {
+                break;
+            }
+            let start = offset;
+            while unsafe { *block.add(offset) } != 0 {
+                offset += 1;
+            }
+            raw_entries.push(
+                unsafe { std::slice::from_raw_parts(block.add(start), offset - start) }.to_vec(),
+            );
+            offset += 1;
+        }
+        if unsafe { FreeEnvironmentStringsW(block) } == 0 {
+            return Err(last_error("FreeEnvironmentStringsW"));
+        }
+
+        let mut pseudo_entries = Vec::new();
+        let mut values = std::collections::BTreeMap::<String, (Vec<u16>, Vec<u16>)>::new();
+        for entry in raw_entries {
+            let separator = if entry.first() == Some(&(b'=' as u16)) {
+                entry
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .find_map(|(index, unit)| (*unit == b'=' as u16).then_some(index))
+            } else {
+                entry.iter().position(|unit| *unit == b'=' as u16)
+            };
+            let Some(separator) = separator else {
+                continue;
+            };
+            if entry.first() == Some(&(b'=' as u16)) {
+                pseudo_entries.push(entry);
+                continue;
+            }
+            let name = entry[..separator].to_vec();
+            let value = entry[separator + 1..].to_vec();
+            let folded = String::from_utf16_lossy(&name).to_lowercase();
+            values.insert(folded, (name, value));
+        }
+
+        let mut seen_overrides = std::collections::HashSet::new();
+        for (name, value) in overrides {
+            let folded = validate_name(name)?;
+            validate_value(value)?;
+            if !seen_overrides.insert(folded.clone()) {
+                return Err(SupervisorError(
+                    "duplicate inherited environment override (value omitted)".into(),
+                ));
+            }
+            values.insert(
+                folded,
+                (name.encode_wide().collect(), value.encode_wide().collect()),
+            );
+        }
+
+        pseudo_entries.sort();
+        let mut output = Vec::new();
+        for entry in pseudo_entries {
+            output.extend(entry);
+            output.push(0);
+        }
+        for (name, value) in values.into_values() {
+            output.extend(name);
+            output.push(b'=' as u16);
+            output.extend(value);
+            output.push(0);
+        }
+        output.push(0);
+        if output.len() == 1 {
+            output.push(0);
+        }
+        Ok(output)
     }
 
     fn encode_command_line(argv: &[std::ffi::OsString]) -> Result<Vec<u16>, SupervisorError> {
@@ -1283,6 +1640,43 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn owns_pid_checks_membership_in_the_exact_job_object() {
+        let _guard = TEST_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let marker =
+            std::env::temp_dir().join(format!("orion-job-owner-{}.txt", std::process::id()));
+        let _ = fs::remove_file(&marker);
+        let restore = RestoreEnv::set("ORION_SUPERVISOR_EXECUTION_MARKER", marker.as_os_str());
+        let mut supervisor = Supervisor::new().expect("Job Object setup must succeed");
+        let own_pid = std::process::id();
+        assert!(!supervisor.owns_pid(own_pid).expect("query own process"));
+
+        let exe = std::env::current_exe().expect("test executable path");
+        let pid = supervisor
+            .spawn(
+                ProcessSpec::new(exe)
+                    .arg("--ignored")
+                    .arg("windows_test_must_not_run")
+                    .arg("--nocapture")
+                    .current_dir(std::env::temp_dir()),
+            )
+            .expect("child should be created and assigned before running");
+        drop(restore);
+        let reaper = ChildReaper(pid);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !marker.exists() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(25));
+        }
+        assert!(marker.exists(), "child did not start");
+        assert!(supervisor.owns_pid(pid).expect("query Job child"));
+        assert!(!supervisor.owns_pid(own_pid).expect("query foreign process"));
+        supervisor.terminate_all().expect("terminate the test Job");
+        drop(supervisor);
+        drop(reaper);
+        let _ = fs::remove_file(marker);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn resume_thread_failure_terminates_job_before_returning() {
         assert_injected_child_failure(
             windows::FaultPoint::ResumeThread,
@@ -1538,6 +1932,104 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn inherited_environment_preserves_parent_vars_and_overrides_only_requested_names() {
+        let _guard = TEST_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let report = std::env::temp_dir().join(format!(
+            "orion-supervisor-inherited-env-{}.txt",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&report);
+        let preserved = RestoreEnv::set(
+            "ORION_SUPERVISOR_PRESERVED",
+            std::ffi::OsStr::new("keep-me"),
+        );
+        let replaced = RestoreEnv::set(
+            "ORION_SUPERVISOR_OVERRIDE",
+            std::ffi::OsStr::new("old-value"),
+        );
+        let mut supervisor = Supervisor::new().expect("Job Object setup must succeed");
+        let exe = std::env::current_exe().expect("test executable path");
+        let pid = supervisor
+            .spawn(
+                ProcessSpec::new(exe)
+                    .arg("--ignored")
+                    .arg("windows_test_report_environment")
+                    .arg("--nocapture")
+                    .env_inherited("ORION_SUPERVISOR_ENV_REPORT", report.as_os_str())
+                    .env_inherited("ORION_SUPERVISOR_OVERRIDE", "new-value"),
+            )
+            .expect("inherited environment child should start");
+        drop(preserved);
+        drop(replaced);
+        assert_eq!(
+            supervisor
+                .wait_for_exit(pid, Duration::from_secs(5))
+                .unwrap(),
+            Some(0)
+        );
+        let output = fs::read_to_string(&report).expect("read inherited environment report");
+        assert!(output.contains("ORION_SUPERVISOR_PRESERVED=keep-me"));
+        assert!(output.contains("ORION_SUPERVISOR_OVERRIDE=new-value"));
+        assert!(!output.contains("ORION_SUPERVISOR_OVERRIDE=old-value"));
+        assert!(
+            output.contains("SystemRoot="),
+            "Windows system environment must be preserved"
+        );
+        drop(supervisor);
+        let _ = fs::remove_file(report);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explicitly_allowlisted_stdio_handles_receive_child_output() {
+        use std::os::windows::io::AsRawHandle;
+
+        let _guard = TEST_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+        let log_path =
+            std::env::temp_dir().join(format!("orion-supervisor-stdio-{}.log", std::process::id()));
+        let _ = fs::remove_file(&log_path);
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .expect("open isolated log");
+        let stdin = std::fs::OpenOptions::new()
+            .read(true)
+            .open("NUL")
+            .expect("open null input");
+        let mut supervisor = Supervisor::new().expect("Job Object setup must succeed");
+        let exe = std::env::current_exe().expect("test executable path");
+        let pid = supervisor
+            .spawn(
+                ProcessSpec::new(exe)
+                    .arg("--ignored")
+                    .arg("windows_test_write_standard_streams")
+                    .arg("--nocapture")
+                    .current_dir(std::env::temp_dir())
+                    .stdio_handles(
+                        stdin.as_raw_handle() as usize,
+                        log.as_raw_handle() as usize,
+                        log.as_raw_handle() as usize,
+                    ),
+            )
+            .expect("child with explicitly passed standard handles should start");
+        assert_eq!(
+            supervisor
+                .wait_for_exit(pid, Duration::from_secs(5))
+                .unwrap(),
+            Some(0)
+        );
+        let output = fs::read_to_string(&log_path).expect("read child output");
+        assert!(output.contains("stdout-proof"));
+        assert!(output.contains("stderr-proof"));
+        drop(supervisor);
+        drop(log);
+        drop(stdin);
+        let _ = fs::remove_file(log_path);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn isolated_environment_rejects_conflicting_or_malformed_variables_without_values() {
         assert!(matches!(
             ProcessSpec::new("unused.exe").environment,
@@ -1768,6 +2260,14 @@ mod tests {
             )
             .expect("write environment report");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn windows_test_write_standard_streams() {
+        println!("stdout-proof");
+        eprintln!("stderr-proof");
     }
 
     #[cfg(not(windows))]

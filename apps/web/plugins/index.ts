@@ -172,6 +172,8 @@ const ProjectIdeasTab = dynamic<ProjectTabSlotProps>(() => import("./project-cap
 const ProjectProblemsTab = dynamic<ProjectTabSlotProps>(() => import("./project-captures/problems-tab").then((m) => m.ProjectProblemsTab), { ssr: false });
 contribute("projects.tabs", { pluginId: "projects-ideas", component: ProjectIdeasTab, order: 30, meta: { tabId: "ideas", label: "Идеи" } });
 contribute("projects.tabs", { pluginId: "projects-problems", component: ProjectProblemsTab, order: 40, meta: { tabId: "problems", label: "Проблемы" } });
+const ProjectLogbookTab = dynamic<ProjectTabSlotProps>(() => import("./projects-logbook/logbook-tab").then((m) => m.ProjectLogbookTab), { ssr: false });
+contribute("projects.tabs", { pluginId: "projects-logbook", component: ProjectLogbookTab, order: 45, meta: { tabId: "logbook", label: "Журнал" } });
 
 contribute("inventory.alerts", {
   pluginId: "inventory-alerts",

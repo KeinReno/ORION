@@ -1,11 +1,13 @@
 "use client";
 
-import { Badge, Button, Card, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton, useToast } from "@orion/ui";
 import { Download, RefreshCw, TriangleAlert } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { applyUpdate, checkForUpdate, downloadUpdate, fetchUpdateConfig, fetchUpdateStatus, saveUpdateConfig } from "../../lib/updates-local";
 import { describeAuthError } from "../../lib/error-message";
+import { hasAnyStoredDraft } from "../../lib/draft-storage";
+import { hasUnsavedDrafts } from "../../lib/unsaved-drafts";
 
 const STATE_LABEL: Record<string, string> = {
   idle: "Не проверялось",
@@ -23,8 +25,8 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * Обновления программы с GitHub Releases. Токен чтения релизов встроен в программу; свой токен на этом компьютере
- * хранится зашифрованным и обратно не показывается. Скачивание проверяется по размеру и SHA-256 из описания релиза; установка
+ * Обновления программы с GitHub Releases. Токен чтения приватных релизов пользователь задаёт один раз; он
+ * хранится зашифрованным на этом компьютере и обратно не показывается. Скачивание проверяется по размеру и SHA-256 из описания релиза; установка
  * закрывает программу, ставит новую версию поверх (данные сохраняются) и запускает её заново.
  * Сборка ORION Rust не ставит установщик обычного ORION.
  */
@@ -32,6 +34,7 @@ export function UpdatesSettings(): React.ReactElement {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [busy, setBusy] = useState<"check" | "download" | "apply" | null>(null);
+  const [confirmApply, setConfirmApply] = useState<{ draftsDetected: boolean } | null>(null);
   const [token, setToken] = useState("");
   const [repo, setRepo] = useState<string | null>(null);
   const status = useQuery({
@@ -65,6 +68,19 @@ export function UpdatesSettings(): React.ReactElement {
     } catch (error) {
       toast({ title: "Не удалось сохранить", description: describeAuthError(error), tone: "danger" });
     }
+  }
+
+  function requestApply(): void {
+    let storedDraft = false;
+    try {
+      storedDraft = hasAnyStoredDraft(window.localStorage);
+    } catch {
+      // If storage is inaccessible, confirmation is safer than silently closing the app.
+      storedDraft = true;
+    }
+    // Detached Tauri windows have their own WebView and draft registry, so always ask before the
+    // process-wide restart and tell the user to check every open window.
+    setConfirmApply({ draftsDetected: hasUnsavedDrafts() || storedDraft });
   }
 
   if (status.isLoading || config.isLoading) return <Skeleton className="h-40" />;
@@ -119,7 +135,7 @@ export function UpdatesSettings(): React.ReactElement {
               size="sm"
               disabled={(busy !== null && busy !== "download") || !s.canApply}
               title={s.canApply ? undefined : "Автоматическая установка доступна только в установленной версии для Windows"}
-              onClick={() => void run("apply", applyUpdate, "Устанавливаю… программа закроется и откроется заново")}
+              onClick={requestApply}
             >
               Установить и перезапустить
             </Button>
@@ -130,10 +146,10 @@ export function UpdatesSettings(): React.ReactElement {
 
       <form onSubmit={(event) => void saveConfig(event)} className="max-w-md space-y-3">
         <p className="text-xs text-muted-foreground">
-          Репозиторий приватный. Токен чтения релизов уже встроен, вводить его не нужно. Свой токен можно указать вместо
-          встроенного: он хранится зашифрованным на этом компьютере и обратно не показывается.
+          Репозиторий приватный. Чтобы проверять и скачивать обновления, введите токен GitHub с правом чтения релизов один раз.
+          Он хранится зашифрованным на этом компьютере и обратно не показывается. Секрет не включается в установщик.
           Эта сборка не устанавливает обновления обычного ORION.
-          {c?.tokenSet ? "" : " Сейчас токен недоступен."}
+          {c?.tokenSet ? "" : " Сейчас токен не задан."}
         </p>
         <label className="block space-y-1 text-sm">
           <span>Репозиторий</span>
@@ -147,6 +163,19 @@ export function UpdatesSettings(): React.ReactElement {
           Сохранить
         </Button>
       </form>
+      <ConfirmDialog
+        open={confirmApply !== null}
+        title={confirmApply?.draftsDetected ? "Обнаружены несохранённые черновики" : "Подтвердите установку обновления"}
+        description="Перед продолжением сохраните изменения во всех окнах ORION, включая откреплённые сайдбары. Приложение закроет окна для установки; оставшиеся несохранённые изменения будут потеряны."
+        confirmLabel="Я проверил окна — установить"
+        cancelLabel="Отмена"
+        onConfirm={() => {
+          setConfirmApply(null);
+          void run("apply", applyUpdate, "Устанавливаю… программа закроется и откроется заново");
+        }}
+        onCancel={() => setConfirmApply(null)}
+        confirmDisabled={busy !== null}
+      />
     </div>
   );
 }

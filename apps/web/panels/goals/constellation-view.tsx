@@ -4,14 +4,14 @@ import { useAddProjectGoalPlan, useEntityLinks, useMilestones, useProjectGoalsHi
 import type { Goal, Project } from "@orion/shared-types";
 import { Badge, Button, Card, SegmentedControl, useToast } from "@orion/ui";
 import { ArrowLeft, GitBranch, Hand, History, Plus, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeError } from "../../lib/error-message";
 import { shortDate } from "../../lib/format";
 import { openEntity, openProject } from "../../lib/panel-bus";
 import { buildConstellations, suggestCanvasPoint, type Lens, type Star } from "../../lib/goal-constellation";
 import { goalsAt, progressDelta } from "../../lib/goal-history";
-import { applyPins, loadPins, loadVisibleLinks, pinsOf, savePins, saveVisibleLinks, type SkyPins } from "../../lib/goal-sky-layout";
+import { applyPins, loadPins, loadViews, loadVisibleLinks, pinsOf, savePins, saveViews, saveVisibleLinks, type SkyPins, type SkyView } from "../../lib/goal-sky-layout";
 import { GoalInspector } from "./goal-inspector";
 import { CanvasComposer } from "./canvas-composer";
 import { KIND_LABEL, SkyCanvas, STATE_LABEL } from "./sky-canvas";
@@ -68,6 +68,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
   const [arrange, setArrange] = useState(false);
   const [editLinks, setEditLinks] = useState(false);
   const [pins, setPins] = useState<SkyPins>({});
+  const [views, setViews] = useState<Record<string, SkyView>>({});
   const [visibleLinkIds, setVisibleLinkIds] = useState<string[]>([]);
   const [timeline, setTimeline] = useState(false);
   const [sliderValue, setSliderValue] = useState(HISTORY_WEEKS);
@@ -95,6 +96,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
   useEffect(() => {
     if (workspaceId) {
       setPins(loadPins(workspaceId));
+      setViews(loadViews(workspaceId));
       setVisibleLinkIds(loadVisibleLinks(workspaceId));
     }
   }, [workspaceId]);
@@ -279,6 +281,13 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
     });
   }
 
+  const persistView = useCallback((rootId: string, view: SkyView): void => {
+    if (!workspaceId || readOnly) return;
+    const next = { ...views, [rootId]: view };
+    setViews(next);
+    saveViews(workspaceId, next);
+  }, [workspaceId, readOnly, views]);
+
   function resetPins(starIds: string[]): void {
     setPins((prev) => {
       const next = { ...prev };
@@ -362,10 +371,10 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{titles.get(open.rootId) ?? open.stars[0]?.label}</h2>
           {!readOnly ? (
             <>
-              <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: point.x / 560, screenY: point.y / 420, parentId: selected.id, contextStarId: null }); }} aria-label="Добавить элемент в созвездие">
+              <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: 0.5, screenY: 0.5, parentId: selected.id, contextStarId: null }); }} aria-label="Добавить элемент в созвездие">
                 <Plus className="mr-1 h-3.5 w-3.5" /> Добавить узел
               </Button>
-              <Button type="button" size="sm" variant={arrange ? "outline" : "ghost"} aria-pressed={arrange} onClick={() => { setArrange(!arrange); setEditLinks(false); }} title="Меняет только личное расположение звёзд на этом устройстве">
+              <Button type="button" size="sm" variant={arrange ? "outline" : "ghost"} aria-pressed={arrange} onClick={() => { setArrange(!arrange); setEditLinks(false); }} title="Shift+щелчок выделяет несколько звёзд. Перетащите выбранную, чтобы передвинуть группу только на вашей карте.">
                 <Hand className="mr-1 h-3.5 w-3.5" />
                 Расположить
               </Button>
@@ -398,7 +407,9 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
 
         {!readOnly && editLinks ? <div className={styles.canvasLinkBar}>
           <GitBranch size={16} aria-hidden />
-          <span>{linkSource ? `Теперь выберите узел, который зависит от «${open.stars.find((star) => star.id === linkSource)?.label ?? "выбранного"}». Для задачи → веха задача войдёт в этап.` : "Выберите исходный узел и нажмите «Связать от этого узла», затем выберите второй."}</span>
+          <span>{linkSource
+            ? `Выберите второй узел. Задача → задача и веха → веха добавляют зависимость; задача → веха меняет этап задачи; цель → цель меняет родителя. Чтобы заменить зависимость, добавьте новую, затем снимите старую в инспекторе.`
+            : "Выберите узел и нажмите «Связать от этого узла», затем выберите второй. Добавление связи не удаляет существующие связи; удалить их можно в инспекторе выбранного узла."}</span>
           {linkSource ? <Button type="button" size="sm" variant="ghost" onClick={() => setLinkSource(null)}>Отмена</Button> : <Button type="button" size="sm" variant="outline" onClick={() => setLinkSource(selected.id)}>Связать от этого узла</Button>}
         </div> : null}
 
@@ -407,6 +418,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
             <div className={styles.canvasStage}>
               {open.stars.length === 1 ? <div className={styles.canvasFirstHint}>Это ваша цель. Нажмите ПКМ на свободном месте, чтобы добавить первый узел.</div> : null}
               <div className={`${styles.atlasWideMap} ${open.stars.length === 1 ? styles.canvasFirstMap : ""}`}><SkyCanvas
+              key={`${workspaceId ?? "local"}:${open.rootId}`}
               constellation={open}
               goals={shownGoals}
               lens={lens}
@@ -422,6 +434,8 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
               onInvalidDropProject={readOnly || !editLinks ? undefined : () => toast({ title: "Проект не прикреплён", description: "Отпустите его точно на звезде цели (крупный круг).", tone: "default" })}
               arrange={arrange && !readOnly}
               onPin={readOnly || !arrange ? undefined : pin}
+              initialView={views[open.rootId]}
+              onViewChange={readOnly ? undefined : (view) => persistView(open.rootId, view)}
               onCanvasPrimaryClick={() => { setSelectedId(null); setLinkSource(null); setComposer(null); }}
               onCanvasContextMenu={readOnly ? undefined : (x, y, screenX, screenY, starId) => {
                 const target = open.stars.find((star) => star.id === starId) ?? selected;
@@ -448,10 +462,10 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
               /> : null}
             </div>
             {open.stars.length > 1 ? (
-              <div className={styles.atlasCompactRoute} aria-label="Маршрут к цели">
+              <div className={`${styles.atlasCompactRoute} ${open.stars.length > 20 ? styles.atlasRouteAlways : ""}`} aria-label="Маршрут к цели">
                 <p className={styles.atlasRouteHeading}>МАРШРУТ К РЕЗУЛЬТАТУ · СНИЗУ ВВЕРХ</p>
                 {[...open.stars].sort((a, b) => b.y - a.y || a.x - b.x).map((star) => (
-                  <button key={star.id} type="button" className={styles.atlasRouteStar} data-selected={star.id === selected.id} onClick={() => selectStar(star.id, open.stars)}>
+                  <button key={star.id} type="button" className={styles.atlasRouteStar} data-selected={star.id === selected.id} aria-label={`Выбрать ${KIND_LABEL[star.kind]} «${star.label}»`} title={star.label} onClick={() => selectStar(star.id, open.stars)}>
                     <span className={styles.atlasRouteSymbol} data-kind={star.kind} aria-hidden>{star.kind === "goal" ? "✦" : star.kind === "milestone" ? "◆" : star.kind === "task" ? "▪" : "◯"}</span>
                     <span className={styles.atlasRouteText}><strong>{star.label}</strong><small>{KIND_LABEL[star.kind]} · {STATE_LABEL[star.state]}</small></span>
                     <span className={styles.atlasRouteProgress}>{star.progress === null ? "—" : `${star.progress}%`}</span>
@@ -459,7 +473,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
                 ))}
               </div>
             ) : null}
-            <p className="text-2xs text-subtle-foreground">ПКМ открывает меню создания. ЛКМ выбирает узел, двойной ЛКМ открывает его запись; ЛКМ по пустому полю снимает выделение. Перетащите поле для обзора, Ctrl + колесо меняет масштаб. «Расположить» меняет только ваш рисунок, «Изменить связи» — структуру цели для пространства.</p>
+            <p className="text-2xs text-subtle-foreground">ПКМ открывает меню создания. ЛКМ выбирает узел, двойной ЛКМ открывает его запись; Shift+ЛКМ выделяет несколько звёзд. Перетащите поле для обзора, Ctrl + колесо меняет масштаб. В «Расположить» можно двигать группу, не меняя данные; «Изменить связи» меняет структуру для всего пространства.</p>
             {!readOnly && editLinks && freeProjects.length > 0 ? (
               <div className="rounded-lg border border-dashed border-border p-2.5">
                 <p className="mb-1.5 text-2xs uppercase tracking-wide text-subtle-foreground">Свободные проекты · перетащите на цель или выберите в панели справа</p>
@@ -488,7 +502,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
             <Card className="space-y-2 p-4" aria-label="Поле созвездия">
               <p className="text-sm font-medium">Поле созвездия</p>
               <p className="text-label text-subtle-foreground">Выберите узел ЛКМ, чтобы увидеть его действия. ПКМ на поле откроет меню создания; двойной ЛКМ по узлу откроет запись.</p>
-              <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: point.x / 560, screenY: point.y / 420, parentId: selected.id, contextStarId: null }); }}>Добавить узел</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: 0.5, screenY: 0.5, parentId: selected.id, contextStarId: null }); }}>Добавить узел</Button>
             </Card>
           ) : (
             <GoalInspector

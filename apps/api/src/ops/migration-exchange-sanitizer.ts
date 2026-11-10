@@ -46,6 +46,7 @@ export function sanitizeMigrationExchangeRows(
 
 function sanitizePublicationRule(row: MigrationExchangeRow): MigrationExchangeRow {
   assertRow(row, "publication_rules", ["id", "workspaceId", "userId", "targetWorkspaceId", "config", "enabled", "revision", "history", "lastError"]);
+  assertStringFields(row, "publication_rules", ["id", "workspaceId", "userId", "targetWorkspaceId"]);
   if (typeof row.enabled !== "boolean" || !isPositiveInteger(row.revision) || !Array.isArray(row.history)) {
     throw new Error("Unsupported publication_rules row");
   }
@@ -68,6 +69,7 @@ function sanitizeSharedPublication(row: MigrationExchangeRow, deactivatedAt: str
     "id", "ruleId", "workspaceId", "publisherId", "kind", "sourceWorkspaceId", "sourceId", "sourceRevision",
     "content", "includeText", "includeDueAt", "allowStatus", "revision", "revokedAt"
   ]);
+  assertStringFields(row, "shared_publications", ["id", "workspaceId", "publisherId", "sourceWorkspaceId", "sourceId"]);
   if (row.ruleId !== null && typeof row.ruleId !== "string") throw new Error("Unsupported shared_publications row");
   if (row.workspaceId === row.sourceWorkspaceId || !publicationKindSchema.safeParse(row.kind).success ||
       !isPositiveInteger(row.sourceRevision) || !isPositiveInteger(row.revision) ||
@@ -84,6 +86,7 @@ function sanitizeCrossWorkspaceGrant(row: MigrationExchangeRow, deactivatedAt: s
   assertRow(row, "cross_workspace_grants", [
     "id", "workspaceId", "granterId", "granteeUserId", "objectType", "objectId", "scope", "projectionFields", "revokedAt"
   ]);
+  assertStringFields(row, "cross_workspace_grants", ["id", "workspaceId", "granterId", "granteeUserId", "objectId"]);
   if (!sharedGrantObjectTypeSchema.safeParse(row.objectType).success || row.scope !== "full" ||
       !Array.isArray(row.projectionFields) || row.projectionFields.length !== 0 ||
       !row.projectionFields.every((field) => typeof field === "string")) {
@@ -105,6 +108,7 @@ function sanitizeCalendarConnection(row: MigrationExchangeRow): MigrationExchang
   assertRow(row, "calendar_connections", [
     "id", "workspaceId", "name", "kind", "url", "username", "passwordEnc", "color", "enabled", "lastSyncAt", "lastError", "createdAt", "updatedAt"
   ]);
+  assertStringFields(row, "calendar_connections", ["id", "workspaceId"]);
   if (typeof row.enabled !== "boolean" || !CALENDAR_KINDS.has(String(row.kind)) ||
       typeof row.passwordEnc !== "string" || typeof row.name !== "string" ||
       typeof row.url !== "string" || typeof row.username !== "string" ||
@@ -152,7 +156,13 @@ function hasUnsupportedContentKeys(value: unknown): boolean {
 function assertRow(row: MigrationExchangeRow, table: string, required: readonly string[]): void {
   if (!isRecord(row)) throw new Error(`Unsupported ${table} row`);
   for (const key of required) {
-    const value = row[key];
+    if (!Object.prototype.hasOwnProperty.call(row, key)) throw new Error(`Unsupported ${table} row`);
+  }
+}
+
+function assertStringFields(row: MigrationExchangeRow, table: string, fields: readonly string[]): void {
+  for (const field of fields) {
+    const value = row[field];
     if (typeof value !== "string" || value.length === 0) throw new Error(`Unsupported ${table} row`);
   }
 }

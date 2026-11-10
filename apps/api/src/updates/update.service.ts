@@ -15,7 +15,7 @@ import { nodeDir, writeJsonAtomic } from "../lan/node-config";
 import { openSecret, sealSecret } from "../sync/sync-crypto";
 import { buildApplyScript } from "./apply-script";
 import { builtinGithubUpdateToken } from "./builtin-github-token";
-import { compareTags, extractSha256, pickInstallerAsset, pickPayloadAsset, pickLatestRelease, type GithubRelease } from "./release-feed";
+import { compareRustTags, compareTags, extractSha256, pickInstallerAsset, pickRustInstallerAsset, pickPayloadAsset, pickLatestRelease, pickLatestRustRelease, type GithubRelease } from "./release-feed";
 import { rustReleaseRefusal } from "./rust-update-guard";
 
 interface StoredConfig {
@@ -142,10 +142,33 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   private readConfig(): StoredConfig {
     try {
       const raw = JSON.parse(fs.readFileSync(this.configPath(), "utf8")) as Partial<StoredConfig>;
-      return { repo: raw.repo || APP_UPDATE_DEFAULT_REPO, tokenEnc: raw.tokenEnc ?? null, autoCheck: raw.autoCheck ?? true };
+      return { repo: this.isRustEdition() ? this.rustChannel() : raw.repo || APP_UPDATE_DEFAULT_REPO, tokenEnc: raw.tokenEnc ?? null, autoCheck: raw.autoCheck ?? true };
     } catch {
-      return { repo: APP_UPDATE_DEFAULT_REPO, tokenEnc: null, autoCheck: true };
+      return { repo: this.isRustEdition() ? this.rustChannel() : APP_UPDATE_DEFAULT_REPO, tokenEnc: null, autoCheck: true };
     }
+  }
+
+  private isRustEdition(): boolean {
+    return process.env.ORION_EDITION === "rust";
+  }
+
+  private rustChannel(): string {
+    return process.env.ORION_RUST_UPDATE_REPO?.trim() || APP_UPDATE_DEFAULT_REPO;
+  }
+
+  private rustApplyShutdownProof(): { pid: number | null; marker: string | null } {
+    const rawPid = process.env.ORION_SHELL_PID?.trim() ?? "";
+    const parsedPid = /^\d+$/.test(rawPid) ? Number(rawPid) : Number.NaN;
+    const pid = Number.isSafeInteger(parsedPid) && parsedPid > 0 && parsedPid <= 2_147_483_647 ? parsedPid : null;
+    const dataDir = process.env.ORION_DESKTOP_DATA_DIR?.trim();
+    const rawMarker = process.env.ORION_SHUTDOWN_MARKER?.trim();
+    if (pid === null || !dataDir || !rawMarker || !path.isAbsolute(rawMarker)) return { pid, marker: null };
+    const absoluteDataDir = path.resolve(dataDir);
+    const absoluteMarker = path.resolve(rawMarker);
+    const markerName = path.basename(absoluteMarker);
+    const safeName = markerName.startsWith(`runtime-stopped-${pid}-`) && /^runtime-stopped-\d+-\d+\.marker$/.test(markerName);
+    if (path.dirname(absoluteMarker).toLowerCase() !== absoluteDataDir.toLowerCase() || !safeName) return { pid, marker: null };
+    return { pid, marker: absoluteMarker };
   }
 
   getConfig(): AppUpdateConfig {
@@ -156,6 +179,10 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   setConfig(input: SetAppUpdateConfigInput): AppUpdateConfig {
     if (["checking", "downloading", "applying"].includes(this.status.state)) throw new ConflictException("Дождитесь завершения текущего обновления");
     const current = this.readConfig();
+    const requestedRepo = input.repo ?? current.repo;
+    if (this.isRustEdition() && requestedRepo !== this.rustChannel()) {
+      throw new BadRequestException("Для ORION Rust доступен только настроенный канал ORION Rust");
+    }
     let tokenEnc = current.tokenEnc;
     if (input.token === null) tokenEnc = null;
     else if (typeof input.token === "string") {
@@ -165,7 +192,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException(error instanceof Error ? error.message : "Не удалось зашифровать токен");
       }
     }
-    writeJsonAtomic(this.configPath(), { repo: input.repo ?? current.repo, tokenEnc, autoCheck: input.autoCheck ?? current.autoCheck });
+    writeJsonAtomic(this.configPath(), { repo: requestedRepo, tokenEnc, autoCheck: input.autoCheck ?? current.autoCheck });
     // Другая учётная запись или репозиторий — прежний результат проверки недействителен.
     this.status = { state: "idle", latest: null, progress: 0, error: null, lastCheckedAt: null };
     this.downloaded = null;
@@ -179,7 +206,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         const opened = openSecret(saved).trim();
         if (opened) return opened;
       } catch {
-        // Повреждённая запись не блокирует обновление: ниже встроенный токен.
+        // Повреждённая запись не блокирует обновление: ниже проверяется локальный env fallback.
       }
     }
     const builtin = builtinGithubUpdateToken();
@@ -217,11 +244,12 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
    * Download and apply call the same check, so a file that was already marked
    * ready cannot be installed by skipping the list.
    */
-  private assertRustRelease(repo: string, assetName?: string | null, notes?: string | null, sha256?: string | null): void {
+  private assertRustRelease(repo: string, tag?: string | null, assetName?: string | null, notes?: string | null, sha256?: string | null): void {
     const message = rustReleaseRefusal({
       edition: process.env.ORION_EDITION,
       repo,
       channel: process.env.ORION_RUST_UPDATE_REPO,
+      tag,
       assetName,
       notes,
       sha256
@@ -242,11 +270,8 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   // ── проверка ────────────────────────────────────────────────────────────────────────────────
   async check(): Promise<AppUpdateStatus> {
     const repo = this.readConfig().repo;
-    if (process.env.ORION_EDITION === "rust") {
-      const channel = process.env.ORION_RUST_UPDATE_REPO?.trim() ?? "";
-      if (repo.trim().toLowerCase() === APP_UPDATE_DEFAULT_REPO.toLowerCase() || channel === "" || repo.trim() !== channel) {
-        this.assertRustRelease(repo);
-      }
+    if (this.isRustEdition() && repo !== this.rustChannel()) {
+      this.fail("Для ORION Rust доступен только настроенный канал ORION Rust");
     }
     const token = this.token();
     if (!token) this.fail("Токен GitHub не задан: добавьте его в настройках обновлений");
@@ -266,14 +291,14 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       if (error instanceof BadRequestException) throw error;
       this.fail("Не удалось связаться с GitHub — проверьте подключение к интернету");
     }
-    const latest = pickLatestRelease(releases, true, this.payloadBase());
+    const latest = this.isRustEdition() ? pickLatestRustRelease(releases) : pickLatestRelease(releases, true, this.payloadBase());
     const lastCheckedAt = new Date().toISOString();
     if (!latest) {
       this.status = { state: "up_to_date", latest: null, progress: 0, error: null, lastCheckedAt };
       return this.getStatus();
     }
-    const payloadAsset = pickPayloadAsset(latest, this.payloadBase());
-    const asset = payloadAsset ?? pickInstallerAsset(latest)!;
+    const payloadAsset = this.isRustEdition() ? null : pickPayloadAsset(latest, this.payloadBase());
+    const asset = this.isRustEdition() ? pickRustInstallerAsset(latest)! : payloadAsset ?? pickInstallerAsset(latest)!;
     const info: AppUpdateRelease = {
       tag: latest.tag_name,
       name: latest.name ?? latest.tag_name,
@@ -284,10 +309,10 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       assetName: asset.name,
       sha256: payloadAsset ? null : extractSha256(latest.body)
     };
-    this.assertRustRelease(repo, asset.name, latest.body, info.sha256);
+    this.assertRustRelease(repo, latest.tag_name, asset.name, latest.body, info.sha256);
     const current = this.currentTag();
     // Сборка без метки (старая установка) не знает своей версии — предлагаем самую новую.
-    const newer = current === null || compareTags(info.tag, current) > 0;
+    const newer = current === null || (this.isRustEdition() ? compareRustTags(info.tag, current) : compareTags(info.tag, current)) > 0;
     const ready = this.downloaded?.tag === info.tag && fs.existsSync(this.downloaded.file);
     this.status = { state: newer ? (ready ? "ready" : "available") : "up_to_date", latest: newer ? info : null, progress: 0, error: null, lastCheckedAt };
     return this.getStatus();
@@ -296,7 +321,7 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   // ── скачивание ──────────────────────────────────────────────────────────────────────────────
   async download(): Promise<AppUpdateStatus> {
     const latest = this.status.latest;
-    if (latest) this.assertRustRelease(this.readConfig().repo, latest.assetName, latest.notes, latest.sha256);
+    if (latest) this.assertRustRelease(this.readConfig().repo, latest.tag, latest.assetName, latest.notes, latest.sha256);
     if (!latest || (this.status.state !== "available" && this.status.state !== "error" && this.status.state !== "ready")) {
       throw new ConflictException("Сначала проверьте наличие обновления");
     }
@@ -316,8 +341,14 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
       });
       if (!releases.ok) this.fail(`GitHub ответил ошибкой (код ${releases.status})`);
       const release = (await releases.json()) as GithubRelease;
-      const asset = latest.kind === "payload" ? pickPayloadAsset(release, this.payloadBase()) : pickInstallerAsset(release);
+      if (release.tag_name !== latest.tag) this.fail("Метка релиза изменилась — проверьте обновления заново");
+      const asset = this.isRustEdition()
+        ? pickRustInstallerAsset(release)
+        : latest.kind === "payload" ? pickPayloadAsset(release, this.payloadBase()) : pickInstallerAsset(release);
       if (!asset) this.fail("В релизе нет установщика");
+      const releaseSha256 = extractSha256(release.body);
+      this.assertRustRelease(repo, release.tag_name, asset.name, release.body, releaseSha256);
+      if (this.isRustEdition() && releaseSha256 !== latest.sha256) this.fail("Описание релиза изменилось — проверьте обновления заново");
       if (asset.name !== latest.assetName || asset.size !== latest.sizeBytes || asset.size > 512 * 1024 * 1024) this.fail("Файл релиза изменился или превышает лимит — проверьте обновления заново");
       const file = path.join(dir, asset.name.replace(/[^0-9A-Za-z._-]/g, "_"));
       downloadPath = file;
@@ -361,9 +392,9 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
   // ── применение ──────────────────────────────────────────────────────────────────────────────
   async apply(): Promise<{ started: true }> {
     const status = this.getStatus();
-    if (process.env.ORION_EDITION === "rust" && (this.downloaded || status.latest)) {
+    if (this.isRustEdition() && (this.downloaded || status.latest)) {
       const fileName = this.downloaded ? path.basename(this.downloaded.file) : status.latest?.assetName;
-      this.assertRustRelease(this.readConfig().repo, fileName, status.latest?.notes, status.latest?.sha256);
+      this.assertRustRelease(this.readConfig().repo, this.downloaded?.tag ?? status.latest?.tag, fileName, status.latest?.notes, status.latest?.sha256);
       if (this.downloaded && status.latest?.sha256) {
         const onDisk = createHash("sha256").update(fs.readFileSync(this.downloaded.file)).digest("hex");
         if (onDisk !== status.latest.sha256.toLowerCase()) this.fail("Контрольная сумма файла на диске не совпала — установка отклонена");
@@ -372,6 +403,10 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
     const installDir = this.installDir();
     if (status.state !== "ready" || !this.downloaded) throw new ConflictException("Обновление ещё не скачано");
     if (process.platform !== "win32" || !installDir) throw new ConflictException("Автоматическое применение доступно только в установленной версии для Windows");
+    const rustShutdownProof = this.isRustEdition() ? this.rustApplyShutdownProof() : null;
+    if (rustShutdownProof && (!rustShutdownProof.pid || !rustShutdownProof.marker)) {
+      throw new ConflictException("Безопасная установка ORION Rust недоступна: не подтверждены PID оболочки и путь штатного завершения базы");
+    }
     this.status = { ...this.status, state: "applying" };
     try {
       if (this.downloaded.payloadId) await this.payloadCommand("queue", this.downloaded.payloadId);
@@ -383,7 +418,8 @@ export class UpdateService implements OnModuleInit, OnModuleDestroy {
         installDir,
         pgCtl: process.env.ORION_PG_CTL?.trim() || null,
         cluster: process.env.ORION_PG_CLUSTER?.trim() || null,
-        logFile: path.join(dir, "apply-update.log")
+        logFile: path.join(dir, "apply-update.log"),
+        ...(rustShutdownProof ? { rustShellPid: rustShutdownProof.pid, rustShutdownMarker: rustShutdownProof.marker } : {})
       });
       // BOM — чтобы PowerShell 5.1 прочитал кириллицу в путях как UTF-8.
       fs.writeFileSync(scriptPath, String.fromCharCode(0xfeff) + script, "utf8");

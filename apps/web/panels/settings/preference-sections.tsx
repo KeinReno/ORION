@@ -80,19 +80,17 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
   const systemReducesMotion = useReducedMotion();
   return (
     <div className="space-y-5">
-      <SettingGroup title="Оболочка">
-        <SettingRow
-          anchor="shell"
-          label="Оформление Orion"
-          description={
-            precision
-              ? "Новая навигация и спокойная палитра. Палитры — на вкладке «Темы»."
-              : "Прежний интерфейс: свой акцент, фон и стекло. При переходе на Precision и обратно они сохраняются."
-          }
-        >
-          {PRECISION_ONLY ? (
-            <p className="text-sm text-subtle-foreground">KAIDEN Precision — единственная оболочка этой сборки.</p>
-          ) : (
+      {!PRECISION_ONLY ? (
+        <SettingGroup title="Оболочка">
+          <SettingRow
+            anchor="shell"
+            label="Оформление Orion"
+            description={
+              precision
+                ? "Новая навигация и спокойная палитра. Палитры — на вкладке «Темы»."
+                : "Прежний интерфейс: свой акцент, фон и стекло. При переходе на Precision и обратно они сохраняются."
+            }
+          >
             <ChoiceSelect
               label="Оформление Orion"
               value={form.theme}
@@ -102,14 +100,14 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
               ]}
               onChange={(theme) => setForm({ ...form, theme })}
             />
-          )}
-        </SettingRow>
-        {!precision ? (
-          <SettingRow anchor="accent" label="Акцент" description="Цвет выделения, ссылок и активных элементов." stack>
-            <SegmentedControl<UserPreference["accent"]> aria-label="Акцент" value={form.accent} onChange={(accent) => setForm({ ...form, accent })} options={ACCENT_OPTIONS} />
           </SettingRow>
-        ) : null}
-      </SettingGroup>
+          {!precision ? (
+            <SettingRow anchor="accent" label="Акцент" description="Цвет выделения, ссылок и активных элементов." stack>
+              <SegmentedControl<UserPreference["accent"]> aria-label="Акцент" value={form.accent} onChange={(accent) => setForm({ ...form, accent })} options={ACCENT_OPTIONS} />
+            </SettingRow>
+          ) : null}
+        </SettingGroup>
+      ) : null}
 
       <SettingGroup title="Макет">
         <SettingRow anchor="density" label="Плотность" description="Размер текста и отступов во всём приложении.">

@@ -55,15 +55,16 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
     "kind": "additional",
     "required": false,
     "label": "Agent Hub",
-    "summary": "История и жизненный цикл исполнений задач агентами. Первый срез: долговременная очередь, события, отмена и просмотр.",
-    "owns": "Исполнения и атомарная история их изменений; задачи и полномочия остаются за соответствующими модулями и AI Bridge.",
+    "summary": "Стабильные профили ИИ-агентов, назначения исполнителей и история исполнений.",
+    "owns": "Стабильные профили, назначение профиля на задачу, исполнения и атомарная история; задачи остаются у Tasks, учетные данные — у AI Bridge.",
     "livesWithout": "Работает как журнал и очередь без запущенных агентов; не требует облачного inference API или открытой IDE.",
     "provides": [
       "Панель исполнений и состояний",
       "Создание исполнения для существующей задачи",
       "Отмена исполнения владельцем/руководителем",
       "История изменений с ревизиями",
-      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности"
+      "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности",
+      "Именованные профили агентов и назначение конкретного профиля существующей задаче без запуска"
     ],
     "optionalDependencies": [
       "tasks"
@@ -150,7 +151,8 @@ export const GENERATED_ADDITIONAL_PERMISSIONS: readonly string[] = [
 export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[number], readonly string[]> = {
   "agent-hub": [
     "20261029202000_agent_hub_executions",
-    "20261029223000_agent_hub_runtime_sessions"
+    "20261029223000_agent_hub_runtime_sessions",
+    "20261110140000_agent_hub_agent_assignments"
   ],
   "chat-archive": [
     "20261020222504_chat_archive",

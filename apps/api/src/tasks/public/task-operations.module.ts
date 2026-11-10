@@ -4,12 +4,13 @@ import { WorkspacesModule } from "../../workspaces/workspaces.module";
 import { ProjectTaskLinksModule } from "../../projects/public/project-task-links.module";
 import { MilestoneReferencesModule } from "../../milestones/public/milestone-references.module";
 import { TaskClosureRegistryModule } from "./task-closure-registry";
+import { TaskAgentAssignmentRegistryModule } from "./task-agent-assignment-registry";
 import { TasksService } from "../tasks.service";
 import { TaskOperations } from "./task-operations";
 
 /** Shared command implementation; no task controllers, listeners or provider registrations. */
 @Module({
-  imports: [HomeReferencesModule, WorkspacesModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule],
+  imports: [HomeReferencesModule, WorkspacesModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, TaskAgentAssignmentRegistryModule],
   providers: [TasksService, { provide: TaskOperations, useFactory: (service: TasksService): TaskOperations => service, inject: [TasksService] }],
   exports: [TaskOperations, TasksService]
 })

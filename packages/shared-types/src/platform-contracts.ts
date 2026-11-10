@@ -25,7 +25,7 @@ export type ContractId = (typeof CONTRACT_IDS)[number];
  */
 export const PLATFORM_CONTRACT_VERSIONS: Readonly<Record<ContractId, string>> = {
   module: "1.3.0",
-  plugin: "1.4.0",
+  plugin: "1.5.0",
   event: "1.1.0",
   storage: "1.0.0",
   workspace: "1.0.0",

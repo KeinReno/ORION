@@ -374,64 +374,41 @@ function DashboardOverview(): React.ReactElement {
         subtitle={headerNow.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
       />
       <PanelBody className="space-y-6 [container-type:inline-size]">
+        {/* Keep the first useful action available while workspace data loads. */}
+        <header className="space-y-3">
+          <form onSubmit={submitCapture} className="space-y-1.5">
+            <div className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row [@container(min-width:576px)]:items-center">
+              <Input
+                id="orion-quick-capture"
+                value={capture}
+                onChange={(e) => setCapture(e.target.value)}
+                placeholder={quickCapturePlaceholder({ tasks: tasksOn, notes: notesOn, lists: listsOn })}
+                aria-label="Быстрый ввод"
+              />
+              <Button type="submit" size="sm" disabled={captureBusy || !capture.trim()} className="shrink-0">
+                Добавить
+              </Button>
+            </div>
+            {captureHintText ? (
+              <p className={cx("text-label", capturePreview?.kind === "error" ? "text-destructive" : "text-muted-foreground")}>
+                {captureHintText}
+              </p>
+            ) : null}
+          </form>
+          {hasAlerts ? (
+            <div className="flex flex-wrap gap-2">
+              {parts.overdue.length > 0 ? <StatusChip tone="danger" onClick={() => openPanel("tasks")}>Просрочено <CountUp value={parts.overdue.length} /></StatusChip> : null}
+              {running ? <StatusChip tone="accent" onClick={() => openPanel("time")}><LiveDot /><span className="truncate">{running.note || "Идёт таймер"}</span><span className="font-mono tabular-nums">{formatDuration(entryMinutes(running, tick))}</span></StatusChip> : null}
+              {inboxCount > 0 ? <StatusChip tone="neutral" onClick={() => openPanel("inbox")}><Inbox className="h-3 w-3" />Инбокс <CountUp value={inboxCount} /></StatusChip> : null}
+            </div>
+          ) : !loading ? (
+            <OnboardingCard onCapture={() => document.getElementById("orion-quick-capture")?.focus()} />
+          ) : null}
+        </header>
         {loading ? (
           <DashboardSkeleton />
         ) : (
           <>
-            {/* Capture stays up: OnboardingCard's copy points at the field
-                above, and that component is out of scope. With no alerts the
-                chip ribbon is what the card replaces (it returns null once dismissed). */}
-            <header className="space-y-3">
-              <form onSubmit={submitCapture} className="space-y-1.5">
-                <div className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row [@container(min-width:576px)]:items-center">
-                  <Input
-                    id="orion-quick-capture"
-                    value={capture}
-                    onChange={(e) => setCapture(e.target.value)}
-                    placeholder={quickCapturePlaceholder({ tasks: tasksOn, notes: notesOn, lists: listsOn })}
-                    aria-label="Быстрый ввод"
-                  />
-                  <Button type="submit" size="sm" disabled={captureBusy || !capture.trim()} className="shrink-0">
-                    Добавить
-                  </Button>
-                </div>
-                {captureHintText ? (
-                  <p
-                    className={cx(
-                      "text-label",
-                      capturePreview?.kind === "error" ? "text-destructive" : "text-muted-foreground"
-                    )}
-                  >
-                    {captureHintText}
-                  </p>
-                ) : null}
-              </form>
-              {hasAlerts ? (
-                <div className="flex flex-wrap gap-2">
-                  {parts.overdue.length > 0 ? (
-                    <StatusChip tone="danger" onClick={() => openPanel("tasks")}>
-                      Просрочено <CountUp value={parts.overdue.length} />
-                    </StatusChip>
-                  ) : null}
-                  {running ? (
-                    <StatusChip tone="accent" onClick={() => openPanel("time")}>
-                      <LiveDot />
-                      <span className="truncate">{running.note || "Идёт таймер"}</span>
-                      <span className="font-mono tabular-nums">{formatDuration(entryMinutes(running, tick))}</span>
-                    </StatusChip>
-                  ) : null}
-                  {inboxCount > 0 ? (
-                    <StatusChip tone="neutral" onClick={() => openPanel("inbox")}>
-                      <Inbox className="h-3 w-3" />
-                      Инбокс <CountUp value={inboxCount} />
-                    </StatusChip>
-                  ) : null}
-                </div>
-              ) : (
-                <OnboardingCard onCapture={() => document.getElementById("orion-quick-capture")?.focus()} />
-              )}
-            </header>
-
             {tasksBlockError ? (
               <EmptyState
                 icon={AlertCircle}

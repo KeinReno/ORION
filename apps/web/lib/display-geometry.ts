@@ -11,6 +11,44 @@ export interface DisplayArea {
   scaleFactor: number;
 }
 
+/** A DPI-aware native monitor identity that avoids comparing mixed-DPI global origins. */
+export function monitorIdentity(monitor: {
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  scaleFactor: number;
+} | null | undefined): string | null {
+  if (!monitor || ![monitor.position?.x, monitor.position?.y, monitor.size?.width, monitor.size?.height, monitor.scaleFactor].every((value) => typeof value === "number" && Number.isFinite(value))) return null;
+  return `${monitor.position.x}:${monitor.position.y}:${monitor.size.width}:${monitor.size.height}:${monitor.scaleFactor}`;
+}
+
+/** Index of the connected display containing this point, or -1 when off screen. */
+export function displayIndexAtPoint(x: number, y: number, displays: readonly DisplayArea[]): number {
+  return displays.findIndex((display) => x >= display.x && y >= display.y && x < display.x + display.width && y < display.y + display.height);
+}
+
+/** True only when the center points of two windows belong to distinct monitors. */
+export function windowsOnDifferentDisplays(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+  displays: readonly DisplayArea[]
+): boolean {
+  const firstDisplay = displayIndexAtPoint(first.x + first.width / 2, first.y + first.height / 2, displays);
+  const secondDisplay = displayIndexAtPoint(second.x + second.width / 2, second.y + second.height / 2, displays);
+  return firstDisplay >= 0 && secondDisplay >= 0 && firstDisplay !== secondDisplay;
+}
+
+/** Preserve an explicit unknown state when display geometry cannot identify either window. */
+export function windowDisplayRelation(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+  displays: readonly DisplayArea[]
+): "same" | "different" | "unknown" {
+  const firstDisplay = displayIndexAtPoint(first.x + first.width / 2, first.y + first.height / 2, displays);
+  const secondDisplay = displayIndexAtPoint(second.x + second.width / 2, second.y + second.height / 2, displays);
+  if (firstDisplay < 0 || secondDisplay < 0) return "unknown";
+  return firstDisplay === secondDisplay ? "same" : "different";
+}
+
 /** Tauri reports physical pixels. Divide by this monitor's scale to reach CSS pixels. */
 export function displayFromWorkArea(
   position: { x: number; y: number },

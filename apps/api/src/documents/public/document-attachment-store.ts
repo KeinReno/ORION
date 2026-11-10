@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { DocumentItem } from "@orion/shared-types";
 
-export interface UploadedDocumentFile { originalname: string; mimetype: string; size: number; buffer: Buffer }
+export interface UploadedDocumentFile { originalname: string; mimetype: string; size: number; buffer: Buffer; relativePath?: string }
 export type AttachmentDocument = {
   id: string; kind: "file" | "folder"; deletedAt: Date | null;
   name: string; mimeType: string | null; sizeBytes: number | null;

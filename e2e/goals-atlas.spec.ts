@@ -103,7 +103,9 @@ test("a new goal opens as a canvas and creates real project, task and milestone 
   await composer.getByRole("button", { name: "Задача", exact: true }).click();
   await composer.getByPlaceholder("Что должно появиться?").fill("Разметить грядки");
   await composer.getByRole("button", { name: "Создать", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Задача Разметить грядки/ })).toBeVisible();
+  const firstTask = page.getByRole("button", { name: /Задача Разметить грядки/ });
+  await expect(firstTask).toBeVisible();
+  await expect(firstTask).toBeInViewport();
 
   await page.getByRole("button", { name: "Добавить элемент в созвездие" }).click();
   await composer.getByRole("button", { name: "Веха", exact: true }).click();
@@ -116,7 +118,9 @@ test("a new goal opens as a canvas and creates real project, task and milestone 
   await composer.getByPlaceholder("Что должно появиться?").fill("Посадить деревья");
   await composer.getByRole("button", { name: "Создать", exact: true }).click();
   await expect(page.getByRole("button", { name: /Задача Посадить деревья/ })).toBeVisible();
-  await page.getByRole("button", { name: /Задача Разметить грядки/ }).click({ button: "right" });
+  await page.getByRole("button", { name: "Вписать всё" }).click();
+  await expect(firstTask).toBeInViewport();
+  await firstTask.click({ button: "right" });
   await composer.getByRole("button", { name: "Связать от этого узла" }).click();
   await page.getByRole("button", { name: /Задача Посадить деревья/ }).click();
   await expect(page.getByRole("button", { name: "Убрать зависимость от задачи Разметить грядки" })).toBeVisible();

@@ -114,6 +114,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   specSelfRef("tasks", (tx) => tx.task),
   spec("taskDependencies", (tx) => tx.taskDependency),
   spec("taskComments", (tx) => tx.taskComment),
+  spec("projectLogEntries", (tx) => tx.projectLogEntry),
+  spec("projectRelations", (tx) => tx.projectRelation),
+  spec("projectLogEntryTasks", (tx) => tx.projectLogEntryTask),
   spec("taskActivities", (tx) => tx.taskActivity),
   // UI-05: authorId (User) is identity-excluded and must exist at the restore
   // target, same precondition as TaskComment.userId; projects load earlier.

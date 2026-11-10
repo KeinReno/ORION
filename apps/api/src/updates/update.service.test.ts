@@ -58,19 +58,29 @@ function release(tag: string, over: Record<string, unknown> = {}) {
   };
 }
 
+function rustRelease(tag: string, over: Record<string, unknown> = {}) {
+  return release(tag, {
+    body: `Сборка com.orion.rust.desktop\n\nSHA-256 установщика: \`${SHA}\``,
+    assets: [{ id: 7, name: "ORION-Rust_0.1.45-beta.2-x64-setup.exe", size: INSTALLER.length }],
+    ...over
+  });
+}
+
 beforeAll(async () => {
   server = createServer((req, res) => {
     const auth = String(req.headers.authorization ?? "");
     seenAuth.push(auth);
     if (auth !== `Bearer ${TOKEN}`) return void res.writeHead(401).end("{}");
     const url = req.url ?? "";
-    if (url.startsWith("/repos/o/r/releases?")) return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(releases));
-    const tag = /^\/repos\/o\/r\/releases\/tags\/(.+)$/.exec(url);
+    const repository = /^\/repos\/([^/]+\/[^/]+)\/releases/.exec(url)?.[1];
+    if (repository && repository !== "o/r" && repository !== "KeinReno/ORION") return void res.writeHead(404).end("{}");
+    if (/^\/repos\/[^/]+\/[^/]+\/releases\?/.test(url)) return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(releases));
+    const tag = /^\/repos\/[^/]+\/[^/]+\/releases\/tags\/(.+)$/.exec(url);
     if (tag) {
       const found = releases.find((r) => r.tag_name === decodeURIComponent(tag[1]!));
       return void (found ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(found)) : res.writeHead(404).end("{}"));
     }
-    if (url === "/repos/o/r/releases/assets/7") return void res.writeHead(302, { location: "/blob/7" }).end();
+    if (/^\/repos\/[^/]+\/[^/]+\/releases\/assets\/7$/.test(url)) return void res.writeHead(302, { location: "/blob/7" }).end();
     if (url === "/blob/7") return void res.writeHead(200, { "content-type": "application/octet-stream", "content-length": assetBody.length }).end(assetBody);
     res.writeHead(404).end("{}");
   });
@@ -92,6 +102,9 @@ beforeEach(() => {
   delete process.env.ORION_RUST_UPDATE_REPO;
   delete process.env.ORION_GITHUB_UPDATE_TOKEN;
   delete process.env.ORION_INSTALL_DIR;
+  delete process.env.ORION_SHELL_PID;
+  delete process.env.ORION_SHUTDOWN_MARKER;
+  delete process.env.ORION_DESKTOP_DATA_DIR;
   delete process.env.ORION_SHELL_RUNTIME;
   delete process.env.ORION_SHELL_BASE_TAG;
   releases = [release("v0.1.0-windows-beta.3"), release("v0.1.0-windows-beta.2")];
@@ -148,7 +161,7 @@ describe("UpdateService", () => {
     fs.writeFileSync(path.join(dir, "ack"), "");
     expect(service.acknowledgeUi("v0.1.0-windows-beta.2").accepted).toBe(true);
   });
-  it("без своего токена уходит встроенный, а сохранённый не возвращается и лежит зашифрованным", async () => {
+  it("использует локальный env fallback, а сохранённый токен не возвращается и лежит зашифрованным", async () => {
     process.env.ORION_GITHUB_UPDATE_TOKEN = "github_pat_builtin_fixture_not_real";
     const service = new UpdateService();
     expect(service.getConfig().tokenSet).toBe(true);
@@ -165,8 +178,10 @@ describe("UpdateService", () => {
     process.env.ORION_EDITION = "rust";
     process.env.ORION_GITHUB_UPDATE_TOKEN = "github_pat_builtin_fixture_not_real";
     const service = new UpdateService();
-    await expect(service.check()).rejects.toThrow("классической беты");
-    expect(seenAuth).toEqual([]);
+    service.setConfig({ token: TOKEN });
+    expect(service.getConfig().repo).toBe("KeinReno/ORION");
+    expect((await service.check()).state).toBe("up_to_date");
+    expect(seenAuth).toHaveLength(1);
   });
 
   it("чужой репозиторий и уже скачанный установщик тоже не применяются в ORION Rust", async () => {
@@ -175,11 +190,81 @@ describe("UpdateService", () => {
     await service.download();
     const callsBefore = seenAuth.length;
     process.env.ORION_EDITION = "rust";
-    await expect(service.download()).rejects.toThrow("свой канал");
+    process.env.ORION_RUST_UPDATE_REPO = "KeinReno/ORION";
+    await expect(service.download()).rejects.toThrow(/метка релиза/i);
     expect(seenAuth).toHaveLength(callsBefore);
-    await expect(service.apply()).rejects.toThrow("свой канал");
+    await expect(service.apply()).rejects.toThrow(/метка релиза/i);
     process.env.ORION_RUST_UPDATE_REPO = "o/r";
-    await expect(service.check()).rejects.toThrow("не принадлежит");
+    expect(() => service.setConfig({ repo: "someone/fork" })).toThrow("только настроенный канал");
+    expect((await service.check()).state).toBe("up_to_date");
+  });
+
+  it("в Rust выбирает только Rust tag, проверяет релиз при повторном скачивании и сохраняет токен", async () => {
+    process.env.ORION_EDITION = "rust";
+    process.env.ORION_RUST_UPDATE_REPO = "o/r";
+    process.env.ORION_BUILD_TAG = "v0.1.0-orion-rust-beta.1";
+    releases = [
+      release("v0.1.0-windows-beta.99"),
+      rustRelease("v0.1.0-orion-rust-beta.9", { body: "wrong product id" }),
+      rustRelease("v0.1.0-orion-rust-beta.2"),
+      rustRelease("v0.1.0-orion-rust-beta.1")
+    ];
+    const service = new UpdateService();
+    service.setConfig({ token: TOKEN });
+    expect(service.getConfig()).toEqual({ repo: "o/r", tokenSet: true, autoCheck: true });
+    const checked = await service.check();
+    expect(checked.latest).toMatchObject({ tag: "v0.1.0-orion-rust-beta.2", assetName: "ORION-Rust_0.1.45-beta.2-x64-setup.exe", sha256: SHA });
+    expect((await service.download()).state).toBe("ready");
+    expect(fs.readdirSync(path.join(dir, "updates", "v0.1.0-orion-rust-beta.2"))).toContain("ORION-Rust_0.1.45-beta.2-x64-setup.exe");
+    process.env.ORION_BUILD_TAG = "v0.1.0-orion-rust-beta.2";
+    expect((await service.check()).state).toBe("up_to_date");
+  });
+
+  it("повторно получает Rust релиз и отклоняет изменившуюся сумму до скачивания", async () => {
+    process.env.ORION_EDITION = "rust";
+    process.env.ORION_RUST_UPDATE_REPO = "o/r";
+    process.env.ORION_BUILD_TAG = "v0.1.0-orion-rust-beta.1";
+    releases = [rustRelease("v0.1.0-orion-rust-beta.2")];
+    const service = new UpdateService();
+    service.setConfig({ token: TOKEN });
+    await service.check();
+    releases = [rustRelease("v0.1.0-orion-rust-beta.2", { body: "com.orion.rust.desktop\nSHA-256: `" + "b".repeat(64) + "`" })];
+    await expect(service.download()).rejects.toThrow(/описание релиза изменилось/i);
+    expect(seenAuth).toHaveLength(2);
+    expect(fs.existsSync(path.join(dir, "updates", "v0.1.0-orion-rust-beta.2", "ORION-Rust_0.1.45-beta.2-x64-setup.exe"))).toBe(false);
+  });
+
+  it("отклоняет изменившийся Rust asset и release tag при повторном fetch", async () => {
+    process.env.ORION_EDITION = "rust";
+    process.env.ORION_RUST_UPDATE_REPO = "o/r";
+    process.env.ORION_BUILD_TAG = "v0.1.0-orion-rust-beta.1";
+    releases = [rustRelease("v0.1.0-orion-rust-beta.2")];
+    const service = new UpdateService();
+    service.setConfig({ token: TOKEN });
+    await service.check();
+    releases = [rustRelease("v0.1.0-orion-rust-beta.2", { assets: [{ id: 7, name: "ORION_0.1.0_x64-setup.exe", size: INSTALLER.length }] })];
+    await expect(service.download()).rejects.toThrow("В релизе нет установщика");
+    expect(fs.existsSync(path.join(dir, "updates", "v0.1.0-orion-rust-beta.2", "ORION-Rust_0.1.45-beta.2-x64-setup.exe"))).toBe(false);
+  });
+
+  it.skipIf(process.platform !== "win32")("не запускает Rust installer без соответствующего marker shutdown", async () => {
+    process.env.ORION_EDITION = "rust";
+    process.env.ORION_RUST_UPDATE_REPO = "o/r";
+    process.env.ORION_BUILD_TAG = "v0.1.0-orion-rust-beta.1";
+    process.env.ORION_SHELL_PID = "4321";
+    process.env.ORION_DESKTOP_DATA_DIR = dir;
+    process.env.ORION_SHUTDOWN_MARKER = path.join(dir, "runtime-stopped-9999-123.marker");
+    releases = [rustRelease("v0.1.0-orion-rust-beta.2")];
+    const service = new UpdateService();
+    service.setConfig({ token: TOKEN });
+    await service.check();
+    await service.download();
+    const installDir = path.join(dir, "install");
+    fs.mkdirSync(installDir, { recursive: true });
+    fs.writeFileSync(path.join(installDir, "orion-desktop.exe"), "fixture");
+    process.env.ORION_INSTALL_DIR = installDir;
+    await expect(service.apply()).rejects.toThrow("не подтверждены PID оболочки");
+    expect(fs.existsSync(path.join(dir, "updates", "v0.1.0-orion-rust-beta.2", "apply-update.ps1"))).toBe(false);
   });
 
   it("находит более новый релиз, а для актуальной сборки говорит «последняя версия»", async () => {

@@ -4,6 +4,9 @@ export const noteSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   projectId: z.string().nullable(),
+  stackId: z.string().nullable().optional(),
+  stackTitle: z.string().nullable().optional(),
+  stackOrder: z.number().int().optional(),
   title: z.string(),
   /// Short stable id within the workspace — shown as "N-<number>". Null only for a row that
   /// predates the trigger and was not backfilled (should not occur after the migration).
@@ -130,6 +133,26 @@ export const noteAttachmentSchema = z.object({
   createdAt: z.string()
 });
 export type NoteAttachment = z.infer<typeof noteAttachmentSchema>;
+
+export const createNoteStackInputSchema = z.object({
+  title: z.string().trim().min(1, "Название стопки обязательно").max(80),
+  noteIds: z.array(z.string().min(1)).min(2).max(100)
+}).refine((input) => new Set(input.noteIds).size === input.noteIds.length, { message: "Заметка указана несколько раз", path: ["noteIds"] });
+export type CreateNoteStackInput = z.infer<typeof createNoteStackInputSchema>;
+
+export const noteStackSchema = z.object({ id: z.string(), title: z.string(), noteIds: z.array(z.string()) });
+export type NoteStack = z.infer<typeof noteStackSchema>;
+export const reorderNoteStackInputSchema = z.object({
+  noteIds: z.array(z.string().min(1)).min(2).max(100)
+}).refine((input) => new Set(input.noteIds).size === input.noteIds.length, {
+  message: "Заметка указана несколько раз",
+  path: ["noteIds"]
+});
+export type ReorderNoteStackInput = z.infer<typeof reorderNoteStackInputSchema>;
+export const moveNotesToStackInputSchema = z.object({
+  noteIds: z.array(z.string().min(1)).min(1).max(100)
+}).refine((input) => new Set(input.noteIds).size === input.noteIds.length, { message: "Заметка указана несколько раз", path: ["noteIds"] });
+export type MoveNotesToStackInput = z.infer<typeof moveNotesToStackInputSchema>;
 
 /// Attach an already uploaded document to a note — `POST .../notes/:id/attachments`.
 export const attachNoteDocumentInputSchema = z.object({ documentId: z.string().min(1, "Документ обязателен") });
