@@ -41,7 +41,7 @@ describe("GPT-QA Agent Hub concurrency and lease regressions", () => {
     } finally { await app?.close(); }
   });
 
-  async function http<T = any>(method: string, path: string, bearer?: string, payload?: unknown) {
+  async function http<T = unknown>(method: string, path: string, bearer?: string, payload?: unknown) {
     const response = await fetch(origin + path, {
       method, headers: {
         "Content-Type": "application/json",
@@ -62,7 +62,7 @@ describe("GPT-QA Agent Hub concurrency and lease regressions", () => {
     const token = auth.data.accessToken;
     const id = auth.data.user.id;
     const ws = (await http<Array<{ id: string }>>("GET", "/workspaces/me", token)).data[0]!.id;
-    const human = <T = any>(method: string, path: string, body?: unknown) =>
+    const human = <T = unknown>(method: string, path: string, body?: unknown) =>
       http<T>(method, "/workspaces/" + ws + path, token, body);
     const issue = async () => {
       const created = await human<{ id: string; secret: string }>("POST", "/agent-tokens", {
@@ -73,7 +73,7 @@ describe("GPT-QA Agent Hub concurrency and lease regressions", () => {
       expect(created.status).toBe(201);
       return {
         ...created.data,
-        call: <T = any>(method: string, path: string, body?: unknown) =>
+        call: <T = unknown>(method: string, path: string, body?: unknown) =>
           http<T>(method, "/ai/v1/agent-hub" + path, created.data.secret, body)
       };
     };

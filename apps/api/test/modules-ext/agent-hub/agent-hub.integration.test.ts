@@ -37,7 +37,7 @@ describe("Agent Hub: durable human queue v1", () => {
     await app?.close();
   });
 
-  async function request<T = any>(path: string, method: string, token?: string, body?: unknown) {
+  async function request<T = unknown>(path: string, method: string, token?: string, body?: unknown) {
     const response = await fetch(url + path, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -54,7 +54,7 @@ describe("Agent Hub: durable human queue v1", () => {
     expect(auth.status).toBe(201);
     const token = auth.data.accessToken;
     const ws = (await request<Array<{ id: string }>>("/workspaces/me", "GET", token)).data[0]!.id;
-    const call = <T = any>(method: string, path: string, body?: unknown) =>
+    const call = <T = unknown>(method: string, path: string, body?: unknown) =>
       request<T>(`/workspaces/${ws}/agent-hub${path}`, method, token, body);
     const task = await request<{ id: string }>(`/workspaces/${ws}/tasks`, "POST", token, { title: "Проверить выполнение" });
     expect(task.status).toBe(201);

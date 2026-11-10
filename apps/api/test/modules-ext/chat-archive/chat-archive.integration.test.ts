@@ -49,7 +49,7 @@ describe("Архив чатов", () => {
     await app?.close();
   });
 
-  async function request<T = any>(path: string, options: { method: string; token?: string; body?: unknown; form?: FormData }) {
+  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown; form?: FormData }) {
     const response = await fetch(`${baseUrl}${path}`, {
       method: options.method,
       headers: {

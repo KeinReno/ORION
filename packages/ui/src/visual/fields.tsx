@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Check, ChevronDown, Eye, EyeOff, Minus, Plus, X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { useMotionLevel } from "../motion-level";
 import { clampIndex, comboboxMenuAction, glideMenuAction, stepIndex, typeaheadIndex } from "./list-keyboard";
 

@@ -263,7 +263,8 @@ export class MemoryHost implements SyncTransport {
     const out: Record<string, unknown> = {};
     for (const [key, row] of [...this.rows].sort(([a], [b]) => (a < b ? -1 : 1))) {
       const [entity, id] = key.split(":") as [SyncEntityType, string];
-      const { createdAt: _c, updatedAt: _u, ...rest } = this.doc(entity, id, row);
+      const rest = { ...this.doc(entity, id, row) };
+      delete rest.createdAt; delete rest.updatedAt;
       out[key] = rest;
     }
     return out;

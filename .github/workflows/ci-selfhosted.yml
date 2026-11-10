@@ -1,0 +1,76 @@
+# CI on the owner's self-hosted Windows runner.
+#
+# Why this exists: the hosted `ci.yml` is blocked by GitHub billing, and only a
+# Windows machine with Rust can check the Tauri shell and the orion-rust
+# supervisor. This workflow runs the same quality gates locally, free of charge.
+#
+# Prerequisite: register a self-hosted runner once (docs/CI_SELFHOSTED_RUNNER.md).
+
+name: CI (self-hosted Windows)
+
+on:
+  push:
+    branches: [master, "experiment/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: selfhosted-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: [self-hosted, windows]
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: postgresql://orion:orion_local_dev@127.0.0.1:5433/orion
+      APP_DATABASE_URL: postgresql://orion_app:OcjNaKnQFUp0gdwdju-cSP9T_0gaiOZI@127.0.0.1:5433/orion
+      JWT_SECRET: ci-only-secret-with-sufficient-length
+      # Test-only key; must decode from base64 to exactly 32 bytes (sync-crypto.ts).
+      SYNC_SECRET: gqnzEEdiChs+nfvHWYR9NA36qBGOCjVZq0xqXHtdHn8=
+      STORAGE_DRIVER: local
+      STORAGE_DIR: ./tmp/ci-documents
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - run: pnpm install --frozen-lockfile
+
+      # Local PostgreSQL without Docker (scripts/postgres.mjs, port 5433).
+      - run: pnpm db:up
+      - run: pnpm db:generate
+      - run: pnpm --filter @orion/api prisma:migrate:deploy
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm architecture-check
+      - run: pnpm platform-map:check
+      - run: pnpm plugin-contract-check
+      - run: pnpm test
+      - run: pnpm test:integration
+      - run: pnpm build
+
+      # Rust parts that hosted CI could never check.
+      - name: orion-rust supervisor tests
+        working-directory: orion-rust
+        run: cargo test
+      - name: orion-rust clippy
+        working-directory: orion-rust
+        run: cargo clippy -- -D warnings
+      - name: Tauri shell typecheck
+        working-directory: apps/desktop/src-tauri
+        run: cargo check
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: pnpm db:down

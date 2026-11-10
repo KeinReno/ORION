@@ -86,7 +86,7 @@ process.stdin.on("end", async () => {
     fs.rmSync(scratch, { recursive: true, force: true });
   });
 
-  async function request<T = any>(url: string, method: string, token?: string, body?: unknown) {
+  async function request<T = unknown>(url: string, method: string, token?: string, body?: unknown) {
     const response = await fetch(`${baseUrl}${url}`, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

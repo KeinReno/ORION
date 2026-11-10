@@ -228,7 +228,6 @@ function placeData(grid: { modules: boolean[][]; fn: boolean[][] }, bytes: Uint8
 }
 
 function applyMask(grid: { modules: boolean[][]; fn: boolean[][] }, mask: number): boolean[][] {
-  const n = grid.modules.length;
   return grid.modules.map((row, y) => row.map((cell, x) => (grid.fn[y][x] ? cell : cell !== maskHit(mask, x, y))));
 }
 

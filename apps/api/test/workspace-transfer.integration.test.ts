@@ -65,7 +65,7 @@ describe("ТЗ-05: перенос пространства между узлам
   }
 
   const importAs = (person: Person, file: Buffer, fields: Record<string, string>) =>
-    request<any>("/workspaces/import", { method: "POST", token: person.token, form: importForm(file, fields) });
+    request<{ applied: boolean; workspaceId: string }>("/workspaces/import", { method: "POST", token: person.token, form: importForm(file, fields) });
 
   async function exportFile(passphrase?: string): Promise<Buffer> {
     const r = await request(`/workspaces/${source}/export`, { method: "POST", token: anna.token, body: passphrase ? { passphrase } : {}, raw: true });

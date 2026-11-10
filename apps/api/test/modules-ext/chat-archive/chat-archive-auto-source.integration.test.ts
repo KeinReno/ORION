@@ -49,7 +49,7 @@ describe("Архив чатов — автосбор (ORION-16)", () => {
     await app?.close();
   });
 
-  async function request<T = any>(path: string, options: { method: string; token?: string; body?: unknown }) {
+  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown }) {
     const response = await fetch(`${baseUrl}${path}`, {
       method: options.method,
       headers: { "Content-Type": "application/json", ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },

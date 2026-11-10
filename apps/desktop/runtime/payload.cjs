@@ -130,7 +130,13 @@ async function prepare(file, runtime, data, expectedTag) {
     fs.renameSync(stage, path.join(versions, id));
     return { id, tag: manifest.tag };
   } catch (error) { fs.rmSync(stage, { recursive: true, force: true }); throw error; }
-  finally { input.destroy(); unzip.destroy(); }
+  finally {
+    // destroy() releases the file handle asynchronously; callers (and tests) must be
+    // able to delete the payload file immediately after prepare() settles on Windows.
+    input.destroy(); unzip.destroy();
+    const closed = stream => (stream.closed ? Promise.resolve() : new Promise(resolve => stream.once('close', resolve)));
+    await Promise.all([closed(input), closed(unzip)]);
+  }
 }
 
 function atomic(file, value) {

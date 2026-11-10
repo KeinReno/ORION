@@ -92,12 +92,6 @@ describe("Permission API pilot (tasks)", () => {
     return created.data;
   }
 
-  async function createProject(owner: Session, name: string): Promise<{ id: string }> {
-    const response = await request<{ id: string }>(`/workspaces/${owner.workspaceId}/projects`, { method: "POST", token: owner.accessToken, body: { name } });
-    expect(response.status).toBe(201);
-    return response.data;
-  }
-
   async function register(name: string): Promise<Session> {
     const email = `${emailPrefix}-${name}@example.test`;
     const response = await request<{ accessToken: string }>("/auth/register", { method: "POST", body: { email, password: "integration-password-123", name } });

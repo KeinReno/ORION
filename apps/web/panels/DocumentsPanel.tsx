@@ -54,8 +54,7 @@ import {
   Search,
   Trash2,
   Upload,
-  Send,
-  X
+  Send
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
@@ -241,6 +240,41 @@ export function DocumentsPanel(): React.ReactElement {
     });
   }, [docs, trash, cwd, debouncedQuery, groupFilter, sort]);
 
+  const openFolder = useCallback((id: string | null): void => {
+    guardNavigation(() => {
+      setCwd(id);
+      selectedFileIdRef.current = null;
+      setSelectedFileId(null);
+      setEditorDirty(false);
+      setChecked(new Set());
+    });
+  }, [guardNavigation]);
+
+  const moveMany = useCallback((ids: string[], parentId: string | null): void => {
+    const real = ids.filter((id) => id !== parentId);
+    if (real.length === 0) return;
+    const done = () => {
+      toast({ title: real.length === 1 ? "Перемещено" : `Перемещено: ${real.length}`, tone: "success" });
+      setChecked(new Set());
+      setMoveTargets(null);
+    };
+    const fail = (e: unknown) => toast({ title: "Не удалось переместить", description: (e as Error).message, tone: "danger" });
+    if (real.length === 1) {
+      renameOrMove.mutate({ id: real[0], input: { parentId } }, { onSuccess: done, onError: fail });
+    } else {
+      bulk.mutate({ op: "move", ids: real, parentId }, { onSuccess: done, onError: fail });
+    }
+  }, [renameOrMove, bulk, toast]);
+
+  const requestMove = useCallback((ids: string[], parentId: string | null): void => {
+    if (ids.length > 1) {
+      setPendingBulkMove({ ids, parentId });
+      setMoveTargets(null);
+      return;
+    }
+    moveMany(ids, parentId);
+  }, [moveMany]);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
       if (!panelVisible || trash || newFolderOpen || renameTarget || moveTargets || pendingPurge || pendingBulkMove || historyTarget) {
@@ -305,7 +339,9 @@ export function DocumentsPanel(): React.ReactElement {
     checked,
     cwd,
     byId,
-    selectFile
+    selectFile,
+    openFolder,
+    requestMove
   ]);
 
   const groupsPresent = useMemo(() => {
@@ -325,16 +361,6 @@ export function DocumentsPanel(): React.ReactElement {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
-    });
-  }
-
-  function openFolder(id: string | null): void {
-    guardNavigation(() => {
-      setCwd(id);
-      selectedFileIdRef.current = null;
-      setSelectedFileId(null);
-      setEditorDirty(false);
-      setChecked(new Set());
     });
   }
 
@@ -426,31 +452,6 @@ export function DocumentsPanel(): React.ReactElement {
         onError: (e) => toast({ title: "Не удалось переименовать", description: (e as Error).message, tone: "danger" })
       }
     );
-  }
-
-  function moveMany(ids: string[], parentId: string | null): void {
-    const real = ids.filter((id) => id !== parentId);
-    if (real.length === 0) return;
-    const done = () => {
-      toast({ title: real.length === 1 ? "Перемещено" : `Перемещено: ${real.length}`, tone: "success" });
-      setChecked(new Set());
-      setMoveTargets(null);
-    };
-    const fail = (e: unknown) => toast({ title: "Не удалось переместить", description: (e as Error).message, tone: "danger" });
-    if (real.length === 1) {
-      renameOrMove.mutate({ id: real[0], input: { parentId } }, { onSuccess: done, onError: fail });
-    } else {
-      bulk.mutate({ op: "move", ids: real, parentId }, { onSuccess: done, onError: fail });
-    }
-  }
-
-  function requestMove(ids: string[], parentId: string | null): void {
-    if (ids.length > 1) {
-      setPendingBulkMove({ ids, parentId });
-      setMoveTargets(null);
-      return;
-    }
-    moveMany(ids, parentId);
   }
 
   function trashMany(ids: string[]): void {

@@ -22,7 +22,6 @@ import {
   Skeleton,
   StatCard,
   CircularProgress,
-  CountUp,
   cx,
   useToast,
   useUiSound

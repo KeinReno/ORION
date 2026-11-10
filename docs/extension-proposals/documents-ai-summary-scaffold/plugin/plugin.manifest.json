@@ -1,0 +1,13 @@
+{
+  "id": "documents-ai-summary",
+  "version": "0.1.0",
+  "extends": "documents",
+  "catalog": {
+    "label": "ИИ-суммаризация документов",
+    "summary": "Действие «Суммаризировать ИИ…» для выбранного документа с сохранением результата в заметку.",
+    "provides": ["Действие суммаризации в меню документа"],
+    "disableBehavior": "Действие скрывается при выключении плагина; созданные заметки сохраняются.",
+    "defaultEnabled": false
+  },
+  "status": "scaffold — web.contributions появятся после утверждения слота documents.item.actions (docs/extension-proposals/EP-DOCUMENTS-ITEM-ACTIONS.md)"
+}

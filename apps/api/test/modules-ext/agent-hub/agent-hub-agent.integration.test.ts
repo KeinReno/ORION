@@ -38,7 +38,7 @@ describe("Agent Hub manual MCP adapter", () => {
     await app?.close();
   });
 
-  async function request<T = any>(method: string, path: string, token?: string, body?: unknown) {
+  async function request<T = unknown>(method: string, path: string, token?: string, body?: unknown) {
     const res = await fetch(root + path, {
       method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body)
@@ -55,7 +55,7 @@ describe("Agent Hub manual MCP adapter", () => {
     const token = auth.data.accessToken;
     const userId = auth.data.user.id;
     const ws = (await request<Array<{ id: string }>>("GET", "/workspaces/me", token)).data[0]!.id;
-    const human = <T = any>(method: string, path: string, body?: unknown) =>
+    const human = <T = unknown>(method: string, path: string, body?: unknown) =>
       request<T>(method, `/workspaces/${ws}${path}`, token, body);
     const issue = async (config: Record<string, unknown> = {}) => {
       const result = await human<{ id: string; secret: string }>("POST", "/agent-tokens", {
@@ -64,7 +64,7 @@ describe("Agent Hub manual MCP adapter", () => {
         ...config
       });
       expect(result.status, JSON.stringify(result.data)).toBe(201);
-      return { ...result.data, call: <T = any>(method: string, path: string, body?: unknown) =>
+      return { ...result.data, call: <T = unknown>(method: string, path: string, body?: unknown) =>
         request<T>(method, `/ai/v1/agent-hub${path}`, result.data.secret, body) };
     };
     const task = await human<{ id: string }>("POST", "/tasks", { title: "Попытка выполнения в IDE" });

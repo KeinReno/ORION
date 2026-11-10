@@ -35,7 +35,7 @@ describe("Agent Hub runtime session registry (reported presence, not attestation
     await app?.close();
   });
 
-  async function request<T = any>(method: string, path: string, bearer?: string, body?: unknown) {
+  async function request<T = unknown>(method: string, path: string, bearer?: string, body?: unknown) {
     const response = await fetch(root + path, {
       method,
       headers: { "Content-Type": "application/json", ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
@@ -51,7 +51,7 @@ describe("Agent Hub runtime session registry (reported presence, not attestation
     });
     expect(auth.status).toBe(201);
     const ws = (await request<Array<{ id: string }>>("GET", "/workspaces/me", auth.data.accessToken)).data[0]!.id;
-    const human = <T = any>(method: string, path: string, body?: unknown) =>
+    const human = <T = unknown>(method: string, path: string, body?: unknown) =>
       request<T>(method, `/workspaces/${ws}/agent-hub${path}`, auth.data.accessToken, body);
     const issue = async (overrides: Record<string, unknown> = {}) => {
       const response = await request<{ id: string; secret: string }>("POST", `/workspaces/${ws}/agent-tokens`, auth.data.accessToken, {
@@ -59,7 +59,7 @@ describe("Agent Hub runtime session registry (reported presence, not attestation
         scopes: ["tasks:read"], modulePermissions: ["agent-hub.runtime.create"], ...overrides
       });
       expect(response.status, JSON.stringify(response.data)).toBe(201);
-      return { ...response.data, call: <T = any>(method: string, path: string, body?: unknown) =>
+      return { ...response.data, call: <T = unknown>(method: string, path: string, body?: unknown) =>
         request<T>(method, `/ai/v1/agent-hub${path}`, response.data.secret, body) };
     };
     return { human, issue, ws, userId: auth.data.user.id };

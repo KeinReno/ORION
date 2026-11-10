@@ -339,7 +339,8 @@ describe("Hybrid sync (ADR-0016): snapshot, change feed, ops, convergence", () =
 
     const server = (await a.call<ReplicaSnapshot>("GET", "/sync/replica?protocol=1")).data;
     const strip = (d: Record<string, unknown>) => {
-      const { createdAt: _c, updatedAt: _u, checkedByName: _n, ...rest } = d;
+      const rest = { ...d };
+      delete rest.createdAt; delete rest.updatedAt; delete rest.checkedByName;
       return rest;
     };
     const byId = (docs: Array<Record<string, unknown>>) => Object.fromEntries(docs.map((d) => [d.id as string, strip(d)]));

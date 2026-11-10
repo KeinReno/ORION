@@ -35,7 +35,7 @@ describe("QA-03: deletion isolation and recoverability", () => {
     } finally { await app?.close(); }
   });
 
-  async function http<T = any>(method: string, path: string, token?: string, body?: unknown) {
+  async function http<T = unknown>(method: string, path: string, token?: string, body?: unknown) {
     const response = await fetch(origin + path, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
@@ -53,7 +53,7 @@ describe("QA-03: deletion isolation and recoverability", () => {
     const ws = (await http<Array<{ id: string }>>("GET", "/workspaces/me", token)).data[0]!.id;
     return {
       ws,
-      call: <T = any>(method: string, path: string, body?: unknown) =>
+      call: <T = unknown>(method: string, path: string, body?: unknown) =>
         http<T>(method, "/workspaces/" + ws + path, token, body)
     };
   }

@@ -16,7 +16,8 @@ function rng(seed: number) {
 }
 
 function strip(doc: Record<string, unknown>): Record<string, unknown> {
-  const { createdAt: _c, updatedAt: _u, checkedAt: _ca, checkedById: _cb, checkedByName: _cn, ...rest } = doc;
+  const rest = { ...doc };
+  delete rest.createdAt; delete rest.updatedAt; delete rest.checkedAt; delete rest.checkedById; delete rest.checkedByName;
   return rest;
 }
 
@@ -186,7 +187,8 @@ async function notesTasksScenario(seed: number): Promise<number> {
   const expected: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(host.canonical())) if (key.startsWith("note:") || key.startsWith("task:")) expected[key] = value;
   const norm = (doc: Record<string, unknown>) => {
-    const { createdAt: _c, updatedAt: _u, ...rest } = doc;
+    const rest = { ...doc };
+    delete rest.createdAt; delete rest.updatedAt;
     return rest;
   };
   for (const [index, engine] of devices.entries()) {

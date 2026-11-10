@@ -42,7 +42,7 @@ import {
   type SlotCreatePayload
 } from "@orion/ui";
 import { CalendarDays, ChevronDown, CircleHelp, FileText, ListTodo, Plus, Search, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { eventReschedulePatch, shiftAllDayIso } from "../lib/calendar-reschedule";
 import { fromDatetimeLocal, toDatetimeLocal } from "../lib/format";
@@ -293,11 +293,11 @@ export function CalendarPanel(): React.ReactElement {
     return () => { cancelled = true; };
   }, [api, eventFocus, events, eventsQuery.isLoading, wsId, toast]);
 
-  function findEvent(id: string): Event | undefined {
+  const findEvent = useCallback((id: string): Event | undefined => {
     return (events ?? []).find((e) => e.id === id);
-  }
+  }, [events]);
 
-  function openItem(id: string): void {
+  const openItem = useCallback((id: string): void => {
     setFocusedId(id);
     const birthdayContactId = contactIdFromBirthdayItem(id);
     if (birthdayContactId) {
@@ -312,9 +312,9 @@ export function CalendarPanel(): React.ReactElement {
     if ((tasks ?? []).some((t) => t.id === id)) openEntity("task", id);
     else if ((notes ?? []).some((n) => n.id === id)) openEntity("note", id);
     else openPanel("finance");
-  }
+  }, [findEvent, tasks, notes]);
 
-  function applyEventReschedule(event: Event, payload: ReschedulePayload, editScope: EventScope): void {
+  const applyEventReschedule = useCallback((event: Event, payload: ReschedulePayload, editScope: EventScope): void => {
     const { masterId, occurrenceStart } = splitOccurrenceId(event.id);
     // Month-grid drops carry only the target day; `eventReschedulePatch`
     // keeps the event's length, time of day and all-day date-only contract.
@@ -342,9 +342,9 @@ export function CalendarPanel(): React.ReactElement {
           })
       }
     );
-  }
+  }, [updateEvent, toast]);
 
-  function reschedule(id: string, payload: ReschedulePayload): void {
+  const reschedule = useCallback((id: string, payload: ReschedulePayload): void => {
     const event = findEvent(id);
     if (event) {
       if (event.readOnly) return;
@@ -361,7 +361,7 @@ export function CalendarPanel(): React.ReactElement {
         { onSuccess: () => toast({ title: "Срок перенесён", tone: "success" }) }
       );
     }
-  }
+  }, [findEvent, applyEventReschedule, updateTask, toast, tasks]);
 
   const sortedItemIds = useMemo(
     () => [...items].sort((a, b) => a.start.localeCompare(b.start)).map((item) => item.id),
@@ -404,7 +404,7 @@ export function CalendarPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, selected, newSlot, pendingScope, items, focusedId, sortedItemIds]);
+  }, [panelVisible, selected, newSlot, pendingScope, items, focusedId, sortedItemIds, openItem, reschedule]);
 
   async function create(values: EventFormValues): Promise<void> {
     try {

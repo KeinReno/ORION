@@ -10,8 +10,7 @@ import {
   agentHubCredentialOptionsResponseSchema,
   agentHubSetTaskAssignmentInputSchema,
   agentHubTaskAssignmentSchema,
-  type AgentHubCredentialOption,
-  type Task
+  type AgentHubCredentialOption
 } from "@orion/shared-types";
 import { Button, Combobox, Input, Modal, Skeleton, useToast } from "@orion/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

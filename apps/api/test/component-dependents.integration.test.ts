@@ -73,10 +73,10 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
       token,
       ws,
       setModule: (id: string, enabled: boolean, confirm?: boolean) =>
-        request<any>(`/workspaces/${ws}/modules/${id}`, { method: "PATCH", token, body: confirm === undefined ? { enabled } : { enabled, confirm } }),
+        request<{ code?: string; message?: string; dependents?: Array<{ id: string; kind: string; relation?: string }> }>(`/workspaces/${ws}/modules/${id}`, { method: "PATCH", token, body: confirm === undefined ? { enabled } : { enabled, confirm } }),
       setPlugin: (id: string, enabled: boolean, confirm?: boolean) =>
-        request<any>(`/workspaces/${ws}/plugins/${id}`, { method: "PATCH", token, body: confirm === undefined ? { enabled } : { enabled, confirm } }),
-      get: (path: string) => request<any>(`/workspaces/${ws}${path}`, { method: "GET", token })
+        request<{ code?: string; message?: string; dependents?: Array<{ id: string; kind: string; relation?: string }> }>(`/workspaces/${ws}/plugins/${id}`, { method: "PATCH", token, body: confirm === undefined ? { enabled } : { enabled, confirm } }),
+      get: (path: string) => request<Array<{ id: string; enabled: boolean }>>(`/workspaces/${ws}${path}`, { method: "GET", token })
     };
   }
 

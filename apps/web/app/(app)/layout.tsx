@@ -33,7 +33,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns2, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, SlidersHorizontal, PanelLeft, PanelRight, Search, Wrench } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns2, ExternalLink, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, PanelLeft, PanelRight, Search, SlidersHorizontal, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -42,7 +42,6 @@ import { CommandCenter, showCommandPalette } from "../../lib/command-center";
 import { WorkspaceContext, type ProjectOpenMode } from "../../components/workspace-context";
 import { ProjectContextInspector } from "../../components/project-context-inspector";
 import { projectContextId } from "../../lib/shell-context";
-import { usesPrecisionShell } from "../../lib/orion-edition";
 import { FolderNameDialog } from "../../components/folder-name-dialog";
 import { ResourcesDock, ResourcesToggle } from "../../components/resources/resources-dock";
 import { ModuleSettingsSheet } from "../../components/module-settings-sheet";
@@ -58,7 +57,6 @@ import {
   getDefaultLayoutName,
   getNamedLayout,
   importNamedLayouts,
-  layoutShortcutIndex,
   listNamedLayouts,
   namedLayoutsKey,
   pruneDockLayout,
@@ -203,9 +201,9 @@ function DetachHeaderAction({ activePanel }: IDockviewHeaderActionsProps): React
       type="button"
       onClick={detach}
       title="Открепить в окне"
-      className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+      className="mr-2 flex h-7 w-7 items-center justify-center rounded-md text-subtle-foreground hover:bg-white/10 hover:text-foreground"
     >
-      ⧉
+      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
     </button>
   );
 }
@@ -376,12 +374,15 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // Panels that enabled plugins and extensions ADD (ADR-0022): `ext:<pluginId>.<id>` entries in the same list, so folders,
   // ordering, "open beside" and "new window" treat them like any other section.
   const extensionPanels = useEnabledPlaces("panel");
-  const extensionNav = extensionPanels.flatMap((place): PanelDefinition[] => {
+  const extensionNav = useMemo(() => extensionPanels.flatMap((place): PanelDefinition[] => {
     const id = instancePanelId("ext", placeKey(place));
     const host = getPanelDefinition(id);
     return host ? [{ ...host, id, label: place.label, icon: place.icon, group: place.group ?? DEFAULT_PLACE_GROUP, hideFromNav: false }] : [];
-  });
-  const navPanels = [...visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides), ...extensionNav];
+  }), [extensionPanels]);
+  const navPanels = useMemo(
+    () => [...visiblePanels(disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides), ...extensionNav],
+    [disabledModules, preferences?.hiddenModules, workspace?.pluginOverrides, extensionNav]
+  );
 
   // The user's own sidebar folders: personal, saved with their preferences.
   const { folders: legacyFolders, order: sidebarOrder } = useSidebarFolders();
@@ -600,10 +601,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   // Named layouts - integrate with shortcut system (Alt+1..9)
   const layoutNamesRef = useRef(layoutNames);
   layoutNamesRef.current = layoutNames;
-  
-  // Track current index for Alt+N shortcuts
-  const [activeLayoutIndex, setActiveLayoutIndex] = useState(0);
-  
+
   useShortcutHandler("global.layout-1", () => { const name = layoutNamesRef.current[0]; if (name) applyLayout(name); });
   useShortcutHandler("global.layout-2", () => { const name = layoutNamesRef.current[1]; if (name) applyLayout(name); });
   useShortcutHandler("global.layout-3", () => { const name = layoutNamesRef.current[2]; if (name) applyLayout(name); });

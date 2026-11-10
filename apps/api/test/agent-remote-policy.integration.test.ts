@@ -41,7 +41,7 @@ describe("Agent tokens in server mode (ADR-0017)", () => {
     await app?.close();
   });
 
-  async function request<T = any>(path: string, method: string, token?: string, body?: unknown) {
+  async function request<T = unknown>(path: string, method: string, token?: string, body?: unknown) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

@@ -41,7 +41,7 @@ describe("GPT-QA ORION DEV import-to-review journey", () => {
       });
     } finally { await app?.close(); }
   });
-  async function http<T = any>(method: string, path: string, bearer?: string, body?: unknown) {
+  async function http<T = unknown>(method: string, path: string, bearer?: string, body?: unknown) {
     const response = await fetch(origin + path, {
       method,
       headers: { "Content-Type": "application/json", ...(bearer ? { Authorization: "Bearer " + bearer } : {}) },
@@ -58,7 +58,7 @@ describe("GPT-QA ORION DEV import-to-review journey", () => {
     expect(auth.status).toBe(201);
     const token = auth.data.accessToken;
     const ws = (await http<Array<{ id: string }>>("GET", "/workspaces/me", token)).data[0]!.id;
-    const human = <T = any>(method: string, path: string, body?: unknown) =>
+    const human = <T = unknown>(method: string, path: string, body?: unknown) =>
       http<T>(method, "/workspaces/" + ws + path, token, body);
     return { ws, human };
   }
