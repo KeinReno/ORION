@@ -44,7 +44,7 @@ describe("data-only theme engine v1", () => {
     expect(variables["--kaiden-bg-surface"]).toBe("255 255 255");
     expect(variables["--kaiden-focus-ring"]).toBe("48 92 140");
     expect(variables["--kaiden-button-bg"]).toBe("var(--kaiden-accent-base)");
-    expect(variables["--kaiden-panel-padding"]).toBe("var(--kaiden-space-6)");
+    expect(variables["--kaiden-panel-padding"]).toBe("var(--kaiden-space-5)");
     expect(variables["--kaiden-type-body"]).toBe("var(--font-body, 0.9375rem)");
     const precision = themeDocumentVariables(PRECISION_THEME);
     for (const [name, value] of Object.entries(PRECISION_TOKENS)) {

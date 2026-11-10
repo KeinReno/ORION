@@ -166,19 +166,19 @@ export function PanelHeader({
   return (
     <header
       className={clsx(
-        "relative z-20 shrink-0 border-b border-ui-border bg-ui-header/80 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-ui-header/60",
+        "orion-panel-header relative z-20 shrink-0 border-b border-ui-border bg-ui-header px-6 py-4",
         className
       )}
     >
       <div className="flex min-h-8 flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 max-w-full flex-auto items-start gap-3">
           {Icon ? (
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-ui-secondary">
+            <span className="orion-panel-mark mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ui-border bg-ui-tint/[0.03] text-ui-secondary">
               <Icon className="h-4 w-4" />
             </span>
           ) : null}
           <div className="min-w-0">
-            <h1 className="truncate text-display text-ui-primary">{title}</h1>
+            <h1 className="truncate text-display font-semibold tracking-[-0.025em] text-ui-primary">{title}</h1>
             {subtitle ? <p className="mt-0.5 truncate text-label text-ui-secondary">{subtitle}</p> : null}
           </div>
         </div>

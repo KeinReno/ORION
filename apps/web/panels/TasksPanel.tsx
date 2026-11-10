@@ -702,15 +702,15 @@ export function TasksPanel(): React.ReactElement {
                   if (id) applyDrop(id, column.key);
                 }}
                 className={cx(
-                  "flex flex-col gap-2 rounded-2xl border p-2 transition-colors",
+                  "orion-track-column flex flex-col gap-2 rounded-lg border bg-panel/40 p-2 transition-colors",
                   !activeViewMeta && "w-full",
                   dragOverKey === column.key ? "border-accent bg-accent/[0.05]" : "border-border"
                 )}
               >
-                <div className="flex items-center gap-2 px-1 py-1">
+                <div className="orion-track-heading flex items-center gap-2 border-b border-border/70 px-1 pb-2 pt-1">
                   {column.dot ? <span className={cx("h-1.5 w-1.5 rounded-full", column.dot)} /> : null}
                   <h2 className="text-label text-muted-foreground">{column.label}</h2>
-                  <span className="text-micro text-subtle-foreground">{column.tasks.length}</span>
+                  <span className="font-mono text-micro tabular-nums text-subtle-foreground">{column.tasks.length}</span>
                   {groupBy === "status" && column.key === "todo" ? (
                     <button
                       type="button"

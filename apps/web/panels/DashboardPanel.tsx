@@ -376,8 +376,8 @@ function DashboardOverview(): React.ReactElement {
       <PanelBody className="space-y-6 [container-type:inline-size]">
         {/* Keep the first useful action available while workspace data loads. */}
         <header className="space-y-3">
-          <form onSubmit={submitCapture} className="space-y-1.5">
-            <div className="flex flex-col gap-2 [@container(min-width:576px)]:flex-row [@container(min-width:576px)]:items-center">
+          <form onSubmit={submitCapture} className="orion-command-strip space-y-1.5">
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-card/35 p-1.5 [@container(min-width:576px)]:flex-row [@container(min-width:576px)]:items-center">
               <Input
                 id="orion-quick-capture"
                 value={capture}
@@ -727,9 +727,9 @@ function Section({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <section className={cx("min-w-0 rounded-2xl border border-border bg-card/60 p-3", className)}>
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-title text-foreground">
+    <section className={cx("orion-track min-w-0 rounded-lg border border-border bg-card/40 p-3", className)}>
+      <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+        <h2 className="flex items-center gap-2 text-title font-semibold tracking-[-0.015em] text-foreground">
           <Icon className="h-4 w-4 text-muted-foreground" />
           {title}
         </h2>

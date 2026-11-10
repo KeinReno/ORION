@@ -79,9 +79,9 @@ function TreeBranch({ node }: { node: TreeNode }): React.ReactElement {
 
 export function DataTable({ columns, rows }: { columns: string[]; rows: ReactNode[][] }): React.ReactElement {
   return (
-    <div className="overflow-auto rounded-lg border border-ui-border">
-      <table className="w-full border-collapse text-left text-body">
-        <thead className="bg-ui-hover/60 text-label text-ui-subtle">
+    <div className="orion-data-table overflow-auto rounded-md border border-ui-border">
+      <table className="w-full border-collapse text-left text-body tabular-nums">
+        <thead className="bg-ui-hover/60 text-micro uppercase tracking-[0.06em] text-ui-subtle">
           <tr>{columns.map((column) => <th key={column} className="px-3 py-2 font-medium">{column}</th>)}</tr>
         </thead>
         <tbody>

@@ -69,6 +69,10 @@ module.exports = {
         warning: "rgb(var(--orion-warning) / <alpha-value>)",
         "warning-hover": "rgb(var(--orion-warning-hover) / <alpha-value>)"
       },
+      fontFamily: {
+        sans: ["var(--kaiden-font-sans)"],
+        mono: ["var(--kaiden-font-mono)"]
+      },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
         display: ["var(--font-display)", { lineHeight: "1.2", fontWeight: "600" }],

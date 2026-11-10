@@ -32,7 +32,7 @@ export function OnboardingCard({ onCapture }: { onCapture: () => void }): React.
   }
 
   return (
-    <section className="rounded-xl border border-accent/30 bg-accent/5 px-3 py-3">
+    <section className="orion-onboarding rounded-lg border border-border bg-card/40 px-4 py-3.5">
       <p className="text-sm font-medium text-foreground">Как устроен день</p>
       <ol className="mt-2 space-y-1.5 text-xs text-muted-foreground">
         <li>

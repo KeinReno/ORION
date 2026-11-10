@@ -15,7 +15,7 @@ import { NotificationBell } from "./notification-bell";
 export function GlobalCorner({ children }: { children?: ReactNode }): React.ReactElement {
   return (
     <div className="flex min-h-10 shrink-0 items-center justify-end px-3">
-      <div className="flex max-w-full flex-wrap items-center justify-end gap-1 rounded-full border border-border bg-card/90 p-1 shadow-lg shadow-black/30 backdrop-blur-md">
+      <div className="orion-transport flex max-w-full flex-wrap items-center justify-end gap-1 rounded-lg border border-border bg-card p-1 shadow-lg shadow-black/20">
         {children}
         <NotificationBell />
         <FeedbackButton />

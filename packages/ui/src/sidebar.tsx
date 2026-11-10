@@ -391,10 +391,10 @@ export function Sidebar({
     const Icon = link.icon;
     const isActive = link.isActive ?? link.href === activeHref;
     const className = clsx(
-      "group relative flex items-center gap-3 rounded-lg px-3 text-sm transition-colors",
+      "group relative flex items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
       isDrawer ? "min-h-11 py-2.5" : "py-2",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
-      isActive ? "text-foreground" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+      isActive ? "text-foreground" : "text-muted-foreground hover:bg-ui-hover/60 hover:text-foreground"
     );
     const ariaLabel = link.badge
       ? `${link.label}, ${link.badgeLabel ?? String(link.badge)}`
@@ -404,7 +404,7 @@ export function Sidebar({
         {isActive ? (
           <motion.span
             layoutId={isDrawer ? `${navId}-pill-drawer` : `${navId}-pill`}
-            className="absolute inset-0 rounded-lg bg-accent/12"
+            className="absolute inset-0 rounded-md bg-accent/10"
             transition={smooth}
             aria-hidden
           />
@@ -412,14 +412,14 @@ export function Sidebar({
         {isActive ? (
           <motion.span
             layoutId={isDrawer ? `${navId}-bar-drawer` : `${navId}-bar`}
-            className={clsx("absolute rounded-full bg-accent", horizontal ? "inset-x-2 bottom-0 h-0.5" : "inset-y-1.5 left-0 w-0.5")}
+            className={clsx("absolute bg-accent", horizontal ? "inset-x-2 bottom-0 h-px" : "inset-y-2 left-0 w-px")}
             transition={smooth}
             aria-hidden
           />
         ) : null}
         <motion.span
           className="relative shrink-0"
-          whileHover={{ scale: reduceMotion ? 1 : 1.12 }}
+          whileHover={{ x: reduceMotion ? 0 : 1 }}
           transition={smooth}
         >
           <Icon className="h-5 w-5" aria-hidden />

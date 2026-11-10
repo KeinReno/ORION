@@ -155,7 +155,7 @@ export function TaskCard({
         }
       }}
       className={cx(
-        "group relative flex cursor-pointer flex-col gap-2 rounded-2xl border bg-card px-3 py-card-row transition-colors hover:border-border-strong hover:bg-card-hover",
+        "orion-track-card group relative flex cursor-pointer flex-col gap-2 rounded-lg border bg-card px-3 py-card-row transition-colors hover:border-border-strong hover:bg-card-hover",
         focused || selected ? "border-accent" : "border-border",
         nested && "ml-4",
         closed && "opacity-60",
@@ -198,7 +198,7 @@ export function TaskCard({
          */}
         {task.status === "in_progress" ? <StatusMark status="running" label="в работе" /> : null}
         {canceled ? <StatusMark status="cancelled" label="отменена" /> : null}
-        {task.projectTag && !hideProject ? <span style={projectColor(task.projectTag)} title={task.projectTag} className="block max-w-full truncate rounded-full border px-2 py-0.5 text-micro font-medium sm:max-w-[16rem]">{task.projectTag}</span> : null}
+        {task.projectTag && !hideProject ? <span style={projectColor(task.projectTag)} title={task.projectTag} className="block max-w-full truncate rounded border px-1.5 py-0.5 text-micro font-medium sm:max-w-[16rem]">{task.projectTag}</span> : null}
         {task.dueAt ? (
           <span
             className={cx("inline-flex items-center gap-1 text-micro", overdue ? "text-destructive" : "text-subtle-foreground")}

@@ -31,6 +31,20 @@ export default function RootLayout({ children }: { children: ReactNode }): React
   return (
     <html lang="ru">
       <body>
+        <script
+          type="text/html"
+          id="orion-direction-contract"
+          dangerouslySetInnerHTML={{
+            __html: `<!--
+THESIS: A non-linear editing suite for many life domains; docked work persists instead of becoming a generic card dashboard.
+OWN-WORLD: Graphite, bone text, user-theme accent, 1px seams, compact grotesque, mono timecode, square transport controls, registered tracks.
+STORY: Capture first, then scan focus, schedule and records without losing workspace context.
+FIRST VIEWPORT: 60px rail; persistent context; compact panel header; full-width command strip; aligned focus/today tracks; primary action at header right.
+FORM: Professional NLE, grounded candidate 6, seed cefcc80a. Hold-state keeps row identity. Typographic rank uses weight/case/rules. Registered plates share baselines. Cells reflow whole.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->`
+          }}
+        />
         <Providers>{children}</Providers>
         <RuntimeReady />
       </body>

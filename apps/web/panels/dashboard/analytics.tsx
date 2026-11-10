@@ -20,11 +20,11 @@ const MODE_KEY = "orion.dashboard-analytics-mode";
 function StatTile({ value, label, tone, onClick }: { value: number | string; label: string; tone?: "danger" | "warning"; onClick?: () => void }): React.ReactElement {
   const body = (
     <>
-      <span className={cx("block font-mono text-xl tabular-nums", tone === "danger" && "text-destructive", tone === "warning" && "text-warning")}>{value}</span>
-      <span className="block text-2xs text-subtle-foreground">{label}</span>
+      <span className={cx("block font-mono text-2xl leading-none tabular-nums", tone === "danger" && "text-destructive", tone === "warning" && "text-warning")}>{value}</span>
+      <span className="mt-1.5 block text-2xs uppercase tracking-[0.04em] text-subtle-foreground">{label}</span>
     </>
   );
-  const className = "rounded-xl border border-border px-3 py-2 text-left";
+  const className = "orion-stat rounded-md border border-border bg-panel/40 px-3 py-2.5 text-left";
   return onClick ? (
     <button type="button" onClick={onClick} className={cx(className, "transition-colors hover:bg-white/5")}>
       {body}
@@ -146,7 +146,7 @@ export function DashboardAnalytics({
 
 
   return (
-    <section aria-label="Аналитика" className="min-w-0 space-y-3 rounded-2xl border border-border bg-card/60 p-3">
+    <section aria-label="Аналитика" className="orion-track min-w-0 space-y-3 rounded-lg border border-border bg-card/40 p-3">
       {section.locked ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-title text-foreground">

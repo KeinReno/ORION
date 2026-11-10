@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted, Cyrillic-complete typography. Fontsource packages and OFL texts ship beside the files. */
+@font-face {
+  font-family: "Onest Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/onest-cyrillic-wght-normal.woff2") format("woff2");
+  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+@font-face {
+  font-family: "Onest Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/onest-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 500;
+  src: url("/fonts/ibm-plex-mono-cyrillic-400-normal.woff2") format("woff2");
+  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 500;
+  src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
 /* Precision is a saved USER-global choice. Legacy fallbacks and all old preferences remain intact. */
 html[data-orion-design="precision"] {
   --orion-color-canvas: var(--kaiden-bg-canvas);
@@ -393,13 +427,53 @@ html[data-motion="off"] *::after {
   scroll-behavior: auto !important;
 }
 
-/* Scoped redesign chrome: no ambient effects or glass, regardless of retained legacy choices. */
-html[data-orion-design="precision"] body { background-color: rgb(var(--orion-color-canvas)); color: rgb(var(--orion-color-text)); }
+/* ORION workstation: one restrained geometry across every built-in and contributed panel. */
+html[data-orion-design="precision"] body {
+  background-color: rgb(var(--orion-color-canvas));
+  color: rgb(var(--orion-color-text));
+  font-family: var(--kaiden-font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+[data-orion-design="precision"] {
+  accent-color: rgb(var(--orion-accent));
+  caret-color: rgb(var(--orion-accent-hover));
+  text-underline-offset: 0.2em;
+}
+[data-orion-design="precision"] ::selection {
+  background: rgb(var(--orion-accent) / 0.28);
+  color: rgb(var(--orion-color-text));
+}
+[data-orion-design="precision"] :where(code, kbd, samp, pre, time, [role="timer"]) {
+  font-family: var(--kaiden-font-mono);
+}
+[data-orion-design="precision"] :where(table, .orion-stat, .orion-track-heading) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
 [data-orion-design="precision"] .orion-app-background,
 [data-orion-design="precision"] .orion-app-background-webgl { display: none; }
 [data-orion-design="precision"] .bg-background { background-color: rgb(var(--orion-color-canvas)) !important; backdrop-filter: none; }
 [data-orion-design="precision"] .bg-panel { background-color: rgb(var(--orion-color-surface)) !important; }
 [data-orion-design="precision"] .bg-card { background-color: rgb(var(--orion-color-elevated)) !important; backdrop-filter: none; }
+[data-orion-design="precision"] .hover\:bg-white\/5:hover,
+[data-orion-design="precision"] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgb(var(--kaiden-tint-base) / 0.055); }
+[data-orion-design="precision"] .hover\:bg-white\/10:hover { background-color: rgb(var(--kaiden-tint-base) / 0.09); }
+[data-orion-design="precision"] .bg-white\/\[0\.02\] { background-color: rgb(var(--kaiden-tint-base) / 0.025); }
+[data-orion-design="precision"] .bg-white\/\[0\.03\] { background-color: rgb(var(--kaiden-tint-base) / 0.035); }
+[data-orion-design="precision"] .bg-white\/\[0\.04\] { background-color: rgb(var(--kaiden-tint-base) / 0.045); }
+[data-orion-design="precision"] .bg-white\/\[0\.06\] { background-color: rgb(var(--kaiden-tint-base) / 0.065); }
+[data-orion-design="precision"] .orion-field { background-color: rgb(var(--orion-color-canvas) / 0.35); }
+[data-orion-design="precision"] .orion-field:hover { border-color: rgb(var(--orion-color-border-strong)); }
+[data-orion-design="precision"] .orion-command-strip .orion-field { border-color: transparent; background-color: transparent; }
+[data-orion-design="precision"] .orion-command-strip .orion-field:focus { border-color: rgb(var(--orion-accent)); background-color: rgb(var(--orion-color-canvas) / 0.45); }
+[data-orion-design="precision"] .orion-panel-header { box-shadow: 0 1px rgb(var(--kaiden-tint-base) / 0.015); }
+[data-orion-design="precision"] .orion-track,
+[data-orion-design="precision"] .orion-track-column,
+[data-orion-design="precision"] .orion-track-card { background-clip: padding-box; }
+[data-orion-design="precision"] .orion-track-card:focus-visible { outline: 1px solid rgb(var(--orion-accent)); outline-offset: 2px; }
+[data-orion-design="precision"] .orion-stat { min-width: 0; }
+[data-orion-design="precision"] .orion-transport { box-shadow: 0 5px 18px rgb(0 0 0 / 0.18); }
 [data-orion-design="precision"] .dockview-theme-abyss {
   --dv-background-color: rgb(var(--orion-color-surface)) !important;
   --dv-group-view-background-color: rgb(var(--orion-color-surface)) !important;
@@ -409,16 +483,30 @@ html[data-orion-design="precision"] body { background-color: rgb(var(--orion-col
   --dv-activegroup-hiddenpanel-tab-color: rgb(var(--orion-color-secondary)) !important;
   --dv-inactivegroup-visiblepanel-tab-color: rgb(var(--orion-color-secondary)) !important;
   --dv-inactivegroup-hiddenpanel-tab-color: rgb(var(--orion-color-subtle)) !important;
-  --dv-separator-border: rgb(var(--orion-color-border-strong)) !important;
+  --dv-separator-border: rgb(var(--orion-color-border)) !important;
   --dv-paneview-header-border-color: rgb(var(--orion-color-border)) !important;
+  --dv-icon-hover-background-color: rgb(var(--kaiden-tint-base) / 0.07) !important;
 }
-[data-orion-design="precision"] .dockview-theme-abyss .dv-tabs-and-actions-container { border-color: rgb(var(--orion-color-border)); backdrop-filter: none; padding-top: 4px; }
-[data-orion-design="precision"] .dockview-theme-abyss .dv-tab { border-radius: 6px 6px 0 0 !important; }
-[data-orion-design="precision"] .dockview-theme-abyss .dv-tab.dv-active-tab { box-shadow: inset 0 2px rgb(var(--orion-accent)); }
-[data-orion-design="precision"] .rounded-2xl { border-radius: 8px; }
+[data-orion-design="precision"] .dockview-theme-abyss .dv-tabs-and-actions-container {
+  border-color: rgb(var(--orion-color-border));
+  backdrop-filter: none;
+  min-height: 38px;
+  padding: 4px 6px 0;
+}
+[data-orion-design="precision"] .dockview-theme-abyss .dv-tab { border-radius: 4px 4px 0 0 !important; }
+[data-orion-design="precision"] .dockview-theme-abyss .dv-tab.dv-active-tab { box-shadow: inset 0 1px rgb(var(--orion-accent)); }
+[data-orion-design="precision"] .dockview-theme-abyss .dv-tab.dv-inactive-tab:hover { background-color: rgb(var(--kaiden-tint-base) / 0.05) !important; }
+[data-orion-design="precision"] .dockview-theme-abyss .dv-sash-container .dv-sash { background-color: transparent !important; }
+[data-orion-design="precision"] .rounded-2xl { border-radius: var(--kaiden-radius-10); }
+[data-orion-design="precision"] .rounded-xl { border-radius: var(--kaiden-radius-8); }
 [data-orion-design="precision"] .orion-scroll { scrollbar-color: rgb(var(--orion-color-border-strong)) transparent; }
-
+[data-orion-design="precision"] .orion-scroll::-webkit-scrollbar-thumb { border-radius: 2px; }
 [data-orion-design="precision"] [data-panel-glow] { display: none; }
+@media (max-width: 767px) {
+  [data-orion-design="precision"] .orion-panel-header { padding: 14px 16px; }
+  [data-orion-design="precision"] .p-ui-panel { padding: 16px; }
+  [data-orion-design="precision"] .orion-transport { box-shadow: 0 4px 14px rgb(0 0 0 / 0.16); }
+}
 
 /*
  * Агенты за работой (lib/agent-presence.tsx). Рамка панели — бегущий по краю свет цвета акцента (предложение — цвет

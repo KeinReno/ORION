@@ -77,9 +77,9 @@ export function Button({
     <button
       disabled={disabled || status === "pending"}
       className={clsx(
-        "inline-flex select-none items-center justify-center gap-2 rounded-ui-button font-medium transition-[color,background-color,border-color,transform] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 disabled:pointer-events-none disabled:opacity-50",
-        "active:scale-[0.97]",
+        "inline-flex min-h-8 select-none items-center justify-center gap-2 rounded-ui-button font-medium transition-[color,background-color,border-color,transform] duration-150 outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 focus-visible:ring-offset-1 focus-visible:ring-offset-ui-overlay disabled:pointer-events-none disabled:opacity-50",
+        "active:translate-y-px",
         size === "sm" ? "px-2.5 py-1.5 text-label" : "px-4 py-2 text-body",
         variant === "primary" && "bg-ui-button text-ui-button-foreground hover:bg-ui-accent-hover",
         variant === "outline" && "border border-ui-border-strong bg-transparent text-ui-primary hover:bg-ui-hover",
@@ -127,8 +127,8 @@ export function IconButton({
       title={label}
       disabled={disabled || status === "pending"}
       className={clsx(
-        "inline-flex shrink-0 items-center justify-center rounded-md text-ui-secondary transition-[color,background-color,transform] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 active:scale-[0.93]",
+        "inline-flex shrink-0 items-center justify-center rounded-md text-ui-secondary transition-[color,background-color,transform] duration-150 outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ui-focus/60 active:translate-y-px",
         size === "sm" ? "h-7 w-7" : "h-8 w-8",
         tone === "default" && "hover:bg-ui-tint/10 hover:text-ui-primary",
         tone === "danger" && "hover:bg-ui-danger/15 hover:text-ui-danger",
@@ -146,8 +146,8 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>): React.React
     <input
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
-        "placeholder:text-ui-subtle outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
+        "orion-field w-full rounded-md border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
+        "placeholder:text-ui-subtle outline-none focus:border-ui-focus focus:ring-1 focus:ring-ui-focus/60",
         props.className
       )}
     />
@@ -160,8 +160,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
       ref={ref}
       {...props}
       className={clsx(
-        "w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
-        "placeholder:text-ui-subtle outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
+        "orion-field w-full rounded-md border border-ui-border bg-ui-tint/[0.03] px-3 py-2 text-body text-ui-primary transition-colors",
+        "placeholder:text-ui-subtle outline-none focus:border-ui-focus focus:ring-1 focus:ring-ui-focus/60",
         props.className
       )}
     />
@@ -178,8 +178,8 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
         // it sits next to in a form row (S12 control-height audit).
         // A native select is as wide as its longest option; min-w-0/max-w-full keep a
         // long option from stretching the card or form it sits in.
-        "min-w-0 max-w-full rounded-lg border border-ui-border bg-ui-tint/[0.03] px-2.5 py-2 text-body text-ui-primary transition-colors",
-        "outline-none focus:border-ui-focus/70 focus:ring-2 focus:ring-ui-focus/25",
+        "orion-field min-w-0 max-w-full rounded-md border border-ui-border bg-ui-tint/[0.03] px-2.5 py-2 text-body text-ui-primary transition-colors",
+        "outline-none focus:border-ui-focus focus:ring-1 focus:ring-ui-focus/60",
         "[&>option]:bg-ui-overlay [&>option]:text-ui-primary",
         className
       )}
@@ -200,9 +200,9 @@ export function Card({
   return (
     <div
       className={clsx(
-        "rounded-2xl border border-border bg-card p-4",
+        "orion-card rounded-xl border border-border bg-card p-4",
         interactive && "cursor-pointer transition-colors hover:border-border-strong hover:bg-card-hover",
-        elevate && "transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lg hover:shadow-black/30",
+        elevate && "transition-colors duration-150 hover:border-border-strong hover:bg-card-hover",
         className
       )}
       {...props}
@@ -243,7 +243,7 @@ export function Badge({
     <span
       style={style}
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium leading-none",
+        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-2xs font-medium leading-none tracking-[-0.02em]",
         tone === "neutral" && "border-border text-muted-foreground",
         tone === "accent" && "border-accent/30 bg-accent/10 text-accent-text",
         tone === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
@@ -311,14 +311,14 @@ export function EmptyState({
   tone?: "neutral" | "danger" | "success";
 }): React.ReactElement {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border px-6 py-12 text-center">
+    <div className="orion-empty mx-auto flex w-full max-w-md flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-6 py-12 text-center">
       {Icon ? (
         <span
           className={clsx(
-            "flex h-11 w-11 items-center justify-center rounded-full",
-            tone === "danger" && "bg-destructive/10 text-destructive",
-            tone === "success" && "bg-accent/10 text-accent-text",
-            tone === "neutral" && "bg-white/[0.04] text-muted-foreground"
+            "flex h-10 w-10 items-center justify-center rounded-md border",
+            tone === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
+            tone === "success" && "border-accent/30 bg-accent/10 text-accent-text",
+            tone === "neutral" && "border-border bg-ui-tint/[0.04] text-muted-foreground"
           )}
         >
           <Icon className="h-5 w-5" />
