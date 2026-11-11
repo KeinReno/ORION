@@ -91,7 +91,10 @@ export const noteRevisionSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
   /// When the snapshot was taken (= when the note last changed before it).
-  createdAt: z.string()
+  createdAt: z.string(),
+  /// 07 (Заметки 2.0): id версии, из которой восстановлено содержимое этой
+  /// записи истории. null = обычный снимок (не восстановление).
+  restoredFrom: z.string().nullable()
 });
 export type NoteRevisionSummary = z.infer<typeof noteRevisionSummarySchema>;
 
@@ -136,7 +139,11 @@ export type NoteAttachment = z.infer<typeof noteAttachmentSchema>;
 
 export const createNoteStackInputSchema = z.object({
   title: z.string().trim().min(1, "Название стопки обязательно").max(80),
-  noteIds: z.array(z.string().min(1)).min(2).max(100)
+  noteIds: z.array(z.string().min(1)).min(2).max(100),
+  /// 07 (Заметки 2.0): вложенные стопки сознательно не поддерживаются. Поле
+  /// принимается, чтобы отказ был явным 400 с текстом, а не молчаливым
+  /// игнорированием лишнего ключа.
+  parentStackId: z.string().min(1).optional()
 }).refine((input) => new Set(input.noteIds).size === input.noteIds.length, { message: "Заметка указана несколько раз", path: ["noteIds"] });
 export type CreateNoteStackInput = z.infer<typeof createNoteStackInputSchema>;
 
@@ -215,3 +222,118 @@ export const noteConflictSchema = z.object({
   current: noteSchema
 });
 export type NoteConflict = z.infer<typeof noteConflictSchema>;
+
+// --- 07 (Заметки 2.0): ссылки, поиск, связанные заметки, стопки ----------
+
+/// Одна wiki-ссылка заметки в ответе GET .../notes/:id/links.
+export const noteLinkEntrySchema = z.object({
+  id: z.string(),
+  /// "outgoing" — ссылка из этой заметки; "incoming" — обратная (backlink).
+  direction: z.enum(["outgoing", "incoming"]),
+  /// Для outgoing — текст внутри [[...]] как написан; для incoming — заголовок источника.
+  title: z.string(),
+  /// Заметка на другом конце, если ссылка разрешилась; null — цель не найдена.
+  noteId: z.string().nullable(),
+  /// true = битая ссылка: цель удалена, переименована или ещё не создана.
+  /// Запись при этом не удаляется — её видно в разборе битых ссылок.
+  broken: z.boolean()
+});
+export type NoteLinkEntry = z.infer<typeof noteLinkEntrySchema>;
+
+export const noteLinksSchema = z.object({
+  outgoing: z.array(noteLinkEntrySchema),
+  incoming: z.array(noteLinkEntrySchema)
+});
+export type NoteLinks = z.infer<typeof noteLinksSchema>;
+
+/// Битая ссылка в масштабе пространства (GET .../notes/links/broken).
+export const brokenNoteLinkSchema = z.object({
+  id: z.string(),
+  sourceNoteId: z.string(),
+  sourceTitle: z.string(),
+  /// Текст внутри [[...]], который никуда не ведёт.
+  targetTitle: z.string(),
+  createdAt: z.string()
+});
+export type BrokenNoteLink = z.infer<typeof brokenNoteLinkSchema>;
+
+/// Вхождение поискового запроса в теле заметки — для подсветки на клиенте.
+export const noteSearchMatchSchema = z.object({
+  /// Смещение в UTF-16 единицах (индексы JavaScript-строки), включительно.
+  start: z.number().int(),
+  /// Конец вхождения, исключительно.
+  end: z.number().int(),
+  /// Номер строки, 1-based.
+  line: z.number().int(),
+  /// Текст строки с вхождением.
+  text: z.string()
+});
+export type NoteSearchMatch = z.infer<typeof noteSearchMatchSchema>;
+
+export const noteSearchResultSchema = z.object({
+  query: z.string(),
+  total: z.number().int(),
+  matches: z.array(noteSearchMatchSchema),
+  /// true = вхождений больше, чем вернулось в matches.
+  truncated: z.boolean()
+});
+export type NoteSearchResult = z.infer<typeof noteSearchResultSchema>;
+
+/// Почему заметка попала в «связанные»: wiki-ссылка, обратная ссылка,
+/// общая связь EntityLink или общий проект.
+export const noteRelatedReasonSchema = z.enum(["wiki-link", "backlink", "entity-link", "project"]);
+export type NoteRelatedReason = z.infer<typeof noteRelatedReasonSchema>;
+
+export const noteRelatedSchema = z.object({
+  noteId: z.string(),
+  title: z.string(),
+  /// Начало тела связанной заметки — для превью в списке.
+  snippet: z.string(),
+  reasons: z.array(noteRelatedReasonSchema)
+});
+export type NoteRelated = z.infer<typeof noteRelatedSchema>;
+
+/// Строка построчного diff'а между версиями (07, 7.1).
+export const noteDiffLineSchema = z.object({
+  type: z.enum(["equal", "added", "removed"]),
+  text: z.string(),
+  oldLine: z.number().int().nullable(),
+  newLine: z.number().int().nullable()
+});
+export type NoteDiffLineDto = z.infer<typeof noteDiffLineSchema>;
+
+export const noteRevisionDiffSchema = z.object({
+  /// С какой версией сравниваем (всегда заполнена).
+  fromRevisionId: z.string(),
+  /// С чем сравниваем; null = с текущим содержимым заметки.
+  toRevisionId: z.string().nullable(),
+  fromTitle: z.string(),
+  toTitle: z.string(),
+  lines: z.array(noteDiffLineSchema),
+  added: z.number().int(),
+  removed: z.number().int()
+});
+export type NoteRevisionDiff = z.infer<typeof noteRevisionDiffSchema>;
+
+/// Состояние стопки для одного участника (per-user): свёрнута ли и как
+/// упорядочена среди других стопок. Хранится отдельно от самих заметок.
+export const noteStackStateSchema = z.object({
+  stackId: z.string(),
+  collapsed: z.boolean(),
+  sortOrder: z.number().int(),
+  /// Заголовок стопки — чтобы клиент мог нарисовать список стопок без
+  /// отдельного запроса заметок.
+  title: z.string()
+});
+export type NoteStackState = z.infer<typeof noteStackStateSchema>;
+
+export const setNoteStackStateInputSchema = z.object({
+  collapsed: z.boolean()
+});
+export type SetNoteStackStateInput = z.infer<typeof setNoteStackStateInputSchema>;
+
+/// Полный порядок стопок для этого пользователя, от первой к последней.
+export const reorderNoteStacksInputSchema = z.object({
+  stackIds: z.array(z.string().min(1)).max(200)
+});
+export type ReorderNoteStacksInput = z.infer<typeof reorderNoteStacksInputSchema>;

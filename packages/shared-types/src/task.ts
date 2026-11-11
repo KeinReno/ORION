@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  taskComplexitySchema,
+  taskExecutorSourceSchema,
+  taskFieldValueMapSchema,
+  taskPlannerLevelSchema
+} from "./task-planning";
 
 export const taskStatusSchema = z.enum(["backlog", "todo", "in_progress", "done", "canceled"]);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
@@ -45,7 +51,13 @@ export const taskSchema = z.object({
   title: z.string(),
   description: z.string(),
   status: taskStatusSchema,
+  /** Пользовательский статус пространства (2.3). null — используется встроенный enum `status`. */
+  statusId: z.string().nullable(),
   priority: taskPrioritySchema,
+  /** Плановые свойства (2.4) — независимы от `priority`. */
+  importance: taskPlannerLevelSchema.nullable(),
+  urgency: taskPlannerLevelSchema.nullable(),
+  complexity: taskComplexitySchema.nullable(),
   dueAt: z.string().nullable(),
   projectTag: z.string().nullable(),
   recurrence: taskRecurrenceSchema.nullable(),
@@ -61,6 +73,10 @@ export const taskSchema = z.object({
   estimatedMinutes: z.number().int().nullable(),
   milestoneId: z.string().nullable(),
   checklist: taskChecklistSchema,
+  /** Источник исполнения для аналитики (2.4): человек, ИИ-агент или никто. */
+  executorSource: taskExecutorSourceSchema,
+  /** Архив (2.2): задача скрыта из обычных списков, данные сохранены. */
+  archivedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -70,6 +86,13 @@ export const createTaskInputSchema = z.object({
   title: z.string().min(1, "Заголовок обязателен").max(200),
   description: z.string().max(20_000).default(""),
   priority: taskPrioritySchema.default("normal"),
+  /** Пользовательский статус; при наличии выводит встроенный enum из его категории. */
+  statusId: z.string().nullable().optional(),
+  importance: taskPlannerLevelSchema.nullable().optional(),
+  urgency: taskPlannerLevelSchema.nullable().optional(),
+  complexity: taskComplexitySchema.nullable().optional(),
+  /** Значения пользовательских полей (2.3); обязательные проверяются на сервере. */
+  fieldValues: taskFieldValueMapSchema.optional(),
   dueAt: z.string().datetime().nullable().optional(),
   projectTag: z.string().max(60).nullable().optional(),
   projectId: z.string().nullable().optional(),
@@ -90,7 +113,14 @@ export const updateTaskInputSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(20_000).optional(),
   status: taskStatusSchema.optional(),
+  statusId: z.string().nullable().optional(),
   priority: taskPrioritySchema.optional(),
+  importance: taskPlannerLevelSchema.nullable().optional(),
+  urgency: taskPlannerLevelSchema.nullable().optional(),
+  complexity: taskComplexitySchema.nullable().optional(),
+  fieldValues: taskFieldValueMapSchema.optional(),
+  /** Архивировать/вернуть задачу. `true` ставит `archivedAt`, `false` очищает. */
+  archived: z.boolean().optional(),
   dueAt: z.string().datetime().nullable().optional(),
   projectTag: z.string().max(60).nullable().optional(),
   projectId: z.string().nullable().optional(),

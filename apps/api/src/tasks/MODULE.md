@@ -40,11 +40,11 @@ Projects использует read-only `TaskReferenceReader` для показ�
 | Вид | базовый, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `projects`, `calendar`, `time` |
-| Права (permissions) | `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete` |
-| События | публикует: `tasks.task.changed`, `tasks.task.closed`; слушает: `tasks.task.changed`, `tasks.task.closed` |
+| Права (permissions) | `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete`, `tasks.status.manage`, `tasks.field.manage`, `tasks.recurrence.manage` |
+| События | публикует: `tasks.task.changed`, `tasks.task.closed`, `tasks.task.updated`, `tasks.task.status_changed`, `tasks.task.bulk_applied`, `tasks.recurrence.instance_completed`, `tasks.recurrence.skipped`, `tasks.task.assigned`; слушает: `tasks.task.changed`, `tasks.task.closed` |
 | Панели веба | `tasks` |
 | Слоты | — |
-| Маршруты API | `workspaces/:workspaceId/tasks` |
+| Маршруты API | `workspaces/:workspaceId/task-fields`, `workspaces/:workspaceId/task-statuses`, `workspaces/:workspaceId/task-values`, `workspaces/:workspaceId/tasks` |
 | Плагины, расширяющие модуль | `team`, `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning` |
 | Миграции в манифесте | — |
 | Код на сервере | `apps/api/src/tasks/` |

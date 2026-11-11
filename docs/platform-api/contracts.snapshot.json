@@ -1,6 +1,6 @@
 {
   "module": {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "surface": [
       "calendar",
       "contacts",
@@ -15,6 +15,7 @@
       "markets",
       "notes",
       "opportunities",
+      "planning",
       "projects",
       "tasks",
       "time"
@@ -143,10 +144,29 @@
     ]
   },
   "event": {
-    "version": "1.1.0",
+    "version": "1.3.0",
     "surface": [
+      "entity_link.created",
+      "entity_link.deleted",
+      "knowledge.item.verification.changed",
+      "planning.block.moved",
+      "projects.milestone.completed",
+      "projects.milestone.dates_changed",
+      "projects.project.dates_changed",
+      "projects.project.parent_changed",
+      "projects.project.status_changed",
+      "projects.project.updated",
+      "table.row_changed",
+      "tasks.recurrence.instance_completed",
+      "tasks.recurrence.skipped",
+      "tasks.task.assigned",
+      "tasks.task.bulk_applied",
       "tasks.task.changed",
-      "tasks.task.closed"
+      "tasks.task.closed",
+      "tasks.task.status_changed",
+      "tasks.task.updated",
+      "time.entry.edited",
+      "time.entry.switched"
     ]
   },
   "storage": {
@@ -191,7 +211,7 @@
     ]
   },
   "permission": {
-    "version": "1.3.0",
+    "version": "1.5.0",
     "surface": [
       "calendar.event.create",
       "calendar.event.delete",
@@ -204,8 +224,16 @@
       "core.agent_job.create",
       "core.agent_job.update",
       "core.agent_message.create",
+      "core.command.execute",
+      "core.command.read",
+      "core.domain_event.manage",
+      "core.key_binding.manage",
       "core.link.create",
       "core.link.delete",
+      "core.table.create",
+      "core.table.delete",
+      "core.table.read",
+      "core.table.update",
       "documents.document.create",
       "documents.document.delete",
       "documents.document.read",
@@ -251,10 +279,25 @@
       "opportunities.opportunity.delete",
       "opportunities.opportunity.read",
       "opportunities.opportunity.update",
+      "planning.block.create",
+      "planning.block.delete",
+      "planning.block.read",
+      "planning.block.update",
+      "planning.preset.manage",
+      "planning.view.read",
+      "projects.history.read",
+      "projects.portfolio.read",
       "projects.project.create",
       "projects.project.delete",
       "projects.project.read",
       "projects.project.update",
+      "projects.template.create",
+      "projects.template.delete",
+      "projects.template.read",
+      "projects.template.update",
+      "tasks.field.manage",
+      "tasks.recurrence.manage",
+      "tasks.status.manage",
       "tasks.task.create",
       "tasks.task.delete",
       "tasks.task.read",
@@ -262,7 +305,8 @@
       "time.entry.create",
       "time.entry.delete",
       "time.entry.read",
-      "time.entry.update"
+      "time.entry.update",
+      "time.plan.manage"
     ]
   },
   "integration": {

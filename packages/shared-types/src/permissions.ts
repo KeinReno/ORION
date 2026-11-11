@@ -24,6 +24,7 @@ const CORE_PRIMARY_RESOURCE: Record<(typeof CORE_MODULE_IDS)[number], string> = 
   documents: "document",
   projects: "project",
   time: "entry",
+  planning: "block",
   finance: "transaction",
   habits: "habit",
   lists: "list",
@@ -47,7 +48,44 @@ const EXTRA_PERMISSIONS = [
   "core.link.delete",
   "core.agent_message.create",
   "core.agent_job.create",
-  "core.agent_job.update"
+  "core.agent_job.update",
+  // Tasks 2.0 (задание 02): настройка справочников и рекуррентности — отдельные
+  // операции поверх CRUD задачи (массовые операции используют `tasks.task.update`/`delete`).
+  "tasks.status.manage",
+  "tasks.field.manage",
+  "tasks.recurrence.manage",
+  // Foundation Core (задание 01): единый слой связей и диагностика outbox.
+  "entity-links.read",
+  "entity-links.manage",
+  // Центр проектов (задание 03): шаблон — НЕ проект, поэтому у него свои права
+  // (`projects.templates.*` из задания в реестре — `projects.template.*`:
+  // формат реестра `module.resource.action`, ресурсы в единственном числе).
+  "projects.template.read",
+  "projects.template.create",
+  "projects.template.update",
+  "projects.template.delete",
+  // Портфель и история — отдельные операции чтения поверх проектов.
+  "projects.portfolio.read",
+  "projects.history.read",
+  "core.domain_event.manage",
+  // Планирование (задание 04): чтение представлений (Гантт, матрица, dry-run
+  // переноса) — отдельная операция, потому что это межмодульное чтение задач и
+  // событий через контракты владельцев, а не CRUD тайм-блока.
+  "planning.view.read",
+  "planning.preset.manage",
+  // Учёт времени (задание 04): недельный план — не запись времени, у него свой
+  // смысл и свой тумблер; аналитика читает уже существующие `time.entry.read`.
+  "time.plan.manage",
+  // Общие инструменты (задание 10): таблицы — поверхность ядра, а не предметный
+  // модуль, поэтому у них собственный ресурс `core.table`, а команды и личные
+  // горячие клавиши — отдельные операции `core.command`/`core.key_binding`.
+  "core.table.read",
+  "core.table.create",
+  "core.table.update",
+  "core.table.delete",
+  "core.command.read",
+  "core.command.execute",
+  "core.key_binding.manage"
 ] as const;
 
 function buildPermissionIds(): string[] {
@@ -86,7 +124,7 @@ export const AGENT_SCOPE_PERMISSIONS: Record<AgentScope, readonly string[]> = {
   "events:read": ["calendar.event.read"],
   "events:write": ["calendar.event.create", "calendar.event.update"],
   "finance:draft": ["finance.draft.propose"],
-  "links:write": ["core.link.create", "core.link.delete"],
+  "links:write": ["core.link.create", "core.link.delete", "entity-links.manage"],
   "agents:message": ["core.agent_message.create"],
   "agents:delegate": ["core.agent_job.create", "core.agent_job.update"]
 };

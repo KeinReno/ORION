@@ -1,16 +1,16 @@
 {
   "schemaVersion": "1.0.0",
   "meaning": "Declarations generated from code, not runtime acceptance or test results",
-  "platformVersion": "1.13.0",
+  "platformVersion": "1.14.0",
   "contractVersions": {
-    "module": "1.3.0",
+    "module": "1.4.0",
     "plugin": "1.5.0",
-    "event": "1.1.0",
+    "event": "1.3.0",
     "storage": "1.0.0",
     "workspace": "1.0.0",
     "theme": "1.0.0",
     "surface": "1.0.0",
-    "permission": "1.3.0",
+    "permission": "1.5.0",
     "integration": "1.11.0",
     "agentGateway": "1.1.0"
   },
@@ -18,7 +18,7 @@
     {
       "id": "agent-hub",
       "kind": "module",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "title": "Agent Hub",
       "description": "Стабильные профили ИИ-агентов, назначения исполнителей и история исполнений.",
       "requires": {
@@ -33,7 +33,12 @@
         "agent-hub.execution.create",
         "agent-hub.execution.update",
         "agent-hub.execution.delete",
-        "agent-hub.runtime.create"
+        "agent-hub.runtime.create",
+        "agent-hub.memory.read",
+        "agent-hub.memory.create",
+        "agent-hub.memory.update",
+        "agent-hub.policy.read",
+        "agent-hub.policy.update"
       ],
       "surfaces": [
         "dock",
@@ -52,7 +57,10 @@
       "migrations": [
         "20261029202000_agent_hub_executions",
         "20261029223000_agent_hub_runtime_sessions",
-        "20261110140000_agent_hub_agent_assignments"
+        "20261110140000_agent_hub_agent_assignments",
+        "20261111200000_agent_hub_orchestration",
+        "20261111201000_agent_hub_memory_trace",
+        "20261111202000_agent_hub_memory_agent_scope"
       ],
       "sourceDirectory": "apps/api/src/modules-ext/agent-hub",
       "dataModels": [
@@ -60,8 +68,11 @@
         "AgentHubAgentProfile",
         "AgentHubEvent",
         "AgentHubExecution",
+        "AgentHubPolicy",
         "AgentHubRuntimeSession",
-        "AgentHubTaskAssignment"
+        "AgentHubTaskAssignment",
+        "AgentHubTraceStep",
+        "AgentMemoryRecord"
       ]
     },
     {
@@ -259,7 +270,10 @@
         "tasks.task.read",
         "tasks.task.create",
         "tasks.task.update",
-        "tasks.task.delete"
+        "tasks.task.delete",
+        "tasks.status.manage",
+        "tasks.field.manage",
+        "tasks.recurrence.manage"
       ],
       "surfaces": [
         "dock",
@@ -275,7 +289,13 @@
       "events": {
         "publishes": [
           "tasks.task.changed",
-          "tasks.task.closed"
+          "tasks.task.closed",
+          "tasks.task.updated",
+          "tasks.task.status_changed",
+          "tasks.task.bulk_applied",
+          "tasks.recurrence.instance_completed",
+          "tasks.recurrence.skipped",
+          "tasks.task.assigned"
         ],
         "subscribes": [
           "tasks.task.changed",
@@ -289,7 +309,12 @@
         "Task",
         "TaskActivity",
         "TaskComment",
-        "TaskDependency"
+        "TaskDependency",
+        "TaskFieldDefinition",
+        "TaskFieldValue",
+        "TaskRecurrence",
+        "TaskRecurrenceInstance",
+        "TaskStatusDefinition"
       ]
     },
     {
@@ -333,7 +358,8 @@
         "Note",
         "NoteAttachment",
         "NoteLink",
-        "NoteRevision"
+        "NoteRevision",
+        "NoteStackState"
       ]
     },
     {
@@ -368,7 +394,9 @@
         ]
       },
       "events": {
-        "publishes": [],
+        "publishes": [
+          "knowledge.item.verification.changed"
+        ],
         "subscribes": []
       },
       "migrations": [],
@@ -376,7 +404,9 @@
       "dataModels": [
         "KnowledgeCategory",
         "KnowledgeItem",
+        "KnowledgeItemRevision",
         "KnowledgeRelation",
+        "KnowledgeSettings",
         "KnowledgeSource"
       ]
     },
@@ -489,7 +519,13 @@
         "projects.project.read",
         "projects.project.create",
         "projects.project.update",
-        "projects.project.delete"
+        "projects.project.delete",
+        "projects.template.read",
+        "projects.template.create",
+        "projects.template.update",
+        "projects.template.delete",
+        "projects.portfolio.read",
+        "projects.history.read"
       ],
       "surfaces": [
         "dock",
@@ -503,17 +539,26 @@
         ]
       },
       "events": {
-        "publishes": [],
+        "publishes": [
+          "projects.project.status_changed",
+          "projects.project.dates_changed",
+          "projects.milestone.completed",
+          "projects.milestone.dates_changed",
+          "projects.project.updated",
+          "projects.project.parent_changed"
+        ],
         "subscribes": []
       },
       "migrations": [],
       "sourceDirectory": "apps/api/src/projects",
       "dataModels": [
         "Project",
+        "ProjectHistoryEntry",
         "ProjectLogEntry",
         "ProjectLogEntryTask",
         "ProjectRelation",
-        "ProjectStatusUpdate"
+        "ProjectStatusUpdate",
+        "ProjectTemplate"
       ]
     },
     {
@@ -534,7 +579,8 @@
         "time.entry.read",
         "time.entry.create",
         "time.entry.update",
-        "time.entry.delete"
+        "time.entry.delete",
+        "time.plan.manage"
       ],
       "surfaces": [
         "dock",
@@ -548,13 +594,17 @@
         ]
       },
       "events": {
-        "publishes": [],
+        "publishes": [
+          "time.entry.switched",
+          "time.entry.edited"
+        ],
         "subscribes": []
       },
       "migrations": [],
       "sourceDirectory": "apps/api/src/time",
       "dataModels": [
-        "TimeEntry"
+        "TimeEntry",
+        "TimePlan"
       ]
     },
     {
@@ -901,6 +951,53 @@
         "HealthSubject",
         "HealthSymptom",
         "HealthTarget"
+      ]
+    },
+    {
+      "id": "planning",
+      "kind": "module",
+      "version": "1.0.0",
+      "title": "Планирование",
+      "description": "Тайм-блоки, Гантт с критическим путём и матрица «важно/срочно» — представления существующих задач.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [],
+        "optionalModules": [
+          "tasks",
+          "projects",
+          "calendar",
+          "time"
+        ]
+      },
+      "permissions": [
+        "planning.block.read",
+        "planning.block.create",
+        "planning.block.update",
+        "planning.block.delete",
+        "planning.view.read",
+        "planning.preset.manage"
+      ],
+      "surfaces": [
+        "dock",
+        "floating",
+        "window"
+      ],
+      "contributions": {
+        "panels": [
+          "planning"
+        ]
+      },
+      "events": {
+        "publishes": [
+          "planning.block.moved"
+        ],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/api/src/planning",
+      "dataModels": [
+        "PlanningBlock",
+        "PlanningMatrixPreset"
       ]
     },
     {
@@ -1599,7 +1696,13 @@
       "contributions": {},
       "events": {
         "publishes": [],
-        "subscribes": []
+        "subscribes": [
+          "projects.project.status_changed",
+          "projects.project.dates_changed",
+          "projects.milestone.completed",
+          "projects.milestone.dates_changed",
+          "tasks.task.assigned"
+        ]
       },
       "migrations": [],
       "sourceDirectory": "apps/web/plugins/projects-logbook",
@@ -2118,6 +2221,7 @@
   ],
   "dataOwnership": {
     "core": [
+      "AgentMemberEvent",
       "CrossWorkspaceGrant",
       "DomainEvent",
       "DomainEventDelivery",
@@ -2145,8 +2249,11 @@
       "AgentHubAgentProfile": "modules-ext/agent-hub",
       "AgentHubEvent": "modules-ext/agent-hub",
       "AgentHubExecution": "modules-ext/agent-hub",
+      "AgentHubPolicy": "modules-ext/agent-hub",
       "AgentHubRuntimeSession": "modules-ext/agent-hub",
       "AgentHubTaskAssignment": "modules-ext/agent-hub",
+      "AgentHubTraceStep": "modules-ext/agent-hub",
+      "AgentMemoryRecord": "modules-ext/agent-hub",
       "AgentMessage": "ai",
       "AgentProposal": "ai",
       "AgentTask": "ai",
@@ -2163,7 +2270,9 @@
       "Contact": "contacts",
       "ContactInteraction": "contacts",
       "ContactRelation": "contacts",
+      "DevelopmentArchitectLayout": "development",
       "DevelopmentCatalogMapping": "development",
+      "DevelopmentGitRepository": "development",
       "DevelopmentImportConsent": "development",
       "Document": "documents",
       "DocumentAnnotation": "documents",
@@ -2181,6 +2290,7 @@
       "FinanceSplitShare": "finance",
       "FinanceTemplate": "finance",
       "Goal": "goals",
+      "GoalCanvasLayout": "goals",
       "GoalPlan": "goals",
       "Habit": "habits",
       "HabitEntry": "habits",
@@ -2201,9 +2311,12 @@
       "InventoryItem": "inventory",
       "InventoryMovement": "inventory",
       "InvestmentTrade": "finance",
+      "KeyBinding": "commands",
       "KnowledgeCategory": "knowledge",
       "KnowledgeItem": "knowledge",
+      "KnowledgeItemRevision": "knowledge",
       "KnowledgeRelation": "knowledge",
+      "KnowledgeSettings": "knowledge",
       "KnowledgeSource": "knowledge",
       "List": "lists",
       "ListItem": "lists",
@@ -2216,6 +2329,7 @@
       "NoteAttachment": "notes",
       "NoteLink": "notes",
       "NoteRevision": "notes",
+      "NoteStackState": "notes",
       "Opportunity": "opportunities",
       "OpportunityAssessment": "opportunities",
       "OpportunityAttempt": "opportunities",
@@ -2236,11 +2350,15 @@
       "PetCareEntry": "modules-ext/pet-care",
       "PetCareEvent": "modules-ext/pet-care",
       "PetCarePet": "modules-ext/pet-care",
+      "PlanningBlock": "planning",
+      "PlanningMatrixPreset": "planning",
       "Project": "projects",
+      "ProjectHistoryEntry": "projects",
       "ProjectLogEntry": "projects",
       "ProjectLogEntryTask": "projects",
       "ProjectRelation": "projects",
       "ProjectStatusUpdate": "projects",
+      "ProjectTemplate": "projects",
       "PublicationRule": "shared",
       "RecurringTransaction": "finance",
       "SavedTaskView": "tasks",
@@ -2249,11 +2367,20 @@
       "SharedPublication": "shared",
       "SharedPublicationOperation": "shared",
       "SharedPublicationPin": "shared",
+      "TableDefinition": "tables",
+      "TableRow": "tables",
       "Task": "tasks",
       "TaskActivity": "tasks",
       "TaskComment": "tasks",
+      "TaskCommitLink": "development",
       "TaskDependency": "tasks",
+      "TaskFieldDefinition": "tasks",
+      "TaskFieldValue": "tasks",
+      "TaskRecurrence": "tasks",
+      "TaskRecurrenceInstance": "tasks",
+      "TaskStatusDefinition": "tasks",
       "TimeEntry": "time",
+      "TimePlan": "time",
       "Transaction": "finance",
       "TransactionLine": "finance"
     }
@@ -2262,6 +2389,7 @@
     "auth",
     "common",
     "domain-events",
+    "entity-links",
     "lan",
     "mcp",
     "modules",
@@ -2292,6 +2420,8 @@
     "apps/api/src/documents/public/document-attachment-store.ts",
     "apps/api/src/documents/public/document-content-reader.module.ts",
     "apps/api/src/documents/public/document-content-reader.ts",
+    "apps/api/src/entity-links/public/entity-link-operations.module.ts",
+    "apps/api/src/entity-links/public/entity-link-operations.ts",
     "apps/api/src/events/public/event-agent-references.module.ts",
     "apps/api/src/events/public/event-agent-references.ts",
     "apps/api/src/events/public/event-operations.module.ts",
@@ -2319,6 +2449,8 @@
     "apps/api/src/home/public/home-utility-references.ts",
     "apps/api/src/inbox/public/inbox-agent-operations.module.ts",
     "apps/api/src/inbox/public/inbox-agent-operations.ts",
+    "apps/api/src/inbox/public/inbox-items.module.ts",
+    "apps/api/src/inbox/public/inbox-items.ts",
     "apps/api/src/inventory/public/inventory-home-links.module.ts",
     "apps/api/src/inventory/public/inventory-home-links.ts",
     "apps/api/src/inventory/public/inventory-references.module.ts",
@@ -2333,8 +2465,12 @@
     "apps/api/src/lists/public/list-shopping-commands.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.module.ts",
     "apps/api/src/milestones/public/goal-milestone-reader.ts",
+    "apps/api/src/milestones/public/milestone-commands.module.ts",
+    "apps/api/src/milestones/public/milestone-commands.ts",
     "apps/api/src/milestones/public/milestone-references.module.ts",
     "apps/api/src/milestones/public/milestone-references.ts",
+    "apps/api/src/milestones/public/milestone-timeline.module.ts",
+    "apps/api/src/milestones/public/milestone-timeline.ts",
     "apps/api/src/notes/public/note-agent-references.module.ts",
     "apps/api/src/notes/public/note-agent-references.ts",
     "apps/api/src/notes/public/note-operations.module.ts",
@@ -2352,11 +2488,16 @@
     "apps/api/src/projects/public/project-task-links.ts",
     "apps/api/src/search/public/search-operations.module.ts",
     "apps/api/src/search/public/search-operations.ts",
+    "apps/api/src/shared/public/published-source.ts",
     "apps/api/src/tasks/public/development-catalog.ts",
     "apps/api/src/tasks/public/goal-task-reader.module.ts",
     "apps/api/src/tasks/public/goal-task-reader.ts",
     "apps/api/src/tasks/public/task-agent-assignment-registry.ts",
     "apps/api/src/tasks/public/task-closure-registry.ts",
+    "apps/api/src/tasks/public/task-estimate-reader.module.ts",
+    "apps/api/src/tasks/public/task-estimate-reader.ts",
+    "apps/api/src/tasks/public/task-field-reader.module.ts",
+    "apps/api/src/tasks/public/task-field-reader.ts",
     "apps/api/src/tasks/public/task-home-links.module.ts",
     "apps/api/src/tasks/public/task-home-links.ts",
     "apps/api/src/tasks/public/task-integration-reader.module.ts",
@@ -2371,6 +2512,8 @@
     "apps/api/src/tasks/public/task-proposal-reader.ts",
     "apps/api/src/tasks/public/task-reference-reader.module.ts",
     "apps/api/src/tasks/public/task-reference-reader.ts",
+    "apps/api/src/tasks/public/task-trace-reader.module.ts",
+    "apps/api/src/tasks/public/task-trace-reader.ts",
     "apps/api/src/time/public/task-time-reader.module.ts",
     "apps/api/src/time/public/task-time-reader.ts",
     "apps/web/lib/extensions/contracts.ts",
@@ -2384,6 +2527,9 @@
     "packages/shared-types/src/agent-gateway.ts",
     "packages/shared-types/src/agent-hub-assignment.ts",
     "packages/shared-types/src/agent-hub-lifecycle.ts",
+    "packages/shared-types/src/agent-hub-memory.ts",
+    "packages/shared-types/src/agent-hub-orchestration.ts",
+    "packages/shared-types/src/agent-hub-trace.ts",
     "packages/shared-types/src/agent-hub.ts",
     "packages/shared-types/src/agent-manual.ts",
     "packages/shared-types/src/agent-module-inputs.ts",
@@ -2395,12 +2541,15 @@
     "packages/shared-types/src/assistant-chat.ts",
     "packages/shared-types/src/auth.ts",
     "packages/shared-types/src/capture.ts",
+    "packages/shared-types/src/commands.ts",
     "packages/shared-types/src/component-data.ts",
     "packages/shared-types/src/component-dependencies.ts",
     "packages/shared-types/src/component-diagnostics.ts",
     "packages/shared-types/src/component-manifest.ts",
     "packages/shared-types/src/contact-io.ts",
     "packages/shared-types/src/contact.ts",
+    "packages/shared-types/src/development-architect.ts",
+    "packages/shared-types/src/development-git.ts",
     "packages/shared-types/src/document.ts",
     "packages/shared-types/src/domain-events.ts",
     "packages/shared-types/src/event.ts",
@@ -2414,6 +2563,7 @@
     "packages/shared-types/src/finance-templates.ts",
     "packages/shared-types/src/finance-transfer-match.ts",
     "packages/shared-types/src/finance.ts",
+    "packages/shared-types/src/goal-canvas.ts",
     "packages/shared-types/src/goal.ts",
     "packages/shared-types/src/habit.ts",
     "packages/shared-types/src/health-measurements.ts",
@@ -2434,9 +2584,12 @@
     "packages/shared-types/src/lists-finance.ts",
     "packages/shared-types/src/lists-inventory.ts",
     "packages/shared-types/src/markets.ts",
+    "packages/shared-types/src/mentions.ts",
     "packages/shared-types/src/milestone.ts",
     "packages/shared-types/src/modules-ext/registry.generated.ts",
     "packages/shared-types/src/modules.ts",
+    "packages/shared-types/src/note-diff.ts",
+    "packages/shared-types/src/note-search.ts",
     "packages/shared-types/src/note.ts",
     "packages/shared-types/src/notification.ts",
     "packages/shared-types/src/object-navigation.ts",
@@ -2449,9 +2602,11 @@
     "packages/shared-types/src/orion-send.ts",
     "packages/shared-types/src/overview.ts",
     "packages/shared-types/src/permissions.ts",
+    "packages/shared-types/src/planning.ts",
     "packages/shared-types/src/platform-contracts.ts",
     "packages/shared-types/src/plugins.ts",
     "packages/shared-types/src/project-capture.ts",
+    "packages/shared-types/src/project-center.ts",
     "packages/shared-types/src/project-logbook.ts",
     "packages/shared-types/src/project-update.ts",
     "packages/shared-types/src/project.ts",
@@ -2463,8 +2618,11 @@
     "packages/shared-types/src/settings.ts",
     "packages/shared-types/src/shared-grant.ts",
     "packages/shared-types/src/sync.ts",
+    "packages/shared-types/src/table.ts",
     "packages/shared-types/src/task-comment.ts",
+    "packages/shared-types/src/task-planning.ts",
     "packages/shared-types/src/task.ts",
+    "packages/shared-types/src/team.ts",
     "packages/shared-types/src/theme-document.ts",
     "packages/shared-types/src/time.ts",
     "packages/shared-types/src/today.ts",
@@ -2475,7 +2633,11 @@
     "packages/shared-types/src/workspace.ts"
   ],
   "registryEntryPoints": [
+    "apps/api/src/commands/command-registry.module.ts",
+    "apps/api/src/commands/command.registry.ts",
+    "apps/api/src/common/background-job-registry.ts",
     "apps/api/src/common/entity-reference-registry.ts",
+    "apps/api/src/entity-links/entity-registry.ts",
     "apps/api/src/inbox/inbox-registry.module.ts",
     "apps/api/src/inbox/inbox-target.registry.ts",
     "apps/api/src/lan/pairing-registry.ts",
@@ -2536,7 +2698,26 @@
   "events": {
     "types": [
       "tasks.task.changed",
-      "tasks.task.closed"
+      "tasks.task.closed",
+      "tasks.task.updated",
+      "tasks.task.status_changed",
+      "tasks.task.bulk_applied",
+      "tasks.recurrence.instance_completed",
+      "tasks.recurrence.skipped",
+      "tasks.task.assigned",
+      "projects.project.status_changed",
+      "projects.project.dates_changed",
+      "projects.milestone.completed",
+      "projects.milestone.dates_changed",
+      "projects.project.updated",
+      "projects.project.parent_changed",
+      "knowledge.item.verification.changed",
+      "planning.block.moved",
+      "time.entry.switched",
+      "time.entry.edited",
+      "entity_link.created",
+      "entity_link.deleted",
+      "table.row_changed"
     ],
     "subscriptions": [
       {
@@ -2551,6 +2732,17 @@
         "componentId": "tasks",
         "types": [
           "tasks.task.closed"
+        ]
+      },
+      {
+        "id": "projects.logbook-auto-entries",
+        "componentId": "projects-logbook",
+        "types": [
+          "projects.project.status_changed",
+          "projects.project.dates_changed",
+          "projects.milestone.completed",
+          "projects.milestone.dates_changed",
+          "tasks.task.assigned"
         ]
       }
     ]
@@ -2584,6 +2776,10 @@
     "time.entry.create",
     "time.entry.update",
     "time.entry.delete",
+    "planning.block.read",
+    "planning.block.create",
+    "planning.block.update",
+    "planning.block.delete",
     "finance.transaction.read",
     "finance.transaction.create",
     "finance.transaction.update",
@@ -2637,12 +2833,39 @@
     "pet-care.pet.update",
     "pet-care.pet.delete",
     "agent-hub.runtime.create",
+    "agent-hub.memory.read",
+    "agent-hub.memory.create",
+    "agent-hub.memory.update",
+    "agent-hub.policy.read",
+    "agent-hub.policy.update",
     "finance.draft.propose",
     "core.link.create",
     "core.link.delete",
     "core.agent_message.create",
     "core.agent_job.create",
-    "core.agent_job.update"
+    "core.agent_job.update",
+    "tasks.status.manage",
+    "tasks.field.manage",
+    "tasks.recurrence.manage",
+    "entity-links.read",
+    "entity-links.manage",
+    "projects.template.read",
+    "projects.template.create",
+    "projects.template.update",
+    "projects.template.delete",
+    "projects.portfolio.read",
+    "projects.history.read",
+    "core.domain_event.manage",
+    "planning.view.read",
+    "planning.preset.manage",
+    "time.plan.manage",
+    "core.table.read",
+    "core.table.create",
+    "core.table.update",
+    "core.table.delete",
+    "core.command.read",
+    "core.command.execute",
+    "core.key_binding.manage"
   ],
   "passports": [
     "apps/api/src/captures/MODULE.md",
@@ -2692,6 +2915,8 @@
     "apps/api/src/opportunities-profiles/MODULE.md",
     "apps/api/src/opportunities/AI_CONTEXT.md",
     "apps/api/src/opportunities/MODULE.md",
+    "apps/api/src/planning/AI_CONTEXT.md",
+    "apps/api/src/planning/MODULE.md",
     "apps/api/src/projects/AI_CONTEXT.md",
     "apps/api/src/projects/MODULE.md",
     "apps/api/src/tasks/AI_CONTEXT.md",

@@ -36,6 +36,7 @@ model User {
   assistantKey      AssistantKey?
   extensionSecrets  ExtensionSecret[]
   privateNotes      Note[]            @relation("NotePrivate")
+  noteStackStates   NoteStackState[]
   refreshTokens     RefreshToken[]
   preference        UserPreference?
   sentInvites       WorkspaceInvite[]
@@ -222,10 +223,13 @@ model Workspace {
   notes         Note[]
   noteLinks     NoteLink[]
   noteRevisions NoteRevision[]
+  noteStackStates NoteStackState[]
   tasks         Task[]
   events        Event[]
   projects      Project[]
   notifications Notification[]
+  /// 12-team-access: очередь упоминаний для агентов-членов команды.
+  agentMemberEvents AgentMemberEvent[]
   domainEvents DomainEvent[]
   domainEventDeliveries DomainEventDelivery[]
   inboxItems    InboxItem[]
@@ -236,6 +240,8 @@ model Workspace {
   projectLogEntries ProjectLogEntry[]
   projectLogEntryTasks ProjectLogEntryTask[]
   projectRelations ProjectRelation[]
+  projectTemplates ProjectTemplate[]
+  projectHistoryEntries ProjectHistoryEntry[]
   taskActivities TaskActivity[]
   entityLinks   EntityLink[]
   entityReminders EntityReminder[]
@@ -262,6 +268,10 @@ model Workspace {
   documentAnnotations   DocumentAnnotation[]
   noteAttachments       NoteAttachment[]
   timeEntries           TimeEntry[]
+  /// Планирование (задание 04): тайм-блоки, пресеты матрицы, недельный план времени.
+  planningBlocks        PlanningBlock[]
+  planningMatrixPresets PlanningMatrixPreset[]
+  timePlans             TimePlan[]
   habits                Habit[]
   habitEntries          HabitEntry[]
   lists                 List[]
@@ -288,6 +298,12 @@ model Workspace {
   milestones            Milestone[]
   milestoneDependencies MilestoneDependency[]
   captures              Capture[]
+  /// Tasks 2.0 (задание 02): справочники и значения пользовательских полей/статусов.
+  taskRecurrences       TaskRecurrence[]
+  taskRecurrenceInstances TaskRecurrenceInstance[]
+  taskFieldDefinitions  TaskFieldDefinition[]
+  taskFieldValues       TaskFieldValue[]
+  taskStatusDefinitions TaskStatusDefinition[]
   agentTokens           AgentToken[]
   assistantConversations AssistantConversation[]
   agentCaptures         AgentCapture[]
@@ -302,10 +318,15 @@ model Workspace {
   contactRelations      ContactRelation[]
   goals                 Goal[]
   goalPlans             GoalPlan[]
+  goalCanvasLayouts     GoalCanvasLayout[]
   agentAuditEntries     AgentAuditEntry[]
   agentMessages         AgentMessage[]
   agentTasks            AgentTask[]
   developmentCatalogMappings DevelopmentCatalogMapping[]
+  // 11: Git Workspace / привязки коммитов / раскладка Architect.
+  developmentGitRepositories DevelopmentGitRepository[]
+  taskCommitLinks TaskCommitLink[]
+  developmentArchitectLayouts DevelopmentArchitectLayout[]
   agentProposals        AgentProposal[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
@@ -323,6 +344,11 @@ model Workspace {
   healthTargets      HealthTarget[]
   healthSymptoms     HealthSymptom[]
 
+  // Задание 10: общие инструменты (Orion Tables и горячие клавиши пользователя).
+  tableDefinitions TableDefinition[]
+  tableRows        TableRow[]
+  keyBindings      KeyBinding[]
+
   // <module-registry:workspace-relations>
     agentHubExecutions AgentHubExecution[]
     agentHubEvents AgentHubEvent[]
@@ -330,6 +356,9 @@ model Workspace {
     agentHubAgentProfiles AgentHubAgentProfile[]
     agentHubAgentCredentials AgentHubAgentCredential[]
     agentHubTaskAssignments AgentHubTaskAssignment[]
+    agentHubTraceSteps AgentHubTraceStep[]
+    agentMemoryRecords AgentMemoryRecord[]
+    agentHubPolicies AgentHubPolicy[]
   chatArchiveConversations ChatArchiveConversation[]
   chatArchiveLines         ChatArchiveLine[]
   chatArchiveAutoSources   ChatArchiveAutoSource[]
@@ -342,6 +371,10 @@ model Workspace {
   knowledgeItems      KnowledgeItem[]
   knowledgeSources    KnowledgeSource[]
   knowledgeRelations  KnowledgeRelation[]
+  // --- BEGIN 06-knowledge ---
+  knowledgeItemRevisions KnowledgeItemRevision[]
+  knowledgeSettings      KnowledgeSettings?
+  // --- END 06-knowledge ---
 }
 
 model Project {
@@ -369,11 +402,23 @@ model Project {
   /// Team-shared board order («Порядок команды»). Null = not placed yet (sorts after placed
   /// projects). Written only by owner/lead through PUT projects/order, in one statement.
   sharedOrder  Int?
+  /// Центр проектов (задание 03): родительский проект. Дерево живёт в той же таблице —
+  /// «один объект, много представлений»: дочерний проект остаётся обычным Project со своим
+  /// workspace/видимостью. Циклы и глубина проверяются сервисом (max 6), при удалении
+  /// родителя дети становятся корневыми (`SetNull`), а не исчезают.
+  parentId     String?
   archivedAt   DateTime?
+  /// Optimistic-concurrency token (задание 12.4): +1 on every write through ProjectsService.update,
+  /// same contract as Task.revision/Note.revision. `expectedRevision` in PATCH is compared against it;
+  /// a mismatch is 409 `project_revision_conflict` carrying the current copy.
+  revision     Int       @default(1)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent       Project?      @relation("ProjectHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Project[]     @relation("ProjectHierarchy")
+  history      ProjectHistoryEntry[]
   tasks        Task[]
   notes        Note[]
   events       Event[]
@@ -389,10 +434,14 @@ model Project {
   projectRelationsTo ProjectRelation[] @relation("ProjectRelationTo")
   captures     Capture[]
   goalPlans    GoalPlan[]
+  /// Tasks 2.0 (задание 02): поля задачи, привязанные к проекту.
+  taskFieldDefinitions TaskFieldDefinition[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
   @@index([dueAt])
+  /// Центр проектов (задание 03): выборка дерева по родителю и ancestor-запросы (recursive CTE).
+  @@index([workspaceId, parentId])
   @@map("projects")
 }
 
@@ -408,15 +457,35 @@ enum WorkspaceRole {
 model WorkspaceMember {
   id          String        @id @default(uuid())
   workspaceId String
-  userId      String
+  /// A human membership points at a User; an agent membership (`kind = "agent"`) has no user at all
+  /// and points at `agentProfileId` instead. Exactly one of the two is set — enforced by the CHECK
+  /// in migration 20261112120000_team_permissions.
+  userId      String?
   role        WorkspaceRole @default(member)
+  /// "human" | "agent" — principal discriminator (задание 12). An agent membership NEVER grants
+  /// the role permissions of a human: agent calls are authorized by token scopes (ADR-0007) and
+  /// explicit grants, not by this row's `role`.
+  kind        String        @default("human")
+  /// "active" | "disabled" — roster state for team display. Invited people are not member rows:
+  /// the unified team list shows pending WorkspaceInvite rows with status "invited".
+  status      String        @default("active")
+  /// AgentHubAgentProfile.id for `kind = "agent"`. Deliberately no Prisma relation: agent-hub
+  /// models live in the generated module region, where a hand-added relation would be overwritten.
+  /// The DB trigger in 20261112120000_team_permissions keeps this column in step with profiles.
+  agentProfileId String?
+  /// Team-roster display name for an agent membership (snapshot kept in step with the profile name by
+  /// the same DB trigger). Always null for a human — their name comes from `User`.
+  displayName String?
   createdAt   DateTime      @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedTasks Task[]
+  agentEvents AgentMemberEvent[]
 
   @@unique([workspaceId, userId])
+  @@unique([workspaceId, agentProfileId])
+  @@index([workspaceId, kind])
   @@map("workspace_members")
 }
 
@@ -441,9 +510,18 @@ model WorkspaceInvite {
   tokenHash   String                @unique
   status      WorkspaceInviteStatus @default(pending)
   invitedById String
-  expiresAt   DateTime
+  /// null = бессрочное приглашение. The owner picks the term when inviting (default 7 days); null
+  /// means no expiry at all, mirroring agent-token lifetime — no hidden defaults other than that one.
+  expiresAt   DateTime?
   acceptedAt  DateTime?
   revokedAt   DateTime?
+  /// Audit only, no FK: the record of who revoked must survive account deletion.
+  revokedById String?
+  /// Resend audit: when/by whom the accept link was last reissued, and how many times in total.
+  /// A resend keeps the same row (same email/role) but replaces `tokenHash` and restarts the term.
+  resentAt    DateTime?
+  resentById  String?
+  resendCount Int                   @default(0)
   createdAt   DateTime              @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -556,6 +634,10 @@ model NoteLink {
   /// The title as written inside `[[ ]]` (trimmed, original case). Compared
   /// to Note.title case-insensitively when resolving `targetNoteId`.
   targetTitle  String
+  /// 07 (Заметки 2.0): цель ссылки недоступна (удалена, переименована или
+  /// ещё не создана). Запись остаётся, чтобы ссылку было видно и можно было
+  /// разобрать, — поэтому это флаг, а не молчаливое удаление строки.
+  broken       Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -583,6 +665,9 @@ model NoteRevision {
   summary     String   @default("")
   body        String
   tags        String[] @default([])
+  /// 07 (Заметки 2.0): id версии, из которой восстановлено это содержимое.
+  /// null — обычный снимок перед правкой, а не результат восстановления.
+  restoredFrom String?
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -646,6 +731,19 @@ model Task {
   milestoneId      String?
   /// Checklist / checkup items: [{ id, title, done }]. A repeated task copies them unchecked.
   checklist        Json     @default("[]")
+  /// Tasks 2.0 (задание 02): плановые свойства, независимые от `priority`.
+  /// 0–3 — уровни матрицы «важно/срочно» (задание 04); null = не задан.
+  importance   Int?
+  urgency      Int?
+  complexity   TaskComplexity?
+  /// Пользовательский статус пространства. `status` остаётся категорией
+  /// (open/in_progress/done/cancelled) для отчётов и `isTaskClosed`; здесь —
+  /// отображаемое имя/цвет. Синхронизируется сервисом, null = встроенный enum.
+  statusId     String?
+  /// Источник исполнения для аналитики. `none` — исполнитель не назначен.
+  executorSource TaskExecutorSource @default(none)
+  /// Архив (2.2): строка остаётся, обычные списки её скрывают.
+  archivedAt   DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -662,7 +760,13 @@ model Task {
   comments   TaskComment[]
   activities TaskActivity[]
   captures   Capture[]
+  // 11.2: коммиты, привязанные к задаче (из сообщения или вручную).
+  commitLinks TaskCommitLink[]
   projectLogEntries ProjectLogEntryTask[]
+  statusDefinition TaskStatusDefinition? @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  fieldValues TaskFieldValue[]
+  recurrenceRule TaskRecurrence? @relation("TaskRecurrenceTemplate")
+  recurrenceInstance TaskRecurrenceInstance? @relation("TaskRecurrenceInstanceTask")
 
   @@index([workspaceId])
   @@index([projectId])
@@ -829,6 +933,21 @@ model TimeEntry {
   note        String    @default("")
   startedAt   DateTime
   endedAt     DateTime?
+  /// ORION «Планирование» (задание 04): суммарная пауза в секундах. Отдельной
+  /// колонки длительности по-прежнему нет — `entryMinutes` вычитает паузу из
+  /// (endedAt − startedAt), чтобы «идёт» и «на паузе» считались одинаково на
+  /// сервере и в работающем таймере клиента.
+  pausedSeconds Int     @default(0)
+  /// Идёт пауза с этого момента: `endedAt` остаётся null (таймер запущен), но
+  /// время не капает. Снятие паузы переносит разницу в `pausedSeconds`.
+  pausedAt    DateTime?
+  /// Ручная корректировка (задание 04): момент последней правки записи руками.
+  /// `null` — запись не правили. Правки пишутся в `edits`, а не в отдельный журнал:
+  /// аудит относится ровно к этой строке и не должен переживать её удаление.
+  editedAt    DateTime?
+  /// Последние правки [{ at, field, from, to }], новее сверху; ограничено
+  /// TIME_ENTRY_EDIT_LOG_LIMIT. Значения — строки, чтобы дата и null хранились одинаково.
+  edits       Json      @default("[]")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1662,8 +1781,13 @@ model EntityLink {
   sourceId    String
   targetType  String
   targetId    String
-  kind        String   @default("related_to")
+  /// Enum EntityLinkKind (Foundation Core, task 01). The app layer never stores free text here.
+  kind        EntityLinkKind @default(related_to)
   label       String?
+  /// True for symmetric kinds: A<->B is one fact and no reverse row is created.
+  bidirectional Boolean @default(false)
+  /// Who created the link (actor of the audit trail; history must outlive the user row).
+  createdById String?
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -1991,11 +2115,37 @@ model ProjectStatusUpdate {
   @@map("project_status_updates")
 }
 
-enum ProjectLogKind {
+// --- BEGIN 05-logbook ---
+/// Тип записи журнала проекта (задание 05). Историческое значение поля `kind`
+/// было подмножеством; open/close типы сохранены, добавлены hypothesis/result/incident.
+enum ProjectLogEntryType {
   observation
   decision
+  hypothesis
+  result
+  incident
   change
 }
+
+/// Severity инцидента. Null для остальных типов.
+enum ProjectLogSeverity {
+  low
+  medium
+  high
+}
+
+/// `event` — автозапись из domain events (read-only, живёт до удаления проекта).
+enum ProjectLogSource {
+  manual
+  event
+}
+
+/// Результат подтверждает или опровергает гипотезу/решение.
+enum ProjectLogVerdict {
+  confirms
+  refutes
+}
+// --- END 05-logbook ---
 
 enum ProjectRelationType {
   continues
@@ -2011,17 +2161,47 @@ model ProjectLogEntry {
   workspaceId String
   projectId   String
   authorId    String
-  kind        ProjectLogKind
+  /// Задание 05: типизированная запись. Колонка в БД называется `type`.
+  type        ProjectLogEntryType
   text        String
-  createdAt   DateTime      @default(now())
+  // --- BEGIN 05-logbook ---
+  /// Обязательное обоснование для `decision`; пустая строка для остальных типов.
+  rationale       String              @default("")
+  /// [{ option, whyNot }] — альтернативы решения. Хранится в записи, а не в EntityLink:
+  /// это часть текста решения, а не отдельная сущность.
+  alternatives    Json                @default("[]")
+  /// Дата проверки гипотезы (`hypothesis`).
+  verificationDue DateTime?
+  /// `result` подтверждает/опровергает запись того же проекта (гипотезу или решение).
+  confirmsEntryId String?
+  severity        ProjectLogSeverity?
+  /// Как инцидент был разрешён (`incident`); пустая строка = ещё открыт.
+  resolution      String              @default("")
+  verdict         ProjectLogVerdict?
+  source          ProjectLogSource    @default(manual)
+  /// Исходное domain-event для автозаписи (`source = event`).
+  sourceEventId   String?
+  sourceEventType String?
+  /// Ключ дедупликации bulk-операций: `bulk:<eventType>:<bulkId>`, уникален в проекте.
+  dedupeKey       String?
+  updatedAt       DateTime            @updatedAt
+  createdAt       DateTime            @default(now())
+  // --- END 05-logbook ---
 
   workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   author    User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
   tasks     ProjectLogEntryTask[]
+  history   ProjectHistoryEntry[]
+  // --- BEGIN 05-logbook ---
+  confirms    ProjectLogEntry?  @relation("ProjectLogConfirms", fields: [confirmsEntryId], references: [id], onDelete: SetNull)
+  confirmedBy ProjectLogEntry[] @relation("ProjectLogConfirms")
+  // --- END 05-logbook ---
 
+  @@unique([projectId, dedupeKey])
   @@index([workspaceId])
   @@index([projectId, createdAt])
+  @@index([projectId, type, createdAt])
   @@map("project_log_entries")
 }
 
@@ -2252,6 +2432,7 @@ model Goal {
   parent    Goal?      @relation("GoalTree", fields: [parentId], references: [id], onDelete: SetNull)
   children  Goal[]     @relation("GoalTree")
   plans     GoalPlan[]
+  canvasLayout GoalCanvasLayout?
 
   @@index([workspaceId])
   @@index([parentId])
@@ -3513,6 +3694,8 @@ model DevelopmentCatalogMapping {
 // <module-registry:models>
 // module: agent-hub
 /// A durable execution attempt, distinct from the existing Task and AgentJob records.
+/// `parentExecutionId` deliberately has no FK: a snapshot restore inserts rows in
+/// registry order and a self-reference would make the order significant.
 model AgentHubExecution {
   id            String   @id @default(uuid())
   workspaceId   String
@@ -3528,14 +3711,29 @@ model AgentHubExecution {
   evidenceRefs  Json     @default("[]")
   verifiedBy    String?
   blockedReason String?
+  /// Delegation tree: branch parent, depth below the root and the profile the branch was handed to.
+  parentExecutionId    String?
+  delegationDepth      Int      @default(0)
+  delegatedToProfileId String?
+  /// Profiles that already took part in this branch (oldest first); the cycle guard.
+  delegationChain      Json     @default("[]")
+  /// Structured order payload: task, project, material link ids, permission constraints.
+  delegationPayload    Json     @default("{}")
+  /// Pending human approval: action, reason, requestedAt, requestedBy.
+  approval             Json?
+  /// Short summary handed to the parent branch on a terminal transition.
+  resultSummary        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events    AgentHubEvent[]
+  steps     AgentHubTraceStep[]
 
   @@index([workspaceId, updatedAt])
   @@index([workspaceId, targetKind, targetId])
+  @@index([workspaceId, status])
+  @@index([parentExecutionId])
   @@map("agent_hub_executions")
 }
 
@@ -3630,6 +3828,82 @@ model AgentHubTaskAssignment {
   @@unique([workspaceId, taskId])
   @@index([workspaceId, profileId])
   @@map("agent_hub_task_assignments")
+}
+
+/// One reported or derived step of a real execution. Reasoning is never stored here.
+model AgentHubTraceStep {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  executionId  String
+  /// Logical step id, unique inside one execution; parents refer to it, not to a row id.
+  stepId       String
+  parentStepId String?
+  /// tool_call | tool_result | delegation | approval_wait | note | error
+  type         String
+  name         String?
+  /// Stable agent profile when the reporting credential is bound to one.
+  agentId      String?
+  actorId      String
+  payload      Json     @default("{}")
+  durationMs   Int?
+  error        String?
+  attempt      Int      @default(0)
+  at           DateTime @default(now())
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  execution AgentHubExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, stepId])
+  @@index([workspaceId, executionId, at])
+  @@index([workspaceId, agentId])
+  @@map("agent_hub_trace_steps")
+}
+
+/// Versioned agent memory. Exactly one `valid` row per (scope, scopeId, key) — enforced
+/// by a partial unique index — while superseded rows keep the revision history.
+model AgentMemoryRecord {
+  id                String   @id @default(uuid())
+  workspaceId       String
+  /// user | project | agent | global
+  scope             String
+  /// userId / projectId / profileId; null for global.
+  scopeId           String?
+  key               String
+  value             Json
+  /// agent | user | system
+  source            String
+  /// Profile that wrote it; null when a human wrote the record.
+  agentId           String?
+  userId            String?
+  provenanceEventId String?
+  /// valid | superseded | outdated
+  validity          String   @default("valid")
+  /// No FK on purpose: snapshot restore must not depend on self-reference order.
+  supersededById    String?
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scope, scopeId, key])
+  @@index([workspaceId, key])
+  @@index([workspaceId, validity])
+  @@map("agent_memory_records")
+}
+
+/// Owner-controlled delegation policy; one row per workspace, created on first write.
+model AgentHubPolicy {
+  id                 String   @id @default(uuid())
+  workspaceId        String   @unique
+  maxDelegationDepth Int      @default(3)
+  updatedById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("agent_hub_policies")
 }
 
 // module: chat-archive
@@ -3843,6 +4117,16 @@ model KnowledgeItem {
   kind        String   @default("fact")
   tags        String[] @default([])
   revision    Int      @default(1)
+  // --- BEGIN 06-knowledge ---
+  /// Происхождение материала (jsonb): sourceFile, importedAt, sourceUrl, author, importedBy.
+  origin            Json?
+  /// Хранимое состояние проверки: unverified | verified. `outdated` — производное от lastVerifiedAt.
+  verificationState String    @default("unverified")
+  lastVerifiedAt    DateTime?
+  verifiedById      String?
+  /// Материализованный tsvector по title/summary/body; заполняется триггером миграции.
+  searchVector      Unsupported("tsvector")?
+  // --- END 06-knowledge ---
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -3851,6 +4135,9 @@ model KnowledgeItem {
   category  KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   project   Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   sources   KnowledgeSource[]
+  // --- BEGIN 06-knowledge ---
+  revisions KnowledgeItemRevision[]
+  // --- END 06-knowledge ---
   fromRelations KnowledgeRelation[] @relation("KnowledgeRelationFrom")
   toRelations   KnowledgeRelation[] @relation("KnowledgeRelationTo")
 
@@ -3977,3 +4264,632 @@ model PublicationRule {
   @@index([targetWorkspaceId])
   @@map("publication_rules")
 }
+
+// --- BEGIN 01-foundation-core ---
+// Foundation Core (task 01) does not add a new table: it promotes the existing EntityLink.kind
+// to the closed EntityLinkKind enum and adds the audit/bidirectional columns. EntityLink itself
+// stays a core model (scripts/module-ownership.mjs CORE_MODELS).
+enum EntityLinkKind {
+  related_to
+  supports
+  evidence_for
+  goal_step
+  goal_measure
+  goal_material
+  goal_risk
+  goal_prerequisite
+  blocks
+  depends_on
+  relates_to
+  continues
+  replaces
+  duplicates
+  references
+}
+// --- END 01-foundation-core ---
+
+
+// --- BEGIN 03 ---
+// Центр проектов (задание 03). Новые модели — строго в этом блоке: файл общий для параллельных заданий.
+
+/// Шаблон проекта — НЕ проект: своя таблица и свои права (`projects.template.*`), чтобы шаблон можно было
+/// править и архивировать, не задевая живые проекты. Структура (вехи, задачи, записи журнала, дочерние
+/// проекты) хранится одним JSON-деревом со сдвигами в днях от стартовой даты: «один объект — одно
+/// представление», без параллельной таблицы на каждый вид элемента. Схема дерева — `projectTemplateStructureSchema`
+/// в `packages/shared-types/src/project-center.ts`.
+model ProjectTemplate {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  description String    @default("")
+  structure   Json
+  /// Автор — обычная строка без FK: шаблон переживает удаление пользователя (как `DomainEvent.actorId`).
+  createdById String?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("project_templates")
+}
+
+/// Audit trail проекта (3.4): кто/когда/какое поле изменил. Append-only и пишется в ТОЙ ЖЕ транзакции,
+/// что и само изменение, поэтому история не расходится с данными. Читается из своих строк, а не из
+/// `domain_events`: outbox чистится через 7 дней и не входит в резервную копию, а история проекта должна
+/// переживать и чистку, и восстановление. Доменные события публикуются параллельно — они несут изменения
+/// другим модулям, но не служат хранилищем истории.
+model ProjectHistoryEntry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  projectId   String
+  /// Кто изменил; null — системное изменение. Строка без FK: история переживает удаление пользователя.
+  actorId     String?
+  /// Имя изменённого поля (см. `PROJECT_HISTORY_FIELDS`), включая `parentId`.
+  field       String
+  fromValue   String?
+  toValue     String?
+  /// id доменного события, которым изменение объявлено наружу (трассировка шины).
+  eventId     String?
+  /// Запись журнала («решение»), к которой отнесено изменение. Связывание — отдельный endpoint;
+  /// при удалении записи журнала связь снимается, сама история остаётся.
+  logEntryId  String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  logEntry  ProjectLogEntry?  @relation(fields: [logEntryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+  @@index([projectId, field, createdAt])
+  @@map("project_history_entries")
+}
+// --- END 03 ---
+
+// --- BEGIN 02 ---
+// Tasks 2.0 (задание 02). Новые модели — строго в этом блоке: файл общий для
+// параллельных заданий. Поля новой функциональности на `Task` добавлены выше;
+// RLS-политики и дефолтные статусы — в миграции `..._tasks_20`.
+
+enum TaskComplexity {
+  low
+  medium
+  high
+}
+
+enum TaskExecutorSource {
+  none
+  human
+  agent
+}
+
+enum TaskRecurrenceFreq {
+  daily
+  weekly
+  monthly
+  weekdays
+}
+
+enum TaskRecurrenceEndMode {
+  never
+  count
+  until
+}
+
+enum TaskRecurrenceInstanceStatus {
+  scheduled
+  completed
+  skipped
+}
+
+enum TaskFieldType {
+  text
+  number
+  date
+  select
+  multi
+  checkbox
+  url
+}
+
+enum TaskFieldApplicability {
+  all
+  project
+}
+
+enum TaskStatusCategory {
+  open
+  in_progress
+  done
+  cancelled
+}
+
+/// Правило повторения задачи-шаблона (2.1). Владелец — задача-шаблон; экземпляры
+/// цепочки связаны с ним через TaskRecurrenceInstance. Полного RRULE здесь нет:
+/// только daily/weekly/monthly/weekdays + интервал и конец серии.
+model TaskRecurrence {
+  id             String                @id @default(uuid())
+  workspaceId    String
+  templateId     String                @unique
+  freq           TaskRecurrenceFreq
+  interval       Int                   @default(1)
+  /// Для weekly — явный список дней (0 = понедельник); пусто = день шаблона.
+  weekdays       Int[]                 @default([])
+  endsMode       TaskRecurrenceEndMode @default(never)
+  endsCount      Int?
+  endsAt         DateTime?
+  /// Сколько экземпляров уже порождено, включая шаблон. Гонка двух завершений
+  /// разрешается условным `UPDATE ... WHERE generatedCount = <прочитано>`.
+  generatedCount Int                   @default(1)
+  /// Опора сетки «каждые N недель»: дата первого экземпляра. Перенос отдельной
+  /// даты не ломает цепочку — сетка считается от опоры.
+  anchorAt       DateTime
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  workspace Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template  Task                     @relation("TaskRecurrenceTemplate", fields: [templateId], references: [id], onDelete: Cascade)
+  instances TaskRecurrenceInstance[]
+
+  @@index([workspaceId])
+  @@map("task_recurrences")
+}
+
+/// Один экземпляр цепочки повторения. `ordinal` уникален внутри правила — это
+/// идемпотентность материализации: двойное завершение не создаёт второй «следующий».
+/// `taskId` nullable: удалённый/перепрыгнутый экземпляр сохраняет историю.
+model TaskRecurrenceInstance {
+  id           String                       @id @default(uuid())
+  workspaceId  String
+  recurrenceId String
+  taskId       String?                      @unique
+  ordinal      Int
+  scheduledFor DateTime
+  status       TaskRecurrenceInstanceStatus @default(scheduled)
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recurrence TaskRecurrence @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  task       Task?          @relation("TaskRecurrenceInstanceTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([recurrenceId, ordinal])
+  @@index([workspaceId])
+  @@index([recurrenceId, status])
+  @@map("task_recurrence_instances")
+}
+
+/// Пользовательское поле пространства (2.3). `applicability = project` ограничивает
+/// поле одним проектом; иначе оно доступно всем задачам пространства.
+model TaskFieldDefinition {
+  id            String                 @id @default(uuid())
+  workspaceId   String
+  name          String
+  type          TaskFieldType
+  /// Варианты для select/multi; для остальных типов пустой массив.
+  options       Json                   @default("[]")
+  required      Boolean                @default(false)
+  applicability TaskFieldApplicability @default(all)
+  projectId     String?
+  sortOrder     Int                    @default(0)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  values    TaskFieldValue[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@index([workspaceId, applicability])
+  @@index([projectId])
+  @@map("task_field_definitions")
+}
+
+/// Значение пользовательского поля задачи. `valueJson` — типизированное значение,
+/// `valueText` — нормализованный текст для поиска (GIN-индекс в миграции).
+model TaskFieldValue {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskId      String
+  fieldId     String
+  valueJson   Json?
+  valueText   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field     TaskFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldId])
+  @@index([workspaceId, fieldId])
+  @@index([workspaceId, valueText])
+  @@map("task_field_values")
+}
+
+/// Пользовательский статус пространства (2.3), упорядоченный. `category` — контракт
+/// семантики; `systemKey` связывает встроенные статусы с прежним enum `TaskStatus`.
+model TaskStatusDefinition {
+  id          String             @id @default(uuid())
+  workspaceId String
+  name        String
+  category    TaskStatusCategory
+  color       String             @default("slate")
+  isDefault   Boolean            @default(false)
+  sortOrder   Int                @default(0)
+  systemKey   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@unique([workspaceId, name])
+  @@unique([workspaceId, systemKey])
+  @@index([workspaceId])
+  @@map("task_status_definitions")
+}
+// --- END 02 ---
+
+// --- BEGIN 07 ---
+/// 07 (Заметки 2.0, 7.4): per-user состояние визуальной стопки — свёрнута ли
+/// она и где стоит в порядке стопок. Хранится отдельно от заметок: порядок в
+/// строке Note — общий для пространства, а сворачивание — личный выбор,
+/// который не должен менять данные соседей. Стопки остаются плоскими:
+/// stackId вложенности не поддерживает, и API отвергает её явно.
+model NoteStackState {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  stackId     String
+  collapsed   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, stackId])
+  @@index([workspaceId, userId])
+  @@map("note_stack_states")
+}
+// --- END 07 ---
+// --- BEGIN 06-knowledge ---
+/// Снимок материала на значимом изменении (задание 06, п. 6.3). Восстановление не перезаписывает историю:
+/// оно применяет снимок и добавляет новый снимок с ссылкой `restoredFromId`.
+model KnowledgeItemRevision {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  itemId         String
+  /// Номер ревизии материала, на котором сделан снимок.
+  revision       Int
+  title          String
+  summary        String   @default("")
+  body           String   @default("")
+  origin         Json?
+  /// Кто сделал снимок (пользователь).
+  authorId       String
+  /// id снимка-источника, если этот снимок создан восстановлением.
+  restoredFromId String?
+  createdAt      DateTime @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  item      KnowledgeItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([itemId, createdAt])
+  @@map("knowledge_item_revisions")
+}
+
+/// Настройки базы знаний пространства (задание 06): порог просроченной проверки и лимит версий.
+model KnowledgeSettings {
+  id               String   @id @default(uuid())
+  workspaceId      String   @unique
+  /// Через сколько дней после проверки материал считается просроченным (по умолчанию 90).
+  verificationDays Int      @default(90)
+  /// Сколько последних версий хранить на материал (по умолчанию 20).
+  revisionLimit    Int      @default(20)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_settings")
+}
+// --- END 06-knowledge ---
+
+// --- BEGIN 04-planning ---
+
+/// Тайм-блок планирования: окно фокуса, встречи, буфера или личного дела.
+/// Это единственная «собственная» сущность календаря планирования: задача,
+/// проект и событие не копируются, а только упоминаются по id. Поэтому ссылки
+/// `taskId`/`projectId` — НЕ внешние ключи: принадлежность тому же пространству
+/// проверяется в сервисе через публичные контракты владельцев (TaskIntegrationReader,
+/// ProjectReferences). Удаление задачи не удаляет блок — время в календаре
+/// остаётся фактом, а не свойством задачи (тот же принцип, что у
+/// AgentTaskAssignment и Capture.anchorId).
+model PlanningBlock {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  taskId           String?
+  projectId        String?
+  title            String
+  note             String   @default("")
+  /// focus | meeting | buffer | personal — закрытый набор в shared-types (`PLANNING_BLOCK_TYPES`).
+  type             String   @default("focus")
+  /// draft | committed — черновик можно двигать свободно, фиксированный блок
+  /// считается обещанием (перенос всё равно разрешён, но это осознанное действие).
+  state            String   @default("draft")
+  startAt          DateTime
+  endAt            DateTime
+  /// CAS-токен: +1 на каждой записи; `expectedRevision` сверяется с ним.
+  revision         Int      @default(1)
+  /// Ключ идемпотентности клиента: повтор того же переноса не двигает блок второй раз.
+  clientMutationId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, clientMutationId])
+  @@index([workspaceId])
+  @@index([workspaceId, startAt])
+  @@index([taskId])
+  @@index([projectId])
+  @@map("planning_blocks")
+}
+
+/// Пресет осей матрицы «важно/срочно». Встроенный Эйзенхауэр в таблице не
+/// хранится (его нельзя удалить или испортить): он отвечает id `eisenhower` и
+/// собирается из константы в shared-types. Здесь — только пользовательские пресеты.
+model PlanningMatrixPreset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  /// { field, kind } — ось x; `field` для customFieldId указывает на TaskFieldDefinition.
+  xAxis       Json
+  yAxis       Json
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("planning_matrix_presets")
+}
+
+/// Недельный план времени: «на этой неделе планирую 30 часов». Отдельная от
+/// задач сущность: `Task.estimatedMinutes` — план по задаче, здесь — намерение
+/// на календарную неделю. Одно значение на неделю пространства.
+model TimePlan {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  /// ISO-неделя `2026-W45` (UTC), см. `isoWeekKey`/`isoWeekRange` в shared-types.
+  week           String
+  plannedMinutes Int
+  note           String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, week])
+  @@index([workspaceId])
+  @@map("time_plans")
+}
+// --- END 04-planning ---
+
+// --- BEGIN 08-goals-constellations ---
+/// 08.1: server-side constellation canvas of ONE root goal. `entries` is a
+/// presentation layout over existing Goal/Project/Task/Milestone rows (never a
+/// copy of an entity), `zones` groups nodes visually, `conflicts` keeps BOTH
+/// versions of a per-node merge conflict until a later accepted write resolves
+/// it. Deleting an entity never deletes another node: a missing reference is
+/// marked `broken` when read (no flag is stored).
+model GoalCanvasLayout {
+  id          String   @id @default(uuid())
+  workspaceId String
+  goalId      String   @unique
+  /// Array of {entityType, entityId, x, y, width?, collapsed?, dirty?, updatedAt}.
+  entries     Json     @default("[]")
+  /// {x, y, zoom}.
+  viewport    Json     @default("{}")
+  /// Ordered groups [{name, color?, entityIds[]}].
+  zones       Json     @default("[]")
+  /// Unresolved per-node conflicts [{id, entityType, entityId, reason, client, server, at}].
+  conflicts   Json     @default("[]")
+  /// Bumped on every accepted write; the ETag used by a full replacement.
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  goal      Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("goal_canvas_layouts")
+}
+// --- END 08-goals-constellations ---
+
+// --- BEGIN 11-orion-dev-git ---
+// Git Workspace (11.1): репозиторий, который владелец разрешил читать. Путь — абсолютный и уже
+// проверенный на принадлежность разрешённому корню (ORION_DEV_REPOSITORY_ROOTS). Это конфигурация
+// пространства, а не копия кода: удаление строки не трогает каталог на диске.
+model DevelopmentGitRepository {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  /// Абсолютный канонический путь к рабочей копии (внутри разрешённого корня).
+  path        String
+  /// Префикс ссылки на задачу в сообщении коммита (`#42`). Настраивается на репозиторий.
+  taskRefPrefix String @default("#")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  commitLinks TaskCommitLink[]
+  layouts    DevelopmentArchitectLayout[]
+
+  @@unique([workspaceId, path])
+  @@index([workspaceId])
+  @@map("development_git_repositories")
+}
+
+/// Привязка коммита к задаче (11.2): из сообщения (`#42`, настраиваемый префикс) или вручную.
+/// Коммит не копируется целиком: sha + подпись на момент привязки, чтобы таймлайн задачи не зависел
+/// от того, доступен ли ещё репозиторий.
+model TaskCommitLink {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  taskId       String
+  repositoryId String
+  sha          String
+  subject      String
+  author       String
+  committedAt  DateTime?
+  /// false — найдено в сообщении коммита; true — поставлено человеком руками.
+  manual       Boolean   @default(false)
+  createdById  String?
+  createdAt    DateTime  @default(now())
+
+  workspace  Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task       Task                     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  repository DevelopmentGitRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, repositoryId, sha])
+  @@index([workspaceId])
+  @@index([repositoryId, sha])
+  @@map("task_commit_links")
+}
+
+/// Architect (11.3): пользовательская раскладка карты репозитория и загруженная проектная схема.
+/// `nodes` — только позиции (`[{id,x,y}]`), не копия узлов анализатора; `projectSchema` — jsonb
+/// `{nodes:[], edges:[]}` для отчёта расхождений. Одна строка на пару пространство+репозиторий.
+model DevelopmentArchitectLayout {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  repositoryId  String
+  /// Позиции узлов; сама карта каждый раз строится анализатором заново.
+  nodes         Json     @default("[]")
+  viewport      Json     @default("{}")
+  projectSchema Json?
+  /// Растёт на каждой принятой записи раскладки/схемы — ETag и защита от затирания.
+  revision      Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace  Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repository DevelopmentGitRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, repositoryId])
+  @@index([workspaceId])
+  @@map("development_architect_layouts")
+}
+// --- END 11-orion-dev-git ---
+
+
+// --- BEGIN 10-orion-tools ---
+
+/// Orion Tables (задание 10.1): пользовательская таблица пространства.
+/// `columns` — массив описаний колонок `{id, name, type, options?, formula?, linkType?}`
+/// (jsonb, потому что состав колонок — данные пользователя, а не схема БД).
+/// Формулы не хранят значения: они вычисляются при чтении по общим правилам
+/// `shared-types/src/table.ts`, поэтому одна и та же схема даёт один и тот же
+/// ответ в API и в экспорте.
+model TableDefinition {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  columns     Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rows      TableRow[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, updatedAt])
+  @@map("table_definitions")
+}
+
+/// Строка таблицы. `values` — ячейки по id колонок; `position` — ручной порядок
+/// (шаг 1000, как у списков и задач). workspaceId денормализован, чтобы RLS и
+/// проверка принадлежности не зависели от join к определению.
+model TableRow {
+  id          String   @id @default(uuid())
+  workspaceId String
+  tableId     String
+  values      Json     @default("{}")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  table     TableDefinition @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([tableId, position])
+  @@map("table_rows")
+}
+
+/// Горячая клавиша участника (задание 10.3). Привязка личная: `userId` входит в
+/// уникальный ключ, поэтому один участник не перекрывает сочетания другому.
+/// Конфликты — предупреждение API, а не запрет: пересечения вычисляются
+/// `keyBindingConflicts` из shared-types.
+model KeyBinding {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String
+  commandId   String
+  keys        String
+  scope       String   @default("global")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, commandId])
+  @@index([workspaceId, userId])
+  @@map("key_bindings")
+}
+// --- END 10-orion-tools ---
+
+// --- BEGIN 12-team-access ---
+/// Очередь событий агента-члена команды (задание 12.3). Упоминание `@имя` в комментарии задачи,
+/// адресованное агенту, не может лечь в `notifications` (там получатель — `User`, а у агента его
+/// нет), поэтому у агентского членства своя очередь. Наполняется в той же транзакции, что и
+/// комментарий; человек-участник получает обычное уведомление.
+model AgentMemberEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  /// WorkspaceMember.id агентского членства (kind = "agent").
+  memberId    String
+  /// "mention" — единственный вид в этом срезе; поле оставлено строкой под будущие виды.
+  kind        String   @default("mention")
+  title       String
+  body        String   @default("")
+  entityType  String?
+  entityId    String?
+  /// Автор действия — человек (или null для системных записей); не FK: история переживает удаление.
+  actorUserId String?
+  /// Дедупликация: повторная обработка того же комментария не создаёт вторую запись.
+  eventKey    String?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  member    WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, eventKey])
+  @@index([workspaceId, memberId, readAt])
+  @@index([createdAt])
+  @@map("agent_member_events")
+}
+// --- END 12-team-access ---

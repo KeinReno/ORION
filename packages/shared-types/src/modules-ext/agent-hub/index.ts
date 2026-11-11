@@ -31,13 +31,14 @@ export const agentHubClaimInputSchema = z.object({
 export type AgentHubClaimInput = z.infer<typeof agentHubClaimInputSchema>;
 
 const reportRevision = { expectedRevision: z.number().int().nonnegative() };
+const reportSummary = { summary: z.string().trim().min(1).max(4000).optional() };
 export const agentHubReportInputSchema = z.discriminatedUnion("action", [
   z.object({ ...reportRevision, action: z.literal("start") }),
   z.object({ ...reportRevision, action: z.literal("heartbeat") }),
   z.object({ ...reportRevision, action: z.literal("checkpoint"), checkpointRef: z.string().trim().min(1).max(1000) }),
-  z.object({ ...reportRevision, action: z.literal("submit"), evidenceRefs: z.array(z.string().trim().min(1).max(1000)).min(1).max(20) }),
+  z.object({ ...reportRevision, ...reportSummary, action: z.literal("submit"), evidenceRefs: z.array(z.string().trim().min(1).max(1000)).min(1).max(20) }),
   z.object({ ...reportRevision, action: z.literal("block"), reason: z.string().trim().min(1).max(2000) }),
-  z.object({ ...reportRevision, action: z.literal("fail"), reason: z.string().trim().min(1).max(2000) })
+  z.object({ ...reportRevision, ...reportSummary, action: z.literal("fail"), reason: z.string().trim().min(1).max(2000) })
 ]);
 export type AgentHubReportInput = z.infer<typeof agentHubReportInputSchema>;
 

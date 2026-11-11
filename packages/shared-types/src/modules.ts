@@ -16,6 +16,7 @@ export const CORE_MODULE_IDS = [
   "documents",
   "projects",
   "time",
+  "planning",
   "finance",
   "habits",
   "lists",
@@ -141,7 +142,10 @@ export const SEARCH_TYPE_MODULE: Record<SearchableEntityType, OrionModuleId> = {
   list: "lists",
   account: "finance",
   goal: "projects",
-  savings_goal: "finance"
+  savings_goal: "finance",
+  project_log_entry: "projects",
+  // Задание 10: материал базы знаний ищется провайдером модуля knowledge.
+  knowledge_item: "knowledge"
 };
 
 export const INBOX_TARGET_MODULE: Record<"task" | "note" | "event", OrionModuleId> = {
@@ -373,6 +377,26 @@ export const MODULE_CATALOG: readonly ModuleManifest[] = [
     disableBehavior: "Панель и API скрываются. Все записи сохраняются и вернутся при включении; другие участники их не видят и после включения.",
     panelId: "health",
     defaultEnabled: false
+  },
+  {
+    id: "planning",
+    kind: "additional",
+    required: false,
+    label: "Планирование",
+    summary: "Тайм-блоки, Гантт с критическим путём и матрица «важно/срочно» — представления существующих задач.",
+    owns: "Только собственные тайм-блоки (окна фокуса и встреч), пресеты осей матрицы и недельный план времени. Задачи, проекты, вехи и события не копируются: планирование читает их через публичные контракты владельцев.",
+    livesWithout:
+      "Работает без проектов, задач и календаря: Гантт и матрица показывают пустые представления, тайм-блоки живут сами по себе. Конфликты с календарём появляются, только когда календарь включён.",
+    provides: [
+      "API тайм-блоков с обнаружением пересечений и переносом окна",
+      "Гантт проекта: задачи, вехи, зависимости, критический путь и запас",
+      "Оценка последствий переноса задачи (dry-run)",
+      "Матрица «важно/срочно» с пресетами осей"
+    ],
+    optionalDependencies: ["tasks", "projects", "calendar", "time"],
+    disableBehavior: "API планирования отвечает 409; тайм-блоки, пресеты и планы сохраняются, задачи и события не меняются.",
+    panelId: "planning",
+    defaultEnabled: true
   }
 ];
 

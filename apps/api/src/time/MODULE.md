@@ -16,6 +16,13 @@ Tasks не мешает Time, контрактный Nest-модуль не им
 
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
+Задание 04 добавляет паузу (`pausedSeconds`/`pausedAt` — вычитаются в `entryMinutes`), переключение между задачами
+(`POST time/switch` закрывает прежний таймер и публикует `time.entry.switched`; у `start` остаётся прежнее 409 на второй
+таймер — на нём держится защита от гонки вкладок, S06), журнал ручных правок (`editedAt`, `edits`, событие
+`time.entry.edited`) и недельный план (`TimePlan`, ISO-неделя) с аналитикой план/факт. Оценку задачи аналитика читает
+узким `TaskEstimateReader`, а не полным `TaskOperations`: Time остаётся работоспособным без модуля задач.
+[Контракт](../../../../docs/platform-api/PLANNING.md).
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 
@@ -27,8 +34,8 @@ Tasks не мешает Time, контрактный Nest-модуль не им
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `projects` |
-| Права (permissions) | `time.entry.read`, `time.entry.create`, `time.entry.update`, `time.entry.delete` |
-| События | публикует: —; слушает: — |
+| Права (permissions) | `time.entry.read`, `time.entry.create`, `time.entry.update`, `time.entry.delete`, `time.plan.manage` |
+| События | публикует: `time.entry.switched`, `time.entry.edited`; слушает: — |
 | Панели веба | `time` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/time` |

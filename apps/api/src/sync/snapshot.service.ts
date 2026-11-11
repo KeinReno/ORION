@@ -68,8 +68,20 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   specRestoredAttempts("opportunityAttempts", (tx) => tx.opportunityAttempt),
   specRestoredPolicies("opportunityPolicies", (tx) => tx.opportunityPolicy),
   spec("opportunityManagerActions", (tx) => tx.opportunityManagerAction),
-  spec("projects", (tx) => tx.project),
+  // Задание 03: `Project.parentId` делает projects самоссылающимся деревом — порядок
+  // вставки обязан быть топологическим, иначе ребёнок может приехать раньше родителя.
+  specSelfRef("projects", (tx) => tx.project),
+  // Шаблоны не ссылаются на живые проекты; история — после проектов и записей журнала,
+  // на которые она может ссылаться (`logEntryId`).
+  spec("projectTemplates", (tx) => tx.projectTemplate),
+  // Tasks 2.0: справочники статусов и полей идут до задач (Task.statusId и
+  // TaskFieldDefinition.projectId ссылаются на них), значения — после задач.
+  spec("taskStatusDefinitions", (tx) => tx.taskStatusDefinition),
+  spec("taskFieldDefinitions", (tx) => tx.taskFieldDefinition),
   spec("developmentCatalogMappings", (tx) => tx.developmentCatalogMapping),
+  // 11: репозитории — конфигурация пространства, ни от чего не зависят; раскладка — после них.
+  spec("developmentGitRepositories", (tx) => tx.developmentGitRepository),
+  spec("developmentArchitectLayouts", (tx) => tx.developmentArchitectLayout),
   spec("homes", (tx) => tx.home),
   spec("meters", (tx) => tx.meter),
   spec("meterReadings", (tx) => tx.meterReading),
@@ -81,6 +93,8 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("milestones", (tx) => tx.milestone),
   specSelfRef("goals", (tx) => tx.goal),
   spec("goalPlans", (tx) => tx.goalPlan),
+  // 08: canvas rows reference a goal; loaded after goals.
+  spec("goalCanvasLayouts", (tx) => tx.goalCanvasLayout),
   spec("financeAccounts", (tx) => tx.account),
   spec("financeCategories", (tx) => tx.financeCategory),
   spec("calendarConnections", (tx) => tx.calendarConnection),
@@ -113,8 +127,18 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // itself, if ever inspected/edited by hand, is already sane) and insert.
   specSelfRef("tasks", (tx) => tx.task),
   spec("taskDependencies", (tx) => tx.taskDependency),
+  // Tasks 2.0: правило повторения после задач-шаблонов, экземпляры — после
+  // правила и задач (taskId nullable: перепрыгнутый экземпляр сохраняет историю).
+  spec("taskRecurrences", (tx) => tx.taskRecurrence),
+  spec("taskRecurrenceInstances", (tx) => tx.taskRecurrenceInstance),
+  spec("taskFieldValues", (tx) => tx.taskFieldValue),
   spec("taskComments", (tx) => tx.taskComment),
+  // 11.2: привязки коммитов ссылаются на задачу и репозиторий — после обоих.
+  spec("taskCommitLinks", (tx) => tx.taskCommitLink),
   spec("projectLogEntries", (tx) => tx.projectLogEntry),
+  // Audit trail проекта (задание 03): ссылается и на проект, и (необязательно) на запись
+  // журнала — поэтому после `projectLogEntries`, не раньше.
+  spec("projectHistoryEntries", (tx) => tx.projectHistoryEntry),
   spec("projectRelations", (tx) => tx.projectRelation),
   spec("projectLogEntryTasks", (tx) => tx.projectLogEntryTask),
   spec("taskActivities", (tx) => tx.taskActivity),
@@ -148,6 +172,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   spec("marketWatchItems", (tx) => tx.marketWatchItem),
   spec("investmentTrades", (tx) => tx.investmentTrade),
   spec("timeEntries", (tx) => tx.timeEntry),
+  spec("timePlans", (tx) => tx.timePlan),
+  spec("planningBlocks", (tx) => tx.planningBlock),
+  spec("planningMatrixPresets", (tx) => tx.planningMatrixPreset),
   spec("habitEntries", (tx) => tx.habitEntry),
   spec("extensionRecords", (tx) => tx.extensionRecord),
   spec("inventoryItems", (tx) => tx.inventoryItem),
@@ -163,6 +190,11 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   specGrants("sharedPublications", (tx) => tx.sharedPublication),
   spec("sharedPublicationPins", (tx) => tx.sharedPublicationPin),
   spec("sharedPublicationOperations", (tx) => tx.sharedPublicationOperation),
+  // Задание 10: пользовательские таблицы — данные пространства; строки после
+  // определений (FK tableId). Личные горячие клавиши в снапшот не входят
+  // (`identity-excluded` в реестре: это настройка участника, как NoteStackState).
+  spec("tableDefinitions", (tx) => tx.tableDefinition),
+  spec("tableRows", (tx) => tx.tableRow),
   // G10: таблицы подключаемых модулей (порядок «родитель раньше ребёнка» задаёт манифест).
   ...GENERATED_SNAPSHOT_SPECS.map((item) => spec(item.key, item.delegate))
 ];

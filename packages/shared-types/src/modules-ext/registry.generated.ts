@@ -12,7 +12,7 @@ export const GENERATED_MODULE_IDS = [
 import type { ComponentMetadata } from "../component-manifest";
 export const GENERATED_MODULE_METADATA: Record<string, ComponentMetadata> = {
   "agent-hub": {
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "chat-archive": {
     "version": "1.0.0"
@@ -64,7 +64,11 @@ export const GENERATED_MODULE_CATALOG: readonly GeneratedModuleCatalogEntry[] = 
       "Отмена исполнения владельцем/руководителем",
       "История изменений с ревизиями",
       "Реестр зарегистрированных runtime-сессий с TTL и отметками недавней активности",
-      "Именованные профили агентов и назначение конкретного профиля существующей задаче без запуска"
+      "Именованные профили агентов и назначение конкретного профиля существующей задаче без запуска",
+      "Делегирование подпоручений между профилями с ограничением глубины и запретом циклов",
+      "Машина состояний с ожиданием подтверждения владельцем и переназначением исполнителя",
+      "Trace-лента и дерево шагов исполнения с фильтрами по типу, шагу и агенту",
+      "Версионированная память агентов (пользователь, проект, агент, пространство) с цепочкой пересмотра"
     ],
     "optionalDependencies": [
       "tasks"
@@ -144,7 +148,12 @@ export const GENERATED_PRIMARY_RESOURCES: Record<(typeof GENERATED_MODULE_IDS)[n
 
 /** Additional, explicitly declared capabilities of optional modules. */
 export const GENERATED_ADDITIONAL_PERMISSIONS: readonly string[] = [
-  "agent-hub.runtime.create"
+  "agent-hub.runtime.create",
+  "agent-hub.memory.read",
+  "agent-hub.memory.create",
+  "agent-hub.memory.update",
+  "agent-hub.policy.read",
+  "agent-hub.policy.update"
 ];
 
 /** Имена миграций модуля в порядке применения (G11): манифест компонента и `GET system/components` сверяют их с базой. */
@@ -152,7 +161,10 @@ export const GENERATED_MODULE_MIGRATIONS: Record<(typeof GENERATED_MODULE_IDS)[n
   "agent-hub": [
     "20261029202000_agent_hub_executions",
     "20261029223000_agent_hub_runtime_sessions",
-    "20261110140000_agent_hub_agent_assignments"
+    "20261110140000_agent_hub_agent_assignments",
+    "20261111200000_agent_hub_orchestration",
+    "20261111201000_agent_hub_memory_trace",
+    "20261111202000_agent_hub_memory_agent_scope"
   ],
   "chat-archive": [
     "20261020222504_chat_archive",

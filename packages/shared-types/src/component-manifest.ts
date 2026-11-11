@@ -14,7 +14,7 @@ import { isContractId, PLATFORM_CONTRACT_VERSIONS } from "./platform-contracts";
  */
 
 /** Версия публичного контракта платформы. Смена мажорной части = несовместимое изменение. */
-export const PLATFORM_API_VERSION = "1.13.0";
+export const PLATFORM_API_VERSION = "1.14.0";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 /** Поддерживаемые диапазоны: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`. */

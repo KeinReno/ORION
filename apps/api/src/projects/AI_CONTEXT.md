@@ -19,8 +19,8 @@ Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneR
 
 Блок собирается `pnpm module-docs`; руками не править.
 
-- Точки входа: API `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/projects` (за `@RequireModule("projects")`); панель веба `projects`; код `apps/api/src/projects/`.
-- Права: `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete`.
+- Точки входа: API `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/project-log`, `workspaces/:workspaceId/projects` (за `@RequireModule("projects")`); панель веба `projects`; код `apps/api/src/projects/`.
+- Права: `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete`, `projects.template.read`, `projects.template.create`, `projects.template.update`, `projects.template.delete`, `projects.portfolio.read`, `projects.history.read`.
 - Модуль владеет: Проекты и их собственные поля (имя, статус, сроки, бюджет, ставка).
 - Соседи: жёсткие: —; мягкие: `tasks`, `notes`, `calendar`, `documents`, `knowledge`, `time`, `finance`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `projects-planning`, `projects-ideas`, `projects-problems`, `projects-logbook`, `projects-goals`.

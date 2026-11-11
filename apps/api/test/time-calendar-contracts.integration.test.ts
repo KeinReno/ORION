@@ -1,4 +1,4 @@
-import { Module, type INestApplication, type ModuleMetadata } from "@nestjs/common";
+﻿import { Module, type INestApplication, type ModuleMetadata } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { SchedulerRegistry } from "@nestjs/schedule";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import { TaskIntegrationReader } from "../src/tasks/public/task-integration-read
 import { ProjectReferences } from "../src/projects/public/project-references";
 
 const hostModules = new Set(["ScheduleModule", "PrismaModule", "BackgroundJobsModule", "ProjectAggregateModule",
-  "AuthModule", "WorkspacesModule", "ModulesModule", "PluginsModule", "StorageModule", "TimeModule", "EventsModule"]);
+  "AuthModule", "WorkspacesModule", "ModulesModule", "PluginsModule", "StorageModule", "TimeModule", "EventsModule", "DomainEventsModule"]);
 const appImports = Reflect.getMetadata("imports", AppModule) as NonNullable<ModuleMetadata["imports"]>;
 class IntegrationHost {}
 Module({ imports: appImports.filter(entry => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isIsoWeekKey } from "./planning";
 
 /**
  * ORION v0.18 «Учёт времени» — see docs/HISTORY.md.
@@ -7,7 +8,23 @@ import { z } from "zod";
  * `endedAt` means the timer is running *right now*. Duration is never stored —
  * it is derived on both sides through `entryMinutes` below, so a running timer
  * needs no writes while it ticks.
+ *
+ * Задание 04 добавляет к этому паузу (`pausedSeconds`/`pausedAt`), отметку
+ * ручной корректировки (`editedAt`) с журналом правок и недельный план
+ * (`TimePlan`). Длительность по-прежнему одна на всех — `entryMinutes`.
  */
+
+/** Одна ручная правка записи: что, с чего и на что изменили. */
+export const timeEntryEditSchema = z.object({
+  at: z.string(),
+  field: z.enum(["startedAt", "endedAt", "taskId", "projectId", "note"]),
+  from: z.string().nullable(),
+  to: z.string().nullable()
+});
+export type TimeEntryEdit = z.infer<typeof timeEntryEditSchema>;
+
+/** Сколько последних правок хранится в самой записи (аудит без отдельной таблицы). */
+export const TIME_ENTRY_EDIT_LOG_LIMIT = 20;
 
 export const timeEntrySchema = z.object({
   id: z.string(),
@@ -29,6 +46,14 @@ export const timeEntrySchema = z.object({
   startedAt: z.string(),
   /** Null = running. */
   endedAt: z.string().nullable(),
+  /** Накопленная пауза в секундах; вычитается из длительности. */
+  pausedSeconds: z.number().int(),
+  /** Не null = таймер стоит на паузе (идёт, но время не капает). */
+  pausedAt: z.string().nullable(),
+  /** Не null = запись правили руками после создания (флаг для интерфейса и отчётов). */
+  editedAt: z.string().nullable(),
+  /** Последние правки, новее сверху; ограничено `TIME_ENTRY_EDIT_LOG_LIMIT`. */
+  edits: z.array(timeEntryEditSchema),
   /** Minutes worked as of the response: for a running entry, up to "now" (what the client then ticks on its own). */
   minutes: z.number().int(),
   running: z.boolean(),
@@ -89,6 +114,10 @@ export function summarizeByAuthorship(entries: readonly TimeEntry[]): TimeAuthor
 export interface MeasurableInterval {
   startedAt: string;
   endedAt: string | null;
+  /** Накопленная пауза, секунды (задание 04). Отсутствует у старых вызывающих — считается 0. */
+  pausedSeconds?: number | null;
+  /** Идёт пауза с этого момента: длительность замирает, пока её не снимут. */
+  pausedAt?: string | null;
 }
 
 /**
@@ -96,12 +125,20 @@ export interface MeasurableInterval {
  * to whole minutes and never negative. The API uses it for the DTO's `minutes`
  * and the client re-runs it every second for the live timer — one definition of
  * "how long", so the running value can't disagree with the stored one.
+ *
+ * Пауза вычитается здесь же: иначе «минуты» таймера разошлись бы с тем, что
+ * записано в отчёте. Пока пауза идёт (`pausedAt`), её длительность считается
+ * до `end` — то есть до «сейчас» для запущенной записи: секундомер замирает.
  */
 export function entryMinutes(entry: MeasurableInterval, now: Date = new Date()): number {
   const start = new Date(entry.startedAt).getTime();
   const end = entry.endedAt ? new Date(entry.endedAt).getTime() : now.getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
-  return Math.max(0, Math.round((end - start) / 60_000));
+  const pausedSeconds = Math.max(0, entry.pausedSeconds ?? 0);
+  const pausedAt = entry.pausedAt ? new Date(entry.pausedAt).getTime() : null;
+  const currentPause = pausedAt !== null && Number.isFinite(pausedAt) ? Math.max(0, end - pausedAt) / 1000 : 0;
+  const workedSeconds = (end - start) / 1000 - pausedSeconds - currentPause;
+  return Math.max(0, Math.round(workedSeconds / 60));
 }
 
 /** "2 ч 05 мин" / "45 мин" — the one place time is rendered as text, shared by every panel. */
@@ -171,3 +208,112 @@ export const updateTimeEntryInputSchema = z.object({
   endedAt: z.string().datetime().nullable().optional()
 });
 export type UpdateTimeEntryInput = z.infer<typeof updateTimeEntryInputSchema>;
+
+/**
+ * Переключение между задачами (задание 04): старт нового таймера закрывает
+ * прежний. Отдельный маршрут, а не изменение `start`: у `start` есть обещание
+ * «второй таймер того же человека — 409», на котором держится защита от гонки
+ * двух вкладок (S06). Переключение — осознанное действие, которое это
+ * обещание не ломает.
+ */
+export const switchTimerInputSchema = startTimerInputSchema.extend({
+  /** Момент закрытия прежней записи; по умолчанию «сейчас». */
+  at: z.string().datetime().nullable().optional()
+});
+export type SwitchTimerInput = z.infer<typeof switchTimerInputSchema>;
+
+export const switchTimerResultSchema = z.object({
+  /** Закрытая запись или null, если до переключения таймер не шёл. */
+  stopped: timeEntrySchema.nullable(),
+  started: timeEntrySchema
+});
+export type SwitchTimerResult = z.infer<typeof switchTimerResultSchema>;
+
+// --- недельный план времени -------------------------------------------------
+
+/**
+ * План на неделю — отдельная от задач сущность: «на этой неделе я планирую
+ * 30 часов». Оценки самих задач (`Task.estimatedMinutes`) остаются планом по
+ * задаче; складывать одно с другим молча нельзя, поэтому в аналитике они идут
+ * разными полями.
+ */
+export const timePlanSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  /** ISO-неделя `2026-W45` (UTC), см. `isoWeekKey`/`isoWeekRange`. */
+  week: z.string(),
+  plannedMinutes: z.number().int(),
+  note: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type TimePlan = z.infer<typeof timePlanSchema>;
+
+export const setTimePlanInputSchema = z.object({
+  /** 0 — «на эту неделю план не отличается от обычной»; верхняя граница — 7 суток. */
+  plannedMinutes: z.number().int().min(0).max(10_080),
+  note: z.string().max(1_000).default("")
+});
+export type SetTimePlanInput = z.infer<typeof setTimePlanInputSchema>;
+
+// --- аналитика план/факт ----------------------------------------------------
+
+export const timeAnalyticsTaskPlanSchema = z.object({
+  taskId: z.string(),
+  title: z.string(),
+  /** Оценка задачи; `null` — не оценена (это не «ноль»). */
+  estimatedMinutes: z.number().int().nullable(),
+  actualMinutes: z.number().int(),
+  /** `estimatedMinutes - actualMinutes`; `null`, если оценки нет. */
+  remainingMinutes: z.number().int().nullable(),
+  overrun: z.boolean()
+});
+export type TimeAnalyticsTaskPlan = z.infer<typeof timeAnalyticsTaskPlanSchema>;
+
+export const timeAnalyticsWeekPlanSchema = z.object({
+  week: z.string(),
+  /** `null` — план на неделю не задан (не ноль). */
+  plannedMinutes: z.number().int().nullable(),
+  actualMinutes: z.number().int()
+});
+export type TimeAnalyticsWeekPlan = z.infer<typeof timeAnalyticsWeekPlanSchema>;
+
+export const timeAnalyticsSchema = z.object({
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  projectId: z.string().nullable(),
+  totals: z.object({
+    minutes: z.number().int(),
+    count: z.number().int(),
+    /** Время, привязанное к задаче. */
+    linkedMinutes: z.number().int(),
+    /** Свободный секундомер: записи без задачи — это законный сценарий, не «ошибка заполнения». */
+    freeMinutes: z.number().int()
+  }),
+  byProject: z.array(
+    z.object({
+      projectId: z.string().nullable(),
+      minutes: z.number().int(),
+      count: z.number().int()
+    })
+  ),
+  byTask: z.array(
+    z.object({
+      taskId: z.string().nullable(),
+      minutes: z.number().int(),
+      count: z.number().int()
+    })
+  ),
+  plan: z.object({
+    /** Сумма оценок только по оценённым задачам; `null` — ни одна не оценена. */
+    estimatedMinutes: z.number().int().nullable(),
+    estimatedTaskCount: z.number().int(),
+    unknownEstimateTaskCount: z.number().int(),
+    tasks: z.array(timeAnalyticsTaskPlanSchema),
+    weeks: z.array(timeAnalyticsWeekPlanSchema)
+  })
+});
+export type TimeAnalytics = z.infer<typeof timeAnalyticsSchema>;
+
+/** Ключ недели для пути: `2026-W45`. Отдельная схема, чтобы 400 был понятным. */
+export const weekKeyParamSchema = z.string().refine(isIsoWeekKey, "Ожидается неделя вида 2026-W45");

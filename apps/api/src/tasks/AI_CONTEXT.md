@@ -17,8 +17,8 @@ Projects читает заголовок/статус/проект сущест�
 
 Блок собирается `pnpm module-docs`; руками не править.
 
-- Точки входа: API `workspaces/:workspaceId/tasks` (за `@RequireModule("tasks")`); панель веба `tasks`; код `apps/api/src/tasks/`.
-- Права: `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete`.
+- Точки входа: API `workspaces/:workspaceId/task-fields`, `workspaces/:workspaceId/task-statuses`, `workspaces/:workspaceId/task-values`, `workspaces/:workspaceId/tasks` (за `@RequireModule("tasks")`); панель веба `tasks`; код `apps/api/src/tasks/`.
+- Права: `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete`, `tasks.status.manage`, `tasks.field.manage`, `tasks.recurrence.manage`.
 - Модуль владеет: Задачи, подзадачи, зависимости, сохранённые виды.
 - Соседи: жёсткие: —; мягкие: `projects`, `calendar`, `time`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `team`, `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`.

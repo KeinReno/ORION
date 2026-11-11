@@ -23,13 +23,16 @@ export const MODULE_GROUPS = new Map([
  */
 export const CORE_MODULE_DIRS = new Set([
   "common", "workspaces", "auth", "users", "sync", "system", "storage", "notifications",
-  "modules", "plugins", "settings", "shared", "ops", "lan", "mcp", "domain-events"
+  "modules", "plugins", "settings", "shared", "ops", "lan", "mcp", "domain-events", "entity-links"
 ]);
 
 /** Модели ядра: любой модуль вправе читать/писать их (членство, пользователи, общие связи/напоминания, синхронизация, outbox доменных событий). */
 export const CORE_MODELS = new Set([
   "User", "RefreshToken", "UserPreference", "Workspace", "WorkspaceMember", "WorkspaceInvite", "CrossWorkspaceGrant",
   "Notification", "EntityLink", "EntityReminder",
+  // 12-team-access: очередь упоминаний агентского членства — общая, как уведомления:
+  // её пишут комментарии задач/журнал проекта, читает команда.
+  "AgentMemberEvent",
   "SyncRemote", "SyncRestoreOperation", "SyncChange", "SyncOp", "SyncEntityStamp", "SyncDevice",
   "DomainEvent", "DomainEventDelivery"
 ]);
@@ -42,15 +45,16 @@ function owned(owner, models) {
 export const MODEL_OWNERS = new Map([
   // G5/G10: модели модулей, подключённых манифестом, вносит генератор (scripts/module-registry.mjs).
   ...GENERATED_MODEL_OWNERS,
-  ...owned("development", "DevelopmentCatalogMapping DevelopmentImportConsent"),
+  ...owned("development", "DevelopmentCatalogMapping DevelopmentImportConsent DevelopmentGitRepository TaskCommitLink DevelopmentArchitectLayout"),
   ...owned("shared", "SharedPublication SharedPublicationPin SharedPublicationOperation PublicationRule"),
-  ...owned("projects", "Project ProjectStatusUpdate ProjectLogEntry ProjectLogEntryTask ProjectRelation"),
+  ...owned("projects", "Project ProjectStatusUpdate ProjectLogEntry ProjectLogEntryTask ProjectRelation ProjectTemplate ProjectHistoryEntry"),
+  ...owned("planning", "PlanningBlock PlanningMatrixPreset"),
   ...owned("milestones", "Milestone MilestoneDependency"),
-  ...owned("notes", "Note NoteLink NoteRevision NoteAttachment"),
-  ...owned("tasks", "Task TaskComment TaskActivity TaskDependency SavedTaskView"),
+  ...owned("notes", "Note NoteLink NoteRevision NoteAttachment NoteStackState"),
+  ...owned("tasks", "Task TaskComment TaskActivity TaskDependency SavedTaskView TaskRecurrence TaskRecurrenceInstance TaskFieldDefinition TaskFieldValue TaskStatusDefinition"),
   ...owned("captures", "Capture"),
-  ...owned("knowledge", "KnowledgeCategory KnowledgeItem KnowledgeSource KnowledgeRelation"),
-  ...owned("time", "TimeEntry"),
+  ...owned("knowledge", "KnowledgeCategory KnowledgeItem KnowledgeSource KnowledgeRelation KnowledgeItemRevision KnowledgeSettings"),
+  ...owned("time", "TimeEntry TimePlan"),
   ...owned("habits", "Habit HabitEntry"),
   ...owned("lists", "List ListItem"),
   ...owned("events", "Event CalendarConnection EventOverride SentReminder"),
@@ -59,14 +63,17 @@ export const MODEL_OWNERS = new Map([
   ...owned("documents", "Document DocumentVersion DocumentAnnotation"),
   ...owned("inbox", "InboxItem"),
   ...owned("inventory", "InventoryItem InventoryMovement"),
-  ...owned("goals", "Goal GoalPlan"),
+  ...owned("goals", "Goal GoalPlan GoalCanvasLayout"),
   ...owned("ai", "AgentToken AgentCapture AgentAuditEntry AgentMessage AgentTask AgentProposal AssistantKey AssistantConversation"),
   ...owned("extensions", "ExtensionRecord ExtensionSecret"),
   ...owned("opportunities", "Opportunity OpportunityProfile OpportunityFact OpportunityTrack OpportunityMaterial OpportunityImport OpportunityCapture OpportunityHistory OpportunityAssessment OpportunityDraft OpportunityConnection OpportunityAttempt OpportunityGrant OpportunityBudget OpportunityPolicy OpportunityManagerAction"),
   ...owned("home", "Home Meter MeterReading"),
   ...owned("home-utilities", "HomeUtilityMonth HomeUtilityPayment HomeElectricityTariff"),
   ...owned("contacts", "Contact ContactInteraction ContactRelation"),
-  ...owned("health", "HealthSubject HealthGrant HealthAppointment HealthPreventiveItem HealthMedication HealthIntake HealthMeasurement HealthTarget HealthSymptom")
+  ...owned("health", "HealthSubject HealthGrant HealthAppointment HealthPreventiveItem HealthMedication HealthIntake HealthMeasurement HealthTarget HealthSymptom"),
+  // Общие инструменты платформы (задание 10): таблицы и личные горячие клавиши.
+  ...owned("tables", "TableDefinition TableRow"),
+  ...owned("commands", "KeyBinding")
 ]);
 
 export function moduleOfDir(dir) {

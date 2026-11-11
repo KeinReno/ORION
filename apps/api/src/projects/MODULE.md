@@ -18,6 +18,14 @@ Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneR
 
 Межмодульные операции выполняются через публичные SDK владельцев; полные доменные модули ради ссылки/команды не импортируются. [Контракты и правила](../../../../docs/platform-api/MODULE_BOUNDARY_SDKS.md).
 
+## Центр проектов (задание 03)
+
+- **Иерархия.** `Project.parentId` — дерево в той же таблице; дочерний проект остаётся обычным проектом. Циклы (409 `project_hierarchy_cycle` с путём `A → B → C → A`) и лимит глубины (6) проверяются сервисом до записи, под блокировкой строки пространства — иначе две встречные правки создали бы петлю. Ancestor/потомки читает `ProjectHierarchyRepository` (recursive CTE). Удаление родителя не удаляет детей (`SetNull`), `GET projects/:id` отдаёт `ancestors` и `childCount`.
+- **Шаблоны.** `ProjectTemplate` — отдельная таблица и права `projects.template.*`; структура (вехи, задачи, записи журнала, дочерние проекты) — одно JSON-дерево со сдвигами в днях от стартовой даты, а не набор параллельных таблиц. `POST projects/from-template` и `POST projects/:id/duplicate` материализуют дерево в ОДНОЙ транзакции; задачи создаются публичным `TaskOperations`, вехи — `MilestoneCommands` (чужие таблицы не пишутся). Дублирование по умолчанию не копирует содержимое (`withContent: false`) и не тиражирует журнал/комментарии.
+- **Портфель.** `GET projects/portfolio` — агрегаты по пространству (прогресс, открытые задачи, просрочка, риски, дедлайны, загрузка по участникам, распределение по статусам) с фильтрами `scope/status/memberId/from/to` и явными лимитами (`limit`, `page.truncated`). Данные соседей приходят провайдерами агрегатов: `openTasksByAssignee` и `milestonesWithoutDates` считают владельцы задач и вех.
+- **История.** `GET projects/:id/history` — append-only `ProjectHistoryEntry` (кто/когда/какое поле, «было → стало»), пишется в транзакции самого изменения, поэтому не расходится с данными; доменные события `projects.project.updated` / `projects.project.parent_changed` публикуются параллельно. Читается из своих строк, а не из outbox (тот чистится через 7 дней). Связывание с записью журнала — `POST/DELETE projects/:id/history/:historyId/decision`: ссылка на «решение», а не копия его текста.
+
+
 <!-- generated:manifest:start -->
 ## Манифест (генерируется)
 
@@ -29,11 +37,11 @@ Goals использует `ProjectCatalog`, `GoalTaskReader` и `GoalMilestoneR
 | Вид | дополнительный, по умолчанию включён |
 | Жёсткие зависимости | — |
 | Мягкие зависимости | `tasks`, `notes`, `calendar`, `documents`, `knowledge`, `time`, `finance` |
-| Права (permissions) | `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete` |
-| События | публикует: —; слушает: — |
+| Права (permissions) | `projects.project.read`, `projects.project.create`, `projects.project.update`, `projects.project.delete`, `projects.template.read`, `projects.template.create`, `projects.template.update`, `projects.template.delete`, `projects.portfolio.read`, `projects.history.read` |
+| События | публикует: `projects.project.status_changed`, `projects.project.dates_changed`, `projects.milestone.completed`, `projects.milestone.dates_changed`, `projects.project.updated`, `projects.project.parent_changed`; слушает: — |
 | Панели веба | `projects` |
 | Слоты | — |
-| Маршруты API | `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/projects` |
+| Маршруты API | `workspaces/:workspaceId/goals`, `workspaces/:workspaceId/milestones`, `workspaces/:workspaceId/project-log`, `workspaces/:workspaceId/projects` |
 | Плагины, расширяющие модуль | `projects-planning`, `projects-ideas`, `projects-problems`, `projects-logbook`, `projects-goals` |
 | Миграции в манифесте | — |
 | Код на сервере | `apps/api/src/projects/` |

@@ -14,7 +14,7 @@
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/time` (за `@RequireModule("time")`); панель веба `time`; код `apps/api/src/time/`.
-- Права: `time.entry.read`, `time.entry.create`, `time.entry.update`, `time.entry.delete`.
+- Права: `time.entry.read`, `time.entry.create`, `time.entry.update`, `time.entry.delete`, `time.plan.manage`.
 - Модуль владеет: Записи времени и запущенный таймер.
 - Соседи: жёсткие: —; мягкие: `tasks`, `projects`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `time-insights`, `time-billing`.

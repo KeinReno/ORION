@@ -112,6 +112,11 @@ export const projectSchema = z.object({
   /** Team-shared board order (0-based); null = not placed yet. Written only via the reorder endpoint. */
   sharedOrder: z.number().int().nullable(),
   /**
+   * Центр проектов (задание 03): родительский проект в том же пространстве.
+   * Дерево живёт в `Project` — дочерний проект остаётся обычным проектом.
+   */
+  parentId: z.string().nullable(),
+  /**
    * The author-reported health from the newest status update (UI-05), or null
    * when nobody has reported. Deliberately separate from `progress`/overdue,
    * which are computed: this one is a person's statement with a date.
@@ -154,6 +159,8 @@ export const projectSchema = z.object({
   plannedMinutes: z.number().int().nonnegative().nullable(),
   /** Newest `updatedAt` across this project's tasks/notes/events/documents/transactions/time entries — "открывали N дней назад". Null for a project with no activity yet. */
   lastActivityAt: z.string().nullable(),
+  /** Optimistic-concurrency token (задание 12.4): send it back as `expectedRevision` on save. */
+  revision: z.number().int().positive(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -168,8 +175,21 @@ export const projectActivitySchema = z.object({
 });
 export type ProjectActivity = z.infer<typeof projectActivitySchema>;
 
+/** Предок в дереве проектов: путь от корня к непосредственному родителю, включительно. */
+export const projectAncestorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Глубина: корень = 1. */
+  depth: z.number().int().positive()
+});
+export type ProjectAncestor = z.infer<typeof projectAncestorSchema>;
+
 export const projectDetailSchema = projectSchema.extend({
-  activity: z.array(projectActivitySchema)
+  activity: z.array(projectActivitySchema),
+  /** Путь от корня до родителя (без самого проекта) — «Где этот проект в дереве». */
+  ancestors: z.array(projectAncestorSchema),
+  /** Сколько непосредственных дочерних проектов (не архивных). */
+  childCount: z.number().int().nonnegative()
 });
 export type ProjectDetail = z.infer<typeof projectDetailSchema>;
 
@@ -183,15 +203,35 @@ const projectBody = {
   budgetAmount: z.number().int().nonnegative().nullable().optional(),
   hourlyRate: z.number().int().nonnegative().nullable().optional(),
   currency: z.string().length(3).default("RUB"),
-  contextNote: z.string().max(4_000).optional()
+  contextNote: z.string().max(4_000).optional(),
+  /**
+   * Задание 03: родительский проект. Цикл и глубина > PROJECT_TREE_MAX_DEPTH
+   * отвергаются сервером (409) — схема проверяет только форму.
+   */
+  parentId: z.string().nullable().optional()
 };
 
 export const createProjectInputSchema = z.object(projectBody);
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 export const updateProjectInputSchema = z.object(projectBody).partial().extend({
-  archivedAt: z.string().datetime().nullable().optional()
+  archivedAt: z.string().datetime().nullable().optional(),
+  /**
+   * CAS-токен (задание 12.4): ревизия, на которой основана правка. Не указан — последняя явная
+   * правка побеждает (LWW, как и раньше), но ревизия всё равно растёт; указан и устарел — 409
+   * `project_revision_conflict` с текущей копией в ответе.
+   */
+  expectedRevision: z.number().int().positive().optional()
 });
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
+
+/** Тело 409, которое отдаёт `PATCH .../projects/:id` при устаревшем `expectedRevision`. */
+export const projectRevisionConflictSchema = z.object({
+  code: z.literal("project_revision_conflict"),
+  message: z.string(),
+  currentRevision: z.number().int().positive(),
+  current: projectSchema
+});
+export type ProjectRevisionConflict = z.infer<typeof projectRevisionConflictSchema>;
 
 /** Owner/lead write the whole shared board order in one request (ids of the visible list, top to bottom). */
 export const reorderProjectsInputSchema = z.object({

@@ -1,5 +1,456 @@
 # ORION — состояние на 30 октября 2026
 
+## Agent Hub 2.0: оркестрация, Trace, Memory — backend, 11.11.2026
+
+Задание 09 (backend). Новые файлы: `packages/shared-types/src/agent-hub-trace.ts`
+(+тест), `agent-hub-memory.ts`, `agent-hub-orchestration.ts` (+тест);
+`apps/api/src/modules-ext/agent-hub/`: `agent-hub-transitions.service.ts`,
+`agent-hub-delegation.service.ts`, `agent-hub-trace.service.ts`,
+`agent-hub-memory.service.ts`, `agent-hub-dto.ts`; миграции
+`20261111200000_agent_hub_orchestration`, `20261111201000_agent_hub_memory_trace`,
+`20261111202000_agent_hub_memory_agent_scope`; интеграционный тест
+`apps/api/test/modules-ext/agent-hub/agent-hub-orchestration.integration.test.ts`.
+Манифест модуля — `1.1.0`; новые модели объявлены в реестре снапшота.
+
+- **9.1. Делегирование.** `AgentHubExecution` получил `parentExecutionId`,
+  `delegationDepth`, `delegatedToProfileId`, `delegationChain` (цепочка профилей,
+  защита от циклов), `delegationPayload` (краткое поручение, инструкции,
+  задача/проект, `materialLinkIds` из EntityLink, ограничения прав) и
+  `resultSummary`. Глубина ограничена политикой пространства `agent_hub_policies`
+  (по умолчанию 3, меняет только владелец/руководитель; делегатор может только
+  ужесточить). `A → B → A` — 409 `delegation_cycle`, глубина сверх лимита — 409
+  `delegation_depth_exceeded`. Дочерняя ветка (`targetKind = delegation`, цель —
+  собственный id) видна в очереди только профилю-получателю; родительская ревизия
+  не двигается, делегирование фиксируется шагом trace. При завершении дочернего
+  исполнения родителю пишется `delegation_result` с итогом, evidence и checkpoint.
+- **9.1/9.4. Машина состояний.** Прежние значения статусов сохранены; добавлены
+  `waiting_approval` и `reassigned`. Каждый переход проверяется по разрешённому
+  списку и пишет `AgentHubEvent` в одной транзакции с состоянием (CAS по
+  `revision`). `request_approval` останавливает операцию выше read-only до
+  решения человека; `approve` возвращает в `working` с новым lease, `reject`
+  завершает `failed` с причиной. `reassign` завершает ветку как `reassigned`
+  (терминальный статус, частичный уникальный индекс «одно активное исполнение на
+  цель» обновлён) и атомарно открывает независимое исполнение той же цели с новым
+  журналом. `AgentHubTransitions.commitTx` — единственная точка смены состояния.
+- **9.2. Trace.** Новая таблица `agent_hub_trace_steps`: `tool_call |
+  tool_result | delegation | approval_wait | note | error`, `stepId` /
+  `parentStepId` (дерево), `agentId`, payload, длительность (для `tool_result`
+  считается сервером), ошибка, попытка. `GET …/executions/:id/trace` отдаёт
+  плоскую ленту и дерево; `type`, `stepId`, `agentId`, `depth` — фильтры того же
+  endpoint. `tool_result` без родительского `tool_call` отклоняется. Внутренние
+  рассуждения модели не фиксируются и не восстанавливаются.
+- **9.3. Memory.** `AgentMemoryRecord`: scope `user | project | agent | global`,
+  `scopeId`, ключ, jsonb-значение, `source`, `agentId`, `provenanceEventId`,
+  `validity` (`valid | superseded | outdated`) и `supersededById`; частичный
+  уникальный индекс держит одну `valid`-запись на scope/профиль/ключ, перезапись
+  создаёт новую ревизию и помечает прежнюю. `POST …/agent-hub/context` собирает
+  память областей исполнения (глобальная, проект, агент, пользователь) и
+  возможности включённых модулей, ограничивает объём (≤50 записей, 32 КБ) и
+  помечает `outdated` как `needsVerification`. User-память, записанная агентом,
+  приватна для его профиля: другой агент получает 403 и на чтение (пусто), и на
+  перезапись ключа; запись в память проекта ограничена проектным fence токена.
+  Чтение/запись агента журналируются в `AgentAuditEntry` через
+  `AgentModuleToolsService`. Новые MCP-инструменты: `orion_agent_hub_delegate`,
+  `orion_agent_hub_request_approval`, `orion_agent_hub_trace_record`,
+  `orion_agent_hub_memory_write`, `orion_agent_hub_memory_read`,
+  `orion_agent_hub_context`; права `agent-hub.memory.*` и `agent-hub.policy.*`
+  внесены в реестр. `scope-ceiling` не расширялся.
+
+Проверки: unit — новые `agent-hub-trace` 5/5 и `agent-hub-orchestration` 9/9,
+прежний `agent-hub-lifecycle` 10/10, каталог инструментов ↔ маршруты 16/16;
+интеграция на реальной PostgreSQL/RLS — новые 5/5 (делегирование, цикл, глубина,
+approval/reject, trace-дерево и фильтры, память и superseded-цепочка, reassign),
+прежние 21/21 Agent Hub без изменения ожиданий; все 170 миграций применены к
+чистой временной базе; `pnpm module-registry --check` — OK,
+`pnpm module-docs:check` — OK, `pnpm plugin-contract-check` — 11/11; ESLint по
+изменённым файлам — 0 ошибок/0 предупреждений; Prisma Client перегенерирован.
+
+Ограничения: глобальные гейты в этом checkout красные из-за параллельных
+незавершённых срезов — `architecture-check` указывает на `development/*`
+(импорт сервиса соседнего модуля и `tx.task`), общий API-typecheck — на
+`development`, `tables`, `search`; `platform-map:check` не запускается в этой
+среде (esbuild: `Cannot read directory "../..": Access is denied`), поэтому
+`capabilities.generated.json` перегенерирован тем же алгоритмом через TypeScript
+API и совпал с прежним выводом плюс версия `agent-hub` 1.1.0. Общий unit-прогон
+`packages/shared-types` — 604/605: красный чужой
+`entity-links.read` (id не соответствует формату `module.resource.action`,
+задание 01). Фронтенд Hub/Trace/Memory в объём не входил (в панели добавлены
+только подписи двух новых статусов ради типизации); автоматического диспетчера
+нет. Истёкший lease в `waiting_approval` при `reconcile` возвращает исполнение в
+очередь и сбрасывает запрос подтверждения — владельцу нужно запросить его снова.
+
+## Центр проектов: иерархия, шаблоны, портфель, история (задание 03) — 11.11.2026
+
+Бэкенд без изменений фронтенда. Схема: `Project.parentId` (self-ref, `SetNull` при удалении родителя,
+индекс `(workspaceId, parentId)`), новые таблицы `project_templates` и `project_history_entries`
+(обе — `ENABLE` + `FORCE ROW LEVEL SECURITY` + политика по членству; явный `GRANT` ролям приложения
+отдельной миграцией, потому что `ALTER DEFAULT PRIVILEGES` из `infra/postgres/init` действует только
+в базе, созданной init-скриптом). Миграции: `20261111102912_project_center`, `20261111103000_project_center_grants`.
+
+Добавлено:
+
+- **Иерархия.** Смена/назначение родителя — с блокировкой строки пространства, проверкой предков
+  (recursive CTE в `ProjectHierarchyRepository`) и лимитом глубины 6. Цикл → 409 с кодом
+  `project_hierarchy_cycle` и путём `A → B → C → A`; слишком глубокое дерево → 400 с причиной.
+  `GET projects/:id` отдаёт `ancestors` и `childCount`, `Project` — `parentId`.
+  Событие `projects.project.parent_changed`.
+- **Шаблоны** (`projects/templates`, права `projects.template.*`): структура — одно JSON-дерево со
+  сдвигами в днях (вехи, задачи, записи журнала, дочерние проекты), схема — `projectTemplateStructureSchema`.
+  `POST projects/from-template` и `POST projects/:id/duplicate` создают проект + вехи + задачи + записи
+  одной транзакцией; задачи создаются публичным `TaskOperations.createTx`, вехи — `MilestoneCommands.createTx`
+  (таблицы соседей из projects не пишутся). Дублирование по умолчанию не копирует описания
+  (`withContent: false`), не копирует журнал/комментарии/вложения, дочерние проекты — по `withChildren`.
+- **Портфель.** `GET projects/portfolio` (`projects.portfolio.read`): прогресс по задачам, открытые задачи,
+  просрочка, риски (`no_tasks`, `milestone_without_dates`, `overdue`, `blocked_dependency`), дедлайны,
+  загрузка по участникам, распределение по статусам; фильтры `scope/status/memberId/from/to`, пагинация
+  `limit/offset` и `page.truncated`. Данные соседей — через расширенные провайдеры агрегатов
+  (`openTasksByAssignee` у tasks, `milestonesWithoutDates` у milestones), не чтением чужих таблиц.
+- **История.** `GET projects/:id/history` (`projects.history.read`) из append-only `ProjectHistoryEntry`
+  с фильтрами `field/from/to` и пагинацией; пишется в транзакции самого изменения, поэтому не расходится
+  с данными. Публикуются `projects.project.updated` (изменения «было → стало») и `parent_changed`.
+  `POST/DELETE projects/:id/history/:historyId/decision` относят изменение к записи журнала.
+  История включена в резервную копию (`projectTemplates`, `projectHistoryEntries` в реестре снапшота,
+  `specSelfRef` для projects из-за `parentId`).
+
+Проверено локально (Windows, PostgreSQL 16 на 127.0.0.1:5433):
+
+- `pnpm --filter @orion/shared-types typecheck` — мои файлы чистые; полный прогон пакета падает на чужих
+  незавершённых файлах (`planning.ts` в момент прогона). `pnpm --filter @orion/api typecheck` — исходники
+  API чистые, тестовая сборка падает на чужих тестах (`workspace-transfer`, `qa-orion-dev-journey`).
+- `pnpm exec vitest run packages/shared-types/src/project-center.test.ts` — **16 passed**.
+  `pnpm exec vitest run --config vitest.integration.config.mts apps/api/test/project-center.integration.test.ts`
+  — **10 passed**: цикл (409 с путём), лимит глубины, from-template (проект+вехи+задачи+журнал, даты от
+  `startDate`, статус задачи), откат при инъекции отказа в середине материализации (ни проекта, ни вех,
+  ни задач), duplicate с/без содержимого, архивация шаблона, портфель (прогресс/риски/дедлайны/загрузка/
+  фильтр по участнику/пагинация/архив), история (поля, фильтры, связывание с журналом, `parent_changed`).
+- Миграции с нуля: чистая БД, `prisma migrate deploy` — **все миграции применились**; проверены таблицы,
+  `parentId`, `relrowsecurity`/`relforcerowsecurity` и права `orion_app` (после grants-миграции).
+- `pnpm architecture-check` — OK (в том числе после перевода копирования на публичные контракты).
+- `pnpm module-docs` / `pnpm module-docs:check` — OK (обновлён блок манифеста projects: новые права и события).
+- `pnpm lint` по затронутым файлам — 0 ошибок, 0 предупреждений.
+
+Не подтверждено в этой среде: `pnpm platform-map`/`platform-map:check` и `pnpm build` — esbuild не может
+прочитать каталог рабочей копии (`Access is denied` на файле даже при `esbuild.exe --bundle`), то есть это
+ограничение окружения, а не кода; на момент прогона полная сборка API дополнительно падала на незавершённых
+правках соседних заданий (`development-git`, `entity-links`, `agent-hub`). Полный `pnpm test` — 2025/2040,
+все 15 отказов в файлах соседних незавершённых заданий (`sync-classification` — `NoteStackState`,
+`DevelopmentGitRepository`, `TaskCommitLink`, `DevelopmentArchitectLayout`; `permissions` — id
+`entity-links.read` без ресурсного сегмента; `contract-snapshot`; sync-реплики; `agent-manual`).
+
+Ограничения среза: портфель агрегирует максимум 500 проектов за запрос (дальше `page.truncated: true` — цифры
+по первым 500); шаблон не копирует вложения/файлы и не переносит права доступа (шаблон — не проект);
+удаление шаблона — архивация; связь «история ↔ решение» хранится ссылкой `logEntryId` (не EntityLink), потому
+что закрытый каталог `SearchableEntityType` не содержит типов истории/записи журнала и принадлежит заданиям
+01/05 — при его расширении связь проецируется без миграции данных. `Project.parentId` пока не участвует в
+поиске/обзоре и не отдаётся агенту отдельным инструментом.
+
+## Планирование: тайм-блоки, Гантт, матрица, учёт времени (задание 04) — 11.11.2026
+
+Пакет `tasks/deepseek-backend`, волна 2. Реализовано в общем checkout поверх работы
+заданий 01–03 и 05–09 (их незакоммиченные миграции были предпосылкой прогона).
+Фронтенд не входил.
+
+**Новый модуль `planning`** (`apps/api/src/planning/`, `@RequireModule("planning")`,
+`workspaces/:workspaceId/planning`). Матрица, Гантт и календарь планирования —
+представления существующих задач, вех, событий и проектов: чужих таблиц модуль не
+читает. Контракт — [platform-api/PLANNING.md](platform-api/PLANNING.md).
+
+- Тайм-блоки (`planning_blocks`): окно, тип, draft/committed, необязательная
+  ссылка на задачу и проект (без FK — проверка через публичные контракты
+  владельцев), `revision` (CAS) и `clientMutationId` (идемпотентный перенос).
+  Пересечения с событиями и другими блоками — предупреждение в ответе (минуты
+  наложения), не запрет; при выключенном календаре события не читаются.
+  `POST …/blocks/:id/move` публикует `planning.block.moved` с оценкой «что
+  затронуто»: другие блоки той же задачи и транзитивные зависимые задачи.
+- Гантт `GET …/gantt?projectId=`: задачи проекта (через `TaskOperations`), вехи
+  (новый узкий `MilestoneTimelineReader`), зависимости и CPM. Критический путь,
+  `totalFloat`, конфликты (порядок зависимостей, цикл, отсутствие дат, перегрузка
+  исполнителя) и `unscheduled` считает чистый `computeCriticalPath` в
+  `shared-types`.
+- `POST …/reschedule-impact` — dry-run: цепочка зависимых задач, вех, блоков и
+  событий (связь через `EntityLink`) с величинами сдвига; записей в БД нет.
+- Матрица: оси importance/urgency/priority/status/customFieldId, встроенный
+  Эйзенхауэр (не хранится и не удаляется) + пользовательские пресеты
+  (`planning_matrix_presets`). Распределение — запрос по полям задач; запись
+  квадранта — `TaskOperations.update` (`importance`/`urgency`/`priority`/
+  `fieldValues`), оси без записываемого поля честно перечислены в `skipped`.
+  Пока явные поля не заданы, важность/срочность проецируются из приоритета и
+  срока с указанием источника (`source`) и `degraded`.
+- Учёт времени (`time`): пауза/возобновление (`pausedSeconds`/`pausedAt`,
+  вычитаются в `entryMinutes`), переключение между задачами `POST time/switch`
+  (закрывает прежний таймер, публикует `time.entry.switched`; `start` сохраняет
+  прежнее 409 на второй таймер — защита S06), журнал ручных правок (`editedAt`,
+  `edits`, `time.entry.edited`), `GET time/analytics` (факт по проектам/задачам,
+  свободное vs привязанное время, план/факт по `estimatedMinutes`, недельный
+  план) и `TimePlan` (`time_plans`, ISO-неделя, `time.plan.manage`).
+- Права: `planning.block.*`, `planning.view.read`, `planning.preset.manage`,
+  `time.plan.manage`. События: `planning.block.moved`, `time.entry.switched`,
+  `time.entry.edited`. Новые таблицы — с ENABLE + FORCE RLS и политикой
+  членства; внесены в реестр снапшота и классификацию синхронизации.
+- Контракты платформы: module 1.3.0 → 1.4.0, event 1.1.0 → 1.2.0,
+  permission 1.3.0 → 1.4.0, Platform API 1.13.0 → 1.14.0; снимок и
+  `capabilities.generated.json` перегенерированы, 11 plugin contract tests
+  зелёные (слоты не менялись).
+
+Проверки (Windows, отдельная PostgreSQL 16 на 127.0.0.1:5433, БД
+`orion_planning04`, создана заново): **все миграции с нуля применились**
+(157+ … включая незакоммиченные миграции других заданий пакета; моя —
+`20261111190500_planning_blocks_presets_time_plan`). Focused integration:
+**10 passed** (`planning.integration.test.ts` 7, `time-planning.integration.test.ts`
+3), плюс затронутые сьюты time-calendar-contracts / task-time-bridge /
+time-entries / time-pagination / snapshot / domain-events. Unit: 16 тестов CPM
+(эталонный граф из 8 задач с ручным расчётом), матрицы и каскада переноса,
+4 новых теста `entryMinutes` с паузой. `architecture-check` зелёный (включая
+«нет чужих таблиц в planning/time»). `plugin-contract-check` — 11/11.
+`module-docs` и `contracts.snapshot.json` обновлены, `module-docs:check`
+зелёный. Scoped ESLint по файлам задания — 0 ошибок.
+
+Ограничения и что не удалось проверить:
+
+- `pnpm platform-map:check` в этой среде не запускается: дочерний процесс
+  esbuild не может прочитать каталоги выше рабочего дерева
+  (`Cannot read directory "../..": Access is denied`) — ограничение песочницы,
+  воспроизводится на пустом файле. `docs/platform-api/capabilities.generated.json`
+  перегенерирован эквивалентной логикой без esbuild (тот же derivation, `tmp/`-скрипт
+  вне репозитория); расхождение с `pnpm platform-map` не проверено запуском.
+- `time-calendar-contracts` требовал правки оснастки: облегчённый Nest-host
+  собирался без `DomainEventsModule`, а Time теперь публикует события, а
+  `TasksService` (задание 02) уже требует `DomainEventBus` — модуль добавлен в
+  набор host-модулей; продуктовый код ради теста не ослаблялся.
+- Остальной пакет 00-README одновременно правится другими агентами: на момент
+  проверки `tsc` по всему `apps/api` красный только на незавершённых файлах
+  `src/development/**` (задание 11), к заданию 04 отношения не имеет. Полный
+  `pnpm lint`/`pnpm test` по всему дереву в таком состоянии не показателен.
+- Не проверялись: установленный Tauri/Windows runtime, браузерная панель
+  планирования (её нет — фронтенд вне задания), реальные нагрузки на Гантте
+  (сейчас выборка задач проекта целиком, как у публичного `TaskOperations.list`).
+
+## Foundation Core (задание 01) — 11.11.2026
+
+Реализовано (API, без фронтенда):
+
+- **Единый слой связей** `apps/api/src/entity-links/`: `EntityLinksService` — единственный writer
+  `entity_links`; `EntityLink.kind` переведён в Prisma-enum `EntityLinkKind` (миграция
+  `20261111150000_foundation_core_entity_links`), добавлены `bidirectional` и `createdById`.
+  Инварианты в транзакции: оба конца существуют и принадлежат пространству, нет самосвязи, нет цикла
+  `depends_on`/`blocks` (409; legacy `goal_prerequisite` остаётся 400), симметричный вид хранится одной
+  канонической строкой. Модульный SDK — `EntityLinkOperations`; `SearchService` больше не пишет таблицу.
+- **События**: `entity_link.created/deleted` (publisher `core`, payload `{type,from,to}`) в общем outbox;
+  диспетчер проверяет тип/версию/payload при доставке, изолирует падение подписчика через SAVEPOINT;
+  добавлены диагностика `GET workspaces/:id/domain-events/status`, `GET system/domain-events` и ручной
+  replay упавшей доставки.
+- **Жизненный цикл модулей**: `BackgroundJobRegistry` (декларативный каталог cron-задач) и
+  `BackgroundJobSupervisor` (проверка включённости компонента в пространстве, счётчик `paused`);
+  `GET system/jobs/registry`; пурж корзины заметок/документов пропускает пространства с выключенным
+  модулем. Core-джобы (`core`) всегда включены.
+- **CI**: `module-docs:check` добавлен в `ci.yml` и `ci-selfhosted.yml` рядом с `architecture-check`,
+  `platform-map:check` и `plugin-contract-check`.
+
+Проверки: unit — `entity-links.test.ts`, `background-job-supervisor.test.ts`, `delivery-policy.test.ts`
+зелёные; интеграционные `entity-links.integration.test.ts` (16), `domain-events.integration.test.ts` (9),
+`background-jobs.integration.test.ts` (1) на реальной PostgreSQL зелёные; миграции применяются к текущей
+базе; `module-docs:check` и `plugin-contract-check` зелёные; typecheck исходников API/Web — зелёный.
+Оставшиеся красные проверки этого checkout — не Foundation Core: `tsconfig.test.json` (типизация
+`request<T = unknown>` в существующих интеграционных тестах) и `architecture-check` (манифест и RLS
+миграций `modules-ext/agent-hub`, задание 09). `platform-map` локально не запускается — esbuild в
+песочнице среды не может прочитать корень диска; сгенерированная карта при этом актуальна (в CI
+генерируется обычным Node).
+
+Ограничения: удаление сущности каскадно чистит связи через `EntityLinkOperations.removeForEntityTx`
+(владелец сущности вызывает его в своей транзакции); отдельного DB-триггера нет. Аудит связи — строка
+outbox (`actorId`/`occurredAt`) плюс `EntityLink.createdById`, отдельной таблицы аудита нет.
+
+
+## База знаний 2.0 — 11.11.2026
+
+Задание 06 (backend, без фронтенда). Зоны: `apps/api/src/knowledge/**`,
+`packages/shared-types/src/knowledge.ts`, `agent-tools.ts`, `domain-events.ts`,
+`apps/api/src/inbox/public/inbox-items*`,
+`apps/api/src/inbox/inbox-items-reader.service.ts`,
+`scripts/module-ownership.mjs`; миграции `20261111160000_knowledge_verification_revisions`,
+`20261111161000_knowledge_search_vector`, `20261111162000_knowledge_search_lowercase`;
+тесты `apps/api/test/knowledge.integration.test.ts`,
+`packages/shared-types/src/knowledge.test.ts`,
+`apps/api/src/knowledge/knowledge-import.test.ts`.
+
+- **6.1. Происхождение и проверка.** `KnowledgeItem.origin` (jsonb: sourceFile,
+  importedAt, sourceUrl, author, importedBy), `verificationState`
+  (`unverified | verified | outdated`), `lastVerifiedAt`, `verifiedById`.
+  `POST …/items/:itemId/verify` фиксирует автора и время и публикует
+  `knowledge.item.verification.changed` (outbox, та же транзакция). Правка
+  title/summary/body/origin снимает подтверждение; дата и автор прошлой
+  проверки остаются историей. `outdated` — вычисляемое: проверка была, но
+  прошло больше `verificationDays` (настройка пространства, по умолчанию 90).
+  Список принимает `verification=unverified|verified|outdated`, `overdue=true`
+  и `sort=verification` (сначала те, чья проверка старше, NULL — первыми).
+- **6.2. Поиск.** `searchVector` — материализованный tsvector (russian) по
+  title/summary/body, GIN + триггер миграции. `GET …/search?q=&type=&verified=&projectId=&from=&to=`:
+  `websearch_to_tsquery`, точная фраза поднимается через `phraseto_tsquery`,
+  ранг — `ts_rank` с весами полей, сниппет — `ts_headline` с `<b>`. База живёт с
+  локалью C, где `to_tsvector` не складывает кириллицу в нижний регистр, поэтому
+  вектор и запрос строятся через `lower()`. Провайдер глобального поиска
+  `knowledge_item` (`KnowledgeSearchProvider`, задание 10) использует тот же
+  `searchVector`; тип `knowledge_item` связуем через `EntityLink` (адаптер в
+  `entity-links/entity-registry.ts`).
+- **6.3. Версии.** `KnowledgeItemRevision` (title/summary/body/origin + authorId).
+  Снимок — на явное `POST …/items/:itemId/revisions` и при переходе в
+  `published`; автосохранение снимков не плодит. Восстановление применяет снимок
+  как новую ревизию (`restoredFromId`), историю не перезаписывает; лимит
+  `revisionLimit` (по умолчанию 20) обрезает только самые старые снимки.
+- **6.4. Входящие и импорт.** `POST …/from-inbox/:inboxItemId`: материал из
+  записи «Входящих», заполнение `origin`, удаление записи только по
+  `deleteFromInbox: true` (чтение и удаление — через публичный контракт
+  `InboxItems` в одной транзакции). `POST …/import/documents`: пофайловый отчёт
+  (ok/failed+причина), каждый файл пишется отдельной транзакцией, поэтому ошибка
+  одного не откатывает остальные; файлы Documents переиспользуются, источник —
+  `KnowledgeSource type=document`.
+- **6.5. Агент.** `orion_knowledge_search` и `orion_knowledge_read` добавлены в
+  каталог `AGENT_TOOLS` (MCP-адаптер и руководство строятся из него). Нужен
+  `knowledge.item.read` в разрешениях токена, включённый модуль и запись о чтении
+  в журнале агента; ответ всегда содержит состояние проверки.
+- Настройки пространства — `knowledge_settings` (`GET` любому участнику,
+  `PATCH` — владельцу). У всех трёх новых таблиц ENABLE + FORCE RLS; модели
+  внесены в реестр владения.
+
+Проверки: unit 13/13 (`knowledge`, `knowledge-import`); интеграция
+`knowledge.integration.test.ts` — 6/6 на реальной PostgreSQL (проверка и сброс,
+порог/просроченные, русский и английский поиск с рангом фразы, версии и restore,
+импорт и входящие, отказ агенту без разрешения и журнал чтений);
+`api-rls.integration.test.ts` — 35/35 (структурная проверка RLS новых таблиц);
+`agent-module-tools`/`ai-bridge`/`agent-gateway` — 27/27; `g19-providers` — 3/3
+(провайдер `knowledge_item` зарегистрирован, материал виден в глобальном поиске);
+миграции с нуля — 167/167 на отдельной чистой БД; `module-docs:check` — OK;
+`plugin-contract-check` — 11/11; scoped ESLint — 0 ошибок.
+`architecture-check` по файлам задания чист (красный на чужих `NoteStackState`,
+`planning-gantt` и `project-templates`); `platform-map:check` падает на
+`Access is denied` при чтении каталога в этом окружении (не код задания);
+production build API красный на незавершённом `src/development/**` параллельного
+задания 11 (неверные относительные импорты), ошибок в файлах Knowledge нет.
+
+Ограничения: «значимость» правки API различает только по явному запросу версии и
+публикации — другого сигнала от клиента нет, автосохранение остаётся без снимка;
+импорт папок разворачивает клиент, сервер принимает готовый список `documentIds`;
+семантический поиск не реализован (только место под будущий провайдер).
+
+## Журнал проекта: типизация и автозаписи — 11.11.2026
+
+Задание 05 (backend). Изменены `apps/api/src/projects/project-logbook.*`,
+`project-logbook-validation.ts`, `project-logbook-auto-entries.service.ts`,
+`apps/api/src/milestones/milestones.service.ts`,
+`apps/api/src/projects/projects.service.ts`,
+`apps/api/src/tasks/tasks.service.ts`,
+`packages/shared-types/src/project-logbook.ts`, `domain-events.ts`,
+`search.ts`, `modules.ts`; миграция `20261111120000_logbook_typed_entries`;
+тесты `apps/api/test/project-logbook.integration.test.ts` и
+`apps/api/src/projects/project-logbook-validation.test.ts`.
+
+- **5.1. Типы.** `ProjectLogEntry.type`: `observation | decision | hypothesis |
+  result | incident | change` (колонка `type`, исторический `kind` остаётся
+  алиасом в ответе для прежнего клиента). `decision` требует `rationale` и
+  принимает `alternatives`; `hypothesis` — `verificationDue`; `result` —
+  `confirmsEntryId` (только гипотеза/решение того же проекта) и `verdict`;
+  `incident` — обязательный `severity` и `resolution`; `change` — `source`.
+  Несоответствие полей типу — 422 `logbook_entry_invalid` с картой `errors`.
+  Существующие записи сохраняют прежнее значение (`kind` уже был подмножеством
+  нового enum), новые колонки получают безопасные дефолты.
+- **5.2. Автозаписи.** Подписка `projects.logbook-auto-entries`
+  (`componentId: "projects-logbook"`) на `projects.project.status_changed`,
+  `projects.project.dates_changed`, `projects.milestone.completed`,
+  `projects.milestone.dates_changed`, `tasks.task.assigned`. Запись создаётся
+  как `change/source=event` со ссылкой на событие; `source=event` read-only
+  (PATCH/DELETE → 409). Bulk-операция несёт общий `bulkId`: unique index
+  `(projectId, dedupeKey)` + `createMany(skipDuplicates)` дают ровно одну
+  запись (проверено каскадом вех и прямыми событиями).
+- **5.3. Материалы.** `project_log_entry` зарегистрирован в EntityLink-реестре;
+  запись не хранит копий. `GET /workspaces/:id/project-log/:entryId/related`
+  агрегирует связи; удаление записи чистит их через `EntityLinkOperations`.
+- **5.4. Фильтры и сводка.** Список принимает `type`, `authorId`, `from`,
+  `to`, `hasTasks`, `limit`, `projectId` (workspace-wide endpoint) и
+  `includeChildren` (recursive CTE по `Project.parentId`).
+  `GET .../logbook/summary` отдаёт количества по типам, просроченные гипотезы,
+  инциденты без resolution и решения без результатов.
+
+Проверки: unit `project-logbook-validation` — 5/5, `delivery-policy` — 8/8;
+интеграция `project-logbook.integration.test.ts` — 7/7 на реальной PostgreSQL
+(типы/422, фильтры и дочерние проекты, сводка, EntityLinks, автозаписи,
+bulk-дедупликация, read-only); миграция применена к локальной БД и ко всем
+164+ миграциям на чистой временной PostgreSQL (scratch-база создана и удалена);
+`module-docs:check` — OK; `plugin-contract-check` — 11/11; scoped ESLint —
+0 ошибок; `@orion/shared-types` typecheck — чисто; `pnpm --filter @orion/api
+build` — PASS. `architecture-check` больше не указывает на файлы журнала: он
+падает на манифесте Agent Hub (`AgentHubTraceStep` и RLS-таблицы, задание 09).
+`platform-map:check` падает на `Access is denied` при чтении каталога в этом
+окружении (не связано с изменением). Полный API typecheck (`tsconfig.test.json`)
+красный из-за чужих интеграционных тестов (`agent-remote-policy`,
+`assistant-chat`, `component-dependents`, `login-policy`); ошибок в файлах
+задания нет.
+
+Ограничения: прежний контракт сохраняет `kind` рядом с `type` до отдельного
+решения о breaking-change; bulk-группировка работает для издателей, которые
+передают `bulkId` (сейчас — каскад вех); вложения Knowledge/Documents/Notes
+прикрепляются через существующий `POST /links`, отдельного экрана вложения в
+этом задании нет.
+
+## Созвездия: серверная раскладка и граф — 11.11.2026
+
+Задание 08 (backend). Новые файлы: `packages/shared-types/src/goal-canvas.ts`
+(+ тест), `apps/api/src/goals/goal-canvas.service.ts`,
+`goal-canvas.controller.ts`, миграция `20261111170000_goal_canvas_layouts`,
+интеграционный тест `apps/api/test/goals-canvas.integration.test.ts`.
+
+- **8.1. Раскладка.** Модель `GoalCanvasLayout` (workspaceId + goalId, entries/viewport/
+  zones/conflicts jsonb, revision) с RLS. `GET/PUT
+  /workspaces/:workspaceId/goals/:goalId/canvas-layout`: частичный PUT сливает ноды
+  по `updatedAt` (свежая правка побеждает, ноды вне запроса не трогаются); конфликт
+  одной ноды возвращается с обеими версиями и хранится в строке до разрешения.
+  Полная замена — только с `If-Match` по ревизии (нет заголовка — 428, чужая
+  ревизия — 412); ответ несёт `ETag`. Битая ссылка помечается `broken` при
+  чтении, строка раскладки не удаляется.
+- **8.2. Граф.** `GET …/:goalId/graph` за один запрос собирает поддерево целей,
+  проекты планов, задачи и вехи, плюс рёбра `depends_on`/`continues`/`relates_to`
+  из `entity_links` (legacy `goal_prerequisite` нормализуется в `depends_on`).
+  Запись связей остаётся за общим слоем EntityLinksService.
+- **8.3. Автокомпоновка.** `POST …/:goalId/canvas-layout/auto`: детерминированная
+  слоистая раскладка (топологические слои, горизонтальный вес по числу листьев),
+  ручные якоря (`dirty`) неподвижны при `respectManual` (по умолчанию), узлы не
+  перекрываются; применение — только явным PUT. Параметр `strategy` оставлен
+  точкой замены будущего Rust-оптимизатора.
+- **8.4. Прогресс и поиск.** `GET …/:goalId/progress` отдаёт тот же процент, что и
+  DTO цели (этапы-планы с весами, проекты, суммарные задачи, подцели);
+  `GET …/:goalId/graph/search?q=` ищет по названиям нод и отдаёт координаты.
+
+Проверки: unit `goal-canvas.test.ts` — 11/11; интеграция
+`goals-canvas.integration.test.ts` — 8/8 (два клиента, конфликт одной ноды, If-Match,
+битая ссылка, граф, авто-раскладка, прогресс, чужое пространство); существующий
+`goals.integration.test.ts` — 7/7; goal/search unit — 45/45; scoped ESLint — 0
+ошибок/0 предупреждений. Миграция применена к локальной PostgreSQL.
+
+Миграции: на отдельной чистой базе `prisma migrate deploy` применил все
+миграции, включая `20261111170000_goal_canvas_layouts`; у таблицы проверены
+`ENABLE`/`FORCE ROW LEVEL SECURITY` и политика `goal_canvas_layouts_isolation`,
+после чего на этой же базе прошёл весь `goals-canvas.integration.test.ts` (8/8).
+Скрэтч-база удалена.
+
+Ограничения этого checkout: `architecture-check` и `module-docs:check` зелёные.
+`platform-map:check` в этой среде не запускается — генератор на esbuild не может
+прочитать каталог выше рабочего (`Cannot read directory "../..": Access is denied`),
+как и у остальных параллельных заданий; карта перегенерирована тем же алгоритмом
+через TypeScript API и содержит `packages/shared-types/src/goal-canvas.ts`
+и `GoalCanvasLayout` за `goals`. Общий `@orion/api` typecheck красный на чужих
+срезах (`development/git`, `entity-links` → `knowledge_item`, `agent-hub`), в
+`goals/` ошибок нет. Полный `pnpm lint` захватывает посторонний минифицированный
+файл в рабочем дереве; ESLint по всем файлам задания — 0 ошибок/0 предупреждений.
+Наша модель внесена в `MODEL_OWNERS`, snapshot/бэкап и sync-классификацию;
+фронтенд-холст, DnD и мини-карта в объём не входили.
+
+## Заметки 2.0 — backend, 11.11.2026
+
+Серверный срез задания 07. История версий: восстановление создаёт новую ревизию с `restoredFrom` (старая история и снимок «до» сохраняются), добавлен построчный diff без сторонних библиотек (`packages/shared-types/src/note-diff.ts`, собственный LCS). Wiki-ссылки разрешаются по заголовку, id и короткому номеру (`[[N-104]]`), неразрешённая цель остаётся строкой `NoteLink` с `broken: true`; есть `GET notes/:id/links` и `GET notes/links/broken`. Поиск внутри заметки отдаёт смещения вхождений (`GET notes/:id/search?q=`), связанные заметки — wiki-ссылки глубины 2, общие `EntityLink` и общий проект (`GET notes/:id/related`). Свёрнутость и порядок стопок вынесены в per-user `note_stack_states` (ENABLE + FORCE RLS, политика по участнику); вложенные стопки отвергаются 400. Ночная чистка ревизий не трогает пространства с выключенным модулем.
+
+Проверки: `prisma migrate deploy` с нуля на отдельной базе — все 167 миграций применились, включая `20261111103247_notes_20_versions_links_stack_state`; Prisma Client сгенерирован; 8 новых интеграционных тестов (версии, diff, wiki-ссылки и broken, номерные ссылки, поиск, связанные, стопки) — PASS; прежние `notes-get-one`, `note-cas`, `private-notes` и `rls-coverage` — PASS; unit-тесты diff/search — 13 PASS; ESLint по изменённым файлам — 0; `plugin-contract-check` — 11 PASS; `module-docs:check` — OK; карта платформы перегенерирована (в ней `NoteStackState` у notes). Интеграционные сьюты в этой среде запускались с `--pool=threads`: пул forks падает native abort до старта Nest, включая неизменённые тесты.
+
+Ограничения: `platform-map:check` в этой среде не запускается — генератор на esbuild не может прочитать каталог выше рабочего (отказ доступа к `C:\Users` из дочернего процесса), поэтому карта собрана тем же алгоритмом через TypeScript API и в ней `NoteStackState` числится за notes. `architecture-check` указывает на модели без владельца из соседних срезов (`DevelopmentGitRepository`, `TaskCommitLink`, `DevelopmentArchitectLayout`), файлов заметок в замечаниях нет. Общий `typecheck` красный в `packages/core` из-за типов `ProjectLogEntry` (задание 05); `@orion/api` typecheck чистый. Production build API на момент проверки упирается в незавершённый `entity-registry` (`knowledge_item`, задание 01). Фронтенд (панель истории/ссылок/поиска) в объём не входил.
+
 ## Аудит текущего checkout и исправления — 11.11.2026
 
 Комплексный аудит дерева (поверх `7666960b`): API/Web typecheck, architecture-check,
@@ -449,3 +900,109 @@ CI на каждом PR зелёный: typecheck, lint, architecture-check, plu
 2. Проверить установленную Tauri-версию с master на Windows; пройти [SYNC_TWO_INSTALL_ACCEPTANCE.md](SYNC_TWO_INSTALL_ACCEPTANCE.md) на двух ПК (G20).
 3. Пройти остальные модули и плагины при смене темы.
 4. Личные записи для задач и остальных сущностей (G21), панель «Ассистент» и личные заметки — глазами и в e2e.
+
+## Tasks 2.0 — backend (задание 02) — 11.11.2026
+
+Реализован серверный срез Tasks 2.0. Фронтенд не менялся; единственная правка вне API/контрактов —
+тестовые фикстуры `Task` в `apps/web/lib/*.test.ts`: в них добавлены новые поля DTO, иначе `typecheck` веба
+не сходится.
+
+- **Рекуррентность.** Модели `TaskRecurrence` (владелец — задача-шаблон) и `TaskRecurrenceInstance`
+  (уникальный `ordinal` внутри правила). Завершение создаёт **ровно один** следующий экземпляр;
+  идемпотентность держится уникальным `(recurrenceId, ordinal)` и условным
+  `UPDATE ... WHERE generatedCount = <прочитано>`, поэтому два одновременных завершения не дают дубля.
+  Режимы `daily | weekly | monthly | weekdays` + интервал, конец `count | until | never`; `weekly` умеет
+  явный список дней от `anchorAt`. `skip` сохраняет историю (экземпляр `skipped`, задача удалена,
+  `taskId → null`) и продолжает цепочку. События `tasks.recurrence.instance_completed`,
+  `tasks.recurrence.skipped`.
+- **Массовые операции.** `POST workspaces/:id/tasks/bulk`: complete/set-status/set-priority/move-to-project/
+  delete/archive/change-dates, лимит 200. `dryRun` (и отсутствие `confirm: true`) не пишет ничего; без
+  `allowPartial` частичное применение отклоняется целиком (409 `bulk_partial_not_allowed`); по каждой
+  позиции причина (`not_found | blocked | archived | in_publication | no_permission | invalid`). Сводное
+  событие `tasks.task.bulk_applied` + обычные события на каждую задачу.
+- **Пользовательские статусы.** `TaskStatusDefinition` (категория open/in_progress/done/cancelled, цвет,
+  порядок, `systemKey` для встроенных) + `Task.statusId`. `Task.status` остаётся категорией: закрытость,
+  отчёты и напоминания не переписаны. Миграция создаёт дефолтный набор (Бэклог / К выполнению / В работе /
+  Готово / Отменено) для всех существующих пространств и бэкфилит `statusId`; новые пространства получают
+  набор лениво. Удаление занятого статуса без `confirm=true` — 409 `task_status_in_use` с числом задач и
+  статусом переноса.
+- **Пользовательские поля.** `TaskFieldDefinition` (text/number/date/select/multi/checkbox/url,
+  обязательность, `all | project`) и `TaskFieldValue` (`valueJson` + `valueText`); GIN-индекс по
+  `valueText`, значения участвуют в общем поиске задач. Типы проверяет общая чистая
+  `validateTaskFieldValue`.
+- **Плановые свойства.** `importance`/`urgency` (0–3), `complexity` (low/medium/high) — независимы от
+  `priority`; `executorSource` (none/human/agent). Взаимное исключение «человек ИЛИ агент»: Tasks уже
+  спрашивает `TaskAgentAssignmentRegistry`, добавлен обратный guard `assertAgentAssignmentAllowedTx`.
+- **Контракты/события.** `task-planning.ts` в `shared-types` (схемы + чистые помощники сдвига дат, тесты
+  `task-planning.test.ts`), события `tasks.task.updated`, `tasks.task.status_changed`,
+  `tasks.task.bulk_applied`, `tasks.recurrence.*`; разрешения `tasks.status.manage`, `tasks.field.manage`,
+  `tasks.recurrence.manage`. Plugin contract tasks 1.5.0 не менялся (`plugin-contract-check` — 11 passed).
+- **Данные/бэкап.** Модели внесены в `MODEL_OWNERS`; `TaskStatusDefinition`, `TaskFieldDefinition`,
+  `TaskFieldValue`, `TaskRecurrence`, `TaskRecurrenceInstance` классифицированы в snapshot-registry и
+  SNAPSHOT_MODELS (справочники — до задач, значения/экземпляры — после), RLS `ENABLE + FORCE` на всех пяти
+  таблицах. Публичное чтение полей для планирования — `tasks/public/task-field-reader.ts`.
+
+Проверено локально: все миграции (166+) применяются к чистой PostgreSQL, включая `..._tasks_20`; новый
+`apps/api/test/tasks-20.integration.test.ts` — **5 passed** (идемпотентность завершения, skip, bulk
+dryRun/confirm/allowPartial, статусы с переносом, поля и поиск, плановые свойства); затронутые
+integration-сьюты (revision, comments, planning-links, time-bridge, RLS, domain-events) — зелёные.
+Unit: `task-planning` — 12 passed, патченные web-фикстуры — 90 passed; `module-docs:check`,
+`plugin-contract-check` — зелёные; eslint по изменённым файлам — 0 ошибок; `architecture-check` по задачам
+чист. **Не проверено в этой среде:** полный `pnpm typecheck`/`architecture-check` красный из-за
+незавершённых правок соседних волн (planning/projects/time/knowledge — чужие файлы), а `platform-map` не
+запускается: сервис esbuild в песочнице получает `Access is denied` на чтение каталогов, поэтому
+`capabilities.generated.json` не перегенерирован. Граница: `TaskFieldDefinition.projectId` проверяется
+через публичный `ProjectTaskLinks`; таблицы чужих модулей Tasks не читает.
+
+## Orion Tools — Tables, Global Search, команды (задание 10) — 11.11.2026
+
+Реализован серверный срез общих инструментов. Фронтенд не входит в задание; вне API
+затронуты только два словаря `SearchableEntityType` (метка/иконка материала в
+`apps/web/lib/entity-type-meta.ts`) — иначе typecheck веба не сходится на новом типе.
+
+- **Orion Tables.** `TableDefinition` + `TableRow` (jsonb-схема колонок и значения строк),
+  RLS `ENABLE + FORCE` и политика членства, миграция `20261111193000_orion_tools_tables_key_bindings`.
+  Типы колонок `text|number|date|select|checkbox|url|formula|link`; значения проверяет общая
+  чистая `validateTableRowValues` из `shared-types`, ссылки — публичные `TaskReferenceReader`
+  и `ProjectReferences` (не прямые запросы в чужие таблицы). Формулы: `sum/avg/count/min/max`
+  по колонке и выражения по ячейкам строки; разбор/вычисление — `shared-types/src/table.ts`.
+  Неизвестная функция/ссылка на формулу — 422 при записи схемы, sum считается на чтении
+  (`totals` + `computed` строк). CSV: импорт с явным `sourceHeader`-маппингом и приведением
+  типов, экспорт с BOM; XLSX осознанно отложен — в `apps/api` нет рантайм-зависимости.
+  События `table.row_changed` (publisher `core`), права `core.table.*`.
+- **Global Search.** Единый вход `GET /search?workspaceId=&q=&types=&from=&to=&limit=`:
+  фильтры по типам и окну `updatedAt`, общий лимит, `module`/`moduleLabel` и `deepLink`
+  (`ObjectRef`) в каждом результате. Провайдеры модулей не менялись по контракту; добавлен
+  `KnowledgeSearchProvider` (tsvector задания 06, архивные и приватные чужие материалы не
+  отдаются) и тип `knowledge_item`. Старый `GET /workspaces/:id/search` сохранён. Выключенный
+  модуль по-прежнему не опрашивается (`accessibleTypesTx`), проверено интеграционным тестом.
+- **Команды и горячие клавиши.** Реестр `CommandRegistry` (модули регистрируют команды в
+  `onModuleInit`; неизвестное разрешение/дубль падают при старте), `GET /commands` для
+  включённых модулей, `POST /commands/:id/execute` — серверная команда исполняется, UI-команда
+  возвращает маршрут. `KeyBinding` (per-user+workspace, RLS, уникальность команды) с
+  нормализацией сочетаний и **предупреждением** о конфликтах (`keyBindingConflicts`), а не
+  блокировкой. Права `core.command.*`, `core.key_binding.manage`.
+- **Данные/бэкап.** `TableDefinition`/`TableRow` — `included` в snapshot-registry и
+  `SNAPSHOT_MODELS` (определения до строк), `KeyBinding` — `identity-excluded` (личная
+  настройка), модели внесены в `MODEL_OWNERS`. Контракты: `event` 1.3.0, `permission` 1.5.0,
+  снимок `contracts.snapshot.json` обновлён.
+
+Проверено локально: миграции с нуля (отдельная БД, 175 миграций, включая
+`20261111193000_orion_tools_tables_key_bindings`) — PASS; у трёх новых таблиц `ENABLE`+`FORCE`
+RLS и политика членства. Новый
+`apps/api/test/orion-tools.integration.test.ts` — **6 passed** (sum на чтении и 422 на
+неизвестную формулу, проверка link на задачу через контракт, импорт/экспорт CSV с типами,
+поиск задачи+заметки+материала и отсутствие заметки при выключенном модуле, фильтр `types`,
+исполнение `core.create-table`, скрытие команд выключенного модуля, конфликты клавиш);
+`rls-coverage` — зелёный (новые таблицы учтены). Unit: `table.test.ts` — 11, `commands.test.ts` — 3,
+`command.registry.test.ts` — 4, реестр провайдеров — 3. `module-docs:check`, `plugin-contract-check`
+(11) — зелёные; `architecture-check` падает только на незавершённых файлах `development/`
+(соседняя волна 11), по файлам задания чист. **Не проверено в этой среде:** полный
+`pnpm typecheck`/`build` (те же чужие незавершённые файлы), `pnpm platform-map` — esbuild не может
+читать каталог (`Access is denied`); `capabilities.generated.json` перегенерирован эквивалентной
+логикой без esbuild-бандлера и проверен по содержимому (события/права/контракты на месте).
+`snapshot.integration.test.ts` красный из-за неклассифицированных моделей соседних волн
+(`KnowledgeItemRevision`, `KnowledgeSettings`, `AgentMemberEvent`), не из-за таблиц задания.
+Граница: link-колонки первой срез — задачи и проекты; новый тип = адаптер на публичном
+контракте владельца. Синхронизация таблиц поверх Sync Core, плагины-хранилища и SQL-режим — вне
+задания.

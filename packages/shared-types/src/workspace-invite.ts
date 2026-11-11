@@ -11,9 +11,16 @@ export const workspaceInviteSchema = z.object({
   role: workspaceRoleSchema,
   status: workspaceInviteStatusSchema,
   invitedById: z.string(),
-  expiresAt: z.string(),
+  /** null = приглашение бессрочное (владелец выбрал «без срока» при создании/повторе). */
+  expiresAt: z.string().nullable(),
   acceptedAt: z.string().nullable(),
   revokedAt: z.string().nullable(),
+  /** Кто отозвал — аудит (12.2); null для ещё не отозванных. */
+  revokedById: z.string().nullable(),
+  /** Последняя повторная отправка: когда и кем; счётчик — сколько раз всего. */
+  resentAt: z.string().nullable(),
+  resentById: z.string().nullable(),
+  resendCount: z.number().int().nonnegative(),
   createdAt: z.string()
 });
 export type WorkspaceInvite = z.infer<typeof workspaceInviteSchema>;
@@ -38,10 +45,26 @@ export type InviteRole = z.infer<typeof inviteRoleSchema>;
 
 export const createWorkspaceInviteInputSchema = z.object({
   email: z.string().trim().email("Введите корректный email"),
-  role: inviteRoleSchema.default("member")
+  role: inviteRoleSchema.default("member"),
+  /**
+   * Срок в днях. Не указан — 7 дней (явный дефолт, 12.2). `null` — бессрочно, осознанный выбор
+   * владельца, как у agent-аренды; скрытых дефолтов нет. Максимум 3650 дней.
+   */
+  expiresInDays: z.number().int().min(1).max(3650).nullable().optional()
 });
 export type CreateWorkspaceInviteInput = z.infer<typeof createWorkspaceInviteInputSchema>;
 
+/** Повторная отправка: ссылка выдаётся заново (старый токен перестаёт работать), срок перезапускается. */
+export const resendWorkspaceInviteInputSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(3650).nullable().optional()
+});
+export type ResendWorkspaceInviteInput = z.infer<typeof resendWorkspaceInviteInputSchema>;
+
+/**
+ * Человеческое членство. `kind`/`status` добавлены заданием 12: агентские членства этот DTO тоже
+ * описывает, но `GET /members` (старый контракт) по-прежнему отдаёт только живых людей, чтобы не
+ * ломать клиентов; единый список людей, приглашённых и агентов — `GET /team` (`teamEntrySchema`).
+ */
 export const workspaceMemberSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -50,6 +73,11 @@ export const workspaceMemberSchema = z.object({
   /** Whether this member has an uploaded avatar image — see `AccountAvatar`. */
   hasAvatar: z.boolean(),
   role: workspaceRoleSchema,
+  /** Principal discriminator, всегда "human" в этом DTO (см. комментарий выше). */
+  kind: z.enum(["human", "agent"]),
+  /** "active" | "disabled". */
+  status: z.enum(["active", "disabled"]),
+  agentProfileId: z.string().nullable(),
   createdAt: z.string()
 });
 export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;

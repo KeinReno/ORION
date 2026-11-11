@@ -47,6 +47,14 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   // --- этап 3: заметки и задачи ---------------------------------------------------
   Note: { syncClass: "mergeable-text", stage: "stage3", note: "Заголовок/тело/теги — только через CAS по revision, конфликт явный (note_revision_conflict); без молчаливого merge." },
   Task: lww("stage3", "Поля — LWW по полю + revision (task_revision_conflict для полей, где важен порядок); дерево parentId требует проверки цикла на узле."),
+  // Tasks 2.0: справочники и значения — обычные поля, но цепочку повторения
+  // материализует только авторитетный узел (unique ordinal), поэтому recurrences
+  // и экземпляры остаются online-only.
+  TaskStatusDefinition: lww("later", "Статусы пространства: порядок/цвет/категория — LWW; удаление занятого статуса требует переноса задач."),
+  TaskFieldDefinition: lww("later", "Определения пользовательских полей; значения ссылаются на них."),
+  TaskFieldValue: lww("later", "Значения полей задачи — LWW по (taskId, fieldId); порядок не важен."),
+  TaskRecurrence: strict("Правило повторения и generatedCount меняются только материализацией на авторитетном узле; офлайн-запись создала бы дубли."),
+  TaskRecurrenceInstance: strict("Экземпляры цепочки: уникальный ordinal — идемпотентность материализации, офлайн-запись её не гарантирует."),
 
   // --- позже: LWW-кандидаты без офлайн-записи в этой фазе ------------------------
   Opportunity: lww("later", "Карточки Opportunity Hub: поля LWW, но связаны с историей и импортом — отдельное решение."),
@@ -73,6 +81,7 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   MilestoneDependency: lww("later", "Набор зависимостей (set); проверка цикла на узле."),
   TaskDependency: lww("later", "Набор зависимостей (set); проверка цикла на узле."),
   GoalPlan: lww("later", "Связь цель ↔ проект с весом."),
+  GoalCanvasLayout: lww("later", "Раскладка созвездия: координаты узлов и камеры, LWW по строке; конфликты правок — в самой строке."),
   EntityLink: lww("later", "Набор связей (set); недоступные модули отбрасывает узел."),
   NoteAttachment: lww("later", "Связь заметка ↔ документ; сам документ — блоб, см. ADR-0016 §4."),
   EventOverride: lww("later", "Переопределения повторений."),
@@ -97,6 +106,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   Capture: append("Идеи/замечания с якорем."),
   ProjectStatusUpdate: append("Ручные отчёты о состоянии проекта."),
   ProjectLogEntry: append("Авторские записи проектного журнала."),
+  ProjectTemplate: lww("later", "Шаблон проекта: поля и JSON-структура — LWW; живым проектам не принадлежит."),
+  ProjectHistoryEntry: append("Audit trail проекта: записи только добавляются, правка истории не предусмотрена."),
   ProjectLogEntryTask: append("Ссылка на задачу с ремаркой, хранимой только в проектном журнале."),
   ProjectRelation: append("Направленные связи между проектами одного пространства."),
   TaskComment: append("Комментарии: автор проставляется узлом, правка только автором; уведомления создаёт узел."),
@@ -125,6 +136,9 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   InventoryItem: strict("Остаток — производное от леджера движений."),
   InventoryMovement: strict("Леджер движений остатка: порядок и сумма важны, только онлайн."),
   TimeEntry: strict("«Один таймер на человека» держит частичный уникальный индекс узла; офлайн-старт нарушил бы инвариант."),
+  TimePlan: strict("Недельный план — намерение на календарную неделю; уникальность (пространство, неделя) проверяет узел."),
+  PlanningBlock: strict("Тайм-блоки пересекаются с событиями календаря; конфликты и перенос окон проверяет авторитетный узел."),
+  PlanningMatrixPreset: strict("Пресет осей матрицы — конфигурация представления; единственность имени проверяет узел."),
   Document: strict("Дерево папок + блобы: файлы передаются по хэшу (ADR-0016 §4), офлайн-правка дерева не поддерживается."),
   DocumentVersion: strict("Версии файлов и их байты."),
 
@@ -172,7 +186,13 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   HealthIntake: never("ADR-0012."),
   HealthMeasurement: never("ADR-0012."),
   HealthTarget: never("ADR-0012."),
-  HealthSymptom: never("ADR-0012.")
+  HealthSymptom: never("ADR-0012."),
+  // Задание 10: Orion Tables — обычные пользовательские данные, но смена схемы
+  // над строками должна проверяться на авторитетном узле, поэтому офлайн-записи
+  // в этой фазе нет (те же правила формул и типов колонок).
+  TableDefinition: lww("later", "Имя/схема колонок — LWW по полю; смена схемы проверяет строки на узле, офлайн-правка могла бы разойтись с данными."),
+  TableRow: lww("later", "Значения/порядок строк — LWW по полю; формулы не хранятся и вычисляются на чтении."),
+  KeyBinding: never("Личные сочетания клавиш участника — не данные пространства (identity-excluded).")
 };
 
 /** Модели, которые вообще попадают в локальную копию (чтение офлайн) на этапах 1–3. */

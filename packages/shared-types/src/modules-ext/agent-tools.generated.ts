@@ -224,6 +224,311 @@ export const GENERATED_AGENT_TOOLS: readonly AgentToolDef[] = [
     "moduleId": "agent-hub"
   },
   {
+    "name": "orion_agent_hub_delegate",
+    "description": "Передать подпоручение другому профилю агента из текущего исполнения. Требуются действующий lease и привязка токена к профилю. Глубина ограничена политикой пространства, цикл A→B→A отклоняется. Дочернее исполнение получает структурированный payload (задача, проект, материалы, ограничения прав).",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/executions/{executionId}/delegate"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "description": "UUID текущего (родительского) исполнения"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия состояния из последнего ответа Agent Hub"
+        },
+        "targetAgentId": {
+          "type": "string",
+          "description": "UUID профиля агента-исполнителя"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Краткая формулировка подпоручения"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Подробное задание, только факты и ограничения"
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Задача, к которой относится подпоручение (по умолчанию — задача родителя)"
+        },
+        "projectId": {
+          "type": "string",
+          "description": "Проект подпоручения для проверки границ токена"
+        },
+        "materialLinkIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ссылки EntityLink на связанные материалы без копирования содержимого"
+        },
+        "constraints": {
+          "type": "object",
+          "description": "Ограничения прав: readOnly, allowedModules, maxDepth (может только ужесточить политику)"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedRevision",
+        "targetAgentId",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "example": {
+      "executionId": "<uuid>",
+      "expectedRevision": 2,
+      "targetAgentId": "<profile-uuid>",
+      "summary": "Проверить тесты и вернуть отчёт",
+      "constraints": {
+        "readOnly": true
+      }
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_request_approval",
+    "description": "Остановить своё исполнение до подтверждения владельцем перед операцией с правами выше read-only. Статус станет waiting_approval; продолжение — только после approve владельца. Scope-ceiling не расширяется.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/executions/{executionId}/request-approval"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "description": "UUID собственного исполнения"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "description": "Ревизия состояния из последнего ответа Agent Hub"
+        },
+        "action": {
+          "type": "string",
+          "description": "Какая операция требует подтверждения"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Почему операция не может быть выполнена read-only"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedRevision",
+        "action",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_trace_record",
+    "description": "Записать фактический шаг исполнения: tool_call, tool_result, note или error. Только текущий исполнитель. Результат инструмента ссылается на шаг tool_call через parentStepId; длительность вычисляется сервером. Внутренние рассуждения модели не фиксируются.",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/executions/{executionId}/trace"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "description": "UUID собственного исполнения"
+        },
+        "stepId": {
+          "type": "string",
+          "description": "Логический id шага, уникальный внутри исполнения"
+        },
+        "parentStepId": {
+          "type": "string",
+          "description": "Шаг-родитель в дереве (для tool_result — его tool_call)"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "tool_call",
+            "tool_result",
+            "note",
+            "error"
+          ],
+          "description": "Тип шага"
+        },
+        "name": {
+          "type": "string",
+          "description": "Имя инструмента или короткая метка шага"
+        },
+        "payload": {
+          "type": "object",
+          "description": "Фактические аргументы/результат без секретов"
+        },
+        "error": {
+          "type": "string",
+          "description": "Текст ошибки для type=error"
+        },
+        "attempt": {
+          "type": "integer",
+          "description": "Номер повторной попытки, начиная с 0"
+        }
+      },
+      "required": [
+        "executionId",
+        "stepId",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.execution.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_memory_write",
+    "description": "Записать версионированное знание агента. Области: global, project, agent, user. Перезапись того же ключа создаёт новую ревизию и помечает прежнюю superseded; история сохраняется. В чужую user-память и в память другого профиля запись запрещена (403).",
+    "group": "modules",
+    "effect": "create",
+    "scopes": null,
+    "http": {
+      "method": "POST",
+      "path": "/ai/v1/agent-hub/memory"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": [
+            "global",
+            "project",
+            "agent",
+            "user"
+          ],
+          "description": "Область памяти"
+        },
+        "scopeId": {
+          "type": "string",
+          "description": "projectId для project; для agent/user подставляется caller"
+        },
+        "key": {
+          "type": "string",
+          "description": "Ключ знания внутри области"
+        },
+        "value": {
+          "description": "JSON-значение"
+        },
+        "provenanceEventId": {
+          "type": "string",
+          "description": "Событие/исполнение, из которого получено знание"
+        }
+      },
+      "required": [
+        "scope",
+        "key",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.memory.create",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_memory_read",
+    "description": "Прочитать доступную агенту память по области и ключу. user-память видна только этому же агенту того же пользователя; память другого профиля недоступна (403).",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/agent-hub/memory"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": [
+            "global",
+            "project",
+            "agent",
+            "user"
+          ]
+        },
+        "scopeId": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "includeHistory": {
+          "type": "boolean",
+          "description": "Включить superseded/outdated ревизии"
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.memory.read",
+    "moduleId": "agent-hub"
+  },
+  {
+    "name": "orion_agent_hub_context",
+    "description": "Собрать контекст перед запуском: доступную память по областям исполнения и публичные возможности включённых модулей, которые разрешены этому токену. Устаревшие записи помечены needsVerification.",
+    "group": "modules",
+    "effect": "read",
+    "scopes": null,
+    "http": {
+      "method": "GET",
+      "path": "/ai/v1/agent-hub/context"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "includeCapabilities": {
+          "type": "boolean"
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "permission": "agent-hub.memory.read",
+    "moduleId": "agent-hub"
+  },
+  {
     "name": "orion_chat_archive_search",
     "description": "Поиск по прошлым разговорам владельца с ИИ-агентами (Claude Code, Codex): реплики человека и ответы, содержащие фразу. Возвращает conversationId, заголовок, проект, seq строки и отрывок. Найденное — история обсуждений, а не принятые решения.",
     "group": "modules",

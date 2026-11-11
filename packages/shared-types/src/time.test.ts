@@ -82,6 +82,10 @@ describe("summarizeByAuthorship", () => {
       note: "",
       startedAt: "2026-09-10T09:00:00.000Z",
       endedAt: "2026-09-10T10:00:00.000Z",
+      pausedSeconds: 0,
+      pausedAt: null,
+      editedAt: null,
+      edits: [],
       minutes: 60,
       running: false,
       createdAt: "2026-09-10T09:00:00.000Z",
@@ -126,5 +130,37 @@ describe("startTimerInputSchema", () => {
   it("lets a timer run without a task (project-only tracking)", () => {
     expect(startTimerInputSchema.safeParse({ projectId: "p1" }).success).toBe(true);
     expect(startTimerInputSchema.safeParse({ taskId: null, projectId: null }).success).toBe(true);
+  });
+});
+
+describe("entryMinutes with pause (задание 04)", () => {
+  const start = "2026-11-11T09:00:00.000Z";
+
+  it("subtracts the accumulated pause from the worked minutes", () => {
+    // 09:00–10:00 минус 15 минут паузы = 45.
+    expect(entryMinutes({ startedAt: start, endedAt: "2026-11-11T10:00:00.000Z", pausedSeconds: 15 * 60 })).toBe(45);
+  });
+
+  it("freezes the running timer while the pause is open", () => {
+    // Идёт пауза с 09:30, «сейчас» 10:00 — длительность стоит на 30 минутах.
+    const entry = { startedAt: start, endedAt: null, pausedSeconds: 0, pausedAt: "2026-11-11T09:30:00.000Z" };
+    expect(entryMinutes(entry, new Date("2026-11-11T10:00:00.000Z"))).toBe(30);
+    // Через час паузы — те же 30 минут: время на паузе не капает.
+    expect(entryMinutes(entry, new Date("2026-11-11T11:00:00.000Z"))).toBe(30);
+  });
+
+  it("combines closed and open pauses", () => {
+    const entry = {
+      startedAt: start,
+      endedAt: "2026-11-11T10:00:00.000Z",
+      pausedSeconds: 10 * 60,
+      pausedAt: "2026-11-11T09:50:00.000Z"
+    };
+    // 60 минут работы минус 10 закрытых и 10 текущих = 40.
+    expect(entryMinutes(entry, new Date("2026-11-11T11:00:00.000Z"))).toBe(40);
+  });
+
+  it("never goes negative when the pause is longer than the elapsed time", () => {
+    expect(entryMinutes({ startedAt: start, endedAt: "2026-11-11T10:00:00.000Z", pausedSeconds: 9_999 })).toBe(0);
   });
 });

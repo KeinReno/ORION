@@ -27,6 +27,7 @@ import { ProjectsModule } from "./projects/projects.module";
 import { SearchModule } from "./search/search.module";
 import { InboxModule } from "./inbox/inbox.module";
 import { TimeModule } from "./time/time.module";
+import { PlanningModule } from "./planning/planning.module";
 import { HabitsModule } from "./habits/habits.module";
 import { KnowledgeModule } from "./knowledge/knowledge.module";
 import { ListsModule } from "./lists/lists.module";
@@ -87,6 +88,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     InboxModule,
     SearchModule,
     TimeModule,
+    PlanningModule,
     HabitsModule,
     KnowledgeModule,
     ListsModule,

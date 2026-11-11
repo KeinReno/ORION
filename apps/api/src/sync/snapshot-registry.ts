@@ -75,6 +75,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   // --- identity / membership — сознательно не бэкапится --------------------
   { model: "User", snapshotKey: null, policy: "identity-excluded", reason: "Глобальный аккаунт, не workspace-запись." },
   { model: "RefreshToken", snapshotKey: null, policy: "identity-excluded", reason: "Сессионный секрет пользователя, не данные пространства." },
+  { model: "NoteStackState", snapshotKey: null, policy: "identity-excluded", reason: "07 (Заметки 2.0): свёрнутость и порядок стопок — личный выбор участника (per-user, как UserPreference), а не данные пространства; при восстановлении на новом узле состояние просто начинается с значений по умолчанию." },
   { model: "UserPreference", snapshotKey: null, policy: "identity-excluded", reason: "Per-user настройки интерфейса, не workspace-scoped (нет workspaceId). Включает U05 `spheres`/`favoriteWorkspaceIds` — личная группировка/избранное, а не данные пространства (23-UNIVERSAL-CONNECTED-CORE.md: «не копируются чужим участникам при восстановлении workspace»)." },
   { model: "WorkspaceMember", snapshotKey: null, policy: "identity-excluded", reason: "Членство/роли — восстановление в тот же workspaceId не должно менять состав участников; identity mapping на новую установку не реализован." },
   { model: "WorkspaceInvite", snapshotKey: null, policy: "identity-excluded", reason: "Токены приглашений одноразовые и адресные — восстанавливать их бессмысленно и небезопасно." },
@@ -105,6 +106,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
 
   // --- продуктовая политика уведомлений (09-RELIABILITY.md) ---------------
   { model: "Notification", snapshotKey: null, policy: "ephemeral-excluded", reason: "Лента уведомлений — архивная политика продукта, не источник истины пространства (09-RELIABILITY.md)." },
+  { model: "AgentMemberEvent", snapshotKey: null, policy: "ephemeral-excluded", reason: "Очередь упоминаний агентского членства (задание 12) — как лента уведомлений: транспорт адресации, а не данные пространства; агентские членства в бэкап не входят (identity-excluded), так что очередь без них бессмысленна." },
   { model: "DomainEvent", snapshotKey: null, policy: "ephemeral-excluded", reason: "Outbox доменных событий (ADR-0019) — транспорт между модулями, не данные пространства; события не воспроизводятся при восстановлении." },
   { model: "DomainEventDelivery", snapshotKey: null, policy: "ephemeral-excluded", reason: "Учёт доставок outbox (ADR-0019) — служебное состояние диспетчера." },
   { model: "SentReminder", snapshotKey: null, policy: "ephemeral-excluded", reason: "Дедуп-журнал уже отправленных напоминаний — служебное состояние крона, не пользовательские данные." },
@@ -130,17 +132,28 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "OpportunityBudget", snapshotKey: null, policy: "ephemeral-excluded", reason: "Счётчик дневного лимита не откатывается назад восстановлением — это позволило бы обойти лимит." },
   { model: "OpportunityPolicy", snapshotKey: "opportunityPolicies", policy: "included", reason: "Политика автономности; при восстановлении всегда приостанавливается — полномочия не оживают из копии." },
   { model: "OpportunityManagerAction", snapshotKey: "opportunityManagerActions", policy: "included", reason: "Журнал действий менеджера (после политики и возможностей)." },
-  { model: "Project", snapshotKey: "projects", policy: "included", reason: "Корень для milestones/tasks/notes/events/documents/finance/inventory через projectId." },
+  { model: "Project", snapshotKey: "projects", policy: "included", reason: "Корень для milestones/tasks/notes/events/documents/finance/inventory через projectId. С `parentId` (задание 03) дерево вставляется топологически — как tasks/documents." },
+  { model: "ProjectTemplate", snapshotKey: "projectTemplates", policy: "included", reason: "Шаблоны проектов (задание 03) — пользовательские данные пространства; не зависят от живых проектов." },
+  { model: "ProjectHistoryEntry", snapshotKey: "projectHistoryEntries", policy: "included", reason: "Audit trail проекта (задание 03): кто/когда/какое поле изменил. Входит в бэкап; ссылка на запись журнала — nullable, история переживает её удаление." },
   { model: "ProjectLogEntry", snapshotKey: "projectLogEntries", policy: "included", reason: "Авторская хронология проекта; после проектов, до ссылок на задачи." },
   { model: "ProjectRelation", snapshotKey: "projectRelations", policy: "included", reason: "Направленные связи проектов; ссылка на обе стороны, без копирования проектов." },
   { model: "DevelopmentCatalogMapping", snapshotKey: "developmentCatalogMappings", policy: "included", reason: "Постоянные соответствия каталога разработки сущностям пространства. Без них повторный импорт снова создаст проекты и задачи." },
+  { model: "DevelopmentGitRepository", snapshotKey: "developmentGitRepositories", policy: "included", reason: "Зарегистрированные владельцем репозитории (имя, путь, префикс ссылки) — конфигурация пространства. На другом узле путь может не существовать: при чтении он проверяется заново." },
+  { model: "TaskCommitLink", snapshotKey: "taskCommitLinks", policy: "included", reason: "Привязки коммитов к задачам — часть истории задачи (sha и подпись на момент привязки). Вставляются после Task и DevelopmentGitRepository." },
+  { model: "DevelopmentArchitectLayout", snapshotKey: "developmentArchitectLayouts", policy: "included", reason: "Пользовательская раскладка карты и загруженная проектная схема — настройка пространства, не копия кода." },
   { model: "Milestone", snapshotKey: "milestones", policy: "included", reason: "«План проекта» (v0.27) — веха, дочерняя к Project, родитель для Task.milestoneId." },
   { model: "MilestoneDependency", snapshotKey: "milestoneDependencies", policy: "included", reason: "Finish-to-start связи между вехами." },
+  { model: "TaskStatusDefinition", snapshotKey: "taskStatusDefinitions", policy: "included", reason: "Tasks 2.0: пользовательские статусы пространства; вставляются до Task (statusId)." },
+  { model: "TaskFieldDefinition", snapshotKey: "taskFieldDefinitions", policy: "included", reason: "Tasks 2.0: определения пользовательских полей; вставляются до значений и задач." },
   { model: "Task", snapshotKey: "tasks", policy: "included", reason: "Самоссылающееся дерево (parentId) — вставляется в топологическом порядке, не в порядке findMany." },
   { model: "TaskDependency", snapshotKey: "taskDependencies", policy: "included", reason: "Связи между задачами, требуют, чтобы обе задачи уже были вставлены." },
+  { model: "TaskRecurrence", snapshotKey: "taskRecurrences", policy: "included", reason: "Tasks 2.0: правило повторения задачи-шаблона; вставляется после Task.templateId." },
+  { model: "TaskRecurrenceInstance", snapshotKey: "taskRecurrenceInstances", policy: "included", reason: "Tasks 2.0: история экземпляров цепочки; taskId nullable, удалённый экземпляр остаётся записью." },
+  { model: "TaskFieldValue", snapshotKey: "taskFieldValues", policy: "included", reason: "Tasks 2.0: значения пользовательских полей; после Task и TaskFieldDefinition." },
   { model: "ProjectStatusUpdate", snapshotKey: "projectStatusUpdates", policy: "included", reason: "Ручные отчёты о состоянии проекта (UI-05) — пользовательский контент." },
   { model: "Goal", snapshotKey: "goals", policy: "included", reason: "Глобальные цели (плагин projects-goals) — пользовательский контент." },
   { model: "GoalPlan", snapshotKey: "goalPlans", policy: "included", reason: "Связь цель ↔ проект с весом; вставляется после целей и проектов." },
+  { model: "GoalCanvasLayout", snapshotKey: "goalCanvasLayouts", policy: "included", reason: "Серверная раскладка созвездия (координаты, зоны, неразрешённые конфликты) — пользовательская настройка пространства, не копия сущностей." },
   { model: "Capture", snapshotKey: "captures", policy: "included", reason: "Универсальные идеи/проблемы/заметки с якорем (anchorType, anchorId) — пользовательский текст; после Project и Task (projectId, taskId)." },
   { model: "TaskComment", snapshotKey: "taskComments", policy: "included", reason: "Комментарии задач (S17) — пользовательский контент, часть истории задачи." },
   { model: "ProjectLogEntryTask", snapshotKey: "projectLogEntryTasks", policy: "included", reason: "Ссылка журнала на исходную задачу и локальная ремарка; после задач и записей." },
@@ -173,6 +186,9 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "FinanceSettlement", snapshotKey: "financeSettlements", policy: "included", reason: "Взаиморасчёты между участниками." },
   { model: "FinanceExchangeRate", snapshotKey: "financeExchangeRates", policy: "included", reason: "Курсы валют, введённые вручную." },
   { model: "TimeEntry", snapshotKey: "timeEntries", policy: "included", reason: "Записи учёта времени (v0.18)." },
+  { model: "TimePlan", snapshotKey: "timePlans", policy: "included", reason: "Недельный план времени (задание 04) — намерение пользователя, а не служебное состояние; вставляется после пространства." },
+  { model: "PlanningBlock", snapshotKey: "planningBlocks", policy: "included", reason: "Тайм-блоки планирования (задание 04) — пользовательский календарь; taskId/projectId не FK, поэтому порядок не важен." },
+  { model: "PlanningMatrixPreset", snapshotKey: "planningMatrixPresets", policy: "included", reason: "Пользовательские пресеты осей матрицы (задание 04); встроенный Эйзенхауэр не хранится и восстанавливается из кода." },
   { model: "HealthSubject", snapshotKey: null, policy: "secret-excluded", reason: "Здоровье (ADR-0012): снимок делает любой участник, а данные принадлежат человеку и не должны попасть к остальным. Личный экспорт «забрать всё» — отдельная работа (этап 5)." },
   { model: "HealthGrant", snapshotKey: null, policy: "secret-excluded", reason: "Допуски к данным здоровья — часть приватной модели человека (ADR-0012), в снимок пространства не входят." },
   { model: "HealthAppointment", snapshotKey: null, policy: "secret-excluded", reason: "Визиты к врачам — данные о здоровье человека (ADR-0012), в снимок пространства не входят." },
@@ -209,7 +225,12 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
       "revokedAt на момент restore для каждой строки без собственного revokedAt; исходный revokedAt " +
       "(если грант уже был отозван на момент бэкапа) сохраняется как есть. Повторная выдача — только " +
       "новый явный грант владельца."
-  }
+  },
+  // Задание 10: пользовательские таблицы — полноценные данные пространства,
+  // поэтому входят в бэкап (определения раньше строк: FK tableId).
+  { model: "TableDefinition", snapshotKey: "tableDefinitions", policy: "included", reason: "Orion Tables: определения пользовательских таблиц и их схемы колонок — данные пространства." },
+  { model: "TableRow", snapshotKey: "tableRows", policy: "included", reason: "Orion Tables: строки таблиц; вставляются после tableDefinitions из-за FK." },
+  { model: "KeyBinding", snapshotKey: null, policy: "identity-excluded", reason: "Личные сочетания клавиш участника (per-user, как NoteStackState): при восстановлении на новом узле начинаются со значений по умолчанию и не навязываются другому человеку." }
 ];
 
 /** Быстрый доступ policy=included → snapshotKey, для сверки с snapshot.service.ts. */

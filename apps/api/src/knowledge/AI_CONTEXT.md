@@ -6,6 +6,8 @@
 
 Необязательная связь с проектом проверяется через публичный `ProjectReferences` в той же транзакции. При выключенном Projects библиотека остаётся доступной; связь можно не задавать.
 
+Проверка материала — хранимое состояние + `lastVerifiedAt`/`verifiedById`; вычисляемое `outdated` считается по `KnowledgeSettings.verificationDays`. Правка содержимого снимает подтверждение, `verify` публикует `knowledge.item.verification.changed`. Поиск идёт по `searchVector` (триггер, конфигурация russian, текст в нижнем регистре из-за локали C). История — `KnowledgeItemRevision` (снимки и восстановление без перезаписи). Входящие читаются через публичный `InboxItems`, файлы Documents — через `readKnowledgeSourceTitle`; агентные инструменты ждут `knowledge.item.read`.
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 

@@ -1,4 +1,5 @@
 import {
+  AGENT_HUB_TERMINAL_STATUS_SET,
   type AgentHubCommand,
   type AgentHubExecution,
   type AgentHubTarget
@@ -13,7 +14,8 @@ export type AgentHubTransitionErrorCode =
   | "lease_not_expired"
   | "invalid_time"
   | "invalid_evidence"
-  | "self_review";
+  | "self_review"
+  | "wall_clock";
 
 export class AgentHubTransitionError extends Error {
   constructor(public readonly code: AgentHubTransitionErrorCode) {
@@ -22,13 +24,21 @@ export class AgentHubTransitionError extends Error {
   }
 }
 
-const TERMINAL = new Set(["done", "failed", "canceled"]);
+/** An approval decision resumes the worker for another two minutes, like a fresh claim. */
+export const APPROVAL_RESUME_LEASE_MS = 120_000;
 
 export function createAgentHubExecution(
   id: string,
   workspaceId: string,
   target: AgentHubTarget,
-  at: string
+  at: string,
+  delegation: {
+    parentExecutionId?: string | null;
+    delegationDepth?: number;
+    delegatedToProfileId?: string | null;
+    delegationChain?: string[];
+    delegationPayload?: Record<string, unknown>;
+  } = {}
 ): AgentHubExecution {
   if (!id || !workspaceId || !target.id || !Number.isFinite(Date.parse(at))) {
     throw new AgentHubTransitionError("invalid_time");
@@ -36,7 +46,14 @@ export function createAgentHubExecution(
   return {
     id, workspaceId, target, status: "queued", revision: 0, attempt: 0,
     workerId: null, runtimeId: null, leaseUntil: null, checkpointRef: null,
-    evidenceRefs: [], verifiedBy: null, blockedReason: null, updatedAt: at
+    evidenceRefs: [], verifiedBy: null, blockedReason: null, updatedAt: at,
+    parentExecutionId: delegation.parentExecutionId ?? null,
+    delegationDepth: delegation.delegationDepth ?? 0,
+    delegatedToProfileId: delegation.delegatedToProfileId ?? null,
+    delegationChain: delegation.delegationChain ?? [],
+    delegationPayload: delegation.delegationPayload ?? {},
+    approval: null,
+    resultSummary: null
   };
 }
 
@@ -50,7 +67,7 @@ export function transitionAgentHubExecution(
   command: AgentHubCommand
 ): AgentHubExecution {
   if (command.expectedRevision !== current.revision) throw new AgentHubTransitionError("stale_revision");
-  if (TERMINAL.has(current.status)) throw new AgentHubTransitionError("terminal");
+  if (AGENT_HUB_TERMINAL_STATUS_SET.has(current.status)) throw new AgentHubTransitionError("terminal");
 
   const now = Date.parse(command.at);
   if (!Number.isFinite(now) || now < Date.parse(current.updatedAt)) {
@@ -83,7 +100,7 @@ export function transitionAgentHubExecution(
       assertLiveLease();
       return { ...next, status: "working" };
     case "heartbeat":
-      assertStatus("claimed", "working");
+      assertStatus("claimed", "working", "waiting_approval");
       assertWorker(command.workerId);
       assertLiveLease();
       return { ...next, leaseUntil: leaseUntil(command.leaseMs) };
@@ -107,7 +124,8 @@ export function transitionAgentHubExecution(
       if (!command.evidenceRefs.length || command.evidenceRefs.some((ref) => !ref.trim())) {
         throw new AgentHubTransitionError("invalid_evidence");
       }
-      return { ...next, status: "review", leaseUntil: null, evidenceRefs: [...new Set(command.evidenceRefs)] };
+      return { ...next, status: "review", leaseUntil: null, evidenceRefs: [...new Set(command.evidenceRefs)],
+        resultSummary: command.summary ?? current.resultSummary };
     case "verify":
       assertStatus("review");
       if (command.reviewerId === current.workerId) throw new AgentHubTransitionError("self_review");
@@ -117,15 +135,32 @@ export function transitionAgentHubExecution(
       assertStatus("claimed", "working");
       assertWorker(command.workerId);
       assertLiveLease();
-      return { ...next, status: "failed", leaseUntil: null, blockedReason: command.reason };
+      return { ...next, status: "failed", leaseUntil: null, blockedReason: command.reason,
+        resultSummary: command.summary ?? current.resultSummary };
     case "expire":
-      assertStatus("claimed", "working");
+      assertStatus("claimed", "working", "waiting_approval");
       if (!current.leaseUntil || now < Date.parse(current.leaseUntil)) {
         throw new AgentHubTransitionError("lease_not_expired");
       }
       // Checkpoint remains available to the next, independently authorized worker.
-      return { ...next, status: "queued", workerId: null, runtimeId: null, leaseUntil: null };
+      return { ...next, status: "queued", workerId: null, runtimeId: null, leaseUntil: null, approval: null };
     case "cancel":
-      return { ...next, status: "canceled", leaseUntil: null };
+      return { ...next, status: "canceled", leaseUntil: null, approval: null };
+    case "request_approval":
+      assertStatus("working");
+      assertWorker(command.workerId);
+      assertLiveLease();
+      return { ...next, status: "waiting_approval",
+        approval: { action: command.action, reason: command.reason, requestedAt: command.at, requestedBy: command.workerId } };
+    case "approve":
+      assertStatus("waiting_approval");
+      // Only the human owner/lead reaches this command; the worker can never approve itself.
+      return { ...next, status: "working", approval: null, leaseUntil: leaseUntil(APPROVAL_RESUME_LEASE_MS) };
+    case "reject":
+      assertStatus("waiting_approval");
+      return { ...next, status: "failed", approval: null, leaseUntil: null, blockedReason: command.reason };
+    case "reassign":
+      assertStatus("queued", "claimed", "working", "waiting_approval", "blocked");
+      return { ...next, status: "reassigned", workerId: null, runtimeId: null, leaseUntil: null, approval: null };
   }
 }

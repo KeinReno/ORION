@@ -338,6 +338,8 @@ export const backgroundJobStatusSchema = z.object({
   runs: z.number().int(),
   failures: z.number().int(),
   skipped: z.number().int(),
+  /** Сколько раз запуск пропущен из-за выключенного в пространстве компонента (Foundation Core). */
+  paused: z.number().int().optional(),
   lastStartedAt: z.string().nullable(),
   lastFinishedAt: z.string().nullable(),
   lastSuccessAt: z.string().nullable(),
@@ -345,3 +347,19 @@ export const backgroundJobStatusSchema = z.object({
 });
 export type BackgroundJobStatus = z.infer<typeof backgroundJobStatusSchema>;
 export const backgroundJobListSchema = z.array(backgroundJobStatusSchema);
+
+/**
+ * Foundation Core (задание 01.3): декларативная запись реестра фоновых задач. Задача объявляет
+ * себя один раз (компонент + расписание + описание), supervisor проверяет включённость компонента
+ * в пространстве перед запуском. Состояние — `BackgroundJobStatus` по тому же ключу.
+ */
+export const backgroundJobScheduleSchema = z.enum(["cron", "interval", "event"]);
+export type BackgroundJobSchedule = z.infer<typeof backgroundJobScheduleSchema>;
+
+export const backgroundJobDefinitionSchema = z.object({
+  componentId: z.string(),
+  jobName: z.string(),
+  schedule: backgroundJobScheduleSchema,
+  description: z.string()
+});
+export type BackgroundJobDefinition = z.infer<typeof backgroundJobDefinitionSchema>;
