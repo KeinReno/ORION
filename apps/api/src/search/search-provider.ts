@@ -24,7 +24,7 @@ export const SEARCH_PROVIDER_LIMIT = 8;
  * определяют именно эти позиции — фиксируем их здесь, а не порядком инициализации модулей Nest.
  */
 export const SEARCH_PROVIDER_ORDER: readonly SearchableEntityType[] = [
-  "project", "task", "note", "event", "document", "transaction", "contact", "list", "goal", "account", "savings_goal"
+  "project", "task", "note", "event", "document", "transaction", "contact", "list", "goal", "account", "savings_goal", "knowledge_item"
 ];
 
 /** Собирает DTO результата; `matchedText` режется до 240 символов, `updatedAt` — ISO. */

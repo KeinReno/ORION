@@ -93,7 +93,7 @@ describe("G19: search providers and inbox targets", () => {
 
   it("registers a provider per searchable type and a target per inbox kind", () => {
     const types = app.get(SearchProviderRegistry).list().map((provider) => provider.entityType);
-    expect(types).toEqual(["project", "task", "note", "event", "document", "transaction", "contact", "list", "goal", "account", "savings_goal"]);
+    expect(types).toEqual(["project", "task", "note", "event", "document", "transaction", "contact", "list", "goal", "account", "savings_goal", "knowledge_item"]);
     const targets = app.get(InboxTargetRegistry);
     expect(["task", "note", "event"].map((kind) => targets.get(kind)?.kind)).toEqual(["task", "note", "event"]);
   });

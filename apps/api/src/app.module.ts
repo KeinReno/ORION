@@ -25,6 +25,8 @@ import { ExtensionsModule } from "./extensions/extensions.module";
 import { CapturesModule } from "./captures/captures.module";
 import { ProjectsModule } from "./projects/projects.module";
 import { SearchModule } from "./search/search.module";
+import { TablesModule } from "./tables/tables.module";
+import { CommandsModule } from "./commands/commands.module";
 import { InboxModule } from "./inbox/inbox.module";
 import { TimeModule } from "./time/time.module";
 import { PlanningModule } from "./planning/planning.module";
@@ -49,6 +51,7 @@ import { OverviewModule } from "./overview/overview.module";
 import { SharedGrantModule } from "./shared/shared.module";
 import { UsersModule } from "./users/users.module";
 import { DomainEventsModule } from "./domain-events/domain-events.module";
+import { EntityLinksModule } from "./entity-links/entity-links.module";
 import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
 
 @Module({
@@ -58,6 +61,7 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     BackgroundJobsModule,
     ProjectAggregateModule,
     DomainEventsModule,
+    EntityLinksModule,
     AuthModule,
     WorkspacesModule,
     ModulesModule,
@@ -87,6 +91,9 @@ import { GENERATED_NEST_MODULES } from "./modules-ext/modules.generated";
     CapturesModule,
     InboxModule,
     SearchModule,
+    // Задание 10: общие инструменты платформы — таблицы и реестр команд.
+    TablesModule,
+    CommandsModule,
     TimeModule,
     PlanningModule,
     HabitsModule,

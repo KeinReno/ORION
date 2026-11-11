@@ -13,7 +13,12 @@
 
 Аддитивные серверные мосты: [перенос ссылок](ENTITY_REFERENCES.md),
 [синхронное закрытие задачи](TASK_CLOSURE.md) и [проверка ссылки на контакт](CONTACT_REFERENCES.md).
-Текущие версии: Integration API 1.11.0, Platform API 1.13.0, AgentGateway 1.1.0, Event API 1.1.0. Agent connection/lifetime: [ADR-0047](../adr/ADR-0047-agent-connection-owner-control.md). Историческая строка Integration API ниже
+Текущие версии: Integration API 1.11.0, Platform API 1.13.0, AgentGateway 1.1.0, Event API 1.1.0.
+
+Общие инструменты (задание 10): [Orion Tables, команды и горячие клавиши](ORION_TOOLS.md)
+и [единый вход глобального поиска](GLOBAL_SEARCH.md).
+
+Agent connection/lifetime: [ADR-0047](../adr/ADR-0047-agent-connection-owner-control.md). Историческая строка Integration API ниже
 описывает исходный срез, до появления этих контрактов.
 
 Завершение оставшихся 17 межмодульных исключений: [Owner SDKs](MODULE_BOUNDARY_SDKS.md),

@@ -1,5 +1,114 @@
 # ORION — состояние на 30 октября 2026
 
+## Orion Dev + Git Workspace + Architect + MCP-доступ — 11.11.2026
+
+Задание 11 (backend, волна 3). Новые файлы: `packages/shared-types/src/development-git.ts`,
+`development-architect.ts` (+ тест парсера ссылок), `apps/api/src/development/git/*`
+(`git-command`, `git-graph-parser`, `development-git.service`, `development-task-links.service`,
+контроллеры), `apps/api/src/development/architect/*` (анализатор + сервис + контроллер),
+`apps/api/src/development/development-agent.controller.ts`, `apps/api/src/mcp/agent-tool-catalog.ts`
+(+ тест), `agent-tool-runner.ts`, `agent-tools.module.ts`,
+`apps/api/src/tasks/public/task-trace-reader.*` и `apps/api/src/tasks/task-trace-reader.service.ts`,
+миграция `20261111203000_development_git_architect`, интеграционный тест
+`apps/api/test/development-workspace.integration.test.ts`.
+
+- **11.1 Git Workspace.** Репозиторий добавляет владелец/лид по абсолютному пути внутри
+  `ORION_DEV_REPOSITORY_ROOTS`; путь проходит `realpath`, проверку корня и `.git` и сохраняется
+  каноническим. Произвольный путь с клиента в `git` не попадает; при каждом чтении путь
+  перепроверяется. `GET …/development/git/:repoId/graph` отдаёт ветки, теги, коммиты (sha, родители,
+  автор, дата, сообщение), слияния, `pullRequest: null`, фильтры author/branch/from/to и пагинацию
+  курсором по sha (default 500, максимум 2000). `GET …/compare?from=&to=` — отличающиеся коммиты,
+  diffstat файлов и ahead/behind. Кэш истории — в памяти процесса, ключ включает подпись `.git`
+  (HEAD/index/packed-refs/refs/reflog); меняющие git-операции отсутствуют.
+- **11.2 Привязки коммитов.** `TaskCommitLink` (RLS, unique task+repo+sha): разбор
+  `taskRefPrefix` (по умолчанию `#`, настраивается на репозиторий) — `#42` это 42-я задача
+  пространства по порядку создания, `#<uuid>` — начало id; ссылка разрешается публичным контрактом
+  `TaskTraceReader`, только внутри пространства. `POST …/sync-links` идемпотентен; ручные
+  link/unlink — `tasks.task.update`. `GET tasks/:id/trace`: создание → поручение → журнал
+  статусов/срока → коммиты → проверки (QA-заглушка) → релиз (заглушка), единая timeline-структура с
+  явным `placeholder`.
+- **11.3 Architect.** Анализатор обходит файлы (без `node_modules`/`.git`/сборочных каталогов),
+  строит узлы file/dir/module (index.ts)/crate (Cargo.toml), метрики и рёбра импортов TS/TSX и
+  Rust на регулярном уровне, без AST и новых зависимостей. `GET …/architect/:repoId/map?path=`,
+  `GET/PUT …/layout` (позиции узлов, viewport, revision → 412/409 при чужой ревизии),
+  `GET/PUT …/project-schema`, `GET …/compare` — расхождения «задумано ↔ в коде».
+- **11.4 MCP.** `GET /ai/v1/tools` отдаёт отфильтрованный каталог: инструменты модулей видны только
+  при выданном разрешении и включённом модуле, инструменты ядра — по scope'ам токена. MCP-адаптер
+  берёт `tools/list` у сервера, при недоступности — прежний статический каталог. Новые read-only
+  инструменты `orion_git_graph` и `orion_architect_map` идут через существующий
+  `AgentModuleToolsService` (разрешение, режим, модуль, `AgentAuditEntry` на каждый вызов).
+- **Данные.** Три модели в блоке `BEGIN 11`, RLS `ENABLE`+`FORCE`+membership-политика; внесены в
+  `MODEL_OWNERS`, `SNAPSHOT_MODEL_REGISTRY`/`SNAPSHOT_MODELS` и `SYNC_CLASSIFICATION`
+  (путь репозитория — `not-synced`, привязки — `strict`, раскладка — `lww`); `TaskCommitLink.createdById`
+  ремапится на импортирующего.
+
+Проверки: unit `git-graph-parser` 9/9, `architect-analyzer` 9/9, `agent-tool-catalog` 4/4,
+shared-types `development-git` 4/4, `agent-gateway` 17/17; интеграция
+`development-workspace.integration.test.ts` 7/7 на реальной PostgreSQL и настоящем `git`
+(ветвление+слияние, пагинация, compare, `#42`, ручная привязка/отвязка, trace, карта/раскладка/сравнение,
+MCP-список и аудит); `rls-coverage` и `api-rls` — PASS; миграция применена; `architecture-check` — OK;
+`plugin-contract-check` 11/11; `module-docs:check` — OK; scoped ESLint по файлам задания — 0.
+
+Ограничения: весь API `typecheck` в этом дереве красный из-за незавершённых чужих срезов
+(`projects`, `workspaces`); `platform-map:check` падает на отказе доступа к каталогу выше рабочего
+(esbuild `Access is denied`); полный lint завален артефактами `splash/_chromeprofile` (чужой
+профиль Chromium), файлы задания чистые; `snapshot`/`sync-classification` тесты красные из-за
+неклассифицированных `KnowledgeItemRevision`/`KnowledgeSettings` и `NoteStackState`/`AgentMemberEvent`
+(другие задания). `#42` — порядковый номер задачи пространства, потому что короткого номера в схеме
+задач нет; QA-проверки и релизы — контрактные заглушки; внешнего Git-провайдера и PR нет; фронтенд
+(дерево, 2D-редактор) в объём не входил.
+
+## Команда и разграничение прав человек/ИИ — backend, 12.11.2026
+
+Задание 12. Бэкенд: principal-модель членства, срок и аудит приглашений, упоминания в
+комментариях и журнале проекта, CAS-ревизия проекта. Фронтенд команды не делался (вне объёма).
+
+- **12.1. Principal-модель.** `WorkspaceMember.kind` (`human | agent`), `status`
+  (`active | disabled`), `agentProfileId`, `displayName`; `userId` стал nullable, CHECK требует
+  ровно одну ссылку (User или профиль Agent Hub). Миграция проставляет существующим строкам
+  `human/active` — их семантика не меняется. Членство агента ссылается на `AgentHubAgentProfile`;
+  связь держит триггер БД (`team_agent_member_sync`): профиль появился/переименован/удалён —
+  членство появилось/обновило имя/ушло. Это осознанно не Prisma-делегат из `workspaces/`:
+  agent-hub — подключаемый модуль, его модели лежат в генерируемой области schema.prisma, а
+  публичного контракта-читателя у него нет (architecture-check ловит такие обращения).
+- **API команды.** `GET /workspaces/:id/team` — единый список людей, агентов и приглашённых
+  (`kind`, `status`, `role`, фильтры `?kind=human|agent`, `?status=active|invited|disabled`).
+  Приглашения в нём видят только владелец и лид; состав команды — все участники.
+  `GET /workspaces/:id/members` не изменился: только живые люди (у каждого непустой `userId`),
+  добавлены поля `kind`/`status`/`agentProfileId`. Роль агента не меняется и строку ростера
+  нельзя удалить (400): его подключение — существующий owner-control flow (ADR-0047), отзыв
+  credential, а не удаление строки.
+- **Права.** Агент никогда не наследует права человека по `role`: его вызовы авторизуются
+  scope'ами токена и матрицей разрешений. Проверено: агент с `tasks:read` при создателе-владельце
+  получает 403 «нет разрешения `tasks.task.update`», задача не меняется.
+- **12.2. Приглашения.** `expiresInDays` (по умолчанию 7 дней; `null` — бессрочно, явный выбор),
+  `POST …/invites/:id/resend` — та же строка приглашения (email и роль), новый токен, срок
+  перезапускается; аудит `revokedById`, `resentAt`, `resentById`, `resendCount`. Принятие:
+  отозванного — 409, истёкшего — 410, уже принятого — 409 (причина в тексте).
+- **12.3. Упоминания.** `parseMentions` в `shared-types` (`@Иван`, `@"Иван Петров"`; адрес
+  электронной почты упоминанием не считается). Резолв — только по участникам этого пространства.
+  Человек получает адресное `Notification` (с его тумблерами и тихими часами), агент —
+  `AgentMemberEvent` (`GET /workspaces/:id/team/agents/:memberId/events`). Записи журнала проекта
+  используют тот же разбор. Лента уведомлений при чтении проверяет существование объекта в этом
+  пространстве: удалённый/невидимый объект отдаётся как «Содержимое недоступно», без тела и
+  `entityId`; отметить прочитанным такое уведомление нельзя (404).
+- **12.4. CAS проекта.** `Project.revision` + `expectedRevision` в `PATCH …/projects/:id`:
+  конфликт — 409 `project_revision_conflict` с текущей копией; правка без токена остаётся
+  last-write-wins, но ревизия растёт. Задачи, заметки и материалы знаний уже работали по этому
+  контракту; проект приведён к нему.
+- **Проверки.** `apps/api/test/team-access.integration.test.ts` — 6 сценариев PASS.
+  `shared-workspaces`, `notifications`, `task-comments`, `project-logbook` — PASS (ожидания
+  кодов 410/409 у приглашений обновлены). `architecture-check`, `plugin-contract-check` (11),
+  `module-docs:check` — OK; изменённые файлы чисты по eslint; typecheck `shared-types`,
+  `core`, `core-react`, `ui` и мои файлы API — без ошибок.
+- **Ограничения.** `status = "disabled"` в модель добавлен, но процессом пока не выставляется:
+  подключение агента выключается отзывом credential (ADR-0047), отдельной ручки «отключить в
+  ростере» нет намеренно. Миграции `20261112120000_team_permissions` и
+  `20261112121000_team_agent_member_name` применяются к чистой БД. В общем рабочем дереве
+  остаются незавершённые правки параллельных заданий: `pnpm --filter api typecheck` падает на
+  `tsconfig.test.json` чужих тестов, `platform-map:check` в этой среде не запускается (esbuild не
+  может прочитать каталог репозитория — ошибка окружения, не кода).
+
 ## Agent Hub 2.0: оркестрация, Trace, Memory — backend, 11.11.2026
 
 Задание 09 (backend). Новые файлы: `packages/shared-types/src/agent-hub-trace.ts`
@@ -66,18 +175,23 @@ approval/reject, trace-дерево и фильтры, память и supersede
 изменённым файлам — 0 ошибок/0 предупреждений; Prisma Client перегенерирован.
 
 Ограничения: глобальные гейты в этом checkout красные из-за параллельных
-незавершённых срезов — `architecture-check` указывает на `development/*`
-(импорт сервиса соседнего модуля и `tx.task`), общий API-typecheck — на
-`development`, `tables`, `search`; `platform-map:check` не запускается в этой
-среде (esbuild: `Cannot read directory "../..": Access is denied`), поэтому
+незавершённых срезов — `architecture-check` зелёный, но общий API-typecheck и
+production build API на момент сдачи проходят только по файлам задания (сборка
+API собрана); `pnpm lint` целиком падает на артефактах профиля Chrome
+`splash/_chromeprofile/**` (минифицированные JS расширений) и на чужих
+`workspaces/members.service.ts` / `team.controller.ts`, ESLint по изменённым
+файлам — 0 ошибок. `platform-map:check` не запускается в этой среде (esbuild:
+`Cannot read directory "../..": Access is denied`), поэтому
 `capabilities.generated.json` перегенерирован тем же алгоритмом через TypeScript
 API и совпал с прежним выводом плюс версия `agent-hub` 1.1.0. Общий unit-прогон
-`packages/shared-types` — 604/605: красный чужой
-`entity-links.read` (id не соответствует формату `module.resource.action`,
-задание 01). Фронтенд Hub/Trace/Memory в объём не входил (в панели добавлены
-только подписи двух новых статусов ради типизации); автоматического диспетчера
-нет. Истёкший lease в `waiting_approval` при `reconcile` возвращает исполнение в
-очередь и сбрасывает запрос подтверждения — владельцу нужно запросить его снова.
+`packages/shared-types` — 604/605: красный чужой `entity-links.read` (id не
+соответствует формату `module.resource.action`, задание 01); `sync`/`ops`
+инвентари красные на `NoteStackState` и `AgentMemberEvent` без строки
+sync-классификации (задания 07 и 12). Фронтенд Hub/Trace/Memory в объём не
+входил (в панели добавлены только подписи двух новых статусов ради типизации);
+автоматического диспетчера нет. Истёкший lease в `waiting_approval` при
+`reconcile` возвращает исполнение в очередь и сбрасывает запрос подтверждения —
+владельцу нужно запросить его снова.
 
 ## Центр проектов: иерархия, шаблоны, портфель, история (задание 03) — 11.11.2026
 
@@ -1002,7 +1116,9 @@ RLS и политика членства. Новый
 читать каталог (`Access is denied`); `capabilities.generated.json` перегенерирован эквивалентной
 логикой без esbuild-бандлера и проверен по содержимому (события/права/контракты на месте).
 `snapshot.integration.test.ts` красный из-за неклассифицированных моделей соседних волн
-(`KnowledgeItemRevision`, `KnowledgeSettings`, `AgentMemberEvent`), не из-за таблиц задания.
+(`KnowledgeItemRevision`, `KnowledgeSettings`, `AgentMemberEvent`), не из-за таблиц задания;
+`sync-classification`/`ops`-инвентари также красные из-за моделей соседних волн (наши три строки
+добавлены: `TableDefinition`/`TableRow` — LWW «later», `KeyBinding` — `not-synced`).
 Граница: link-колонки первой срез — задачи и проекты; новый тип = адаптер на публичном
 контракте владельца. Синхронизация таблиц поверх Sync Core, плагины-хранилища и SQL-режим — вне
 задания.

@@ -1,9 +1,11 @@
 import type { SearchableEntityType } from "@orion/shared-types";
 import {
+  BookOpen,
   CalendarDays,
   FileText,
   FolderKanban,
   Flag,
+  Library,
   ListChecks,
   ListTodo,
   Receipt,
@@ -25,7 +27,10 @@ export const ENTITY_TYPE_ICON: Record<SearchableEntityType, LucideIcon> = {
   transaction: Receipt,
   contact: UserRound,
   list: ListChecks,
-  account: Wallet
+  account: Wallet,
+  project_log_entry: BookOpen,
+  // Общие инструменты (задание 10): материал базы знаний — тоже связуемая сущность.
+  knowledge_item: Library
 };
 
 export const ENTITY_TYPE_LABEL: Record<SearchableEntityType, string> = {
@@ -39,5 +44,7 @@ export const ENTITY_TYPE_LABEL: Record<SearchableEntityType, string> = {
   transaction: "операция",
   contact: "контакт",
   list: "список",
-  account: "счёт"
+  account: "счёт",
+  project_log_entry: "запись журнала",
+  knowledge_item: "материал"
 };
