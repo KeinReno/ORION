@@ -184,8 +184,7 @@ export class ModulesService {
     tx: Prisma.TransactionClient,
     userId: string,
     workspaceId: string
-  ): Promise<Set<OrionModuleId>> {
-    const { disabled, restricted } = await this.overridesTx(tx, workspaceId);
+  ): Promise<Set<OrionModuleId>> {    const { disabled, restricted } = await this.overridesTx(tx, workspaceId);
     const membership = await tx.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } }
     });
@@ -195,6 +194,14 @@ export class ModulesService {
         (id) => !disabled.includes(id) && !(isMember && restricted.includes(id))
       )
     );
+  }
+
+  /** The actor-aware set outside an existing transaction (dynamic MCP tools/list, задание 11.4). */
+  async accessibleSet(userId: string, workspaceId: string): Promise<Set<OrionModuleId>> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return this.accessibleSetTx(tx, userId, workspaceId);
+    });
   }
 
   private async overridesTx(

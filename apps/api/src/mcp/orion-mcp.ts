@@ -141,6 +141,37 @@ async function fetchTokenMode(settings: McpSettings, deps: McpDeps): Promise<Age
   }
 }
 
+interface ServerTool {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+}
+
+/**
+ * `tools/list` as THIS token may use it (задание 11.4): the server filters the shared catalogue by the token's scopes,
+ * module permissions and the modules switched on in the workspace. `null` means "ask failed" — then the adapter falls
+ * back to the full static catalogue, which is exactly the pre-11.4 behaviour (older server, offline, invalid token).
+ */
+async function fetchServerTools(settings: McpSettings, deps: McpDeps): Promise<ServerTool[] | null> {
+  if (!settings.token) return null;
+  try {
+    const response = await (deps.fetchImpl ?? fetch)(`${settings.apiUrl}/ai/v1/tools`, { method: "GET", headers: { Authorization: `Bearer ${settings.token}` } });
+    if (!response.ok) return null;
+    const parsed = (await response.json()) as { tools?: unknown };
+    if (!Array.isArray(parsed.tools)) return null;
+    const tools: ServerTool[] = [];
+    for (const candidate of parsed.tools) {
+      if (typeof candidate !== "object" || candidate === null) return null;
+      const tool = candidate as Record<string, unknown>;
+      if (typeof tool.name !== "string" || typeof tool.description !== "string" || tool.inputSchema === undefined) return null;
+      tools.push({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema });
+    }
+    return tools;
+  } catch {
+    return null;
+  }
+}
+
 /** One JSON-RPC message → its `result` (or `undefined` for a notification). Throws `McpError` for protocol errors. */
 export async function handleMcpMessage(message: JsonRpcMessage, settings: McpSettings, deps: McpDeps = {}): Promise<unknown> {
   const { id, method, params } = message;
@@ -159,8 +190,19 @@ export async function handleMcpMessage(message: JsonRpcMessage, settings: McpSet
       return {};
     case "tools/list": {
       // With the token's mode known, each description also says what THIS call will do for it (acts / becomes a request / refused).
-      const mode = await fetchTokenMode(settings, deps);
-      return { tools: AGENT_TOOLS.map((tool) => ({ name: tool.name, description: agentToolDescription(tool, mode ?? undefined), inputSchema: tool.input })) };
+      // The list itself comes from the server when it can answer: that is the token's scope lease, not a static catalogue.
+      const [mode, serverTools] = await Promise.all([fetchTokenMode(settings, deps), fetchServerTools(settings, deps)]);
+      const source = serverTools ?? AGENT_TOOLS.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.input }));
+      return {
+        tools: source.map((tool) => {
+          const known = agentToolByName(tool.name);
+          return {
+            name: tool.name,
+            description: known ? agentToolDescription(known, mode ?? undefined) : tool.description,
+            inputSchema: tool.inputSchema
+          };
+        })
+      };
     }
     case "tools/call": {
       const tool = params?.name ? agentToolByName(params.name) : undefined;

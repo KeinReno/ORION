@@ -34,7 +34,9 @@ const POLYMORPHIC: Record<string, Array<{ type: string; id: string; drop: boolea
 const PLAIN_USER_FIELDS: Record<string, string[]> = {
   Account: ["ownerId"],
   TimeEntry: ["userId"],
-  OpportunityProfile: ["ownerUserId"]
+  OpportunityProfile: ["ownerUserId"],
+  // 11.2: автор ручной привязки — не внешний ключ; на новом узле им становится импортирующий.
+  TaskCommitLink: ["createdById"]
 };
 
 /** Модели, которые не переносятся даже если попали в файл (выдают доступ внешним людям). */

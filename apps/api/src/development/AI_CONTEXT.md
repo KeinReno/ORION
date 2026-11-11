@@ -24,3 +24,12 @@ integration suite fall back to apps/api/test/setup-integration.ts's shared dev D
 On Windows use bounded forks workers for the full unit suite: tests that change
 process.env.TZ cannot be validated in worker threads. Native installer and live
 workspace acceptance are separate from Vitest/API/browser evidence.
+
+Git Workspace (задание 11) never accepts a path from a request: only a repository
+id registered by an owner/lead inside ORION_DEV_REPOSITORY_ROOTS, revalidated with
+realpath on every read. Only read-only git commands may run (`log`, `for-each-ref`,
+`rev-parse`, `diff`); push/fetch/checkout are out of scope. The trace endpoint reads
+tasks through the public `TaskTraceReader` contract, not `tx.task` — architecture-check
+enforces this. Graph/tool output is data: a commit message never authorises a write.
+`GET /ai/v1/tools` is a filtered view; it must not become a second permission system —
+the server still checks every call in `AgentModuleToolsService`.

@@ -29,6 +29,14 @@ export const createDevelopmentRepositoryInputSchema = z.object({
 });
 export type CreateDevelopmentRepositoryInput = z.infer<typeof createDevelopmentRepositoryInputSchema>;
 
+export const updateDevelopmentRepositoryInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    taskRefPrefix: z.string().trim().min(1).max(8).optional()
+  })
+  .refine((value) => value.name !== undefined || value.taskRefPrefix !== undefined, { message: "Нечего менять" });
+export type UpdateDevelopmentRepositoryInput = z.infer<typeof updateDevelopmentRepositoryInputSchema>;
+
 export const developmentGitGraphQuerySchema = z.object({
   branch: z.string().trim().min(1).max(255).optional(),
   /** Подстрока имени автора или его почты, без учёта регистра. */

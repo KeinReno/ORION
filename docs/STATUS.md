@@ -49,14 +49,15 @@ shared-types `development-git` 4/4, `agent-gateway` 17/17; интеграция
 MCP-список и аудит); `rls-coverage` и `api-rls` — PASS; миграция применена; `architecture-check` — OK;
 `plugin-contract-check` 11/11; `module-docs:check` — OK; scoped ESLint по файлам задания — 0.
 
-Ограничения: весь API `typecheck` в этом дереве красный из-за незавершённых чужих срезов
-(`projects`, `workspaces`); `platform-map:check` падает на отказе доступа к каталогу выше рабочего
-(esbuild `Access is denied`); полный lint завален артефактами `splash/_chromeprofile` (чужой
-профиль Chromium), файлы задания чистые; `snapshot`/`sync-classification` тесты красные из-за
-неклассифицированных `KnowledgeItemRevision`/`KnowledgeSettings` и `NoteStackState`/`AgentMemberEvent`
-(другие задания). `#42` — порядковый номер задачи пространства, потому что короткого номера в схеме
-задач нет; QA-проверки и релизы — контрактные заглушки; внешнего Git-провайдера и PR нет; фронтенд
-(дерево, 2D-редактор) в объём не входил.
+Ограничения: API и `@orion/shared-types` typecheck — чисто, но общий `pnpm typecheck` красный в
+`packages/core` (`api-client.ts`, несовместимость `alternatives` журнала проекта — задание 05);
+`platform-map:check` падает на отказе доступа к каталогу выше рабочего (esbuild `Access is denied`);
+полный lint завален артефактами `splash/_chromeprofile` (чужой профиль Chromium), файлы задания
+чистые; `snapshot`/`sync-classification` тесты красные из-за неклассифицированных
+`KnowledgeItemRevision`/`KnowledgeSettings` и `NoteStackState`/`AgentMemberEvent` (другие задания).
+`#42` — порядковый номер задачи пространства, потому что короткого номера в схеме задач нет;
+QA-проверки и релизы — контрактные заглушки; внешнего Git-провайдера и PR нет; фронтенд (дерево,
+2D-редактор) в объём не входил.
 
 ## Команда и разграничение прав человек/ИИ — backend, 12.11.2026
 

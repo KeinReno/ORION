@@ -78,6 +78,7 @@ import {
 import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
+import { selectAgentTools, type AgentToolListing } from "../mcp/agent-tool-catalog";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import { EventOperations } from "../events/public/event-operations";
 import { AgentDraftOperations } from "../finance/public/agent-draft-operations";
@@ -237,6 +238,30 @@ export class AiController {
   me(@Req() req: AgentRequest): { tokenName: string; workspaceId: string; scopes: AgentScope[]; mode: AgentMode } {
     const agent = req.agent as AgentContext;
     return { tokenName: agent.tokenName, workspaceId: agent.workspaceId, scopes: agent.scopes, mode: agent.mode };
+  }
+
+  /**
+   * Аренда scope'ов как витрина (11.4): MCP-адаптер получает отсюда `tools/list` для ЭТОГО токена,
+   * а не весь каталог. Модули, выключенные/ограниченные в пространстве, и разрешения, которых у
+   * токена нет, инструмент не показывают — серверная проверка на вызове остаётся главной.
+   */
+  @Get("tools")
+  async tools(@Req() req: AgentRequest): Promise<{ tools: AgentToolListing[] }> {
+    const agent = req.agent as AgentContext;
+    const modules = await this.modules.accessibleSet(agent.userId, agent.workspaceId);
+    const selected = selectAgentTools({
+      scopes: agent.scopes,
+      modulePermissions: agent.modulePermissions,
+      modules
+    });
+    return {
+      tools: selected.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.input,
+        moduleId: tool.moduleId ?? null
+      }))
+    };
   }
 
   @Get("tasks")

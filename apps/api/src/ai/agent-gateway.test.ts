@@ -17,7 +17,9 @@ import { TimeAgentController } from "../time/time.agent.controller";
 import { GoalsAgentController } from "../goals/goals.agent.controller";
 import { HealthAgentController } from "../health/health.agent.controller";
 import { HomeAgentController } from "../home/home.agent.controller";
+import { KnowledgeAgentController } from "../knowledge/knowledge.agent.controller";
 import { ProjectsAgentController } from "../projects/projects.agent.controller";
+import { DevelopmentAgentController } from "../development/development-agent.controller";
 
 /** Agent tools of the core modules live next to each module (G13), like the manifest modules' ones. */
 const CORE_MODULE_AGENT_CONTROLLERS = [
@@ -31,7 +33,9 @@ const CORE_MODULE_AGENT_CONTROLLERS = [
   ProjectsAgentController,
   GoalsAgentController,
   HealthAgentController,
-  HomeAgentController
+  HomeAgentController,
+  KnowledgeAgentController,
+  DevelopmentAgentController
 ];
 
 const TOKEN = "orion_agt_SECRETSECRETSECRETSECRET1234";
@@ -64,7 +68,8 @@ describe("каталог инструментов ↔ маршруты /ai/v1", 
 
   it("каждый маршрут агента описан инструментом (иначе агент о нём не узнает)", () => {
     // Маршруты, которых в каталоге нет сознательно: их список — единственное, что можно здесь пополнять.
-    const intentionallyUndeclared = new Set<string>();
+    // `/ai/v1/tools` — не инструмент, а витрина аренды scope'ов для MCP-адаптера (задание 11.4).
+    const intentionallyUndeclared = new Set<string>(["GET /ai/v1/tools"]);
     for (const route of actual) {
       if (!declared.has(route) && !intentionallyUndeclared.has(route)) throw new Error(`Маршрут ${route} есть в контроллере, но не описан в AGENT_TOOLS`);
     }
@@ -83,6 +88,27 @@ describe("MCP-адаптер", () => {
       expect(tool.description).toContain("Режимы токена:");
       expect(tool.inputSchema).toEqual(AGENT_TOOLS[index]!.input);
     }
+  });
+
+  it("tools/list берёт отфильтрованный по аренде список у сервера, а не весь каталог", async () => {
+    // Сервер вернул только разрешённые токену read-only инструменты (11.4) — адаптер не должен
+    // добавлять остальной каталог и обязан сохранить описание/схему сервера.
+    const fetchImpl = (async (url: string | URL | Request) =>
+      String(url).endsWith("/ai/v1/tools")
+        ? new Response(
+            JSON.stringify({
+              tools: [
+                { name: "orion_git_graph", description: "граф", inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false }, moduleId: "orion-dev" },
+                { name: "orion_architect_map", description: "карта", inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false }, moduleId: "orion-dev" }
+              ]
+            }),
+            { status: 200 }
+          )
+        : new Response(JSON.stringify({ mode: "observer" }), { status: 200 })) as unknown as typeof fetch;
+    const result = (await handleMcpMessage({ id: 1, method: "tools/list" }, settings, { fetchImpl })) as { tools: Array<{ name: string; description: string }> };
+    expect(result.tools.map((tool) => tool.name)).toEqual(["orion_git_graph", "orion_architect_map"]);
+    expect(result.tools[0]!.description).toContain("Режимы токена:");
+    expect(result.tools[0]!.description).toContain("orion-dev.development_import.read");
   });
 
   it("описания инструментов называют режимы; изменение — запрос у помощника, отказ у наблюдателя", () => {
