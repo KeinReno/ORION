@@ -590,13 +590,13 @@ describe("ТЗ-05: два пользователя, три пространст�
     // Отзыв делает код недействительным.
     expect((await request(`/workspaces/${home}/invites/${created.data.id}`, { method: "DELETE", token: reno.token })).status).toBeLessThan(300);
     expect((await request<{ status: string }>(`/invites/${token}`)).data.status).toBe("revoked");
-    expect((await request(`/invites/${token}/accept`, { method: "POST", token: guest.token })).status).toBe(400);
+    expect((await request(`/invites/${token}/accept`, { method: "POST", token: guest.token })).status).toBe(409);
 
     // Просроченное — expired и не принимается.
     const second = await request<{ id: string; code: string }>(`/workspaces/${home}/invites`, { method: "POST", token: reno.token, body: { email: guest.email } });
     await prisma.asSystem((tx) => tx.workspaceInvite.update({ where: { id: second.data.id }, data: { expiresAt: new Date(Date.now() - 1000) } }));
     expect((await request<{ status: string }>(`/invites/${second.data.code}`)).data.status).toBe("expired");
-    expect((await request(`/invites/${second.data.code}/accept`, { method: "POST", token: guest.token })).status).toBe(400);
+    expect((await request(`/invites/${second.data.code}/accept`, { method: "POST", token: guest.token })).status).toBe(410);
 
     // Принятое — used, повторно не принять; роль берётся из приглашения.
     const third = await request<{ code: string }>(`/workspaces/${home}/invites`, { method: "POST", token: reno.token, body: { email: guest.email, role: "lead" } });
@@ -604,7 +604,7 @@ describe("ТЗ-05: два пользователя, три пространст�
     expect((await request(`/invites/${third.data.code}/accept`, { method: "POST", token: guest.token })).status).toBe(201);
     expect((await memberRow(home, guest.userId)).role).toBe("lead");
     expect((await request<{ status: string }>(`/invites/${third.data.code}`)).data.status).toBe("used");
-    expect((await request(`/invites/${third.data.code}/accept`, { method: "POST", token: guest.token })).status).toBe(400);
+    expect((await request(`/invites/${third.data.code}/accept`, { method: "POST", token: guest.token })).status).toBe(409);
 
     // Смена роли — только владелец; лид не может понизить/повысить.
     const guestRow = await memberRow(home, guest.userId);

@@ -153,7 +153,7 @@ export class HealthService {
         create: { workspaceId, subjectId, granteeUserId, level: input.level },
         update: { level: input.level }
       });
-      return { subjectId, granteeUserId, granteeName: member.user.name, level: input.level, createdAt: row.createdAt.toISOString() };
+      return { subjectId, granteeUserId, granteeName: member.user?.name ?? "Участник", level: input.level, createdAt: row.createdAt.toISOString() };
     });
   }
 

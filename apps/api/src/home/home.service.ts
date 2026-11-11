@@ -275,7 +275,9 @@ export class HomeService {
           minutes: tracked > 0 ? tracked : t.estimatedMinutes
         };
       });
-      return buildContributions({ period, now, members: memberRows.map((m) => ({ userId: m.userId, name: m.user.name })), tasks });
+      // Агентские членства (задание 12) не имеют `User` и не участвуют в человеческой статистике.
+      const humanRows = memberRows.flatMap((m) => (m.userId && m.user ? [{ userId: m.userId, name: m.user.name }] : []));
+      return buildContributions({ period, now, members: humanRows, tasks });
     });
   }
 

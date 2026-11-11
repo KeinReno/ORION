@@ -127,6 +127,8 @@ export class WorkspacesService {
       return tx.workspaceMember.findMany({
         where: {
           workspaceId,
+          // Агентское членство (задание 12) — не человек: выдать ему доступ как пользователю нельзя.
+          kind: "human",
           userId: { not: userId },
           user: {
             OR: [
@@ -139,7 +141,7 @@ export class WorkspacesService {
         take: 20
       });
     });
-    return rows.map((m) => ({ userId: m.user.id, email: m.user.email, name: m.user.name }));
+    return rows.flatMap((m) => (m.user ? [{ userId: m.user.id, email: m.user.email, name: m.user.name }] : []));
   }
 
   /**

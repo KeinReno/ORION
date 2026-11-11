@@ -34,15 +34,17 @@ export class TaskClosedNotifier implements OnModuleInit {
     const payload = parseDomainEventPayload("tasks.task.closed", event.payload);
     if (!payload.assigneeId) return;
     const assignee = await tx.workspaceMember.findUnique({ where: { id: payload.assigneeId }, select: { userId: true } });
-    if (!assignee) return;
-    const allowed = await this.policy.allowsForUserTx(tx, assignee.userId, "task");
+    // Агентское членство (задание 12) не имеет `User` — уведомление в личную ленту ему адресовать некуда.
+    if (!assignee?.userId) return;
+    const recipientId = assignee.userId;
+    const allowed = await this.policy.allowsForUserTx(tx, recipientId, "task");
     await restoreSystemRole(tx); // allowsForUserTx ends with RESET ROLE
     if (!allowed) return;
     const task = await tx.task.findUnique({ where: { id: payload.id }, select: { title: true } });
     if (!task) return;
     await this.notifications.createTx(tx, {
       workspaceId: event.workspaceId,
-      recipientId: assignee.userId,
+      recipientId,
       kind: "system",
       title: `Задача закрыта: ${task.title}`,
       entityType: "task",

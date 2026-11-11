@@ -6,10 +6,11 @@ import { WorkspaceInvitesController, InviteAcceptController } from "./invites.co
 import { WorkspaceInvitesService } from "./invites.service";
 import { WorkspaceMembersController } from "./members.controller";
 import { WorkspaceMembersService } from "./members.service";
+import { WorkspaceTeamController } from "./team.controller";
 
 @Module({
   imports: [AuthModule],
-  controllers: [WorkspacesController, WorkspaceInvitesController, InviteAcceptController, WorkspaceMembersController],
+  controllers: [WorkspacesController, WorkspaceInvitesController, InviteAcceptController, WorkspaceMembersController, WorkspaceTeamController],
   providers: [WorkspacesService, WorkspaceInvitesService, WorkspaceMembersService],
   exports: [WorkspacesService]
 })

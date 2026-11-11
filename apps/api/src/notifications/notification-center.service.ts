@@ -46,6 +46,13 @@ function moduleIdForEntityType(entityType: string | null): OrionModuleId | null 
   }
 }
 
+/** Типы уведомлений, для которых можно проверить само существование объекта в этом пространстве. */
+const OBJECT_BACKED_ENTITY_TYPES = new Set(["task", "note", "project", "document", "event"]);
+
+/** Признак «содержимое скрыто» — клиенту не отдаются ни title объекта, ни body. */
+const REDACTED_TITLE = "Содержимое недоступно";
+const REDACTED_BODY = "Объект этого уведомления больше недоступен в этом пространстве.";
+
 export interface CreateNotificationData {
   workspaceId: string;
   /** User id this notification is addressed to. Required — see the class comment. */
@@ -123,15 +130,61 @@ export class NotificationCenterService {
         // not silently short of a full page.
         take: 300
       });
-      return found.filter((n) => this.isVisibleToActor(n.entityType, accessible)).slice(0, 100);
+      const visible = await this.visibleEntityIdsTx(tx, workspaceId, found);
+      return found
+        .filter((n) => this.isVisibleToActor(n.entityType, accessible))
+        .slice(0, 100)
+        .map((row) => ({ row, visible: this.entityVisible(row, visible) }));
     });
-    return rows.map(toDto);
+    return rows.map(({ row, visible }) => (visible ? toDto(row) : toRedactedDto(row)));
   }
 
   /** Same module-access gate as `list()` — see its doc comment. */
   private isVisibleToActor(entityType: string | null, accessible: Set<OrionModuleId>): boolean {
     const moduleId = moduleIdForEntityType(entityType);
     return !moduleId || accessible.has(moduleId);
+  }
+
+  /**
+   * 12.3: «уведомление не раскрывает содержимое объекта, к которому у получателя нет доступа».
+   * Модульный гейт закрывает выключенный/ограниченный раздел, но не удалённый или чужой объект с тем
+   * же id. Здесь одним пачкой на каждый тип проверяется, что объект правда существует в ЭТОМ
+   * пространстве; отсутствующий объект не отдаёт ни заголовка, ни тела.
+   */
+  private async visibleEntityIdsTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    rows: ReadonlyArray<{ entityType: string | null; entityId: string | null }>
+  ): Promise<Set<string>> {
+    const byType = new Map<string, Set<string>>();
+    for (const row of rows) {
+      if (!row.entityType || !row.entityId || !OBJECT_BACKED_ENTITY_TYPES.has(row.entityType)) continue;
+      const ids = byType.get(row.entityType) ?? new Set<string>();
+      ids.add(row.entityId);
+      byType.set(row.entityType, ids);
+    }
+    const visible = new Set<string>();
+    for (const [type, ids] of byType) {
+      const idList = [...ids];
+      const found =
+        type === "task"
+          ? await tx.task.findMany({ where: { workspaceId, id: { in: idList } }, select: { id: true } })
+          : type === "note"
+            ? await tx.note.findMany({ where: { workspaceId, id: { in: idList } }, select: { id: true } })
+            : type === "project"
+              ? await tx.project.findMany({ where: { workspaceId, id: { in: idList } }, select: { id: true } })
+              : type === "document"
+                ? await tx.document.findMany({ where: { workspaceId, id: { in: idList } }, select: { id: true } })
+                : await tx.event.findMany({ where: { workspaceId, id: { in: idList } }, select: { id: true } });
+      for (const row of found) visible.add(`${type}:${row.id}`);
+    }
+    return visible;
+  }
+
+  /** Объект без проверяемого id (например, системное уведомление) считается видимым. */
+  private entityVisible(row: { entityType: string | null; entityId: string | null }, visible: Set<string>): boolean {
+    if (!row.entityType || !row.entityId || !OBJECT_BACKED_ENTITY_TYPES.has(row.entityType)) return true;
+    return visible.has(`${row.entityType}:${row.entityId}`);
   }
 
   async markRead(userId: string, workspaceId: string, notificationId: string, read: boolean): Promise<Notification> {
@@ -153,6 +206,10 @@ export class NotificationCenterService {
       if (!this.isVisibleToActor(notification.entityType, accessible)) {
         throw new NotFoundException("Уведомление не найдено");
       }
+      const visible = await this.visibleEntityIdsTx(tx, workspaceId, [notification]);
+      if (!this.entityVisible(notification, visible)) {
+        throw new NotFoundException("Уведомление не найдено");
+      }
       return tx.notification.update({ where: { id: notificationId }, data: { readAt: read ? new Date() : null } });
     });
     return toDto(row);
@@ -168,9 +225,12 @@ export class NotificationCenterService {
       // since `updateMany`'s WHERE can't run the module-access rule itself.
       const candidates = await tx.notification.findMany({
         where: { workspaceId, recipientId: userId, readAt: null },
-        select: { id: true, entityType: true }
+        select: { id: true, entityType: true, entityId: true }
       });
-      const ids = candidates.filter((n) => this.isVisibleToActor(n.entityType, accessible)).map((n) => n.id);
+      const visibleEntities = await this.visibleEntityIdsTx(tx, workspaceId, candidates);
+      const ids = candidates
+        .filter((n) => this.isVisibleToActor(n.entityType, accessible) && this.entityVisible(n, visibleEntities))
+        .map((n) => n.id);
       if (ids.length === 0) return { updated: 0 };
       const result = await tx.notification.updateMany({
         where: { id: { in: ids } },
@@ -266,6 +326,28 @@ function toDto(row: {
     body: row.body,
     entityType: row.entityType,
     entityId: row.entityId,
+    readAt: row.readAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString()
+  };
+}
+
+/**
+ * 12.3: уведомление, чей объект больше не виден получателю, остаётся его строкой (readAt, kind,
+ * время) — но без заголовка/тела и без id объекта. Так лента не превращается в канал утечки.
+ */
+function toRedactedDto(row: {
+  id: string; workspaceId: string; recipientId: string | null; kind: string; title: string; body: string;
+  entityType: string | null; entityId: string | null; readAt: Date | null; createdAt: Date;
+}): Notification {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    recipientId: row.recipientId,
+    kind: row.kind as Notification["kind"],
+    title: REDACTED_TITLE,
+    body: REDACTED_BODY,
+    entityType: null,
+    entityId: null,
     readAt: row.readAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString()
   };

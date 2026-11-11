@@ -71,8 +71,8 @@ export class ProjectUpdatesService {
       const members =
         input.health === "on_track"
           ? []
-          : await tx.workspaceMember.findMany({ where: { workspaceId, NOT: { userId } }, select: { userId: true } });
-      return { dto: toDto(created, userId), recipients: members.map((member) => member.userId), projectName: project.name };
+          : await tx.workspaceMember.findMany({ where: { workspaceId, kind: "human", userId: { not: null }, NOT: { userId } }, select: { userId: true } });
+      return { dto: toDto(created, userId), recipients: members.flatMap((member) => (member.userId ? [member.userId] : [])), projectName: project.name };
     });
 
     for (const recipientId of recipients) {

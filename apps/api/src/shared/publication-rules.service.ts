@@ -109,7 +109,8 @@ export class PublicationRulesService implements OnModuleInit {
       const action = own?.revokedAt || !own && other ? "excluded" as const : own ? "update" as const : "publish" as const;
       return { sourceId: item.sourceId, content: this.content(item.content), revision: item.revision, action };
     });
-    const recipients = (await tx.workspaceMember.findMany({ where: { workspaceId: config.workspaceId }, orderBy: { userId: "asc" }, select: { userId: true, role: true } }));
+    const recipients = (await tx.workspaceMember.findMany({ where: { workspaceId: config.workspaceId, kind: "human", userId: { not: null } }, orderBy: { userId: "asc" }, select: { userId: true, role: true } }))
+      .flatMap(member => (member.userId ? [{ userId: member.userId, role: member.role as string }] : []));
     const fingerprint = createHash("sha256").update(JSON.stringify({ id: row.id, revision: row.revision, config, items, recipients, existing: existing.map(p => ({ id: p.id, revision: p.revision, revokedAt: p.revokedAt })) })).digest("hex");
     return { count: items.length, publishableCount: items.filter(item => item.action !== "excluded").length, items: items.map(({ sourceId, content, action }) => ({ sourceId, content, action })), recipients, fingerprint };
   }

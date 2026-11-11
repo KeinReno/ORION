@@ -135,7 +135,8 @@ export class NotificationPolicyService {
     const userId = await read(async (tx) => {
       const membership =
         (await tx.workspaceMember.findFirst({ where: { workspaceId, role: "owner" } })) ??
-        (await tx.workspaceMember.findFirst({ where: { workspaceId } }));
+        // Агентское членство (задание 12) не имеет `User` — владельцем по умолчанию быть не может.
+        (await tx.workspaceMember.findFirst({ where: { workspaceId, kind: "human", userId: { not: null } } }));
       if (!membership) {
         this.logger.warn(`Workspace ${workspaceId} has no members; delivering reminders by default`);
         return null;

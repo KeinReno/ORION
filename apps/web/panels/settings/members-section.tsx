@@ -220,7 +220,7 @@ export function MembersSettings(): React.ReactElement {
                     <Badge tone="neutral">{STATUS_LABEL[invite.status]}</Badge>
                   </p>
                   <p className="mt-0.5 text-2xs text-muted-foreground">
-                    {ROLE_LABEL[invite.role]} · истекает {shortDateTime(invite.expiresAt)}
+                    {ROLE_LABEL[invite.role]} · {invite.expiresAt ? `истекает ${shortDateTime(invite.expiresAt)}` : "бессрочно"}
                   </p>
                 </div>
                 <Button size="sm" variant="ghost" disabled={revokeInvite.isPending} onClick={() => void onRevoke(invite)}>

@@ -5,6 +5,7 @@ import { PrismaService } from "../common/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { NotificationCenterService } from "../notifications/notification-center.service";
 import { NotificationPolicyService } from "../notifications/notification-policy.service";
+import { MentionsService } from "../notifications/mentions.service";
 
 /** `list()` pagination knobs — mirrors `TimePageOptions` (S15). */
 export interface TaskCommentPageOptions {
@@ -37,7 +38,8 @@ export class TaskCommentsService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly notifications: NotificationCenterService,
-    private readonly policy: NotificationPolicyService
+    private readonly policy: NotificationPolicyService,
+    private readonly mentions: MentionsService
   ) {}
 
   /** Cursor-paginated, newest first (same composite-cursor shape as `TimeService.list`, S15). */
@@ -122,6 +124,20 @@ export class TaskCommentsService {
         })
       );
     }
+    // Упоминания `@имя` (задание 12.3): люди получают адресное уведомление, агенты — событие в
+    // своей очереди. Исполнитель уже получил уведомление о комментарии выше, второй раз не шлём.
+    await this.mentions.deliver({
+      workspaceId,
+      actorId: userId,
+      body: input.body,
+      entityType: "task",
+      entityId: taskId,
+      entityLabel: `задаче «${taskTitle}»`,
+      notificationKind: "task_comment",
+      policyKind: "task",
+      eventKeyPrefix: `mention:task_comment:${comment.id}`,
+      excludeUserIds: recipientId ? [recipientId] : []
+    });
     return toDto(comment, userId);
   }
 

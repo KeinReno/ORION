@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
 import {
   createWorkspaceInviteInputSchema,
+  resendWorkspaceInviteInputSchema,
   type CreateWorkspaceInviteInput,
   type CreatedWorkspaceInvite,
   type InviteLookup,
+  type ResendWorkspaceInviteInput,
   type WorkspaceInvite
 } from "@orion/shared-types";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
@@ -28,7 +30,18 @@ export class WorkspaceInvitesController {
     @Param("workspaceId") workspaceId: string,
     @Body(new ZodValidationPipe(createWorkspaceInviteInputSchema)) body: CreateWorkspaceInviteInput
   ): Promise<CreatedWorkspaceInvite> {
-    return this.invites.create(user.userId, workspaceId, body.email, body.role);
+    return this.invites.create(user.userId, workspaceId, body.email, body.role, body.expiresInDays);
+  }
+
+  /** Повторная отправка (12.2): новый код/ссылка, прежний перестаёт работать; срок перезапускается. */
+  @Post(":inviteId/resend")
+  resend(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("inviteId") inviteId: string,
+    @Body(new ZodValidationPipe(resendWorkspaceInviteInputSchema)) body: ResendWorkspaceInviteInput
+  ): Promise<CreatedWorkspaceInvite> {
+    return this.invites.resend(user.userId, workspaceId, inviteId, body.expiresInDays);
   }
 
   @Delete(":inviteId")
