@@ -175,7 +175,7 @@ describe("Task integration projections for Time and Calendar (ADR-0030)", () => 
     await expect(prisma.withUser(alice.user.id, async tx => {
       const row = await tx.task.create({ data: { workspaceId: alice.workspaceId, title: "uncommitted", dueAt: new Date(range.startedAt) } });
       id = row.id;
-      expect(await reader.referenceTx(tx, alice.workspaceId, id)).toEqual({ id, projectId: null });
+      expect(await reader.referenceTx(tx, alice.workspaceId, id)).toEqual({ id, projectId: null, assigneeId: null });
       expect(await reader.referenceTx(tx, outsider.workspaceId, id)).toBeNull();
       const dated = await reader.datedTx(tx, alice.workspaceId);
       expect(Object.keys(dated[0]).sort()).toEqual(["description", "dueAt", "id", "projectTag", "status", "title"]);

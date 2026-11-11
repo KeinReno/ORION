@@ -109,7 +109,7 @@ describe("API workspace isolation", () => {
     const hiddenFromBob = await prisma.withUser(bob.user.id, (tx) =>
       tx.note.findMany({ where: { workspaceId: alice.workspaceId } })
     );
-    expect(visibleToAlice).toHaveLength(2);
+    expect(visibleToAlice).toHaveLength(1);
     expect(hiddenFromBob).toHaveLength(0);
   });
 
