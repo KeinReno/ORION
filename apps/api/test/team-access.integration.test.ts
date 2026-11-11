@@ -143,6 +143,12 @@ describe("Team and access (задание 12)", () => {
     const events = await request<unknown[]>(`/workspaces/${workspaceId}/team/agents/${agentMemberId}/events`, { method: "GET", token: bob.accessToken });
     expect(events.status).toBe(200);
     expect(events.data).toEqual([]);
+
+    // Переименование профиля обновляет снимок имени в ростере (триггер, не код модуля).
+    await prisma.asSystem((tx) => tx.agentHubAgentProfile.update({ where: { id: agentProfileId }, data: { name: "Рита-2" } }));
+    const renamed = await request<Array<Record<string, unknown>>>(`/workspaces/${workspaceId}/team?kind=agent`, { method: "GET", token: alice.accessToken });
+    expect(renamed.data[0]).toMatchObject({ name: "Рита-2" });
+    await prisma.asSystem((tx) => tx.agentHubAgentProfile.update({ where: { id: agentProfileId }, data: { name: "Рита" } }));
   });
 
   it("агент с правом только читать не меняет задачу, даже когда создатель — owner (403 про scope, не 500)", async () => {
