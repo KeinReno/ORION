@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  PROJECT_TREE_MAX_DEPTH,
   compareProjectsByLifecycle,
   normaliseProjectOrder,
   type ReorderProjectsInput,
@@ -15,8 +16,11 @@ import {
 } from "@orion/shared-types";
 import { ProjectAggregateRegistry, type ProjectAggregate } from "../common/project-aggregates";
 import { PrismaService } from "../common/prisma.service";
+import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { ModulesService } from "../modules/modules.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { ProjectHierarchyRepository } from "./project-hierarchy.repository";
+import { ProjectHistoryService } from "./project-history.service";
 
 @Injectable()
 export class ProjectsService {
@@ -24,7 +28,10 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly aggregates: ProjectAggregateRegistry
+    private readonly aggregates: ProjectAggregateRegistry,
+    private readonly events: DomainEventBus,
+    private readonly hierarchy: ProjectHierarchyRepository,
+    private readonly history: ProjectHistoryService
   ) {}
 
   async list(userId: string, workspaceId: string, archived = false): Promise<Project[]> {
@@ -64,13 +71,16 @@ export class ProjectsService {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const row = await this.assertOwnedTx(tx, workspaceId, projectId);
-      const [items, activity] = await Promise.all([
+      const [items, activity, ancestors, childCount] = await Promise.all([
         this.toDtos(tx, userId, [row]),
-        this.activity(tx, projectId, await this.modules.accessibleSetTx(tx, userId, workspaceId))
+        this.activity(tx, projectId, await this.modules.accessibleSetTx(tx, userId, workspaceId)),
+        // Дерево проектов (задание 03): путь от корня до родителя + число детей.
+        this.hierarchy.ancestorsTx(tx, workspaceId, projectId),
+        tx.project.count({ where: { workspaceId, parentId: projectId, archivedAt: null } })
       ]);
       const project = items[0];
       if (!project) throw new NotFoundException("Проект не найден");
-      return { ...project, activity };
+      return { ...project, activity, ancestors, childCount };
     });
   }
 
@@ -81,10 +91,13 @@ export class ProjectsService {
         where: { workspaceId, name: { equals: input.name, mode: "insensitive" } }
       });
       if (duplicate) throw new ConflictException("Проект с таким названием уже существует");
+      // Новый проект сразу может быть дочерним — проверки те же, что при смене родителя.
+      if (input.parentId) await this.assertParentAssignmentTx(tx, workspaceId, null, input.parentId);
       const row = await tx.project.create({
         data: {
           workspaceId,
           ...input,
+          parentId: input.parentId ?? null,
           startAt: input.startAt ?? null,
           dueAt: input.dueAt ?? null,
           budgetAmount: input.budgetAmount ?? null,
@@ -99,14 +112,67 @@ export class ProjectsService {
   async update(userId: string, workspaceId: string, projectId: string, input: UpdateProjectInput): Promise<Project> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertOwnedTx(tx, workspaceId, projectId);
+      const current = await this.assertOwnedTx(tx, workspaceId, projectId);
+      // 12.4: `expectedRevision` — CAS-токен в стиле Task.revision/Note.revision. Правка без него
+      // (архивация, перестановка полей из соседних сценариев) остаётся last-write-wins, но ревизия
+      // всё равно растёт, чтобы открытая форма узнала о чужой записи.
+      const { expectedRevision, ...patch } = input;
       if (input.name) {
         const duplicate = await tx.project.findFirst({
           where: { workspaceId, id: { not: projectId }, name: { equals: input.name, mode: "insensitive" } }
         });
         if (duplicate) throw new ConflictException("Проект с таким названием уже существует");
       }
-      const row = await tx.project.update({ where: { id: projectId }, data: input });
+      // Дерево (задание 03): проверка цикла и глубины ДО записи; блокировка пространства
+      // внутри — чтобы две встречные правки не создали петлю.
+      if (input.parentId !== undefined) await this.assertParentAssignmentTx(tx, workspaceId, projectId, input.parentId);
+      const written = await tx.project.updateMany({
+        where: { id: projectId, ...(expectedRevision !== undefined ? { revision: expectedRevision } : {}) },
+        data: { ...patch, revision: { increment: 1 } }
+      });
+      if (written.count === 0) {
+        const latest = await this.assertOwnedTx(tx, workspaceId, projectId);
+        throw new ConflictException({
+          code: "project_revision_conflict",
+          message: "Проект изменил кто-то другой, пока вы редактировали — загрузите последнюю версию",
+          currentRevision: latest.revision,
+          current: this.requireDto(await this.toDtos(tx, userId, [latest]))
+        });
+      }
+      const row = await tx.project.findUniqueOrThrow({ where: { id: projectId } });
+      // Audit trail (3.4) пишется в этой же транзакции: кто/когда/какое поле. Даты
+      // нормализуются в Date, чтобы «тот же момент в другом поясе» не стал изменением.
+      await this.history.recordTx(tx, {
+        workspaceId,
+        projectId,
+        actorId: userId,
+        changes: this.history.changesBetween(current, {
+          ...patch,
+          startAt: input.startAt !== undefined ? (input.startAt ? new Date(input.startAt) : null) : undefined,
+          dueAt: input.dueAt !== undefined ? (input.dueAt ? new Date(input.dueAt) : null) : undefined,
+          archivedAt: input.archivedAt !== undefined ? (input.archivedAt ? new Date(input.archivedAt) : null) : undefined
+        })
+      });
+      // Задание 05: журнал проекта получает автозапись из события, а не из
+      // прямого вызова logbook. Событие пишется в этой же транзакции (outbox).
+      if (input.status !== undefined && input.status !== current.status) {
+        await this.events.publishTx(tx, {
+          workspaceId, actorId: userId, type: "projects.project.status_changed",
+          payload: { id: projectId, from: current.status, to: input.status }
+        });
+      }
+      if (input.startAt !== undefined || input.dueAt !== undefined) {
+        const nextStart = input.startAt !== undefined ? input.startAt : current.startAt?.toISOString() ?? null;
+        const prevStart = current.startAt?.toISOString() ?? null;
+        const nextDue = input.dueAt !== undefined ? input.dueAt : current.dueAt?.toISOString() ?? null;
+        const prevDue = current.dueAt?.toISOString() ?? null;
+        if (nextStart !== prevStart || nextDue !== prevDue) {
+          await this.events.publishTx(tx, {
+            workspaceId, actorId: userId, type: "projects.project.dates_changed",
+            payload: { id: projectId, startAtFrom: prevStart, startAtTo: nextStart, dueAtFrom: prevDue, dueAtTo: nextDue }
+          });
+        }
+      }
       return this.requireDto(await this.toDtos(tx, userId, [row]));
     });
   }
@@ -119,6 +185,47 @@ export class ProjectsService {
     const project = await tx.project.findUnique({ where: { id: projectId } });
     if (!project || project.workspaceId !== workspaceId) throw new NotFoundException("Проект не найден");
     return project;
+  }
+
+  /**
+   * Иерархия проектов (3.1): родитель должен быть в этом же пространстве, не создавать
+   * цикл и не выводить дерево за пределы `PROJECT_TREE_MAX_DEPTH`. Цикл — 409 с путём
+   * `A → B → C → A`; слишком глубокое дерево — 400 с понятной причиной.
+   *
+   * Блокировка строки пространства сериализует правки дерева: без неё две встречные
+   * правки (A.parent=B и B.parent=A) прошли бы проверку обе и создали петлю.
+   */
+  private async assertParentAssignmentTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    projectId: string | null,
+    parentId: string | null
+  ): Promise<void> {
+    if (!parentId) return;
+    if (projectId && parentId === projectId) {
+      throw new ConflictException({ code: "project_hierarchy_cycle", message: `Цикл иерархии проектов: ${parentId} → ${projectId}` });
+    }
+    await this.hierarchy.lockWorkspaceTx(tx, workspaceId);
+    // Цепочка [родитель, …, корень]. Проект не найден → 404, а не «создадим корень».
+    const chain = await this.hierarchy.chainTx(tx, workspaceId, parentId);
+    if (chain.length === 0) throw new NotFoundException("Родительский проект не найден");
+    if (projectId) {
+      const index = chain.findIndex((node) => node.id === projectId);
+      if (index >= 0) {
+        // Проект — предок назначаемого родителя. Путь цикла: A → … → родитель → A.
+        const path = chain.slice(0, index + 1).reverse();
+        const names = [...path.map((node) => node.name), path[0]?.name ?? projectId];
+        throw new ConflictException({ code: "project_hierarchy_cycle", message: `Цикл иерархии проектов: ${names.join(" → ")}` });
+      }
+    }
+    const subtreeDepth = projectId ? await this.hierarchy.subtreeDepthTx(tx, workspaceId, projectId) : 0;
+    const newDepth = chain.length + 1;
+    if (newDepth + subtreeDepth > PROJECT_TREE_MAX_DEPTH) {
+      throw new BadRequestException(
+        `Дерево проектов не может быть глубже ${PROJECT_TREE_MAX_DEPTH} уровней: проект оказался бы на уровне ${newDepth}` +
+          (subtreeDepth > 0 ? `, а его поддерево добавляет ещё ${subtreeDepth}` : "")
+      );
+    }
   }
 
   private requireDto(items: Project[]): Project {
@@ -196,6 +303,7 @@ export class ProjectsService {
         currency: row.currency,
         contextNote: row.contextNote,
         sharedOrder: row.sharedOrder,
+        parentId: row.parentId,
         reportedHealth: (reportByProject.get(row.id)?.health as Project["reportedHealth"]) ?? null,
         reportedAt: reportByProject.get(row.id)?.createdAt.toISOString() ?? null,
         archivedAt: row.archivedAt?.toISOString() ?? null,
@@ -217,6 +325,7 @@ export class ProjectsService {
         unratedMinutes: time.unratedMinutes,
         plannedMinutes: tasks.plannedMinutes ?? null,
         lastActivityAt: lastActivityAt?.toISOString() ?? null,
+        revision: row.revision,
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString()
       };
