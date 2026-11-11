@@ -4,12 +4,14 @@ import {
   PRIMARY_SIDEBAR_ID,
   addNavFolder,
   createNavSidebar,
+  defaultNavFolderId,
   deleteNavFolder,
   initialNavSidebars,
   movePanelToSidebar,
   panelsForSidebar,
   parseNavSidebarState,
   removeNavSidebar,
+  seedDefaultNavFolders,
   updateNavSidebar,
 } from "./sidebar-instances";
 
@@ -183,5 +185,45 @@ describe("folders on every bar", () => {
     const state = movePanelToSidebar(createNavSidebar(initialNavSidebars()), "notes", "side-2");
     expect(movePanelToSidebar(state, "notes", "side-2", { folderId: "missing" })).toBe(state);
     expect(state.placement.notes).toBe("side-2");
+  });
+});
+
+describe("editable default folders", () => {
+  const defaults = [
+    { id: "dashboard" },
+    { id: "tasks", group: "Работа" },
+    { id: "notes", group: "Работа" },
+    { id: "finance", group: "Деньги и склад" },
+  ];
+
+  it("materializes built-in groups without taking over custom folders or ungrouped links", () => {
+    let state = addNavFolder(initialNavSidebars(), PRIMARY_SIDEBAR_ID, "Личное", "personal", "notes");
+    state = seedDefaultNavFolders(state, PRIMARY_SIDEBAR_ID, defaults);
+    expect(state.sidebars[0]?.folders).toEqual([
+      { id: "personal", name: "Личное", collapsed: false, items: ["notes"] },
+      { id: defaultNavFolderId("Работа"), name: "Работа", collapsed: false, items: ["tasks"] },
+      { id: defaultNavFolderId("Деньги и склад"), name: "Деньги и склад", collapsed: false, items: ["finance"] },
+    ]);
+    expect(panelsForSidebar(state, PRIMARY_SIDEBAR_ID, ["dashboard", "tasks", "notes", "finance"])).toEqual([
+      "dashboard", "notes", "tasks", "finance",
+    ]);
+  });
+
+  it("keeps deleted defaults deleted and lets a section live outside every folder after reload", () => {
+    let state = seedDefaultNavFolders(initialNavSidebars(), PRIMARY_SIDEBAR_ID, defaults);
+    state = movePanelToSidebar(state, "notes", PRIMARY_SIDEBAR_ID, {
+      folderId: null,
+      catalog: defaults.map(({ id }) => id),
+    });
+    state = deleteNavFolder(state, PRIMARY_SIDEBAR_ID, defaultNavFolderId("Деньги и склад"));
+    const restored = parseNavSidebarState(JSON.parse(JSON.stringify(state)));
+    expect(restored.sidebars[0]?.defaultFoldersSeeded).toBe(true);
+    expect(restored.sidebars[0]?.folders.map((folder) => folder.id)).toEqual([defaultNavFolderId("Работа")]);
+    expect(restored.sidebars[0]?.folders[0]?.items).toEqual(["tasks"]);
+    expect(restored.sidebars[0]?.order).toEqual(["dashboard", "notes", "finance"]);
+    expect(seedDefaultNavFolders(restored, PRIMARY_SIDEBAR_ID, defaults)).toBe(restored);
+    expect(panelsForSidebar(restored, PRIMARY_SIDEBAR_ID, defaults.map(({ id }) => id))).toEqual([
+      "dashboard", "notes", "finance", "tasks",
+    ]);
   });
 });

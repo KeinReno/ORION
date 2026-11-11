@@ -160,7 +160,7 @@ export interface SidebarProps {
 
 const DRAG_TYPE = "application/x-orion-sidebar-link";
 
-type NavDropAttrs = React.HTMLAttributes<HTMLElement> & {
+type NavDropAttrs = Pick<React.HTMLAttributes<HTMLElement>, "onDragOver" | "onDragLeave" | "onDrop"> & {
   "data-orion-nav-before"?: string;
   "data-orion-nav-folder"?: string;
 };
@@ -545,7 +545,7 @@ export function Sidebar({
         key={link.label}
         {...(folder ? dropProps(key, folder.id, link.id) : linkDropProps(link))}
         className={clsx(
-          "rounded-lg data-[orion-nav-hot]:bg-accent/15 data-[orion-nav-hot]:ring-1 data-[orion-nav-hot]:ring-accent",
+          "rounded-lg transition-colors data-[orion-nav-hot]:bg-accent/15 data-[orion-nav-hot]:ring-1 data-[orion-nav-hot]:ring-accent",
           isDropTarget && folder && "bg-accent/10 ring-1 ring-accent/60",
           isDropTarget && !folder && dropMode === "group" && "bg-accent/10 ring-1 ring-accent/60",
           isDropTarget && !folder && dropMode === "order" && "border-t-2 border-accent"
@@ -566,7 +566,7 @@ export function Sidebar({
   for (const link of free) {
     if (link.group && !groupOrder.includes(link.group)) groupOrder.push(link.group);
   }
-  const hasSections = groupOrder.length > 0 || folders.length > 0;
+  const hasSections = groupOrder.length > 0 || folders.length > 0 || Boolean(onCreateFolder);
   const grouped = open && hasSections;
   const linkById = new Map(links.filter((l) => l.id).map((l) => [l.id as string, l]));
   const iconButtonClass = clsx(
@@ -659,7 +659,7 @@ export function Sidebar({
       <div
         key={`folder:${folder.id}`}
         {...dropProps(`folder:${folder.id}`, folder.id)}
-        className={clsx("flex flex-col gap-1 rounded-lg", dragId && dropKey === `folder:${folder.id}` && "bg-accent/10 ring-1 ring-accent/60")}
+        className={clsx("flex flex-col gap-1 rounded-lg transition-colors", dragId && dropKey === `folder:${folder.id}` && "bg-accent/10 ring-1 ring-accent/60")}
       >
         <div className="group/folder flex items-center gap-0.5">
           <button
@@ -669,10 +669,11 @@ export function Sidebar({
               if (folder.menuItems && folder.menuItems.length > 0) showContextMenu(event, folder.menuItems);
             }}
             aria-expanded={!folder.collapsed}
+            aria-label={`Папка «${folder.name}», разделов: ${members.length}`}
             className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <motion.span
-              animate={{ rotate: folder.collapsed ? -90 : 0 }}
+              animate={{ rotate: folder.collapsed && !reduceMotion ? -90 : 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.15 }}
               className="flex h-3 w-3 shrink-0 items-center justify-center"
             >
@@ -780,62 +781,61 @@ export function Sidebar({
               {railLabel}
             </div>
           ) : null}
-          {!grouped
-            ? hasSections
-              ? renderRail()
-              : links.map(renderLink)
-            : [
-                ...ungrouped.map(renderLink),
-                ungrouped.length > 0 ? <div key="__sep" className="my-1 h-px bg-border" aria-hidden /> : null,
-                ...folders.map(renderFolder),
-                folders.length > 0 && groupOrder.length > 0 ? <div key="__sep2" className="my-1 h-px bg-border" aria-hidden /> : null,
-                ...groupOrder.map((groupName) => {
-                  const items = free.filter((l) => l.group === groupName);
-                  const isCollapsed = collapsedGroups.has(groupName);
-                  return (
-                    <div key={groupName} className="flex flex-col gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(groupName)}
-                        aria-expanded={!isCollapsed}
-                        className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground"
+          {!grouped ? (
+            hasSections ? renderRail() : links.map(renderLink)
+          ) : (
+            <>
+              {ungrouped.map(renderLink)}
+              {ungrouped.length > 0 ? <div key="ungrouped-separator" className="my-1 h-px bg-border" aria-hidden /> : null}
+              {folders.map(renderFolder)}
+              {folders.length > 0 && groupOrder.length > 0 ? <div key="folder-separator" className="my-1 h-px bg-border" aria-hidden /> : null}
+              {groupOrder.map((groupName) => {
+                const items = free.filter((l) => l.group === groupName);
+                const isCollapsed = collapsedGroups.has(groupName);
+                return (
+                  <div key={groupName} className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(groupName)}
+                      aria-expanded={!isCollapsed}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground"
+                    >
+                      <motion.span
+                        animate={{ rotate: isCollapsed && !reduceMotion ? -90 : 0 }}
+                        transition={{ duration: reduceMotion ? 0 : 0.15 }}
+                        className="flex h-3 w-3 shrink-0 items-center justify-center"
                       >
-                        <motion.span
-                          animate={{ rotate: isCollapsed ? -90 : 0 }}
-                          transition={{ duration: reduceMotion ? 0 : 0.15 }}
-                          className="flex h-3 w-3 shrink-0 items-center justify-center"
-                        >
-                          <ChevronDown className="h-3 w-3" aria-hidden />
-                        </motion.span>
-                        {groupName}
-                      </button>
-                      {!isCollapsed ? (
-                        // The connecting "branch" line — a thin border the group's own
-                        // rows sit against, so the tree structure reads even without
-                        // per-row indentation eating into the label width.
-                        <div className="ml-[19px] flex flex-col gap-1 border-l border-border pl-2">
-                          {items.map(renderLink)}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                }),
-                onCreateFolder ? (
-                  <button
-                    key="__new-folder"
-                    type="button"
-                    onClick={() => onCreateFolder()}
-                    {...dropProps("new-folder", null, undefined, (id) => onCreateFolder(id))}
-                    className={clsx(
-                      "mt-1 flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-1.5 text-left text-2xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
-                      dragId && dropKey === "new-folder" && "border-accent text-foreground"
-                    )}
-                  >
-                    <FolderPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    Новая папка
-                  </button>
-                ) : null
-              ]}
+                        <ChevronDown className="h-3 w-3" aria-hidden />
+                      </motion.span>
+                      {groupName}
+                    </button>
+                    {!isCollapsed ? (
+                      // The connecting "branch" line — a thin border the group's own
+                      // rows sit against, so the tree structure reads even without
+                      // per-row indentation eating into the label width.
+                      <div className="ml-[19px] flex flex-col gap-1 border-l border-border pl-2">
+                        {items.map(renderLink)}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {onCreateFolder ? (
+                <button
+                  type="button"
+                  onClick={() => onCreateFolder()}
+                  {...dropProps("new-folder", null, undefined, (id) => onCreateFolder(id))}
+                  className={clsx(
+                    "mt-1 flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-1.5 text-left text-2xs text-subtle-foreground transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                    dragId && dropKey === "new-folder" && "border-accent text-foreground"
+                  )}
+                >
+                  <FolderPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  Новая папка
+                </button>
+              ) : null}
+            </>
+          )}
         </nav>
       </div>
       <div

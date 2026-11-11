@@ -33,7 +33,7 @@ import {
   type MenuItem,
   type SidebarFolderView
 } from "@orion/ui";
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Columns2, ExternalLink, Folder, FolderPlus, LayoutTemplate, LogOut, Menu, PanelLeft, PanelRight, Search, SlidersHorizontal, Wrench } from "lucide-react";
+import { ArrowLeftRight, ArrowLeftToLine, ArrowRightToLine, ChevronLeft, ChevronRight, Columns2, ExternalLink, Folder, FolderPlus, LayoutTemplate, LogOut, Maximize2, Menu, Minimize2, PanelLeft, PanelRight, Search, SlidersHorizontal, Wrench, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -120,6 +120,7 @@ import {
   panelsForSidebar,
   removeNavSidebar,
   renameNavFolder,
+  seedDefaultNavFolders,
   seedPrimaryFolders,
   toggleNavFolder,
   updateNavSidebar,
@@ -217,9 +218,9 @@ function MoveToSecondaryHeaderAction({ activePanel }: IDockviewHeaderActionsProp
       onClick={() => moveToSecondaryDock(activePanel.id)}
       title="Переместить во второй сайдбар"
       aria-label="Переместить во второй сайдбар"
-      className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+      className="mr-2 flex h-7 w-7 items-center justify-center rounded-md text-subtle-foreground hover:bg-white/10 hover:text-foreground"
     >
-      ⇥
+      <ArrowRightToLine className="h-3.5 w-3.5" aria-hidden />
     </button>
   );
 }
@@ -233,9 +234,9 @@ function MoveToPrimaryHeaderAction({ activePanel }: IDockviewHeaderActionsProps)
       onClick={() => moveToPrimaryDock(activePanel.id)}
       title="Переместить в основной сайдбар"
       aria-label="Переместить в основной сайдбар"
-      className="mr-2 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+      className="mr-2 flex h-7 w-7 items-center justify-center rounded-md text-subtle-foreground hover:bg-white/10 hover:text-foreground"
     >
-      ⇤
+      <ArrowLeftToLine className="h-3.5 w-3.5" aria-hidden />
     </button>
   );
 }
@@ -274,9 +275,9 @@ function FloatHeaderAction({ containerApi, api, activePanel }: IDockviewHeaderAc
       onClick={toggle}
       title={floating ? "Вернуть в рабочую область" : "Сделать плавающим окном"}
       aria-label={floating ? "Вернуть в рабочую область" : "Сделать плавающим окном"}
-      className="mr-1 rounded px-2 text-xs text-subtle-foreground hover:bg-white/10 hover:text-foreground"
+      className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-subtle-foreground hover:bg-white/10 hover:text-foreground"
     >
-      {floating ? "⇲" : "⇱"}
+      {floating ? <Minimize2 className="h-3.5 w-3.5" aria-hidden /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden />}
     </button>
   );
 }
@@ -420,6 +421,14 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   useEffect(() => {
     updateNav((current) => seedPrimaryFolders(current, legacyFolders, sidebarOrder));
   }, [legacyFolders, sidebarOrder, updateNav]);
+  const defaultNavPanels = useMemo(
+    () => panelRegistry.filter((panel) => !panel.hideFromNav).map(({ id, group }) => ({ id, group })),
+    [],
+  );
+  const primaryDefaultFoldersSeeded = navState.sidebars.find((bar) => bar.id === PRIMARY_SIDEBAR_ID)?.defaultFoldersSeeded;
+  useEffect(() => {
+    updateNav((current) => seedDefaultNavFolders(current, PRIMARY_SIDEBAR_ID, defaultNavPanels));
+  }, [defaultNavPanels, primaryDefaultFoldersSeeded, updateNav]);
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; sidebarId: string; panelId?: string } | { mode: "rename"; sidebarId: string; id: string; name: string } | null>(null);
   const [barName, setBarName] = useState<{ id: string; name: string } | null>(null);
   const folderViewsFor = useCallback((sidebarId: string): SidebarFolderView[] => {
@@ -435,10 +444,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         { label: "Выше", disabled: index === 0, onSelect: () => updateNav((current) => moveNavFolder(current, sidebarId, folder.id, -1)) },
         { label: "Ниже", disabled: index === folders.length - 1, onSelect: () => updateNav((current) => moveNavFolder(current, sidebarId, folder.id, 1)) },
         "separator",
-        { label: "Удалить папку", tone: "danger", onSelect: () => updateNav((current) => deleteNavFolder(current, sidebarId, folder.id)) }
+        { label: "Удалить папку", tone: "danger", onSelect: () => {
+          const before = navState;
+          const next = deleteNavFolder(before, sidebarId, folder.id);
+          if (next === before) return;
+          updateNav(() => next);
+          toast({
+            title: `Папка «${folder.name}» удалена`,
+            description: "Разделы остались в общем списке сайдбара.",
+            action: { label: "Отменить", onClick: () => updateNav(() => before) },
+          });
+        } }
       ] satisfies (MenuItem | "separator")[]
     }));
-  }, [navPanels, navState.sidebars, updateNav]);
+  }, [navPanels, navState, toast, updateNav]);
   const folderViews = folderViewsFor(PRIMARY_SIDEBAR_ID);
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
@@ -797,7 +816,9 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         label: panel.label,
         icon: panel.icon,
         isActive: panel.id === activeNavId,
-        group: panel.group,
+        group: sidebarId === PRIMARY_SIDEBAR_ID && !navState.sidebars.find((bar) => bar.id === sidebarId)?.defaultFoldersSeeded
+          ? panel.group
+          : undefined,
         badge:
           panel.id === "inbox" && inboxCount > 0
             ? inboxCount
@@ -1142,10 +1163,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
             {secondaryDock.position === "left" ? <PanelRight className="h-3.5 w-3.5" /> : <PanelLeft className="h-3.5 w-3.5" />}
           </IconButton>
           <IconButton label="Открепить на другой экран" size="sm" onClick={() => void detachSecondaryDockToWindow(workspace.id)}>
-            <span aria-hidden className="text-xs">⧉</span>
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </IconButton>
           <IconButton label="Закрыть второй сайдбар" size="sm" onClick={() => secondaryDock.setOpen(false)}>
-            <span aria-hidden className="text-xs">✕</span>
+            <X className="h-3.5 w-3.5" aria-hidden />
           </IconButton>
         </div>
       </div>
@@ -1262,7 +1283,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               </button>
             ) : (
               <IconButton label="В отдельное окно" onClick={() => navWindows.detach(bar.id)}>
-                <span aria-hidden className="text-xs">⧉</span>
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               </IconButton>
             );
             const removeButton = labeled ? (
@@ -1275,7 +1296,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               </button>
             ) : (
               <IconButton label="Убрать сайдбар" onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}>
-                <span aria-hidden className="text-xs">✕</span>
+                <X className="h-3.5 w-3.5" aria-hidden />
               </IconButton>
             );
             return labeled ? (
@@ -1444,11 +1465,20 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           const dialog = folderDialog;
           setFolderDialog(null);
           if (!dialog) return;
-          updateNav((current) =>
-            dialog.mode === "rename"
-              ? renameNavFolder(current, dialog.sidebarId, dialog.id, name)
-              : addNavFolder(current, dialog.sidebarId, name, newFolderId(), dialog.panelId)
-          );
+          const before = navState;
+          const next = dialog.mode === "rename"
+            ? renameNavFolder(before, dialog.sidebarId, dialog.id, name)
+            : addNavFolder(before, dialog.sidebarId, name, newFolderId(), dialog.panelId);
+          if (next === before) {
+            toast({
+              title: "Изменение не применено",
+              description: dialog.mode === "create" ? "Освободите место в сайдбаре или обновите список и повторите." : "Папка уже недоступна. Откройте меню ещё раз.",
+              tone: "danger",
+            });
+            return;
+          }
+          updateNav(() => next);
+          toast({ title: dialog.mode === "rename" ? `Папка переименована в «${name}»` : `Папка «${name}» создана` });
         }}
       />
       {compact && drawerOpen ? (

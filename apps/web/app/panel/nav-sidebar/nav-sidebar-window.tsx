@@ -1,10 +1,12 @@
 "use client";
 
 import { usePreferences, useSession } from "@orion/core-react";
-import { ConfirmDialog, LoadingScreen, Sidebar, Workbench, type DockviewApi, type DockviewReadyEvent, type SidebarFolderView, type SidebarLinkItem } from "@orion/ui";
+import { ConfirmDialog, LoadingScreen, Sidebar, Workbench, useToast, type DockviewApi, type DockviewReadyEvent, type MenuItem, type SidebarFolderView, type SidebarLinkItem } from "@orion/ui";
+import { Folder, FolderPlus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentPresenceFeed } from "../../../lib/agent-presence";
+import { FolderNameDialog } from "../../../components/folder-name-dialog";
 import { dockLayoutStorageKey } from "../../../lib/dock-layout-key";
 import { sanitizeDockLayout } from "../../../lib/dock-layout-sanitize";
 import { buildPanelComponents } from "../../../lib/panel-components";
@@ -21,8 +23,18 @@ import {
   rememberNavWindowBounds,
   rememberNavWorkspaceBounds,
 } from "../../../lib/nav-sidebar-windows";
-import { panelsForSidebar, toggleNavFolder, movePanelToSidebar } from "../../../lib/sidebar-instances";
-import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelSupportsSurface, visiblePanels } from "../../../lib/panel-registry";
+import {
+  PRIMARY_SIDEBAR_ID,
+  addNavFolder,
+  deleteNavFolder,
+  moveNavFolder,
+  movePanelToSidebar,
+  panelsForSidebar,
+  renameNavFolder,
+  seedDefaultNavFolders,
+  toggleNavFolder,
+} from "../../../lib/sidebar-instances";
+import { getPanelDefinition, isPanelAvailable, panelInstanceId, panelRegistry, panelSupportsSurface, visiblePanels } from "../../../lib/panel-registry";
 import { registerPanelBus } from "../../../lib/panel-bus";
 import { objectViewPanel } from "../../../lib/object-view";
 import { monitorIdentity, windowDisplayRelation } from "../../../lib/display-geometry";
@@ -31,6 +43,7 @@ import { useEnabledModules } from "../../../lib/use-enabled-modules";
 import { hasUnsavedDrafts } from "../../../lib/unsaved-drafts";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { useNavSidebars } from "../../../lib/use-nav-sidebars";
+import { newFolderId } from "../../../lib/use-sidebar-folders";
 
 const panelComponents = buildPanelComponents();
 
@@ -58,6 +71,17 @@ export function NavSidebarWindow(): React.ReactElement | null {
   const apiRef = useRef<DockviewApi | null>(null);
   const pendingOpenRef = useRef<{ panelId: string; title?: string } | null>(null);
   const { state, update } = useNavSidebars(user?.id, workspace?.id);
+  const { toast } = useToast();
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
+  const defaultNavPanels = useMemo(
+    () => panelRegistry.filter((panel) => !panel.hideFromNav).map(({ id, group }) => ({ id, group })),
+    [],
+  );
+  const primaryDefaultFoldersSeeded = state.sidebars.find((bar) => bar.id === PRIMARY_SIDEBAR_ID)?.defaultFoldersSeeded;
+  useEffect(() => {
+    if (sidebarId !== PRIMARY_SIDEBAR_ID) return;
+    update((current) => seedDefaultNavFolders(current, PRIMARY_SIDEBAR_ID, defaultNavPanels));
+  }, [defaultNavPanels, primaryDefaultFoldersSeeded, sidebarId, update]);
   const openPanel = useCallback((panelId: string, title?: string) => {
     const definition = getPanelDefinition(panelId);
     if (!definition || !isPanelAvailable(definition, disabledModules, pluginOverrides)) return;
@@ -344,6 +368,15 @@ export function NavSidebarWindow(): React.ReactElement | null {
     [disabled, hidden, workspace?.pluginOverrides],
   );
   const bar = state.sidebars.find((item) => item.id === sidebarId);
+  const otherBars = state.sidebars.filter((item) => item.id !== sidebarId);
+  function showPanel(panelId: string): void {
+    if (displayRelation === "different") openPanel(panelId);
+    else if (displayRelation === "same") {
+      const channel = openNavSidebarChannel();
+      channel?.postMessage({ type: "open", panelId });
+      channel?.close();
+    }
+  }
   const links: SidebarLinkItem[] = panelsForSidebar(state, sidebarId, panels.map((panel) => panel.id)).flatMap((id) => {
     const panel = panels.find((item) => item.id === id);
     if (!panel) return [];
@@ -351,22 +384,59 @@ export function NavSidebarWindow(): React.ReactElement | null {
       id: panel.id,
       label: panel.label,
       icon: panel.icon,
-      onClick: () => {
-        if (displayRelation === "different") openPanel(panel.id);
-        else if (displayRelation === "same") {
-          const channel = openNavSidebarChannel();
-          channel?.postMessage({ type: "open", panelId: panel.id });
-          channel?.close();
-        }
-      },
+      onClick: () => showPanel(panel.id),
       ...bindSectionDrag(panel.id, panel.label, panelSupportsSurface(panel.id, "window")),
+      menuItems: [
+        { label: "Открыть", onSelect: () => showPanel(panel.id) },
+        ...(otherBars.length > 0
+          ? [
+              "separator" as const,
+              ...otherBars.map((targetBar) => ({
+                label: `Переместить в сайдбар «${targetBar.name}»`,
+                onSelect: () => update((current) => movePanelToSidebar(current, panel.id, targetBar.id)),
+              })),
+            ]
+          : []),
+        "separator",
+        ...state.sidebars.flatMap((targetBar) =>
+          targetBar.folders
+            .filter((folder) => !folder.items.includes(panel.id))
+            .map((folder) => ({
+              label: targetBar.id === sidebarId ? `В папку «${folder.name}»` : `В папку «${folder.name}» сайдбара «${targetBar.name}»`,
+              icon: Folder,
+              onSelect: () => update((current) => movePanelToSidebar(current, panel.id, targetBar.id, { folderId: folder.id })),
+            })),
+        ),
+        ...(state.sidebars.some((targetBar) => targetBar.folders.some((folder) => folder.items.includes(panel.id)))
+          ? [{ label: "Убрать из папки", onSelect: () => update((current) => movePanelToSidebar(current, panel.id, sidebarId, { folderId: null })) }]
+          : []),
+        { label: "В новую папку…", icon: FolderPlus, onSelect: () => setFolderDialog({ mode: "create", panelId: panel.id }) },
+      ] satisfies (MenuItem | "separator")[],
     }];
   });
-  const folders: SidebarFolderView[] = (bar?.folders ?? []).map((folder) => ({
+  const visible = new Set(panels.map((panel) => panel.id));
+  const folders: SidebarFolderView[] = (bar?.folders ?? []).map((folder, index, allFolders) => ({
     id: folder.id,
     name: folder.name,
     collapsed: folder.collapsed,
-    linkIds: folder.items,
+    linkIds: folder.items.filter((id) => visible.has(id)),
+    menuItems: [
+      { label: "Переименовать…", onSelect: () => setFolderDialog({ mode: "rename", id: folder.id, name: folder.name }) },
+      { label: "Выше", disabled: index === 0, onSelect: () => update((current) => moveNavFolder(current, sidebarId, folder.id, -1)) },
+      { label: "Ниже", disabled: index === allFolders.length - 1, onSelect: () => update((current) => moveNavFolder(current, sidebarId, folder.id, 1)) },
+      "separator",
+      { label: "Удалить папку", tone: "danger", onSelect: () => {
+        const before = state;
+        const next = deleteNavFolder(before, sidebarId, folder.id);
+        if (next === before) return;
+        update(() => next);
+        toast({
+          title: `Папка «${folder.name}» удалена`,
+          description: "Разделы остались в общем списке сайдбара.",
+          action: { label: "Отменить", onClick: () => update(() => before) },
+        });
+      } },
+    ],
   }));
 
   const requestPanelClose = (panelId: string) => {
@@ -396,10 +466,42 @@ export function NavSidebarWindow(): React.ReactElement | null {
         railLabel={bar.name}
         links={links}
         folders={folders}
+        surfaceMenuItems={[{ label: "Новая папка…", onSelect: () => setFolderDialog({ mode: "create" }) }]}
         onToggleFolder={(id) => update((current) => toggleNavFolder(current, bar.id, id))}
-        onMoveLink={(panelId, folderId, beforeId) => update((current) => movePanelToSidebar(current, panelId, bar.id, { folderId, beforeId }))}
+        onCreateFolder={(panelId) => setFolderDialog({ mode: "create", panelId })}
+        onMoveLink={(panelId, folderId, beforeId) => update((current) => {
+          const visibleIds = panelsForSidebar(current, bar.id, panels.map((panel) => panel.id));
+          const catalog = visibleIds.includes(panelId) ? visibleIds : [...visibleIds, panelId];
+          return movePanelToSidebar(current, panelId, bar.id, { folderId, beforeId, catalog });
+        })}
       />
       </div>
+      <FolderNameDialog
+        open={folderDialog !== null}
+        title={folderDialog?.mode === "rename" ? "Переименовать папку" : "Новая папка"}
+        initial={folderDialog?.mode === "rename" ? folderDialog.name : ""}
+        submitLabel={folderDialog?.mode === "rename" ? "Сохранить" : "Создать"}
+        onClose={() => setFolderDialog(null)}
+        onSubmit={(name) => {
+          const dialog = folderDialog;
+          setFolderDialog(null);
+          if (!dialog) return;
+          const before = state;
+          const next = dialog.mode === "rename"
+            ? renameNavFolder(before, sidebarId, dialog.id, name)
+            : addNavFolder(before, sidebarId, name, newFolderId(), dialog.panelId);
+          if (next === before) {
+            toast({
+              title: "Изменение не применено",
+              description: dialog.mode === "create" ? "Освободите место в сайдбаре или обновите список и повторите." : "Папка уже недоступна. Откройте меню ещё раз.",
+              tone: "danger",
+            });
+            return;
+          }
+          update(() => next);
+          toast({ title: dialog.mode === "rename" ? `Папка переименована в «${name}»` : `Папка «${name}» создана` });
+        }}
+      />
       {hasLocalWorkbench ? <main className={displayRelation === "different" ? "min-w-0 flex-1 overflow-hidden" : "hidden"} aria-hidden={displayRelation !== "different"}><Workbench components={panelComponents} onReady={onWorkbenchReady} onRequestClose={requestPanelClose} /></main> : null}
       <ConfirmDialog open={pendingPanelClose !== null} title="Закрыть вкладку без сохранения?" description="В этой вкладке есть изменения, которые ещё не сохранены. При закрытии они пропадут." confirmLabel="Закрыть" onConfirm={() => { const panelId = pendingPanelClose; setPendingPanelClose(null); if (panelId) apiRef.current?.getPanel(panelId)?.api.close(); }} onCancel={() => setPendingPanelClose(null)} />
       <ConfirmDialog open={confirmWindowClose} title="Закрыть сайдбар с несохранёнными изменениями?" description="В рабочей области есть несохранённые изменения. При закрытии окна они пропадут." confirmLabel="Закрыть окно" onConfirm={() => { dockCloseRef.current = false; setConfirmWindowClose(false); closeWindowAfterConfirm(); }} onCancel={() => { setConfirmWindowClose(false); if (dockCloseRef.current) { dockCloseRef.current = false; const channel = openNavSidebarChannel(); channel?.postMessage({ type: "dock-cancelled", sidebarId }); channel?.close(); } }} />

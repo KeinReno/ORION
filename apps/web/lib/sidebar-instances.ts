@@ -5,7 +5,7 @@
  * opens or closes a workbench tab.
  */
 
-import type { SidebarFolder } from "@orion/shared-types";
+import { SIDEBAR_FOLDERS_MAX, type SidebarFolder } from "@orion/shared-types";
 import { addFolder, deleteFolder, groupOnto, moveFolder, placeInFolder, renameFolder, toggleFolder } from "./sidebar-folders";
 
 export const NAV_SIDEBAR_LIMIT = 3;
@@ -22,6 +22,8 @@ export interface NavSidebarConfig {
   /** Shortcut order for panels that are not inside a folder. */
   order: string[];
   folders: SidebarFolder[];
+  /** Built-in groups became real, editable folders. Deleting them must not bring them back. */
+  defaultFoldersSeeded?: boolean;
 }
 
 export interface NavSidebarState {
@@ -104,6 +106,7 @@ export function parseNavSidebarState(raw: unknown): NavSidebarState {
       density: isDensity(entry.density) ? entry.density : "full",
       order,
       folders: normalizeOwnedFolders(entry.folders),
+      ...(entry.defaultFoldersSeeded === true ? { defaultFoldersSeeded: true } : {}),
     });
   }
 
@@ -363,4 +366,50 @@ export function seedPrimaryFolders(
   const nextOrder = order.filter((id) => !away.has(id));
   if (nextFolders.length === 0 && nextOrder.length === 0) return state;
   return replaceBar(state, PRIMARY_SIDEBAR_ID, { ...primary, folders: nextFolders, order: nextOrder });
+}
+
+export interface NavDefaultPanel {
+  id: string;
+  group?: string;
+}
+
+export function defaultNavFolderId(group: string): string {
+  return `default:${encodeURIComponent(group)}`;
+}
+
+/**
+ * Turns registry groups into ordinary folders once. From then on the user's
+ * arrangement is authoritative: renamed/deleted groups never regenerate, and
+ * a shortcut outside every folder is genuinely ungrouped.
+ */
+export function seedDefaultNavFolders(
+  state: NavSidebarState,
+  sidebarId: string,
+  panels: readonly NavDefaultPanel[],
+): NavSidebarState {
+  const bar = state.sidebars.find((sidebar) => sidebar.id === sidebarId);
+  if (!bar || bar.defaultFoldersSeeded || panels.length === 0) return state;
+  const claimed = new Set(bar.folders.flatMap((folder) => folder.items));
+  const groups: string[] = [];
+  for (const panel of panels) {
+    if (panel.group && panel.group !== "Инструменты" && !groups.includes(panel.group)) groups.push(panel.group);
+  }
+  const defaults: SidebarFolder[] = [];
+  for (const group of groups) {
+    if (bar.folders.length + defaults.length >= SIDEBAR_FOLDERS_MAX) break;
+    const items = panels
+      .filter((panel) => panel.group === group && !claimed.has(panel.id) && barOf(state, panel.id) === sidebarId)
+      .map((panel) => panel.id);
+    if (items.length === 0) continue;
+    const id = defaultNavFolderId(group);
+    if (bar.folders.some((folder) => folder.id === id)) continue;
+    items.forEach((item) => claimed.add(item));
+    defaults.push({ id, name: group, collapsed: false, items });
+  }
+  return replaceBar(state, sidebarId, {
+    ...bar,
+    defaultFoldersSeeded: true,
+    folders: [...bar.folders, ...defaults],
+    order: bar.order.filter((id) => !claimed.has(id)),
+  });
 }

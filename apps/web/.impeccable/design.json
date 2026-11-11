@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-11T03:12:44+03:00",
+  "title": "Design System: ORION",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Warm Signal Gold", "canonical": "#c9a86a", "tonalRamp": ["oklch(28% 0.035 82)", "oklch(38% 0.05 82)", "oklch(48% 0.07 82)", "oklch(58% 0.09 82)", "oklch(68% 0.105 82)", "oklch(76% 0.11 82)", "oklch(85% 0.085 82)", "oklch(94% 0.04 82)"] },
+      "primary-hover": { "role": "primary", "displayName": "Warm Signal Hover", "canonical": "#dec08b", "tonalRamp": ["oklch(30% 0.035 82)", "oklch(40% 0.05 82)", "oklch(50% 0.07 82)", "oklch(60% 0.09 82)", "oklch(70% 0.105 82)", "oklch(79% 0.11 82)", "oklch(87% 0.085 82)", "oklch(95% 0.04 82)"] },
+      "accent-foreground": { "role": "neutral", "displayName": "Accent Ink", "canonical": "#16171a", "tonalRamp": ["oklch(16% 0.005 260)", "oklch(25% 0.005 260)", "oklch(36% 0.005 260)", "oklch(48% 0.005 260)", "oklch(60% 0.005 260)", "oklch(72% 0.005 260)", "oklch(84% 0.005 260)", "oklch(95% 0.005 260)"] },
+      "canvas": { "role": "neutral", "displayName": "Graphite Canvas", "canonical": "#0f1012", "tonalRamp": ["oklch(15% 0.005 260)", "oklch(24% 0.005 260)", "oklch(35% 0.005 260)", "oklch(47% 0.005 260)", "oklch(59% 0.005 260)", "oklch(71% 0.005 260)", "oklch(83% 0.005 260)", "oklch(95% 0.005 260)"] },
+      "surface": { "role": "neutral", "displayName": "Panel Graphite", "canonical": "#16171a", "tonalRamp": ["oklch(17% 0.005 260)", "oklch(26% 0.005 260)", "oklch(37% 0.005 260)", "oklch(49% 0.005 260)", "oklch(61% 0.005 260)", "oklch(73% 0.005 260)", "oklch(85% 0.005 260)", "oklch(96% 0.005 260)"] },
+      "elevated": { "role": "neutral", "displayName": "Elevated Graphite", "canonical": "#1d1e22", "tonalRamp": ["oklch(19% 0.005 260)", "oklch(28% 0.005 260)", "oklch(39% 0.005 260)", "oklch(51% 0.005 260)", "oklch(63% 0.005 260)", "oklch(75% 0.005 260)", "oklch(86% 0.005 260)", "oklch(96% 0.005 260)"] },
+      "hover": { "role": "neutral", "displayName": "Hover Graphite", "canonical": "#27282d", "tonalRamp": ["oklch(22% 0.005 260)", "oklch(31% 0.005 260)", "oklch(42% 0.005 260)", "oklch(54% 0.005 260)", "oklch(65% 0.005 260)", "oklch(76% 0.005 260)", "oklch(87% 0.005 260)", "oklch(96% 0.005 260)"] },
+      "text-primary": { "role": "neutral", "displayName": "Bone Text", "canonical": "#f2f0ea", "tonalRamp": ["oklch(20% 0.008 85)", "oklch(30% 0.008 85)", "oklch(41% 0.008 85)", "oklch(53% 0.008 85)", "oklch(65% 0.008 85)", "oklch(77% 0.008 85)", "oklch(88% 0.008 85)", "oklch(96% 0.008 85)"] },
+      "text-secondary": { "role": "neutral", "displayName": "Secondary Bone", "canonical": "#b2b0a9", "tonalRamp": ["oklch(20% 0.008 85)", "oklch(30% 0.008 85)", "oklch(41% 0.008 85)", "oklch(53% 0.008 85)", "oklch(64% 0.008 85)", "oklch(73% 0.008 85)", "oklch(83% 0.008 85)", "oklch(94% 0.008 85)"] },
+      "text-subtle": { "role": "neutral", "displayName": "Subtle Bone", "canonical": "#a6a49f", "tonalRamp": ["oklch(20% 0.006 85)", "oklch(30% 0.006 85)", "oklch(41% 0.006 85)", "oklch(52% 0.006 85)", "oklch(62% 0.006 85)", "oklch(71% 0.006 85)", "oklch(82% 0.006 85)", "oklch(94% 0.006 85)"] },
+      "border": { "role": "neutral", "displayName": "Seam", "canonical": "#414248", "tonalRamp": ["oklch(18% 0.005 260)", "oklch(27% 0.005 260)", "oklch(35% 0.005 260)", "oklch(46% 0.005 260)", "oklch(58% 0.005 260)", "oklch(70% 0.005 260)", "oklch(83% 0.005 260)", "oklch(95% 0.005 260)"] },
+      "border-strong": { "role": "neutral", "displayName": "Strong Seam", "canonical": "#66676e", "tonalRamp": ["oklch(20% 0.005 260)", "oklch(30% 0.005 260)", "oklch(40% 0.005 260)", "oklch(49% 0.005 260)", "oklch(60% 0.005 260)", "oklch(72% 0.005 260)", "oklch(84% 0.005 260)", "oklch(95% 0.005 260)"] },
+      "success": { "role": "semantic", "displayName": "Success", "canonical": "#10b981", "tonalRamp": ["oklch(25% 0.05 155)", "oklch(35% 0.07 155)", "oklch(45% 0.09 155)", "oklch(55% 0.12 155)", "oklch(65% 0.15 155)", "oklch(75% 0.15 155)", "oklch(85% 0.12 155)", "oklch(95% 0.05 155)"] },
+      "warning": { "role": "semantic", "displayName": "Warning", "canonical": "#f59e0b", "tonalRamp": ["oklch(28% 0.05 70)", "oklch(38% 0.07 70)", "oklch(48% 0.1 70)", "oklch(58% 0.13 70)", "oklch(68% 0.16 70)", "oklch(78% 0.17 70)", "oklch(87% 0.13 70)", "oklch(96% 0.05 70)"] },
+      "danger": { "role": "semantic", "displayName": "Danger", "canonical": "#fb7185", "tonalRamp": ["oklch(28% 0.06 15)", "oklch(38% 0.09 15)", "oklch(48% 0.13 15)", "oklch(58% 0.17 15)", "oklch(68% 0.19 15)", "oklch(77% 0.16 15)", "oklch(86% 0.11 15)", "oklch(95% 0.04 15)"] },
+      "info": { "role": "semantic", "displayName": "Info", "canonical": "#60a5fa", "tonalRamp": ["oklch(25% 0.05 255)", "oklch(35% 0.08 255)", "oklch(45% 0.11 255)", "oklch(55% 0.15 255)", "oklch(65% 0.18 255)", "oklch(75% 0.16 255)", "oklch(85% 0.1 255)", "oklch(95% 0.04 255)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Panel Display", "purpose": "Единственный основной заголовок панели." },
+      "title": { "displayName": "Section Title", "purpose": "Карточки, dialogs и независимые секции." },
+      "body": { "displayName": "Interface Body", "purpose": "Основной текст, поля и действия." },
+      "label": { "displayName": "Dense Label", "purpose": "Фильтры, метаданные и плотные строки." },
+      "micro": { "displayName": "Group Micro", "purpose": "Короткие групповые подписи и uppercase table headers." },
+      "data": { "displayName": "Measured Data", "purpose": "Числа, даты, время, код и клавиатурные подсказки." }
+    },
+    "shadows": [
+      { "name": "transport-shadow", "value": "0 5px 18px rgb(0 0 0 / 0.18)", "purpose": "Отделяет глобальные transport controls от рабочей области." },
+      { "name": "compact-transport-shadow", "value": "0 4px 14px rgb(0 0 0 / 0.16)", "purpose": "Уменьшенная мобильная тень transport controls." }
+    ],
+    "motion": [
+      { "name": "motion-fast", "value": "120ms", "purpose": "Короткая локальная обратная связь." },
+      { "name": "control-state", "value": "150ms", "purpose": "Цвет и фон buttons, fields и icon controls." },
+      { "name": "motion-ui", "value": "180ms", "purpose": "Спокойные переходы общих UI-состояний." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Затухание без bounce и overshoot." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Основное действие панели или формы.",
+      "html": "<button class=\"ds-btn-primary\">Новая задача</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:8px 16px; border:1px solid transparent; border-radius:var(--kaiden-radius-6,6px); background:rgb(var(--kaiden-accent-base,201 168 106)); color:rgb(var(--kaiden-accent-foreground,22 23 26)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); font-weight:500; line-height:1.5; transition:background-color 150ms,color 150ms,transform 150ms; } .ds-btn-primary:hover { background:rgb(var(--kaiden-accent-hover,222 192 139)); } .ds-btn-primary:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-focus-ring,222 192 139) / .6); } .ds-btn-primary:active { transform:translateY(1px); } .ds-btn-primary:disabled { opacity:.5; pointer-events:none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Второе действие рядом с primary.",
+      "html": "<button class=\"ds-btn-outline\">Понятно</button>",
+      "css": ".ds-btn-outline { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:8px 16px; border:1px solid rgb(var(--kaiden-border-strong,102 103 110)); border-radius:var(--kaiden-radius-6,6px); background:transparent; color:rgb(var(--kaiden-text-primary,242 240 234)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); font-weight:500; line-height:1.5; transition:background-color 150ms,border-color 150ms,transform 150ms; } .ds-btn-outline:hover { background:rgb(var(--kaiden-bg-hover,39 40 45)); } .ds-btn-outline:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-focus-ring,222 192 139) / .6); } .ds-btn-outline:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Тихое действие в плотном toolbar.",
+      "html": "<button class=\"ds-btn-ghost\">Сохранить вид</button>",
+      "css": ".ds-btn-ghost { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:8px 16px; border:1px solid transparent; border-radius:var(--kaiden-radius-6,6px); background:rgb(var(--kaiden-tint-base,255 255 255) / .05); color:rgb(var(--kaiden-text-primary,242 240 234)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); font-weight:500; line-height:1.5; transition:background-color 150ms,transform 150ms; } .ds-btn-ghost:hover { background:rgb(var(--kaiden-tint-base,255 255 255) / .1); } .ds-btn-ghost:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-focus-ring,222 192 139) / .6); } .ds-btn-ghost:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Subtle Button",
+      "kind": "button",
+      "refersTo": "button-subtle",
+      "description": "Вторичное текстовое действие без постоянной заливки.",
+      "html": "<button class=\"ds-btn-subtle\">Открыть раздел</button>",
+      "css": ".ds-btn-subtle { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:8px 16px; border:1px solid transparent; border-radius:var(--kaiden-radius-6,6px); background:transparent; color:rgb(var(--kaiden-text-secondary,178 176 169)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); font-weight:500; line-height:1.5; transition:background-color 150ms,color 150ms,transform 150ms; } .ds-btn-subtle:hover { background:rgb(var(--kaiden-tint-base,255 255 255) / .05); color:rgb(var(--kaiden-text-primary,242 240 234)); } .ds-btn-subtle:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-focus-ring,222 192 139) / .6); } .ds-btn-subtle:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Деструктивное действие с семантическим цветом.",
+      "html": "<button class=\"ds-btn-danger\">Удалить</button>",
+      "css": ".ds-btn-danger { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:8px 16px; border:1px solid transparent; border-radius:var(--kaiden-radius-6,6px); background:rgb(var(--kaiden-status-danger,251 113 133) / .1); color:rgb(var(--kaiden-status-danger,251 113 133)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); font-weight:500; line-height:1.5; transition:background-color 150ms,transform 150ms; } .ds-btn-danger:hover { background:rgb(var(--kaiden-status-danger,251 113 133) / .2); } .ds-btn-danger:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-focus-ring,222 192 139) / .6); } .ds-btn-danger:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Поле поиска или ввода с ясным keyboard focus.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Поиск задач\" aria-label=\"Поиск задач\">",
+      "css": ".ds-input { width:100%; min-height:36px; padding:8px 12px; border:1px solid rgb(var(--kaiden-border-default,65 66 72)); border-radius:var(--kaiden-radius-6,6px); background:rgb(var(--kaiden-bg-canvas,15 16 18) / .35); color:rgb(var(--kaiden-text-primary,242 240 234)); caret-color:rgb(var(--kaiden-accent-hover,222 192 139)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-body,15px); line-height:1.5; transition:border-color 150ms,box-shadow 150ms; } .ds-input::placeholder { color:rgb(var(--kaiden-text-subtle,166 164 159)); } .ds-input:hover { border-color:rgb(var(--kaiden-border-strong,102 103 110)); } .ds-input:focus { outline:none; border-color:rgb(var(--kaiden-focus-ring,222 192 139)); box-shadow:0 0 0 1px rgb(var(--kaiden-focus-ring,222 192 139) / .6); }"
+    },
+    {
+      "name": "Active Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Текущий раздел с tonal track и тонким accent seam.",
+      "html": "<a class=\"ds-nav-active\" href=\"#dashboard\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg><span>Дашборд</span></a>",
+      "css": ".ds-nav-active { position:relative; display:flex; align-items:center; gap:12px; min-height:36px; padding:8px 12px; border-radius:var(--kaiden-radius-6,6px); background:rgb(var(--kaiden-accent-base,201 168 106) / .1); color:rgb(var(--kaiden-text-primary,242 240 234)); font-family:var(--kaiden-font-sans,sans-serif); font-size:var(--kaiden-type-label,13px); font-weight:500; line-height:1.4; text-decoration:none; transition:background-color 150ms,color 150ms; } .ds-nav-active::before { content:\"\"; position:absolute; left:0; top:8px; bottom:8px; width:1px; background:rgb(var(--kaiden-accent-base,201 168 106)); } .ds-nav-active:hover { background:rgb(var(--kaiden-accent-base,201 168 106) / .14); } .ds-nav-active:focus-visible { outline:none; box-shadow:0 0 0 2px rgb(var(--kaiden-accent-base,201 168 106) / .6); }"
+    },
+    {
+      "name": "Neutral Chip",
+      "kind": "chip",
+      "refersTo": "chip-neutral",
+      "description": "Короткая метка проекта, фильтра или метаданных.",
+      "html": "<span class=\"ds-chip\">Запуск ORION</span>",
+      "css": ".ds-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border:1px solid rgb(var(--kaiden-border-default,65 66 72)); border-radius:var(--kaiden-radius-4,4px); background:transparent; color:rgb(var(--kaiden-text-secondary,178 176 169)); font-family:var(--kaiden-font-mono,monospace); font-size:var(--kaiden-type-micro,11px); font-weight:500; line-height:1.4; letter-spacing:-.02em; }"
+    },
+    {
+      "name": "Work Card",
+      "kind": "card",
+      "refersTo": "card-default",
+      "description": "Плоская интерактивная единица внутри рабочего потока.",
+      "html": "<section class=\"ds-card\" tabindex=\"0\"><h2 class=\"ds-card-title\">Собрать единый визуальный язык</h2><p class=\"ds-card-copy\">Проверить результат в реальном разделе и зафиксировать наблюдения.</p></section>",
+      "css": ".ds-card { padding:16px; border:1px solid rgb(var(--kaiden-border-default,65 66 72)); border-radius:var(--kaiden-radius-8,8px); background:rgb(var(--kaiden-bg-elevated,29 30 34)); color:rgb(var(--kaiden-text-primary,242 240 234)); font-family:var(--kaiden-font-sans,sans-serif); transition:border-color 150ms,background-color 150ms; } .ds-card:hover { border-color:rgb(var(--kaiden-border-strong,102 103 110)); background:rgb(var(--kaiden-bg-hover,39 40 45)); } .ds-card:focus-visible { outline:1px solid rgb(var(--kaiden-accent-base,201 168 106)); outline-offset:2px; } .ds-card-title { margin:0 0 8px; font-size:var(--kaiden-type-title,18px); font-weight:600; line-height:1.3; } .ds-card-copy { margin:0; color:rgb(var(--kaiden-text-secondary,178 176 169)); font-size:var(--kaiden-type-body,15px); line-height:1.5; }"
+    },
+    {
+      "name": "Registered Track",
+      "kind": "custom",
+      "refersTo": "track-default",
+      "description": "Фирменная рабочая группа с заголовком, rule и выровненными строками.",
+      "html": "<section class=\"ds-track\"><div class=\"ds-track-heading\"><strong>Фокус</strong><span>3</span></div><div class=\"ds-track-row\">Собрать единый визуальный язык<time>11 нояб., 18:00</time></div><div class=\"ds-track-row\">Проверить панели на узком экране<time>12 нояб., 18:00</time></div></section>",
+      "css": ".ds-track { overflow:hidden; border:1px solid rgb(var(--kaiden-border-default,65 66 72)); border-radius:var(--kaiden-radius-8,8px); background:rgb(var(--kaiden-bg-elevated,29 30 34)); color:rgb(var(--kaiden-text-primary,242 240 234)); font-family:var(--kaiden-font-sans,sans-serif); font-variant-numeric:tabular-nums lining-nums; } .ds-track-heading { display:flex; align-items:center; justify-content:space-between; margin:0 16px; padding:14px 0 10px; border-bottom:1px solid rgb(var(--kaiden-border-default,65 66 72)); font-size:var(--kaiden-type-title,18px); line-height:1.3; } .ds-track-heading span { color:rgb(var(--kaiden-text-secondary,178 176 169)); font-family:var(--kaiden-font-mono,monospace); font-size:var(--kaiden-type-label,13px); } .ds-track-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 16px; border-bottom:1px solid rgb(var(--kaiden-border-default,65 66 72) / .55); font-size:var(--kaiden-type-body,15px); line-height:1.5; } .ds-track-row:last-child { border-bottom:0; } .ds-track-row time { flex-shrink:0; color:rgb(var(--kaiden-text-secondary,178 176 169)); font-family:var(--kaiden-font-mono,monospace); font-size:var(--kaiden-type-label,13px); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Точная модульная рабочая станция",
+    "overview": "ORION использует дисциплину профессионального нелинейного редактора: рабочие области закреплены, контекст не исчезает между задачами, а иерархия возникает из типографики, линий и выравнивания. Это не буквальная стилизация под видеоредактор и не набор одинаковых карточек. Каждый модуль сохраняет собственную рабочую меру — от компактной формы до широкого календаря или таблицы.\n\nМатериал интерфейса спокойный и плоский: graphite, bone text, тонкие seams и редкий акцент пользовательской темы. Светлые и тёмные палитры меняют цвет, но не геометрию. Плотность остаётся рабочей, а не тесной; свободное пространство отделяет смысловые группы, а не заполняется декоративными эффектами.",
+    "keyCharacteristics": [
+      "Закреплённые панели и зарегистрированные tracks вместо свободной card-сетки.",
+      "Тонкие границы, небольшие радиусы и ясные базовые линии.",
+      "Onest для интерфейса и IBM Plex Mono для измерений.",
+      "Акцент только для действия, выбора, фокуса и текущего положения.",
+      "Сохранение поведения, данных и пользовательских конфигураций при смене темы."
+    ],
+    "rules": [
+      { "name": "Правило одного сигнала", "body": "Акцент обозначает действие, выбор, фокус или текущее положение; не использовать его как общий фон раздела или декоративную заливку.", "section": "colors" },
+      { "name": "Правило темной независимости", "body": "Новые компоненты читают семантические токены и tint текущей темы; локальные белые подложки и фиксированные dark-only цвета запрещены.", "section": "colors" },
+      { "name": "Правило двух голосов", "body": "Onest говорит интерфейсом, IBM Plex Mono — данными; моноширинный шрифт не применяется к обычным заголовкам ради стилистики.", "section": "typography" },
+      { "name": "Правило рабочей меры", "body": "Не назначать всем разделам одинаковую ширину или одинаковые карточки: форма следует задаче и объёму данных.", "section": "layout" },
+      { "name": "Правило плоской основы", "body": "В состоянии покоя достаточно border или тонального слоя; shadow принадлежит плавающим и overlay-элементам, а не каждой карточке.", "section": "elevation" },
+      { "name": "Правило спокойных углов", "body": "Форма показывает функцию: маленькие радиусы для рабочих контролов, pill только там, где круглая геометрия сама является состоянием или метрикой.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do собирать новые разделы из PanelShell, PanelHeader, PanelBody, общих primitives и семантических токенов.",
+      "Do сохранять одинаковую геометрию в Arctic, тёмных presets, пользовательских темах и plugins-off.",
+      "Do проверять реальные данные, empty/error/loading/disabled states, клавиатурный фокус и ширины 390, 768, 1171 и 1440 px.",
+      "Do использовать mono и tabular numerals для измерений, времени и сравниваемых чисел.",
+      "Do оставлять акцент редким и функциональным."
+    ],
+    "donts": [
+      "Don't превращать каждую смысловую группу в отдельную одинаковую карточку или вкладывать карточки друг в друга без необходимости.",
+      "Don't возвращать glass, декоративный blur, glow, gradient text или hover-lift рабочих карточек.",
+      "Don't использовать pill как универсальную форму кнопок, badges и вкладок.",
+      "Don't применять scale-анимации, bounce easing или Unicode-глифы вместо иконок.",
+      "Don't hardcode белые overlays, dark-only цвета или локальную типографику вне токенов."
+    ]
+  }
+}

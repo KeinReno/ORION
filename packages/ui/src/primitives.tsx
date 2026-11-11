@@ -261,14 +261,14 @@ export function Badge({
 /** Monospace keyboard-hint chip, e.g. for the ⌘K palette affordance. */
 export function Kbd({ children }: { children: ReactNode }): React.ReactElement {
   return (
-    <kbd className="rounded border border-border bg-white/[0.04] px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
+    <kbd className="rounded border border-border bg-ui-tint/[0.04] px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
       {children}
     </kbd>
   );
 }
 
 export function Skeleton({ className }: { className?: string }): React.ReactElement {
-  return <div className={clsx("animate-pulse rounded-md bg-white/[0.06]", className)} />;
+  return <div className={clsx("animate-pulse rounded-md bg-ui-tint/[0.06]", className)} />;
 }
 
 export function Spinner({ className }: { className?: string }): React.ReactElement {
@@ -276,7 +276,7 @@ export function Spinner({ className }: { className?: string }): React.ReactEleme
     <span
       role="status"
       aria-label="Загрузка"
-      className={clsx("inline-block animate-spin rounded-full border-2 border-white/20 border-t-white/70", className ?? "h-4 w-4")}
+      className={clsx("inline-block animate-spin rounded-full border-2 border-ui-tint/20 border-t-ui-tint/70", className ?? "h-4 w-4")}
     />
   );
 }
@@ -367,7 +367,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="tablist"
       aria-label={groupLabel}
-      className={clsx("inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-white/[0.02] p-0.5", className)}
+      className={clsx("inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-ui-tint/[0.02] p-0.5", className)}
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -388,7 +388,7 @@ export function SegmentedControl<T extends string>({
             )}
           >
             {active ? (
-              <motion.span aria-hidden layoutId={pillId} transition={snap} className="absolute inset-0 rounded-md bg-white/10" />
+              <motion.span aria-hidden layoutId={pillId} transition={snap} className="absolute inset-0 rounded-md bg-ui-tint/10" />
             ) : null}
             <span className="relative">{option.label}</span>
           </button>

@@ -405,7 +405,7 @@ body {
   background-size: 100% 1px;
 }
 html[data-motion="expressive"] .orion-strike {
-  transition-timing-function: cubic-bezier(0.34, 1.4, 0.64, 1), ease-out;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1), ease-out;
 }
 @media print {
   .orion-strike[data-done="true"] {
