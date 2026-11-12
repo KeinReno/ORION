@@ -9,13 +9,15 @@ Stable agent profiles are separate from credentials and runtime sessions. Task a
 Server code calls TaskIntegrationReader through its public module, never Tasks
 internals. Model code must not infer an online runtime from token presence. A runtime session with presence=recent proves only that a scoped token renewed a TTL within 5 minutes; it does not prove local process or device identity. No auto-dispatch rights derive from runtime registration.
 
+Task 09 additions: a working branch can delegate a structured sub-order to another profile (`parentExecutionId`, `delegationDepth`, `delegationChain`, `delegatedToProfileId`, `delegationPayload`); depth is bounded by the owner policy and `A → B → A` is refused. `waiting_approval` is the only path for operations above read-only and is always decided by a human owner/lead. `reassign` ends a branch and opens a replacement. The trace is a `AgentHubTraceStep` tree of actual steps (`tool_call`, `tool_result`, `delegation`, `approval_wait`, `note`, `error`) — never private reasoning. Memory is versioned per scope (user/project/agent/global); a rewrite supersedes, never overwrites, and another agent cannot read or take over this agent's user memory. In tests and services use `AgentHubTransitions.commitTx` for every state change so CAS, the event journal and parent summaries cannot drift apart.
+
 <!-- generated:manifest:start -->
 ## Для агента (генерируется)
 
 Блок собирается `pnpm module-docs`; руками не править.
 
 - Точки входа: API `workspaces/:workspaceId/agent-hub` (за `@RequireModule("agent-hub")`); панель веба `agent-hub`; код `apps/api/src/modules-ext/agent-hub/`.
-- Права: `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`, `agent-hub.runtime.create`.
+- Права: `agent-hub.execution.read`, `agent-hub.execution.create`, `agent-hub.execution.update`, `agent-hub.execution.delete`, `agent-hub.runtime.create`, `agent-hub.memory.read`, `agent-hub.memory.create`, `agent-hub.memory.update`, `agent-hub.policy.read`, `agent-hub.policy.update`.
 - Модуль владеет: Стабильные профили, назначение профиля на задачу, исполнения и атомарная история; задачи остаются у Tasks, учетные данные — у AI Bridge.
 - Соседи: жёсткие: —; мягкие: `tasks`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
 - Расширения: плагины: `agent-hub-task-assignment`.

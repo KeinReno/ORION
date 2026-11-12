@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Module } from "@nestjs/common";
+import { ConflictException, Injectable, Module, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 
 export type TaskAgentAssignmentRef = { workspaceId: string; taskId: string };
@@ -24,6 +24,20 @@ export class TaskAgentAssignmentRegistry {
     for (const hasAssignment of this.owners.values()) {
       if (await hasAssignment(tx, ref)) throw new ConflictException("Сначала снимите назначение ИИ-агента");
     }
+  }
+
+  /**
+   * Обратная сторона валидации «человек ИЛИ агент» (задание 02, 2.4): владелец
+   * назначения агента обязан спросить этот guard перед записью — на задаче не
+   * должно быть исполнителя-человека. Tasks остаётся владельцем `assigneeId`.
+   */
+  async assertAgentAssignmentAllowedTx(tx: Prisma.TransactionClient, ref: TaskAgentAssignmentRef): Promise<void> {
+    const task = await tx.task.findFirst({
+      where: { id: ref.taskId, workspaceId: ref.workspaceId },
+      select: { assigneeId: true }
+    });
+    if (!task) throw new NotFoundException("Задача не найдена");
+    if (task.assigneeId) throw new ConflictException("Сначала снимите исполнителя-человека");
   }
 }
 

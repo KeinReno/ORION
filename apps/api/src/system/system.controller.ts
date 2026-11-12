@@ -1,10 +1,12 @@
 import { Controller, Get, UseGuards } from "@nestjs/common";
 import type { AppInfo, BackgroundJobStatus, ComponentDataStatus, OrionModeInfo } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { BackgroundJobSupervisor } from "../common/background-job-supervisor";
 import { BackgroundJobsService } from "../common/background-jobs.service";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { resolveMode } from "../common/orion-mode";
 import { resolveLoginPolicy } from "../auth/login-policy";
+import { DomainEventDispatcherService } from "../domain-events/domain-event-dispatcher.service";
 import { ComponentDataService } from "./component-data.service";
 
 @Controller("system")
@@ -12,6 +14,8 @@ export class SystemController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jobs: BackgroundJobsService,
+    private readonly jobSupervisor: BackgroundJobSupervisor,
+    private readonly domainEvents: DomainEventDispatcherService,
     private readonly componentData: ComponentDataService
   ) {}
 
@@ -59,6 +63,26 @@ export class SystemController {
    * G11 — применены ли миграции компонентов, подключённых манифестом. Нужен вход, но не членство:
    * в ответе только имена компонентов и миграций.
    */
+  /**
+   * Foundation Core (task 01.3): декларативный реестр фоновых задач и их текущие счётчики.
+   * `paused` растёт, когда задача пропущена из-за выключенного в пространстве компонента.
+   */
+  @Get("jobs/registry")
+  @UseGuards(JwtAuthGuard)
+  listRegisteredJobs(): { definitions: ReturnType<BackgroundJobSupervisor["definitions"]>; states: BackgroundJobStatus[] } {
+    return { definitions: this.jobSupervisor.definitions(), states: this.jobs.list() };
+  }
+
+  /**
+   * Foundation Core (task 01.2): общесистемное состояние outbox. Только счётчики, возраст и
+   * последние упавшие доставки (тип/ошибка), без payload и без имён пространств.
+   */
+  @Get("domain-events")
+  @UseGuards(JwtAuthGuard)
+  domainEventStatus(): ReturnType<DomainEventDispatcherService["status"]> {
+    return this.domainEvents.status();
+  }
+
   @Get("components")
   @UseGuards(JwtAuthGuard)
   listComponentData(): Promise<ComponentDataStatus[]> {

@@ -19,7 +19,7 @@
 | События | публикует: —; слушает: — |
 | Панели веба | `orion-dev` |
 | Слоты | — |
-| Маршруты API | `workspaces/:workspaceId/development-import` |
+| Маршруты API | `workspaces/:workspaceId` |
 | Плагины, расширяющие модуль | — |
 | Миграции в манифесте | — |
 | Код на сервере | `apps/api/src/modules-ext/orion-dev/` |

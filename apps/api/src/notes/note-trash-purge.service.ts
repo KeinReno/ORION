@@ -39,7 +39,8 @@ export class NoteTrashPurgeService {
   async runPurge(): Promise<{ purged: number }> {
     const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     const { count } = await this.prisma.asSystem((tx) =>
-      tx.note.deleteMany({ where: { deletedAt: { lte: cutoff } } })
+      // Disabled module — its scheduled work stops (Foundation Core, task 01.3).
+      tx.note.deleteMany({ where: { deletedAt: { lte: cutoff }, workspace: { NOT: { disabledModules: { has: "notes" } } } } })
     );
     if (count > 0) {
       this.logger.log(`Purged ${count} trashed note(s) older than ${TRASH_RETENTION_DAYS} days`);
@@ -55,8 +56,10 @@ export class NoteTrashPurgeService {
         USING (
           SELECT id, row_number() OVER (PARTITION BY "noteId" ORDER BY "createdAt" DESC) AS rn
           FROM "note_revisions"
-        ) ranked
+        ) ranked, "notes" n, "workspaces" w
         WHERE ranked.id = nr.id AND ranked.rn > ${REVISIONS_KEPT_PER_NOTE}
+          AND n."id" = nr."noteId" AND w."id" = n."workspaceId"
+          AND NOT (w."disabledModules" @> ARRAY['notes']::text[])
       `
     );
     if (pruned > 0) {

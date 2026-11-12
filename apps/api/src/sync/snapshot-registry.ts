@@ -203,6 +203,8 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "KnowledgeItem", snapshotKey: "knowledgeItems", policy: "included", reason: "Материалы базы знаний." },
   { model: "KnowledgeSource", snapshotKey: "knowledgeSources", policy: "included", reason: "Источники материалов базы знаний." },
   { model: "KnowledgeRelation", snapshotKey: "knowledgeRelations", policy: "included", reason: "Связи между материалами базы знаний." },
+  { model: "KnowledgeItemRevision", snapshotKey: "knowledgeItemRevisions", policy: "included", reason: "Неизменяемые снимки версий материалов базы знаний (задание 08); вставляются после KnowledgeItem (FK itemId)." },
+  { model: "KnowledgeSettings", snapshotKey: "knowledgeSettings", policy: "included", reason: "Настройки базы знаний пространства (задание 08) — одна строка на пространство, пользовательская конфигурация." },
   { model: "HabitEntry", snapshotKey: "habitEntries", policy: "included", reason: "Отметки привычек." },
   { model: "List", snapshotKey: "lists", policy: "included", reason: "Списки." },
   { model: "ListItem", snapshotKey: "listItems", policy: "included", reason: "Пункты списков." },

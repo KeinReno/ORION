@@ -68,7 +68,7 @@ describe("GPT-QA ORION DEV import-to-review journey", () => {
     const intent = { workspaceConfirmed: true, previewDigest: preview.data.previewDigest, choices: {} };
     const consent = await s.human<{ token: string }>("POST", "/development-import/consent", intent);
     expect(consent.status).toBe(201);
-    const applied = await s.human("POST", "/development-import/apply", { ...intent, token: consent.data.token });
+    const applied = await s.human<{ tasks: Array<{ outcome: string }> }>("POST", "/development-import/apply", { ...intent, token: consent.data.token });
     expect(applied.status).toBe(201);
     return applied.data;
   }

@@ -1,16 +1,13 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
 import { Prisma, type AgentHubExecution as ExecutionRow } from "@prisma/client";
-import {
-  transitionAgentHubExecution, AgentHubTransitionError,
-  type AgentHubCommand, type AgentHubExecution, type AgentHubReportInput
-} from "@orion/shared-types";
 import type { AgentContext } from "../../ai/public/agent-context";
+import type { AgentHubCommand, AgentHubExecution, AgentHubReportInput } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { ModulesService } from "../../modules/modules.service";
-import { TaskIntegrationReader } from "../../tasks/public/task-integration-reader";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
-import { executionDto } from "./agent-hub.service";
+import { executionDto } from "./agent-hub-dto";
 import { AgentHubAssignmentService } from "./agent-hub-assignment.service";
+import { AgentHubTransitions } from "./agent-hub-transitions.service";
 
 const LEASE_MS = 120_000;
 /** This is a manual MCP adapter, not a process identity or proof of a live IDE. */
@@ -22,28 +19,22 @@ export class AgentHubWorkerService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TaskIntegrationReader,
-    private readonly assignments: AgentHubAssignmentService
+    private readonly assignments: AgentHubAssignmentService,
+    private readonly transitions: AgentHubTransitions
   ) {}
 
-  /** Project fences and task read scope are mandatory even if the caller has the Agent Hub tool permission. */
-  private async accessibleTx(tx: Prisma.TransactionClient, agent: AgentContext, row: ExecutionRow): Promise<void> {
-    if (!agent.scopes.includes("tasks:read")) throw new ForbiddenException("Нужно разрешение tasks:read");
-    if (row.targetKind !== "task") throw new ForbiddenException("Этот тип исполнения пока не поддерживается");
-    const task = await this.tasks.referenceTx(tx, agent.workspaceId, row.targetId);
-    if (!task) throw new NotFoundException("Связанная задача недоступна");
-    if (agent.allowedProjectIds.length > 0 && (!task.projectId || !agent.allowedProjectIds.includes(task.projectId))) {
-      throw new ForbiddenException("Задача вне разрешённых проектов токена");
-    }
-  }
-
-  /** The token sees queued jobs and its own claimed/working jobs, never other workers' active jobs. */
+  /**
+   * The token sees queued jobs and its own claimed/working jobs, never other
+   * workers' active jobs. A delegated branch is visible only to the profile it
+   * was handed to; ordinary task work keeps the durable assignment fence.
+   */
   async queue(agent: AgentContext): Promise<AgentHubExecution[]> {
     return this.prisma.withUser(agent.userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "agent-hub");
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "tasks");
       if (!agent.scopes.includes("tasks:read")) throw new ForbiddenException("Нужно разрешение tasks:read");
+      const profileId = await this.transitions.profileIdForTokenTx(tx, agent.workspaceId, agent.tokenId);
       const rows = await tx.agentHubExecution.findMany({
         where: {
           workspaceId: agent.workspaceId,
@@ -53,52 +44,35 @@ export class AgentHubWorkerService {
       });
       const visible: AgentHubExecution[] = [];
       for (const row of rows) {
-        if (row.targetKind !== "task") continue;
-        if (row.status === "queued" && !await this.assignments.workerMayClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId)) continue;
-        const task = await this.tasks.referenceTx(tx, agent.workspaceId, row.targetId);
-        if (!task) continue;
-        if (agent.allowedProjectIds.length > 0 && (!task.projectId || !agent.allowedProjectIds.includes(task.projectId))) continue;
+        if (!await this.visibleToAgentTx(tx, agent, row, profileId)) continue;
         visible.push(executionDto(row));
       }
       return visible;
     });
   }
 
-  /** Server-generated command actor/time; optimistic concurrency is checked by updateMany. */
-  private async commitTx(
+  private async visibleToAgentTx(
     tx: Prisma.TransactionClient,
-    current: ExecutionRow,
-    command: AgentHubCommand,
-    actorId: string,
-    metadata: Record<string, string | string[]> = {}
-  ): Promise<AgentHubExecution> {
-    let next: AgentHubExecution;
-    try {
-      next = transitionAgentHubExecution(executionDto(current), command);
-    } catch (error) {
-      if (error instanceof AgentHubTransitionError) throw new ConflictException(error.code);
-      throw error;
+    agent: AgentContext,
+    row: ExecutionRow,
+    profileId: string | null
+  ): Promise<boolean> {
+    if (row.targetKind === "delegation") {
+      if (row.delegatedToProfileId && row.delegatedToProfileId !== profileId) return false;
+    } else if (row.targetKind === "task") {
+      if (row.status === "queued" && !await this.assignments.workerMayClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId)) return false;
+    } else {
+      return false;
     }
-    const changed = await tx.agentHubExecution.updateMany({
-      where: { id: current.id, workspaceId: current.workspaceId, revision: command.expectedRevision },
-      data: {
-        status: next.status, revision: next.revision, attempt: next.attempt,
-        workerId: next.workerId, runtimeId: next.runtimeId,
-        leaseUntil: next.leaseUntil ? new Date(next.leaseUntil) : null,
-        checkpointRef: next.checkpointRef, evidenceRefs: next.evidenceRefs,
-        verifiedBy: next.verifiedBy, blockedReason: next.blockedReason,
-        updatedAt: new Date(next.updatedAt)
-      }
-    });
-    if (changed.count !== 1) throw new ConflictException("Исполнение изменилось одновременно");
-    await tx.agentHubEvent.create({
-      data: {
-        workspaceId: current.workspaceId, executionId: current.id,
-        revision: next.revision, action: command.type, actorId,
-        data: metadata, at: new Date(command.at)
-      }
-    });
-    return next;
+    let task: Awaited<ReturnType<AgentHubTransitions["governingTaskTx"]>>;
+    try {
+      task = await this.transitions.governingTaskTx(tx, row);
+    } catch {
+      return false;
+    }
+    if (!task) return true;
+    if (agent.allowedProjectIds.length > 0 && (!task.projectId || !agent.allowedProjectIds.includes(task.projectId))) return false;
+    return true;
   }
 
   async claim(agent: AgentContext, executionId: string, expectedRevision: number): Promise<AgentHubExecution> {
@@ -106,15 +80,19 @@ export class AgentHubWorkerService {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "agent-hub");
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "tasks");
-      const row = await tx.agentHubExecution.findFirst({ where: { id: executionId, workspaceId: agent.workspaceId } });
-      if (!row) throw new NotFoundException("Исполнение не найдено");
-      if (row.targetKind === "task") await this.assignments.lockTaskForWorkerClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId);
-      await this.accessibleTx(tx, agent, row);
+      const row = await this.transitions.loadTx(tx, agent.workspaceId, executionId);
+      if (row.targetKind === "task") {
+        await this.assignments.lockTaskForWorkerClaimTx(tx, agent.userId, agent.workspaceId, row.targetId, agent.tokenId);
+      } else if (row.targetKind === "delegation" && row.delegatedToProfileId) {
+        const profileId = await this.transitions.profileIdForTokenTx(tx, agent.workspaceId, agent.tokenId);
+        if (profileId !== row.delegatedToProfileId) throw new ForbiddenException("Подпоручение передано другому профилю агента");
+      }
+      await this.transitions.accessibleTx(tx, agent, row);
       const command = {
         type: "claim" as const, expectedRevision, at: new Date().toISOString(),
         workerId: agent.tokenId, runtimeId: runtimeOf(agent), leaseMs: LEASE_MS
       };
-      return this.commitTx(tx, row, command, agent.tokenId, { kind: "manual_mcp" });
+      return this.transitions.commitTx(tx, row, command, agent.tokenId, { kind: "manual_mcp" });
     });
   }
 
@@ -127,9 +105,8 @@ export class AgentHubWorkerService {
       await this.workspaces.assertMemberTx(tx, agent.userId, agent.workspaceId);
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "agent-hub");
       await this.modules.assertEnabledTx(tx, agent.userId, agent.workspaceId, "tasks");
-      const row = await tx.agentHubExecution.findFirst({ where: { id: executionId, workspaceId: agent.workspaceId } });
-      if (!row) throw new NotFoundException("Исполнение не найдено");
-      await this.accessibleTx(tx, agent, row);
+      const row = await this.transitions.loadTx(tx, agent.workspaceId, executionId);
+      await this.transitions.accessibleTx(tx, agent, row);
       const shared = { expectedRevision: input.expectedRevision, at: new Date().toISOString(), workerId: agent.tokenId };
       const command: AgentHubCommand = input.action === "start"
         ? { ...shared, type: "start" }
@@ -138,16 +115,17 @@ export class AgentHubWorkerService {
           : input.action === "checkpoint"
             ? { ...shared, type: "checkpoint", checkpointRef: input.checkpointRef }
             : input.action === "submit"
-              ? { ...shared, type: "submit", evidenceRefs: input.evidenceRefs }
+              ? { ...shared, type: "submit", evidenceRefs: input.evidenceRefs, summary: input.summary }
               : input.action === "block"
                 ? { ...shared, type: "block", reason: input.reason }
-                : { ...shared, type: "fail", reason: input.reason };
-      const metadata: Record<string, string | string[]> = {};
+                : { ...shared, type: "fail", reason: input.reason, summary: input.summary };
+      const metadata: Record<string, unknown> = {};
       if (input.action === "block" || input.action === "fail") metadata.reason = input.reason;
       if (input.action === "checkpoint") metadata.checkpointRef = input.checkpointRef;
       if (input.action === "submit") metadata.evidenceRefs = input.evidenceRefs;
+      if ((input.action === "submit" || input.action === "fail") && input.summary) metadata.summary = input.summary;
       // These are unverified references; they do NOT close the Task automatically.
-      return this.commitTx(tx, row, command, agent.tokenId, metadata);
+      return this.transitions.commitTx(tx, row, command, agent.tokenId, metadata);
     });
   }
 
@@ -161,13 +139,13 @@ export class AgentHubWorkerService {
       await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
       const now = new Date();
       const stale = await tx.agentHubExecution.findMany({
-        where: { workspaceId, status: { in: ["claimed", "working"] }, leaseUntil: { lte: now } },
+        where: { workspaceId, status: { in: ["claimed", "working", "waiting_approval"] }, leaseUntil: { lte: now } },
         orderBy: { leaseUntil: "asc" }, take: 50
       });
       let recovered = 0;
       for (const row of stale) {
         try {
-          await this.commitTx(tx, row, {
+          await this.transitions.commitTx(tx, row, {
             type: "expire", expectedRevision: row.revision, at: now.toISOString()
           }, userId, { reason: "lease_expired" });
           recovered++;

@@ -11,6 +11,8 @@ interface JobState {
   runs: number;
   failures: number;
   skipped: number;
+  /** Foundation Core: запусков, пропущенных потому, что компонент выключен в пространстве. */
+  paused: number;
   lastStartedAt: Date | null;
   lastFinishedAt: Date | null;
   lastSuccessAt: Date | null;
@@ -60,6 +62,11 @@ export class BackgroundJobsService {
     }
   }
 
+  /** Отметить пропуск из-за выключенного компонента (Foundation Core): задача не падала, а была поставлена на паузу. */
+  markPaused(componentId: string, jobName: string): void {
+    this.stateFor(componentId, jobName).paused += 1;
+  }
+
   /** Снимок для диагностического эндпоинта: только имена, счётчики, время и текст последней ошибки. */
   list(): BackgroundJobStatus[] {
     return [...this.jobs.values()]
@@ -70,6 +77,7 @@ export class BackgroundJobsService {
         runs: s.runs,
         failures: s.failures,
         skipped: s.skipped,
+        paused: s.paused,
         lastStartedAt: s.lastStartedAt?.toISOString() ?? null,
         lastFinishedAt: s.lastFinishedAt?.toISOString() ?? null,
         lastSuccessAt: s.lastSuccessAt?.toISOString() ?? null,
@@ -89,6 +97,7 @@ export class BackgroundJobsService {
         runs: 0,
         failures: 0,
         skipped: 0,
+        paused: 0,
         lastStartedAt: null,
         lastFinishedAt: null,
         lastSuccessAt: null,

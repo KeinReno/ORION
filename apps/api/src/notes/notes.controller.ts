@@ -21,21 +21,31 @@ import {
   renameNoteTagInputSchema,
   restoreNoteRevisionInputSchema,
   reorderNoteStackInputSchema,
+  reorderNoteStacksInputSchema,
+  setNoteStackStateInputSchema,
   updateNoteInputSchema,
   type AttachNoteDocumentInput,
+  type BrokenNoteLink,
   type CreateNoteStackInput,
   type MoveNotesToStackInput,
   type CreateNoteInput,
   type Note,
   type NoteAttachment,
   type NoteBacklink,
+  type NoteLinks,
+  type NoteRelated,
   type NoteRevision,
+  type NoteRevisionDiff,
   type NoteRevisionSummary,
+  type NoteSearchResult,
+  type NoteStackState,
   type NoteTitleRef,
   type NoteView,
   type ReorderNoteStackInput,
+  type ReorderNoteStacksInput,
   type RenameNoteTagInput,
   type RestoreNoteRevisionInput,
+  type SetNoteStackStateInput,
   type UpdateNoteInput
 } from "@orion/shared-types";
 import { CurrentUser } from "../common/current-user.decorator";
@@ -45,6 +55,7 @@ import type { RequestUser } from "../auth/jwt.strategy";
 import type { UploadedDocumentFile } from "../documents/documents.service";
 import { RequireModule } from "../modules/require-module";
 import { NoteAttachmentsService } from "./note-attachments.service";
+import { NoteLinksService } from "./note-links.service";
 import { NotesService } from "./notes.service";
 
 @RequireModule("notes")
@@ -52,6 +63,7 @@ import { NotesService } from "./notes.service";
 export class NotesController {
   constructor(
     private readonly notes: NotesService,
+    private readonly notesLinks: NoteLinksService,
     private readonly attachments: NoteAttachmentsService
   ) {}
 
@@ -61,7 +73,7 @@ export class NotesController {
     @Param("workspaceId") workspaceId: string,
     @Body(new ZodValidationPipe(createNoteStackInputSchema)) body: CreateNoteStackInput
   ) {
-    return this.notes.createStack(user.userId, workspaceId, body.title, body.noteIds);
+    return this.notes.createStack(user.userId, workspaceId, body.title, body.noteIds, body.parentStackId);
   }
 
   @Patch("stacks/:stackId/order")
@@ -92,6 +104,45 @@ export class NotesController {
     @Param("stackId") stackId: string
   ): Promise<void> {
     return this.notes.removeStack(user.userId, workspaceId, stackId);
+  }
+
+  /** 07 (Заметки 2.0): свёрнутость и личный порядок стопок этого участника. */
+  @Get("stacks/state")
+  listStackStates(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string
+  ): Promise<NoteStackState[]> {
+    return this.notes.listStackStates(user.userId, workspaceId);
+  }
+
+  /** Полный личный порядок стопок, от первой к последней. */
+  @Patch("stacks/order")
+  reorderStacks(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(reorderNoteStacksInputSchema)) body: ReorderNoteStacksInput
+  ): Promise<void> {
+    return this.notes.reorderStacks(user.userId, workspaceId, body.stackIds);
+  }
+
+  /** Свернуть или развернуть стопку — состояние личное, остальных не меняет. */
+  @Patch("stacks/:stackId/state")
+  setStackState(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("stackId") stackId: string,
+    @Body(new ZodValidationPipe(setNoteStackStateInputSchema)) body: SetNoteStackStateInput
+  ): Promise<NoteStackState> {
+    return this.notes.setStackState(user.userId, workspaceId, stackId, body.collapsed);
+  }
+
+  /** 07 (Заметки 2.0): битые wiki-ссылки пространства — для экрана разбора. */
+  @Get("links/broken")
+  brokenLinks(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string
+  ): Promise<BrokenNoteLink[]> {
+    return this.notesLinks.listBrokenLinks(user.userId, workspaceId);
   }
 
   @Get()
@@ -213,6 +264,49 @@ export class NotesController {
     @Param("noteId") noteId: string
   ): Promise<NoteBacklink[]> {
     return this.notes.backlinks(user.userId, workspaceId, noteId);
+  }
+
+  /** 07 (Заметки 2.0): исходящие и входящие wiki-ссылки заметки с флагом broken. */
+  @Get(":noteId/links")
+  links(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId") noteId: string
+  ): Promise<NoteLinks> {
+    return this.notesLinks.listLinks(user.userId, workspaceId, noteId);
+  }
+
+  /** 07 (Заметки 2.0): вхождения запроса в тело заметки со смещениями для подсветки. */
+  @Get(":noteId/search")
+  searchInNote(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId") noteId: string,
+    @Query("q") query?: string
+  ): Promise<NoteSearchResult> {
+    return this.notesLinks.search(user.userId, workspaceId, noteId, query ?? "");
+  }
+
+  /** 07 (Заметки 2.0): связанные заметки — wiki-ссылки, общие EntityLink, общий проект. */
+  @Get(":noteId/related")
+  related(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId") noteId: string
+  ): Promise<NoteRelated[]> {
+    return this.notesLinks.related(user.userId, workspaceId, noteId);
+  }
+
+  /** 07 (Заметки 2.0): diff версии с текущим содержимым или с другой версией (against). */
+  @Get(":noteId/revisions/:revisionId/diff")
+  diffRevision(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId") noteId: string,
+    @Param("revisionId") revisionId: string,
+    @Query("against") against?: string
+  ): Promise<NoteRevisionDiff> {
+    return this.notes.diffRevision(user.userId, workspaceId, noteId, revisionId, against || undefined);
   }
 
   @Get(":noteId/revisions")

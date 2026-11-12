@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import type { ProjectActivity } from "@orion/shared-types";
+import { TASK_CLOSED_STATUSES, type ProjectActivity } from "@orion/shared-types";
 import { ProjectAggregateRegistry, type ProjectAggregate, type ProjectAggregateProvider } from "../common/project-aggregates";
 
 /** Что модуль «Задачи» сообщает карточке проекта (прогресс, оценка, активность) — вместо `tx.task` внутри projects. */
@@ -15,7 +15,7 @@ export class TasksProjectAggregates implements ProjectAggregateProvider {
   }
 
   async aggregate(tx: Prisma.TransactionClient, ids: string[]): Promise<Map<string, ProjectAggregate>> {
-    const [statusGroups, estimated, latest] = await Promise.all([
+    const [statusGroups, estimated, latest, openByAssignee] = await Promise.all([
       tx.task.groupBy({ by: ["projectId", "status"], where: { projectId: { in: ids } }, _count: true }),
       // `estimatedMinutes: { not: null }` — заодно признак «оценка есть вообще»: проект без таких строк
       // «не оценён» (null в DTO), а не «оценён в 0».
@@ -25,7 +25,14 @@ export class TasksProjectAggregates implements ProjectAggregateProvider {
         _sum: { estimatedMinutes: true },
         _count: true
       }),
-      tx.task.groupBy({ by: ["projectId"], where: { projectId: { in: ids } }, _max: { updatedAt: true } })
+      tx.task.groupBy({ by: ["projectId"], where: { projectId: { in: ids } }, _max: { updatedAt: true } }),
+      // Задание 03: загрузка портфеля по участникам. «Открытая» — тот же признак, что везде
+      // (`TASK_CLOSED_STATUSES`), иначе canceled-задачи снова начнут считаться работой.
+      tx.task.groupBy({
+        by: ["projectId", "assigneeId"],
+        where: { projectId: { in: ids }, status: { notIn: [...TASK_CLOSED_STATUSES] } },
+        _count: true
+      })
     ]);
     const map = new Map<string, ProjectAggregate>();
     const entryOf = (projectId: string): ProjectAggregate => map.get(projectId) ?? map.set(projectId, {}).get(projectId)!;
@@ -36,6 +43,11 @@ export class TasksProjectAggregates implements ProjectAggregateProvider {
     }
     for (const entry of estimated) if (entry.projectId) entryOf(entry.projectId).plannedMinutes = entry._sum.estimatedMinutes ?? 0;
     for (const entry of latest) if (entry.projectId && entry._max.updatedAt) entryOf(entry.projectId).lastActivityAt = entry._max.updatedAt;
+    for (const entry of openByAssignee) {
+      if (!entry.projectId) continue;
+      const aggregate = entryOf(entry.projectId);
+      (aggregate.openTasksByAssignee ??= []).push({ assigneeId: entry.assigneeId, count: entry._count });
+    }
     return map;
   }
 

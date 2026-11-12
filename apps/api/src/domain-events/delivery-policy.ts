@@ -48,6 +48,8 @@ export interface WorkspaceCapabilityState {
  * `pluginOverrides` И включён его модуль-хозяин (как `pluginStates`). Неизвестный id считается выключенным.
  */
 export function isComponentEnabled(componentId: string, ws: WorkspaceCapabilityState): boolean {
+  // `core` is platform infrastructure, not a switchable module: always enabled.
+  if (componentId === "core") return true;
   if (isOrionModuleId(componentId)) return isModuleEnabled(ws.disabledModules, componentId);
   if (isOrionPluginId(componentId)) {
     const host = PLUGIN_CATALOG.find((p) => p.id === componentId)?.extendsModuleId;

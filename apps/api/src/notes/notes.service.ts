@@ -1,14 +1,17 @@
 import { ProjectReferences } from "../projects/public/project-references";
 import { randomUUID } from "node:crypto";
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Note as DbNote, NoteRevision as DbNoteRevision, Prisma } from "@prisma/client";
 import {
+  diffNoteLines,
   wikiLinkTargets,
   type CreateNoteInput,
   type Note,
   type NoteBacklink,
   type NoteRevision,
+  type NoteRevisionDiff,
   type NoteRevisionSummary,
+  type NoteStackState as NoteStackStateDto,
   type NoteTitleRef,
   type NoteView,
   parseNoteNumber,
@@ -27,6 +30,9 @@ type NoteCore = { id: string; workspaceId: string; title: string; summary: strin
  * editing session" snapshot rather than one per keystroke-batch.
  */
 const REVISION_MIN_GAP_MS = 3 * 60 * 1000;
+
+/** Ссылка вида `[[<uuid>]]` тоже допустима: id стабильнее заголовка. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class NotesService {
@@ -127,7 +133,16 @@ export class NotesService {
   }
 
   /** Create or replace a visual stack. Removing notes from prior stacks never removes the notes themselves. */
-  async createStack(userId: string, workspaceId: string, title: string, noteIds: string[]): Promise<{ id: string; title: string; noteIds: string[] }> {
+  async createStack(
+    userId: string,
+    workspaceId: string,
+    title: string,
+    noteIds: string[],
+    parentStackId?: string
+  ): Promise<{ id: string; title: string; noteIds: string[] }> {
+    // 07 (Заметки 2.0, 7.4): вложенные стопки не поддерживаются — явный отказ,
+    // а не тихое игнорирование поля. Данные для них тоже не заводим.
+    if (parentStackId) throw new BadRequestException("Стопки в стопках не поддерживаются");
     const stackId = randomUUID();
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -415,7 +430,7 @@ export class NotesService {
     await this.assertOwnedTx(tx, workspaceId, noteId);
     await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date(), revision: { increment: 1 } } });
     await tx.noteLink.deleteMany({ where: { sourceNoteId: noteId } });
-    await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null } });
+    await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null, broken: true } });
   }
 
   /** Soft delete — moves the note to the trash. NoteTrashPurgeService hard-deletes it later. */
@@ -426,7 +441,7 @@ export class NotesService {
       await tx.note.update({ where: { id: noteId }, data: { deletedAt: new Date(), revision: { increment: 1 } } });
       // A trashed note is neither a link source nor a backlink target.
       await tx.noteLink.deleteMany({ where: { sourceNoteId: noteId } });
-      await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null } });
+      await tx.noteLink.updateMany({ where: { targetNoteId: noteId }, data: { targetNoteId: null, broken: true } });
     });
   }
 
@@ -488,27 +503,60 @@ export class NotesService {
     return toDto(note);
   }
 
-  /** Rebuild `note`'s outgoing `[[wiki links]]` from its body — full replace. */
+  /**
+   * Rebuild `note`'s outgoing `[[wiki links]]` from its body — full replace.
+   * 07 (Заметки 2.0): цель — заголовок, но также id и короткий номер
+   * (`[[N-104]]` / `[[104]]`), чтобы ссылка не ломалась при переименовании
+   * заметки, у которой есть стабильный номер. Нераспознанная цель сохраняется
+   * с `broken: true`, а не выбрасывается.
+   */
   private async syncOutgoingLinks(tx: Prisma.TransactionClient, note: NoteCore): Promise<void> {
-    const titles = wikiLinkTargets(note.body);
+    const targets = wikiLinkTargets(note.body);
     await tx.noteLink.deleteMany({ where: { sourceNoteId: note.id } });
-    if (titles.length === 0) return;
+    if (targets.length === 0) return;
+
+    const numeric = targets.flatMap((target) => {
+      const match = /^\s*(?:n[-\s]?)?(\d{1,9})\s*$/i.exec(target);
+      return match ? [Number(match[1])] : [];
+    });
+    const uuidCandidates = targets.filter((target) => UUID_RE.test(target));
+
     const matches = await tx.note.findMany({
       where: {
         workspaceId: note.workspaceId,
         deletedAt: null,
         id: { not: note.id },
-        OR: titles.map((t) => ({ title: { equals: t, mode: "insensitive" as const } }))
+        OR: [
+          ...targets.map((t) => ({ title: { equals: t, mode: "insensitive" as const } })),
+          ...(uuidCandidates.length ? [{ id: { in: uuidCandidates } }] : []),
+          ...(numeric.length ? [{ number: { in: numeric } }] : [])
+        ]
       },
-      select: { id: true, title: true }
+      select: { id: true, title: true, number: true }
     });
+
     const idByTitle = new Map(matches.map((m) => [m.title.toLowerCase(), m.id]));
+    const idById = new Map(matches.map((m) => [m.id, m.id]));
+    const idByNumber = new Map(matches.flatMap((m) => (m.number === null ? [] : [[m.number, m.id] as const])));
+
+    const resolved = targets.map((target) => {
+      const byId = idById.get(target);
+      if (byId) return byId;
+      const match = /^\s*(?:n[-\s]?)?(\d{1,9})\s*$/i.exec(target);
+      if (match) {
+        const byNumber = idByNumber.get(Number(match[1]));
+        if (byNumber) return byNumber;
+      }
+      return idByTitle.get(target.toLowerCase()) ?? null;
+    });
+
     await tx.noteLink.createMany({
-      data: titles.map((t) => ({
+      data: targets.map((target, index) => ({
         workspaceId: note.workspaceId,
         sourceNoteId: note.id,
-        targetNoteId: idByTitle.get(t.toLowerCase()) ?? null,
-        targetTitle: t
+        targetNoteId: resolved[index],
+        targetTitle: target,
+        broken: resolved[index] === null
       })),
       skipDuplicates: true
     });
@@ -526,7 +574,7 @@ export class NotesService {
         targetNoteId: note.id,
         NOT: { targetTitle: { equals: note.title, mode: "insensitive" } }
       },
-      data: { targetNoteId: null }
+      data: { targetNoteId: null, broken: true }
     });
     await tx.noteLink.updateMany({
       where: {
@@ -534,7 +582,7 @@ export class NotesService {
         targetNoteId: null,
         targetTitle: { equals: note.title, mode: "insensitive" }
       },
-      data: { targetNoteId: note.id }
+      data: { targetNoteId: note.id, broken: false }
     });
   }
 
@@ -559,11 +607,19 @@ export class NotesService {
       await this.assertOwnedTx(tx, workspaceId, noteId);
       const rows = await tx.noteRevision.findMany({
         where: { noteId },
-        select: { id: true, title: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
+        select: { id: true, title: true, createdAt: true, restoredFrom: true },
+        // Снимок «до» и запись восстановления создаются в одной транзакции и
+        // делят createdAt (now() транзакции). Восстановление должно стоять
+        // выше — иначе пользователь видит не тот верх истории.
+        orderBy: [{ createdAt: "desc" }, { restoredFrom: { sort: "asc", nulls: "last" } }],
         take: 200
       });
-      return rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.createdAt.toISOString() }));
+      return rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        createdAt: r.createdAt.toISOString(),
+        restoredFrom: r.restoredFrom ?? null
+      }));
     });
   }
 
@@ -630,11 +686,150 @@ export class NotesService {
         });
       }
       const updated = await tx.note.findUniqueOrThrow({ where: { id: noteId } });
+      // 07 (Заметки 2.0, 7.1): само восстановление — тоже запись истории, с
+      // пометкой restoredFrom. Снимок «до» уже сделан выше (maybeSnapshot),
+      // поэтому история и остаётся, и не теряет точку, откуда откатывались.
+      await tx.noteRevision.create({
+        data: {
+          workspaceId: updated.workspaceId,
+          noteId: updated.id,
+          title: updated.title,
+          summary: updated.summary,
+          body: updated.body,
+          tags: updated.tags,
+          restoredFrom: revision.id
+        }
+      });
       await this.syncOutgoingLinks(tx, updated);
       await this.reresolveIncomingLinks(tx, updated);
       return updated;
     });
     return toDto(note);
+  }
+
+  /**
+   * 07 (Заметки 2.0, 7.1): построчный diff между версией и текущим
+   * содержимым (или другой версией через against). Считается на сервере,
+   * чтобы контракт был одинаковым для всех клиентов, и без сторонних
+   * diff-библиотек — см. shared-types/note-diff.
+   */
+  async diffRevision(
+    userId: string,
+    workspaceId: string,
+    noteId: string,
+    revisionId: string,
+    againstRevisionId?: string
+  ): Promise<NoteRevisionDiff> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const current = await this.assertOwnedTx(tx, workspaceId, noteId);
+      const from = await tx.noteRevision.findUnique({ where: { id: revisionId } });
+      if (!from || from.noteId !== noteId) throw new NotFoundException("Версия не найдена");
+
+      let toTitle = current.title;
+      let toBody = current.body;
+      let toRevisionId: string | null = null;
+      if (againstRevisionId) {
+        const to = await tx.noteRevision.findUnique({ where: { id: againstRevisionId } });
+        if (!to || to.noteId !== noteId) throw new NotFoundException("Версия для сравнения не найдена");
+        toTitle = to.title;
+        toBody = to.body;
+        toRevisionId = to.id;
+      }
+
+      const diff = diffNoteLines(from.body, toBody);
+      return {
+        fromRevisionId: from.id,
+        toRevisionId,
+        fromTitle: from.title,
+        toTitle,
+        lines: diff.lines,
+        added: diff.added,
+        removed: diff.removed
+      };
+    });
+  }
+
+  /**
+   * 07 (Заметки 2.0, 7.4): состояние стопок этого пользователя. Стопки без
+   * личной записи получают значение по умолчанию; порядок по умолчанию —
+   * порядок участников (stackOrder), а не порядок создания.
+   */
+  async listStackStates(userId: string, workspaceId: string): Promise<NoteStackStateDto[]> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const notes = await tx.note.findMany({
+        where: { workspaceId, stackId: { not: null }, deletedAt: null },
+        select: { stackId: true, stackTitle: true, stackOrder: true },
+        orderBy: { stackOrder: "asc" }
+      });
+      const stacks = new Map<string, { title: string; order: number }>();
+      for (const note of notes) {
+        if (!note.stackId) continue;
+        const known = stacks.get(note.stackId);
+        if (!known) stacks.set(note.stackId, { title: note.stackTitle ?? "", order: note.stackOrder });
+      }
+      const states = await tx.noteStackState.findMany({ where: { workspaceId, userId } });
+      const byStack = new Map(states.map((state) => [state.stackId, state]));
+      const out: NoteStackStateDto[] = [];
+      let fallbackOrder = 1000;
+      for (const [stackId, stack] of stacks) {
+        const state = byStack.get(stackId);
+        out.push({
+          stackId,
+          collapsed: state?.collapsed ?? false,
+          sortOrder: state?.sortOrder ?? fallbackOrder,
+          title: stack.title
+        });
+        fallbackOrder += 1;
+      }
+      return out.sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"));
+    });
+  }
+
+  /** Свернуть/развернуть стопку для этого пользователя (остальных не затрагивает). */
+  async setStackState(
+    userId: string,
+    workspaceId: string,
+    stackId: string,
+    collapsed: boolean
+  ): Promise<NoteStackStateDto> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const member = await tx.note.findFirst({
+        where: { workspaceId, stackId, deletedAt: null },
+        select: { stackTitle: true }
+      });
+      if (!member) throw new NotFoundException("Стопка не найдена");
+      const state = await tx.noteStackState.upsert({
+        where: { workspaceId_userId_stackId: { workspaceId, userId, stackId } },
+        create: { workspaceId, userId, stackId, collapsed },
+        update: { collapsed }
+      });
+      return { stackId, collapsed: state.collapsed, sortOrder: state.sortOrder, title: member.stackTitle ?? "" };
+    });
+  }
+
+  /** Сохранить личный порядок стопок; состав должен совпадать с текущими стопками пространства. */
+  async reorderStacks(userId: string, workspaceId: string, stackIds: string[]): Promise<void> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const notes = await tx.note.findMany({
+        where: { workspaceId, stackId: { not: null }, deletedAt: null },
+        select: { stackId: true }
+      });
+      const actual = [...new Set(notes.flatMap((note) => (note.stackId ? [note.stackId] : [])))];
+      if (actual.length !== stackIds.length || actual.some((id) => !stackIds.includes(id))) {
+        throw new ConflictException("Состав стопок изменился. Обновите заметки и повторите.");
+      }
+      for (const [index, stackId] of stackIds.entries()) {
+        await tx.noteStackState.upsert({
+          where: { workspaceId_userId_stackId: { workspaceId, userId, stackId } },
+          create: { workspaceId, userId, stackId, sortOrder: index },
+          update: { sortOrder: index }
+        });
+      }
+    });
   }
 
   /**
@@ -723,6 +918,7 @@ function toRevision(r: DbNoteRevision): NoteRevision {
     summary: r.summary,
     body: r.body,
     tags: r.tags,
+    restoredFrom: r.restoredFrom ?? null,
     createdAt: r.createdAt.toISOString()
   };
 }

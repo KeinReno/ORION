@@ -15,6 +15,7 @@ export default tseslint.config(
       "**/.tmp/**", // Local scratch builds are not source files.
       "tmp/**", // Local build/extraction artifacts, never source code.
       "apps/compass-engine/**",
+      "splash/_chromeprofile/**", // Одноразовый профиль Chromium для съёмки splash, не исходники
       "**/src-tauri/gen/**",
       "**/src-tauri/resources/**",
       "**/generated/**",

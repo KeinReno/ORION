@@ -116,7 +116,6 @@ Payload каждого — минимум: `{ id, projectId?, homeId?, status? }
 
 
 ## Добавление 26.10.2026: правила публикации Tasks
-
 Event API 1.1.0: добавлено `tasks.task.changed`, version 1, payload `{id:string}`.
 TasksService пишет событие в исходной транзакции create/update/delete и создания
 следующей повторяющейся задачи. Текст и приватные поля в outbox не передаются.
@@ -127,3 +126,46 @@ TasksService пишет событие в исходной транзакции 
 полномочий останавливают правило. Периодическая сверка ловит изменения вне
 TasksService, включая каскадные сроки без повышения revision.
 Подробности и ограничения: [PUBLICATION_RULES](PUBLICATION_RULES.md).
+
+## ���������� 11.11.2026: ������� ������� ������� (������� 05)
+
+������� �������� ����� ���������; ��� � version 1, payload ������ id �
+������� ����� (��� ������ ������� �������):
+
+| ������� | �������� | ����� |
+|---|---|---|
+| `projects.project.status_changed` | `ProjectsService.update` | ������ ������� ��������� (`{ id, from, to }`) |
+| `projects.project.dates_changed` | `ProjectsService.update` | ��������� `startAt`/`dueAt` ������� |
+| `projects.milestone.completed` | `MilestonesService.update` | ���� ������� � `done` (`{ id, projectId, title }`) |
+| `projects.milestone.dates_changed` | `MilestonesService.update` | ���� ���� ��� ������� ��������� |
+| `tasks.task.assigned` | `TasksService.update` | �������� ���������� ����������� ������ ������� |
+
+Bulk-�������� ������� ����� `bulkId` (�, ���� �����, `bulkLabel`).
+��������� `projects.logbook-auto-entries` (`componentId:
+"projects-logbook"`) ����� ���� ������ ������� �� bulk: `dedupeKey =
+bulk:<eventType>:<bulkId>` + unique index `(projectId, dedupeKey)`.
+����������� ������ �������� `skipped_disabled`, ��� � ��������� �������.
+
+
+## Foundation Core (11.11.2026, задание 01)
+
+- **Каталог получил core-издателя.** `DomainEventDefinition.publisher` допускает `"core"` рядом с id модулей.
+  Добавлены `entity_link.created` и `entity_link.deleted` (version 1, publisher `core`), payload строго
+  `{ type, from: {type,id}, to: {type,id} }` — только идентификаторы, без названий.
+- **Единый слой связей.** `apps/api/src/entity-links/EntityLinksService` — единственный писатель `entity_links`.
+  Публикует события в транзакции записи; `actorId` + `occurredAt` строки outbox и `createdById` связи образуют
+  аудит «кто/когда/что». Модули используют SDK `EntityLinkOperations`, а не таблицу.
+- **Проверка контракта при доставке.** Диспетчер отвергает неизвестный тип, несовпадающую версию payload или
+  payload, не проходящий zod-схему, и помечает доставку `failed` с причиной (раньше это было исключение в
+  произвольном потребителе).
+- **Диагностика.** `GET workspaces/:id/domain-events/status` (членство + `core.domain_event.manage`) —
+  pending/done/skipped/failed, возраст старейшего неразложенного события и старейшей ожидающей доставки,
+  разбивка по типам, последние упавшие доставки. `GET system/domain-events` — те же счётчики без имён
+  пространств и payload.
+- **Ручной replay.** `POST workspaces/:id/domain-events/deliveries/:deliveryId/replay` сбрасывает только
+  `failed`-доставку в `pending` с новым бюджетом попыток; обработчик должен оставаться идемпотентным.
+- **Изоляция подписчиков.** Доставка каждого подписчика идёт в SAVEPOINT: падение одного не откатывает
+  остальных и не блокирует публикацию. Интеграционный тест — два подписчика на одно событие.
+- **Жизненный цикл фоновых задач.** `BackgroundJobRegistry` + `BackgroundJobSupervisor`: задача объявляется
+  один раз (component/job/schedule), supervisor проверяет включённость компонента в пространстве;
+  `GET system/jobs/registry` показывает реестр и счётчик `paused`. Выключение модуля не удаляет данные.

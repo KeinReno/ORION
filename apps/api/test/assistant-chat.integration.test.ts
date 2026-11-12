@@ -20,7 +20,8 @@ describe("Assistant chat (variant C)", () => {
   let fake: Server;
   const emailPrefix = `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const API_KEY = "sk-ant-test-0123456789abcdefghijkl";
-  const seen: Array<{ key: string | undefined; body: unknown }> = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- тест инспектирует произвольные JSON-тела запросов провайдера
+  const seen: Array<{ key: string | undefined; body: any }> = [];
   let script: Array<(body: unknown) => { status?: number; json: unknown }> = [];
 
   beforeAll(async () => {
@@ -61,7 +62,8 @@ describe("Assistant chat (variant C)", () => {
     await new Promise<void>((resolve) => fake.close(() => resolve()));
   });
 
-  async function request<T = unknown>(path: string, method: string, token?: string, body?: unknown) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- дефолт any сознательно: тесты читают JSON-ответы произвольной формы
+  async function request<T = any>(path: string, method: string, token?: string, body?: unknown) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

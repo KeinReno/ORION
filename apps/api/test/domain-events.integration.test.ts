@@ -252,6 +252,95 @@ describe("Domain event bus (outbox)", () => {
     expect(await prisma.asSystem((tx) => tx.domainEventDelivery.count({ where: { eventId: id } }))).toBe(0);
   });
 
+  it("isolates a throwing subscriber: the healthy subscriber still completes", async () => {
+    const alice = await register("subscriber-isolation");
+    const realLookup = bus.subscriberById.bind(bus);
+    const realSubscribersFor = bus.subscribersFor.bind(bus);
+    const failing = {
+      id: "test.failing-subscriber",
+      componentId: "core",
+      types: ["tasks.task.closed"] as const,
+      handle: vi.fn(async () => { throw new Error("handler down"); })
+    };
+    const healthy = {
+      id: "test.healthy-subscriber",
+      componentId: "core",
+      types: ["tasks.task.closed"] as const,
+      handle: vi.fn(async () => undefined)
+    };
+    vi.spyOn(bus, "subscribersFor").mockImplementation((type) =>
+      type === "tasks.task.closed" ? [failing, healthy] : realSubscribersFor(type)
+    );
+    vi.spyOn(bus, "subscriberById").mockImplementation((id) =>
+      id === failing.id ? failing : id === healthy.id ? healthy : realLookup(id)
+    );
+
+    const eventId = await prisma.withUser(alice.userId, (tx) =>
+      bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", actorId: alice.userId, payload: payload("isolation") })
+    );
+    await dispatcher.runOnce();
+    expect(failing.handle).toHaveBeenCalledTimes(1);
+    expect(healthy.handle).toHaveBeenCalledTimes(1);
+
+    const deliveries = await prisma.asSystem((tx) =>
+      tx.domainEventDelivery.findMany({ where: { eventId }, orderBy: { subscriberId: "asc" } })
+    );
+    expect(deliveries.find((row) => row.subscriberId === failing.id)).toMatchObject({ status: "pending", attempts: 1 });
+    expect(deliveries.find((row) => row.subscriberId === healthy.id)).toMatchObject({ status: "done", attempts: 1 });
+  }, 40000);
+
+  it("diagnostics show the backlog and manual replay resurrects a dead-letter delivery", async () => {
+    const alice = await register("diagnostics");
+    const real = bus.subscriberById(SUBSCRIBER_ID)!;
+    const lookup = bus.subscriberById.bind(bus);
+    let failingEventId: string | null = null;
+    vi.spyOn(bus, "subscriberById").mockImplementation((subscriberId) => subscriberId === SUBSCRIBER_ID
+      ? { ...real, handle: async (event, tx) => {
+          if (event.id === failingEventId) throw new Error("dead letter");
+          await real.handle(event, tx);
+        } }
+      : lookup(subscriberId));
+
+    const eventId = await prisma.withUser(alice.userId, (tx) =>
+      bus.publishTx(tx, { workspaceId: alice.workspaceId, type: "tasks.task.closed", actorId: alice.userId, payload: payload("replay") })
+    );
+    failingEventId = eventId;
+    await dispatcher.runOnce();
+
+    const status = await request<{ pending: number; failed: number; oldestPendingAgeSeconds: number | null; failedDeliveries: Array<{ id: string; type: string }> }>(
+      `/workspaces/${alice.workspaceId}/domain-events/status`, { method: "GET", token: alice.accessToken }
+    );
+    expect(status.status).toBe(200);
+    expect(status.data.pending).toBeGreaterThanOrEqual(1);
+    expect(status.data.oldestPendingAgeSeconds).not.toBeNull();
+
+    const delivery = await deliveryFor(eventId);
+    await prisma.asSystem((tx) =>
+      tx.domainEventDelivery.update({ where: { id: delivery.id }, data: { status: "failed", attempts: MAX_DELIVERY_ATTEMPTS, completedAt: new Date() } })
+    );
+    const failedStatus = await request<{ failed: number; failedDeliveries: Array<{ id: string; type: string }> }>(
+      `/workspaces/${alice.workspaceId}/domain-events/status`, { method: "GET", token: alice.accessToken }
+    );
+    expect(failedStatus.data.failed).toBeGreaterThanOrEqual(1);
+    expect(failedStatus.data.failedDeliveries.some((row) => row.id === delivery.id && row.type === "tasks.task.closed")).toBe(true);
+
+    const replay = await request(`/workspaces/${alice.workspaceId}/domain-events/deliveries/${delivery.id}/replay`, {
+      method: "POST", token: alice.accessToken
+    });
+    expect(replay.status).toBe(204);
+    expect(await deliveryFor(eventId)).toMatchObject({ status: "pending", attempts: 0 });
+
+    // The global system view exposes counters only.
+    const global = await request<{ pending: number; failed: number }>("/system/domain-events", { method: "GET", token: alice.accessToken });
+    expect(global.status).toBe(200);
+    expect(global.data.pending).toBeGreaterThanOrEqual(1);
+
+    // Handler repaired: the replayed delivery completes on the next pass.
+    vi.restoreAllMocks();
+    await dispatcher.runOnce();
+    expect((await deliveryFor(eventId)).status).toBe("done");
+  }, 40000);
+
   async function closedNotifications(s: Session, workspaceId: string) {
     const res = await request<Array<{ title: string; kind: string }>>(`/workspaces/${workspaceId}/notifications`, { method: "GET", token: s.accessToken });
     return res.data.filter((n) => n.title.startsWith("Задача закрыта"));

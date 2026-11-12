@@ -1,46 +1,19 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, type AgentHubExecution as ExecutionRow, type AgentHubEvent as EventRow } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import {
-  agentHubExecutionSchema,
   type AgentHubExecution,
   type AgentHubCreateExecutionInput,
   type AgentHubEvent
 } from "@orion/shared-types";
-import { transitionAgentHubExecution, AgentHubTransitionError } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { ModulesService } from "../../modules/modules.service";
 import { TaskIntegrationReader } from "../../tasks/public/task-integration-reader";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
+import { executionDto, eventDto } from "./agent-hub-dto";
+import { AgentHubTransitions } from "./agent-hub-transitions.service";
 
 const LIMIT = 100;
-
-export function executionDto(row: ExecutionRow): AgentHubExecution {
-  return agentHubExecutionSchema.parse({
-    id: row.id,
-    workspaceId: row.workspaceId,
-    target: { kind: row.targetKind, id: row.targetId },
-    status: row.status,
-    revision: row.revision,
-    attempt: row.attempt,
-    workerId: row.workerId,
-    runtimeId: row.runtimeId,
-    leaseUntil: row.leaseUntil?.toISOString() ?? null,
-    checkpointRef: row.checkpointRef,
-    evidenceRefs: row.evidenceRefs,
-    verifiedBy: row.verifiedBy,
-    blockedReason: row.blockedReason,
-    updatedAt: row.updatedAt.toISOString()
-  });
-}
-
-function eventDto(row: EventRow): AgentHubEvent {
-  return {
-    id: row.id, workspaceId: row.workspaceId, executionId: row.executionId,
-    revision: row.revision, action: row.action, actorId: row.actorId,
-    data: row.data as Record<string, unknown>, at: row.at.toISOString()
-  };
-}
 
 /**
  * Durable user-facing coordination records. NOT a runtime scheduler.
@@ -56,7 +29,8 @@ export class AgentHubService {
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
     private readonly modules: ModulesService,
-    private readonly tasks: TaskIntegrationReader
+    private readonly tasks: TaskIntegrationReader,
+    private readonly transitions: AgentHubTransitions
   ) {}
 
   async list(userId: string, workspaceId: string): Promise<AgentHubExecution[]> {
@@ -134,27 +108,10 @@ export class AgentHubService {
   async cancel(userId: string, workspaceId: string, id: string, expectedRevision: number): Promise<AgentHubExecution> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
-      const row = await tx.agentHubExecution.findFirst({ where: { id, workspaceId } });
-      if (!row) throw new NotFoundException("Исполнение не найдено");
-      const now = new Date();
-      let next: AgentHubExecution;
-      try {
-        next = transitionAgentHubExecution(executionDto(row), {
-          type: "cancel", expectedRevision, at: now.toISOString()
-        });
-      } catch (error) {
-        if (error instanceof AgentHubTransitionError) throw new ConflictException(error.code);
-        throw error;
-      }
-      const updated = await tx.agentHubExecution.updateMany({
-        where: { id, workspaceId, revision: expectedRevision, status: { notIn: ["done", "failed", "canceled"] } },
-        data: { status: next.status, revision: next.revision, leaseUntil: null, updatedAt: now }
-      });
-      if (updated.count !== 1) throw new ConflictException("Исполнение изменилось одновременно");
-      await tx.agentHubEvent.create({
-        data: { workspaceId, executionId: id, revision: next.revision, action: "cancel", actorId: userId, data: {}, at: now }
-      });
-      return next;
+      const row = await this.transitions.loadTx(tx, workspaceId, id);
+      return this.transitions.commitTx(tx, row, {
+        type: "cancel", expectedRevision, at: new Date().toISOString()
+      }, userId, {});
     });
   }
 }

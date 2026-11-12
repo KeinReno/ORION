@@ -1,5 +1,43 @@
 # ORION — состояние на 30 октября 2026
 
+## Приёмка бэкенд-заданий DeepSeek-агентов (задания 01–12) — 12.11.2026
+
+Задания 01–12 из `tasks/deepseek-backend` приняты в `experiment/orion-rust-foundation`. По ходу приёмки
+исправлено (исторические блоки ниже описывают состояние до этих правок):
+
+- **Реестры снапшота/синка** (`snapshot-registry.ts`, `sync-classification.ts`, `snapshot.service.ts`):
+  добавлены политики `KnowledgeItemRevision`/`KnowledgeSettings` (задание 08; `included`, ключи
+  `knowledgeItemRevisions`/`knowledgeSettings`) и sync-классы `NoteStackState`/`AgentMemberEvent`
+  (`not-synced`), `KnowledgeItemRevision` (`append-only`), `KnowledgeSettings` (`lww`) — инвентарные
+  тесты `whole-node-snapshot-inventory`, `migration-table-inventory`, `sync-classification` зелёные.
+- **Sync-реплики полей Task** (`packages/core/src/sync/memory-host.ts`, `replica-view.ts`): в device-view
+  доки добавлены поля Tasks 2.0 (`statusId`, `importance`, `urgency`, `complexity`, `executorSource`,
+  `archivedAt`) — `taskSchema` их требует, без них копия на устройстве молча отбрасывала задачи.
+  `replica-notes-tasks` и `convergence.fuzz` (ТЗ-06 этап 3) зелёные.
+- **Формат прав**: `entity-links.read/manage` переименованы в `entity-links.link.read/manage`
+  (`module.resource.action`); в перечень действий добавлен `execute` (`core.command.execute`, задание 10)
+  — обновлены `PERMISSION_ACTIONS`, тест реестра и `docs/platform-api/PERMISSIONS.md`.
+- **Матрица модулей** (`component-dependents.integration.test.ts`): добавлена проба `planning`
+  (`GET /planning/blocks`) — модуль появился в `MODULE_CATALOG` в задании 04.
+- **Контракт логбука** (задание 05): `.default("")` вложенной схемы ломал `z.ZodType<T>`-инференс в
+  api-client — вынесен во входную схему `projectLogAlternativeInputSchema`; service приводит `tasks ?? []`.
+- **Типизация интеграционных тестов**: возвращён `T = any` по умолчанию в семи хелперах (сознательный
+  дефолт), типы в `workspace-transfer`, `component-dependents`, `qa-orion-dev-journey`, `private-notes`.
+
+Проверки на чистой БД (PostgreSQL 127.0.0.1:5433): `prisma migrate reset --force` — все 175 миграций
+применяются с нуля (включая 17 новых); гранты `orion_app`/`orion_system` повторно применены из
+`infra/postgres/init/01-app-roles.sql` (grants живут на схеме и теряются при reset — повторять после
+любого `migrate reset`). Интеграционные тесты: 782/788 зелёные; 6 отказов — внешние блокировки среды,
+не кода: `migration-stage` (initdb не может писать в `B:\Temp` — тот же класс блокировки антивируса,
+что и esbuild), `assistant-cli` (внешний Codex CLI завершается с ошибкой), 3 unit-прогона
+(`orion-ext` ×2, `platform-map`) — esbuild.exe заблокирован Windows Defender (`Access is denied`).
+
+Прочее: typecheck всех пакетов — зелёный; `pnpm lint` — зелёный (в ignores добавлен чужой профиль
+`splash/_chromeprofile/**`); `pnpm --filter @orion/api build` — собирается; `architecture-check`,
+`plugin-contract-check` (11/11), `module-docs:check` — OK; unit: 2104 passed / 3 (только esbuild).
+`capabilities.generated.json` НЕ перегенерирован — для этого нужно разрешить esbuild в Windows Security,
+затем `pnpm platform-map && pnpm platform-map:check`.
+
 ## Orion Dev + Git Workspace + Architect + MCP-доступ — 11.11.2026
 
 Задание 11 (backend, волна 3). Новые файлы: `packages/shared-types/src/development-git.ts`,

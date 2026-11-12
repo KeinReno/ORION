@@ -11,14 +11,20 @@ import type {
   KnowledgeCategory,
   KnowledgeItem,
   KnowledgeItemDetail,
-  KnowledgeLink,
+  KnowledgeListQuery,
   KnowledgeRelation,
   KnowledgeSource,
+  KnowledgeVerificationState,
   UpdateKnowledgeCategoryInput,
   UpdateKnowledgeItemInput
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
+import { toCategory, toDetail, toItem, toRelation, toSource } from "./knowledge-dto";
+import { assertKnowledgeCategoryTx, assertKnowledgeProjectTx } from "./knowledge-refs";
+import { pruneKnowledgeRevisionsTx, snapshotKnowledgeRevisionTx } from "./knowledge-revisions";
+import { KnowledgeSettingsService } from "./knowledge-settings.service";
 
 const itemInclude = {
   sources: true,
@@ -26,12 +32,16 @@ const itemInclude = {
   toRelations: { include: { from: { select: { id: true, title: true } } } }
 } as const;
 
+const DAY_MS = 86_400_000;
+
 @Injectable()
 export class KnowledgeService {
   constructor(
     private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly settings: KnowledgeSettingsService,
+    private readonly events: DomainEventBus
   ) {}
 
   listCategories(userId: string, workspaceId: string): Promise<KnowledgeCategory[]> {
@@ -96,66 +106,57 @@ export class KnowledgeService {
     });
   }
 
-  listItems(userId: string, workspaceId: string, includeArchived: boolean, query?: string): Promise<KnowledgeItem[]> {
+  listItems(userId: string, workspaceId: string, query: KnowledgeListQuery = {}): Promise<KnowledgeItem[]> {
+    const includeArchived = query.includeArchived === "true";
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      const needle = query?.trim();
-      const text = needle
-        ? {
-            OR: [
-              { title: { contains: needle, mode: "insensitive" as const } },
-              { summary: { contains: needle, mode: "insensitive" as const } },
-              { body: { contains: needle, mode: "insensitive" as const } },
-              {
-                sources: {
-                  some: {
-                    OR: [
-                      { originalText: { contains: needle, mode: "insensitive" as const } },
-                      { sourceTitle: { contains: needle, mode: "insensitive" as const } },
-                      { sourceUrl: { contains: needle, mode: "insensitive" as const } }
-                    ]
-                  }
-                }
-              }
-            ]
-          }
-        : {};
-      const rows = await tx.knowledgeItem.findMany({
-        where: { workspaceId, ...(includeArchived ? {} : { status: { not: "archived" } }), ...text },
-        orderBy: { updatedAt: "desc" }
-      });
-      if (!needle) return rows.map(toItem);
+      const settings = await this.settings.readTx(tx, workspaceId);
+      const now = new Date();
+      const cutoff = new Date(now.getTime() - settings.verificationDays * DAY_MS);
+      const baseWhere: Prisma.KnowledgeItemWhereInput = {
+        workspaceId,
+        ...(includeArchived ? {} : { status: { not: "archived" } }),
+        ...verificationWhere(query, cutoff)
+      };
+      const orderBy = sortOrder(query);
+      const needle = query.q?.trim();
+      const text = needle ? this.textWhere(needle) : {};
+      const rows = await tx.knowledgeItem.findMany({ where: { ...baseWhere, ...text }, orderBy });
+
+      // Теги ищутся регистронезависимо (массив строк), поэтому — отдельный запрос по id.
+      // Фильтры проверки/архива применяются к найденным id тем же `baseWhere`, чтобы
+      // поиск по тегам не показывал то, что скрывает фильтр.
+      if (!needle) return rows.map((row) => toItem(row, settings, now));
       const pattern = `%${needle.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
       const tagged = await tx.$queryRaw<Array<{ id: string }>>(
         Prisma.sql`SELECT id FROM knowledge_items WHERE "workspaceId" = ${workspaceId} AND EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE tag ILIKE ${pattern} ESCAPE '\\')`
       );
-      if (tagged.length === 0) return rows.map(toItem);
       const seen = new Set(rows.map((row) => row.id));
-      const extra = await tx.knowledgeItem.findMany({
-        where: {
-          workspaceId,
-          id: { in: tagged.map((row) => row.id).filter((id) => !seen.has(id)) },
-          ...(includeArchived ? {} : { status: { not: "archived" } })
-        }
-      });
-      return [...rows, ...extra].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map(toItem);
+      const extraIds = tagged.map((row) => row.id).filter((id) => !seen.has(id));
+      if (extraIds.length === 0) return rows.map((row) => toItem(row, settings, now));
+      const extra = await tx.knowledgeItem.findMany({ where: { ...baseWhere, id: { in: extraIds } }, orderBy });
+      return [...rows, ...extra]
+        .sort(comparator(query))
+        .map((row) => toItem(row, settings, now));
     });
   }
 
   getItem(userId: string, workspaceId: string, itemId: string): Promise<KnowledgeItemDetail> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const settings = await this.settings.readTx(tx, workspaceId);
       const row = await tx.knowledgeItem.findFirst({ where: { id: itemId, workspaceId }, include: itemInclude });
       if (!row) throw new NotFoundException("Материал не найден");
-      return toDetail(row);
+      return toDetail(row, settings);
     });
   }
 
   createItem(userId: string, workspaceId: string, input: CreateKnowledgeItemInput): Promise<KnowledgeItemDetail> {
     return this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      if (input.categoryId) await this.assertCategory(tx, workspaceId, input.categoryId);
-      await this.assertProject(tx, workspaceId, input.projectId ?? null);
+      await assertKnowledgeCategoryTx(tx, workspaceId, input.categoryId);
+      await assertKnowledgeProjectTx(tx, this.projectReferences, workspaceId, input.projectId);
+      const settings = await this.settings.readTx(tx, workspaceId);
       const row = await tx.knowledgeItem.create({
         data: {
           workspaceId,
@@ -168,11 +169,12 @@ export class KnowledgeService {
           visibility: input.visibility ?? "workspace",
           kind: input.kind ?? "fact",
           tags: input.tags ?? [],
-          createdBy: userId
+          createdBy: userId,
+          ...(input.origin ? { origin: input.origin as Prisma.InputJsonValue } : {})
         },
         include: itemInclude
       });
-      return toDetail(row);
+      return toDetail(row, settings);
     });
   }
 
@@ -189,15 +191,24 @@ export class KnowledgeService {
       if (input.visibility === "private" && current.createdBy !== userId) {
         throw new ForbiddenException("Скрыть материал может только его автор");
       }
-      if (input.categoryId) await this.assertCategory(tx, workspaceId, input.categoryId);
-      if (input.projectId !== undefined) await this.assertProject(tx, workspaceId, input.projectId);
+      if (input.categoryId) await assertKnowledgeCategoryTx(tx, workspaceId, input.categoryId);
+      if (input.projectId !== undefined) await assertKnowledgeProjectTx(tx, this.projectReferences, workspaceId, input.projectId);
+
+      const settings = await this.settings.readTx(tx, workspaceId);
+      const now = new Date();
       const expected = input.expectedRevision ?? current.revision;
       const patch = { ...input };
       delete patch.expectedRevision;
-      const written = await tx.knowledgeItem.updateMany({
-        where: { id: itemId, revision: expected },
-        data: { ...patch, revision: { increment: 1 } }
-      });
+
+      // Правка содержимого снимает подтверждение (п. 6.1). Дата и автор прошлой проверки
+      // остаются историческими фактами: состояние — авторитетный признак.
+      const contentChanged = itemContentChanged(current, input);
+      const resetsVerification = contentChanged && current.verificationState !== "unverified";
+      const published = input.status === "published" && current.status !== "published";
+
+      const data = { ...patch, revision: { increment: 1 } } as Prisma.KnowledgeItemUpdateManyMutationInput;
+      if (resetsVerification) data.verificationState = "unverified";
+      const written = await tx.knowledgeItem.updateMany({ where: { id: itemId, revision: expected }, data });
       if (written.count === 0) {
         const fresh = await tx.knowledgeItem.findFirst({ where: { id: itemId, workspaceId }, include: itemInclude });
         if (!fresh) throw new NotFoundException("Материал не найден");
@@ -205,11 +216,46 @@ export class KnowledgeService {
           code: "knowledge_revision_conflict",
           message: "Материал сохранился в другой версии, пока вы его правили",
           currentRevision: fresh.revision,
-          current: toDetail(fresh)
+          current: toDetail(fresh, settings, now)
         });
       }
       const row = await tx.knowledgeItem.findFirstOrThrow({ where: { id: itemId }, include: itemInclude });
-      return toDetail(row);
+      if (resetsVerification) {
+        await this.events.publishTx(tx, {
+          workspaceId,
+          type: "knowledge.item.verification.changed",
+          payload: { id: itemId, from: current.verificationState as KnowledgeVerificationState, to: "unverified" },
+          actorId: userId
+        });
+      }
+      if (published) {
+        await snapshotKnowledgeRevisionTx(tx, row, userId);
+        await pruneKnowledgeRevisionsTx(tx, itemId, settings.revisionLimit);
+      }
+      return toDetail(row, settings, now);
+    });
+  }
+
+  /** Подтверждение проверки: кто и когда — в самой строке, событие — в той же транзакции. */
+  verifyItem(userId: string, workspaceId: string, itemId: string): Promise<KnowledgeItemDetail> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const current = await tx.knowledgeItem.findFirst({ where: { id: itemId, workspaceId }, select: { id: true, verificationState: true } });
+      if (!current) throw new NotFoundException("Материал не найден");
+      const settings = await this.settings.readTx(tx, workspaceId);
+      const now = new Date();
+      const row = await tx.knowledgeItem.update({
+        where: { id: itemId },
+        data: { verificationState: "verified", lastVerifiedAt: now, verifiedById: userId },
+        include: itemInclude
+      });
+      await this.events.publishTx(tx, {
+        workspaceId,
+        type: "knowledge.item.verification.changed",
+        payload: { id: itemId, from: current.verificationState as KnowledgeVerificationState, to: "verified" },
+        actorId: userId
+      });
+      return toDetail(row, settings, now);
     });
   }
 
@@ -304,14 +350,31 @@ export class KnowledgeService {
     });
   }
 
+  /** Условие поиска по title/summary/body/источникам (прежнее поведение списка). */
+  private textWhere(needle: string): Prisma.KnowledgeItemWhereInput {
+    return {
+      OR: [
+        { title: { contains: needle, mode: "insensitive" as const } },
+        { summary: { contains: needle, mode: "insensitive" as const } },
+        { body: { contains: needle, mode: "insensitive" as const } },
+        {
+          sources: {
+            some: {
+              OR: [
+                { originalText: { contains: needle, mode: "insensitive" as const } },
+                { sourceTitle: { contains: needle, mode: "insensitive" as const } },
+                { sourceUrl: { contains: needle, mode: "insensitive" as const } }
+              ]
+            }
+          }
+        }
+      ]
+    };
+  }
+
   private async assertCategory(tx: Prisma.TransactionClient, workspaceId: string, categoryId: string): Promise<void> {
     const row = await tx.knowledgeCategory.findFirst({ where: { id: categoryId, workspaceId } });
     if (!row) throw new BadRequestException("Раздел не найден в этом пространстве");
-  }
-
-  private async assertProject(tx: Prisma.TransactionClient, workspaceId: string, projectId: string | null): Promise<void> {
-    if (!projectId) return;
-    if (!(await this.projectReferences.existsTx(tx, workspaceId, projectId))) throw new NotFoundException("Проект не найден");
   }
 
   /** Родитель раздела — только верхний уровень, чтобы дерево не ушло глубже двух. */
@@ -331,129 +394,49 @@ export class KnowledgeService {
   }
 }
 
-type CategoryRow = {
-  id: string;
-  workspaceId: string;
-  name: string;
-  parentId: string | null;
-  sortOrder: number;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type ItemRow = {
-  id: string;
-  workspaceId: string;
-  categoryId: string | null;
-  projectId: string | null;
-  title: string;
-  summary: string;
-  body: string;
-  status: string;
-  visibility: string;
-  kind: string;
-  tags: string[];
-  revision: number;
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type SourceRow = {
-  id: string;
-  workspaceId: string;
-  itemId: string;
-  type: string;
-  sourceUrl: string;
-  sourceTitle: string;
-  sourceAuthor: string;
-  originalText: string;
-  noteId: string | null;
-  documentId: string | null;
-  capturedAt: Date;
-};
-
-type RelationRow = {
-  id: string;
-  workspaceId: string;
-  fromId: string;
-  toId: string;
-  kind: string;
-};
-
-function toCategory(row: CategoryRow): KnowledgeCategory {
-  return {
-    id: row.id,
-    workspaceId: row.workspaceId,
-    name: row.name,
-    parentId: row.parentId,
-    sortOrder: row.sortOrder,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
+/** Фильтр списка по состоянию проверки; `outdated` — вычисляемое: проверено, но срок вышел. */
+function verificationWhere(query: KnowledgeListQuery, cutoff: Date): Prisma.KnowledgeItemWhereInput {
+  const state = query.verification;
+  const overdue = query.overdue === "true";
+  const staleVerified: Prisma.KnowledgeItemWhereInput = {
+    verificationState: "verified",
+    OR: [{ lastVerifiedAt: null }, { lastVerifiedAt: { lt: cutoff } }]
   };
+  const filters: Prisma.KnowledgeItemWhereInput[] = [];
+  if (state === "unverified") filters.push({ verificationState: "unverified" });
+  if (state === "outdated") filters.push(staleVerified);
+  if (state === "verified") filters.push({ verificationState: "verified", lastVerifiedAt: { gte: cutoff } });
+  if (overdue) filters.push({ OR: [{ verificationState: "unverified" }, staleVerified] });
+  return filters.length === 0 ? {} : { AND: filters };
 }
 
-function toItem(row: ItemRow): KnowledgeItem {
-  return {
-    id: row.id,
-    workspaceId: row.workspaceId,
-    categoryId: row.categoryId,
-    projectId: row.projectId,
-    title: row.title,
-    summary: row.summary,
-    body: row.body,
-    status: row.status as KnowledgeItem["status"],
-    visibility: row.visibility as KnowledgeItem["visibility"],
-    kind: row.kind as KnowledgeItem["kind"],
-    tags: row.tags,
-    revision: row.revision,
-    createdBy: row.createdBy,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString()
-  };
-}
-
-function toSource(row: SourceRow): KnowledgeSource {
-  return {
-    id: row.id,
-    workspaceId: row.workspaceId,
-    itemId: row.itemId,
-    type: row.type as KnowledgeSource["type"],
-    sourceUrl: row.sourceUrl,
-    sourceTitle: row.sourceTitle,
-    sourceAuthor: row.sourceAuthor,
-    originalText: row.originalText,
-    noteId: row.noteId,
-    documentId: row.documentId,
-    capturedAt: row.capturedAt.toISOString()
-  };
-}
-
-function toRelation(row: RelationRow): KnowledgeRelation {
-  return {
-    id: row.id,
-    workspaceId: row.workspaceId,
-    fromId: row.fromId,
-    toId: row.toId,
-    kind: row.kind as KnowledgeRelation["kind"]
-  };
-}
-
-function toLink(row: RelationRow & { to?: { id: string; title: string }; from?: { id: string; title: string } }, peer: { id: string; title: string }): KnowledgeLink {
-  return { ...toRelation(row), peerId: peer.id, peerTitle: peer.title };
-}
-
-function toDetail(
-  row: ItemRow & {
-    sources: SourceRow[];
-    fromRelations: Array<RelationRow & { to: { id: string; title: string } }>;
-    toRelations: Array<RelationRow & { from: { id: string; title: string } }>;
+function sortOrder(query: KnowledgeListQuery): Prisma.KnowledgeItemOrderByWithRelationInput[] {
+  if (query.sort === "verification") {
+    return [{ lastVerifiedAt: { sort: "asc", nulls: "first" } }, { updatedAt: "desc" }];
   }
-): KnowledgeItemDetail {
-  return {
-    ...toItem(row),
-    sources: row.sources.map(toSource),
-    relations: row.fromRelations.map((link) => toLink(link, link.to)),
-    backlinks: row.toRelations.map((link) => toLink(link, link.from))
-  };
+  return [{ updatedAt: "desc" }];
+}
+
+/** Локальная сортировка склеенной выдачи (основной запрос + теги) тем же правилом, что и в SQL. */
+function comparator(query: KnowledgeListQuery) {
+  if (query.sort === "verification") {
+    return (a: { lastVerifiedAt: Date | null; updatedAt: Date }, b: { lastVerifiedAt: Date | null; updatedAt: Date }): number => {
+      const left = a.lastVerifiedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+      const right = b.lastVerifiedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+      return left - right || b.updatedAt.getTime() - a.updatedAt.getTime();
+    };
+  }
+  return (a: { updatedAt: Date }, b: { updatedAt: Date }): number => b.updatedAt.getTime() - a.updatedAt.getTime();
+}
+
+/** Значимая правка содержимого: текст/происхождение, а не статус, теги или раздел. */
+function itemContentChanged(
+  current: { title: string; summary: string; body: string; origin: Prisma.JsonValue | null },
+  input: UpdateKnowledgeItemInput
+): boolean {
+  if (input.title !== undefined && input.title !== current.title) return true;
+  if (input.summary !== undefined && input.summary !== current.summary) return true;
+  if (input.body !== undefined && input.body !== current.body) return true;
+  if (input.origin !== undefined && JSON.stringify(input.origin ?? null) !== JSON.stringify(current.origin ?? null)) return true;
+  return false;
 }

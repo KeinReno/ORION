@@ -138,9 +138,11 @@ describe("buildConstellations", () => {
     const milestone = { id: "m1", title: "Первый этап", status: "planned" as const, dueAt: null, tasks: 1, closed: 0 };
     const task: Task = {
       id: "t1", revision: 1, workspaceId: "ws", projectId: "p-1", parentId: null,
-      title: "Разметить грядки", description: "", status: "todo", priority: "normal", dueAt: null,
+      title: "Разметить грядки", description: "", status: "todo", statusId: null,
+      priority: "normal", importance: null, urgency: null, complexity: null, dueAt: null,
       projectTag: null, recurrence: null, completedAt: null, sortOrder: 0, dependencyIds: [], blocked: false,
       assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: "m1", checklist: [],
+      executorSource: "none", archivedAt: null,
       createdAt: NOW.toISOString(), updatedAt: NOW.toISOString()
     };
     const constellation = buildConstellations([goal("garden", { plans: [plan("1", 0, 1, { milestones: [milestone] })], progress: 0 })], NOW, [task])[0]!;

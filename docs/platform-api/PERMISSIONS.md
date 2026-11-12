@@ -28,7 +28,7 @@
 ### Словарь разрешений
 
 Формат: `<module>.<resource>.<action>`, где `module` — id модуля (`ORION_MODULE_IDS`) или `core`; `action` из набора
-`read | create | update | delete | propose | manage`. Три сегмента обязательны; двухсегментный пример `tasks.read` в комментарии
+`read | create | update | delete | propose | manage | execute`. Три сегмента обязательны; двухсегментный пример `tasks.read` в комментарии
 схемы манифеста считается устаревшим и заменяется на `tasks.task.read` при реализации (breaking для манифеста — до
 реализации это допустимо, поле пусто).
 

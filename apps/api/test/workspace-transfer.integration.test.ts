@@ -1,5 +1,6 @@
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { WorkspaceTransferPreview } from "@orion/shared-types";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -65,7 +66,7 @@ describe("ТЗ-05: перенос пространства между узлам
   }
 
   const importAs = (person: Person, file: Buffer, fields: Record<string, string>) =>
-    request<{ applied: boolean; workspaceId: string }>("/workspaces/import", { method: "POST", token: person.token, form: importForm(file, fields) });
+    request<WorkspaceTransferPreview>("/workspaces/import", { method: "POST", token: person.token, form: importForm(file, fields) });
 
   async function exportFile(passphrase?: string): Promise<Buffer> {
     const r = await request(`/workspaces/${source}/export`, { method: "POST", token: anna.token, body: passphrase ? { passphrase } : {}, raw: true });
@@ -177,7 +178,7 @@ describe("ТЗ-05: перенос пространства между узлам
     const applied = await importAs(boris, file, { dryRun: "false", passphrase: "пароль-переноса", expectedHash: preview.data.fileHash, name: `Перенесённое ${marker}` });
     expect(applied.status, applied.text).toBe(201);
     expect(applied.data.applied).toBe(true);
-    const target: string = applied.data.workspaceId;
+    const target: string = applied.data.workspaceId!;
     expect(target).not.toBe(source);
 
     // Борис — владелец нового пространства; Анна к нему доступа не получила.
@@ -237,12 +238,12 @@ describe("ТЗ-05: перенос пространства между узлам
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(first.data.workspaceId).not.toBe(second.data.workspaceId);
-    expect(await counts(first.data.workspaceId)).toEqual(await counts(second.data.workspaceId));
+    expect(await counts(first.data.workspaceId!)).toEqual(await counts(second.data.workspaceId!));
     expect(first.data.targetName).toContain("(перенос)");
     // Тот, кто сделал файл, тоже может импортировать его к себе: коллизия с собственными id.
     const own = await importAs(anna, file, { dryRun: "false", expectedHash: preview.data.fileHash, name: `Копия ${marker}` });
     expect(own.status).toBe(201);
-    expect(await counts(source)).toEqual(await counts(own.data.workspaceId));
+    expect(await counts(source)).toEqual(await counts(own.data.workspaceId!));
   }, 60_000);
 
   it("обрыв посередине: ни пространства, ни файлов не остаётся, исходное нетронуто", async () => {

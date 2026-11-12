@@ -111,7 +111,8 @@ function defaultDoc(op: SyncOp, ctx: OverlayContext, stampIso: string): Record<s
   }
   return {
     id: op.entityId, revision: 1, workspaceId: ctx.workspaceId, projectId: null, parentId: null, title: "", description: "",
-    status: "todo", priority: "normal", dueAt: null, projectTag: null, recurrence: null, completedAt: null, sortOrder: 0,
+    status: "todo", statusId: null, priority: "normal", importance: null, urgency: null, complexity: null, executorSource: "none", archivedAt: null,
+    dueAt: null, projectTag: null, recurrence: null, completedAt: null, sortOrder: 0,
     dependencyIds: [], blocked: false, assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: null, checklist: [],
     createdAt: stampIso, updatedAt: stampIso, ...fields
   };

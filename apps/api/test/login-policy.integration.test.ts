@@ -50,7 +50,8 @@ describe("Login policy of a LAN host", () => {
     fs.rmSync(nodeDir, { recursive: true, force: true });
   });
 
-  async function request<T = unknown>(path: string, method: string, body?: unknown, token?: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- дефолт any сознательно: тесты читают JSON-ответы произвольной формы
+  async function request<T = any>(path: string, method: string, body?: unknown, token?: string) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },

@@ -14,6 +14,7 @@ import type {
   Task,
   TaskChecklistItem,
   TaskRecurrence,
+  TaskStatus,
   TaskViewFilters,
   UpdateTaskInput
 } from "@orion/shared-types";
@@ -23,7 +24,11 @@ import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { assertAssigneeInWorkspace } from "./task-refs.util";
 import { TaskClosureRegistry } from "./public/task-closure-registry";
+import type { ProjectTaskSnapshot } from "./public/task-operations";
 import { TaskAgentAssignmentRegistry } from "./public/task-agent-assignment-registry";
+import { TaskStatusesService, legacyStatusForCategory } from "./task-statuses.service";
+import { TaskFieldsService } from "./task-fields.service";
+import { TaskRecurrenceService } from "./tasks-recurrence.service";
 
 const taskInclude = {
   dependsOn: { include: { dependsOn: { select: { status: true } } } }
@@ -40,43 +45,82 @@ export class TasksService {
     private readonly workspaces: WorkspacesService,
     private readonly events: DomainEventBus,
     private readonly closures: TaskClosureRegistry,
-    private readonly agentAssignments: TaskAgentAssignmentRegistry
+    private readonly agentAssignments: TaskAgentAssignmentRegistry,
+    private readonly statuses: TaskStatusesService,
+    private readonly fields: TaskFieldsService,
+    private readonly recurrences: TaskRecurrenceService
   ) {}
 
-  async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean): Promise<Task[]> {
+  async list(userId: string, workspaceId: string, search?: string, assignedToMe?: boolean, includeArchived = false): Promise<Task[]> {
     const tasks = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       const assigneeId = assignedToMe
         ? (await tx.workspaceMember.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }))?.id
         : undefined;
+      const archivedFilter = includeArchived ? {} : { archivedAt: null };
       const query = search?.trim();
       if (!query) {
         return tx.task.findMany({
-          where: { workspaceId, ...(assigneeId ? { assigneeId } : {}) },
+          where: { workspaceId, ...archivedFilter, ...(assigneeId ? { assigneeId } : {}) },
           include: taskInclude,
           orderBy: [{ sortOrder: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }]
         });
       }
+      // Поиск по title/description/projectTag и по значениям пользовательских
+      // полей (Tasks 2.0): GIN-индекс `task_field_values_search_idx`.
       const matches = await tx.$queryRaw<Array<{ id: string; rank: number }>>`
-        SELECT id, ts_rank(
-          to_tsvector('russian', "title" || ' ' || "description" || ' ' || coalesce("projectTag", '')),
+        SELECT DISTINCT t.id, ts_rank(
+          to_tsvector('russian', t."title" || ' ' || t."description" || ' ' || coalesce(t."projectTag", '')),
           websearch_to_tsquery('russian', ${query})
         ) AS rank
-        FROM "tasks"
-        WHERE "workspaceId" = ${workspaceId}
-          AND to_tsvector('russian', "title" || ' ' || "description" || ' ' || coalesce("projectTag", ''))
+        FROM "tasks" t
+        WHERE t."workspaceId" = ${workspaceId}
+          AND (${includeArchived} OR t."archivedAt" IS NULL)
+          AND (
+            to_tsvector('russian', t."title" || ' ' || t."description" || ' ' || coalesce(t."projectTag", ''))
               @@ websearch_to_tsquery('russian', ${query})
+            OR EXISTS (
+              SELECT 1 FROM "task_field_values" v
+              WHERE v."taskId" = t.id
+                AND to_tsvector('russian', coalesce(v."valueText", ''))
+                    @@ websearch_to_tsquery('russian', ${query})
+            )
+          )
         ORDER BY rank DESC
       `;
       if (!matches.length) return [];
       const rows = await tx.task.findMany({
-        where: { id: { in: matches.map((match) => match.id) }, ...(assigneeId ? { assigneeId } : {}) },
+        where: { id: { in: matches.map((match) => match.id) }, ...archivedFilter, ...(assigneeId ? { assigneeId } : {}) },
         include: taskInclude
       });
       const order = new Map(matches.map((match, index) => [match.id, index]));
       return rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     });
     return tasks.map(toDto);
+  }
+
+  /**
+   * Снимок задач проекта в ЧУЖОЙ транзакции — публичная команда `TaskOperations.listByProjectTx`
+   * (задание 03, копирование структуры проекта). Авторизацию и RLS держит вызывающий, поэтому
+   * здесь нет `withUser`; архивные задачи в копию не попадают.
+   */
+  async listByProjectTx(tx: Prisma.TransactionClient, workspaceId: string, projectId: string): Promise<ProjectTaskSnapshot[]> {
+    return tx.task.findMany({
+      where: { workspaceId, projectId, archivedAt: null },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        estimatedMinutes: true,
+        startAt: true,
+        dueAt: true,
+        milestoneId: true,
+        sortOrder: true
+      }
+    });
   }
 
   /** `agentName` is set only by the AI Bridge (ADR-0007): it leaves a `created` journal row marked as the agent's. */
@@ -109,21 +153,27 @@ export class TasksService {
    * or close one itself, and does not re-check membership — it trusts the
    * caller's transaction was already gated.
    */
-  async createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, clientId?: string): Promise<TaskModel> {
-    const project = await this.resolveProjectTx(tx, workspaceId, input.projectId, input.projectTag);
+  async createTx(tx: Prisma.TransactionClient, userId: string, workspaceId: string, input: CreateTaskInput, clientId?: string): Promise<TaskModel> {    const project = await this.resolveProjectTx(tx, workspaceId, input.projectId, input.projectTag);
     await this.assertParentTx(tx, workspaceId, input.parentId ?? null);
     const dependencyIds = unique(input.dependencyIds ?? []);
     await this.assertDependenciesTx(tx, workspaceId, null, dependencyIds);
     if (input.assigneeId !== undefined) await this.assertAssigneeWriteTx(tx, userId, workspaceId, input.assigneeId);
     if (input.milestoneId) await this.assertMilestoneTx(tx, workspaceId, input.milestoneId, project?.id ?? null);
     if (input.homeId) await this.homes.assertTx(tx, workspaceId, input.homeId);
+    const initialStatus = await this.resolveCreateStatusTx(tx, workspaceId, input.statusId);
     const created = await tx.task.create({
       data: {
         ...(clientId ? { id: clientId } : {}),
         workspaceId,
         title: input.title,
         description: input.description,
+        status: initialStatus.status,
+        statusId: initialStatus.statusId,
         priority: input.priority,
+        importance: input.importance ?? null,
+        urgency: input.urgency ?? null,
+        complexity: input.complexity ?? null,
+        executorSource: input.assigneeId ? "human" : "none",
         dueAt: input.dueAt ?? null,
         projectId: project?.id ?? null,
         projectTag: project?.name ?? input.projectTag ?? null,
@@ -137,10 +187,21 @@ export class TasksService {
         recurrence: input.recurrence ? (input.recurrence as Prisma.InputJsonValue) : Prisma.DbNull
       }
     });
+    // Значения пользовательских полей и обязательность — в той же транзакции.
+    await this.fields.validateAndWriteTx(tx, workspaceId, created.id, created.projectId, input.fieldValues, { requireRequired: true });
+    if (input.recurrence) await this.recurrences.syncLegacyTx(tx, workspaceId, created.id, input.recurrence);
     if (dependencyIds.length) {
       await tx.taskDependency.createMany({ data: dependencyIds.map((dependsOnTaskId) => ({ workspaceId, taskId: created.id, dependsOnTaskId })) });
     }
     await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: created.id } });
+    // Задание 05: задача, созданная сразу с исполнителем в проекте, тоже даёт
+    // запись журнала о назначении (для update путь ниже).
+    if (created.assigneeId && created.projectId) {
+      await this.events.publishTx(tx, {
+        workspaceId, actorId: userId, type: "tasks.task.assigned",
+        payload: { id: created.id, projectId: created.projectId, assigneeId: created.assigneeId, previousAssigneeId: null }
+      });
+    }
     return tx.task.findUniqueOrThrow({ where: { id: created.id }, include: taskInclude });
   }
 
@@ -198,18 +259,28 @@ export class TasksService {
       if (input.startAt !== undefined) data.startAt = input.startAt;
       if (input.checklist !== undefined) data.checklist = input.checklist as unknown as Prisma.InputJsonValue;
 
-      const firstCompletion = input.status === "done" && current.status !== "done";
-      if (input.status !== undefined) {
-        data.status = input.status;
-        data.completedAt = input.status === "done" ? new Date() : null;
+      if (input.status !== undefined && input.statusId !== undefined) {
+        throw new BadRequestException("Укажите либо status, либо statusId");
       }
+      const statusWrite = await this.resolveUpdateStatusTx(tx, workspaceId, input, current.status);
+      if (statusWrite) {
+        data.status = statusWrite.status;
+        data.statusId = statusWrite.statusId;
+        data.completedAt = statusWrite.status === "done" ? new Date() : null;
+      }
+      if (input.archived !== undefined) data.archivedAt = input.archived ? new Date() : null;
+      if (input.importance !== undefined) data.importance = input.importance;
+      if (input.urgency !== undefined) data.urgency = input.urgency;
+      if (input.complexity !== undefined) data.complexity = input.complexity;
+      if (input.assigneeId !== undefined) data.executorSource = input.assigneeId ? "human" : "none";
+      const nextStatus = statusWrite?.status ?? current.status;
 
       // S17 audit log — status/assignee/due are the only three fields
       // tracked (see TaskActivity doc comment in schema.prisma), diffed
       // against `current` (the pre-update row) before the write below.
       const activityRows: Prisma.TaskActivityCreateManyInput[] = [];
-      if (input.status !== undefined && input.status !== current.status) {
-        activityRows.push({ workspaceId, taskId, actorId: userId, field: "status", fromValue: current.status, toValue: input.status, agentName: agentName ?? null });
+      if (statusWrite && nextStatus !== current.status) {
+        activityRows.push({ workspaceId, taskId, actorId: userId, field: "status", fromValue: current.status, toValue: nextStatus, agentName: agentName ?? null });
       }
       if (input.assigneeId !== undefined && input.assigneeId !== current.assigneeId) {
         activityRows.push({
@@ -248,11 +319,28 @@ export class TasksService {
       }
       if (activityRows.length) await tx.taskActivity.createMany({ data: activityRows });
 
+      // Значения пользовательских полей (Tasks 2.0) — в этой же транзакции.
+      if (input.fieldValues !== undefined) {
+        await this.fields.validateAndWriteTx(
+          tx,
+          workspaceId,
+          taskId,
+          data.projectId !== undefined ? (data.projectId as string | null) : current.projectId,
+          input.fieldValues,
+          { requireRequired: false }
+        );
+      }
+      // Старое поле `recurrence` (JSON) синхронизируется с правилом ДО обработки
+      // завершения: иначе правило, созданное в этом же запросе, не успело бы
+      // материализовать следующий экземпляр.
+      if (input.recurrence !== undefined) {
+        await this.recurrences.syncLegacyTx(tx, workspaceId, taskId, input.recurrence ?? null);
+      }
+
       if (datesChanged) await cascadeRescheduleTx(tx, taskId);
 
       // Optional neighbors own their synchronous consequences (ADR-0027).
-      const closedNow =
-        input.status !== undefined && isTaskClosed(input.status) && !isTaskClosed(current.status);
+      const closedNow = statusWrite !== null && isTaskClosed(statusWrite.status) && !isTaskClosed(current.status);
       if (closedNow) {
         await this.closures.closeTx(tx, { workspaceId, taskId });
       }
@@ -268,9 +356,32 @@ export class TasksService {
             id: taskId,
             projectId: data.projectId !== undefined ? (data.projectId as string | null) : current.projectId,
             assigneeId: data.assigneeId !== undefined ? (data.assigneeId as string | null) : current.assigneeId,
-            status: input.status!
+            status: nextStatus
           }
         });
+      }
+      if (statusWrite && nextStatus !== current.status) {
+        await this.events.publishTx(tx, {
+          workspaceId,
+          actorId: userId,
+          type: "tasks.task.status_changed",
+          payload: { id: taskId, fromStatus: current.status, toStatus: nextStatus, statusId: statusWrite.statusId }
+        });
+      }
+
+      // Задание 05: назначение исполнителя задачи проекта — событие для журнала
+      // проекта. Пишем только фактическую смену на конкретного человека и только
+      // когда задача принадлежит проекту; снятие исполнителя журнал не трогает.
+      if (input.assigneeId !== undefined && input.assigneeId !== current.assigneeId && input.assigneeId !== null) {
+        const eventProjectId = data.projectId !== undefined ? (data.projectId as string | null) : current.projectId;
+        if (eventProjectId) {
+          await this.events.publishTx(tx, {
+            workspaceId,
+            type: "tasks.task.assigned",
+            actorId: userId,
+            payload: { id: taskId, projectId: eventProjectId, assigneeId: input.assigneeId, previousAssigneeId: current.assigneeId }
+          });
+        }
       }
 
       if (input.dependencyIds !== undefined) {
@@ -284,7 +395,13 @@ export class TasksService {
 
       const recurrence = (input.recurrence === undefined ? current.recurrence : input.recurrence) as TaskRecurrence | null;
       const dueAt = input.dueAt === undefined ? current.dueAt : input.dueAt ? new Date(input.dueAt) : null;
-      if (firstCompletion && recurrence && dueAt) {
+      // Tasks 2.0: сначала правило (идемпотентно по ordinal/generatedCount),
+      // и только если правила нет — прежняя ветка `Task.recurrence` (yearly и
+      // задачи, созданные до миграции).
+      const materialized = closedNow
+        ? await this.recurrences.materializeOnCompletionTx(tx, { userId, workspaceId, taskId })
+        : { handled: false, nextTaskId: null };
+      if (!materialized.handled && closedNow && recurrence && dueAt) {
         const nextDueAt = advanceDate(dueAt, recurrence);
         // projectId/projectTag are resolved together by resolveProjectTx
         // whenever *either* is present in the input (see above) — falling
@@ -315,8 +432,46 @@ export class TasksService {
       }
 
       await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.changed", payload: { id: taskId } });
+      await this.events.publishTx(tx, { workspaceId, actorId: userId, type: "tasks.task.updated", payload: { id: taskId } });
       return tx.task.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
     }
+  }
+
+  /** Статус для создания: явный `statusId` либо встроенный «К выполнению». */
+  private async resolveCreateStatusTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    statusId: string | null | undefined
+  ): Promise<{ status: TaskStatus; statusId: string | null }> {
+    if (statusId) {
+      const definition = await this.statuses.requireTx(tx, workspaceId, statusId);
+      return { status: legacyStatusForCategory(definition.category), statusId: definition.id };
+    }
+    const todo = await this.statuses.bySystemKeyTx(tx, workspaceId, "todo");
+    return { status: "todo", statusId: todo?.id ?? null };
+  }
+
+  /**
+   * Статус для правки. Либо enum (`status`), либо пользовательский (`statusId`);
+   * одновременно нельзя (проверяется выше). `statusId: null` снимает
+   * пользовательский статус, оставляя прежнюю категорию.
+   */
+  private async resolveUpdateStatusTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    input: UpdateTaskInput,
+    currentStatus: TaskStatus
+  ): Promise<{ status: TaskStatus; statusId: string | null } | null> {
+    if (input.statusId !== undefined) {
+      if (input.statusId === null) return { status: currentStatus, statusId: null };
+      const definition = await this.statuses.requireTx(tx, workspaceId, input.statusId);
+      return { status: legacyStatusForCategory(definition.category), statusId: definition.id };
+    }
+    if (input.status !== undefined) {
+      const definition = await this.statuses.bySystemKeyTx(tx, workspaceId, input.status);
+      return { status: input.status, statusId: definition?.id ?? null };
+    }
+    return null;
   }
 
   async remove(userId: string, workspaceId: string, taskId: string): Promise<void> {
@@ -526,7 +681,11 @@ function toDto(task: TaskModel): Task {
     title: task.title,
     description: task.description,
     status: task.status,
+    statusId: task.statusId,
     priority: task.priority,
+    importance: task.importance,
+    urgency: task.urgency,
+    complexity: task.complexity,
     dueAt: task.dueAt?.toISOString() ?? null,
     projectTag: task.projectTag,
     recurrence: task.recurrence as TaskRecurrence | null,
@@ -539,6 +698,8 @@ function toDto(task: TaskModel): Task {
     estimatedMinutes: task.estimatedMinutes,
     milestoneId: task.milestoneId,
     checklist: readChecklist(task.checklist),
+    executorSource: task.executorSource,
+    archivedAt: task.archivedAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString()
   };

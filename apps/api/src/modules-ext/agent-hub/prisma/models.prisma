@@ -1,4 +1,6 @@
 /// A durable execution attempt, distinct from the existing Task and AgentJob records.
+/// `parentExecutionId` deliberately has no FK: a snapshot restore inserts rows in
+/// registry order and a self-reference would make the order significant.
 model AgentHubExecution {
   id            String   @id @default(uuid())
   workspaceId   String
@@ -14,14 +16,29 @@ model AgentHubExecution {
   evidenceRefs  Json     @default("[]")
   verifiedBy    String?
   blockedReason String?
+  /// Delegation tree: branch parent, depth below the root and the profile the branch was handed to.
+  parentExecutionId    String?
+  delegationDepth      Int      @default(0)
+  delegatedToProfileId String?
+  /// Profiles that already took part in this branch (oldest first); the cycle guard.
+  delegationChain      Json     @default("[]")
+  /// Structured order payload: task, project, material link ids, permission constraints.
+  delegationPayload    Json     @default("{}")
+  /// Pending human approval: action, reason, requestedAt, requestedBy.
+  approval             Json?
+  /// Short summary handed to the parent branch on a terminal transition.
+  resultSummary        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events    AgentHubEvent[]
+  steps     AgentHubTraceStep[]
 
   @@index([workspaceId, updatedAt])
   @@index([workspaceId, targetKind, targetId])
+  @@index([workspaceId, status])
+  @@index([parentExecutionId])
   @@map("agent_hub_executions")
 }
 
@@ -116,4 +133,80 @@ model AgentHubTaskAssignment {
   @@unique([workspaceId, taskId])
   @@index([workspaceId, profileId])
   @@map("agent_hub_task_assignments")
+}
+
+/// One reported or derived step of a real execution. Reasoning is never stored here.
+model AgentHubTraceStep {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  executionId  String
+  /// Logical step id, unique inside one execution; parents refer to it, not to a row id.
+  stepId       String
+  parentStepId String?
+  /// tool_call | tool_result | delegation | approval_wait | note | error
+  type         String
+  name         String?
+  /// Stable agent profile when the reporting credential is bound to one.
+  agentId      String?
+  actorId      String
+  payload      Json     @default("{}")
+  durationMs   Int?
+  error        String?
+  attempt      Int      @default(0)
+  at           DateTime @default(now())
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  execution AgentHubExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, stepId])
+  @@index([workspaceId, executionId, at])
+  @@index([workspaceId, agentId])
+  @@map("agent_hub_trace_steps")
+}
+
+/// Versioned agent memory. Exactly one `valid` row per (scope, scopeId, key) — enforced
+/// by a partial unique index — while superseded rows keep the revision history.
+model AgentMemoryRecord {
+  id                String   @id @default(uuid())
+  workspaceId       String
+  /// user | project | agent | global
+  scope             String
+  /// userId / projectId / profileId; null for global.
+  scopeId           String?
+  key               String
+  value             Json
+  /// agent | user | system
+  source            String
+  /// Profile that wrote it; null when a human wrote the record.
+  agentId           String?
+  userId            String?
+  provenanceEventId String?
+  /// valid | superseded | outdated
+  validity          String   @default("valid")
+  /// No FK on purpose: snapshot restore must not depend on self-reference order.
+  supersededById    String?
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scope, scopeId, key])
+  @@index([workspaceId, key])
+  @@index([workspaceId, validity])
+  @@map("agent_memory_records")
+}
+
+/// Owner-controlled delegation policy; one row per workspace, created on first write.
+model AgentHubPolicy {
+  id                 String   @id @default(uuid())
+  workspaceId        String   @unique
+  maxDelegationDepth Int      @default(3)
+  updatedById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("agent_hub_policies")
 }

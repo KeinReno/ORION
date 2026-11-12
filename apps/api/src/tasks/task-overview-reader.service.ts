@@ -7,7 +7,7 @@ import { TaskOverviewReader, type OverviewTask } from "./public/task-overview-re
 export class TaskOverviewQueries extends TaskOverviewReader {
   async assignedTx(tx: Prisma.TransactionClient, workspaceId: string, assigneeId: string): Promise<OverviewTask[]> {
     const rows = await tx.task.findMany({
-      where: { workspaceId, assigneeId },
+      where: { workspaceId, assigneeId, archivedAt: null },
       include: { dependsOn: { include: { dependsOn: { select: { status: true } } } } },
       orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }]
     });
@@ -20,7 +20,11 @@ export class TaskOverviewQueries extends TaskOverviewReader {
       title: task.title,
       description: task.description,
       status: task.status,
+      statusId: task.statusId,
       priority: task.priority,
+      importance: task.importance,
+      urgency: task.urgency,
+      complexity: task.complexity,
       dueAt: task.dueAt?.toISOString() ?? null,
       projectTag: task.projectTag,
       recurrence: task.recurrence as MyOverview["tasks"][number]["recurrence"],
@@ -33,6 +37,8 @@ export class TaskOverviewQueries extends TaskOverviewReader {
       estimatedMinutes: task.estimatedMinutes,
       milestoneId: task.milestoneId,
       checklist: readChecklist(task.checklist),
+      executorSource: task.executorSource,
+      archivedAt: task.archivedAt?.toISOString() ?? null,
       createdAt: task.createdAt.toISOString(),
       updatedAt: task.updatedAt.toISOString()
     }));

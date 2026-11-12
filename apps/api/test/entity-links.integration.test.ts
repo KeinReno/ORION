@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/common/prisma.service";
 import { configureApp } from "../src/configure-app";
+import { EntityLinksService } from "../src/entity-links/entity-links.service";
 
 interface RegisteredSession {
   accessToken: string;
@@ -419,6 +420,66 @@ describe("EntityLink typed registry (U01)", () => {
     const links = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/links?type=goal&id=${goals[0]}`, { method: "GET", token: alice.accessToken });
     expect(links.data.items).toHaveLength(1);
   });
+
+  it("Foundation Core: depends_on is a directed same-type graph; a chain is allowed and a cycle is 409", async () => {
+    const alice = await register("depends");
+    const tasks = await Promise.all(["A", "B", "C"].map((title) => createTask(alice, title)));
+    const depends = (sourceId: string, targetId: string) =>
+      request(`/workspaces/${alice.workspaceId}/entity-links`, {
+        method: "POST", token: alice.accessToken,
+        body: { sourceType: "task", sourceId, targetType: "task", targetId, kind: "depends_on" }
+      });
+    expect((await depends(tasks[0].id, tasks[1].id)).status).toBe(201);
+    expect((await depends(tasks[1].id, tasks[2].id)).status).toBe(201);
+    const cycle = await depends(tasks[2].id, tasks[0].id);
+    expect(cycle.status).toBe(409);
+
+    const event = await prisma.asSystem((tx) =>
+      tx.domainEvent.findFirst({ where: { workspaceId: alice.workspaceId, type: "entity_link.created" }, orderBy: { createdAt: "desc" } })
+    );
+    expect(event?.payload).toMatchObject({ type: "depends_on", from: { type: "task", id: tasks[1].id }, to: { type: "task", id: tasks[2].id } });
+    expect(event?.actorId).toBe(alice.user.id);
+  }, 40000);
+
+  it("Foundation Core: relates_to is symmetric, marked bidirectional and stored once", async () => {
+    const alice = await register("relates");
+    const task = await createTask(alice, "Задача");
+    const note = await createNote(alice, "Заметка");
+    const forward = await request<{ id: string; bidirectional: boolean }>(`/workspaces/${alice.workspaceId}/entity-links`, {
+      method: "POST", token: alice.accessToken,
+      body: { sourceType: "task", sourceId: task.id, targetType: "note", targetId: note.id, kind: "relates_to" }
+    });
+    expect(forward.status).toBe(201);
+    expect(forward.data.bidirectional).toBe(true);
+    const reverse = await request(`/workspaces/${alice.workspaceId}/entity-links`, {
+      method: "POST", token: alice.accessToken,
+      body: { sourceType: "note", sourceId: note.id, targetType: "task", targetId: task.id, kind: "relates_to" }
+    });
+    expect(reverse.status).toBe(400);
+  }, 40000);
+
+  it("Foundation Core: deleting one side cascades only that link, not the other entity", async () => {
+    const alice = await register("cascade");
+    const task = await createTask(alice, "Задача");
+    const note = await createNote(alice, "Заметка");
+    const linked = await request<{ id: string }>(`/workspaces/${alice.workspaceId}/entity-links`, {
+      method: "POST", token: alice.accessToken,
+      body: { sourceType: "task", sourceId: task.id, targetType: "note", targetId: note.id, kind: "related_to" }
+    });
+    expect(linked.status).toBe(201);
+
+    const service = app.get(EntityLinksService);
+    const removed = await prisma.withUser(alice.user.id, (tx) =>
+      service.removeForEntityTx(tx, alice.workspaceId, "note", note.id, alice.user.id)
+    );
+    expect(removed).toBe(1);
+    const fromTask = await request<{ items: unknown[] }>(`/workspaces/${alice.workspaceId}/entity-links?type=task&id=${task.id}`, {
+      method: "GET", token: alice.accessToken
+    });
+    expect(fromTask.data.items).toHaveLength(0);
+    const notes = await request<Array<{ id: string }>>(`/workspaces/${alice.workspaceId}/notes`, { method: "GET", token: alice.accessToken });
+    expect(notes.data.map((row) => row.id)).toContain(note.id);
+  }, 40000);
 
   async function register(name: string): Promise<RegisteredSession> {
     const email = `${emailPrefix}-${name}@example.test`;

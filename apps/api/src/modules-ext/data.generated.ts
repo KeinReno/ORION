@@ -51,6 +51,24 @@ export const GENERATED_SNAPSHOT_REGISTRY: ModelClassification[] = [
     "reason": "Назначение является пользовательским состоянием и должно сохраняться даже при потере credential."
   },
   {
+    "model": "AgentHubTraceStep",
+    "snapshotKey": "agentHubTraceSteps",
+    "policy": "included",
+    "reason": "Шаги исполнения — фактическая история проделанной работы; без них восстановленное исполнение теряет журнал."
+  },
+  {
+    "model": "AgentMemoryRecord",
+    "snapshotKey": "agentMemoryRecords",
+    "policy": "included",
+    "reason": "Память агентов — версионированное пользовательское знание проекта; цепочка пересмотра должна пережить перенос."
+  },
+  {
+    "model": "AgentHubPolicy",
+    "snapshotKey": "agentHubPolicies",
+    "policy": "included",
+    "reason": "Предел глубины делегирования — настройка владельца пространства, а не эфемерное состояние."
+  },
+  {
     "model": "ChatArchiveConversation",
     "snapshotKey": null,
     "policy": "derived",
@@ -100,6 +118,9 @@ export const GENERATED_SNAPSHOT_SPECS: Array<{ key: string; delegate: (tx: Prism
   { key: "agentHubEvents", delegate: (tx) => tx.agentHubEvent },
   { key: "agentHubAgentProfiles", delegate: (tx) => tx.agentHubAgentProfile },
   { key: "agentHubTaskAssignments", delegate: (tx) => tx.agentHubTaskAssignment },
+  { key: "agentHubTraceSteps", delegate: (tx) => tx.agentHubTraceStep },
+  { key: "agentMemoryRecords", delegate: (tx) => tx.agentMemoryRecord },
+  { key: "agentHubPolicies", delegate: (tx) => tx.agentHubPolicy },
   { key: "chatArchiveAutoSources", delegate: (tx) => tx.chatArchiveAutoSource },
   { key: "petCarePets", delegate: (tx) => tx.petCarePet },
   { key: "petCareEntries", delegate: (tx) => tx.petCareEntry },
@@ -138,6 +159,21 @@ export const GENERATED_SYNC_CLASSIFICATION: Record<string, SyncClassification> =
     "syncClass": "not-synced",
     "stage": "later",
     "note": "Назначения пока принадлежат локальному источнику workspace."
+  },
+  "AgentHubTraceStep": {
+    "syncClass": "append-only",
+    "stage": "later",
+    "note": "Шаг — факт: дописывается владельцем исполнения и не правится; порядок задан (executionId, at)."
+  },
+  "AgentMemoryRecord": {
+    "syncClass": "lww-fields",
+    "stage": "later",
+    "note": "Активное значение — LWW по ключу области; история пересмотра сохраняется отдельными строками."
+  },
+  "AgentHubPolicy": {
+    "syncClass": "lww-fields",
+    "stage": "later",
+    "note": "Одна строка на пространство; правит только владелец/руководитель."
   },
   "ChatArchiveConversation": {
     "syncClass": "not-synced",

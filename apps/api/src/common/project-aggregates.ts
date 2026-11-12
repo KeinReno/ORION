@@ -15,6 +15,17 @@ export interface ProjectAggregate {
   count?: number;
   /** Статусы задач проекта: основа прогресса и счётчиков. */
   taskStatusCounts?: Array<{ status: string; count: number }>;
+  /**
+   * Задание 03 (портфель): открытые задачи проекта по исполнителям —
+   * `assigneeId` — это `WorkspaceMember.id` (или null для «не назначено»).
+   * Считает владелец задач, чтобы projects не читал чужую таблицу.
+   */
+  openTasksByAssignee?: Array<{ assigneeId: string | null; count: number }>;
+  /**
+   * Задание 03 (портфель): вехи проекта БЕЗ срока (`dueAt = null`) — риск «веха без даты».
+   * Заголовки, а не id: портфель показывает их человеку в списке рисков.
+   */
+  milestonesWithoutDates?: string[];
   /** Сумма оценок задач; отсутствует, если оценок нет вовсе («не оценено», а не 0). */
   plannedMinutes?: number;
   /** Расходы по валютам источника (копейки): суммировать разные валюты нельзя. */

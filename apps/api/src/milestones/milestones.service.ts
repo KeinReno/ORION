@@ -1,5 +1,6 @@
 import { ProjectReferences } from "../projects/public/project-references";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type {
   CreateMilestoneInput,
@@ -9,6 +10,7 @@ import type {
   UpdateMilestoneInput
 } from "@orion/shared-types";
 import { PrismaService } from "../common/prisma.service";
+import { DomainEventBus } from "../domain-events/domain-event-bus";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 
 const milestoneInclude = {
@@ -27,7 +29,8 @@ export class MilestonesService {
   constructor(
     private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
-    private readonly workspaces: WorkspacesService
+    private readonly workspaces: WorkspacesService,
+    private readonly events: DomainEventBus
   ) {}
 
   async list(userId: string, workspaceId: string, projectId?: string): Promise<Milestone[]> {
@@ -74,7 +77,7 @@ export class MilestonesService {
   async update(userId: string, workspaceId: string, milestoneId: string, input: UpdateMilestoneInput): Promise<Milestone> {
     const milestone = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await this.assertOwnedTx(tx, workspaceId, milestoneId);
+      const current = await this.assertOwnedTx(tx, workspaceId, milestoneId);
       const data: Prisma.MilestoneUncheckedUpdateInput = {};
       if (input.title !== undefined) data.title = input.title;
       if (input.note !== undefined) data.note = input.note;
@@ -98,9 +101,45 @@ export class MilestonesService {
         }
       }
 
-      if (datesChanged) await cascadeRescheduleTx(tx, milestoneId);
+      const changedDependents = datesChanged ? await cascadeRescheduleTx(tx, milestoneId) : new Map<string, MilestoneDateValue>();
 
-      return tx.milestone.findUniqueOrThrow({ where: { id: milestoneId }, include: milestoneInclude });
+      const updated = await tx.milestone.findUniqueOrThrow({ where: { id: milestoneId }, include: milestoneInclude });
+
+      // Задание 05: события для автозаписей журнала. Один жест пользователя,
+      // сдвинувший веху и её зависимые, несёт общий bulkId — подписчик запишет
+      // одну строку, а не по одной на каждую веху.
+      if (input.status !== undefined && input.status === "done" && current.status !== "done") {
+        await this.events.publishTx(tx, {
+          workspaceId, actorId: userId, type: "projects.milestone.completed",
+          payload: { id: milestoneId, projectId: updated.projectId, title: updated.title }
+        });
+      }
+      if (datesChanged) {
+        const affected = 1 + changedDependents.size;
+        const bulkId = affected > 1 ? randomUUID() : undefined;
+        const bulkLabel = affected > 1 ? `Изменены сроки вех: ${affected}` : undefined;
+        await this.events.publishTx(tx, {
+          workspaceId, actorId: userId, type: "projects.milestone.dates_changed",
+          payload: {
+            id: milestoneId, projectId: updated.projectId, title: updated.title,
+            startAt: updated.startAt?.toISOString() ?? null, dueAt: updated.dueAt?.toISOString() ?? null,
+            bulkId, bulkLabel
+          }
+        });
+        for (const [id, value] of changedDependents) {
+          if (id === milestoneId) continue;
+          await this.events.publishTx(tx, {
+            workspaceId, actorId: userId, type: "projects.milestone.dates_changed",
+            payload: {
+              id, projectId: value.projectId, title: value.title,
+              startAt: value.startAt?.toISOString() ?? null, dueAt: value.dueAt?.toISOString() ?? null,
+              bulkId, bulkLabel
+            }
+          });
+        }
+      }
+
+      return updated;
     });
     return toDto(milestone);
   }
@@ -206,12 +245,15 @@ async function dependsOn(tx: Prisma.TransactionClient, fromId: string, targetId:
  * read-only by `previewReschedule`) so preview and apply can never disagree,
  * then persists whatever it computed.
  */
-async function cascadeRescheduleTx(tx: Prisma.TransactionClient, milestoneId: string): Promise<void> {
+type MilestoneDateValue = { title: string; projectId: string; startAt: Date | null; dueAt: Date | null };
+
+async function cascadeRescheduleTx(tx: Prisma.TransactionClient, milestoneId: string): Promise<Map<string, MilestoneDateValue>> {
   const self = await tx.milestone.findUniqueOrThrow({ where: { id: milestoneId } });
   const changed = await simulateCascade(tx, milestoneId, self.startAt, self.dueAt);
   for (const [id, value] of changed) {
     await tx.milestone.update({ where: { id }, data: { startAt: value.startAt, dueAt: value.dueAt } });
   }
+  return changed;
 }
 
 /**
@@ -231,11 +273,11 @@ async function simulateCascade(
   milestoneId: string,
   overrideStart: Date | null,
   overrideDue: Date | null
-): Promise<Map<string, { title: string; startAt: Date | null; dueAt: Date | null }>> {
-  const self = await tx.milestone.findUniqueOrThrow({ where: { id: milestoneId }, select: { title: true } });
-  const current = new Map<string, { title: string; startAt: Date | null; dueAt: Date | null }>();
-  current.set(milestoneId, { title: self.title, startAt: overrideStart, dueAt: overrideDue });
-  const changed = new Map<string, { title: string; startAt: Date | null; dueAt: Date | null }>();
+): Promise<Map<string, MilestoneDateValue>> {
+  const self = await tx.milestone.findUniqueOrThrow({ where: { id: milestoneId }, select: { title: true, projectId: true } });
+  const current = new Map<string, MilestoneDateValue>();
+  current.set(milestoneId, { title: self.title, projectId: self.projectId, startAt: overrideStart, dueAt: overrideDue });
+  const changed = new Map<string, MilestoneDateValue>();
 
   const visited = new Set<string>([milestoneId]);
   let frontier = [milestoneId];
@@ -262,7 +304,7 @@ async function simulateCascade(
         const finish = current.get(row.dependsOn.id)?.dueAt ?? row.dependsOn.dueAt;
         return finish && (!max || finish > max) ? finish : max;
       }, null);
-      const dependent = current.get(dependentId) ?? { title: dependentRow.title, startAt: dependentRow.startAt, dueAt: dependentRow.dueAt };
+      const dependent = current.get(dependentId) ?? { title: dependentRow.title, projectId: dependentRow.projectId, startAt: dependentRow.startAt, dueAt: dependentRow.dueAt };
       if (!requiredStart || (dependent.startAt && dependent.startAt >= requiredStart)) {
         current.set(dependentId, dependent);
         continue;
@@ -271,7 +313,7 @@ async function simulateCascade(
       const duration = dependent.startAt && dependent.dueAt ? dependent.dueAt.getTime() - dependent.startAt.getTime() : null;
       const newStart = requiredStart;
       const newDue = duration !== null ? new Date(newStart.getTime() + duration) : dependent.dueAt && dependent.dueAt > newStart ? dependent.dueAt : newStart;
-      const updated = { title: dependentRow.title, startAt: newStart, dueAt: newDue };
+      const updated = { title: dependentRow.title, projectId: dependentRow.projectId, startAt: newStart, dueAt: newDue };
       current.set(dependentId, updated);
       changed.set(dependentId, updated);
       nextFrontier.push(dependentId);

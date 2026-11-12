@@ -17,11 +17,45 @@ import { TaskInboxTarget } from "./tasks-inbox.target";
 import { TasksProjectAggregates } from "./tasks-project-aggregates";
 import { TaskClosedNotifier } from "./task-closed-notifier";
 import { TaskClosureRegistryModule } from "./public/task-closure-registry";
+import { PublishedSourcesModule } from "../shared/public/published-source";
+import { TaskStatusesController } from "./task-statuses.controller";
+import { TaskFieldsController, TaskValuesController } from "./task-fields.controller";
+import { TasksBulkController } from "./tasks-bulk.controller";
+import { TasksRecurrenceController } from "./tasks-recurrence.controller";
+import { TasksBulkService } from "./tasks-bulk.service";
 
 @Module({
-  imports: [TaskOperationsModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, PublicationRegistryModule, AuthModule, WorkspacesModule, NotificationsModule, SearchRegistryModule, InboxRegistryModule],
-  controllers: [TasksController],
-  providers: [TasksPublicationAdapter, TasksProjectAggregates, TaskCommentsService, TaskActivityService, TaskClosedNotifier, TasksSearchProvider, TaskInboxTarget],
+  imports: [
+    TaskOperationsModule,
+    ProjectTaskLinksModule,
+    MilestoneReferencesModule,
+    TaskClosureRegistryModule,
+    PublicationRegistryModule,
+    PublishedSourcesModule,
+    AuthModule,
+    WorkspacesModule,
+    NotificationsModule,
+    SearchRegistryModule,
+    InboxRegistryModule
+  ],
+  controllers: [
+    TasksController,
+    TaskStatusesController,
+    TaskFieldsController,
+    TaskValuesController,
+    TasksBulkController,
+    TasksRecurrenceController
+  ],
+  providers: [
+    TasksPublicationAdapter,
+    TasksProjectAggregates,
+    TaskCommentsService,
+    TaskActivityService,
+    TaskClosedNotifier,
+    TasksSearchProvider,
+    TaskInboxTarget,
+    TasksBulkService
+  ],
   exports: [TaskOperationsModule]
 })
 export class TasksModule {}

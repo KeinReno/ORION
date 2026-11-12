@@ -16,7 +16,7 @@ import {
 describe("реестр разрешений", () => {
   it("id уникальны и имеют вид module.resource.action", () => {
     expect(new Set(PERMISSION_IDS).size).toBe(PERMISSION_IDS.length);
-    for (const id of PERMISSION_IDS) expect(id).toMatch(/^[a-z][a-z-]*\.[a-z_]+\.(read|create|update|delete|propose|manage)$/);
+    for (const id of PERMISSION_IDS) expect(id).toMatch(/^[a-z][a-z-]*\.[a-z_]+\.(read|create|update|delete|propose|manage|execute)$/);
   });
 
   it("у каждого модуля есть как минимум чтение и запись", () => {

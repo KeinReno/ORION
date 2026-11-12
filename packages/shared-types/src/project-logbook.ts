@@ -56,9 +56,15 @@ export type ProjectLogSource = z.infer<typeof projectLogSourceSchema>;
 
 export const projectLogAlternativeSchema = z.object({
   option: z.string().trim().min(1).max(500),
-  whyNot: z.string().trim().max(1000).default("")
+  whyNot: z.string().trim().max(1000)
 }).strict();
 export type ProjectLogAlternative = z.infer<typeof projectLogAlternativeSchema>;
+
+/** Входная форма альтернативы: `whyNot` необязателен, сервис подставляет "". */
+const projectLogAlternativeInputSchema = z.object({
+  option: z.string().trim().min(1).max(500),
+  whyNot: z.string().trim().max(1000).default("")
+}).strict();
 
 export const projectLogTaskSchema = z.object({
   id: z.string(),
@@ -106,7 +112,7 @@ const createProjectLogEntryObjectSchema = z.object({
   kind: projectLogTypeSchema.optional(),
   text: z.string().trim().min(1, "Добавьте запись").max(5000),
   rationale: z.string().trim().max(5000).default(""),
-  alternatives: z.array(projectLogAlternativeSchema).max(20).default([]),
+  alternatives: z.array(projectLogAlternativeInputSchema).max(20).default([]),
   verificationDue: z.string().datetime({ offset: true }).nullable().optional(),
   confirmsEntryId: z.string().uuid().nullable().optional(),
   severity: projectLogSeveritySchema.optional(),
@@ -125,14 +131,14 @@ export const createProjectLogEntryInputSchema = createProjectLogEntryObjectSchem
     path: ["type"]
   })
   .refine((value) => new Set(value.tasks.map((item) => item.taskId)).size === value.tasks.length, "Одна задача указана несколько раз");
-export type CreateProjectLogEntryInput = z.infer<typeof createProjectLogEntryInputSchema>;
+export type CreateProjectLogEntryInput = z.input<typeof createProjectLogEntryInputSchema>;
 
 /** Правка ручной записи. `type`/`kind` можно не передавать — тогда тип не меняется. */
 export const updateProjectLogEntryInputSchema = z.object({
   type: projectLogTypeSchema.optional(),
   text: z.string().trim().min(1, "Текст записи не может быть пустым").max(5000).optional(),
   rationale: z.string().trim().max(5000).optional(),
-  alternatives: z.array(projectLogAlternativeSchema).max(20).optional(),
+  alternatives: z.array(projectLogAlternativeInputSchema).max(20).optional(),
   verificationDue: z.string().datetime({ offset: true }).nullable().optional(),
   confirmsEntryId: z.string().uuid().nullable().optional(),
   severity: projectLogSeveritySchema.nullable().optional(),
@@ -140,7 +146,7 @@ export const updateProjectLogEntryInputSchema = z.object({
   verdict: projectLogVerdictSchema.nullable().optional()
 }).strict()
   .refine((value) => Object.values(value).some((item) => item !== undefined), "Нет изменений");
-export type UpdateProjectLogEntryInput = z.infer<typeof updateProjectLogEntryInputSchema>;
+export type UpdateProjectLogEntryInput = z.input<typeof updateProjectLogEntryInputSchema>;
 
 /** Фильтры списка журнала (query string). `projectId` — только для workspace-wide endpoint. */
 export const projectLogFiltersSchema = z.object({

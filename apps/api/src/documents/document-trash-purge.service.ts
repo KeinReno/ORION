@@ -33,7 +33,7 @@ export class DocumentTrashPurgeService {
 
     const doomed = await this.prisma.asSystem((tx) =>
       tx.document.findMany({
-        where: { deletedAt: { lte: cutoff } },
+        where: { deletedAt: { lte: cutoff }, workspace: { NOT: { disabledModules: { has: "documents" } } } },
         select: { id: true, workspaceId: true }
       })
     );
@@ -49,7 +49,7 @@ export class DocumentTrashPurgeService {
     }
 
     const { count } = await this.prisma.asSystem((tx) =>
-      tx.document.deleteMany({ where: { deletedAt: { lte: cutoff } } })
+      tx.document.deleteMany({ where: { deletedAt: { lte: cutoff }, workspace: { NOT: { disabledModules: { has: "documents" } } } } })
     );
     if (count > 0) {
       this.logger.log(`Purged ${count} trashed document(s) older than ${TRASH_RETENTION_DAYS} days`);

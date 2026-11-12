@@ -49,7 +49,8 @@ describe("Архив чатов", () => {
     await app?.close();
   });
 
-  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown; form?: FormData }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- дефолт any сознательно: тесты читают JSON-ответы произвольной формы
+  async function request<T = any>(path: string, options: { method: string; token?: string; body?: unknown; form?: FormData }) {
     const response = await fetch(`${baseUrl}${path}`, {
       method: options.method,
       headers: {

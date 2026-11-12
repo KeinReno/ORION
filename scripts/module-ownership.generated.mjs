@@ -26,6 +26,18 @@ export const GENERATED_MODEL_OWNERS = [
     "modules-ext/agent-hub"
   ],
   [
+    "AgentHubTraceStep",
+    "modules-ext/agent-hub"
+  ],
+  [
+    "AgentMemoryRecord",
+    "modules-ext/agent-hub"
+  ],
+  [
+    "AgentHubPolicy",
+    "modules-ext/agent-hub"
+  ],
+  [
     "ChatArchiveConversation",
     "modules-ext/chat-archive"
   ],

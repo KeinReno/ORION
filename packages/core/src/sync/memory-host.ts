@@ -245,7 +245,8 @@ export class MemoryHost implements SyncTransport {
     }
     if (entity === "task") {
       return {
-        id, workspaceId: "ws", projectId: null, parentId: null, title: "", description: "", status: "todo", priority: "normal",
+        id, workspaceId: "ws", projectId: null, parentId: null, title: "", description: "", status: "todo", statusId: null, priority: "normal",
+        importance: null, urgency: null, complexity: null, executorSource: "none", archivedAt: null,
         dueAt: null, projectTag: null, recurrence: null, completedAt: null, sortOrder: 0, dependencyIds: [], blocked: false,
         assigneeId: null, startAt: null, estimatedMinutes: null, milestoneId: null, checklist: [], ...row.fields,
         revision: row.revision, createdAt: iso(row.createdAtMs), updatedAt: iso(row.updatedAtMs)

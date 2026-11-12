@@ -6,12 +6,25 @@ import { MilestoneReferencesModule } from "../../milestones/public/milestone-ref
 import { TaskClosureRegistryModule } from "./task-closure-registry";
 import { TaskAgentAssignmentRegistryModule } from "./task-agent-assignment-registry";
 import { TasksService } from "../tasks.service";
+import { TaskStatusesService } from "../task-statuses.service";
+import { TaskFieldsService } from "../task-fields.service";
+import { TaskRecurrenceService } from "../tasks-recurrence.service";
 import { TaskOperations } from "./task-operations";
 
-/** Shared command implementation; no task controllers, listeners or provider registrations. */
+/**
+ * Shared command implementation; no task controllers, listeners or provider
+ * registrations. Tasks 2.0 statuses/fields/recurrence live here because
+ * `TasksService` injects them and is itself instantiated from this module.
+ */
 @Module({
   imports: [HomeReferencesModule, WorkspacesModule, ProjectTaskLinksModule, MilestoneReferencesModule, TaskClosureRegistryModule, TaskAgentAssignmentRegistryModule],
-  providers: [TasksService, { provide: TaskOperations, useFactory: (service: TasksService): TaskOperations => service, inject: [TasksService] }],
-  exports: [TaskOperations, TasksService]
+  providers: [
+    TasksService,
+    TaskStatusesService,
+    TaskFieldsService,
+    TaskRecurrenceService,
+    { provide: TaskOperations, useFactory: (service: TasksService): TaskOperations => service, inject: [TasksService] }
+  ],
+  exports: [TaskOperations, TasksService, TaskStatusesService, TaskFieldsService, TaskRecurrenceService]
 })
 export class TaskOperationsModule {}

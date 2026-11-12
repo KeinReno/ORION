@@ -50,7 +50,8 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     await app?.close();
   });
 
-  async function request<T = unknown>(path: string, options: { method: string; token?: string; body?: unknown }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- дефолт any сознательно: тесты читают JSON-ответы произвольной формы
+  async function request<T = any>(path: string, options: { method: string; token?: string; body?: unknown }) {
     const response = await fetch(`${baseUrl}${path}`, {
       method: options.method,
       headers: { "Content-Type": "application/json", ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}) },
@@ -92,7 +93,7 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     expect(blocked.status).toBe(409);
     expect(blocked.data.code).toBe("component_has_dependents");
     expect(blocked.data.message).toContain("перестанут работать");
-    expect(blocked.data.dependents.map((item: { id: string }) => item.id).sort()).toEqual(expected);
+    expect(blocked.data.dependents!.map((item: { id: string }) => item.id).sort()).toEqual(expected);
     expect(blocked.data.dependents).toContainEqual(expect.objectContaining({ kind: "plugin", relation: "requires" }));
     expect(blocked.data.dependents).toContainEqual(expect.objectContaining({ id: "orion-dev", kind: "module", relation: "requires" }));
     // Ничего не изменилось.
@@ -103,8 +104,8 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
     expect((await get("/tasks")).status).toBe(409);
     // Зависимые плагины неактивны, но их переключатели не тронуты; сосед работает.
     const plugins = await get("/plugins");
-    for (const dependent of blocked.data.dependents.filter((item: { kind: string }) => item.kind === "plugin")) {
-      expect(plugins.data.find((item: { id: string }) => item.id === dependent.id).enabled).toBe(false);
+    for (const dependent of blocked.data.dependents!.filter((item: { kind: string }) => item.kind === "plugin")) {
+      expect(plugins.data.find((item: { id: string }) => item.id === dependent.id)!.enabled).toBe(false);
     }
     expect((await get("/development-import/preview")).status).toBe(409);
     expect((await get("/notes")).status).toBe(200);
@@ -167,12 +168,12 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
       expect(String(failed.data.message)).toContain("Изменение отменено");
       expect(calls).toEqual([`disable:contacts:true`, "sees:true"]);
       const modules = await get("/modules");
-      expect(modules.data.find((item: { id: string }) => item.id === "contacts").enabled).toBe(true);
+      expect(modules.data.find((item: { id: string }) => item.id === "contacts")!.enabled).toBe(true);
 
       const pluginFailed = await setPlugin(plugin.id, false);
       expect(pluginFailed.status).toBe(500);
       const plugins = await get("/plugins");
-      expect(plugins.data.find((item: { id: string }) => item.id === plugin.id).enabled).toBe(true);
+      expect(plugins.data.find((item: { id: string }) => item.id === plugin.id)!.enabled).toBe(true);
 
       // Включение не вызывает onDisable; сбоя нет.
       calls.length = 0;
@@ -210,7 +211,7 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
         const rejected = await setModule("pet-care", true);
         expect(rejected.status).toBe(409);
         expect(rejected.data.code).toBe("component_incompatible");
-        expect((await get("/modules")).data.find((m: { id: string }) => m.id === "pet-care").enabled).toBe(false);
+        expect((await get("/modules")).data.find((m: { id: string }) => m.id === "pet-care")!.enabled).toBe(false);
         expect(calls).toBe(0);
       }
       manifest.requires = original;
@@ -263,6 +264,7 @@ describe("Component dependents and lifecycle (G6, G7)", () => {
       inventory: "/inventory/items",
       markets: "/markets/trades",
       opportunities: "/opportunities",
+      planning: "/planning/blocks",
       home: "/homes",
       contacts: "/contacts",
       health: "/health/subjects",

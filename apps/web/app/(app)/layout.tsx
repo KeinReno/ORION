@@ -1277,7 +1277,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               <button
                 type="button"
                 onClick={() => navWindows.detach(bar.id)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 В отдельное окно
               </button>
@@ -1290,7 +1290,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
               <button
                 type="button"
                 onClick={() => updateNav((current) => removeNavSidebar(current, bar.id))}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
               >
                 Убрать сайдбар
               </button>
@@ -1313,7 +1313,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                     key={item.id}
                     type="button"
                     onClick={() => navWindows.dock(item.id)}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                   >
                     {`Вернуть «${item.name}»`}
                   </button>
@@ -1327,7 +1327,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                 <button
                   type="button"
                   onClick={() => updateNav(createNavSidebar)}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                 >
                   {navState.sidebars.some((item) => item.id === "side-2") ? "Создать третий сайдбар" : "Создать второй сайдбар"}
                 </button>
@@ -1345,7 +1345,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
                   </button>
                   <button
                     onClick={() => leaveWorkbench("logout")}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                   >
                     <LogOut className="h-5 w-5 shrink-0" aria-hidden />
                     Выйти

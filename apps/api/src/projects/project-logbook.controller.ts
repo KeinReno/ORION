@@ -1,8 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import {
   createProjectLogEntryInputSchema, createProjectRelationInputSchema,
+  projectLogFiltersSchema, updateProjectLogEntryInputSchema,
   type CreateProjectLogEntryInput, type CreateProjectRelationInput,
-  type ProjectLogEntry, type ProjectRelation
+  type ProjectLogEntry, type ProjectLogFilters, type ProjectLogRelated, type ProjectLogSummary,
+  type ProjectRelation, type UpdateProjectLogEntryInput
 } from "@orion/shared-types";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { CurrentUser } from "../common/current-user.decorator";
@@ -18,8 +20,13 @@ export class ProjectLogbookController {
   constructor(private readonly logbook: ProjectLogbookService) {}
 
   @Get()
-  list(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("projectId") projectId: string): Promise<ProjectLogEntry[]> {
-    return this.logbook.listEntries(user.userId, workspaceId, projectId);
+  list(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("projectId") projectId: string,
+    @Query(new ZodValidationPipe(projectLogFiltersSchema)) filters: ProjectLogFilters
+  ): Promise<ProjectLogEntry[]> {
+    return this.logbook.listEntries(user.userId, workspaceId, projectId, filters);
   }
 
   @Post()
@@ -30,10 +37,53 @@ export class ProjectLogbookController {
     return this.logbook.createEntry(user.userId, workspaceId, projectId, body);
   }
 
+  /** Сводка по журналу: количества по типам, просроченные гипотезы, открытые инциденты, решения без результатов. */
+  @Get("summary")
+  summary(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("projectId") projectId: string,
+    @Query(new ZodValidationPipe(projectLogFiltersSchema)) filters: ProjectLogFilters
+  ): Promise<ProjectLogSummary> {
+    return this.logbook.summary(user.userId, workspaceId, projectId, filters);
+  }
+
+  @Patch(":entryId")
+  update(
+    @CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("projectId") projectId: string,
+    @Param("entryId") entryId: string,
+    @Body(new ZodValidationPipe(updateProjectLogEntryInputSchema)) body: UpdateProjectLogEntryInput
+  ): Promise<ProjectLogEntry> {
+    return this.logbook.updateEntry(user.userId, workspaceId, projectId, entryId, body);
+  }
+
   @Delete(":entryId")
   @HttpCode(204)
   remove(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("projectId") projectId: string, @Param("entryId") entryId: string): Promise<void> {
     return this.logbook.removeEntry(user.userId, workspaceId, projectId, entryId);
+  }
+}
+
+/** Список журнала по всему пространству + универсальные связи записи с материалами. */
+@RequireModule("projects")
+@RequirePlugin("projects-logbook")
+@Controller("workspaces/:workspaceId/project-log")
+export class ProjectLogbookWorkspaceController {
+  constructor(private readonly logbook: ProjectLogbookService) {}
+
+  @Get()
+  list(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Query(new ZodValidationPipe(projectLogFiltersSchema)) filters: ProjectLogFilters
+  ): Promise<ProjectLogEntry[]> {
+    return this.logbook.listWorkspaceEntries(user.userId, workspaceId, filters);
+  }
+
+  /** Агрегирует прикреплённые материалы всех типов через EntityLink (Knowledge, Documents, Notes, …). */
+  @Get(":entryId/related")
+  related(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string, @Param("entryId") entryId: string): Promise<ProjectLogRelated> {
+    return this.logbook.related(user.userId, workspaceId, entryId);
   }
 }
 

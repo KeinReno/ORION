@@ -9,7 +9,7 @@
 
 Блок собирается `pnpm module-docs`; руками не править.
 
-- Точки входа: API `workspaces/:workspaceId/development-import` (за `@RequireModule("orion-dev")`); панель веба `orion-dev`; код `apps/api/src/modules-ext/orion-dev/`.
+- Точки входа: API `workspaces/:workspaceId` (за `@RequireModule("orion-dev")`); панель веба `orion-dev`; код `apps/api/src/modules-ext/orion-dev/`.
 - Права: `orion-dev.development_import.read`, `orion-dev.development_import.create`, `orion-dev.development_import.update`, `orion-dev.development_import.delete`.
 - Модуль владеет: Обзор разработки и интерфейс проверки импорта; задачи и проекты принадлежат существующим модулям.
 - Соседи: жёсткие: `projects`, `tasks`; мягкие: —; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.

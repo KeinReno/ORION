@@ -391,7 +391,7 @@ export function Sidebar({
     const Icon = link.icon;
     const isActive = link.isActive ?? link.href === activeHref;
     const className = clsx(
-      "group relative flex items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+      "group relative flex min-w-0 items-center gap-2.5 rounded-md px-3 text-left text-sm font-normal transition-colors",
       isDrawer ? "min-h-11 py-2.5" : "py-2",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
       isActive ? "text-foreground" : "text-muted-foreground hover:bg-ui-hover/60 hover:text-foreground"
@@ -427,12 +427,12 @@ export function Sidebar({
             <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-background" />
           ) : null}
         </motion.span>
-        <span className={clsx("flex flex-1 items-center gap-2 overflow-hidden whitespace-nowrap", !open && "sr-only")}>
-          <span className="flex-1">{link.label}</span>
+        <span className={clsx("flex min-w-0 flex-1 items-center gap-2 overflow-hidden whitespace-nowrap", !open && "sr-only")}>
+          <span className="min-w-0 flex-1 truncate text-left">{link.label}</span>
           {link.badge ? (
             <span
               title={link.badgeLabel}
-              className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text"
+              className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text"
             >
               {link.badge}
             </span>
@@ -506,7 +506,7 @@ export function Sidebar({
     if (!link.menuItems || !open) return button;
 
     return (
-      <div key={link.label} className="group/row flex items-center gap-0.5">
+      <div key={link.label} className="group/row flex min-w-0 items-center gap-0.5">
         {button}
         <DropdownMenu
           align="end"
@@ -570,7 +570,7 @@ export function Sidebar({
   const grouped = open && hasSections;
   const linkById = new Map(links.filter((l) => l.id).map((l) => [l.id as string, l]));
   const iconButtonClass = clsx(
-    "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground",
+    "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
   );
 
@@ -606,7 +606,7 @@ export function Sidebar({
       >
         {({ close }) => (
           <div className="p-1.5">
-            <p className="px-2 pb-1 pt-0.5 text-2xs font-medium uppercase tracking-wide text-subtle-foreground">{folder.name}</p>
+            <p className="px-2 pb-1 pt-0.5 text-2xs font-normal uppercase tracking-wide text-subtle-foreground">{folder.name}</p>
             {members.length === 0 ? <p className="px-2 py-1.5 text-label text-subtle-foreground">В папке пока пусто</p> : null}
             {members.map((member) => {
               const MemberIcon = member.icon;
@@ -637,13 +637,13 @@ export function Sidebar({
                     handleNavigate(member.onClick);
                   }}
                   className={clsx(
-                    "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
                     member.isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <MemberIcon className="h-4 w-4 shrink-0" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{member.label}</span>
-                  {member.badge ? <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text">{member.badge}</span> : null}
+                  {member.badge ? <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-0.5 text-2xs font-medium text-accent-text">{member.badge}</span> : null}
                 </button>
               );
             })}
@@ -670,7 +670,7 @@ export function Sidebar({
             }}
             aria-expanded={!folder.collapsed}
             aria-label={`Папка «${folder.name}», разделов: ${members.length}`}
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-1 text-2xs font-normal uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <motion.span
               animate={{ rotate: folder.collapsed && !reduceMotion ? -90 : 0 }}
@@ -755,7 +755,7 @@ export function Sidebar({
       <div
         ref={scrollRef}
         className={clsx(
-          "flex gap-3",
+          "flex gap-2.5",
           horizontal ? "min-w-0 flex-1 flex-row items-center" : "min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden",
           !horizontal && (open ? "orion-scroll" : "orion-scroll-hidden")
         )}
@@ -777,7 +777,7 @@ export function Sidebar({
           {...dropProps("nav", null)}
         >
           {railLabel && open && !isDrawer ? (
-            <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground">
+            <div className="px-3 pb-1 text-[11px] font-normal uppercase tracking-wide text-subtle-foreground">
               {railLabel}
             </div>
           ) : null}
@@ -798,7 +798,7 @@ export function Sidebar({
                       type="button"
                       onClick={() => toggleGroup(groupName)}
                       aria-expanded={!isCollapsed}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-2xs font-medium uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground"
+                      className="flex items-center gap-2 rounded-lg px-3 py-1 text-2xs font-normal uppercase tracking-wide text-subtle-foreground transition-colors hover:text-foreground"
                     >
                       <motion.span
                         animate={{ rotate: isCollapsed && !reduceMotion ? -90 : 0 }}
@@ -849,7 +849,7 @@ export function Sidebar({
             type="button"
             aria-label="Закрыть меню"
             onClick={onDrawerClose}
-            className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden />
             <span>Закрыть</span>
@@ -862,7 +862,7 @@ export function Sidebar({
             aria-label={pinned ? "Открепить меню" : "Закрепить меню"}
             title={pinned ? "Открепить меню" : "Закрепить меню"}
             onClick={() => setPinned((value) => !value)}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
             {pinned ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeft className="h-5 w-5 shrink-0" aria-hidden />}
             <span className={clsx("whitespace-nowrap", (!open || compactPinControl) && "sr-only")}>{pinned ? "Открепить" : "Закрепить"}</span>

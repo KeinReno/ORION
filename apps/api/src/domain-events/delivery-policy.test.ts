@@ -47,6 +47,9 @@ describe("isComponentEnabled", () => {
   it("unknown component is disabled", () => {
     expect(isComponentEnabled("ghost", on)).toBe(false);
   });
+  it("core infrastructure is always enabled", () => {
+    expect(isComponentEnabled("core", { disabledModules: ["tasks"], pluginOverrides: [] })).toBe(true);
+  });
 });
 
 describe("declared subscriptions", () => {
@@ -64,6 +67,8 @@ describe("declared subscriptions", () => {
       for (const t of sub.types) expect(manifest.events.subscribes).toContain(t);
     }
     for (const [type, def] of Object.entries(DOMAIN_EVENT_CATALOG)) {
+      // "core" is platform infrastructure, not a manifest module: it has no events.publishes row.
+      if (def.publisher === "core") continue;
       expect(COMPONENT_MANIFESTS.find((m) => m.id === def.publisher)!.events.publishes).toContain(type);
     }
   });

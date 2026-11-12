@@ -6,13 +6,13 @@ import { workspaceRoleSchema } from "./workspace";
 /**
  * Единый реестр разрешений платформы (PLATFORM_AUDIT G12, docs/platform-api/PERMISSIONS.md).
  * Формат id: `<module>.<resource>.<action>`, где `module` — id модуля или `core`, а
- * `action` — `read | create | update | delete | propose | manage`.
+ * `action` — `read | create | update | delete | propose | manage | execute`.
  *
  * Реестр — источник истины для: поля `permissions` манифестов, серверного `@RequirePermission`
  * и отображения агентских scope'ов в разрешения. Видимость данных (RLS, приватные счета, гранты)
  * сюда не входит: словарь отвечает на «можно ли операцию», RLS — на «какие строки».
  */
-export const PERMISSION_ACTIONS = ["read", "create", "update", "delete", "propose", "manage"] as const;
+export const PERMISSION_ACTIONS = ["read", "create", "update", "delete", "propose", "manage", "execute"] as const;
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 /** Основной ресурс каждого модуля. Модуль получает CRUD по нему; дополнительные операции — в `EXTRA_PERMISSIONS`. */
@@ -55,8 +55,8 @@ const EXTRA_PERMISSIONS = [
   "tasks.field.manage",
   "tasks.recurrence.manage",
   // Foundation Core (задание 01): единый слой связей и диагностика outbox.
-  "entity-links.read",
-  "entity-links.manage",
+  "entity-links.link.read",
+  "entity-links.link.manage",
   // Центр проектов (задание 03): шаблон — НЕ проект, поэтому у него свои права
   // (`projects.templates.*` из задания в реестре — `projects.template.*`:
   // формат реестра `module.resource.action`, ресурсы в единственном числе).
@@ -124,7 +124,7 @@ export const AGENT_SCOPE_PERMISSIONS: Record<AgentScope, readonly string[]> = {
   "events:read": ["calendar.event.read"],
   "events:write": ["calendar.event.create", "calendar.event.update"],
   "finance:draft": ["finance.draft.propose"],
-  "links:write": ["core.link.create", "core.link.delete", "entity-links.manage"],
+  "links:write": ["core.link.create", "core.link.delete", "entity-links.link.manage"],
   "agents:message": ["core.agent_message.create"],
   "agents:delegate": ["core.agent_job.create", "core.agent_job.update"]
 };

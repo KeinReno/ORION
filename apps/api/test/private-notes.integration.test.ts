@@ -46,6 +46,8 @@ describe("Private notes in a shared workspace", () => {
     return { status: response.status, data: (text ? JSON.parse(text) : null) as T };
   }
 
+  type NoteJson = { id: string; isPrivate: boolean; revision: number };
+
   let counter = 0;
   async function pair() {
     const register = async (name: string) => {
@@ -71,9 +73,9 @@ describe("Private notes in a shared workspace", () => {
 
   it("личную заметку видит только автор, общую — все; владелец пространства чужую личную не видит", async () => {
     const { alice, bob, ws } = await pair();
-    const shared = await request(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Общая", body: "для всех" });
-    const mine = await request(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Личная Алисы", body: "секретное слово ферзь", isPrivate: true });
-    const bobs = await request(`/workspaces/${ws}/notes`, "POST", bob.token, { title: "Личная Боба", body: "тайна", isPrivate: true });
+    const shared = await request<NoteJson>(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Общая", body: "для всех" });
+    const mine = await request<NoteJson>(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Личная Алисы", body: "секретное слово ферзь", isPrivate: true });
+    const bobs = await request<NoteJson>(`/workspaces/${ws}/notes`, "POST", bob.token, { title: "Личная Боба", body: "тайна", isPrivate: true });
     expect([shared.status, mine.status, bobs.status, bobs.data]).toEqual([201, 201, 201, expect.anything()]);
     expect(shared.data.isPrivate).toBe(false);
     expect(mine.data.isPrivate).toBe(true);
@@ -104,10 +106,10 @@ describe("Private notes in a shared workspace", () => {
 
   it("автор переключает заметку между личной и общей; после этого её видят или перестают видеть остальные", async () => {
     const { alice, bob, ws } = await pair();
-    const note = await request(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Черновик", body: "x", isPrivate: true });
+    const note = await request<NoteJson>(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Черновик", body: "x", isPrivate: true });
     expect(await titles(ws, bob.token)).toEqual([]);
 
-    const published = await request(`/workspaces/${ws}/notes/${note.data.id}`, "PATCH", alice.token, { isPrivate: false });
+    const published = await request<NoteJson>(`/workspaces/${ws}/notes/${note.data.id}`, "PATCH", alice.token, { isPrivate: false });
     expect(published.status).toBe(200);
     expect(published.data.isPrivate).toBe(false);
     expect(published.data.revision).toBe(2);
@@ -123,7 +125,7 @@ describe("Private notes in a shared workspace", () => {
   });
   it("ревизии, ссылки и вложения личной заметки тоже скрыты от остальных на уровне БД", async () => {
     const { alice, bob, ws } = await pair();
-    const note = await request(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Секрет", body: "ссылка на [[Общая цель]]", isPrivate: true });
+    const note = await request<NoteJson>(`/workspaces/${ws}/notes`, "POST", alice.token, { title: "Секрет", body: "ссылка на [[Общая цель]]", isPrivate: true });
     await prisma.asSystem(async (tx) => {
       await tx.noteRevision.create({ data: { workspaceId: ws, noteId: note.data.id, title: "Секрет", summary: "", body: "старый текст секрета", tags: [] } });
     });

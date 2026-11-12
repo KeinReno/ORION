@@ -4,6 +4,7 @@ import { AuthModule } from "../auth/auth.module";
 import { DocumentAttachmentStoreModule } from "../documents/public/document-attachment-store.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
 import { NoteAttachmentsService } from "./note-attachments.service";
+import { NoteLinksService } from "./note-links.service";
 import { NotesController } from "./notes.controller";
 import { NoteOperationsModule } from "./public/note-operations.module";
 import { NoteTrashPurgeService } from "./note-trash-purge.service";
@@ -21,7 +22,7 @@ import { NotesProjectAggregates } from "./notes-project-aggregates";
 @Module({
   imports: [NoteOperationsModule, ProjectReferencesModule, AuthModule, WorkspacesModule, DocumentAttachmentStoreModule, SearchRegistryModule, InboxRegistryModule],
   controllers: [NotesController],
-  providers: [NotesProjectAggregates, NoteTrashPurgeService, NoteAttachmentsService, NotesSearchProvider, NoteInboxTarget],
+  providers: [NotesProjectAggregates, NoteTrashPurgeService, NoteAttachmentsService, NoteLinksService, NotesSearchProvider, NoteInboxTarget],
   exports: [NoteOperationsModule]
 })
 export class NotesModule {}

@@ -41,9 +41,10 @@ export class TasksController {
     @CurrentUser() user: RequestUser,
     @Param("workspaceId") workspaceId: string,
     @Query("search") search?: string,
-    @Query("assignedToMe") assignedToMe?: string
+    @Query("assignedToMe") assignedToMe?: string,
+    @Query("includeArchived") includeArchived?: string
   ): Promise<Task[]> {
-    return this.tasks.list(user.userId, workspaceId, search, assignedToMe === "true");
+    return this.tasks.list(user.userId, workspaceId, search, assignedToMe === "true", includeArchived === "true");
   }
 
   @Post()

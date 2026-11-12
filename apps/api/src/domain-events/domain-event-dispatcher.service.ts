@@ -1,7 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { Prisma } from "@prisma/client";
-import type { DomainEventEnvelope, DomainEventType } from "@orion/shared-types";
+import {
+  DOMAIN_EVENT_CATALOG,
+  isDomainEventType,
+  parseDomainEventPayload,
+  type DomainEventEnvelope,
+  type DomainEventOutboxStatus
+} from "@orion/shared-types";
 import { BackgroundJobsService } from "../common/background-jobs.service";
 import { PrismaService } from "../common/prisma.service";
 import { DomainEventBus, restoreSystemRole } from "./domain-event-bus";
@@ -139,14 +145,39 @@ export class DomainEventDispatcherService {
         await finish("failed", { lastError: "Событие не найдено" });
         return "failed";
       }
+      // Delivery-time contract check: a type that left the catalog, a payload version the
+      // catalog no longer speaks, or a payload that no longer parses must become a visible
+      // failed delivery, not an exception thrown from an arbitrary consumer.
+      if (!isDomainEventType(row.type)) {
+        await finish("failed", { attempts: claimed.attempts + 1, lastError: `Неизвестный тип события: ${row.type}` });
+        return "failed";
+      }
+      const definition = DOMAIN_EVENT_CATALOG[row.type];
+      if (row.version !== definition.version) {
+        await finish("failed", {
+          attempts: claimed.attempts + 1,
+          lastError: `Версия payload ${row.version} не совпадает с каталогом (${definition.version})`
+        });
+        return "failed";
+      }
+      let payload: DomainEventEnvelope["payload"];
+      try {
+        payload = parseDomainEventPayload(row.type, row.payload);
+      } catch (error) {
+        await finish("failed", {
+          attempts: claimed.attempts + 1,
+          lastError: `Payload не соответствует схеме: ${error instanceof Error ? error.message : String(error)}`
+        });
+        return "failed";
+      }
       const envelope = {
         id: row.id,
-        type: row.type as DomainEventType,
+        type: row.type,
         version: row.version,
         workspaceId: row.workspaceId,
         actorId: row.actorId,
         occurredAt: row.createdAt.toISOString(),
-        payload: row.payload
+        payload
       } as DomainEventEnvelope;
 
       await tx.$executeRawUnsafe("SAVEPOINT domain_event_handler");
@@ -175,6 +206,73 @@ export class DomainEventDispatcherService {
       }
       await finish("done", { attempts: claimed.attempts + 1, lastError: null });
       return "done";
+    });
+  }
+
+  /**
+   * Foundation Core (task 01.2): состояние outbox для диагностики. `workspaceId` optional —
+   * без него это общесистемные счётчики (без payload и без имён пространств).
+   */
+  async status(workspaceId?: string): Promise<DomainEventOutboxStatus> {
+    return this.prisma.asSystem(async (tx) => {
+      const scope = workspaceId ? { workspaceId } : {};
+      const counts = await tx.domainEventDelivery.groupBy({ by: ["status"], where: scope, _count: { _all: true } });
+      const byStatus = new Map(counts.map((row) => [row.status, row._count._all]));
+      const [oldestEvent, oldestDelivery, byType, failed] = await Promise.all([
+        tx.domainEvent.findFirst({ where: { ...scope, dispatchedAt: null }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+        tx.domainEventDelivery.findFirst({
+          where: { ...scope, status: "pending" },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true }
+        }),
+        tx.domainEvent.groupBy({ by: ["type"], where: { ...scope, dispatchedAt: null }, _count: { _all: true } }),
+        tx.domainEventDelivery.findMany({
+          where: { ...scope, status: "failed" },
+          orderBy: [{ completedAt: "desc" }, { id: "desc" }],
+          take: 20,
+          include: { event: { select: { type: true } } }
+        })
+      ]);
+      const now = Date.now();
+      const age = (date: Date | null | undefined): number | null =>
+        date ? Math.max(0, Math.floor((now - date.getTime()) / 1000)) : null;
+      return {
+        pending: byStatus.get("pending") ?? 0,
+        done: byStatus.get("done") ?? 0,
+        skippedDisabled: byStatus.get("skipped_disabled") ?? 0,
+        failed: byStatus.get("failed") ?? 0,
+        oldestUndispatchedAgeSeconds: age(oldestEvent?.createdAt),
+        oldestPendingAgeSeconds: age(oldestDelivery?.createdAt),
+        undeliveredByType: byType
+          .map((row) => ({ type: row.type, count: row._count._all }))
+          .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type)),
+        failedDeliveries: failed.map((row) => ({
+          id: row.id,
+          eventId: row.eventId,
+          type: row.event.type,
+          subscriberId: row.subscriberId,
+          status: row.status as "failed",
+          attempts: row.attempts,
+          lastError: row.lastError,
+          nextAttemptAt: row.nextAttemptAt.toISOString(),
+          completedAt: row.completedAt?.toISOString() ?? null
+        }))
+      };
+    });
+  }
+
+  /**
+   * Manual replay of a dead-letter delivery (task 01.2): resets only `failed` rows to `pending`
+   * with a fresh attempt budget. The next tick picks it up; the handler must still be idempotent.
+   * Returns false when the row is absent, belongs to another workspace or is not failed.
+   */
+  async replayDelivery(deliveryId: string, workspaceId?: string): Promise<boolean> {
+    return this.prisma.asSystem(async (tx) => {
+      const result = await tx.domainEventDelivery.updateMany({
+        where: { id: deliveryId, status: "failed", ...(workspaceId ? { workspaceId } : {}) },
+        data: { status: "pending", attempts: 0, nextAttemptAt: new Date(), completedAt: null, lastError: null }
+      });
+      return result.count > 0;
     });
   }
 

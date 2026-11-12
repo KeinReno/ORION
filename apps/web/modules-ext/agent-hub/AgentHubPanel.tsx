@@ -12,7 +12,8 @@ import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 const statusLabel: Record<AgentHubExecution["status"], string> = {
   queued: "Ожидает исполнителя", claimed: "Захвачено", working: "В работе", blocked: "Заблокировано",
-  review: "Ожидает проверки", done: "Проверено", failed: "Ошибка", canceled: "Запись отменена"
+  waiting_approval: "Ждёт подтверждения", review: "Ожидает проверки", done: "Проверено",
+  failed: "Ошибка", canceled: "Запись отменена", reassigned: "Переназначено"
 };
 
 export function AgentHubPanel(): React.ReactElement {
