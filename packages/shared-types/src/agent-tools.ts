@@ -1179,17 +1179,51 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
     group: "modules",
     effect: "read",
     description:
-      "Карта репозитория для 2D-редактора: файлы, каталоги, модули и крейты, внутренние импорты TS/TSX и Rust, внешние зависимости, метрики. Только чтение; позиции узлов не меняются. Требуется разрешение orion-dev.development_import.read.",
+      "Карта репозитория для 2D-редактора: файлы, каталоги, модули и крейты, внутренние импорты TS/TSX и Rust, внешние зависимости, метрики. Можно построить по ревизии (sha, ветка, тег) — состояние на коммите, а не в рабочей копии. Только чтение; позиции узлов не меняются. Требуется разрешение orion-dev.development_import.read.",
     scopes: null,
     http: { method: "GET", path: "/ai/v1/development/architect/map" },
     input: obj(
       {
         repositoryId: str("id репозитория из списка ORION DEV"),
-        path: str("Подкаталог внутри репозитория; пусто — весь репозиторий")
+        path: str("Подкаталог внутри репозитория; пусто — весь репозиторий"),
+        ref: str("Ревизия: sha, ветка или тег; без неё — рабочая копия")
       },
       ["repositoryId"]
     ),
-    example: { repositoryId: "<id репозитория>", path: "apps/api/src" },
+    example: { repositoryId: "<id репозитория>", ref: "main~10" },
+    permission: "orion-dev.development_import.read",
+    moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architect_diff",
+    group: "modules",
+    effect: "read",
+    description:
+      "Разница архитектурных карт между двумя ревизиями репозитория ORION DEV: добавленные/удалённые файлы и связи импортов, файлы с изменившимся размером. Обе ревизии разворачиваются сервером во временные каталоги, исходный репозиторий не меняется. Требуется разрешение orion-dev.development_import.read.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/development/architect/diff" },
+    input: obj(
+      {
+        repositoryId: str("id репозитория из списка ORION DEV"),
+        base: str("Базовая ревизия: sha, ветка, тег (например, main~20)"),
+        target: str("Целевая ревизия; обычно HEAD")
+      },
+      ["repositoryId", "base", "target"]
+    ),
+    example: { repositoryId: "<id репозитория>", base: "main~20", target: "HEAD" },
+    permission: "orion-dev.development_import.read",
+    moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architect_snapshots",
+    group: "modules",
+    effect: "read",
+    description:
+      "Список зафиксированных снапшотов карты Architect репозитория ORION DEV: sha коммита, дата, число узлов и связей, признак неполного анализа. Снапшоты снимает владелец из интерфейса ORION. Только чтение. Требуется разрешение orion-dev.development_import.read.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/development/architect/snapshots" },
+    input: obj({ repositoryId: str("id репозитория из списка ORION DEV") }, ["repositoryId"]),
+    example: { repositoryId: "<id репозитория>" },
     permission: "orion-dev.development_import.read",
     moduleId: "orion-dev"
   }

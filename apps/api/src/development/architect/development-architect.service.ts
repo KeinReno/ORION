@@ -6,10 +6,12 @@ import {
   architectNodeSchema,
   architectProjectSchemaSchema,
   compareArchitectSchemas,
+  diffArchitectMaps,
   type ArchitectComparison,
   type ArchitectLayout,
   type ArchitectLayoutInput,
   type ArchitectMap,
+  type ArchitectMapDiff,
   type ArchitectNodePosition,
   type ArchitectProjectSchema,
   type ArchitectSnapshot,
@@ -160,6 +162,27 @@ export class DevelopmentArchitectService {
       if (!row) throw new NotFoundException("Снапшот не найден");
       return toSnapshotDto(row);
     });
+  }
+
+  /** Диф карт между двумя ревизиями: обе разворачиваются параллельно, разница — чистой функцией. */
+  async diff(userId: string, workspaceId: string, repositoryId: string, baseRef: string, targetRef: string): Promise<ArchitectMapDiff> {
+    const repository = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return this.git.requireRepositoryTx(tx, workspaceId, repositoryId);
+    });
+    const repoPath = await this.git.usablePath(repository.path);
+    const load = async (ref: string) => {
+      try {
+        return await this.analyzeRef(repoPath, ref);
+      } catch (error) {
+        throw new BadRequestException(`Не удалось получить ревизию «${ref}»: ${(error as Error).message}`);
+      }
+    };
+    const [baseAnalysis, targetAnalysis] = await Promise.all([load(baseRef), load(targetRef)]);
+    return diffArchitectMaps(
+      { nodes: baseAnalysis.nodes, edges: baseAnalysis.edges },
+      { nodes: targetAnalysis.nodes, edges: targetAnalysis.edges }
+    );
   }
 
   async layout(userId: string, workspaceId: string, repositoryId: string): Promise<ArchitectLayout> {
