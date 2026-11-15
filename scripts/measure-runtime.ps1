@@ -1,4 +1,4 @@
-<#! Read-only sample of explicitly selected Windows processes. #>
+﻿<#! Read-only sample of explicitly selected Windows processes. #>
 param(
     [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][int[]]$ProcessIds,
     [ValidateRange(1, 3600)][int]$Seconds = 10,

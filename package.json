@@ -39,6 +39,7 @@
     "db:status": "node scripts/postgres.mjs status",
     "db:up:docker": "docker compose -f infra/postgres/docker-compose.yml up -d",
     "db:down:docker": "docker compose -f infra/postgres/docker-compose.yml down",
+    "db:grants": "node scripts/db-grants.mjs",
     "db:migrate": "corepack pnpm --filter @orion/api prisma:migrate:dev",
     "db:generate": "corepack pnpm --filter @orion/api prisma:generate",
     "db:seed-dev": "node scripts/seed-dev-user.mjs",

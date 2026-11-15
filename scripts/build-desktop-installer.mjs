@@ -59,7 +59,14 @@ if (process.env.ORION_UPDATE_PUBLIC_KEY_FILE) {
 }
 // Метка сборки для проверки обновлений: ORION_BUILD_TAG=v0.1.0-windows-beta.3 pnpm build:desktop-installer (должна совпадать с тегом релиза).
 const buildTag = process.env.ORION_BUILD_TAG || '';
-const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+// Git может быть недоступен на сборочном хосте (нет PATH, sandbox); тогда фиксируем
+// метку окружения, а не падаем — build.json всегда должен существовать для диагностики обновлений.
+let commit = process.env.ORION_BUILD_COMMIT || 'unknown-commit';
+try {
+  commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+} catch {
+  console.warn('git недоступен на сборочном хосте — build.json получит commit=unknown-commit');
+}
 writeFileSync(join(stage, 'build.json'), JSON.stringify({ tag: buildTag, commit, builtAt: new Date().toISOString() }, null, 2));
 console.log(`Build tag: ${buildTag || '(не задана — обновления сочтут версию неизвестной)'} @ ${commit}`);
 // Agent Manual (TZ-02): shipped beside the runtime so the «Подключить агента» wizard can show its real path.
