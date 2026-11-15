@@ -63,6 +63,8 @@ export function NavSidebarWindow(): React.ReactElement | null {
   const pluginOverrides = useMemo(() => workspace?.pluginOverrides ?? [], [workspace]);
   const [displayRelation, setDisplayRelation] = useState<"same" | "different" | "unknown">("unknown");
   const lastKnownRelationRef = useRef<"same" | "different" | null>(null);
+  /** Авто-ресайз — только при СМЕНЕ отношения к монитору хоста, не на каждом host-bounds. */
+  const lastAppliedRelationRef = useRef<"same" | "different" | null>(null);
   const [hasLocalWorkbench, setHasLocalWorkbench] = useState(false);
   const [pendingPanelClose, setPendingPanelClose] = useState<string | null>(null);
   const [confirmWindowClose, setConfirmWindowClose] = useState(false);
@@ -184,9 +186,16 @@ export function NavSidebarWindow(): React.ReactElement | null {
         if (relation === "different") setHasLocalWorkbench(true);
       }
       setDisplayRelation(relation);
-      if (relation !== "unknown") {
-        try { await resizeWindow?.(relation === "different"); }
-        catch (error) { console.warn("[nav-sidebar] Could not apply display-specific window size.", error); }
+      // Snap the window size only when the relation CHANGES (drag onto another
+      // monitor expands into a workspace; dragging back shrinks to the compact
+      // bar). Re-applying on every host-bounds tick fought the user: a manually
+      // resized or maximized window was snapped back every second, which read
+      // as flicker and made fullscreen impossible.
+      if (relation !== "unknown" && relation !== lastAppliedRelationRef.current) {
+        try {
+          await resizeWindow?.(relation === "different");
+          if (relation !== lastAppliedRelationRef.current) lastAppliedRelationRef.current = relation;
+        } catch (error) { console.warn("[nav-sidebar] Could not apply display-specific window size.", error); }
       }
     };
     void check();
@@ -329,7 +338,7 @@ export function NavSidebarWindow(): React.ReactElement | null {
           return;
         }
         stops.push(...handles);
-      });
+      }).catch((error) => console.error("[nav-sidebar] Window event handlers could not be registered (capability grant missing?); close/dock-on-X is disabled.", error));
     } else {
       const beforeUnload = (event: BeforeUnloadEvent) => {
         if (hasUnsavedDrafts()) {
