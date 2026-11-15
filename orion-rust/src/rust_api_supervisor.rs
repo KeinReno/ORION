@@ -224,14 +224,11 @@ pub fn supervise_api<B: ApiSupervisorBackend>(
             }
 
             if trial && !trial_ready {
-                match backend.trial_readiness(&mut process, &request) {
-                    Ok(true) => {
-                        backend.settle_trial(true)?;
-                        command.trial = false;
-                        trial_ready = true;
-                        remove_ack(ack_file.as_deref());
-                    }
-                    Ok(false) | Err(_) => {}
+                if let Ok(true) = backend.trial_readiness(&mut process, &request) {
+                    backend.settle_trial(true)?;
+                    command.trial = false;
+                    trial_ready = true;
+                    remove_ack(ack_file.as_deref());
                 }
             }
 
@@ -303,9 +300,7 @@ fn make_ack_path(data_dir: &Path) -> Result<PathBuf, String> {
     }
     ensure_no_reparse_directory(&dir)?;
     let mut nonce = [0_u8; 16];
-    use ring::rand::SecureRandom;
-    ring::rand::SystemRandom::new()
-        .fill(&mut nonce)
+    getrandom::getrandom(&mut nonce)
         .map_err(|_| "secure random source unavailable for UI ACK name")?;
     let path = dir.join(format!("ui-ready-{}", hex(&nonce)));
     OpenOptions::new()
@@ -341,7 +336,7 @@ fn is_reparse_point(metadata: &fs::Metadata) -> bool {
     {
         use std::os::windows::fs::MetadataExt;
         const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
     }
     #[cfg(not(windows))]
     {
@@ -365,13 +360,15 @@ fn remove_ack(path: Option<&Path>) {
     }
 }
 
+type PrepareHook = Box<dyn FnMut(&ApiCommand) -> Result<(), String> + Send>;
+
 /// Each API attempt gets a dedicated kill-on-close Job. Killing an API restart
 /// therefore leaves PostgreSQL in the launcher's separate outer Job untouched.
 pub struct SystemApiBackend {
     pub lan_node_file: PathBuf,
     shutdown: Arc<AtomicBool>,
     payload: Option<PayloadSupervisorAdapter>,
-    prepare: Option<Box<dyn FnMut(&ApiCommand) -> Result<(), String> + Send>>,
+    prepare: Option<PrepareHook>,
 }
 
 impl SystemApiBackend {
@@ -652,7 +649,7 @@ fn api_listener_owned_by_job(process: &SystemApiProcess, port: u16) -> Result<bo
     if first != ERROR_INSUFFICIENT_BUFFER || size < std::mem::size_of::<u32>() as u32 {
         return Err(format!("query API listener table size failed: {first}"));
     }
-    let mut storage = vec![0_u64; (size as usize + 7) / 8];
+    let mut storage = vec![0_u64; (size as usize).div_ceil(8)];
     let result = unsafe {
         GetExtendedTcpTable(
             storage.as_mut_ptr().cast(),
@@ -1076,7 +1073,7 @@ fn pipe_available(handle: RawHandle) -> io::Result<Option<u32>> {
     let mut available = 0;
     let ok = unsafe {
         PeekNamedPipe(
-            handle as *mut c_void,
+            handle,
             null_mut(),
             0,
             null_mut(),
@@ -1106,9 +1103,10 @@ fn local_health(port: u16, timeout: Duration) -> Option<HealthEvidence> {
         "GET /system/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
     )
     .ok()?;
-    let mut response = String::new();
-    stream.read_to_string(&mut response).ok()?;
-    let (headers, body) = response.split_once("\r\n\r\n")?;
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).ok()?;
+    let (header_bytes, body_bytes) = split_http_headers(&response)?;
+    let headers = String::from_utf8_lossy(header_bytes);
     let status = headers
         .lines()
         .next()?
@@ -1116,6 +1114,19 @@ fn local_health(port: u16, timeout: Duration) -> Option<HealthEvidence> {
         .nth(1)?
         .parse::<u16>()
         .ok()?;
+    // Dechunk when the server answers HTTP/1.1 chunked; Nest sends short
+    // single-chunk bodies today, but a proxy or a future server version may
+    // chunk, and a trial must not hang on a parse failure.
+    let decoded;
+    let body: &[u8] = if header_value(&headers, "transfer-encoding")
+        .is_some_and(|value| value.to_ascii_lowercase().contains("chunked"))
+    {
+        decoded = dechunk(body_bytes)?;
+        &decoded
+    } else {
+        body_bytes
+    };
+    let body = std::str::from_utf8(body).ok()?;
     let json: serde_json::Value = serde_json::from_str(body).ok()?;
     Some(HealthEvidence {
         http_ok: (200..300).contains(&status),
@@ -1124,6 +1135,64 @@ fn local_health(port: u16, timeout: Duration) -> Option<HealthEvidence> {
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned),
     })
+}
+
+/// Locate the end of the HTTP header block. Tolerates both CRLF and bare LF
+/// separators so a non-conforming loopback peer cannot break readiness probes.
+fn split_http_headers(response: &[u8]) -> Option<(&[u8], &[u8])> {
+    if let Some(at) = find_subslice(response, b"\r\n\r\n") {
+        return Some((&response[..at], &response[at + 4..]));
+    }
+    if let Some(at) = find_subslice(response, b"\n\n") {
+        return Some((&response[..at], &response[at + 2..]));
+    }
+    None
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn header_value<'a>(headers: &'a str, name: &str) -> Option<&'a str> {
+    headers.lines().find_map(|line| {
+        let (key, value) = line.split_once(':')?;
+        key.trim()
+            .eq_ignore_ascii_case(name)
+            .then(|| value.trim())
+    })
+}
+
+/// Decode an HTTP/1.1 chunked body. Trailers (after the zero-size chunk) are
+/// dropped; a truncated chunk sequence is an error, never a partial body.
+fn dechunk(mut input: &[u8]) -> Option<Vec<u8>> {
+    let mut output = Vec::new();
+    loop {
+        let line_end = find_subslice(input, b"\n")?;
+        let line = input[..line_end]
+            .strip_suffix(b"\r")
+            .unwrap_or(&input[..line_end]);
+        let size_text = line.split(|byte| *byte == b';').next()?;
+        let size = usize::from_str_radix(std::str::from_utf8(size_text).ok()?, 16).ok()?;
+        input = &input[line_end + 1..];
+        if size == 0 {
+            return Some(output);
+        }
+        if input.len() < size {
+            return None;
+        }
+        output.extend_from_slice(&input[..size]);
+        input = &input[size..];
+        if input.first() == Some(&b'\r') {
+            input = &input[1..];
+        }
+        if input.first() == Some(&b'\n') {
+            input = &input[1..];
+        } else {
+            return None;
+        }
+    }
 }
 
 #[cfg(all(test, windows))]
@@ -1142,5 +1211,38 @@ mod unit_tests {
         }
         assert_eq!(output.len(), OUTPUT_LIMIT);
         assert_eq!(output.front(), Some(&10));
+    }
+
+    #[test]
+    fn health_parser_accepts_crlf_and_lf_headers() {
+        let crlf = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"database\":\"ok\"}";
+        let (headers, body) = split_http_headers(crlf).unwrap();
+        assert!(String::from_utf8_lossy(headers).starts_with("HTTP/1.1 200"));
+        assert_eq!(body, br#"{"database":"ok"}"#);
+        let lf = b"HTTP/1.1 200 OK\n\n{\"database\":\"ok\"}";
+        let (_, body) = split_http_headers(lf).unwrap();
+        assert_eq!(body, br#"{"database":"ok"}"#);
+        assert!(split_http_headers(b"HTTP/1.1 200 OK").is_none());
+    }
+
+    #[test]
+    fn health_parser_reads_chunked_bodies() {
+        let chunked = b"1c\r\n{\"database\":\"ok\",\"uptime\":1}\r\n0\r\n\r\n";
+        let decoded = dechunk(chunked).unwrap();
+        assert_eq!(decoded, br#"{"database":"ok","uptime":1}"#);
+        // Chunk extensions after the size are ignored.
+        let extended = b"5;foo=bar\r\nhello\r\n0\r\n\r\n";
+        assert_eq!(dechunk(extended).unwrap(), b"hello");
+        // A truncated chunk is a parse failure, never a partial body.
+        assert!(dechunk(b"10\r\nshort").is_none());
+        assert!(dechunk(b"").is_none());
+    }
+
+    #[test]
+    fn header_lookup_is_case_insensitive() {
+        let headers = "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\nContent-Type: application/json";
+        assert_eq!(header_value(headers, "transfer-encoding"), Some("Chunked"));
+        assert_eq!(header_value(headers, "TRANSFER-ENCODING"), Some("Chunked"));
+        assert_eq!(header_value(headers, "content-length"), None);
     }
 }

@@ -1,8 +1,10 @@
-//! Opt-in adapter between the installed payload selector and API supervisor.
+//! Adapter between the installed payload selector and API supervisor.
 //!
-//! This module is intentionally not registered in `lib.rs`. Selection builds a
-//! complete API command; it does not launch a process. The supervisor owns the
-//! ACK/health/listener gate and calls `settle_trial(true)` only after that gate.
+//! Registered in the production path: `lifecycle.rs` primes the adapter
+//! before database work, and `SystemApiBackend` reuses it for trial ACK and
+//! rollback transitions. Selection builds a complete API command; it does
+//! not launch a process. The supervisor owns the ACK/health/listener gate
+//! and calls `settle_trial(true)` only after that gate.
 
 use crate::rust_api_supervisor::ApiCommand;
 use crate::rust_payload::{

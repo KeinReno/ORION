@@ -1,8 +1,9 @@
-//! Disabled Rust-side model of the ORION payload protocol.
+//! Rust-side model of the ORION payload protocol.
 //!
-//! This module is deliberately not registered from `lib.rs`: the packaged
-//! JavaScript launcher remains the only runtime owner until a separately
-//! reviewed integration supplies production cryptography and durable writes.
+//! This module is registered from `lib.rs` and is part of the production
+//! `supervise-direct` path: `PayloadSupervisorAdapter` selects the installed
+//! version before migrations and settles trials after the readiness gate.
+//! Cryptography is injectable so tests cannot claim placeholder security.
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -107,12 +108,19 @@ impl PayloadCrypto for BuiltinPayloadCrypto {
         if der.len() != ED25519_SPKI_PREFIX.len() + 32 || !der.starts_with(ED25519_SPKI_PREFIX) {
             return false;
         }
-        ring::signature::UnparsedPublicKey::new(
-            &ring::signature::ED25519,
-            &der[ED25519_SPKI_PREFIX.len()..],
-        )
-        .verify(message, signature)
-        .is_ok()
+        let Ok(key_bytes) = <&[u8; 32]>::try_from(&der[ED25519_SPKI_PREFIX.len()..]) else {
+            return false;
+        };
+        let Ok(public_key) = ed25519_dalek::VerifyingKey::from_bytes(key_bytes) else {
+            return false;
+        };
+        let Ok(signature_bytes) = <[u8; 64]>::try_from(signature) else {
+            return false;
+        };
+        use ed25519_dalek::Verifier;
+        public_key
+            .verify(message, &ed25519_dalek::Signature::from_bytes(&signature_bytes))
+            .is_ok()
     }
 }
 

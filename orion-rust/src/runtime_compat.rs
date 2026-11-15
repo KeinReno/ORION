@@ -184,7 +184,7 @@ fn sanitize_version(version: &str) -> String {
 fn validate_generated_target(paths: &RuntimePaths) -> Result<(), String> {
     let root = normalized_lexical(&paths.fallback_root);
     let target = normalized_lexical(&paths.effective_pg_dir);
-    if target.parent().as_deref() != Some(root.as_path()) || !target.starts_with(&root) {
+    if target.parent() != Some(root.as_path()) || !target.starts_with(&root) {
         return Err("Отказ от изменения каталога PostgreSQL вне ORION-Rust fallback".to_owned());
     }
     Ok(())

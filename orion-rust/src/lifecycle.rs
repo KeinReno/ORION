@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
 const PROVISION_JS: &str = r#"
 const { createRequire } = require("node:module");
 const apiRequire = createRequire(process.env.ORION_API_PACKAGE_JSON);
@@ -44,6 +45,7 @@ async function main() {
 main().catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); });
 "#;
 
+#[cfg(test)]
 const IDENTITY_JS: &str = r#"
 const { createRequire } = require("node:module");
 const apiRequire = createRequire(process.env.ORION_API_PACKAGE_JSON);
@@ -58,6 +60,53 @@ async function main() {
     if (rows.length !== 1 || Number(rows[0].port) !== Number(process.env.ORION_EXPECTED_PG_PORT) || canonical(rows[0].data_directory) !== canonical(process.env.ORION_EXPECTED_PG_CLUSTER)) {
       throw new Error("Подключённый PostgreSQL не совпадает с ожидаемым кластером и портом");
     }
+  } finally { await db.$disconnect(); }
+}
+main().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); });
+"#;
+
+// One Node boot for the two pre-migration database steps: read-only cluster
+// identity proof, then idempotent database/role provisioning. Splitting them
+// cost a full Prisma Client cold start (~2-5 s) on every launch.
+const PG_SETUP_JS: &str = r#"
+const { createRequire } = require("node:module");
+const apiRequire = createRequire(process.env.ORION_API_PACKAGE_JSON);
+const { PrismaClient } = apiRequire("@prisma/client");
+const fs = require("node:fs");
+const path = require("node:path");
+const sql = (value) => `'${String(value).replaceAll("'", "''")}'`;
+const canonical = value => path.resolve(fs.realpathSync(value)).replace(/[\\/]+$/, "").toLowerCase();
+async function main() {
+  // 1. Never provision merely because a server answered on the port: prove
+  //    the authenticated endpoint is the expected cluster (read-only).
+  const probe = new PrismaClient({ datasources: { db: { url: process.env.ORION_ADMIN_URL } } });
+  try {
+    const rows = await probe.$queryRawUnsafe("SELECT current_setting('data_directory') AS data_directory, current_setting('port')::int AS port");
+    if (rows.length !== 1 || Number(rows[0].port) !== Number(process.env.ORION_EXPECTED_PG_PORT) || canonical(rows[0].data_directory) !== canonical(process.env.ORION_EXPECTED_PG_CLUSTER)) {
+      throw new Error("Подключённый PostgreSQL не совпадает с ожидаемым кластером и портом");
+    }
+  } finally { await probe.$disconnect(); }
+  // 2. Database + roles, idempotent; repairs partial provisioning from an
+  //    interrupted earlier launch before migrations run.
+  const admin = new PrismaClient({ datasources: { db: { url: process.env.ORION_ADMIN_URL } } });
+  try {
+    const found = await admin.$queryRawUnsafe("SELECT 1 FROM pg_database WHERE datname = $1", "orion");
+    if (!found.length) await admin.$executeRawUnsafe("CREATE DATABASE orion");
+  } finally { await admin.$disconnect(); }
+  const db = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });
+  try {
+    const app = await db.$queryRawUnsafe("SELECT 1 FROM pg_roles WHERE rolname = 'orion_app'");
+    if (!app.length) await db.$executeRawUnsafe(`CREATE ROLE orion_app LOGIN PASSWORD ${sql(process.env.ORION_APP_PASSWORD)} NOSUPERUSER NOBYPASSRLS`);
+    else await db.$executeRawUnsafe(`ALTER ROLE orion_app WITH LOGIN PASSWORD ${sql(process.env.ORION_APP_PASSWORD)} NOSUPERUSER NOBYPASSRLS`);
+    const system = await db.$queryRawUnsafe("SELECT 1 FROM pg_roles WHERE rolname = 'orion_system'");
+    if (!system.length) await db.$executeRawUnsafe("CREATE ROLE orion_system NOLOGIN NOSUPERUSER BYPASSRLS");
+    else await db.$executeRawUnsafe("ALTER ROLE orion_system WITH NOLOGIN NOSUPERUSER BYPASSRLS");
+    await db.$executeRawUnsafe("GRANT orion_system TO orion_app");
+    await db.$executeRawUnsafe("GRANT USAGE ON SCHEMA public TO orion_app, orion_system");
+    await db.$executeRawUnsafe("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO orion_app, orion_system");
+    await db.$executeRawUnsafe("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO orion_app, orion_system");
+    await db.$executeRawUnsafe("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO orion_app, orion_system");
+    await db.$executeRawUnsafe("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO orion_app, orion_system");
   } finally { await db.$disconnect(); }
 }
 main().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); });
@@ -321,59 +370,20 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
         }
 
         // Never provision or migrate merely because a server answered on the port.
-        // This read-only check proves the authenticated endpoint is this cluster.
-        let identity_started = Instant::now();
+        // The combined script first proves (read-only) that the authenticated
+        // endpoint is this exact cluster, then provisions database and roles.
+        let setup_started = Instant::now();
         with_private_script(
             &paths.effective_data_dir,
-            "orion-pg-identity",
-            IDENTITY_JS,
-            |identity| {
+            "orion-pg-setup",
+            PG_SETUP_JS,
+            |setup| {
                 run_to_exit(
                     &mut owned,
                     contained(
                         ProcessSpec::new(&base_layout.node)
                             .current_dir(&selected_layout.api)
-                            .arg(identity),
-                    )
-                    .env("DATABASE_URL", &admin_url)
-                    .env(
-                        "ORION_API_PACKAGE_JSON",
-                        selected_layout
-                            .api
-                            .join("package.json")
-                            .display()
-                            .to_string(),
-                    )
-                    .env(
-                        "ORION_EXPECTED_PG_PORT",
-                        effective_profile.pg_port.to_string(),
-                    )
-                    .env("ORION_EXPECTED_PG_CLUSTER", cluster.display().to_string()),
-                )
-            },
-        )?;
-        log_startup_elapsed("postgres-identity", identity_started);
-        if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
-            return Ok(());
-        }
-
-        let provisioning_started = Instant::now();
-        with_private_script(
-            &paths.effective_data_dir,
-            "orion-provision",
-            PROVISION_JS,
-            |provision| {
-                run_to_exit(
-                    &mut owned,
-                    contained(
-                        ProcessSpec::new(&base_layout.node)
-                            .current_dir(&selected_layout.api)
-                            .arg(provision),
+                            .arg(setup),
                     )
                     .env("ORION_ADMIN_URL", &admin_url)
                     .env("DATABASE_URL", &database_url)
@@ -385,11 +395,16 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
                             .display()
                             .to_string(),
                     )
-                    .env("ORION_APP_PASSWORD", &secrets.app_password),
+                    .env("ORION_APP_PASSWORD", &secrets.app_password)
+                    .env(
+                        "ORION_EXPECTED_PG_PORT",
+                        effective_profile.pg_port.to_string(),
+                    )
+                    .env("ORION_EXPECTED_PG_CLUSTER", cluster.display().to_string()),
                 )
             },
         )?;
-        log_startup_elapsed("postgres-provisioning", provisioning_started);
+        log_startup_elapsed("postgres-identity+provisioning", setup_started);
         if shutdown.load(Ordering::Acquire) {
             if api_template.trial {
                 payload
@@ -525,7 +540,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
             Ok(())
         });
         match crate::rust_api_supervisor::supervise_api(&mut backend, api_template)? {
-            SupervisorOutcome::Shutdown { .. } => Ok(()),
+            SupervisorOutcome::Shutdown => Ok(()),
             SupervisorOutcome::Exited { code: 0, .. } => {
                 Err("API завершился без запроса штатного закрытия".into())
             }
@@ -604,7 +619,7 @@ fn write_shutdown_marker(requested_data: &Path, marker: &Path) -> Result<(), Str
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&marker)
+        .open(marker)
         .map_err(|error| format!("could not create shutdown marker: {error}"))?;
     file.write_all(b"orion-runtime-stopped-v1")
         .and_then(|_| file.sync_all())
@@ -835,7 +850,7 @@ fn validate_profile(profile: &Profile) -> Result<(), String> {
         )?;
     }
     let ports = [profile.api_port, profile.pg_port, profile.runtime_port];
-    if ports.iter().any(|port| *port == 0)
+    if ports.contains(&0)
         || ports[0] == ports[1]
         || ports[0] == ports[2]
         || ports[1] == ports[2]
@@ -1014,16 +1029,8 @@ fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), Strin
             .and_then(|_| file.sync_all())
             .map_err(|error| format!("Не удалось записать статус запуска: {error}"))?;
         drop(file);
-        #[cfg(windows)]
-        {
-            fs::rename(&temporary, path)
-                .map_err(|error| format!("Не удалось обновить статус запуска: {error}"))?;
-        }
-        #[cfg(not(windows))]
-        {
-            fs::rename(&temporary, path)
-                .map_err(|error| format!("Не удалось обновить статус запуска: {error}"))?;
-        }
+        fs::rename(&temporary, path)
+            .map_err(|error| format!("Не удалось обновить статус запуска: {error}"))?;
         Ok(())
     })();
     if result.is_err() {
@@ -1550,6 +1557,20 @@ extern "system" {
     ) -> i32;
 }
 
+/// Restore a staged backup into an isolated PostgreSQL database.
+/// This is the final step in the migration workflow: read staged copy, write to target DB, verify integrity.
+pub fn restore_staged_backup(_source_dir: &Path, _profile: &Profile) -> Result<(), String> {
+    // TODO: Implement full restoration flow:
+    // 1. Start temporary PostgreSQL instance on isolated port
+    // 2. Apply Prisma migrations to empty target database (orion_target)
+    // 3. Call stage-backup.mjs if source needs staging
+    // 4. Call restore-staged.mjs to restore into target database
+    // 5. Verify data integrity through SQL queries or health check
+    // 6. Clean up temporary resources
+
+    Err("Восстановление пока не реализовано; данные не изменялись".to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1609,8 +1630,8 @@ mod tests {
 
     #[test]
     fn pg_ctl_status_accepts_only_documented_running_and_stopped_codes() {
-        assert_eq!(classify_pg_status(0).expect("running"), true);
-        assert_eq!(classify_pg_status(3).expect("not running"), false);
+        assert!(classify_pg_status(0).expect("running"));
+        assert!(!classify_pg_status(3).expect("not running"));
         for code in [1, 2, 4, 255] {
             assert!(
                 classify_pg_status(code).is_err(),
@@ -2124,18 +2145,4 @@ process.stdout.write(resolved);
         assert!(restore_staged_backup(Path::new("unused"), &profile).is_err());
         assert!(!directory.exists());
     }
-}
-
-/// Restore a staged backup into an isolated PostgreSQL database.
-/// This is the final step in the migration workflow: read staged copy, write to target DB, verify integrity.
-pub fn restore_staged_backup(_source_dir: &Path, _profile: &Profile) -> Result<(), String> {
-    // TODO: Implement full restoration flow:
-    // 1. Start temporary PostgreSQL instance on isolated port
-    // 2. Apply Prisma migrations to empty target database (orion_target)
-    // 3. Call stage-backup.mjs if source needs staging
-    // 4. Call restore-staged.mjs to restore into target database
-    // 5. Verify data integrity through SQL queries or health check
-    // 6. Clean up temporary resources
-
-    Err("Восстановление пока не реализовано; данные не изменялись".to_owned())
 }
