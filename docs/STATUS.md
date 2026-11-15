@@ -1161,3 +1161,151 @@ RLS и политика членства. Новый
 Граница: link-колонки первой срез — задачи и проекты; новый тип = адаптер на публичном
 контракте владельца. Синхронизация таблиц поверх Sync Core, плагины-хранилища и SQL-режим — вне
 задания.
+
+## ORION-R — стабилизация Rust-shell и сборка установщика — 15.11.2026
+
+Срез: ветка `experiment/orion-rust-foundation`, рабочее дерево. Цель волны — ускорение
+запуска (боль ≥1 мин против 15 с у Classic), гигиена антивируса и рабочий установщик
+ORION-R из прямого Rust lifecycle.
+
+**Код (orion-rust и оболочка):**
+- `ring` удалён из зависимостей (C-сборка при `cargo build` на этой машине стабильно
+  падала в cl с D8050 при любом способе spawn). Замена — чистый Rust:
+  `ed25519-dalek` (верификация подписи payload, `rust_payload.rs`) и `getrandom`
+  (nonce UI-ACK, `rust_api_supervisor.rs`). Сборка orion-runtime стала hermetic,
+  MSVC больше не нужен. `Cargo.lock` обновлён.
+- identity-проверка кластера и provisioning слиты в один Node-процесс (`PG_SETUP_JS`,
+  `lifecycle.rs`) — минус один холодный старт Prisma на каждом запуске.
+  `PROVISION_JS`/`IDENTITY_JS` остаются только в тестах.
+- health-проба API (`local_health`) переписана: читает ответ до EOF, парсит CRLF и LF,
+  понимает `Content-Length` и `Transfer-Encoding: chunked` (добавлены unit-тесты).
+- Tauri (`apps/desktop/src-tauri/src/main.rs`): ожидание выхода runtime в
+  `ExitRequested` раньше висело бесконечно после дедлайна 540 с — теперь жёсткий выход
+  через `EXIT_ALLOWED` + `handle.exit(0)` (Job Object закрывает дерево).
+- `write_json_atomic`: удалены дублирующиеся идентичные `cfg(windows)`/`cfg(not)` ветки.
+- Устаревшие шапки «deliberately not registered» в `rust_payload.rs`/
+  `rust_payload_supervisor.rs` заменены на актуальные (модули — часть production-пути
+  supervise-direct).
+- Clippy под toolchain 1.100 приведён к чистоте (как в CI: `cargo clippy -- -D warnings`):
+  `bool_assert_comparison`, `needless_borrows_for_generic_args`, `single_match`,
+  `needless_return`, `type_complexity` (type alias `PrepareHook`), ручной `div_ceil`,
+  лишний pointer-cast, `items_after_test_module` (`restore_staged_backup` перенесён выше
+  `mod tests`), `assert_eq!(…, false/true)` в тестах.
+
+**Скрипты и сборка:**
+- `scripts/db-grants.mjs` + `pnpm db:grants` (`package.json`): идемпотентное повторное
+  создание ролей orion_app/orion_system и grants после `migrate reset`. Проверен на
+  живом dev-кластере (127.0.0.1:5433, 175 миграций на месте), двойной прогон — чистый.
+- `scripts/defender-exclusions.ps1`: исключения Windows Defender (репо,
+  `%LOCALAPPDATA%\ORION-Rust`, `~/.cargo`, `~/.rustup`) для dev-машины; от админа.
+- `scripts/measure-launch.ps1`: замер холодного/тёплого запуска supervise-direct по
+  этапам (startup-stage elapsed-ms), штатная остановка через EOF, проверка портов.
+- `scripts/build-desktop-installer.mjs`: git rev-parse обёрнут в try/catch — сборка не
+  падает на хосте без git (commit = `unknown-commit` или `ORION_BUILD_COMMIT`).
+- **Установщик собран**: `apps/desktop/src-tauri/target/release/bundle/nsis/
+  ORION Rust_0.1.48_x64-setup.exe` (≈100 МиБ; предыдущий 0.1.47 — ≈97.6 МиБ).
+  Stage runtime полный: node.exe (настоящий Node 24.21.0), orion-runtime.exe,
+  postgres, api (+Prisma client), web, habitat (dotnet smoke — PASS), build.json
+  (tag `v0.1.0-dev-build`). ORION_BUILD_TAG для релиза задавать явно.
+
+**Проверено:** `cargo test --locked` — 40 passed / 7 failed / 8 ignored; все 7 падений —
+артефакты песочницы агентской среды (запрет spawn node/дочерних exe и записи вне
+workspace для неподписанных свежесобранных бинарников), не дефекты кода: тесты на
+изменённые модули зелёные. `cargo clippy -- -D warnings` — чисто (как в CI).
+`cargo check` Tauri-приложения — чисто. `pnpm db:grants` — идемпотентен на живом кластере.
+Полный pipeline установщика — PASS end-to-end.
+
+**Не проверено в этой среде (песочница):** сквозной запуск GUI/runtime (spawn node.exe
+из orion-runtime блокируется) — замер запуска и приёмка установленного приложения —
+на машине пользователя через `scripts\measure-launch.ps1` и ручной установкой NSIS.
+LAN-репетиция, unicode-пути, restore/migration center — не реализованы (restore —
+заглушка). Подпись бинарников: установщик не подписан, на чужих машинах будет
+SmartScreen — нужен EV code-signing сертификат (закупка вне этой волны).
+
+Известные ограничения среды (для будущих волн в этом агенте): нет `ProgramFiles*`/
+`ProgramFiles(x86)` в env — dotnet/NuGet падает с «path1 null», выставлять вручную;
+node в PATH — шим Kimi, для сборки установщика нужен настоящий Node (в `.tools/`);
+git из дочерних процессов node блокируется песочницей.
+
+## 2026-11-15 (вечер) — приёмка 0.1.48 на машине пользователя
+
+**Факты приёмки.** Старая установленная копия (ORION 0.1.39, `%LOCALAPPDATA%\ORION`)
+удалена вручную (штатный uninstall.exe в агентской среде не отработал — см. ограничения
+песочницы ниже). Установщик 0.1.48, запущенный **вне каталога workspace**
+(`D:\ORION-install\`), установился штатно; GUI появляется за **~3 с** (эталон Classic —
+15 с). Стабильно работает: orion-desktop.exe, embedded postgres (порт 5433), API
+(`runtime\node.exe → api\dist\main.js`, порт 14000).
+
+**Корневая причина сбоев установки/запуска на этой машине.** Процессы, запущенные
+из-под каталога workspace (`C:\Users\Reno\Desktop\ORION-Rust\...`), в агентской среде
+Kimi ограничиваются: неподписанные exe не могут писать файлы и спавнить дочерние
+процессы (NSIS из workspace: «Error opening file for writing» на первом же файле,
+дерево установки подчищается после выхода; извне workspace — работает штатно).
+**Вывод для сборок/установок на этой машине:** запускать установщики и свежесобранные
+exe только из каталогов вне workspace. На чистых машинах пользователей ограничений нет.
+
+**Действия пользователя, выполненные на машине:** исключения Defender
+(`scripts\defender-exclusions.ps1` + `D:\ORION Rust` вручную) — добавлены.
+
+## 2026-11-15 (вечер, вторая волна) — починка отсоединённых сайдбаров (0.1.49)
+
+**Симптомы:** второй сайдбар не функционален; размеры окна сбиваются, полный экран
+невозможен, мерцание; после закрытия главного окна сайдбар (и весь процесс) остаётся.
+
+**Причины и правки:**
+1. Не выданы IPC-разрешения на чтение мониторов: `capabilities/nav-sidebar.json` —
+   добавлен `core:window:allow-available-monitors`; `capabilities/default.json` —
+   добавлены `allow-current-monitor` + `allow-available-monitors`. Без них определение
+   «свой/чужой монитор» молча падало в unknown → клики не маршрутизировались,
+   локальный воркбенч не поднимался.
+2. Форс-ресайз 280px на каждый host-bounds тик (раз в секунду) — теперь ресайз только
+   при смене отношения к монитору хоста (`nav-sidebar-window.tsx`,
+   `lastAppliedRelationRef`).
+3. Tauri не завершает приложение, пока живо любое окно: закрытие главного окна теперь
+   закрывает все дочерние (`main.rs`, `on_window_event` → `webview_windows().close()`),
+   далее штатный graceful-путь `ExitRequested`.
+4. `payload_ui.rs` rollback-перезагрузка распространена на `nav-sidebar-*`.
+
+**Проверки:** web `tsc --noEmit` — чисто; `cargo check`/`clippy` — новых замечаний нет
+(дебаговые dead-code/needless-borrow предупреждения crate'а — предсуществующие);
+`payload_ui` тесты зелёные; падения `process_supervisor` тестов — артефакты песочницы
+(запрет spawn). Установщик 0.1.49 собран; версия поднята в tauri.conf.json + Cargo.toml.
+
+## 2026-11-15 (ночь, третья волна) — окна сайдбаров не закрывались по X (0.1.50)
+
+**Симптом:** крестик окна отсоединённого сайдбара не закрывает его (только диспетчер
+задач), перетащенные в него разделы не возвращаются в основное окно.
+
+**Корневая причина (двойная):**
+1. Tauri при наличии JS-обработчика `tauri://close-requested` всегда предотвращает
+   нативное закрытие (`manager/window.rs`: `has_js_listener → api.prevent_close()`),
+   а JS-обёртка `@tauri-apps/api` после обработчика вызывает `destroy()`. Команды
+   `close`/`destroy` входят в `core:window:default` — их нужно выдавать явно. В
+   capabilities их не было → `destroy()` отклонялся → окно висело навсегда.
+2. Окно «второй сайдбар» (`secondary-dock-*`, `lib/secondary-dock-window.ts`) вообще
+   не попадало ни под одну capability (main/panel-*/workspace-*/nav-sidebar-*) →
+   работало с нулевыми правами, `close()` при возврате дока отклонялся тем же путём.
+
+**Правки:** `capabilities/nav-sidebar.json` — добавлены `allow-close`, `allow-destroy`;
+новый `capabilities/secondary-dock.json` для `secondary-dock-*` (core:default +
+мониторы + close/destroy). Диагностика: цепочка регистрации обработчиков окна в
+`nav-sidebar-window.tsx` больше не глотает ошибки молча (catch → console.error).
+Версия 0.1.50. Проверки: tsc — чисто; `cargo check` — без новых замечаний.
+
+**Урок:** для каждой метки WebviewWindow нужна явная capability; любые отказы прав
+в Tauri проявляются как зависания, а не как ошибки — регистрацию обработчиков
+окна закрытия/событий нельзя оставлять без .catch.
+
+## Бэклог решений (2026-11-15)
+
+- **Подпись кода — отложена (решение владельца).** До переезда в публичный репозиторий
+  релизы идут без подписи: на чужих машинах SmartScreen покажет предупреждение
+  («Подробнее → Выполнить в любом случае»). Когда ORION станет публичным под
+  OSI-лицензией — подать заявку в **SignPath Foundation** (бесплатный сертификат для
+  OSS): потребуется LICENSE-файл, публичный репозиторий, страница «Code signing policy»
+  с обязательными формулировками (Authors/Reviewers/Approvers, privacy), CI со
+  сборкой верифицируемым образом (GitHub Actions + Trusted Publishing), ручное
+  одобрение каждого релиза, метаданные product name/version в бинарниках. Условия:
+  signpath.org/terms.html. Альтернатива на случай проприетарности: EV-сертификат
+  ~$300–700/год.
+- **Релизный тег: v0.1.1** (ORION_BUILD_TAG). build.json установщика несёт этот тег.
