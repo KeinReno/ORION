@@ -7,11 +7,14 @@ import { Badge, Button, EmptyState, PanelBody, PanelHeader, PanelShell } from "@
 import { ArrowRight, Code2, Folder, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 import { useDevelopmentNavigation } from "./use-development-navigation";
 import { DevelopmentReview, loadError, withDeadline } from "./DevelopmentImportReview";
 import { buildOverview, phases, projectDescription, statusLabels } from "./presentation";
 import styles from "./orion-dev.module.css";
+
+const ArchitectWorkbench = dynamic(() => import("./ArchitectWorkbench").then(module => module.ArchitectWorkbench), { ssr: false, loading: () => <p role="status">Загружаем рабочую поверхность Architect…</p> });
 
 export function OrionDevPanel(): React.ReactElement {
   const { workspace } = useActiveWorkspace();
@@ -28,8 +31,9 @@ export function OrionDevPanel(): React.ReactElement {
 function DevelopmentWorkspace({ workspaceId, name }: { workspaceId: string; name: string }): React.ReactElement {
   const { api } = useCore();
   const { openProject, openTask } = useDevelopmentNavigation(workspaceId);
-  const [section, setSection] = useState<"overview" | "import">("overview");
+  const [section, setSection] = useState<"overview" | "import" | "architect">("overview");
   const [visitedImport, setVisitedImport] = useState(false);
+  const [visitedArchitect, setVisitedArchitect] = useState(false);
   const [importing, setImporting] = useState(false);
   const [phase, setPhase] = useState("foundation");
   const [filter, setFilter] = useState("all");
@@ -62,10 +66,12 @@ function DevelopmentWorkspace({ workspaceId, name }: { workspaceId: string; name
       <nav aria-label="Разделы ORION DEV" className="flex flex-wrap gap-2">
         <Button variant={section === "overview" ? "primary" : "ghost"} size="sm" aria-pressed={section === "overview"} disabled={importing} onClick={() => { setSection("overview"); refresh(); }}>Обзор разработки</Button>
         <Button variant={section === "import" ? "primary" : "ghost"} size="sm" aria-pressed={section === "import"} disabled={importing} onClick={openImport}>Импорт каталога</Button>
+        <Button variant={section === "architect" ? "primary" : "ghost"} size="sm" aria-pressed={section === "architect"} disabled={importing} onClick={() => { setVisitedArchitect(true); setSection("architect"); }}>Архитектура и Git</Button>
       </nav>
       {section === "overview" && <Button variant="ghost" size="sm" disabled={preview.isFetching || projects.isFetching || archive.isFetching || tasks.isFetching} onClick={refresh}><RefreshCw size={14} aria-hidden />Обновить обзор</Button>}
     </div>
     {visitedImport && <div hidden={section !== "import"}><DevelopmentReview workspaceId={workspaceId} name={name} onImportingChange={setImporting} /></div>}
+    {visitedArchitect && <div hidden={section !== "architect"}><ArchitectWorkbench workspaceId={workspaceId} /></div>}
     <div hidden={section !== "overview"}>
       {loading && <p role="status">Загружаем направления и задачи…</p>}
       {failed && <div role="alert" className="rounded-xl border border-destructive/30 p-4"><p>{preview.isError ? loadError(preview.error) : "Не удалось загрузить проекты или задачи. Обновите обзор, чтобы увидеть актуальное состояние."}</p></div>}

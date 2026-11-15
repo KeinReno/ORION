@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { apiUrl, register, signIn } from "./support";
 
@@ -164,4 +167,76 @@ test("overview uses canonical names, statuses and dependencies with no automatic
   await page.getByRole("button", { name: "ORION DEV", exact: true }).click();
   await page.getByRole("region", { name: "Задачи этапа", exact: true }).getByRole("button").filter({ hasText: "DEV-001" }).click();
   await expect(page.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue("Мой аудит ядра");
+});
+
+test("Architect integrates repository map, read-only Git history and intent comparison", async ({ page, request }, testInfo) => {
+  const account = await register(request, "orion-dev-architect");
+  const repositoryPath = join(testInfo.outputDir, "architect-fixture");
+  mkdirSync(join(repositoryPath, "src"), { recursive: true });
+  writeFileSync(join(repositoryPath, "README.md"), "# Architect E2E fixture\n");
+  writeFileSync(join(repositoryPath, "src", "index.ts"), 'import { value } from "./value";\nexport const result = value;\n');
+  writeFileSync(join(repositoryPath, "src", "value.ts"), 'export const value = "ok";\n');
+  execFileSync("git", ["-C", repositoryPath, "init", "-b", "main"]);
+  execFileSync("git", ["-C", repositoryPath, "config", "user.name", "ORION E2E"]);
+  execFileSync("git", ["-C", repositoryPath, "config", "user.email", "orion-e2e@example.invalid"]);
+  execFileSync("git", ["-C", repositoryPath, "add", "."]);
+  execFileSync("git", ["-C", repositoryPath, "commit", "-m", "Create architecture fixture"]);
+  await signIn(page, account);
+  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
+  await page.getByRole("button", { name: "Архитектура и Git", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Добавьте рабочий репозиторий" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Название" }).fill("ORION-Rust E2E");
+  await page.getByRole("textbox", { name: "Путь на сервере" }).fill(repositoryPath);
+  const registerResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("/development/git/repositories"));
+  await page.getByRole("button", { name: "Проверить и добавить", exact: true }).click();
+  const registeredRepository = await (await registerResponse).json() as { id: string };
+
+  const explorer = page.getByRole("complementary", { name: "Содержимое текущего каталога" });
+  await expect(explorer.getByRole("button", { name: /src/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("внутренних связей")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("architect-desktop.png") });
+  await explorer.getByRole("button", { name: /src/ }).dblclick();
+  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
+  const mapSearch = page.getByRole("textbox", { name: "Поиск по карте" });
+  await mapSearch.fill("index.ts");
+  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
+  await expect(explorer.getByRole("button", { name: /value\.ts/ })).toHaveCount(0);
+  await mapSearch.fill("");
+  const mapNode = page.locator(".react-flow__node").first();
+  const mapNodeBounds = await mapNode.boundingBox();
+  expect(mapNodeBounds).not.toBeNull();
+  await page.mouse.move(mapNodeBounds!.x + mapNodeBounds!.width / 2, mapNodeBounds!.y + mapNodeBounds!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(mapNodeBounds!.x + mapNodeBounds!.width / 2 + 130, mapNodeBounds!.y + mapNodeBounds!.height / 2 + 90, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByText("Раскладка сохранена", { exact: true })).toBeVisible({ timeout: 15_000 });
+  const layoutResponse = await request.get(`${apiUrl()}/workspaces/${account.workspaceId}/development/architect/${registeredRepository.id}/layout`, { headers: { Authorization: `Bearer ${account.accessToken}` } });
+  expect(layoutResponse.ok()).toBe(true);
+  const savedLayout = await layoutResponse.json() as { nodes: Array<{ id: string; x: number; y: number }> };
+  expect(savedLayout.nodes.some(node => node.id.startsWith("src/") && (node.x !== 0 || node.y !== 0))).toBe(true);
+
+  await page.getByRole("button", { name: "История Git", exact: true }).click();
+  await expect(page.locator("ol").getByRole("listitem").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Сверка замысла", exact: true }).click();
+  await page.getByRole("button", { name: "Черновик из карты", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Проектная схема JSON" })).toHaveValue(/"nodes"/);
+  await page.getByRole("button", { name: "Сохранить замысел", exact: true }).click();
+  await expect(page.getByText("Проектный замысел сохранён.")).toBeVisible();
+  await page.getByRole("button", { name: "Сверить с кодом", exact: true }).click();
+  await expect(page.getByText("Распознанные узлы и связи совпадают с сохранённым замыслом.")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Архитектура", exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await explorer.getByRole("button", { name: /src/ }).dblclick();
+  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
+  await explorer.getByRole("button", { name: /index\.ts/ }).click();
+  const mobileInspector = page.getByRole("complementary", { name: "Сведения об элементе" });
+  await expect(mobileInspector).toBeVisible();
+  await expect(page.getByText("Входящие связи", { exact: true })).toBeVisible();
+  const mobileInspectorBounds = await mobileInspector.boundingBox();
+  expect(mobileInspectorBounds).not.toBeNull();
+  expect(mobileInspectorBounds!.y + mobileInspectorBounds!.height).toBeLessThanOrEqual(844);
+  await page.screenshot({ path: testInfo.outputPath("architect-mobile.png"), fullPage: true });
 });

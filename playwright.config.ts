@@ -16,6 +16,8 @@ const apiEnv: Record<string, string> = {
   WEB_ORIGIN: webOrigin,
   ORION_MODE: "local",
   ORION_DEV_CATALOG_ROOT: "../..",
+  // The Architect E2E registers only this checkout as a local read-only fixture.
+  ORION_DEV_REPOSITORY_ROOTS: process.cwd(),
   STORAGE_DRIVER: "local",
   STORAGE_DIR: "../../tmp/e2e-documents",
   // Every spec registers its own accounts from 127.0.0.1; the suite outgrew the 60-per-5-minutes production cap.
