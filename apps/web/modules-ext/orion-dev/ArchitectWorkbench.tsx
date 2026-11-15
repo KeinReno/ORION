@@ -7,6 +7,8 @@ import {
   architectMapSchema,
   architectProjectSchemaSchema,
   architectComparisonSchema,
+  diffArchitectMaps,
+  type ArchitectMapDiff,
   developmentGitGraphSchema,
   developmentRepositoryRemovedSchema,
   developmentRepositoryRootsSchema,
@@ -37,7 +39,7 @@ import {
   type OnMoveEnd
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Activity, AlertCircle, ArrowLeft, Box, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeft, Box, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, GitCompare, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import styles from "./architect-workbench.module.css";
 
@@ -162,6 +164,11 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const [fullMapLoading, setFullMapLoading] = useState(false);
   const [allowedRoots, setAllowedRoots] = useState<string[]>([]);
   const [removing, setRemoving] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffBase, setDiffBase] = useState("");
+  const [diffTarget, setDiffTarget] = useState("");
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffResult, setDiffResult] = useState<ArchitectMapDiff | null>(null);
   const [selected, setSelected] = useState<ArchitectNode | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -495,6 +502,21 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     setNotice("Раскладка выровнена по уровням зависимостей");
   }, [flowNodeOverrides, flowNodes, map, queueLayoutSave]);
 
+  /** Двух карт по ревизиям: сервер разворачивает каждую ревизию отдельно, разницу считаем здесь. */
+  const runDiff = async () => {
+    if (!repositoryId || !diffBase.trim() || !diffTarget.trim() || diffLoading) return;
+    setDiffLoading(true); setError(""); setDiffResult(null);
+    try {
+      const load = (ref: string) => client.get(`/architect/${encodeURIComponent(repositoryId)}/map?ref=${encodeURIComponent(ref)}`, architectMapSchema);
+      const [baseMap, targetMap] = await Promise.all([load(diffBase.trim()), load(diffTarget.trim())]);
+      setDiffResult(diffArchitectMaps(
+        { nodes: baseMap.nodes, edges: baseMap.edges },
+        { nodes: targetMap.nodes, edges: targetMap.edges }
+      ));
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setDiffLoading(false); }
+  };
+
   /** Убирает только запись в ORION: каталог на диске и привязки коммитов не трогаем. */
   const removeRepository = async () => {
     if (!repositoryId || removing) return;
@@ -614,6 +636,30 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <span className={styles.saveState} role="status" aria-live="polite">{saving ? <><LoaderCircle className={styles.spin} size={13} /> Сохраняем…</> : notice || "Изменения раскладки сохраняются автоматически"}</span>
       </div>
       {map?.truncated && <p className={styles.warning} role="status">Карта ограничена лимитом анализа и может быть неполной. Уточните каталог или фильтр, чтобы исследовать структуру подробнее.</p>}
+      <div className={styles.diffBar}>
+        <Button size="sm" variant="ghost" aria-pressed={diffOpen} onClick={() => setDiffOpen(current => !current)}><GitCompare size={14} aria-hidden /> Диф ревизий</Button>
+        {diffOpen && <>
+          <label>База<input value={diffBase} onChange={event => setDiffBase(event.target.value)} placeholder="main~20, тег или sha" aria-label="Базовая ревизия" /></label>
+          <span className={styles.diffArrow}>→</span>
+          <label>Цель<input value={diffTarget} onChange={event => setDiffTarget(event.target.value)} placeholder="HEAD" aria-label="Целевая ревизия" /></label>
+          <Button size="sm" disabled={diffLoading || !diffBase.trim() || !diffTarget.trim()} onClick={() => void runDiff()}>{diffLoading ? "Сравниваем…" : "Сравнить"}</Button>
+        </>}
+      </div>
+      {diffOpen && diffResult && <div className={styles.diffPanel}>
+        <div className={styles.diffCounts}>
+          <span><b>+{diffResult.addedNodes.length}</b> узлов</span><span><b>−{diffResult.removedNodes.length}</b> узлов</span><span><b>+{diffResult.addedEdges.length}</b> связей</span><span><b>−{diffResult.removedEdges.length}</b> связей</span><span><b>~{diffResult.changedNodes.length}</b> изменённых</span>
+        </div>
+        {(diffResult.addedNodes.length > 0 || diffResult.removedNodes.length > 0) && <div className={styles.diffColumns}>
+          {diffResult.addedNodes.length > 0 && <div className={styles.diffColumn}><h5>Добавлены</h5><ul>{diffResult.addedNodes.slice(0, 40).map(id => <li key={id}><button type="button" className={styles.pathLink} onClick={() => revealById(id)}>{id}</button></li>)}{diffResult.addedNodes.length > 40 && <li className={styles.extMore}>… и ещё {diffResult.addedNodes.length - 40}</li>}</ul></div>}
+          {diffResult.removedNodes.length > 0 && <div className={styles.diffColumn}><h5>Удалены</h5><ul>{diffResult.removedNodes.slice(0, 40).map(id => <li key={id}><code>{id}</code></li>)}{diffResult.removedNodes.length > 40 && <li className={styles.extMore}>… и ещё {diffResult.removedNodes.length - 40}</li>}</ul></div>}
+        </div>}
+        {(diffResult.addedEdges.length > 0 || diffResult.removedEdges.length > 0) && <div className={styles.diffColumns}>
+          {diffResult.addedEdges.length > 0 && <div className={styles.diffColumn}><h5>Новые связи</h5><ul className={styles.edgeList}>{diffResult.addedEdges.slice(0, 40).map(edge => <li key={edge}><code>{edge}</code></li>)}</ul>{diffResult.addedEdges.length > 40 && <p className={styles.extMore}>… и ещё {diffResult.addedEdges.length - 40}</p>}</div>}
+          {diffResult.removedEdges.length > 0 && <div className={styles.diffColumn}><h5>Исчезнувшие связи</h5><ul className={styles.edgeList}>{diffResult.removedEdges.slice(0, 40).map(edge => <li key={edge}><code>{edge}</code></li>)}</ul>{diffResult.removedEdges.length > 40 && <p className={styles.extMore}>… и ещё {diffResult.removedEdges.length - 40}</p>}</div>}
+        </div>}
+        {diffResult.changedNodes.length > 0 && <div className={styles.diffColumn}><h5>Изменённый размер</h5><ul className={styles.edgeList}>{diffResult.changedNodes.slice(0, 40).map(node => <li key={node.id}><button type="button" className={styles.pathLink} onClick={() => revealById(node.id)}>{node.id}</button><code> {formatBytes(node.fromSizeBytes)} → {formatBytes(node.toSizeBytes)}</code></li>)}</ul>{diffResult.changedNodes.length > 40 && <p className={styles.extMore}>… и ещё {diffResult.changedNodes.length - 40}</p>}</div>}
+        {diffResult.addedNodes.length === 0 && diffResult.removedNodes.length === 0 && diffResult.addedEdges.length === 0 && diffResult.removedEdges.length === 0 && diffResult.changedNodes.length === 0 && <p className={styles.noIssues}>Структура карты не изменилась между этими ревизиями.</p>}
+      </div>}
       <div className={styles.mapLayout}>
         <aside className={styles.explorer} aria-label="Содержимое текущего каталога">
           <div className={styles.explorerHeading}>{globalActive ? "Найдено в репозитории" : "Элементы каталога"} <span>{globalActive ? globalMatches.length : searchMatches.length}</span></div>

@@ -35,7 +35,7 @@ export class DevelopmentArchitectController {
     @Param("repositoryId") repositoryId: string,
     @Query(new ZodValidationPipe(architectMapQuerySchema)) query: ArchitectMapQuery
   ): Promise<ArchitectMap> {
-    return this.architect.map(user.userId, workspaceId, repositoryId, query.path);
+    return this.architect.map(user.userId, workspaceId, repositoryId, query.path, query.ref);
   }
 
   @Get(":repositoryId/layout")

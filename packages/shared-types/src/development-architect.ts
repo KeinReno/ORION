@@ -55,7 +55,9 @@ export type ArchitectMetrics = z.infer<typeof architectMetricsSchema>;
 
 export const architectMapQuerySchema = z.object({
   /** Подкаталог внутри репозитория; пусто — весь репозиторий. */
-  path: z.string().trim().max(1024).optional()
+  path: z.string().trim().max(1024).optional(),
+  /** Ревизия (sha, ветка, тег): карта строится по состоянию на этот коммит, а не по рабочей копии. */
+  ref: z.string().trim().min(1).max(255).optional()
 });
 export type ArchitectMapQuery = z.infer<typeof architectMapQuerySchema>;
 
@@ -148,6 +150,54 @@ export type ArchitectComparison = z.infer<typeof architectComparisonSchema>;
 
 function edgeKey(edge: { from: string; to: string; kind: string }): string {
   return `${edge.kind}:${edge.from}->${edge.to}`;
+}
+
+/** Изменение узла, существующего в обеих ревизиях: размер файла изменился (переименование — это удаление + добавление). */
+export const architectMapChangedNodeSchema = z.object({
+  id: z.string(),
+  fromSizeBytes: z.number().int().nonnegative(),
+  toSizeBytes: z.number().int().nonnegative()
+});
+export type ArchitectMapChangedNode = z.infer<typeof architectMapChangedNodeSchema>;
+
+/** Разница двух карт архитектуры: что появилось, исчезло и изменилось между базовой и целевой ревизией. */
+export const architectMapDiffSchema = z.object({
+  addedNodes: z.array(z.string()),
+  removedNodes: z.array(z.string()),
+  addedEdges: z.array(z.string()),
+  removedEdges: z.array(z.string()),
+  changedNodes: z.array(architectMapChangedNodeSchema)
+});
+export type ArchitectMapDiff = z.infer<typeof architectMapDiffSchema>;
+
+/**
+ * Диф двух карт (чистая функция). Ключ ребра — `kind:from->to`, чтобы переименования полей внутри
+ * файла не выглядели как новая связь. Узлы сравниваются по id-пути; `changedNodes` — те же id,
+ * но другой размер (правка содержимого без изменения структуры).
+ */
+export function diffArchitectMaps(
+  base: { nodes: ReadonlyArray<{ id: string; sizeBytes: number }>; edges: ReadonlyArray<{ from: string; to: string; kind: string }> },
+  target: { nodes: ReadonlyArray<{ id: string; sizeBytes: number }>; edges: ReadonlyArray<{ from: string; to: string; kind: string }> }
+): ArchitectMapDiff {
+  const baseNodes = new Map(base.nodes.map(node => [node.id, node.sizeBytes]));
+  const targetNodes = new Map(target.nodes.map(node => [node.id, node.sizeBytes]));
+  const edgeKeyOf = (edge: { from: string; to: string; kind: string }) => `${edge.kind}:${edge.from}->${edge.to}`;
+  const baseEdges = new Set(base.edges.map(edgeKeyOf));
+  const targetEdges = new Set(target.edges.map(edgeKeyOf));
+
+  const addedNodes = [...targetNodes.keys()].filter(id => !baseNodes.has(id)).sort();
+  const removedNodes = [...baseNodes.keys()].filter(id => !targetNodes.has(id)).sort();
+  const changedNodes = [...targetNodes.entries()]
+    .filter(([id, size]) => baseNodes.has(id) && baseNodes.get(id) !== size)
+    .map(([id, size]) => ({ id, fromSizeBytes: baseNodes.get(id) as number, toSizeBytes: size }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    addedNodes,
+    removedNodes,
+    addedEdges: [...targetEdges].filter(key => !baseEdges.has(key)).sort(),
+    removedEdges: [...baseEdges].filter(key => !targetEdges.has(key)).sort(),
+    changedNodes
+  };
 }
 
 /**

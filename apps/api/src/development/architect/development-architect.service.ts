@@ -14,6 +14,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { DevelopmentGitService } from "../git/development-git.service";
 import { analyzeRepository, normalizeSubPath } from "./architect-analyzer";
+import { prepareAnalysisRoot } from "./architect-ref";
 
 /**
  * Architect (11.3): карта строится анализатором при каждом запросе, а в БД живут только
@@ -31,7 +32,7 @@ export class DevelopmentArchitectService {
     private readonly git: DevelopmentGitService
   ) {}
 
-  async map(userId: string, workspaceId: string, repositoryId: string, subPath?: string): Promise<ArchitectMap> {
+  async map(userId: string, workspaceId: string, repositoryId: string, subPath?: string, ref?: string): Promise<ArchitectMap> {
     const repository = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       return this.git.requireRepositoryTx(tx, workspaceId, repositoryId);
@@ -43,11 +44,25 @@ export class DevelopmentArchitectService {
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
+    /** Ревизия анализируется в отдельном временном clone: исходный репозиторий не меняется. */
+    let analysisRoot = repoPath;
+    let cleanup: (() => Promise<void>) | null = null;
+    if (ref) {
+      try {
+        const prepared = await prepareAnalysisRoot(repoPath, ref);
+        analysisRoot = prepared.rootPath;
+        cleanup = prepared.cleanup;
+      } catch (error) {
+        throw new BadRequestException(`Не удалось получить ревизию «${ref}»: ${(error as Error).message}`);
+      }
+    }
     let analysis;
     try {
-      analysis = await analyzeRepository({ rootPath: repoPath, subPath: normalized });
+      analysis = await analyzeRepository({ rootPath: analysisRoot, subPath: normalized });
     } catch (error) {
       throw new BadRequestException(`Не удалось построить карту: ${(error as Error).message}`);
+    } finally {
+      if (cleanup) await cleanup().catch(() => undefined);
     }
     const layout = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
