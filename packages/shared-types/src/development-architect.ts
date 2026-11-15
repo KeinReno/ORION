@@ -100,6 +100,32 @@ export const architectLayoutSchema = z.object({
   revision: z.number().int().nonnegative(),
   updatedAt: z.string().nullable()
 });
+
+/** Снапшот карты на ревизии: зафиксированный анализ, чтобы диффы по истории не пересчитывались. */
+export const architectSnapshotSchema = z.object({
+  repositoryId: z.string(),
+  sha: z.string(),
+  nodes: z.array(architectNodeSchema),
+  edges: z.array(architectEdgeSchema),
+  metrics: architectMetricsSchema,
+  truncated: z.boolean(),
+  createdById: z.string().nullable(),
+  createdAt: z.string().datetime()
+});
+export type ArchitectSnapshot = z.infer<typeof architectSnapshotSchema>;
+
+/** Краткая строка списка снапшотов — без узлов и связей. */
+export const architectSnapshotSummarySchema = architectSnapshotSchema.omit({ nodes: true, edges: true }).extend({
+  nodes: z.number().int().nonnegative(),
+  edges: z.number().int().nonnegative()
+});
+export type ArchitectSnapshotSummary = z.infer<typeof architectSnapshotSummarySchema>;
+
+export const createArchitectSnapshotInputSchema = z.object({
+  /** Ревизия (sha, ветка, тег); по умолчанию сервер берёт HEAD. */
+  ref: z.string().trim().min(1).max(255).optional()
+});
+export type CreateArchitectSnapshotInput = z.infer<typeof createArchitectSnapshotInputSchema>;
 export type ArchitectLayout = z.infer<typeof architectLayoutSchema>;
 
 /** Проектная схема: то, как связи задуманы. id узлов — те же пути, что и в фактической карте. */

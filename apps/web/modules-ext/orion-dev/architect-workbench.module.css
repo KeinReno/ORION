@@ -83,6 +83,12 @@
 .diffColumn ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
 .diffColumn code { color: var(--aw-muted); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; font-size: var(--font-micro); overflow-wrap: anywhere; }
 .edgeList { max-height: 190px; overflow: auto; }
+.snapList { display: flex; max-width: 100%; flex: 1 1 100%; gap: 8px; margin: 0; padding: 4px 0 0; list-style: none; overflow-x: auto; order: 10; }
+.snapList li { display: flex; flex: none; align-items: center; gap: 8px; border: 1px solid var(--aw-border); border-radius: 8px; padding: 5px 8px; background: color-mix(in srgb, var(--aw-panel) 62%, var(--orion-color-canvas, #0f1012)); color: var(--aw-muted); font-size: var(--font-micro); }
+.snapList code { color: var(--aw-accent); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; }
+.snapList time { white-space: nowrap; }
+.snapHint { display: inline-flex; align-items: center; gap: 6px; color: var(--aw-muted); font-size: var(--font-micro); }
+.snapWarn { border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--aw-border)); border-radius: 5px; padding: 1px 5px; color: #f59e0b; }
 .saveState { margin-left: auto; color: var(--aw-muted); font-size: var(--font-micro); }
 .warning { margin: 8px 12px 0; border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--aw-border)); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, #f59e0b 8%, var(--aw-panel)); color: var(--aw-text); font-size: var(--font-label); }
 .mapLayout { display: grid; min-height: 470px; flex: 1; grid-template-columns: minmax(180px, 230px) minmax(0, 1fr) minmax(180px, 225px); }

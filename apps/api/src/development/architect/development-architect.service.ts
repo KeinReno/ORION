@@ -1,6 +1,9 @@
-import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  architectEdgeSchema,
+  architectMetricsSchema,
+  architectNodeSchema,
   architectProjectSchemaSchema,
   compareArchitectSchemas,
   type ArchitectComparison,
@@ -8,11 +11,14 @@ import {
   type ArchitectLayoutInput,
   type ArchitectMap,
   type ArchitectNodePosition,
-  type ArchitectProjectSchema
+  type ArchitectProjectSchema,
+  type ArchitectSnapshot,
+  type ArchitectSnapshotSummary
 } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { DevelopmentGitService } from "../git/development-git.service";
+import { resolveCommitSha } from "../git/git-command";
 import { analyzeRepository, normalizeSubPath } from "./architect-analyzer";
 import { prepareAnalysisRoot } from "./architect-ref";
 
@@ -45,24 +51,13 @@ export class DevelopmentArchitectService {
       throw new BadRequestException((error as Error).message);
     }
     /** Ревизия анализируется в отдельном временном clone: исходный репозиторий не меняется. */
-    let analysisRoot = repoPath;
-    let cleanup: (() => Promise<void>) | null = null;
-    if (ref) {
-      try {
-        const prepared = await prepareAnalysisRoot(repoPath, ref);
-        analysisRoot = prepared.rootPath;
-        cleanup = prepared.cleanup;
-      } catch (error) {
-        throw new BadRequestException(`Не удалось получить ревизию «${ref}»: ${(error as Error).message}`);
-      }
-    }
     let analysis;
     try {
-      analysis = await analyzeRepository({ rootPath: analysisRoot, subPath: normalized });
+      analysis = await this.analyzeRef(repoPath, ref, normalized);
     } catch (error) {
-      throw new BadRequestException(`Не удалось построить карту: ${(error as Error).message}`);
-    } finally {
-      if (cleanup) await cleanup().catch(() => undefined);
+      if (error instanceof BadRequestException) throw error;
+      const prefix = ref ? `Не удалось получить ревизию «${ref}»` : "Не удалось построить карту";
+      throw new BadRequestException(`${prefix}: ${(error as Error).message}`);
     }
     const layout = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
@@ -82,6 +77,89 @@ export class DevelopmentArchitectService {
       layoutRevision: layout?.revision ?? 0,
       truncated: analysis.truncated
     };
+  }
+
+  /**
+   * Анализ корня (или подкаталога) репозитория; `ref` разворачивается во временный каталог
+   * (`git archive`) и подчищается. Исходная рабочая копия не изменяется.
+   */
+  private async analyzeRef(repoPath: string, ref?: string, subPath?: string) {
+    if (!ref) return analyzeRepository({ rootPath: repoPath, subPath: subPath ?? "" });
+    const prepared = await prepareAnalysisRoot(repoPath, ref);
+    try {
+      return await analyzeRepository({ rootPath: prepared.rootPath, subPath: subPath ?? "" });
+    } finally {
+      await prepared.cleanup();
+    }
+  }
+
+  // ── снапшоты ──────────────────────────────────────────────────────────────────────────────
+
+  /** Снимает снапшот на ревизии; если снапшот для этого sha уже есть — возвращает его как есть. */
+  async createSnapshot(userId: string, workspaceId: string, repositoryId: string, ref?: string): Promise<ArchitectSnapshotSummary> {
+    const repository = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
+      return this.git.requireRepositoryTx(tx, workspaceId, repositoryId);
+    });
+    const repoPath = await this.git.usablePath(repository.path);
+    const resolvedRef = ref?.trim() || "HEAD";
+    let sha: string | null = null;
+    try {
+      sha = await resolveCommitSha(repoPath, resolvedRef);
+    } catch {
+      sha = null;
+    }
+    if (!sha) throw new BadRequestException(`Ссылка «${resolvedRef}» не найдена в репозитории`);
+    const existing = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return tx.developmentArchitectSnapshot.findUnique({ where: { workspaceId_repositoryId_sha: { workspaceId, repositoryId, sha } } });
+    });
+    if (existing) return toSnapshotSummary(existing);
+    let analysis;
+    try {
+      analysis = await this.analyzeRef(repoPath, resolvedRef);
+    } catch (error) {
+      throw new BadRequestException(`Не удалось построить карту для снапшота: ${(error as Error).message}`);
+    }
+    const row = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      return tx.developmentArchitectSnapshot.create({
+        data: {
+          workspaceId,
+          repositoryId,
+          sha,
+          nodes: analysis.nodes as unknown as Prisma.InputJsonValue,
+          edges: analysis.edges as unknown as Prisma.InputJsonValue,
+          metrics: analysis.metrics as unknown as Prisma.InputJsonValue,
+          truncated: analysis.truncated,
+          createdById: userId
+        }
+      });
+    });
+    return toSnapshotSummary(row);
+  }
+
+  async listSnapshots(userId: string, workspaceId: string, repositoryId: string): Promise<ArchitectSnapshotSummary[]> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await this.git.requireRepositoryTx(tx, workspaceId, repositoryId);
+      const rows = await tx.developmentArchitectSnapshot.findMany({
+        where: { workspaceId, repositoryId },
+        orderBy: { createdAt: "desc" }
+      });
+      return rows.map(toSnapshotSummary);
+    });
+  }
+
+  async snapshot(userId: string, workspaceId: string, repositoryId: string, sha: string): Promise<ArchitectSnapshot> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      await this.git.requireRepositoryTx(tx, workspaceId, repositoryId);
+      const row = await tx.developmentArchitectSnapshot.findUnique({ where: { workspaceId_repositoryId_sha: { workspaceId, repositoryId, sha } } });
+      if (!row) throw new NotFoundException("Снапшот не найден");
+      return toSnapshotDto(row);
+    });
   }
 
   async layout(userId: string, workspaceId: string, repositoryId: string): Promise<ArchitectLayout> {
@@ -196,5 +274,51 @@ function toLayoutDto(
     viewport: readViewport(row?.viewport),
     revision: row?.revision ?? 0,
     updatedAt: row?.updatedAt.toISOString() ?? null
+  };
+}
+
+type SnapshotRow = {
+  repositoryId: string;
+  sha: string;
+  nodes: Prisma.JsonValue;
+  edges: Prisma.JsonValue;
+  metrics: Prisma.JsonValue;
+  truncated: boolean;
+  createdById: string | null;
+  createdAt: Date;
+};
+
+const EMPTY_METRICS: ArchitectSnapshotSummary["metrics"] = { files: 0, directories: 0, modules: 0, crates: 0, edges: 0, internalEdges: 0, externalEdges: 0, bytes: 0 };
+
+function parseSnapshotMetrics(value: Prisma.JsonValue): ArchitectSnapshotSummary["metrics"] {
+  const parsed = architectMetricsSchema.safeParse(value);
+  return parsed.success ? parsed.data : EMPTY_METRICS;
+}
+
+function toSnapshotSummary(row: SnapshotRow): ArchitectSnapshotSummary {
+  return {
+    repositoryId: row.repositoryId,
+    sha: row.sha,
+    nodes: Array.isArray(row.nodes) ? row.nodes.length : 0,
+    edges: Array.isArray(row.edges) ? row.edges.length : 0,
+    metrics: parseSnapshotMetrics(row.metrics),
+    truncated: row.truncated,
+    createdById: row.createdById,
+    createdAt: row.createdAt.toISOString()
+  };
+}
+
+function toSnapshotDto(row: SnapshotRow): ArchitectSnapshot {
+  const nodes = architectNodeSchema.array().safeParse(row.nodes);
+  const edges = architectEdgeSchema.array().safeParse(row.edges);
+  return {
+    repositoryId: row.repositoryId,
+    sha: row.sha,
+    nodes: nodes.success ? nodes.data : [],
+    edges: edges.success ? edges.data : [],
+    metrics: parseSnapshotMetrics(row.metrics),
+    truncated: row.truncated,
+    createdById: row.createdById,
+    createdAt: row.createdAt.toISOString()
   };
 }

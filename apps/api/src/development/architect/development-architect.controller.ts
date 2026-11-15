@@ -1,14 +1,18 @@
-import { Body, Controller, Get, Param, Put, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Query } from "@nestjs/common";
 import {
   architectLayoutInputSchema,
   architectMapQuerySchema,
   architectProjectSchemaSchema,
+  createArchitectSnapshotInputSchema,
   type ArchitectComparison,
   type ArchitectLayout,
   type ArchitectLayoutInput,
   type ArchitectMap,
   type ArchitectMapQuery,
-  type ArchitectProjectSchema
+  type ArchitectProjectSchema,
+  type ArchitectSnapshot,
+  type ArchitectSnapshotSummary,
+  type CreateArchitectSnapshotInput
 } from "@orion/shared-types";
 import { CurrentUser } from "../../common/current-user.decorator";
 import { RequirePermission } from "../../common/require-permission";
@@ -88,5 +92,37 @@ export class DevelopmentArchitectController {
     @Param("repositoryId") repositoryId: string
   ): Promise<ArchitectComparison> {
     return this.architect.compare(user.userId, workspaceId, repositoryId);
+  }
+
+  @Post(":repositoryId/snapshots")
+  @RequirePermission("orion-dev.development_import.update")
+  createSnapshot(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("repositoryId") repositoryId: string,
+    @Body(new ZodValidationPipe(createArchitectSnapshotInputSchema)) body: CreateArchitectSnapshotInput
+  ): Promise<ArchitectSnapshotSummary> {
+    return this.architect.createSnapshot(user.userId, workspaceId, repositoryId, body.ref);
+  }
+
+  @Get(":repositoryId/snapshots")
+  @RequirePermission("orion-dev.development_import.read")
+  listSnapshots(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("repositoryId") repositoryId: string
+  ): Promise<ArchitectSnapshotSummary[]> {
+    return this.architect.listSnapshots(user.userId, workspaceId, repositoryId);
+  }
+
+  @Get(":repositoryId/snapshots/:sha")
+  @RequirePermission("orion-dev.development_import.read")
+  snapshot(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("repositoryId") repositoryId: string,
+    @Param("sha") sha: string
+  ): Promise<ArchitectSnapshot> {
+    return this.architect.snapshot(user.userId, workspaceId, repositoryId, sha);
   }
 }

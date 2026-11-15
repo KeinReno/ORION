@@ -7,8 +7,11 @@ import {
   architectMapSchema,
   architectProjectSchemaSchema,
   architectComparisonSchema,
+  architectSnapshotSchema,
+  architectSnapshotSummarySchema,
   diffArchitectMaps,
   type ArchitectMapDiff,
+  type ArchitectSnapshotSummary,
   developmentGitGraphSchema,
   developmentRepositoryRemovedSchema,
   developmentRepositoryRootsSchema,
@@ -39,7 +42,7 @@ import {
   type OnMoveEnd
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Activity, AlertCircle, ArrowLeft, Box, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, GitCompare, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Activity, AlertCircle, ArrowLeft, Box, Camera, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, GitCompare, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import styles from "./architect-workbench.module.css";
 
@@ -169,6 +172,11 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const [diffTarget, setDiffTarget] = useState("");
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffResult, setDiffResult] = useState<ArchitectMapDiff | null>(null);
+  const [snapOpen, setSnapOpen] = useState(false);
+  const [snapRef, setSnapRef] = useState("");
+  const [snapshots, setSnapshots] = useState<ArchitectSnapshotSummary[]>([]);
+  const [snapListLoading, setSnapListLoading] = useState(false);
+  const [snapTaking, setSnapTaking] = useState(false);
   const [selected, setSelected] = useState<ArchitectNode | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -517,6 +525,45 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     finally { setDiffLoading(false); }
   };
 
+  const loadSnapshots = useCallback(async (repoId = repositoryId) => {
+    if (!repoId) return;
+    setSnapListLoading(true);
+    try {
+      setSnapshots(await client.get(`/architect/${encodeURIComponent(repoId)}/snapshots`, architectSnapshotSummarySchema.array()));
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setSnapListLoading(false); }
+  }, [client, repositoryId]);
+
+  useEffect(() => {
+    if (snapOpen && repositoryId) void loadSnapshots();
+  }, [loadSnapshots, repositoryId, snapOpen]);
+
+  /** Фиксирует карту на ревизии; повтор для того же sha возвращает существующий снапшот. */
+  const takeSnapshot = async () => {
+    if (!repositoryId || snapTaking) return;
+    setSnapTaking(true); setError("");
+    try {
+      await client.post(`/architect/${encodeURIComponent(repositoryId)}/snapshots`, snapRef.trim() ? { ref: snapRef.trim() } : {}, architectSnapshotSummarySchema);
+      await loadSnapshots();
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setSnapTaking(false); }
+  };
+
+  /** Диф «снапшот → текущая рабочая копия»: подставляет снапшот вместо ручного ввода ревизии. */
+  const diffSnapshotWithHead = async (sha: string) => {
+    if (!repositoryId || diffLoading) return;
+    setDiffLoading(true); setError(""); setDiffResult(null); setDiffOpen(true);
+    try {
+      const snapshot = await client.get(`/architect/${encodeURIComponent(repositoryId)}/snapshots/${encodeURIComponent(sha)}`, architectSnapshotSchema);
+      const currentMap = map ?? await client.get(`/architect/${encodeURIComponent(repositoryId)}/map`, architectMapSchema);
+      setDiffResult(diffArchitectMaps(
+        { nodes: snapshot.nodes, edges: snapshot.edges },
+        { nodes: currentMap.nodes, edges: currentMap.edges }
+      ));
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setDiffLoading(false); }
+  };
+
   /** Убирает только запись в ORION: каталог на диске и привязки коммитов не трогаем. */
   const removeRepository = async () => {
     if (!repositoryId || removing) return;
@@ -638,6 +685,21 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
       {map?.truncated && <p className={styles.warning} role="status">Карта ограничена лимитом анализа и может быть неполной. Уточните каталог или фильтр, чтобы исследовать структуру подробнее.</p>}
       <div className={styles.diffBar}>
         <Button size="sm" variant="ghost" aria-pressed={diffOpen} onClick={() => setDiffOpen(current => !current)}><GitCompare size={14} aria-hidden /> Диф ревизий</Button>
+        <Button size="sm" variant="ghost" aria-pressed={snapOpen} onClick={() => setSnapOpen(current => !current)}><Camera size={14} aria-hidden /> Снапшоты</Button>
+        {snapOpen && <>
+          <label>Ревизия<input value={snapRef} onChange={event => setSnapRef(event.target.value)} placeholder="Пусто — HEAD" aria-label="Ревизия снапшота" /></label>
+          <Button size="sm" disabled={snapTaking} onClick={() => void takeSnapshot()}>{snapTaking ? "Снимаем…" : "Снять снапшот"}</Button>
+          {snapListLoading ? <span className={styles.snapHint}><LoaderCircle className={styles.spin} size={13} /> Загружаем…</span> : snapshots.length > 0 && <ol className={styles.snapList}>
+            {snapshots.map(item => <li key={item.sha}>
+              <code title={item.sha}>{item.sha.slice(0, 10)}</code>
+              <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}</time>
+              <span>{item.nodes} узлов · {item.edges} связей</span>
+              {item.truncated && <span className={styles.snapWarn}>неполный</span>}
+              <Button size="sm" variant="ghost" disabled={diffLoading} onClick={() => void diffSnapshotWithHead(item.sha)}><GitCompare size={13} aria-hidden /> С HEAD</Button>
+            </li>)}
+          </ol>}
+          {!snapListLoading && snapshots.length === 0 && <span className={styles.snapHint}>Снапшотов пока нет — зафиксируйте карту ревизии, чтобы потом сравнивать её с кодом без пересчёта.</span>}
+        </>}
         {diffOpen && <>
           <label>База<input value={diffBase} onChange={event => setDiffBase(event.target.value)} placeholder="main~20, тег или sha" aria-label="Базовая ревизия" /></label>
           <span className={styles.diffArrow}>→</span>

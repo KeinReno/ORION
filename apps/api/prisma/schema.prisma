@@ -327,6 +327,7 @@ model Workspace {
   developmentGitRepositories DevelopmentGitRepository[]
   taskCommitLinks TaskCommitLink[]
   developmentArchitectLayouts DevelopmentArchitectLayout[]
+  developmentArchitectSnapshots DevelopmentArchitectSnapshot[]
   agentProposals        AgentProposal[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
@@ -4791,6 +4792,29 @@ model DevelopmentArchitectLayout {
   @@unique([workspaceId, repositoryId])
   @@index([workspaceId])
   @@map("development_architect_layouts")
+}
+
+/// Снапшот карты Architect на конкретном коммите: зафиксированный результат анализа, чтобы
+/// диффы по истории не пересчитывали старые ревизии заново. Одна запись на (репозиторий, sha).
+model DevelopmentArchitectSnapshot {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  repositoryId String
+  /// Полный sha коммита, на котором построен снапшот.
+  sha          String
+  /// Узлы и связи анализатора — та же форма, что у карты; позиции раскладки не копируются.
+  nodes        Json     @default("[]")
+  edges        Json     @default("[]")
+  metrics      Json     @default("{}")
+  truncated    Boolean  @default(false)
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, repositoryId, sha])
+  @@index([workspaceId, repositoryId, createdAt])
+  @@map("development_architect_snapshots")
 }
 // --- END 11-orion-dev-git ---
 
