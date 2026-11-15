@@ -6,7 +6,10 @@
   "permissions": [
     "core:default",
     "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
     "core:window:allow-set-size",
-    "core:window:allow-set-position"
+    "core:window:allow-set-position",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
   ]
 }

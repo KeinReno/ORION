@@ -8,6 +8,8 @@
     "notification:default",
     "deep-link:default",
     "core:webview:allow-create-webview-window",
-    "core:window:allow-create"
+    "core:window:allow-create",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors"
   ]
 }

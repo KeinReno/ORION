@@ -405,6 +405,22 @@ fn main() {
                 open_orion_link(app, &arg);
             }
         }))
+        // Closing the main window must end the whole app: Tauri only requests an
+        // exit when the LAST window closes, so with a detached sidebar open the
+        // shell kept running invisibly and the sidebar survived the "closed" app.
+        .on_window_event(|window, event| {
+            use tauri::Manager;
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                for (label, other) in window.app_handle().webview_windows() {
+                    if label != "main" {
+                        let _ = other.close();
+                    }
+                }
+            }
+        })
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
@@ -500,9 +516,17 @@ fn main() {
                     let mut reported = false;
                     // Never close the Job while PostgreSQL is still checkpointing.
                     while !RUNTIME_DONE.load(Ordering::SeqCst) {
-                        if !reported && std::time::Instant::now() >= deadline {
-                            reported = true;
-                            startup::set(&handle, "error", Some("База данных ещё завершает работу. ORION остаётся открытым, чтобы не прервать сохранение.".into()));
+                        if std::time::Instant::now() >= deadline {
+                            if !reported {
+                                reported = true;
+                                startup::set(&handle, "error", Some("База данных не завершила работу за 9 минут. ORION принудительно завершается; дерево процессов будет остановлено закрытием Job Object.".into()));
+                            }
+                            // Hard cap: a hung runtime must never keep the shell
+                            // open forever. Exiting drops the supervisor, the
+                            // kill-on-close Job Object terminates the whole tree.
+                            EXIT_ALLOWED.store(true, Ordering::SeqCst);
+                            handle.exit(0);
+                            return;
                         }
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }

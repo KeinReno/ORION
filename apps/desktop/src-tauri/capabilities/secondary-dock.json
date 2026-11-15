@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "secondary-dock",
+  "description": "The detached second-dock window (\"второй сайдбар\"): gives the dock back and closes itself on redock",
+  "webviews": ["secondary-dock-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-current-monitor",
+    "core:window:allow-available-monitors",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
+  ]
+}

@@ -76,7 +76,7 @@ pub fn watch_selection(app: tauri::AppHandle) {
                 if current != previous {
                     previous = current;
                     for (label, view) in app.webviews() {
-                        if label == "main" || label.starts_with("panel-") || label.starts_with("workspace-") {
+                        if label == "main" || label.starts_with("panel-") || label.starts_with("workspace-") || label.starts_with("nav-sidebar-") {
                             let _ = view.eval("window.location.reload()");
                         }
                     }
