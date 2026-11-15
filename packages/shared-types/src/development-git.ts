@@ -21,6 +21,19 @@ export const developmentRepositorySchema = z.object({
 });
 export type DevelopmentRepository = z.infer<typeof developmentRepositorySchema>;
 
+/** Удаление репозитория — 204 No Content, тело пустое. */
+export const developmentRepositoryRemovedSchema = z.void();
+
+/**
+ * Каталоги, которые администратор сервера разрешил для регистрации репозиториев
+ * (env `ORION_DEV_REPOSITORY_ROOTS`). Клиент показывает их как подсказку в форме регистрации,
+ * чтобы не угадывать, какой путь сервер примет.
+ */
+export const developmentRepositoryRootsSchema = z.object({
+  roots: z.array(z.string())
+});
+export type DevelopmentRepositoryRoots = z.infer<typeof developmentRepositoryRootsSchema>;
+
 export const createDevelopmentRepositoryInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
   path: z.string().trim().min(1).max(4096),

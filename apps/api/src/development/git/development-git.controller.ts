@@ -10,6 +10,7 @@ import {
   type DevelopmentGitGraph,
   type DevelopmentGitGraphQuery,
   type DevelopmentRepository,
+  type DevelopmentRepositoryRoots,
   type UpdateDevelopmentRepositoryInput
 } from "@orion/shared-types";
 import { CurrentUser } from "../../common/current-user.decorator";
@@ -60,6 +61,13 @@ export class DevelopmentGitController {
     @Body(new ZodValidationPipe(updateDevelopmentRepositoryInputSchema)) body: UpdateDevelopmentRepositoryInput
   ): Promise<DevelopmentRepository> {
     return this.git.updateRepository(user.userId, workspaceId, repositoryId, body);
+  }
+
+  /** Разрешённые для регистрации корни (env `ORION_DEV_REPOSITORY_ROOTS`) — подсказка для формы. */
+  @Get("repositories/allowed-roots")
+  @RequirePermission("orion-dev.development_import.read")
+  allowedRoots(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<DevelopmentRepositoryRoots> {
+    return this.git.allowedRoots(user.userId, workspaceId);
   }
 
   @Delete("repositories/:repositoryId")

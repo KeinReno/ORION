@@ -9,6 +9,7 @@ import {
   type DevelopmentGitGraphQuery,
   type DevelopmentGitCompareQuery,
   type DevelopmentRepository,
+  type DevelopmentRepositoryRoots,
   type UpdateDevelopmentRepositoryInput
 } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
@@ -103,6 +104,17 @@ export class DevelopmentGitService {
       // Удаляется только запись: каталог на диске и привязки коммитов к задачам остаются.
       await tx.developmentGitRepository.delete({ where: { id: row.id } });
     });
+  }
+
+  /**
+   * Разрешённые корни из настроек сервера. Это не секрет: они только сужают, какие пути сервер
+   * вообще примет, и подсказывают пользователю, откуда можно регистрировать репозитории.
+   */
+  async allowedRoots(userId: string, workspaceId: string): Promise<DevelopmentRepositoryRoots> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    });
+    return { roots: configuredRepositoryRoots() };
   }
 
   /** Репозиторий этого пространства; для чужих/несуществующих — 404, без утечки существования. */

@@ -8,6 +8,8 @@ import {
   architectProjectSchemaSchema,
   architectComparisonSchema,
   developmentGitGraphSchema,
+  developmentRepositoryRemovedSchema,
+  developmentRepositoryRootsSchema,
   developmentRepositorySchema,
   type ArchitectMap,
   type ArchitectNode,
@@ -34,7 +36,7 @@ import {
   type OnMoveEnd
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, ArrowLeft, Box, CircleDot, Code2, GitBranch, LoaderCircle, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, ArrowLeft, Box, CircleDot, Code2, GitBranch, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./architect-workbench.module.css";
 
@@ -89,6 +91,11 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const [branch, setBranch] = useState("");
   const [path, setPath] = useState("");
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<"local" | "global">("local");
+  const [fullMap, setFullMap] = useState<ArchitectMap | null>(null);
+  const [fullMapLoading, setFullMapLoading] = useState(false);
+  const [allowedRoots, setAllowedRoots] = useState<string[]>([]);
+  const [removing, setRemoving] = useState(false);
   const [selected, setSelected] = useState<ArchitectNode | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -119,6 +126,32 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   }, [client]);
 
   useEffect(() => { void loadRepositories(); }, [loadRepositories]);
+
+  useEffect(() => {
+    let live = true;
+    client.get("/git/repositories/allowed-roots", developmentRepositoryRootsSchema)
+      .then(result => { if (live) setAllowedRoots(result.roots); })
+      .catch(() => { /* Подсказка необязательна: форма работает и без списка корней. */ });
+    return () => { live = false; };
+  }, [client]);
+
+  /** Полная карта грузится один раз на репозиторий и служит глобальным поиском. */
+  useEffect(() => { setFullMap(null); }, [repositoryId]);
+
+  const ensureFullMap = useCallback(async () => {
+    if (!repositoryId || fullMap) return fullMap;
+    setFullMapLoading(true);
+    try {
+      const loaded = await client.get(`/architect/${encodeURIComponent(repositoryId)}/map`, architectMapSchema);
+      setFullMap(loaded);
+      return loaded;
+    } catch (cause) { setError(apiError(cause)); return null; }
+    finally { setFullMapLoading(false); }
+  }, [client, fullMap, repositoryId]);
+
+  useEffect(() => {
+    if (scope === "global" && search.trim() && repositoryId && !fullMap) void ensureFullMap();
+  }, [scope, search, repositoryId, fullMap, ensureFullMap]);
 
   const loadMap = useCallback(async (repoId: string, subPath: string) => {
     if (!repoId) return;
@@ -205,6 +238,26 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     return value ? visibleNodes.filter(node => `${node.name} ${node.path}`.toLocaleLowerCase("ru-RU").includes(value)) : visibleNodes;
   }, [search, visibleNodes]);
 
+  /** Глобальные совпадения по полной карте; ограничиваем, чтобы список не превращался в простыню. */
+  const globalMatches = useMemo(() => {
+    const value = search.trim().toLocaleLowerCase("ru-RU");
+    if (!value || scope !== "global" || !fullMap) return [];
+    return fullMap.nodes
+      .filter(node => `${node.name} ${node.path}`.toLocaleLowerCase("ru-RU").includes(value))
+      .slice(0, 200);
+  }, [fullMap, scope, search]);
+
+  /** Соседи выбранного узла: при выборе остальное затемняется, чтобы не мешало. */
+  const focusIds = useMemo(() => {
+    if (!selected || !map) return null;
+    const set = new Set<string>([selected.id]);
+    for (const edge of map.edges) {
+      if (edge.from === selected.id) set.add(edge.to);
+      if (edge.to === selected.id) set.add(edge.from);
+    }
+    return set;
+  }, [map, selected]);
+
   const flowNodes = useMemo<FlowNode[]>(() => {
     const count = Math.max(1, Math.ceil(Math.sqrt(visibleNodes.length)));
     const filteredNodes = search.trim() ? searchMatches : visibleNodes;
@@ -215,6 +268,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         id: node.id,
         type: "default",
         position: node.x !== null && node.y !== null ? { x: node.x, y: node.y } : { x: (index % count) * 260, y: Math.floor(index / count) * 126 },
+        className: focusIds && !focusIds.has(node.id) ? styles.dimmed : undefined,
         data: { source: node, title: node.name, subtitle: `${node.fileCount} файлов · ${incoming} входящих · ${outgoing} исходящих`, kind: node.kind },
         style: { width: 228, minHeight: 74, padding: 12, borderRadius: 10, border: `1px solid color-mix(in srgb, ${kindColors[node.kind] ?? kindColors.file} 45%, transparent)`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)", boxShadow: "0 8px 22px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 22%, transparent)" }
       };
@@ -222,10 +276,10 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     const shownIds = new Set(nodes.map(node => node.id));
     const externalNames = new Set(map?.edges.filter(edge => edge.external && shownIds.has(edge.from)).map(edge => edge.to) ?? []);
     for (const [index, id] of [...externalNames].entries()) {
-      nodes.push({ id, type: "default", position: { x: 280 + count * 260, y: index * 126 }, data: { source: null, title: id.replace(/^external:/, ""), subtitle: "Внешняя зависимость", kind: "external" }, style: { width: 205, padding: 12, borderRadius: 10, border: `1px dashed ${kindColors.external}`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)" } });
+      nodes.push({ id, type: "default", position: { x: 280 + count * 260, y: index * 126 }, className: focusIds && !focusIds.has(id) ? styles.dimmed : undefined, data: { source: null, title: id.replace(/^external:/, ""), subtitle: "Внешняя зависимость", kind: "external" }, style: { width: 205, padding: 12, borderRadius: 10, border: `1px dashed ${kindColors.external}`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)" } });
     }
     return nodes;
-  }, [map, search, searchMatches, visibleNodes]);
+  }, [focusIds, map, search, searchMatches, visibleNodes]);
 
   const displayedFlowNodes = useMemo(() => {
     const visibleIds = new Set(flowNodes.map(node => node.id));
@@ -235,14 +289,17 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const flowEdges = useMemo<Edge[]>(() => {
     if (!map) return [];
     const ids = new Set(flowNodes.map(node => node.id));
-    return map.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)).map(edge => ({
-      id: edge.id, source: edge.from, target: edge.to, type: "smoothstep", label: edge.external ? "зависимость" : "импорт", animated: false,
-      markerEnd: { type: MarkerType.ArrowClosed, color: edge.external ? kindColors.external : "rgb(var(--orion-accent, 201 168 106))" },
-      style: { stroke: edge.external ? kindColors.external : "rgb(var(--orion-accent, 201 168 106))", strokeWidth: 1.5 },
-      labelStyle: { fill: "var(--orion-color-secondary, #b2b0a9)", fontSize: "var(--font-micro)" },
-      labelBgStyle: { fill: "var(--orion-color-elevated, #1d1e22)", fillOpacity: 0.9 }
-    }));
-  }, [flowNodes, map]);
+    return map.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)).map(edge => {
+      const blurred = Boolean(focusIds && edge.from !== selected?.id && edge.to !== selected?.id);
+      return {
+        id: edge.id, source: edge.from, target: edge.to, type: "smoothstep", label: edge.external ? "зависимость" : "импорт", animated: false,
+        markerEnd: { type: MarkerType.ArrowClosed, color: edge.external ? kindColors.external : "rgb(var(--orion-accent, 201 168 106))" },
+        style: { stroke: edge.external ? kindColors.external : "rgb(var(--orion-accent, 201 168 106))", strokeWidth: focusIds && !blurred ? 2.4 : 1.5, opacity: blurred ? 0.16 : 1 },
+        labelStyle: { fill: "var(--orion-color-secondary, #b2b0a9)", fontSize: "var(--font-micro)" },
+        labelBgStyle: { fill: "var(--orion-color-elevated, #1d1e22)", fillOpacity: 0.9 }
+      };
+    });
+  }, [flowNodes, focusIds, map, selected]);
 
   const queueLayoutSave = useCallback((nodes: FlowNode[], viewport?: { x: number; y: number; zoom: number }) => {
     if (!repositoryId) return;
@@ -282,6 +339,66 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const onMoveEnd: OnMoveEnd = useCallback((event, viewport) => {
     if (event) queueLayoutSave(nodeSnapshot.current.length ? nodeSnapshot.current : flowNodes, viewport);
   }, [flowNodes, queueLayoutSave]);
+
+  /**
+   * Авто-раскладка без внешних зависимостей: глубина узла — длина самой длинной цепочки импортов
+   * к нему (DFS с мемоизацией, циклы обрываются). Каждый слой выстраивается вертикально,
+   * слои идут слева направо по направлению зависимостей.
+   */
+  const autoLayout = useCallback(() => {
+    const base = flowNodeOverrides ?? flowNodes;
+    if (!map || base.length === 0) return;
+    const ids = new Set(base.map(node => node.id));
+    const incoming = new Map<string, string[]>();
+    for (const edge of map.edges) {
+      if (!ids.has(edge.from) || !ids.has(edge.to)) continue;
+      const list = incoming.get(edge.to) ?? [];
+      list.push(edge.from);
+      incoming.set(edge.to, list);
+    }
+    const depthCache = new Map<string, number>();
+    const visiting = new Set<string>();
+    const depthOf = (id: string): number => {
+      const cached = depthCache.get(id);
+      if (cached !== undefined) return cached;
+      if (visiting.has(id)) return 0; // цикл — не даём рекурсии завернуться
+      visiting.add(id);
+      let depth = 0;
+      for (const from of incoming.get(id) ?? []) depth = Math.max(depth, depthOf(from) + 1);
+      visiting.delete(id);
+      depthCache.set(id, depth);
+      return depth;
+    };
+    const layers = new Map<number, FlowNode[]>();
+    for (const node of base) {
+      const depth = depthOf(node.id);
+      const layer = layers.get(depth) ?? [];
+      layer.push(node);
+      layers.set(depth, layer);
+    }
+    const positioned: FlowNode[] = [];
+    for (const [depth, nodes] of [...layers.entries()].sort((a, b) => a[0] - b[0])) {
+      nodes.forEach((node, index) => { positioned.push({ ...node, position: { x: depth * 300, y: index * 136 } }); });
+    }
+    nodeSnapshot.current = positioned;
+    setFlowNodeOverrides(positioned);
+    queueLayoutSave(positioned);
+    setNotice("Раскладка выровнена по уровням зависимостей");
+  }, [flowNodeOverrides, flowNodes, map, queueLayoutSave]);
+
+  /** Убирает только запись в ORION: каталог на диске и привязки коммитов не трогаем. */
+  const removeRepository = async () => {
+    if (!repositoryId || removing) return;
+    const repo = repositories.find(row => row.id === repositoryId);
+    if (!window.confirm(`Убрать репозиторий «${repo?.name ?? repositoryId}» из ORION?\nКаталог на диске и привязки коммитов к задачам не удаляются.`)) return;
+    setRemoving(true); setError("");
+    try {
+      await client.delete(`/git/repositories/${encodeURIComponent(repositoryId)}`, developmentRepositoryRemovedSchema);
+      setMap(null); setGit(null); setSelected(null); setFullMap(null); setComparison(null); setPath("");
+      await loadRepositories();
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setRemoving(false); }
+  };
 
   const register = async (event: FormEvent) => {
     event.preventDefault();
@@ -330,6 +447,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const updateMapPath = (nextPath: string) => { setPath(nextPath); setSelected(null); setFlowNodeOverrides(null); void loadMap(repositoryId, nextPath); };
   const crumbs = path ? path.split("/").filter(Boolean) : [];
   const currentRepo = repositories.find(repo => repo.id === repositoryId);
+  const globalActive = scope === "global" && search.trim().length > 0;
 
   if (loadingRepos) return <div className={styles.loading}><LoaderCircle className={styles.spin} size={18} /> Загружаем репозитории…</div>;
 
@@ -341,6 +459,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <button type="button" aria-pressed={surface === "compare"} className={surface === "compare" ? styles.activeTab : ""} onClick={() => setSurface("compare")}><CircleDot size={15} /> Сверка замысла</button>
       </div>
       {repositories.length > 0 && <label className={styles.repoSelect}><span>Репозиторий</span><select value={repositoryId} onChange={event => setRepositoryId(event.target.value)} aria-label="Выбрать репозиторий">{repositories.map(repo => <option key={repo.id} value={repo.id}>{repo.name}</option>)}</select></label>}
+      {repositories.length > 0 && <Button size="sm" variant="ghost" disabled={removing || loadingRepos} title="Убрать репозиторий из ORION (каталог на диске не трогаем)" onClick={() => void removeRepository()}><Trash2 size={14} aria-hidden /> {removing ? "Убираем…" : "Удалить"}</Button>}
       {repositoryId && <Button size="sm" variant="ghost" disabled={loading || gitLoading || schemaLoading} onClick={() => surface === "map" ? void loadMap(repositoryId, path) : surface === "git" ? void loadGit() : void loadProjectSchema(repositoryId)}><RefreshCw size={14} aria-hidden /> Обновить</Button>}
     </header>
 
@@ -357,6 +476,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <label>Путь на сервере<input required maxLength={4096} value={repoPath} onChange={event => setRepoPath(event.target.value)} placeholder="Путь внутри разрешённого корня" /></label>
         <Button type="submit" disabled={registering || !repoName.trim() || !repoPath.trim()}>{registering ? "Проверяем…" : "Проверить и добавить"}</Button>
       </form>
+      {allowedRoots.length > 0 && <div className={styles.rootsHint}><strong>Разрешённые корни сервера</strong><ul>{allowedRoots.map(root => <li key={root}><code>{root}</code></li>)}</ul></div>}
     </div> : surface === "map" ? <>
       <div className={styles.summary}>
         <div className={styles.repoName}><span className={styles.statusDot} /> <strong>{currentRepo?.name}</strong><span className={styles.pathLabel}>{currentRepo?.path}</span></div>
@@ -369,15 +489,23 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <button type="button" className={styles.crumb} onClick={() => updateMapPath("")}>{currentRepo?.name ?? "Корень"}</button>
         {crumbs.map((part, index) => <span className={styles.crumbGroup} key={`${part}-${index}`}><span className={styles.slash}>/</span><button type="button" className={styles.crumb} onClick={() => updateMapPath(crumbs.slice(0, index + 1).join("/"))}>{part}</button></span>)}
         <label className={styles.search}><Search size={14} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Найти файл или модуль" aria-label="Поиск по карте" /></label>
+        <button type="button" className={`${styles.scopeToggle}${scope === "global" ? ` ${styles.scopeActive}` : ""}`} aria-pressed={scope === "global"} title={scope === "global" ? "Поиск идёт по всему репозиторию" : "Поиск в текущем каталоге"} onClick={() => setScope(current => current === "global" ? "local" : "global")}><Globe size={14} aria-hidden /> {scope === "global" ? "Весь репозиторий" : "Каталог"}</button>
+        <Button size="sm" variant="ghost" disabled={!map || loading || displayedFlowNodes.length === 0} onClick={autoLayout} title="Выровнять карточки по уровням зависимостей"><LayoutGrid size={14} aria-hidden /> Авто-раскладка</Button>
         <span className={styles.saveState} role="status" aria-live="polite">{saving ? <><LoaderCircle className={styles.spin} size={13} /> Сохраняем…</> : notice || "Изменения раскладки сохраняются автоматически"}</span>
       </div>
       {map?.truncated && <p className={styles.warning} role="status">Карта ограничена лимитом анализа и может быть неполной. Уточните каталог или фильтр, чтобы исследовать структуру подробнее.</p>}
       <div className={styles.mapLayout}>
         <aside className={styles.explorer} aria-label="Содержимое текущего каталога">
-          <div className={styles.explorerHeading}>Элементы каталога <span>{searchMatches.length}</span></div>
-          <div className={styles.explorerList}>{searchMatches.map(node => <button key={node.id} type="button" className={selected?.id === node.id ? styles.selectedItem : ""} onClick={() => setSelected(node)} onDoubleClick={() => node.kind !== "file" && updateMapPath(node.path)}>
+          <div className={styles.explorerHeading}>{globalActive ? "Найдено в репозитории" : "Элементы каталога"} <span>{globalActive ? globalMatches.length : searchMatches.length}</span></div>
+          <div className={styles.explorerList}>{globalActive ? <>
+            {fullMapLoading && <p className={styles.noResults}><LoaderCircle className={styles.spin} size={13} /> Строим карту репозитория…</p>}
+            {!fullMapLoading && globalMatches.map(node => <button key={node.id} type="button" className={selected?.id === node.id ? styles.selectedItem : ""} onClick={() => setSelected(node)} onDoubleClick={() => { if (node.kind === "file") return; const parent = (node.parentId ?? "").replace(/\\/g, "/"); updateMapPath(parent); setSelected(node); }}>
+              <span className={styles.kindMark} style={{ background: kindColors[node.kind] }} /><span className={styles.itemText}><strong>{node.name}</strong><small>{kindLabels[node.kind]} · {(node.parentId ?? "").replace(/\\/g, "/") || "корень репозитория"}</small></span>{node.kind !== "file" && <span className={styles.openHint}>Открыть</span>}
+            </button>)}
+            {!fullMapLoading && globalMatches.length === 0 && <p className={styles.noResults}>По всему репозиторию ничего не найдено.</p>}
+          </> : searchMatches.map(node => <button key={node.id} type="button" className={selected?.id === node.id ? styles.selectedItem : ""} onClick={() => setSelected(node)} onDoubleClick={() => node.kind !== "file" && updateMapPath(node.path)}>
             <span className={styles.kindMark} style={{ background: kindColors[node.kind] }} /><span className={styles.itemText}><strong>{node.name}</strong><small>{kindLabels[node.kind]} · {node.fileCount} файлов</small></span>{node.kind !== "file" && <span className={styles.openHint}>Открыть</span>}
-          </button>)}{searchMatches.length === 0 && <p className={styles.noResults}>В этом каталоге ничего не найдено.</p>}</div>
+          </button>)}{!globalActive && searchMatches.length === 0 && <p className={styles.noResults}>В этом каталоге ничего не найдено.</p>}</div>
           <p className={styles.explorerHint}>Дважды нажмите папку или модуль, чтобы открыть его. Перетаскивайте карточки на схеме — расположение сохранится.</p>
         </aside>
         <div className={styles.canvas}>
