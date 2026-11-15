@@ -42,6 +42,33 @@
 .rootsHint strong { color: var(--aw-text); font-weight: 600; }
 .rootsHint ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .rootsHint code { color: var(--aw-accent); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; overflow-wrap: anywhere; }
+.extBlock { display: grid; gap: 7px; margin: 4px 0 14px; }
+.extBlock h4 { margin: 0; color: var(--aw-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.extBlock ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.extBlock li { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 6px; padding: 4px 7px; background: color-mix(in srgb, var(--aw-border) 16%, transparent); color: var(--aw-text); font-size: var(--font-micro); }
+.extBlock li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extBlock li b { color: var(--aw-accent); font-variant-numeric: tabular-nums; }
+.extMore { color: var(--aw-muted); font-size: var(--font-micro); }
+.zoomCompact :global(.react-flow__edge-text), .zoomCompact :global(.react-flow__edge-textbg), .zoomCompact .flowMeta { opacity: 0; }
+.zoomMicro :global(.react-flow__edge-text), .zoomMicro :global(.react-flow__edge-textbg), .zoomMicro .flowMeta, .zoomMicro .flowKind { display: none; }
+.analyzeView { display: grid; gap: 14px; padding: 15px; }
+.analyzeIntro { max-width: 780px; margin: 0; color: var(--aw-muted); font-size: var(--font-label); line-height: 1.6; }
+.analysisCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.analysisCard { display: grid; gap: 5px; border: 1px solid var(--aw-border); border-radius: 10px; padding: 12px; background: color-mix(in srgb, var(--aw-panel) 62%, var(--orion-color-canvas, #0f1012)); }
+.analysisCard h4 { margin: 0; color: var(--aw-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.analysisCard b { color: var(--aw-text); font-size: var(--font-title); font-variant-numeric: tabular-nums; }
+.analysisCard p { margin: 0; color: var(--aw-muted); font-size: var(--font-micro); line-height: 1.5; }
+.analysisIcon { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid color-mix(in srgb, var(--aw-accent) 30%, var(--aw-border)); border-radius: 8px; background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-panel)); color: var(--aw-accent); }
+.analysisSection { display: grid; gap: 9px; border: 1px solid var(--aw-border); border-radius: 10px; padding: 12px; }
+.analysisSection > h4 { margin: 0; font-size: var(--font-label); font-weight: 600; }
+.cycleList { display: grid; gap: 10px; margin: 0; padding: 0 0 0 18px; }
+.cycleList > li > strong { color: var(--aw-text); font-size: var(--font-label); }
+.cycleList ul { display: grid; gap: 3px; margin: 6px 0 0; padding: 0; list-style: none; }
+.pathList { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.pathList li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pathLink { overflow: hidden; border: 0; border-radius: 5px; padding: 3px 6px; background: transparent; color: var(--aw-accent); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; font-size: var(--font-micro); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.pathLink:hover { background: color-mix(in srgb, var(--aw-accent) 10%, transparent); }
+.pathMeta { flex: none; color: var(--aw-muted); font-size: var(--font-micro); font-variant-numeric: tabular-nums; }
 .saveState { margin-left: auto; color: var(--aw-muted); font-size: var(--font-micro); }
 .warning { margin: 8px 12px 0; border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--aw-border)); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, #f59e0b 8%, var(--aw-panel)); color: var(--aw-text); font-size: var(--font-label); }
 .mapLayout { display: grid; min-height: 470px; flex: 1; grid-template-columns: minmax(180px, 230px) minmax(0, 1fr) minmax(180px, 225px); }

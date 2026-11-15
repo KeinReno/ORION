@@ -30,20 +30,86 @@ import {
   ReactFlowProvider,
   SelectionMode,
   Position,
+  useViewport,
   type Edge,
   type Node,
   type NodeProps,
   type OnMoveEnd
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, ArrowLeft, Box, CircleDot, Code2, GitBranch, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Activity, AlertCircle, ArrowLeft, Box, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import styles from "./architect-workbench.module.css";
 
 type Props = { workspaceId: string };
-type Surface = "map" | "git" | "compare";
+type Surface = "map" | "git" | "compare" | "analyze";
 type FlowNodeData = { source: ArchitectNode | null; title: string; subtitle: string; kind: string };
 type FlowNode = Node<FlowNodeData>;
+
+/**
+ * Компоненты сильной связности внутреннего графа импортов (алгоритм Косараджу, итеративный —
+ * репозиторий может дать тысячи файлов, и рекурсия здесь переполнит стек). Группы больше одного
+ * файла — это циклические зависимости: файлы импортируют друг друга по кругу.
+ */
+function findImportCycles(nodeIds: ReadonlySet<string>, edges: ReadonlyArray<{ from: string; to: string }>): string[][] {
+  const adj = new Map<string, string[]>();
+  const radj = new Map<string, string[]>();
+  const push = (map: Map<string, string[]>, key: string, value: string) => {
+    const list = map.get(key);
+    if (list) list.push(value);
+    else map.set(key, [value]);
+  };
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue;
+    push(adj, edge.from, edge.to);
+    push(radj, edge.to, edge.from);
+  }
+  const visited = new Set<string>();
+  const order: string[] = [];
+  for (const start of nodeIds) {
+    if (visited.has(start)) continue;
+    visited.add(start);
+    const stack: Array<{ id: string; next: number }> = [{ id: start, next: 0 }];
+    while (stack.length) {
+      const frame = stack[stack.length - 1];
+      const targets = adj.get(frame.id) ?? [];
+      if (frame.next >= targets.length) { order.push(frame.id); stack.pop(); continue; }
+      const target = targets[frame.next];
+      frame.next += 1;
+      if (!visited.has(target)) { visited.add(target); stack.push({ id: target, next: 0 }); }
+    }
+  }
+  const assigned = new Set<string>();
+  const cycles: string[][] = [];
+  for (let index = order.length - 1; index >= 0; index -= 1) {
+    const start = order[index];
+    if (assigned.has(start)) continue;
+    assigned.add(start);
+    const group: string[] = [];
+    const stack = [start];
+    while (stack.length) {
+      const id = stack.pop() as string;
+      group.push(id);
+      for (const target of radj.get(id) ?? []) {
+        if (!assigned.has(target)) { assigned.add(target); stack.push(target); }
+      }
+    }
+    if (group.length > 1) cycles.push(group.sort());
+  }
+  return cycles.sort((a, b) => b.length - a.length);
+}
+
+/** Классы зума на канве: на малых масштабах убираем подписи, чтобы карта читалась целиком. */
+function ZoomClassApplier({ targetRef }: { targetRef: RefObject<HTMLDivElement | null> }): null {
+  const { zoom } = useViewport();
+  useEffect(() => {
+    const element = targetRef.current;
+    if (!element) return;
+    element.classList.toggle(styles.zoomCompact, zoom < 0.5);
+    element.classList.toggle(styles.zoomMicro, zoom < 0.26);
+  }, [targetRef, zoom]);
+  return null;
+}
 
 function ArchitectureFlowNode({ data }: NodeProps<FlowNode>): React.ReactElement {
   return <div className={styles.flowCard}>
@@ -106,6 +172,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const [gitLoading, setGitLoading] = useState(false);
   const [gitCursorLoading, setGitCursorLoading] = useState(false);
   const revision = useRef(0);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChain = useRef<Promise<void>>(Promise.resolve());
   const requestSequence = useRef(0);
@@ -175,9 +242,13 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   }, [client]);
 
   useEffect(() => {
-    setPath(""); setMap(null); setGit(null); setSelected(null);
-    if (repositoryId && surface === "map") void loadMap(repositoryId, "");
-  }, [repositoryId, surface, loadMap]);
+    setPath(""); setMap(null); setGit(null); setSelected(null); setFlowNodeOverrides(null);
+  }, [repositoryId]);
+
+  /** Карта грузится, только если её ещё нет: возврат с другой вкладки не сбрасывает каталог. */
+  useEffect(() => {
+    if (repositoryId && surface === "map" && !map) void loadMap(repositoryId, path);
+  }, [repositoryId, surface, map, path, loadMap]);
 
   const loadGit = useCallback(async (repoId = repositoryId, selectedBranch = branch, cursor?: string) => {
     if (!repoId) return;
@@ -224,6 +295,10 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     if (surface === "git" && repositoryId) void loadGit(repositoryId, branch);
   }, [branch, loadGit, repositoryId, surface]);
 
+  useEffect(() => {
+    if (surface === "analyze" && repositoryId) void ensureFullMap();
+  }, [ensureFullMap, repositoryId, surface]);
+
   const visibleNodes = useMemo(() => {
     if (!map) return [];
     const direct = map.nodes.filter(node => {
@@ -257,6 +332,40 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     }
     return set;
   }, [map, selected]);
+
+  /** Внешние зависимости выбранного узла: пакеты, которые тянут файлы внутри него. */
+  const externalSummary = useMemo(() => {
+    if (!selected || !map) return [];
+    const prefix = selected.id ? `${selected.id}/` : "";
+    const counts = new Map<string, number>();
+    for (const edge of map.edges) {
+      if (!edge.external) continue;
+      if (prefix && !edge.from.startsWith(prefix)) continue;
+      counts.set(edge.to, (counts.get(edge.to) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([id, count]) => ({ name: id.replace(/^external:/, ""), count }))
+      .sort((a, b) => b.count - a.count);
+  }, [map, selected]);
+
+  /** Аномалии по полной карте: циклы импортов, файлы без связей, непомерно большие файлы. */
+  const analysis = useMemo(() => {
+    if (!fullMap) return null;
+    const fileIds = new Set(fullMap.nodes.filter(node => node.kind === "file").map(node => node.id));
+    const cycles = findImportCycles(fileIds, fullMap.edges.filter(edge => !edge.external));
+    const connected = new Set<string>();
+    for (const edge of fullMap.edges) {
+      if (fileIds.has(edge.from)) connected.add(edge.from);
+      if (fileIds.has(edge.to)) connected.add(edge.to);
+    }
+    const orphans = fullMap.nodes
+      .filter(node => node.kind === "file" && !connected.has(node.id))
+      .sort((a, b) => b.sizeBytes - a.sizeBytes);
+    const bigFiles = fullMap.nodes
+      .filter(node => node.kind === "file" && node.sizeBytes >= 512 * 1024)
+      .sort((a, b) => b.sizeBytes - a.sizeBytes);
+    return { cycles, orphans, bigFiles };
+  }, [fullMap]);
 
   const flowNodes = useMemo<FlowNode[]>(() => {
     const count = Math.max(1, Math.ceil(Math.sqrt(visibleNodes.length)));
@@ -445,6 +554,16 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   };
 
   const updateMapPath = (nextPath: string) => { setPath(nextPath); setSelected(null); setFlowNodeOverrides(null); void loadMap(repositoryId, nextPath); };
+  /** Показать узел на карте: открыть его каталог и выделить его. */
+  const revealNode = (node: ArchitectNode) => {
+    setSurface("map");
+    updateMapPath((node.parentId ?? "").replace(/\\/g, "/"));
+    setSelected(node);
+  };
+  const revealById = (id: string) => {
+    const node = fullMap?.nodes.find(item => item.id === id);
+    if (node) revealNode(node);
+  };
   const crumbs = path ? path.split("/").filter(Boolean) : [];
   const currentRepo = repositories.find(repo => repo.id === repositoryId);
   const globalActive = scope === "global" && search.trim().length > 0;
@@ -457,6 +576,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <button type="button" aria-pressed={surface === "map"} className={surface === "map" ? styles.activeTab : ""} onClick={() => setSurface("map")}><Code2 size={15} /> Архитектура</button>
         <button type="button" aria-pressed={surface === "git"} className={surface === "git" ? styles.activeTab : ""} onClick={() => setSurface("git")}><GitBranch size={15} /> История Git</button>
         <button type="button" aria-pressed={surface === "compare"} className={surface === "compare" ? styles.activeTab : ""} onClick={() => setSurface("compare")}><CircleDot size={15} /> Сверка замысла</button>
+        <button type="button" aria-pressed={surface === "analyze"} className={surface === "analyze" ? styles.activeTab : ""} onClick={() => setSurface("analyze")}><Activity size={15} /> Анализ</button>
       </div>
       {repositories.length > 0 && <label className={styles.repoSelect}><span>Репозиторий</span><select value={repositoryId} onChange={event => setRepositoryId(event.target.value)} aria-label="Выбрать репозиторий">{repositories.map(repo => <option key={repo.id} value={repo.id}>{repo.name}</option>)}</select></label>}
       {repositories.length > 0 && <Button size="sm" variant="ghost" disabled={removing || loadingRepos} title="Убрать репозиторий из ORION (каталог на диске не трогаем)" onClick={() => void removeRepository()}><Trash2 size={14} aria-hidden /> {removing ? "Убираем…" : "Удалить"}</Button>}
@@ -499,7 +619,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
           <div className={styles.explorerHeading}>{globalActive ? "Найдено в репозитории" : "Элементы каталога"} <span>{globalActive ? globalMatches.length : searchMatches.length}</span></div>
           <div className={styles.explorerList}>{globalActive ? <>
             {fullMapLoading && <p className={styles.noResults}><LoaderCircle className={styles.spin} size={13} /> Строим карту репозитория…</p>}
-            {!fullMapLoading && globalMatches.map(node => <button key={node.id} type="button" className={selected?.id === node.id ? styles.selectedItem : ""} onClick={() => setSelected(node)} onDoubleClick={() => { if (node.kind === "file") return; const parent = (node.parentId ?? "").replace(/\\/g, "/"); updateMapPath(parent); setSelected(node); }}>
+            {!fullMapLoading && globalMatches.map(node => <button key={node.id} type="button" className={selected?.id === node.id ? styles.selectedItem : ""} onClick={() => setSelected(node)} onDoubleClick={() => { if (node.kind !== "file") revealNode(node); }}>
               <span className={styles.kindMark} style={{ background: kindColors[node.kind] }} /><span className={styles.itemText}><strong>{node.name}</strong><small>{kindLabels[node.kind]} · {(node.parentId ?? "").replace(/\\/g, "/") || "корень репозитория"}</small></span>{node.kind !== "file" && <span className={styles.openHint}>Открыть</span>}
             </button>)}
             {!fullMapLoading && globalMatches.length === 0 && <p className={styles.noResults}>По всему репозиторию ничего не найдено.</p>}
@@ -508,9 +628,9 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
           </button>)}{!globalActive && searchMatches.length === 0 && <p className={styles.noResults}>В этом каталоге ничего не найдено.</p>}</div>
           <p className={styles.explorerHint}>Дважды нажмите папку или модуль, чтобы открыть его. Перетаскивайте карточки на схеме — расположение сохранится.</p>
         </aside>
-        <div className={styles.canvas}>
+        <div className={styles.canvas} ref={canvasRef}>
           {loading && <div className={styles.overlay}><LoaderCircle className={styles.spin} size={18} /> Строим карту…</div>}
-          {!loading && displayedFlowNodes.length === 0 ? <div className={styles.canvasEmpty}>В этом каталоге нет непосредственных элементов.</div> : <ReactFlowProvider key={`${repositoryId}:${map?.path ?? "loading"}`}><ReactFlow<FlowNode>
+          {!loading && displayedFlowNodes.length === 0 ? <div className={styles.canvasEmpty}>В этом каталоге нет непосредственных элементов.</div> : <ReactFlowProvider key={`${repositoryId}:${map?.path ?? "loading"}`}><ZoomClassApplier targetRef={canvasRef} /><ReactFlow<FlowNode>
             nodes={displayedFlowNodes}
             edges={flowEdges}
             nodeTypes={flowNodeTypes}
@@ -536,7 +656,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
           </ReactFlow></ReactFlowProvider>}
         </div>
         <aside className={`${styles.inspector}${selected ? ` ${styles.mobileInspectorSelected}` : ""}`} aria-label="Сведения об элементе">
-          {selected ? <><div className={styles.inspectorTop}><CircleDot size={16} style={{ color: kindColors[selected.kind] }} /><span>{kindLabels[selected.kind]}</span></div><h3>{selected.name}</h3><code>{selected.path || "."}</code><dl><div><dt>Файлов</dt><dd>{selected.fileCount}</dd></div><div><dt>Размер</dt><dd>{formatBytes(selected.sizeBytes)}</dd></div><div><dt>Уровень</dt><dd>{selected.depth}</dd></div><div><dt>Входящие связи</dt><dd>{map?.edges.filter(edge => edge.to === selected.id).length ?? 0}</dd></div><div><dt>Исходящие связи</dt><dd>{map?.edges.filter(edge => edge.from === selected.id).length ?? 0}</dd></div></dl>{selected.kind !== "file" && <Button variant="outline" size="sm" onClick={() => updateMapPath(selected.path)}>Открыть каталог</Button>}<p className={styles.provenance}>Карта вычислена по доступным исходным файлам. Связи импорта определяются анализатором и требуют проверки.</p></> : <div className={styles.inspectorEmpty}><Box size={20} /><span>Выберите элемент схемы, чтобы увидеть его свойства.</span></div>}
+          {selected ? <><div className={styles.inspectorTop}><CircleDot size={16} style={{ color: kindColors[selected.kind] }} /><span>{kindLabels[selected.kind]}</span></div><h3>{selected.name}</h3><code>{selected.path || "."}</code><dl><div><dt>Файлов</dt><dd>{selected.fileCount}</dd></div><div><dt>Размер</dt><dd>{formatBytes(selected.sizeBytes)}</dd></div><div><dt>Уровень</dt><dd>{selected.depth}</dd></div><div><dt>Входящие связи</dt><dd>{map?.edges.filter(edge => edge.to === selected.id).length ?? 0}</dd></div><div><dt>Исходящие связи</dt><dd>{map?.edges.filter(edge => edge.from === selected.id).length ?? 0}</dd></div></dl>{externalSummary.length > 0 && <div className={styles.extBlock}><h4>Внешние зависимости</h4><ul>{externalSummary.slice(0, 10).map(dep => <li key={dep.name}><span>{dep.name}</span><b>{dep.count}</b></li>)}{externalSummary.length > 10 && <li className={styles.extMore}>… и ещё {externalSummary.length - 10}</li>}</ul></div>}{selected.kind !== "file" && <Button variant="outline" size="sm" onClick={() => updateMapPath(selected.path)}>Открыть каталог</Button>}<p className={styles.provenance}>Карта вычислена по доступным исходным файлам. Связи импорта определяются анализатором и требуют проверки.</p></> : <div className={styles.inspectorEmpty}><Box size={20} /><span>Выберите элемент схемы, чтобы увидеть его свойства.</span></div>}
         </aside>
       </div>
       <div className={styles.disclaimer}>Карта отражает структуру, которую распознал анализатор ORION. Она не подтверждает полноту кода или соответствие проектному замыслу.</div>
@@ -545,6 +665,20 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         <label>Ветка<select value={branch} onChange={event => setBranch(event.target.value)}><option value="">Все ветки</option>{git?.branches.map(item => <option key={item.name} value={item.name}>{item.name}{item.isCurrent ? " · текущая" : ""}</option>)}</select></label></div>
       {gitLoading ? <div className={styles.loading}><LoaderCircle className={styles.spin} size={18} /> Загружаем историю…</div> : git?.commits.length ? <><div className={styles.gitMeta}>Показано {git.commits.length} из {git.total} коммитов{git.truncated ? " · история ограничена" : ""} · {git.tags.length} тегов</div><ol className={styles.commitList}>{git.commits.map(commit => <li key={commit.sha}><span className={styles.commitMarker} /><div className={styles.commitBody}><div className={styles.commitTitle}>{commit.subject || "Без описания"}{commit.isMerge && <span className={styles.mergeBadge}>Слияние</span>}</div><div className={styles.commitMeta}><code>{commit.sha.slice(0, 8)}</code><span>{commit.author || "Автор не указан"}</span><time dateTime={commit.date}>{new Date(commit.date).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}</time></div>{commit.refs.length > 0 && <div className={styles.refs}>{commit.refs.map(ref => <span key={ref}>{ref}</span>)}</div>}<p>{commit.message}</p></div></li>)}</ol>{git.nextCursor && <Button variant="outline" disabled={gitCursorLoading} onClick={() => void loadGit(repositoryId, branch, git.nextCursor ?? undefined)}>{gitCursorLoading ? "Загружаем…" : "Загрузить ещё"}</Button>}</> : !error && <div className={styles.canvasEmpty}>В этом репозитории пока нет истории Git.</div>}
       <p className={styles.disclaimer}>История загружается только для чтения из зарегистрированного локального репозитория. Получение изменений, переключение веток и запись в Git через этот экран недоступны.</p>
+    </div> : surface === "analyze" ? <div className={styles.analyzeView}>
+      <p className={styles.analyzeIntro}>Проверка полной карты репозитория: циклические импорты, файлы без связей, непомерно большие файлы. Нажмите на путь, чтобы показать файл на карте.</p>
+      {fullMapLoading && !fullMap ? <div className={styles.loading}><LoaderCircle className={styles.spin} size={18} /> Строим карту репозитория…</div> : analysis ? <>
+        <div className={styles.analysisCards}>
+          <div className={styles.analysisCard}><span className={styles.analysisIcon} style={analysis.cycles.length ? { color: "var(--aw-warning, #f59e0b)" } : undefined}><Activity size={18} /></span><h4>Циклические зависимости</h4><b>{analysis.cycles.length}</b><p>Файлы, которые импортируют друг друга по кругу.</p></div>
+          <div className={styles.analysisCard}><span className={styles.analysisIcon} style={analysis.orphans.length ? { color: "var(--aw-warning, #f59e0b)" } : undefined}><FileQuestion size={18} /></span><h4>Файлы без связей</h4><b>{analysis.orphans.length}</b><p>Не импортируют ничего и не импортируются — кандидаты на удаление или на вход в модуль.</p></div>
+          <div className={styles.analysisCard}><span className={styles.analysisIcon} style={analysis.bigFiles.length ? { color: "var(--aw-warning, #f59e0b)" } : undefined}><FileWarning size={18} /></span><h4>Большие файлы</h4><b>{analysis.bigFiles.length}</b><p>Тяжелее 512 КБ — кандидаты на разбиение.</p></div>
+        </div>
+        {analysis.cycles.length > 0 && <section className={styles.analysisSection}><h4>Циклы импортов</h4><ol className={styles.cycleList}>{analysis.cycles.slice(0, 8).map((group, index) => <li key={index}><strong>{group.length} файлов</strong><ul>{group.slice(0, 8).map(id => <li key={id}><button type="button" className={styles.pathLink} onClick={() => revealById(id)}>{id}</button></li>)}{group.length > 8 && <li className={styles.extMore}>… и ещё {group.length - 8}</li>}</ul></li>)}</ol>{analysis.cycles.length > 8 && <p className={styles.extMore}>Показаны 8 из {analysis.cycles.length} групп.</p>}</section>}
+        {analysis.orphans.length > 0 && <section className={styles.analysisSection}><h4>Файлы без связей</h4><ul className={styles.pathList}>{analysis.orphans.slice(0, 30).map(node => <li key={node.id}><button type="button" className={styles.pathLink} onClick={() => revealNode(node)}>{node.id}</button><span className={styles.pathMeta}>{formatBytes(node.sizeBytes)}</span></li>)}</ul>{analysis.orphans.length > 30 && <p className={styles.extMore}>Показаны 30 из {analysis.orphans.length}.</p>}</section>}
+        {analysis.bigFiles.length > 0 && <section className={styles.analysisSection}><h4>Большие файлы</h4><ul className={styles.pathList}>{analysis.bigFiles.slice(0, 30).map(node => <li key={node.id}><button type="button" className={styles.pathLink} onClick={() => revealNode(node)}>{node.id}</button><span className={styles.pathMeta}>{formatBytes(node.sizeBytes)}</span></li>)}</ul>{analysis.bigFiles.length > 30 && <p className={styles.extMore}>Показаны 30 из {analysis.bigFiles.length}.</p>}</section>}
+        {analysis.cycles.length === 0 && analysis.orphans.length === 0 && analysis.bigFiles.length === 0 && <p className={styles.noIssues}>Структурных аномалий не найдено.</p>}
+      </> : !fullMapLoading && <div className={styles.canvasEmpty}>Не удалось построить карту репозитория.</div>}
+      <p className={styles.disclaimer}>Анализ эвристический: он находит структурные сигналы, а не доказывает проблему. Решение о рефакторинге остаётся за командой.</p>
     </div> : <div className={styles.compareView}>
       <div className={styles.compareIntro}><div><h3>Замысел и фактическая карта</h3><p>Проектная схема хранится отдельно от исходного кода. Сверка показывает, какие узлы и связи описаны не полностью или расходятся с тем, что распознал анализатор.</p></div>
         <div className={styles.compareActions}><Button variant="outline" size="sm" disabled={schemaLoading || schemaSaving} onClick={() => void makeSchemaDraft()}>{schemaLoading ? "Загружаем…" : "Черновик из карты"}</Button><Button variant="outline" size="sm" disabled={schemaLoading || schemaSaving || !projectSchemaText.trim()} onClick={() => void compareSchema()}>{comparisonLoading ? "Сверяем…" : "Сверить с кодом"}</Button></div>
