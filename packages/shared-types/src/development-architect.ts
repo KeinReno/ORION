@@ -24,7 +24,11 @@ export const architectNodeSchema = z.object({
   sizeBytes: z.number().int().nonnegative(),
   /** Позиция из сохранённой раскладки; `null`, если пользователь её ещё не задал. */
   x: z.number().nullable(),
-  y: z.number().nullable()
+  y: z.number().nullable(),
+  /** Последний коммит, затронувший файл; у каталогов — самый свежий среди вложенных. `null`/`undefined` — за пределами прочитанной истории. */
+  lastCommitAt: z.string().nullable().optional(),
+  lastAuthor: z.string().nullable().optional(),
+  lastCommitSubject: z.string().nullable().optional()
 });
 export type ArchitectNode = z.infer<typeof architectNodeSchema>;
 

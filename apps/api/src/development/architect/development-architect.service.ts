@@ -21,6 +21,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { DevelopmentGitService } from "../git/development-git.service";
 import { resolveCommitSha } from "../git/git-command";
+import type { GitFileActivity } from "../git/git-graph-parser";
 import { analyzeRepository, normalizeSubPath } from "./architect-analyzer";
 import { prepareAnalysisRoot } from "./architect-ref";
 
@@ -61,6 +62,8 @@ export class DevelopmentArchitectService {
       const prefix = ref ? `Не удалось получить ревизию «${ref}»` : "Не удалось построить карту";
       throw new BadRequestException(`${prefix}: ${(error as Error).message}`);
     }
+    const activityMap = await this.git.recentCommitFiles(repoPath, ref ?? undefined).catch(() => new Map<string, GitFileActivity>());
+    const nodes = this.attachActivity(analysis.nodes, activityMap);
     const layout = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       return tx.developmentArchitectLayout.findUnique({ where: { workspaceId_repositoryId: { workspaceId, repositoryId } } });
@@ -70,7 +73,7 @@ export class DevelopmentArchitectService {
     return {
       repository: { id: repository.id, name: repository.name },
       path: normalized,
-      nodes: analysis.nodes.map((node) => {
+      nodes: nodes.map((node) => {
         const position = positions.get(node.id);
         return position ? { ...node, x: position.x, y: position.y } : node;
       }),
@@ -93,6 +96,45 @@ export class DevelopmentArchitectService {
     } finally {
       await prepared.cleanup();
     }
+  }
+
+  /**
+   * Прикрепляет к узлам активность из git: файлам — их последний коммит, каталогам — самый
+   * свежий среди вложенных (подъём по родителям от глубоких узлов к корню). Файлы вне прочитанной
+   * истории получают `null`, карта от этого не ломается.
+   */
+  private attachActivity<T extends { id: string; parentId: string | null; depth: number; kind: string }>(
+    nodes: T[],
+    activity: ReadonlyMap<string, GitFileActivity>
+  ): Array<T & { lastCommitAt: string | null; lastAuthor: string | null; lastCommitSubject: string | null }> {
+    type Activity = { at: string; author: string; subject: string };
+    const parentOf = new Map(nodes.map(node => [node.id, node.parentId]));
+    const depthOf = new Map(nodes.map(node => [node.id, node.depth]));
+    const best = new Map<string, Activity>();
+    for (const node of nodes) {
+      if (node.kind !== "file") continue;
+      const entry = activity.get(node.id);
+      if (entry) best.set(node.id, { at: entry.at, author: entry.author, subject: entry.subject });
+    }
+    const byDepthDesc = [...best.keys()]
+      .map(id => ({ id, depth: depthOf.get(id) ?? 0 }))
+      .sort((a, b) => b.depth - a.depth);
+    for (const { id } of byDepthDesc) {
+      const parentId = parentOf.get(id);
+      if (!parentId) continue;
+      const mine = best.get(id) as Activity;
+      const theirs = best.get(parentId);
+      if (!theirs || mine.at > theirs.at) best.set(parentId, mine);
+    }
+    return nodes.map(node => {
+      const entry = best.get(node.id);
+      return {
+        ...node,
+        lastCommitAt: entry?.at ?? null,
+        lastAuthor: entry?.author ?? null,
+        lastCommitSubject: entry?.subject ?? null
+      };
+    });
   }
 
   // ── снапшоты ──────────────────────────────────────────────────────────────────────────────
@@ -124,6 +166,8 @@ export class DevelopmentArchitectService {
     } catch (error) {
       throw new BadRequestException(`Не удалось построить карту для снапшота: ${(error as Error).message}`);
     }
+    const activityMap = await this.git.recentCommitFiles(repoPath, sha).catch(() => new Map<string, GitFileActivity>());
+    const nodesWithActivity = this.attachActivity(analysis.nodes, activityMap);
     const row = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
       return tx.developmentArchitectSnapshot.create({
@@ -131,7 +175,7 @@ export class DevelopmentArchitectService {
           workspaceId,
           repositoryId,
           sha,
-          nodes: analysis.nodes as unknown as Prisma.InputJsonValue,
+          nodes: nodesWithActivity as unknown as Prisma.InputJsonValue,
           edges: analysis.edges as unknown as Prisma.InputJsonValue,
           metrics: analysis.metrics as unknown as Prisma.InputJsonValue,
           truncated: analysis.truncated,

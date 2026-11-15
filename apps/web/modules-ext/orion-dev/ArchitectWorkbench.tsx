@@ -48,8 +48,15 @@ import styles from "./architect-workbench.module.css";
 
 type Props = { workspaceId: string };
 type Surface = "map" | "git" | "compare" | "analyze";
-type FlowNodeData = { source: ArchitectNode | null; title: string; subtitle: string; kind: string };
+type FlowNodeData = { source: ArchitectNode | null; title: string; subtitle: string; kind: string; activity: { at: string; author: string | null } | null };
 type FlowNode = Node<FlowNodeData>;
+
+/** Подпись давности: показывает только свежие изменения (до двух недель). */
+function activityLabel(at: string): string | null {
+  const days = Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000);
+  if (Number.isNaN(days) || days < 0 || days > 14) return null;
+  return days === 0 ? "сегодня" : days === 1 ? "вчера" : `${days} дн назад`;
+}
 
 /**
  * Компоненты сильной связности внутреннего графа импортов (алгоритм Косараджу, итеративный —
@@ -117,11 +124,13 @@ function ZoomClassApplier({ targetRef }: { targetRef: RefObject<HTMLDivElement |
 }
 
 function ArchitectureFlowNode({ data }: NodeProps<FlowNode>): React.ReactElement {
+  const fresh = data.activity ? activityLabel(data.activity.at) : null;
   return <div className={styles.flowCard}>
     <Handle type="target" position={Position.Left} className={styles.flowHandle} />
     <span className={styles.flowKind} style={{ color: kindColors[data.kind] ?? kindColors.file }}><i style={{ background: kindColors[data.kind] ?? kindColors.file }} />{kindLabels[data.kind] ?? data.kind}</span>
     <strong className={styles.flowTitle}>{data.title}</strong>
     <small className={styles.flowMeta}>{data.subtitle}</small>
+    {fresh && <small className={styles.activityBadge} title={`${data.activity?.author ?? "Автор не указан"} · ${new Date(data.activity?.at ?? "").toLocaleString("ru-RU")}`}><span className={styles.activityDot} />{fresh}</small>}
     <Handle type="source" position={Position.Right} className={styles.flowHandle} />
   </div>;
 }
@@ -393,14 +402,14 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
         type: "default",
         position: node.x !== null && node.y !== null ? { x: node.x, y: node.y } : { x: (index % count) * 260, y: Math.floor(index / count) * 126 },
         className: focusIds && !focusIds.has(node.id) ? styles.dimmed : undefined,
-        data: { source: node, title: node.name, subtitle: `${node.fileCount} файлов · ${incoming} входящих · ${outgoing} исходящих`, kind: node.kind },
+        data: { source: node, title: node.name, subtitle: `${node.fileCount} файлов · ${incoming} входящих · ${outgoing} исходящих`, kind: node.kind, activity: node.lastCommitAt ? { at: node.lastCommitAt, author: node.lastAuthor ?? null } : null },
         style: { width: 228, minHeight: 74, padding: 12, borderRadius: 10, border: `1px solid color-mix(in srgb, ${kindColors[node.kind] ?? kindColors.file} 45%, transparent)`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)", boxShadow: "0 8px 22px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 22%, transparent)" }
       };
     });
     const shownIds = new Set(nodes.map(node => node.id));
     const externalNames = new Set(map?.edges.filter(edge => edge.external && shownIds.has(edge.from)).map(edge => edge.to) ?? []);
     for (const [index, id] of [...externalNames].entries()) {
-      nodes.push({ id, type: "default", position: { x: 280 + count * 260, y: index * 126 }, className: focusIds && !focusIds.has(id) ? styles.dimmed : undefined, data: { source: null, title: id.replace(/^external:/, ""), subtitle: "Внешняя зависимость", kind: "external" }, style: { width: 205, padding: 12, borderRadius: 10, border: `1px dashed ${kindColors.external}`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)" } });
+      nodes.push({ id, type: "default", position: { x: 280 + count * 260, y: index * 126 }, className: focusIds && !focusIds.has(id) ? styles.dimmed : undefined, data: { source: null, title: id.replace(/^external:/, ""), subtitle: "Внешняя зависимость", kind: "external", activity: null }, style: { width: 205, padding: 12, borderRadius: 10, border: `1px dashed ${kindColors.external}`, background: "var(--orion-color-elevated, #1d1e22)", color: "var(--orion-color-text, #f2f0ea)" } });
     }
     return nodes;
   }, [focusIds, map, search, searchMatches, visibleNodes]);
@@ -764,7 +773,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
           </ReactFlow></ReactFlowProvider>}
         </div>
         <aside className={`${styles.inspector}${selected ? ` ${styles.mobileInspectorSelected}` : ""}`} aria-label="Сведения об элементе">
-          {selected ? <><div className={styles.inspectorTop}><CircleDot size={16} style={{ color: kindColors[selected.kind] }} /><span>{kindLabels[selected.kind]}</span></div><h3>{selected.name}</h3><code>{selected.path || "."}</code><dl><div><dt>Файлов</dt><dd>{selected.fileCount}</dd></div><div><dt>Размер</dt><dd>{formatBytes(selected.sizeBytes)}</dd></div><div><dt>Уровень</dt><dd>{selected.depth}</dd></div><div><dt>Входящие связи</dt><dd>{map?.edges.filter(edge => edge.to === selected.id).length ?? 0}</dd></div><div><dt>Исходящие связи</dt><dd>{map?.edges.filter(edge => edge.from === selected.id).length ?? 0}</dd></div></dl>{externalSummary.length > 0 && <div className={styles.extBlock}><h4>Внешние зависимости</h4><ul>{externalSummary.slice(0, 10).map(dep => <li key={dep.name}><span>{dep.name}</span><b>{dep.count}</b></li>)}{externalSummary.length > 10 && <li className={styles.extMore}>… и ещё {externalSummary.length - 10}</li>}</ul></div>}{selected.kind !== "file" && <Button variant="outline" size="sm" onClick={() => updateMapPath(selected.path)}>Открыть каталог</Button>}<p className={styles.provenance}>Карта вычислена по доступным исходным файлам. Связи импорта определяются анализатором и требуют проверки.</p></> : <div className={styles.inspectorEmpty}><Box size={20} /><span>Выберите элемент схемы, чтобы увидеть его свойства.</span></div>}
+          {selected ? <><div className={styles.inspectorTop}><CircleDot size={16} style={{ color: kindColors[selected.kind] }} /><span>{kindLabels[selected.kind]}</span></div><h3>{selected.name}</h3><code>{selected.path || "."}</code><dl><div><dt>Файлов</dt><dd>{selected.fileCount}</dd></div><div><dt>Размер</dt><dd>{formatBytes(selected.sizeBytes)}</dd></div><div><dt>Уровень</dt><dd>{selected.depth}</dd></div><div><dt>Входящие связи</dt><dd>{map?.edges.filter(edge => edge.to === selected.id).length ?? 0}</dd></div><div><dt>Исходящие связи</dt><dd>{map?.edges.filter(edge => edge.from === selected.id).length ?? 0}</dd></div>{selected.lastCommitAt && <div><dt>Последний коммит</dt><dd>{new Date(selected.lastCommitAt).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}{selected.lastAuthor ? ` · ${selected.lastAuthor}` : ""}</dd></div>}</dl>{externalSummary.length > 0 && <div className={styles.extBlock}><h4>Внешние зависимости</h4><ul>{externalSummary.slice(0, 10).map(dep => <li key={dep.name}><span>{dep.name}</span><b>{dep.count}</b></li>)}{externalSummary.length > 10 && <li className={styles.extMore}>… и ещё {externalSummary.length - 10}</li>}</ul></div>}{selected.kind !== "file" && <Button variant="outline" size="sm" onClick={() => updateMapPath(selected.path)}>Открыть каталог</Button>}<p className={styles.provenance}>Карта вычислена по доступным исходным файлам. Связи импорта определяются анализатором и требуют проверки.</p></> : <div className={styles.inspectorEmpty}><Box size={20} /><span>Выберите элемент схемы, чтобы увидеть его свойства.</span></div>}
         </aside>
       </div>
       <div className={styles.disclaimer}>Карта отражает структуру, которую распознал анализатор ORION. Она не подтверждает полноту кода или соответствие проектному замыслу.</div>

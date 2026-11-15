@@ -24,11 +24,14 @@ import {
 import {
   COMMIT_FIELD_SEPARATOR as FIELD,
   GIT_LOG_FORMAT,
+  GIT_LOG_FILES_FORMAT,
   parseBranches,
   parseGitLog,
+  parseGitLogFiles,
   parseNumstat,
   parseTags,
-  windowCommits
+  windowCommits,
+  type GitFileActivity
 } from "./git-graph-parser";
 
 type DbClient = Prisma.TransactionClient;
@@ -216,6 +219,18 @@ export class DevelopmentGitService {
   async recentCommits(repoPath: string, limit = 500) {
     const log = await runGit(repoPath, ["log", "--all", "--date-order", `--max-count=${Math.min(limit, GIT_HISTORY_FETCH_CAP)}`, `--pretty=format:${GIT_LOG_FORMAT}`, "--"]);
     return parseGitLog(log);
+  }
+
+  /** Последний коммит для каждого файла среди последних `maxCount` коммитов; можно по ревизии. */
+  async recentCommitFiles(repoPath: string, ref?: string, maxCount = 300): Promise<Map<string, GitFileActivity>> {
+    const args = ["log", `--max-count=${Math.min(Math.max(maxCount, 1), GIT_HISTORY_FETCH_CAP)}`, `--pretty=format:${GIT_LOG_FILES_FORMAT}`];
+    if (ref) {
+      const sha = await resolveCommitSha(repoPath, ref);
+      if (!sha) throw new BadRequestException(`Ссылка «${ref}» не найдена в репозитории`);
+      args.push(sha);
+    }
+    args.push("--name-only", "--");
+    return parseGitLogFiles(await runGit(repoPath, args));
   }
 
   // ── чтение git ────────────────────────────────────────────────────────────────────────────────

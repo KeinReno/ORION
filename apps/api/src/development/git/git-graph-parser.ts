@@ -77,6 +77,47 @@ export function parseTags(output: string): DevelopmentGitTag[] {
 }
 
 /** `git diff --numstat` → строки файлов; `-` в числовых колонках означает двоичный файл. */
+/**
+ * Формат для `parseGitLogFiles`: разделитель записи в НАЧАЛЕ — тогда сегмент содержит поля
+ * коммита и его список файлов целиком (`--name-only` печатает файлы после pretty-формата).
+ * Одна строка на коммит, без полного сообщения (%B).
+ */
+export const GIT_LOG_FILES_FORMAT = `${COMMIT_RECORD_SEPARATOR}%H${COMMIT_FIELD_SEPARATOR}%an${COMMIT_FIELD_SEPARATOR}%aI${COMMIT_FIELD_SEPARATOR}%s`;
+
+/** Активность файла: кто и когда последним коммитил в него среди прочитанной истории. */
+export interface GitFileActivity {
+  sha: string;
+  at: string;
+  author: string;
+  subject: string;
+}
+
+/**
+ * Последний коммит для каждого файла из вывода `git log --name-only` в формате
+ * `GIT_LOG_FILES_FORMAT`: первая строка сегмента — поля коммита, остальные — пути файлов.
+ * История идёт от новых к старым, поэтому первая встреченная запись файла и есть самый
+ * свежий коммит.
+ */
+export function parseGitLogFiles(output: string): Map<string, GitFileActivity> {
+  const activity = new Map<string, GitFileActivity>();
+  for (const record of output.split(COMMIT_RECORD_SEPARATOR)) {
+    const lines = record.split("\n");
+    const headIndex = lines.findIndex(line => line.trim());
+    if (headIndex < 0) continue;
+    const parts = lines[headIndex].split(COMMIT_FIELD_SEPARATOR);
+    if (parts.length < 4) continue;
+    const [sha, author, date, subject] = parts;
+    if (!sha || !/^[0-9a-f]{40}$/u.test(sha.trim())) continue;
+    const entry: GitFileActivity = { sha: sha.trim(), at: date ?? "", author: author ?? "", subject: subject ?? "" };
+    for (const line of lines.slice(headIndex + 1)) {
+      const filePath = line.trim();
+      if (!filePath || filePath.includes("\x1f")) continue;
+      if (!activity.has(filePath)) activity.set(filePath, entry);
+    }
+  }
+  return activity;
+}
+
 export function parseNumstat(output: string): DevelopmentGitFileDiff[] {
   const files: DevelopmentGitFileDiff[] = [];
   for (const line of output.split("\n")) {

@@ -114,6 +114,8 @@
 .flowKind i { width: 6px; height: 6px; border-radius: 4px; }
 .flowTitle { overflow: hidden; color: var(--aw-text); font-size: var(--font-label); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .flowMeta { overflow: hidden; color: var(--aw-muted); font-size: var(--font-micro); text-overflow: ellipsis; white-space: nowrap; }
+.activityBadge { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--orion-success, 16 185 129)); font-size: var(--font-micro); }
+.activityDot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: rgb(var(--orion-success, 16 185 129)); box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--orion-success, 16 185 129)) 16%, transparent); }
 .flowHandle { width: 6px; height: 6px; border: 1px solid var(--aw-panel); background: var(--aw-accent); }
 .canvas :global(.react-flow__edge-text) { fill: var(--aw-muted); }
 .canvas :global(.react-flow__controls) { overflow: hidden; border: 1px solid var(--aw-border); border-radius: 8px; box-shadow: 0 3px 12px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 30%, transparent); }

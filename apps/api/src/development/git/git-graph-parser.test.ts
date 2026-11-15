@@ -125,3 +125,29 @@ describe("окно истории: фильтры и пагинация по sha
     expect(() => window({ cursor: "f".repeat(40) })).toThrow("Курсор пагинации не найден");
   });
 });
+
+describe("parseGitLogFiles", () => {
+  const line = (sha: string, author: string, date: string, subject: string) => `${END}${sha}${SEP}${author}${SEP}${date}${SEP}${subject}`;
+
+  it("собирает последний коммит для каждого файла (история от новых к старым)", async () => {
+    const { parseGitLogFiles } = await import("./git-graph-parser");
+    const out = [
+      `${line(A, "Анна", "2026-11-16T01:00:00.000Z", "новое")}\nsrc/a.ts\nsrc/b.ts\n`,
+      `${line(B, "Борис", "2026-11-15T01:00:00.000Z", "старое")}\nsrc/a.ts\nsrc/gone.ts\n`
+    ].join("\n");
+    const activity = parseGitLogFiles(out);
+    expect(activity.get("src/a.ts")).toMatchObject({ sha: A, author: "Анна", subject: "новое" });
+    expect(activity.get("src/b.ts")).toMatchObject({ sha: A, author: "Анна" });
+    expect(activity.get("src/gone.ts")).toMatchObject({ sha: B, author: "Борис" });
+    expect(activity.size).toBe(3);
+  });
+
+  it("игнорирует записи без валидного sha и пустые строки в списке файлов", async () => {
+    const { parseGitLogFiles } = await import("./git-graph-parser");
+    const bad = "not-a-sha";
+    const out = `${END}${bad}${SEP}Анна${SEP}2026-11-16T01:00:00.000Z${SEP}поломка\nsrc/broken.ts\n${line(C, "Анна", "2026-11-16T01:00:00.000Z", "правка")}\nsrc/only.ts\n\n`;
+    const activity = parseGitLogFiles(out);
+    expect(activity.size).toBe(1);
+    expect(activity.get("src/only.ts")).toMatchObject({ sha: C });
+  });
+});
