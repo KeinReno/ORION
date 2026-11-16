@@ -59,25 +59,45 @@ struct RuntimeState {
     started_at: String,
 }
 
-pub fn edition() -> Edition {
-    let value: Value = serde_json::from_str(EDITION_JSON).expect("orion-rust/edition.json");
-    let port = |key: &str| value[key].as_u64().unwrap_or(0) as u16;
-    Edition {
-        edition: value["edition"].as_str().unwrap_or("").to_owned(),
-        product_name: value["productName"].as_str().unwrap_or("").to_owned(),
-        identifier: value["identifier"].as_str().unwrap_or("").to_owned(),
-        data_dir_name: value["dataDirName"].as_str().unwrap_or("").to_owned(),
-        api_port: port("apiPort"),
-        pg_port: port("pgPort"),
-        runtime_port: port("runtimePort"),
-        forbidden_api_port: port("forbiddenApiPort"),
-        forbidden_pg_port: port("forbiddenPgPort"),
-        scheme: value["scheme"].as_str().unwrap_or("").to_owned(),
-    }
+fn edition_field<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
+    value[key]
+        .as_str()
+        .filter(|field| !field.is_empty())
+        .ok_or_else(|| format!("orion-rust/edition.json: поле '{key}' отсутствует или пусто"))
+}
+
+fn edition_port(value: &Value, key: &str) -> Result<u16, String> {
+    let port = value[key]
+        .as_u64()
+        .filter(|port| *port > 0 && *port <= u16::MAX as u64)
+        .ok_or_else(|| {
+            format!("orion-rust/edition.json: порт '{key}' отсутствует или вне диапазона 1..65535")
+        })?;
+    Ok(port as u16)
+}
+
+/// Редакция из зашитого edition.json. Битый JSON или отсутствующее поле —
+/// это ошибка конфигурации сборки: сообщение называет конкретное поле, а не
+/// путающий отказ на позднем этапе запуска.
+pub fn edition() -> Result<Edition, String> {
+    let value: Value = serde_json::from_str(EDITION_JSON)
+        .map_err(|error| format!("orion-rust/edition.json не читается: {error}"))?;
+    Ok(Edition {
+        edition: edition_field(&value, "edition")?.to_owned(),
+        product_name: edition_field(&value, "productName")?.to_owned(),
+        identifier: edition_field(&value, "identifier")?.to_owned(),
+        data_dir_name: edition_field(&value, "dataDirName")?.to_owned(),
+        api_port: edition_port(&value, "apiPort")?,
+        pg_port: edition_port(&value, "pgPort")?,
+        runtime_port: edition_port(&value, "runtimePort")?,
+        forbidden_api_port: edition_port(&value, "forbiddenApiPort")?,
+        forbidden_pg_port: edition_port(&value, "forbiddenPgPort")?,
+        scheme: edition_field(&value, "scheme")?.to_owned(),
+    })
 }
 
 pub fn load_profile() -> Result<Profile, String> {
-    let edition = edition();
+    let edition = edition()?;
     let base = local_app_data()?;
     let production = base.join("ORION");
     let data_dir = std::env::var_os("ORION_DESKTOP_DATA_DIR")
@@ -384,7 +404,7 @@ mod tests {
 
     #[test]
     fn edition_file_keeps_the_experiment_off_beta_ports() {
-        let edition = edition();
+        let edition = edition().expect("edition.json из репозитория должен парситься");
         assert_eq!(edition.edition, "orion-rust");
         assert_eq!(edition.data_dir_name, "ORION-Rust");
         assert_eq!(edition.api_port, 14000);

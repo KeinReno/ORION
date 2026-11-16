@@ -823,7 +823,7 @@ fn layout(root: &Path, pg_root: &Path, app_root: &Path) -> Result<Layout, String
 }
 
 fn validate_profile(profile: &Profile) -> Result<(), String> {
-    let edition = crate::edition();
+    let edition = crate::edition()?;
     let data = crate::resolve_existing_ancestor(&profile.data_dir)?;
     let mut canonical_profile = profile.clone();
     canonical_profile.data_dir = data;
@@ -870,7 +870,7 @@ fn validate_profile_paths(
     requested: &Path,
     effective: &Path,
 ) -> Result<(), String> {
-    let edition = crate::edition();
+    let edition = crate::edition()?;
     for data_dir in [requested, effective] {
         let mut candidate = profile.clone();
         candidate.data_dir = data_dir.to_path_buf();

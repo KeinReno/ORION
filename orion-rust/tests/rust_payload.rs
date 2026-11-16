@@ -4,7 +4,8 @@ mod rust_payload;
 use rust_payload::{
     queue_payload, select_payload, settle_trial, trial_ready, validate_manifest, verify_file_bytes,
     verify_signed_manifest, BaseInfo, PayloadCrypto, PayloadEnvelope, PayloadError, PayloadFile,
-    PayloadManifest, SelectionState,
+    PayloadManifest, SelectionState, prune_stale_versions, version_root,
+    write_selection_state_atomic, STALE_VERSION_TTL,
 };
 
 struct TestCrypto {
@@ -226,4 +227,65 @@ fn new_full_installer_base_discards_old_selection_and_queue_checks_ids() {
     assert_eq!(state.active, None);
     assert_eq!(state.base_id.as_deref(), Some("new-base"));
     assert!(queue_payload(&mut state, "../../escape", |_| true).is_err());
+}
+
+fn temp_data_root(tag: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nonce = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("prune-tests")
+        .join(format!(
+            "orion-prune-test-{}-{}-{nonce}",
+            tag,
+            std::process::id()
+        ));
+    std::fs::create_dir_all(&root).unwrap();
+    root
+}
+
+fn make_version_dir(root: &std::path::Path, selection_id: &str) -> std::path::PathBuf {
+    let dir = version_root(root, selection_id).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("marker.bin"), b"payload").unwrap();
+    dir
+}
+
+#[test]
+fn prune_stale_versions_removes_unreferenced_and_keeps_referenced_and_fresh() {
+    let root = temp_data_root("rotation");
+    let stale_id = id("v1.0.0", 'd');
+    let fresh_id = id("v1.0.1", 'c');
+    let active_id = id("v1.0.2", 'b');
+
+    let stale = make_version_dir(&root, &stale_id);
+    let fresh = make_version_dir(&root, &fresh_id);
+    let active = make_version_dir(&root, &active_id);
+
+    let state = SelectionState {
+        active: Some(active_id.clone()),
+        ..SelectionState::default()
+    };
+    write_selection_state_atomic(&root, &state).unwrap();
+
+    // Нулевой TTL: все нереференсные каталоги удаляются независимо от
+    // возраста, референсный (active в state.json) не трогаем никогда.
+    assert_eq!(prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(), 2);
+    assert!(active.exists());
+    assert!(!stale.exists());
+    assert!(!fresh.exists());
+
+    // Штатный TTL (48 ч): свежий нереференсный каталог переживает ротацию.
+    let fresh = make_version_dir(&root, &fresh_id);
+    assert_eq!(prune_stale_versions(&root, STALE_VERSION_TTL).unwrap(), 0);
+    assert!(fresh.exists());
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn prune_stale_versions_tolerates_missing_versions_dir() {
+    let root = temp_data_root("empty");
+    assert_eq!(prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(), 0);
+    let _ = std::fs::remove_dir_all(&root);
 }

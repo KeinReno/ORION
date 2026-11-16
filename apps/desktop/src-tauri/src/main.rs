@@ -13,9 +13,10 @@ mod startup;
 #[cfg(debug_assertions)]
 mod startup_smoke;
 
-#[cfg(windows)]
-#[path = "../../../../orion-rust/src/supervisor.rs"]
-mod process_supervisor;
+#[cfg(all(windows, not(debug_assertions)))]
+use orion_runtime::supervisor as process_supervisor;
+#[cfg(all(windows, debug_assertions))]
+use orion_runtime as _;
 
 #[cfg(all(windows, not(debug_assertions)))]
 static RUNTIME_STDIN: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
@@ -42,19 +43,9 @@ fn runtime_pipe() -> Result<(std::fs::File, std::fs::File), String> {
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
-fn edition_ports() -> (u16, u16) {
-    let edition: serde_json::Value =
-        serde_json::from_str(include_str!("../../../../orion-rust/edition.json"))
-            .expect("orion-rust/edition.json");
-    let api = edition
-        .get("apiPort")
-        .and_then(|value| value.as_u64())
-        .expect("apiPort") as u16;
-    let pg = edition
-        .get("pgPort")
-        .and_then(|value| value.as_u64())
-        .expect("pgPort") as u16;
-    (api, pg)
+fn edition_ports() -> Result<(u16, u16), String> {
+    let edition = orion_runtime::edition()?;
+    Ok((edition.api_port, edition.pg_port))
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
@@ -200,7 +191,7 @@ fn start_local_runtime(
     use std::time::{Duration, Instant};
     use tauri::Manager;
 
-    let (api_port, pg_port) = edition_ports();
+    let (api_port, pg_port) = edition_ports()?;
     for (name, port) in [("API", api_port), ("PostgreSQL", pg_port)] {
         let pids = listener_pids(port)?;
         reject_occupied_port(name, port, &pids)?;

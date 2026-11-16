@@ -7,7 +7,7 @@ name = "orion-desktop"
 # script's installer step effectively no-ops and the app relaunches unchanged. A real version bump
 # takes the normal "upgrading" branch instead. ORION's own update check still keys off
 # ORION_BUILD_TAG/build.json, not this string — this only has to satisfy NSIS.
-version = "0.1.50"
+version = "0.2.0"
 description = "ORION Rust desktop shell — experimental edition, isolated from the installed beta"
 edition = "2021"
 
@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["unstable"] }
+orion-runtime = { path = "../../../orion-rust" }
 tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

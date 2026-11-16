@@ -12,7 +12,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const MAX_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024 * 1024;
@@ -425,6 +425,62 @@ pub fn version_root(data: &Path, id: &str) -> Result<PathBuf, PayloadError> {
     Ok(data.join("app-updates").join("versions").join(id))
 }
 
+/// Возраст, после которого версия, не упомянутая в state.json, считается
+/// мусором и удаляется. Молодые нереференсные каталоги не трогаем: между
+/// скачиванием и queue лежит окно, где каталог ещё не записан в state.
+pub const STALE_VERSION_TTL: Duration = Duration::from_secs(48 * 60 * 60);
+
+/// Ротация `app-updates/versions`: удаляет каталоги версий, которые не
+/// упомянуты в state.json (base/pending/trial/active/previous/failed) и
+/// старше `max_age`. Возвращает число удалённых каталогов; ошибки чтения
+/// отдельных записей пропускаются, сама ротация никогда не ломает выбор
+/// версии — её вызывают после успешной записи state.
+pub fn prune_stale_versions(data: &Path, max_age: Duration) -> Result<usize, PayloadError> {
+    let state = read_selection_state(data)?;
+    let referenced = [
+        state.base_id,
+        state.pending,
+        state.trial,
+        state.active,
+        state.previous,
+        state.failed,
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<HashSet<_>>();
+    let versions = data.join("app-updates").join("versions");
+    let entries = match fs::read_dir(&versions) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(_) => return Err(PayloadError::InvalidManifest),
+    };
+    let now = SystemTime::now();
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !valid_selection_id(name) || referenced.contains(name) {
+            continue;
+        }
+        // Симлинк или не-каталог: не удаляем из ротации, пусть решают
+        // проверки безопасности пути (ensure_directory_not_link).
+        let Ok(file_type) = entry.file_type() else { continue };
+        if !file_type.is_dir() {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else { continue };
+        let Ok(modified) = metadata.modified() else { continue };
+        let Ok(age) = now.duration_since(modified) else { continue };
+        if age < max_age {
+            continue;
+        }
+        if fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 pub fn read_selection_state(data: &Path) -> Result<SelectionState, PayloadError> {
     ensure_directory_not_link(data)?;
     let updates = data.join("app-updates");
@@ -817,6 +873,15 @@ pub fn select_installed_payload<C: PayloadCrypto>(
         })
     })?;
     write_selection_state_atomic(data, &state)?;
+    // Ротация старых версий после фиксации state: сбой уборки не должен
+    // влиять на выбор, поэтому считаем только для диагностики.
+    match prune_stale_versions(data, STALE_VERSION_TTL) {
+        Ok(removed) if removed > 0 => {
+            eprintln!("[orion-runtime] pruned {removed} stale payload version dir(s)")
+        }
+        Ok(_) => {}
+        Err(_) => eprintln!("[orion-runtime] payload version rotation skipped (state unreadable)"),
+    }
     let root = match selection.id.as_deref() {
         Some(id) => version_root(data, id)?,
         None => runtime.to_path_buf(),
