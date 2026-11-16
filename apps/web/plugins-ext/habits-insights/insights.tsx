@@ -2,7 +2,7 @@
 
 import { useHabitEntries, useToggleHabit } from "@orion/core-react";
 import { PanelSection, Skeleton, useToast } from "@orion/ui";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { HabitsInsightsSlotProps } from "../../lib/extensions/contracts";
 import { buildHeatmapWeeks, buildWeek, entryDaysByHabit, streakLabel } from "../../lib/extensions/host-api";
 import { useLocalNow } from "../../lib/extensions/host-api";
@@ -18,12 +18,21 @@ const HEATMAP_WEEKS = 12;
  * wider heatmap range), so with the plugin off nothing here is fetched at all.
  *
  * Days are the user's local days, like the rest of the module: every tick is sent with the
- * clicked cell's own day key, never the server's idea of today.
+ * clicked cell's own day key, never the server's idea of today. The grid starts on the
+ * current week and pages backwards one week at a time, so a tick forgotten earlier can be
+ * recorded on the day it actually happened — the API accepts any past day.
  */
 export function HabitsInsights({ workspaceId, habits, onEditHabit, onArchiveHabit }: HabitsInsightsSlotProps): React.ReactElement {
   const { toast } = useToast();
   const now = useLocalNow();
-  const week = useMemo(() => buildWeek(now), [now]);
+  // 0 = the week containing today; the grid pages backwards from there. Shifting
+  // by whole weeks keeps buildWeek's Monday-first columns aligned with today.
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekAnchor = useMemo(
+    () => new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekOffset * 7),
+    [now, weekOffset]
+  );
+  const week = useMemo(() => buildWeek(weekAnchor), [weekAnchor]);
   const heatmapWeeks = useMemo(() => buildHeatmapWeeks(now, HEATMAP_WEEKS), [now]);
   const toggleHabit = useToggleHabit(workspaceId);
 
@@ -79,6 +88,8 @@ export function HabitsInsights({ workspaceId, habits, onEditHabit, onArchiveHabi
             onToggle={toggle}
             onEdit={onEditHabit}
             onArchive={onArchiveHabit}
+            weekOffset={weekOffset}
+            onWeekOffsetChange={(delta) => setWeekOffset((current) => Math.max(0, current + delta))}
           />
         )}
       </PanelSection>
