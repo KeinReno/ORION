@@ -135,6 +135,7 @@ pub fn supervise_direct(profile: &Profile) -> Result<(), String> {
 }
 
 fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
+    let run_started = Instant::now();
     let requested_data = crate::resolve_existing_ancestor(&profile.data_dir)?;
     let root = runtime_root()?;
     let program_data = std::env::var_os("ProgramData")
@@ -211,9 +212,11 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     };
     let mut payload =
         PayloadSupervisorAdapter::new(&root, &paths.effective_data_dir, public_key, 0);
+    let payload_select_started = Instant::now();
     api_template = payload
         .select_application(&api_template)
         .map_err(|error| format!("Не удалось выбрать приложение: {error}"))?;
+    log_startup_elapsed("payload-select", payload_select_started);
     write_app_runtime(&requested_data, &api_template)?;
     let shutdown = Arc::new(AtomicBool::new(false));
     if std::env::var("ORION_SHUTDOWN_ON_STDIN_EOF").ok().as_deref() == Some("1") {
@@ -550,6 +553,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
 
     // Keep a single cleanup path for every failure after starting PostgreSQL,
     // including provisioning, migrations, API spawn and API wait errors.
+    log_startup_elapsed("supervise-direct-lifetime", run_started);
     let stop_result = if started_postgres {
         stop_postgres(&mut owned, &base_layout.pg_ctl, &root, &cluster)
     } else {
