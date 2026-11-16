@@ -213,6 +213,10 @@ function writeEnvFile() {
     WEB_ORIGIN: `http://localhost:${WEB_PORT}`,
     ORION_MODE: "local",
     STORAGE_DIR: storageDir,
+    // Локальная разработка без внешних сервисов: Architect читает git-репозитории
+    // из корня этой копии (GitHub не нужен), каталог ORION DEV — из ./development.
+    ORION_DEV_REPOSITORY_ROOTS: ROOT,
+    ORION_DEV_CATALOG_ROOT: ROOT,
     JWT_SECRET: jwtSecret,
     SYNC_SECRET: syncSecret,
     ...(previous.ORION_GITHUB_UPDATE_TOKEN?.trim()
