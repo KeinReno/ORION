@@ -449,11 +449,33 @@ fn main() {
             #[cfg(all(windows, not(debug_assertions)))]
             { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
             #[cfg(debug_assertions)]
-            if startup::smoke_enabled() { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
+            if startup::smoke_enabled() {
+                config.url = tauri::WebviewUrl::App(startup::PATH.into());
+            } else {
+                // Dev build without smoke: load the Next dev server (tauri.conf.json devUrl).
+                // App("index.html") would hit the unregistered tauri:// protocol and the
+                // webview channel dies with FailedToReceiveMessage — no window appears.
+                config.url = tauri::WebviewUrl::External("http://localhost:3011".parse().expect("devUrl"));
+            }
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
             #[cfg(debug_assertions)]
             let window = if payload_ui_smoke::enabled() { window.initialization_script(payload_ui_smoke::FAKE_API) } else { window };
-            window.build()?;
+            #[cfg(debug_assertions)]
+            eprintln!("[orion-debug] building window: label={} size={}x{} visible={} url={:?}",
+                config.label, config.width, config.height, config.visible, config.url);
+            #[cfg(debug_assertions)]
+            let built = window.build();
+            #[cfg(debug_assertions)]
+            {
+                match &built {
+                    Ok(w) => eprintln!("[orion-debug] window built: hwnd={:?} size={:?} visible={:?} title={:?}",
+                        w.hwnd(), w.inner_size(), w.is_visible(), w.title()),
+                    Err(e) => eprintln!("[orion-debug] window build FAILED: {e}"),
+                }
+            }
+            #[cfg(not(debug_assertions))]
+            let built = window.build();
+            built?;
             #[cfg(all(windows, not(debug_assertions)))]
             {
                 let handle = app.handle().clone();
