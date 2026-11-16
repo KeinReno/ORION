@@ -1,11 +1,15 @@
 "use client";
 
 import type { UserPreference } from "@orion/shared-types";
+import { useSession } from "@orion/core-react";
 import { Input, RubberSegment, SegmentedControl, Slider, Switch } from "@orion/ui";
 import { useReducedMotion } from "framer-motion";
 import { ChoiceSelect } from "../../components/choice-select";
 import { ACCENT_HEX, ACCENT_OPTIONS } from "../../lib/accent-options";
 import { PRECISION_ONLY, usesPrecisionShell } from "../../lib/orion-edition";
+import { PRIMARY_SIDEBAR_ID } from "../../lib/sidebar-instances";
+import { useActiveWorkspace } from "../../lib/use-active-workspace";
+import { useNavSidebarPins } from "../../lib/use-nav-sidebar-pins";
 import { BackgroundEffectSettingsForm } from "./background-effect-form";
 import { SettingGroup, SettingRow } from "./setting-row";
 
@@ -72,6 +76,40 @@ export function NotificationSettings({ form, setForm }: FormProps): React.ReactE
 }
 
 /**
+ * Вид левого сайдбара. The pin state lives per device (like the bars' layout),
+ * not in the server preferences this form otherwise edits — so this row reads
+ * and writes the same local store as the pin button at the bottom of the rail.
+ * Choosing here IS choosing there: both controls persist across launches.
+ */
+function SidebarViewRow({ horizontal }: { horizontal: boolean }): React.ReactElement {
+  const { user } = useSession();
+  const { workspace } = useActiveWorkspace();
+  const navPins = useNavSidebarPins(user?.id, workspace?.id);
+  const expanded = navPins.pinned(PRIMARY_SIDEBAR_ID, true);
+  return (
+    <SettingRow
+      anchor="sidebar-view"
+      label="Вид меню"
+      description={
+        horizontal
+          ? "При меню сверху или снизу закрепление не действует — такая панель всегда компактная."
+          : "Состояние запоминается: то же самое переключает кнопка закрепления внизу сайдбара."
+      }
+    >
+      <SegmentedControl
+        aria-label="Вид меню"
+        value={expanded ? "expanded" : "collapsed"}
+        onChange={(value) => navPins.setPinned(PRIMARY_SIDEBAR_ID, value === "expanded")}
+        options={[
+          { value: "expanded", label: "Развёрнут" },
+          { value: "collapsed", label: "Свёрнут" }
+        ]}
+      />
+    </SettingRow>
+  );
+}
+
+/**
  * «Внешний вид», in groups: the shell, the layout, background and surfaces (the previous interface
  * only — Precision draws its own calm chrome), motion, and the small display options.
  */
@@ -134,6 +172,7 @@ export function AppearanceSettings({ form, setForm }: FormProps): React.ReactEle
             ]}
           />
         </SettingRow>
+        <SidebarViewRow horizontal={form.sidebarPosition === "top" || form.sidebarPosition === "bottom"} />
         <SettingRow
           anchor="tabs-mode"
           label="Вкладки сверху"

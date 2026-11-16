@@ -144,8 +144,15 @@ export interface SidebarProps {
    * The caller supplies the text.
    */
   railLabel?: string;
-  /** Initial pin state. Uncontrolled after mount; omitted callers stay unpinned. */
+  /** Initial pin state when the rail manages its own pin; ignored in controlled mode. */
   defaultPinned?: boolean;
+  /**
+   * Controlled pin state: when `pinned` is given, the host owns the value
+   * (e.g. persists it across launches) and the rail reports clicks through
+   * `onPinnedChange` instead of keeping its own state.
+   */
+  pinned?: boolean;
+  onPinnedChange?: (pinned: boolean) => void;
   /** Keep the primary desktop rail's pin control icon-only while expanded. */
   compactPinControl?: boolean;
   /** Expanded width of a vertical rail. Compact bars pass a smaller number; icons stay at 60. */
@@ -206,17 +213,25 @@ export function Sidebar({
   position = "left",
   railLabel,
   defaultPinned,
+  pinned,
+  onPinnedChange,
   compactPinControl = false,
   railWidth = 240,
   navId = "sidebar",
   surfaceMenuItems,
   fill = false
 }: SidebarProps): React.ReactElement {
-  const [pinned, setPinned] = useState(defaultPinned ?? false);
+  const [internalPinned, setInternalPinned] = useState(defaultPinned ?? false);
+  const pinnedControlled = pinned !== undefined;
+  const pinnedState = pinnedControlled ? Boolean(pinned) : internalPinned;
+  function changePinned(next: boolean): void {
+    if (!pinnedControlled) setInternalPinned(next);
+    onPinnedChange?.(next);
+  }
   const showContextMenu = useContextMenuApi();
   const isDrawer = variant === "drawer";
   const horizontal = !isDrawer && (position === "top" || position === "bottom");
-  const open = isDrawer || (pinned && !horizontal);
+  const open = isDrawer || (pinnedState && !horizontal);
   const reduceMotion = useMotionLevel() === "off";
   const smooth = useMotionSpring("smooth");
   const duration = reduceMotion ? 0 : 0.2;
@@ -859,13 +874,13 @@ export function Sidebar({
             type="button"
             aria-expanded={open}
             aria-controls={`${navId}-nav`}
-            aria-label={pinned ? "Открепить меню" : "Закрепить меню"}
-            title={pinned ? "Открепить меню" : "Закрепить меню"}
-            onClick={() => setPinned((value) => !value)}
+            aria-label={pinnedState ? "Открепить меню" : "Закрепить меню"}
+            title={pinnedState ? "Открепить меню" : "Закрепить меню"}
+            onClick={() => changePinned(!pinnedState)}
             className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           >
-            {pinned ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeft className="h-5 w-5 shrink-0" aria-hidden />}
-            <span className={clsx("whitespace-nowrap", (!open || compactPinControl) && "sr-only")}>{pinned ? "Открепить" : "Закрепить"}</span>
+            {pinnedState ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeft className="h-5 w-5 shrink-0" aria-hidden />}
+            <span className={clsx("whitespace-nowrap", (!open || compactPinControl) && "sr-only")}>{pinnedState ? "Открепить" : "Закрепить"}</span>
           </button>
         )}
         {footer ? <div>{typeof footer === "function" ? footer({ open }) : footer}</div> : null}

@@ -43,6 +43,7 @@ import { useEnabledModules } from "../../../lib/use-enabled-modules";
 import { hasUnsavedDrafts } from "../../../lib/unsaved-drafts";
 import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "../../../lib/use-active-workspace";
 import { useNavSidebars } from "../../../lib/use-nav-sidebars";
+import { useNavSidebarPins } from "../../../lib/use-nav-sidebar-pins";
 import { newFolderId } from "../../../lib/use-sidebar-folders";
 
 const panelComponents = buildPanelComponents();
@@ -73,6 +74,7 @@ export function NavSidebarWindow(): React.ReactElement | null {
   const apiRef = useRef<DockviewApi | null>(null);
   const pendingOpenRef = useRef<{ panelId: string; title?: string } | null>(null);
   const { state, update } = useNavSidebars(user?.id, workspace?.id);
+  const navPins = useNavSidebarPins(user?.id, workspace?.id);
   const { toast } = useToast();
   const [folderDialog, setFolderDialog] = useState<{ mode: "create"; panelId?: string } | { mode: "rename"; id: string; name: string } | null>(null);
   const defaultNavPanels = useMemo(
@@ -472,6 +474,8 @@ export function NavSidebarWindow(): React.ReactElement | null {
         position="left"
         fill
         defaultPinned
+        pinned={navPins.pinned(bar.id, true)}
+        onPinnedChange={(next) => navPins.setPinned(bar.id, next)}
         railLabel={bar.name}
         links={links}
         folders={folders}

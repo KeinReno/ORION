@@ -97,12 +97,14 @@ import { getActiveWorkspaceId, setActiveWorkspaceId, useActiveWorkspace } from "
 import { ExtensionSlot } from "../../lib/extensions/slot";
 import { detachPanelToWindow, openWorkspaceInNewWindow } from "../../lib/panel-window";
 import { useDesktopDueReminders } from "../../lib/use-desktop-due-reminders";
+import { useDesktopNotificationPush } from "../../lib/use-desktop-notification-push";
 import { useUpdateNotifier } from "../../lib/use-update-notifier";
 import { orderedIds } from "../../lib/sidebar-folders";
 import { NodeBadge } from "../../components/node-badge";
 import { cancelPendingSwitch, confirmPendingSwitch, hasUnsavedDrafts, requestWorkspaceSwitch, usePendingSwitch } from "../../lib/unsaved-drafts";
 import { newFolderId, useSidebarFolders } from "../../lib/use-sidebar-folders";
 import { useNavSidebars } from "../../lib/use-nav-sidebars";
+import { useNavSidebarPins } from "../../lib/use-nav-sidebar-pins";
 import { useNavSidebarHost } from "../../lib/use-nav-sidebar-windows";
 import { useNavDragBridge } from "../../lib/use-nav-drag-bridge";
 import { subscribeNavDrag } from "@orion/ui";
@@ -408,6 +410,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const sectionNav = orderedNav.filter((panel) => panel.group !== "Инструменты");
   const toolNav = orderedNav.filter((panel) => panel.group === "Инструменты");
   const { state: navState, update: updateNav } = useNavSidebars(user?.id, workspace?.id);
+  const navPins = useNavSidebarPins(user?.id, workspace?.id);
   const openDetachedPanel = useRef<(panelId: string) => void>(() => {});
   const navWindows = useNavSidebarHost(user?.id, workspace?.id, (panelId) => openDetachedPanel.current(panelId));
   useEffect(() => subscribeNavDrag((id) => {
@@ -462,6 +465,7 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
   const { data: tasks } = useTasks(isModuleEnabled(disabledModules, "tasks") ? workspace?.id : undefined);
   const { data: inboxQueue } = useInbox(workspace?.id, false);
   useDesktopDueReminders(tasks);
+  useDesktopNotificationPush(workspace?.id);
   useUpdateNotifier();
 
   const apiRef = useRef<DockviewApi | null>(null);
@@ -1250,6 +1254,8 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
         onDrawerClose={asDrawer ? () => setDrawerOpen(false) : undefined}
         railLabel={!asDrawer && navState.sidebars.length > 1 ? bar.name : undefined}
         defaultPinned={bar.density !== "icons"}
+        pinned={navPins.pinned(bar.id, bar.density !== "icons")}
+        onPinnedChange={(next) => navPins.setPinned(bar.id, next)}
         railWidth={bar.density === "compact" ? 188 : 240}
         compactPinControl={primary}
         header={primary ? ({ open }) => (
