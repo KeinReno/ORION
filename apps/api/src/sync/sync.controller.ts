@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Param, Post, Put, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import {
   restoreInputSchema,
   syncRemoteInputSchema,
@@ -12,6 +13,7 @@ import {
 } from "@orion/shared-types";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { CurrentUser } from "../common/current-user.decorator";
+import { fixMultipartFilename, MAX_BACKUP_UPLOAD_BYTES } from "../common/multipart";
 import { ZodValidationPipe } from "../common/zod-validation.pipe";
 import type { RequestUser } from "../auth/jwt.strategy";
 import { SyncService } from "./sync.service";
@@ -75,4 +77,70 @@ export class SyncController {
   ): Promise<RestorePreview> {
     return this.sync.restore(user.userId, workspaceId, body);
   }
+
+  /** Локальный экспорт: тот же зашифрованный `.orion`, что уходит в облако, — файлом на скачивание. */
+  @Get("local-export")
+  async exportLocal(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string
+  ): Promise<StreamableFile> {
+    const { name, sealed } = await this.sync.exportLocal(user.userId, workspaceId);
+    return new StreamableFile(sealed, {
+      disposition: `attachment; filename="${name}"`,
+      type: "application/octet-stream"
+    });
+  }
+
+  /** Превью локального восстановления: multipart с файлом `.orion`, ничего не пишет в БД. */
+  @Post("local-restore/preview")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_BACKUP_UPLOAD_BYTES } }))
+  previewLocalRestore(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined
+  ): Promise<RestorePreview> {
+    return this.sync.localRestore(
+      user.userId,
+      workspaceId,
+      requireBackupFile(file),
+      fixMultipartFilename(file!.originalname),
+      { snapshot: fixMultipartFilename(file!.originalname), dryRun: true }
+    );
+  }
+
+  /** Применение локального восстановления: тот же файл + `confirmWorkspaceId` и `expectedManifestHash` из превью. */
+  @Post("local-restore/apply")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_BACKUP_UPLOAD_BYTES } }))
+  applyLocalRestore(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @UploadedFile() file: { buffer: Buffer; originalname: string } | undefined,
+    @Body() body: unknown
+  ): Promise<RestorePreview> {
+    const fields = (body ?? {}) as Record<string, unknown>;
+    const parsed = restoreInputSchema.safeParse({
+      snapshot: fixMultipartFilename(file?.originalname ?? "backup.orion"),
+      dryRun: false,
+      confirmWorkspaceId: typeof fields.confirmWorkspaceId === "string" ? fields.confirmWorkspaceId : undefined,
+      expectedManifestHash: typeof fields.expectedManifestHash === "string" ? fields.expectedManifestHash : undefined
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Нужны поля confirmWorkspaceId и expectedManifestHash из предпросмотра");
+    }
+    return this.sync.localRestore(
+      user.userId,
+      workspaceId,
+      requireBackupFile(file),
+      parsed.data.snapshot!,
+      parsed.data
+    );
+  }
+}
+
+/** Multipart без файла — сразу 400, а не падение на пустом буфере внутри конвейера восстановления. */
+function requireBackupFile(file: { buffer: Buffer; originalname: string } | undefined): Buffer {
+  if (!file || !file.buffer || file.buffer.length === 0) {
+    throw new BadRequestException("Файл бэкапа не прикреплён");
+  }
+  return file.buffer;
 }

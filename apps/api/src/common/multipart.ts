@@ -9,6 +9,13 @@
 export const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.MAX_UPLOAD_MB ?? 50)) * 1024 * 1024;
 
 /**
+ * Локальный файл восстановления — это весь бэкап пространства (строки БД +
+ * байты документов), он на порядки больше одиночного документа. Свой лимит,
+ * чтобы не упираться в документный: `MAX_BACKUP_UPLOAD_MB` (по умолчанию 2 ГБ).
+ */
+export const MAX_BACKUP_UPLOAD_BYTES = Math.max(1, Number(process.env.MAX_BACKUP_UPLOAD_MB ?? 2048)) * 1024 * 1024;
+
+/**
  * Busboy (under `multer`/`FilesInterceptor`) decodes the multipart
  * `Content-Disposition: filename="…"` header as Latin-1 by default — it
  * doesn't know the browser actually sent UTF-8 bytes for a non-ASCII name.

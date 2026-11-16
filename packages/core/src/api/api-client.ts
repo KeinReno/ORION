@@ -1967,6 +1967,30 @@ export class ApiClient {
     return this.request("POST", `/workspaces/${workspaceId}/sync/restore`, input, restorePreviewSchema);
   }
 
+  /** Локальный экспорт бэкапа — зашифрованный `.orion` файлом. */
+  downloadLocalBackup(workspaceId: string): Promise<Blob> {
+    return this.requestBlob("GET", `/workspaces/${workspaceId}/sync/local-export`);
+  }
+
+  previewLocalRestore(workspaceId: string, file: Blob, fileName: string): Promise<RestorePreview> {
+    const form = new FormData();
+    form.append("file", file, fileName);
+    return this.request("POST", `/workspaces/${workspaceId}/sync/local-restore/preview`, form, restorePreviewSchema);
+  }
+
+  applyLocalRestore(
+    workspaceId: string,
+    file: Blob,
+    fileName: string,
+    input: { confirmWorkspaceId: string; expectedManifestHash: string }
+  ): Promise<RestorePreview> {
+    const form = new FormData();
+    form.append("file", file, fileName);
+    form.append("confirmWorkspaceId", input.confirmWorkspaceId);
+    form.append("expectedManifestHash", input.expectedManifestHash);
+    return this.request("POST", `/workspaces/${workspaceId}/sync/local-restore/apply`, form, restorePreviewSchema);
+  }
+
   // --- Profile & sessions (v0.14) ------------------------------------------
   // `/auth/me` has always been here; the rest of the identity surface (rename,
   // password change, the device list) was API-only until v0.14.

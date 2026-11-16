@@ -234,6 +234,46 @@ export class SyncService {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  // --- локальный бэкап (файл) ---------------------------------------------
+
+  /**
+   * Локальный экспорт: тот же payload и то же шифрование, что у облачного
+   * `backup()` (строки снапшота + байты документов + Compass), но без
+   * удалёнки — байты отдаются файлом `<дата>.orion` на скачивание. Файл
+   * взаимозаменяем с облачным снимком: его можно положить в `SNAPSHOTS_DIR`
+   * на WebDAV или применить через `localRestore`.
+   */
+  async exportLocal(userId: string, workspaceId: string): Promise<{ name: string; sealed: Buffer }> {
+    const { snapshot, blobDocs } = await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner"]);
+      const snap = await this.snapshots.serialize(tx, workspaceId);
+      const blobEntries = await this.blobs.collect(tx, workspaceId, this.storage);
+      return { snapshot: snap, blobDocs: blobEntries };
+    });
+    // SQLite Compass лежит вне Postgres и RLS: читаем после проверки роли владельца (выше, в транзакции).
+    const compassData = await this.compass.collect(workspaceId);
+    const payload: BackupPayload = { blobs: blobDocs, snapshot, ...(compassData ? { compass: compassData } : {}) };
+    const sealed = encryptSnapshot(Buffer.from(JSON.stringify(payload), "utf8"));
+    return { name: `${snapshot.generatedAt.replace(/[:.]/g, "-")}.orion`, sealed };
+  }
+
+  /**
+   * Локальное восстановление из присланного файла — тот же конвейер
+   * `restoreFromSealed`, что у облачного restore(), включая stale-preview
+   * rejection: apply заново хеширует присланные байты и сверяет с
+   * `expectedManifestHash` превью, поэтому подтвердить можно только тот файл,
+   * который показали в превью.
+   */
+  localRestore(
+    userId: string,
+    workspaceId: string,
+    sealed: Buffer,
+    fileName: string,
+    input: RestoreInput
+  ): Promise<RestorePreview> {
+    return this.restoreFromSealed(userId, workspaceId, sealed, fileName, input);
+  }
+
   // --- восстановление ---------------------------------------------------
 
   async restore(
@@ -246,8 +286,24 @@ export class SyncService {
     if (!(await remote.exists(key))) {
       throw new NotFoundException(`Снапшот не найден: ${input.snapshot ?? LATEST_NAME}`);
     }
-
     const sealed = await remote.getFile(key);
+    return this.restoreFromSealed(userId, workspaceId, sealed, input.snapshot ?? LATEST_NAME, input);
+  }
+
+  /**
+   * Общий конвейер восстановления из уже полученных зашифрованных байт:
+   * расшифровка, проверка payload и принадлежности пространству, превью
+   * (dryRun) и двухфазный apply (R18-01, stale-preview rejection S04).
+   * Облачный `restore()` и локальное восстановление из файла различаются
+   * только источником `sealed` — вся остальная логика одна, намеренно.
+   */
+  private async restoreFromSealed(
+    userId: string,
+    workspaceId: string,
+    sealed: Buffer,
+    snapshotLabel: string,
+    input: RestoreInput
+  ): Promise<RestorePreview> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(decryptSnapshot(sealed).toString("utf8"));
@@ -289,7 +345,7 @@ export class SyncService {
         return this.snapshots.counts(tx, workspaceId);
       });
       return {
-        snapshot: input.snapshot ?? LATEST_NAME,
+        snapshot: snapshotLabel,
         createdAt: snapshot.generatedAt,
         incoming,
         current,
@@ -415,9 +471,9 @@ export class SyncService {
 
     const current = before;
 
-    this.logger.warn(`restore применён для workspace ${workspaceId} из ${key}`);
+    this.logger.warn(`restore применён для workspace ${workspaceId} из ${snapshotLabel}`);
     return {
-      snapshot: input.snapshot ?? LATEST_NAME,
+      snapshot: snapshotLabel,
       createdAt: snapshot.generatedAt,
       incoming,
       current,

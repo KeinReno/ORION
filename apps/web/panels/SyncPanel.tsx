@@ -2,6 +2,9 @@
 
 import {
   useBackups,
+  useApplyLocalRestore,
+  useDownloadLocalBackup,
+  usePreviewLocalRestore,
   useRestoreBackup,
   useRunBackup,
   useSaveSyncRemote,
@@ -25,13 +28,14 @@ import {
   Switch,
   useToast
 } from "@orion/ui";
-import { Cloud, DatabaseBackup, Lock, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { Cloud, DatabaseBackup, Download, HardDrive, Lock, RefreshCw, ShieldCheck, TriangleAlert, Upload } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describeAuthError } from "../lib/error-message";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { HybridModeSection } from "./sync/hybrid-mode-section";
 
 const BACKUP_STEPS = ["Собираю данные…", "Шифрую снимок…", "Загружаю на WebDAV…"];
+const LOCAL_BACKUP_STEPS = ["Собираю данные…", "Шифрую снимок…"];
 const RESTORE_PREVIEW_STEPS = ["Скачиваю снимок…", "Расшифровываю…", "Считаю изменения…"];
 const RESTORE_APPLY_STEPS = ["Скачиваю снимок…", "Расшифровываю…", "Применяю…"];
 
@@ -55,9 +59,15 @@ export function SyncPanel(): React.ReactElement {
   const backups = useBackups(workspace?.id, Boolean(remote.data), isOwner);
   const runBackup = useRunBackup(workspace?.id);
   const restore = useRestoreBackup(workspace?.id);
+  const downloadLocal = useDownloadLocalBackup(workspace?.id);
+  const previewLocalRestore = usePreviewLocalRestore(workspace?.id);
+  const applyLocalRestore = useApplyLocalRestore(workspace?.id);
   const { toast } = useToast();
   const [form, setForm] = useState<SyncRemoteInput>(emptyForm);
   const [preview, setPreview] = useState<RestorePreview | null>(null);
+  /** Файл локального бэкапа, из которого показано текущее превью (null — превью облачного снимка). */
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const restoreFileInput = useRef<HTMLInputElement>(null);
   // `restore` (useRestoreBackup) is shared by both the dry-run preview and
   // the real apply — this tells the two apart so the right step labels (and
   // the confirm button's own status) show for whichever is actually in flight.
@@ -111,6 +121,7 @@ export function SyncPanel(): React.ReactElement {
   }
 
   async function previewRestore(snapshot: string): Promise<void> {
+    setPreviewFile(null);
     setRestorePhase("preview");
     try {
       setPreview(await restore.mutateAsync({ snapshot, dryRun: true }));
@@ -121,21 +132,61 @@ export function SyncPanel(): React.ReactElement {
     }
   }
 
+  async function exportLocalBackup(): Promise<void> {
+    try {
+      const blob = await downloadLocal.mutateAsync();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `orion-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.orion`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Локальная копия сохранена", description: `${formatBytes(blob.size)} · файл можно положить в облако или держать на диске`, tone: "success" });
+    } catch (error) {
+      showError("Не удалось создать локальную копию", error);
+    }
+  }
+
+  async function pickLocalRestore(file: File): Promise<void> {
+    setRestorePhase("preview");
+    try {
+      setPreview(await previewLocalRestore.mutateAsync({ file, fileName: file.name }));
+      setPreviewFile(file);
+    } catch (error) {
+      setPreviewFile(null);
+      showError("Не удалось прочитать файл", error);
+    } finally {
+      setRestorePhase(null);
+    }
+  }
+
   async function applyRestore(): Promise<void> {
     if (!preview || !workspace) return;
     setRestorePhase("apply");
     try {
-      await restore.mutateAsync({
-        snapshot: preview.snapshot,
-        dryRun: false,
-        confirmWorkspaceId: workspace.id,
-        // S04 (stale-preview rejection): apply отдаёт назад тот же
-        // manifestHash, что показал preview — сервер сверяет его со
-        // свежескачанным файлом и отказывает, если удалёнка успела
-        // измениться между предпросмотром и подтверждением.
-        expectedManifestHash: preview.manifestHash
-      });
+      if (previewFile) {
+        await applyLocalRestore.mutateAsync({
+          file: previewFile,
+          fileName: previewFile.name,
+          input: {
+            confirmWorkspaceId: workspace.id,
+            expectedManifestHash: preview.manifestHash
+          }
+        });
+      } else {
+        await restore.mutateAsync({
+          snapshot: preview.snapshot,
+          dryRun: false,
+          confirmWorkspaceId: workspace.id,
+          // S04 (stale-preview rejection): apply отдаёт назад тот же
+          // manifestHash, что показал preview — сервер сверяет его со
+          // свежескачанным файлом и отказывает, если удалёнка успела
+          // измениться между предпросмотром и подтверждением.
+          expectedManifestHash: preview.manifestHash
+        });
+      }
       setPreview(null);
+      setPreviewFile(null);
       toast({ title: "Рабочее пространство восстановлено", tone: "success" });
     } catch (error) {
       showError("Восстановление не выполнено", error);
@@ -149,6 +200,7 @@ export function SyncPanel(): React.ReactElement {
   }
 
   const diff = preview ? previewDiff(preview) : null;
+  const applyPending = restore.isPending || applyLocalRestore.isPending;
 
   if (workspace && !isOwner) {
     // UI-only gate: hides the form so a member/lead doesn't see a panel full
@@ -157,7 +209,7 @@ export function SyncPanel(): React.ReactElement {
     // hygiene, not a substitute for it.
     return (
       <PanelShell>
-        <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки через WebDAV" />
+        <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки: облако и локальные файлы" />
         <PanelBody measure="settings">
           <EmptyState
             icon={Lock}
@@ -171,7 +223,7 @@ export function SyncPanel(): React.ReactElement {
 
   return (
     <PanelShell>
-      <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки через WebDAV" />
+      <PanelHeader icon={RefreshCw} title="Резервные копии" subtitle="Зашифрованные снимки: облако и локальные файлы" />
       <PanelBody measure="settings" className="[container-type:inline-size]">
         {remote.isError ? (
           <EmptyState
@@ -225,6 +277,45 @@ export function SyncPanel(): React.ReactElement {
               </form>
             )}
           </Card>
+        </PanelSection>
+
+        <PanelSection
+          title="Локальная копия"
+          actions={
+            <div className="flex gap-2">
+              <input
+                ref={restoreFileInput}
+                type="file"
+                accept=".orion,application/octet-stream"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void pickLocalRestore(file);
+                }}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                status={downloadLocal.isPending ? "pending" : downloadLocal.isSuccess ? "success" : downloadLocal.isError ? "error" : "idle"}
+                onClick={() => void exportLocalBackup()}
+              >
+                <Download className="h-4 w-4" /> Экспорт файла
+              </Button>
+              <Button size="sm" variant="outline" disabled={applyPending} onClick={() => restoreFileInput.current?.click()}>
+                <Upload className="h-4 w-4" /> Восстановить из файла…
+              </Button>
+            </div>
+          }
+        >
+          <Card className="flex items-start gap-3 text-sm text-muted-foreground">
+            <HardDrive className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              Тот же зашифрованный снимок, что уходит в облако, — одним файлом <span className="font-mono text-xs">.orion</span> на ваш диск.
+              Файл можно держать как локальную копию, положить в любое облако вручную или подложить обратно через «Восстановить из файла».
+            </p>
+          </Card>
+          {downloadLocal.isPending ? <MultiStepLoader steps={LOCAL_BACKUP_STEPS} /> : null}
         </PanelSection>
 
         <PanelSection
@@ -300,7 +391,9 @@ export function SyncPanel(): React.ReactElement {
                 <ShieldCheck className="mt-0.5 h-5 w-5 text-warning" />
                 <div>
                   <p className="text-sm font-medium">Будут заменены данные текущего пространства</p>
-                  <p className="text-xs text-muted-foreground">Снимок: {new Date(preview.createdAt).toLocaleString("ru-RU")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {previewFile ? `Локальный файл: ${previewFile.name}` : `Снимок: ${new Date(preview.createdAt).toLocaleString("ru-RU")}`}
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -316,14 +409,14 @@ export function SyncPanel(): React.ReactElement {
               <div className="flex gap-2">
                 <Button
                   variant="danger"
-                  disabled={restorePhase !== "apply" && restore.isPending}
+                  disabled={restorePhase !== "apply" && applyPending}
                   status={
                     restorePhase === "apply"
-                      ? restore.isPending
+                      ? applyPending
                         ? "pending"
-                        : restore.isSuccess
+                        : restore.isSuccess || applyLocalRestore.isSuccess
                           ? "success"
-                          : restore.isError
+                          : restore.isError || applyLocalRestore.isError
                             ? "error"
                             : "idle"
                       : "idle"
@@ -332,7 +425,7 @@ export function SyncPanel(): React.ReactElement {
                 >
                   Подтвердить восстановление
                 </Button>
-                <Button variant="subtle" onClick={() => setPreview(null)}>
+                <Button variant="subtle" onClick={() => { setPreview(null); setPreviewFile(null); }}>
                   Отмена
                 </Button>
               </div>

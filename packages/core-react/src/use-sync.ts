@@ -65,3 +65,35 @@ export function useRestoreBackup(workspaceId: string | undefined) {
     }
   });
 }
+
+export function useDownloadLocalBackup(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useMutation({ mutationFn: () => api.downloadLocalBackup(workspaceId as string) });
+}
+
+export function usePreviewLocalRestore(workspaceId: string | undefined) {
+  const { api } = useCore();
+  return useMutation({
+    mutationFn: ({ file, fileName }: { file: Blob; fileName: string }) =>
+      api.previewLocalRestore(workspaceId as string, file, fileName)
+  });
+}
+
+export function useApplyLocalRestore(workspaceId: string | undefined) {
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      file,
+      fileName,
+      input
+    }: {
+      file: Blob;
+      fileName: string;
+      input: { confirmWorkspaceId: string; expectedManifestHash: string };
+    }) => api.applyLocalRestore(workspaceId as string, file, fileName, input),
+    onSuccess: (result) => {
+      if (result.applied) queryClient.invalidateQueries();
+    }
+  });
+}
