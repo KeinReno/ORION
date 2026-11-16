@@ -191,7 +191,8 @@ export async function computeNetByAccount(tx: Prisma.TransactionClient, workspac
 }
 
 export interface TransactionShape {
-  accountId: string;
+  /** Optional on create in the simple finance mode (resolved to the default account later). */
+  accountId?: string;
   toAccountId?: string | null;
   type: "income" | "expense" | "transfer";
   lines: { categoryId?: string | null; amount: number }[];

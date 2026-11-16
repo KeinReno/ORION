@@ -96,6 +96,8 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // 08: canvas rows reference a goal; loaded after goals.
   spec("goalCanvasLayouts", (tx) => tx.goalCanvasLayout),
   spec("financeAccounts", (tx) => tx.account),
+  // Простой/расширенный режим модуля — одна строка на пространство, зависит только от workspace.
+  spec("financeSettings", (tx) => tx.financeSettings),
   spec("financeCategories", (tx) => tx.financeCategory),
   spec("calendarConnections", (tx) => tx.calendarConnection),
   spec("habits", (tx) => tx.habit),

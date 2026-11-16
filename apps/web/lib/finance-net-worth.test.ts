@@ -3,7 +3,7 @@ import type { Account, Obligation } from "@orion/shared-types";
 import { assetShares, buildNetWorth, convertNetWorth } from "./finance-net-worth";
 
 const account = (id: string, balance: number, currency = "RUB", kind: Account["kind"] = "card", archivedAt: string | null = null): Account => ({
-  id, workspaceId: "w", name: id, kind, context: "personal", visibility: "workspace", ownerId: null, currency, startingBalance: 0, balance, archivedAt, createdAt: "", updatedAt: ""
+  id, workspaceId: "w", name: id, kind, context: "personal", visibility: "workspace", ownerId: null, currency, startingBalance: 0, balance, archivedAt, isDefault: false, createdAt: "", updatedAt: ""
 });
 const obligation = (patch: Partial<Obligation>): Obligation => ({
   id: "o", workspaceId: "w", name: "Кредит", kind: "credit", direction: "owe", principal: 100000, payment: 10000, interval: "monthly",

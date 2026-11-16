@@ -43,6 +43,8 @@ export function TransactionForm({
   projects,
   defaultAccountId,
   defaultProjectId,
+  /** Простой режим финансов: без выбора счёта и без переводов — сервер сам пишет на счёт «Основной». */
+  simpleMode = false,
   busy,
   submitLabel,
   onSubmit,
@@ -60,6 +62,7 @@ export function TransactionForm({
   projects?: Project[];
   defaultAccountId?: string;
   defaultProjectId?: string;
+  simpleMode?: boolean;
   busy: boolean;
   submitLabel: string;
   onSubmit: (values: TransactionFormValues) => void | Promise<void>;
@@ -127,7 +130,7 @@ export function TransactionForm({
 
   function submit(event: FormEvent): void {
     event.preventDefault();
-    if (!accountId) return;
+    if (!simpleMode && !accountId) return;
 
     if (type === "transfer") {
       const amount = toKopecks(transferAmount);
@@ -179,8 +182,8 @@ export function TransactionForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      <div className="grid grid-cols-3 gap-2 rounded-lg border border-border bg-white/[0.02] p-1">
-        {(["expense", "income", "transfer"] as const).map((t) => (
+      <div className={`grid ${simpleMode ? "grid-cols-2" : "grid-cols-3"} gap-2 rounded-lg border border-border bg-white/[0.02] p-1`}>
+        {(simpleMode ? (["expense", "income"] as const) : (["expense", "income", "transfer"] as const)).map((t) => (
           <button
             key={t}
             type="button"
@@ -228,9 +231,11 @@ export function TransactionForm({
         </>
       ) : (
         <>
-          <Field label="Счёт">
-            <Combobox label="Счёт" items={accounts.map((account) => ({ id: account.id, label: account.name }))} value={accountId} onChange={setAccountId} />
-          </Field>
+          {simpleMode ? null : (
+            <Field label="Счёт">
+              <Combobox label="Счёт" items={accounts.map((account) => ({ id: account.id, label: account.name }))} value={accountId} onChange={setAccountId} />
+            </Field>
+          )}
 
           <div className="flex flex-col gap-2">
             {lines.map((line, index) => (
@@ -322,7 +327,7 @@ export function TransactionForm({
           <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
             Отмена
           </Button>
-          <Button type="submit" size="sm" disabled={busy || !accountId}>
+          <Button type="submit" size="sm" disabled={busy || (!simpleMode && !accountId)}>
             {submitLabel}
           </Button>
         </div>

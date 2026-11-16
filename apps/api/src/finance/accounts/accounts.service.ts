@@ -137,6 +137,7 @@ type AccountRow = {
   ownerId: string | null;
   currency: string;
   startingBalance: number;
+  isDefault: boolean;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -153,6 +154,7 @@ function toDto(account: AccountRow, net: number): Account {
     ownerId: account.ownerId,
     currency: account.currency,
     startingBalance: account.startingBalance,
+    isDefault: account.isDefault,
     balance: account.startingBalance + net,
     archivedAt: account.archivedAt ? account.archivedAt.toISOString() : null,
     createdAt: account.createdAt.toISOString(),

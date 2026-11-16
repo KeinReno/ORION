@@ -32,6 +32,8 @@ export const accountSchema = z.object({
   ownerId: z.string().nullable(),
   currency: z.string(),
   startingBalance: z.number().int(),
+  /** Счёт «Основной» простого режима (isDefault) — на него пишутся операции без выбранного счёта. */
+  isDefault: z.boolean(),
   /** startingBalance + net of every transaction on this account — computed by AccountsService, never stored. */
   balance: z.number().int(),
   archivedAt: z.string().nullable(),
@@ -60,6 +62,28 @@ export const updateAccountInputSchema = z.object({
   archivedAt: z.string().datetime().nullable().optional()
 });
 export type UpdateAccountInput = z.infer<typeof updateAccountInputSchema>;
+
+/**
+ * Режим финансового модуля пространства. `simple` — человек ведёт только
+ * доходы и расходы: счета не показываются, а операции без `accountId`
+ * записываются на авто-созданный счёт «Основной». `advanced` — полный набор
+ * (счета, переводы, бюджеты, цели), как раньше; это значение по умолчанию,
+ * поэтому существующие пространства ничего не замечают.
+ */
+export const financeModeSchema = z.enum(["simple", "advanced"]);
+export type FinanceMode = z.infer<typeof financeModeSchema>;
+
+export const financeSettingsSchema = z.object({
+  workspaceId: z.string(),
+  mode: financeModeSchema,
+  updatedAt: z.string()
+});
+export type FinanceSettings = z.infer<typeof financeSettingsSchema>;
+
+export const updateFinanceSettingsInputSchema = z.object({
+  mode: financeModeSchema
+});
+export type UpdateFinanceSettingsInput = z.infer<typeof updateFinanceSettingsInputSchema>;
 
 export const financeCategoryKindSchema = z.enum(["income", "expense"]);
 export type FinanceCategoryKind = z.infer<typeof financeCategoryKindSchema>;
@@ -155,7 +179,13 @@ export type TransactionLineInput = z.infer<typeof transactionLineInputSchema>;
  * See `assertTransactionShape` in `finance-refs.util.ts` (backend).
  */
 export const createTransactionInputSchema = z.object({
-  accountId: z.string(),
+  /**
+   * В расширенном режиме (mode = advanced) обязателен. В простом (simple) его
+   * можно не передавать — операция запишется на авто-созданный счёт «Основной»
+   * (проверка режима и подстановка — в TransactionsService, не в zod: zod не
+   * знает настроек пространства).
+   */
+  accountId: z.string().optional(),
   /** Only for type = transfer — the destination account. */
   toAccountId: z.string().nullable().optional(),
   type: transactionTypeSchema,

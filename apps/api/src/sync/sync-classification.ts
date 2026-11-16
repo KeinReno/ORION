@@ -79,6 +79,7 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   KnowledgeRelation: lww("later", "Связи между материалами."),
   KnowledgeItemRevision: append("Неизменяемые снимки версий материалов базы знаний (задание 08): правки не предусмотрены, удаление — вместе с материалом."),
   KnowledgeSettings: lww("later", "Настройки базы знаний пространства (задание 08): LWW по полю, одна строка на пространство."),
+  FinanceSettings: lww("later", "Настройки финансов пространства (простой/расширенный режим): LWW по полю, одна строка на пространство."),
   SavedTaskView: lww("later", "Сохранённые виды доски."),
   InboxItem: lww("later", "Входящие: обработка (process) — атомарный захват на узле, офлайн-обработки нет."),
   EntityReminder: lww("later", "Личное напоминание: доставку делает узел."),

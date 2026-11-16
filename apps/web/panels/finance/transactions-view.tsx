@@ -31,7 +31,7 @@ import { TransactionForm, type TransactionFormValues } from "./transaction-form"
 
 const PAGE_SIZE = 50;
 
-export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts }: { focusRequest: EntityFocusRequest | null; onFocusHandled: (nonce: number) => void; onOpenAccounts?: () => void }): React.ReactElement {
+export function TransactionsView({ simpleMode = false, focusRequest, onFocusHandled, onOpenAccounts }: { simpleMode?: boolean; focusRequest: EntityFocusRequest | null; onFocusHandled: (nonce: number) => void; onOpenAccounts?: () => void }): React.ReactElement {
   const { api } = useCore();
   const { workspace } = useActiveWorkspace();
   const [accountFilter, setAccountFilter] = useState("");
@@ -125,14 +125,15 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
   }, [transactions]);
 
   async function create(values: TransactionFormValues): Promise<void> {
-    await createTransaction.mutateAsync(values);
+    // Простой режим: счёт не выбирается — сервер запишет операцию на автоматический счёт «Основной».
+    await createTransaction.mutateAsync(simpleMode ? { ...values, accountId: undefined } : values);
     setCreating(false);
     setCopyOf(null);
     toast({ title: "Операция добавлена", tone: "success" });
   }
 
   async function save(transactionId: string, values: TransactionFormValues): Promise<void> {
-    await updateTransaction.mutateAsync({ transactionId, input: values });
+    await updateTransaction.mutateAsync({ transactionId, input: simpleMode ? { ...values, accountId: undefined } : values });
     setEditing(null);
     toast({ title: "Сохранено", tone: "success" });
   }
@@ -224,7 +225,8 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
     }
   }
 
-  const hasAccounts = activeAccounts.length > 0;
+  // В простом режиме операция создаётся всегда: счёт «Основной» заведёт сам сервер.
+  const hasAccounts = simpleMode || activeAccounts.length > 0;
   const hasMore = (transactions?.length ?? 0) === limit;
   const filtersOn = Boolean(accountFilter || categoryFilter || (projectsOn && projectFilter) || contextFilter || tagFilter || from || to || query || minAmount !== undefined || maxAmount !== undefined);
 
@@ -233,14 +235,16 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
       <ExtensionSlot name="finance.transactions.top" props={{ workspaceId: workspace?.id }} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="w-44">
-            <Combobox
-              label="Фильтр по счёту"
-              value={accountFilter}
-              onChange={setAccountFilter}
-              items={[{ id: "", label: "Все счета" }, ...(accounts ?? []).map((account) => ({ id: account.id, label: account.name }))]}
-            />
-          </div>
+          {simpleMode ? null : (
+            <div className="w-44">
+              <Combobox
+                label="Фильтр по счёту"
+                value={accountFilter}
+                onChange={setAccountFilter}
+                items={[{ id: "", label: "Все счета" }, ...(accounts ?? []).map((account) => ({ id: account.id, label: account.name }))]}
+              />
+            </div>
+          )}
           <div className="w-44">
             <Combobox
               label="Фильтр по категории"
@@ -408,7 +412,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
                           : transaction.note || category?.name || (isIncome ? "Доход" : "Расход")}
                       </p>
                       <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-subtle-foreground">
-                        {!isTransfer ? <span>{accountName.get(transaction.accountId) ?? "—"}</span> : null}
+                        {!isTransfer && !simpleMode ? <span>{accountName.get(transaction.accountId) ?? "—"}</span> : null}
                         {splitCount > 1 ? (
                           <span className="rounded-full border border-border px-1.5 py-0.5 font-medium leading-none">
                             {splitCount} категории
@@ -497,6 +501,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
         <TransactionForm
           key={copyOf?.id ?? "new"}
           copyOf={copyOf ?? undefined}
+          simpleMode={simpleMode}
           accounts={activeAccounts}
           categories={activeCategories}
           categoryRules={categoryRules}
@@ -515,6 +520,7 @@ export function TransactionsView({ focusRequest, onFocusHandled, onOpenAccounts 
           <TransactionForm
             key={editing.id}
             initial={editing}
+            simpleMode={simpleMode}
             accounts={withArchivedFallback(accounts ?? [], [editing.accountId, editing.toAccountId])}
             categories={withArchivedFallback(categories ?? [], editing.lines[0]?.categoryId)}
             categoryRules={categoryRules}

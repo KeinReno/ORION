@@ -37,6 +37,8 @@ import { SplitsService } from "./splits/splits.service";
 import { ExchangeRatesController } from "./exchange-rates/exchange-rates.controller";
 import { ExchangeRatesService } from "./exchange-rates/exchange-rates.service";
 import { FinanceDraftsController } from "./drafts/finance-drafts.controller";
+import { FinanceSettingsController } from "./finance-settings.controller";
+import { FinanceSettingsService } from "./finance-settings.service";
 import { FinanceExpenseModule } from "./public/expense.module";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { TransactionsSearchProvider, AccountsSearchProvider, SavingsGoalsSearchProvider } from "./finance-search.providers";
@@ -68,10 +70,12 @@ import { FinanceProjectAggregates } from "./finance-project-aggregates";
     TemplatesController,
     SplitsController,
     ExchangeRatesController,
-    FinanceDraftsController
+    FinanceDraftsController,
+    FinanceSettingsController
   ],
   providers: [
     FinanceProjectAggregates,
+    FinanceSettingsService,
     AccountsService,
     CategoriesService,
     BudgetsService,

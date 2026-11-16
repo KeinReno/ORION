@@ -87,6 +87,7 @@ import {
   entityReminderSchema,
   eventSchema,
   financeCategorySchema,
+  financeSettingsSchema,
   globalSearchResultSchema,
   habitEntrySchema,
   habitSchema,
@@ -457,6 +458,7 @@ import {
   type TimeEntry,
   type TimeEntryPage,
   type TimeSummary,
+  type FinanceSettings,
   type ToggleHabitInput,
   type ToggleHabitResult,
   type Transaction,
@@ -464,6 +466,7 @@ import {
   type UpdateBudgetInput,
   type UpdateEventInput,
   type UpdateFinanceCategoryInput,
+  type UpdateFinanceSettingsInput,
   type UpdateHabitInput,
   type UpdateInventoryItemInput,
   type UpdateListInput,
@@ -1594,6 +1597,14 @@ export class ApiClient {
 
   rotateCalendarFeed(workspaceId: string): Promise<CalendarFeedInfo> {
     return this.request("POST", `/workspaces/${workspaceId}/calendar/feed/rotate`, undefined, calendarFeedInfoSchema);
+  }
+
+  getFinanceSettings(workspaceId: string): Promise<FinanceSettings> {
+    return this.request("GET", `/workspaces/${workspaceId}/finance/settings`, undefined, financeSettingsSchema);
+  }
+
+  updateFinanceSettings(workspaceId: string, input: UpdateFinanceSettingsInput): Promise<FinanceSettings> {
+    return this.request("PATCH", `/workspaces/${workspaceId}/finance/settings`, input, financeSettingsSchema);
   }
 
   listAccounts(workspaceId: string, includeArchived = false): Promise<Account[]> {

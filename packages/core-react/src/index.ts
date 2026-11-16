@@ -8,6 +8,7 @@ export * from "./use-task-comments";
 export * from "./use-events";
 export * from "./use-documents";
 export * from "./use-finance-accounts";
+export * from "./use-finance-settings";
 export * from "./use-finance-categories";
 export * from "./use-finance-transactions";
 export * from "./use-finance-budgets";

@@ -261,6 +261,7 @@ model Workspace {
   financeDrafts         FinanceDraft[]
   financeSplitShares    FinanceSplitShare[]
   financeSettlements    FinanceSettlement[]
+  financeSettings       FinanceSettings?
   marketWatchItems      MarketWatchItem[]
   investmentTrades      InvestmentTrade[]
   documents             Document[]
@@ -1282,6 +1283,10 @@ model Account {
   visibility      String   @default("workspace")
   /// Who created the account (plain id, no foreign key); null for accounts older than this column.
   ownerId         String?
+  /// The account the "simple" mode writes to when a transaction carries no accountId
+  /// ("Основной", auto-created on first use). At most one per workspace — a partial
+  /// unique index in the migration enforces it (`finance_accounts_one_default`).
+  isDefault       Boolean     @default(false)
   archivedAt      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1297,6 +1302,24 @@ model Account {
 
   @@index([workspaceId])
   @@map("finance_accounts")
+}
+
+/// Настройки финансового модуля пространства: простой режим («только доходы и расходы»,
+/// без счетов) или расширенный (полный набор: счета, переводы, бюджеты). Отдельная строка
+/// на пространство, а не поле Workspace: модуль можно выключить, не трогая общие настройки.
+/// Менять режим может только владелец — как состав модулей. В простом режиме операции без
+/// accountId пишутся на счёт с isDefault (создаётся лениво, см. FinanceSettingsService).
+model FinanceSettings {
+  id        String   @id @default(uuid())
+  workspaceId String @unique
+  /// simple — пользователь ведёт только доходы/расходы, счета скрыты; advanced — полный режим.
+  mode      String   @default("advanced")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("finance_settings")
 }
 
 enum FinanceCategoryKind {

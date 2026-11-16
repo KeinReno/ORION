@@ -1,5 +1,5 @@
 import { ProjectReferences } from "../../projects/public/project-references";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type {
@@ -7,11 +7,13 @@ import type {
   FinanceImportInput,
   FinanceImportResult,
   Transaction,
+  TransactionType,
   UpdateTransactionInput
 } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { BudgetAlertsService } from "../budget-alerts.service";
+import { FinanceSettingsService } from "../finance-settings.service";
 import {
   assertAccountInWorkspace,
   assertCategoryInWorkspace,
@@ -52,7 +54,8 @@ export class TransactionsService {
     private readonly projectReferences: ProjectReferences,
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly budgetAlerts: BudgetAlertsService
+    private readonly budgetAlerts: BudgetAlertsService,
+    private readonly financeSettings: FinanceSettingsService
   ) {}
 
   async list(userId: string, workspaceId: string, filters: TransactionFilters = {}): Promise<Transaction[]> {
@@ -101,7 +104,7 @@ export class TransactionsService {
     assertTransactionShape(input);
     const { transaction, alerts } = await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
-      await assertAccountInWorkspace(tx, workspaceId, input.accountId);
+      const accountId = await this.resolveAccountTx(tx, workspaceId, input.type, input.accountId);
       if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
       if (input.projectId) await assertProjectInWorkspace(tx, workspaceId, input.projectId, this.projectReferences);
       for (const line of input.lines) {
@@ -110,7 +113,7 @@ export class TransactionsService {
       const created = await tx.transaction.create({
         data: {
           workspaceId,
-          accountId: input.accountId,
+          accountId,
           toAccountId: input.toAccountId ?? null,
           type: input.type,
           note: input.note,
@@ -234,12 +237,16 @@ export class TransactionsService {
 
       // Validate the *merged* picture — a PATCH touching only `note` must not
       // have to resend accountId/lines just to pass the transfer/split check.
+      const mergedType = input.type ?? (current.type as CreateTransactionInput["type"]);
       assertTransactionShape({
         accountId: input.accountId ?? current.accountId,
         toAccountId: input.toAccountId !== undefined ? input.toAccountId : current.toAccountId,
-        type: input.type ?? (current.type as CreateTransactionInput["type"]),
+        type: mergedType,
         lines: input.lines ?? current.lines
       });
+      // Transfers are advanced-only; a PATCH morphing an operation into one in
+      // simple mode is rejected here, the same as creating one.
+      await this.assertNoTransferInSimpleModeTx(tx, workspaceId, mergedType);
 
       if (input.accountId) await assertAccountInWorkspace(tx, workspaceId, input.accountId);
       if (input.toAccountId) await assertAccountInWorkspace(tx, workspaceId, input.toAccountId);
@@ -294,6 +301,42 @@ export class TransactionsService {
       // Lines cascade (onDelete: Cascade in schema.prisma).
       await tx.transaction.delete({ where: { id: transactionId } });
     });
+  }
+
+  /**
+   * The account an operation books to. Advanced mode is unchanged — `accountId`
+   * is required. In simple mode it may be omitted and the operation lands on
+   * the auto-created default account ("Основной"); an explicit accountId is
+   * still honoured (asserted against the workspace) so data written before
+   * switching modes keeps working.
+   */
+  private async resolveAccountTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    type: TransactionType,
+    accountId: string | undefined
+  ): Promise<string> {
+    await this.assertNoTransferInSimpleModeTx(tx, workspaceId, type);
+    if (accountId) {
+      await assertAccountInWorkspace(tx, workspaceId, accountId);
+      return accountId;
+    }
+    const mode = await this.financeSettings.readModeTx(tx, workspaceId);
+    if (mode !== "simple") throw new BadRequestException("Укажите счёт операции");
+    return this.financeSettings.resolveDefaultAccountTx(tx, workspaceId);
+  }
+
+  /** Transfers stay advanced-only: moving money between accounts is meaningless without the accounts surface. */
+  private async assertNoTransferInSimpleModeTx(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    type: TransactionType
+  ): Promise<void> {
+    if (type !== "transfer") return;
+    const mode = await this.financeSettings.readModeTx(tx, workspaceId);
+    if (mode === "simple") {
+      throw new BadRequestException("Переводы доступны только в расширенном режиме финансов");
+    }
   }
 
   private async assertOwnedTx(

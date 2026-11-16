@@ -19,6 +19,7 @@ export class FinanceOverviewQueries extends FinanceOverviewReader {
       ownerId: account.ownerId,
       currency: account.currency,
       startingBalance: account.startingBalance,
+      isDefault: account.isDefault,
       balance: account.startingBalance + (netByAccount.get(account.id) ?? 0),
       archivedAt: null,
       createdAt: account.createdAt.toISOString(),

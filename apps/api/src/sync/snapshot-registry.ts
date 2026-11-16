@@ -170,6 +170,7 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "DocumentVersion", snapshotKey: "documentVersions", policy: "included", reason: "Метаданные версий файла (storageKey/checksum) — метаданные включены в S03, сами байты блобов — S04." },
   { model: "DocumentAnnotation", snapshotKey: "documentAnnotations", policy: "included", reason: "Аннотации/закладки поверх документа." },
   { model: "Account", snapshotKey: "financeAccounts", policy: "included", reason: "Счета финансового модуля." },
+  { model: "FinanceSettings", snapshotKey: "financeSettings", policy: "included", reason: "Настройки финансов пространства (простой/расширенный режим) — одна строка на пространство, пользовательская конфигурация." },
   { model: "FinanceCategory", snapshotKey: "financeCategories", policy: "included", reason: "Категории операций." },
   { model: "Transaction", snapshotKey: "financeTransactions", policy: "included", reason: "Финансовые операции." },
   { model: "TransactionLine", snapshotKey: "financeTransactionLines", policy: "included", reason: "Строки операций (денормализованный workspaceId, см. CLAUDE.md)." },
