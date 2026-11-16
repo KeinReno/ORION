@@ -214,8 +214,9 @@ function writeEnvFile() {
     ORION_MODE: "local",
     STORAGE_DIR: storageDir,
     // Локальная разработка без внешних сервисов: Architect читает git-репозитории
-    // из корня этой копии (GitHub не нужен), каталог ORION DEV — из ./development.
-    ORION_DEV_REPOSITORY_ROOTS: ROOT,
+    // из рабочего стола и D:\Projects (GitHub не нужен), каталог ORION DEV — из
+    // ./development этой копии. Несуществующие корни просто ничего не разрешают.
+    ORION_DEV_REPOSITORY_ROOTS: [resolve(ROOT, ".."), "D:\\Projects"].join(";"),
     ORION_DEV_CATALOG_ROOT: ROOT,
     JWT_SECRET: jwtSecret,
     SYNC_SECRET: syncSecret,
