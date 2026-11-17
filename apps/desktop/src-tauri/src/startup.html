@@ -1,278 +1,257 @@
 <!doctype html>
 <html lang="ru" data-edition="{{STARTUP_EDITION}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Запуск ORION</title>
 <style>
-:root{color-scheme:dark;font-family:"Segoe UI",system-ui,sans-serif;background:#16171a;color:#edece8;--canvas:#16171A;--gold:#C9A86A;--gold-bright:#E7D7A8;--text:#EDECE8;--ink:#BEB9AF;--muted:#6E6A60;--danger:#EFB3A8;--danger-deep:#5A3630;--card:#1F1D1A;--mono:Consolas,"Courier New",monospace;--ease:cubic-bezier(.16,1,.3,1)}
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;overflow:hidden;background:var(--canvas);display:flex}
-[hidden]{display:none!important}
-/* ---------------------------------------------------------- левая сцена */
-.sky{position:relative;flex:1 1 auto;min-width:0;overflow:hidden}
-.scene{position:absolute;left:50%;top:50%;width:760px;height:800px;transform:translate(-50%,-50%) scale(var(--sc,1));transform-origin:center}
-.haze{position:absolute;left:160px;top:120px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.09),transparent 66%)}
-.star{position:absolute;border-radius:50%}
-.orbit{position:absolute;left:230px;top:250px;width:300px;height:300px;border-radius:50%;border:1px dashed rgba(201,168,106,.16)}
-.orbit.arc{position:absolute;left:230px;top:250px;width:300px;height:300px;border:none}
-.trail{position:absolute;left:100px;top:120px;width:360px;height:280px}
-.probe{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#FFF4D4;box-shadow:0 0 22px 8px rgba(231,215,168,.35);offset-path:path("M110 390 Q 280 320 430 150");offset-rotate:0deg;opacity:0}
-body.is-motion .probe{animation:fly 5.2s var(--ease) both;animation-delay:1.2s}
-.plane{position:absolute;left:140px;top:230px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.1),transparent 66%)}
-.belt{position:absolute;border-radius:50%}
-.belt.b1{left:356px;top:366px;width:9px;height:9px;background:#C9A86A}
-.belt.b2{left:374px;top:384px;width:10px;height:10px;background:#D8BE85}
-.belt.b3{left:394px;top:400px;width:9px;height:9px;background:#C9A86A}
-.ecliptic{position:absolute;left:30px;top:560px;width:700px;border-top:1px dashed rgba(231,215,168,.12)}
-.ecliptic-label{position:absolute;left:600px;top:570px;font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted)}
-.nav{position:absolute;left:40px;font-family:var(--mono);font-size:11px;letter-spacing:2px}
-.nav.az{top:60px;color:var(--ink)}
-.nav.ra{top:86px;color:var(--muted)}
-.nav.dec{top:112px;color:var(--muted)}
-.assembly{position:absolute;left:296px;top:266px;width:168px;height:168px;opacity:.25}
-.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block;border:0;background:transparent;-webkit-mask-image:radial-gradient(circle at 50% 50%,#000 52%,transparent 71%);mask-image:radial-gradient(circle at 50% 50%,#000 52%,transparent 71%)}
-.dot{position:absolute;border-radius:50%;opacity:0}
-body.is-motion .dot{animation:dotin .5s var(--ease) both;animation-delay:calc(var(--i)*16ms + .3s)}
-body.premiere.is-motion .dot{animation-duration:.6s;animation-delay:calc(var(--i)*30ms + .4s)}
+:root{color-scheme:dark;--gold:#c9a86a;--gold-bright:#e7d7a8;--ink:#beb9af;--muted:#6e6a60;--danger:#efb3a8;--danger-deep:#5a3630;--mono:Consolas,"IBM Plex Mono",monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0b0b0d;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;color:#edece8}
+#stage-scale{position:absolute;left:50%;top:50%;width:1280px;height:800px;background:#16171a;overflow:hidden;transform-origin:center}
+/* ---------------------------------------------------------- сцена */
+#sky{position:absolute;left:0;top:0;width:760px;height:800px}
+#haze{position:absolute;left:160px;top:120px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.10),transparent 62%)}
+canvas{display:block}
+#ecliptic{position:absolute;left:30px;top:560px;width:700px;border-top:1px dashed rgba(231,215,168,.12)}
+#ecl-label{position:absolute;left:600px;top:570px;font:10px var(--mono);letter-spacing:3px;color:var(--muted)}
+.nav{position:absolute;left:40px;font:11px var(--mono);letter-spacing:2px;color:var(--muted)}
+#nav-az{top:60px;color:var(--ink)}
+#nav-ra{top:86px}
+#nav-dec{top:112px}
+#mark{position:absolute;left:296px;top:266px;width:168px;height:168px;mix-blend-mode:screen;opacity:0}
+#pulse{position:absolute;left:286px;top:256px;width:188px;height:188px;border:1px solid var(--gold);border-radius:50%;opacity:0;pointer-events:none}
 /* ---------------------------------------------------------- консоль */
-.console{position:relative;flex:0 0 440px;border-left:1px solid #FFFFFF14;padding:60px 60px 40px 60px;display:flex;flex-direction:column;min-height:100vh}
-.tag{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--gold)}
-h1{font-size:44px;font-weight:500;letter-spacing:.11em;margin:18px 0 0;color:var(--text)}
-.role{color:var(--ink);font-size:13px;margin:14px 0 0}
-#hint{color:var(--muted);font-size:12px;margin:8px 0 0;min-height:1.2em}
-.phases{list-style:none;margin:36px 0 0;padding:0;display:flex;flex-direction:column;gap:16px}
-.phases li{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted)}
-.phases .icon{display:none;width:13px;height:13px;stroke:var(--gold);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.phases .fail{display:none;width:13px;height:13px;stroke:var(--danger);fill:none;stroke-width:2;stroke-linecap:round;flex:none}
-.phases .mark{width:9px;height:9px;border-radius:50%;border:1px solid #4A463C;flex:none;margin:0 2px}
-.phases li.done{color:#9A927E}
-.phases li.done .icon{display:block}
-.phases li.current{color:var(--gold-bright);font-weight:500}
-.phases li.current .mark{background:var(--gold);border-color:var(--gold)}
-.phases li.failed{color:var(--danger);font-weight:500}
-.phases li.failed .mark{display:none}
-.phases li.failed .fail{display:block}
-.stack{margin:52px 0 0;display:flex;flex-direction:column;gap:14px;font-family:var(--mono);font-size:12px}
-.stack .row{display:flex;justify-content:space-between;gap:16px}
-.stack .label{color:#9A927E}
-.stack .value{color:var(--muted)}
-.stack .row.active .label{color:var(--gold-bright)}
-.stack .row.active .value{color:var(--gold)}
-.trackwrap{margin-top:auto;padding-top:40px}
-.track{width:100%;height:2px;border-radius:1px;background:#FFFFFF14;overflow:hidden}
-.track i{display:block;height:100%;width:0;background:var(--gold);transition:width .6s var(--ease)}
-.meta{display:flex;justify-content:space-between;margin-top:12px;font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--ink)}
-#time{color:var(--muted)}
-.coords{margin-top:28px;font-family:var(--mono);font-size:11px;letter-spacing:2px;color:#55524A}
-#stage{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-#error{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--danger);margin-top:16px;font-size:13px;line-height:1.55}
-button{font:inherit;border:1px solid #4A463C;color:var(--text);background:transparent;border-radius:8px;padding:12px 22px;margin-top:20px;cursor:pointer;align-self:flex-start}
-button:hover{border-color:#736342;background:#1F1D1A}
-button:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
-#retry{background:var(--gold);border-color:var(--gold);color:#16171A;font-weight:500}
-#retry:hover{background:var(--gold-bright);border-color:var(--gold-bright)}
-#skip{background:transparent;border-color:transparent;color:var(--ink);padding:6px 0;margin-top:14px;align-self:center}
-#skip:hover{background:transparent;color:var(--text)}
-::selection{background:#c9a86a;color:#16171a}
-/* ---------------------------------------------------------- состояния */
-body.is-motion .star{animation:twinkle 4s ease-in-out infinite;animation-delay:calc(var(--i)*.37s)}
-@keyframes twinkle{0%,100%{opacity:.55}50%{opacity:1}}
-@keyframes dotin{from{opacity:0;transform:scale(.4)}to{opacity:var(--o);transform:scale(1)}}
-@keyframes fly{0%{offset-distance:0%;opacity:0}12%{opacity:1}100%{offset-distance:100%;opacity:1}}
-body.is-failed .haze{background:radial-gradient(circle,rgba(201,117,106,.1),transparent 66%)}
-body.is-failed .tag{color:var(--danger)}
-body.is-failed .probe{background:var(--danger);box-shadow:0 0 22px 8px rgba(239,179,168,.3);animation:none;offset-distance:62%;opacity:1}
-body.is-failed .trail path#trailpath{stroke:#C9756A99}
-body.is-failed .trail path#trailfull{stroke:transparent}
-body.is-failed .orbit.arc path{stroke:transparent}
-body.is-failed .orbit{border-color:rgba(201,117,106,.16)}
-body.is-failed .nav.az{color:var(--danger)}
-body.is-failed .belt{opacity:.35}
-body.is-ready .tag{color:var(--gold)}
-body.is-ready .orbit{border-color:rgba(201,168,106,.55)}
-body.is-ready .orbit.arc path{stroke:var(--gold)}
-body.is-ready .plane{background:radial-gradient(circle,rgba(201,168,106,.15),transparent 66%)}
-body.is-ready .nav.az{color:var(--gold-bright)}
-body.is-depart main,body.is-depart .sky{animation:leave .42s cubic-bezier(.4,0,1,1) forwards}
-@keyframes leave{to{opacity:0}}
-@media(max-width:920px){
-  body{flex-direction:column;overflow:auto}
-  .sky{flex:0 0 47vh}
-  .console{flex:1 0 auto;min-height:0;border-left:none;border-top:1px solid #FFFFFF14;padding:28px 28px 24px}
-  h1{font-size:32px}
-  .stack{margin-top:28px}
-  .coords{margin-top:20px}
+#divider{position:absolute;left:760px;top:40px;width:1px;height:720px;background:rgba(255,255,255,.08)}
+#console{position:absolute;left:820px;top:60px;width:400px}
+#tag{font:11px var(--mono);letter-spacing:3px;color:var(--gold)}
+h1{font-size:44px;font-weight:500;letter-spacing:5px;color:#edece8;margin-top:14px}
+.role{font-size:13px;color:var(--ink);margin-top:10px}
+#phases{margin-top:38px;display:flex;flex-direction:column;gap:18px}
+.phase{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted);transition:color .4s}
+.phase .ic{width:13px;height:13px;flex:none;display:grid;place-items:center;font-size:12px;color:var(--gold)}
+.phase .ic::before{content:"";width:9px;height:9px;border-radius:50%;border:1px solid #4a463c;display:block}
+.phase.active{color:var(--gold-bright);font-weight:500}
+.phase.active .ic::before{background:var(--gold);border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,106,.6)}
+.phase.done{color:#9a927e}
+.phase.done .ic::before{content:"✓";background:none;border:none;box-shadow:none}
+.phase.failed{color:var(--danger);font-weight:500}
+.phase.failed .ic::before{content:"✕";background:none;border:none;box-shadow:none;color:var(--danger)}
+#stack{margin-top:44px;display:flex;flex-direction:column;gap:14px;font:12px var(--mono);color:#9a927e}
+.check{display:flex;justify-content:space-between;max-width:380px}
+.check .v{color:var(--muted)}
+.check.active .k{color:var(--gold-bright)}
+.check.active .v{color:var(--gold)}
+#track{margin-top:48px;width:380px;height:2px;border-radius:1px;background:rgba(255,255,255,.08);overflow:hidden}
+#track-fill{height:100%;width:0%;background:var(--gold);transition:width .6s cubic-bezier(.4,0,.2,1)}
+#status-row{margin-top:14px;display:flex;gap:18px;align-items:baseline}
+#stage-text{font:11px var(--mono);letter-spacing:2px;color:var(--ink)}
+#time{font:11px var(--mono);letter-spacing:2px;color:var(--muted)}
+#enter{margin-top:14px;font-size:14px;font-weight:500;color:var(--gold-bright);opacity:0;transition:opacity .6s}
+#coords{position:absolute;left:820px;top:740px;font:11px var(--mono);letter-spacing:2px;color:#55524a}
+/* ---------------------------------------------------------- служебные */
+#hint{position:absolute;left:820px;top:636px;width:380px;font-size:13px;line-height:1.55;color:var(--muted)}
+#error{position:absolute;left:820px;top:430px;width:380px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;color:var(--danger);background:#1f1d1a;border:1px solid var(--danger-deep);border-radius:12px;padding:16px 18px}
+#actions{position:absolute;left:820px;top:596px;display:flex;gap:12px}
+button{font:inherit;cursor:pointer;border-radius:8px;padding:12px 22px}
+#retry{border:none;background:var(--gold);color:#16171a;font-weight:500}
+#retry:hover{background:var(--gold-bright)}
+#retry:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+#skip{background:transparent;border:1px solid #4a463c;color:var(--ink)}
+#skip:hover{color:#edece8}
+[hidden]{display:none!important}
+::selection{background:var(--gold);color:#16171a}
+/* узкое окно: консоль скрывается, сцена центрируется */
+@media (max-width:900px){
+  #divider,#console,#coords,#hint,#error,#actions{display:none!important}
 }
-@media(prefers-reduced-motion:reduce){
-  .dot,.star,.probe{animation:none!important}
-  .dot{opacity:var(--o)}
-  .probe{opacity:1;offset-distance:100%}
-}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
-<div class="sky" aria-hidden="true"><div class="scene" id="scene">
-  <div class="haze"></div>
-  <div class="orbit"></div>
-  <svg class="orbit arc" viewBox="0 0 300 300"><path d="M150 0 A150 150 0 0 1 300 150" fill="none" stroke="#C9A86A66" stroke-width="1.5" stroke-linecap="round"/></svg>
-  <div class="plane"></div>
-  <svg class="trail" viewBox="0 0 360 280"><path id="trailfull" d="M10 270 Q 180 200 330 30" fill="none" stroke="#E7D7A8B3" stroke-width="2" stroke-linecap="round"/><path id="trailpath" d="M10 270 Q 180 200 330 30" fill="none" stroke="transparent" stroke-width="2" stroke-linecap="round"/></svg>
-  <div class="probe"></div>
-  <span class="belt b1"></span><span class="belt b2"></span><span class="belt b3"></span>
-  <div class="ecliptic"></div><span class="ecliptic-label">ЭКЛИПТИКА</span>
-  <span class="nav az">АЗ 047.2°</span><span class="nav ra">RA 05h 35m</span><span class="nav dec">DEC −05° 23′</span>
-  <div class="assembly"><img src="/__orion_startup/logo.png" alt="" width="168" height="168" onerror="this.remove()"></div>
-</div></div>
-<main class="console" aria-busy="true" id="main">
-  <span class="tag" id="tag">ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА</span>
-  <h1>ORION</h1>
-  <p class="role">Навигация по личным и семейным делам</p>
-  <p id="hint"></p>
-  <h2 id="stage" role="status" aria-live="polite"></h2>
-  <ul class="phases" id="steps">
-    <li data-phase="preparing"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Ядро оболочки</span></li>
-    <li data-phase="database"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Хранилище данных</span></li>
-    <li data-phase="migrations"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Карты и индексы</span></li>
-    <li data-phase="server"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Службы приложения</span></li>
-    <li data-phase="ready"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Выход на орбиту</span></li>
-  </ul>
-  <div class="stack" id="stack">
-    <div class="row" data-phase="preparing"><span class="label">Оболочка Tauri</span><span class="value" id="v-preparing">…</span></div>
-    <div class="row" data-phase="database"><span class="label">PostgreSQL 16</span><span class="value" id="v-database">…</span></div>
-    <div class="row" data-phase="migrations"><span class="label">Миграции</span><span class="value" id="v-migrations">…</span></div>
+<div id="stage-scale">
+  <div id="sky">
+    <div id="haze"></div>
+    <canvas id="field" width="760" height="800"></canvas>
+    <div id="ecliptic"></div>
+    <div id="ecl-label">ЭКЛИПТИКА</div>
+    <div class="nav" id="nav-az">АЗ 047.2°</div>
+    <div class="nav" id="nav-ra">RA 05h 35m</div>
+    <div class="nav" id="nav-dec">DEC −05° 23′</div>
+    <span id="pulse"></span>
+    <img id="mark" src="/__orion_startup/logo.png" alt="" onerror="this.remove()">
   </div>
-  <div class="trackwrap">
-    <div class="track"><i id="fill"></i></div>
-    <div class="meta"><span id="time">00:00</span><span id="percent">0%</span></div>
+  <div id="divider"></div>
+  <div id="console">
+    <div id="tag">ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА</div>
+    <h1>ORION</h1>
+    <div class="role">Навигация по личным и семейным делам</div>
+    <div id="phases">
+      <div class="phase" data-phase="preparing"><span class="ic"></span>Ядро оболочки</div>
+      <div class="phase" data-phase="database"><span class="ic"></span>Хранилище данных</div>
+      <div class="phase" data-phase="migrations"><span class="ic"></span>Карты и индексы</div>
+      <div class="phase" data-phase="server"><span class="ic"></span>Службы приложения</div>
+      <div class="phase" data-phase="ready"><span class="ic"></span>Выход на орбиту</div>
+    </div>
+    <div id="stack">
+      <div class="check" data-phase="preparing"><span class="k">Оболочка Tauri</span><span class="v">…</span></div>
+      <div class="check" data-phase="database"><span class="k">PostgreSQL 16</span><span class="v">…</span></div>
+      <div class="check" data-phase="migrations"><span class="k">Миграции</span><span class="v">…</span></div>
+    </div>
+    <div id="track"><div id="track-fill"></div></div>
+    <div id="status-row">
+      <span id="stage-text" role="status" aria-live="polite"><span id="stage">Готовим рабочую среду</span></span>
+      <span id="time"></span>
+    </div>
+    <div id="enter">Все системы в норме. Открываем ORION</div>
+  </div>
+  <div id="coords">ORION · КАНАЛ БЕТА</div>
+  <p id="hint">Запускаем локальные службы на этом компьютере.</p>
+  <p id="error" role="alert" hidden></p>
+  <div id="actions">
+    <button id="retry" type="button" hidden>Проверить состояние ещё раз</button>
     <button id="skip" type="button" hidden>Пропустить</button>
   </div>
-  <p id="error" role="alert" hidden></p>
-  <button id="retry" type="button" hidden>Проверить ещё раз</button>
-  <p class="coords" id="coords">СЕАНС 014 · КАНАЛ БЕТА · </p>
-</main><script>
-const ASSEMBLY = [[259,147,3,0.16,"#D8C9A6"],[597,106,3,0.16,"#D8C9A6"],[384,66,2,0.25,"#D8C9A6"],[203,436,2,0.36,"#D8C9A6"],[123,199,3,0.3,"#D8C9A6"],[81,461,2,0.39,"#D8C9A6"],[71,657,2,0.25,"#D8C9A6"],[406,450,3,0.35,"#D8C9A6"],[161,457,3,0.2,"#D8C9A6"],[105,551,3,0.16,"#D8C9A6"],[179,529,2,0.34,"#D8C9A6"],[356,704,2,0.22,"#D8C9A6"],[579,542,2,0.17,"#D8C9A6"],[243,395,2,0.33,"#D8C9A6"],[235,745,2,0.28,"#D8C9A6"],[151,285,2,0.26,"#D8C9A6"],[693,94,3,0.29,"#D8C9A6"],[634,264,3,0.24,"#D8C9A6"],[377,613,2,0.36,"#D8C9A6"],[681,380,3,0.17,"#D8C9A6"],[536,261,3,0.4,"#D8C9A6"],[598,244,2,0.37,"#D8C9A6"],[510,348,4,0.75,"#E7D7A8"],[508,371,4,0.96,"#E7D7A8"],[502,393,4,0.98,"#E7D7A8"],[526,434,3,0.35,"#E7D7A8"],[479,433,4,0.56,"#E7D7A8"],[463,449,4,0.51,"#E7D7A8"],[444,462,4,0.68,"#E7D7A8"],[437,508,3,0.35,"#E7D7A8"],[401,478,4,1.0,"#E7D7A8"],[378,480,4,0.85,"#E7D7A8"],[355,478,4,0.61,"#E7D7A8"],[320,508,3,0.35,"#E7D7A8"],[312,462,4,0.62,"#E7D7A8"],[293,449,4,0.86,"#E7D7A8"],[277,433,4,1.0,"#E7D7A8"],[231,434,3,0.35,"#E7D7A8"],[254,393,4,0.68,"#E7D7A8"],[248,371,4,0.51,"#E7D7A8"],[246,348,4,0.56,"#E7D7A8"],[211,319,3,0.35,"#E7D7A8"],[254,303,4,0.98,"#E7D7A8"],[264,282,4,0.96,"#E7D7A8"],[277,263,4,0.75,"#E7D7A8"],[269,218,3,0.35,"#E7D7A8"],[312,234,4,0.52,"#E7D7A8"],[333,224,4,0.72,"#E7D7A8"],[355,218,4,0.94,"#E7D7A8"],[378,178,3,0.35,"#E7D7A8"],[401,218,4,0.82,"#E7D7A8"],[423,224,4,0.58,"#E7D7A8"],[444,234,4,0.5,"#E7D7A8"],[488,218,3,0.35,"#E7D7A8"],[479,263,4,0.89,"#E7D7A8"],[492,282,4,1.0,"#E7D7A8"],[502,303,4,0.88,"#E7D7A8"],[546,319,3,0.35,"#E7D7A8"],[498,363,3,0.8,"#E7D7A8"],[491,391,3,0.8,"#E7D7A8"],[504,435,3,0.3,"#E7D7A8"],[458,438,3,0.8,"#E7D7A8"],[434,455,3,0.8,"#E7D7A8"],[415,496,3,0.3,"#E7D7A8"],[378,468,3,0.8,"#E7D7A8"],[350,465,3,0.8,"#E7D7A8"],[308,483,3,0.3,"#E7D7A8"],[299,438,3,0.8,"#E7D7A8"],[280,417,3,0.8,"#E7D7A8"],[236,402,3,0.3,"#E7D7A8"],[259,363,3,0.8,"#E7D7A8"],[259,334,3,0.8,"#E7D7A8"],[236,295,3,0.3,"#E7D7A8"],[280,280,3,0.8,"#E7D7A8"],[299,259,3,0.8,"#E7D7A8"],[308,214,3,0.3,"#E7D7A8"],[350,232,3,0.8,"#E7D7A8"],[378,228,3,0.8,"#E7D7A8"],[415,201,3,0.3,"#E7D7A8"],[434,242,3,0.8,"#E7D7A8"],[458,259,3,0.8,"#E7D7A8"],[504,262,3,0.3,"#E7D7A8"],[491,306,3,0.8,"#E7D7A8"],[498,334,3,0.8,"#E7D7A8"],[374,158,3,0.7,"#E7D7A8"],[382,158,3,0.7,"#E7D7A8"],[374,206,3,0.45,"#E7D7A8"],[382,206,3,0.45,"#E7D7A8"],[374,254,3,0.7,"#E7D7A8"],[382,254,3,0.7,"#E7D7A8"],[374,301,3,0.45,"#E7D7A8"],[382,301,3,0.45,"#E7D7A8"],[374,348,3,0.7,"#E7D7A8"],[382,348,3,0.7,"#E7D7A8"],[374,396,3,0.45,"#E7D7A8"],[382,396,3,0.45,"#E7D7A8"],[374,444,3,0.7,"#E7D7A8"],[382,444,3,0.7,"#E7D7A8"],[374,491,3,0.45,"#E7D7A8"],[382,491,3,0.45,"#E7D7A8"],[374,538,3,0.7,"#E7D7A8"],[382,538,3,0.7,"#E7D7A8"],[376,214,7,1.0,"#FFF4D4"],[508,346,7,1.0,"#FFF4D4"],[376,478,7,1.0,"#FFF4D4"],[244,346,7,1.0,"#FFF4D4"]];
-const STARS = [[86,118,3,"#D8C9A64D"],[152,66,2,"#FFFFFF59"],[242,152,4,"#D8C9A68C"],[312,82,2,"#FFFFFF40"],[394,128,3,"#FFFFFF59"],[478,68,2,"#D8C9A64D"],[560,146,3,"#FFFFFF52"],[648,88,2,"#FFFFFF38"],[704,198,3,"#D8C9A659"],[62,262,2,"#FFFFFF45"],[132,342,3,"#FFFFFF52"],[228,268,2,"#D8C9A640"],[302,372,2,"#FFFFFF4D"],[420,232,3,"#D8C9A659"],[522,252,2,"#FFFFFF45"],[636,328,3,"#FFFFFF4D"],[704,442,2,"#D8C9A64D"],[94,512,3,"#FFFFFF59"],[182,448,2,"#D8C9A638"],[268,592,3,"#FFFFFF4D"],[356,522,2,"#FFFFFF40"],[486,562,3,"#D8C9A652"],[588,486,2,"#FFFFFF45"],[668,588,3,"#FFFFFF52"],[122,662,2,"#D8C9A64D"],[332,682,2,"#FFFFFF40"],[468,702,3,"#D8C9A645"],[604,662,2,"#FFFFFF4D"],[704,722,2,"#FFFFFF38"]];
+</div>
+<main id="main" aria-busy="true" hidden></main><script>
 (() => {
   const started = performance.now();
-  let stopped = false, failures = 0, holdTimer = 0, progress = 0;
+  let stopped = false, failures = 0, holdTimer = 0;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const edition = document.documentElement.dataset.edition || "";
   const seenKey = "orion.startup.edition";
   let premiere = false;
   try { premiere = edition !== "" && localStorage.getItem(seenKey) !== edition; } catch { premiere = false; }
+  const labels = { preparing: "Готовим рабочую среду", database: "Подключаем базу данных", migrations: "Проверяем структуру данных", server: "Запускаем локальный сервер", ready: "Открываем ORION" };
+  const progress = { preparing: 0.18, database: 0.42, migrations: 0.66, server: 0.86, ready: 1 };
   const order = ["preparing", "database", "migrations", "server", "ready"];
-  const names = { preparing: "ядра оболочки", database: "хранилища данных", migrations: "карт и индексов", server: "служб приложения", ready: "выхода на орбиту" };
-  const scene = document.getElementById("scene");
-  for (const [i, [x, y, s, c]] of STARS.entries()) {
-    const el = document.createElement("span");
-    el.className = "star";
-    el.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${c};--i:${i}`;
-    scene.appendChild(el);
-  }
-  for (const [i, [x, y, s, o, c]] of ASSEMBLY.entries()) {
-    const el = document.createElement("span");
-    el.className = "dot";
-    el.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${c};--i:${i};--o:${o}`;
-    scene.appendChild(el);
-  }
-  function scaleScene() {
-    const sky = document.querySelector(".sky");
-    scene.style.setProperty("--sc", Math.min(sky.clientWidth / 760, sky.clientHeight / 800).toFixed(3));
-  }
-  addEventListener("resize", scaleScene);
-  scaleScene();
-  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"), error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip"), fill = document.getElementById("fill"), tag = document.getElementById("tag");
+  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"),
+    error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip"),
+    fill = document.getElementById("track-fill"), enter = document.getElementById("enter"), navAz = document.getElementById("nav-az"),
+    mark = document.getElementById("mark"), pulse = document.getElementById("pulse"), stageScale = document.getElementById("stage-scale");
+  const phaseRows = [...document.querySelectorAll(".phase")];
+  const checkRows = [...document.querySelectorAll(".check")];
+  main.hidden = false;
   if (edition) document.getElementById("coords").textContent = `СЕАНС 014 · КАНАЛ БЕТА · ${edition}`;
+
+  /* Масштаб фиксированной сцены 1280x800 под окно; в узком окне консоль скрыта — центрируем небо. */
+  function fit() {
+    const compact = innerWidth <= 900;
+    const s = Math.min(innerWidth / 1280, innerHeight / 800) * (compact ? 1.35 : 1);
+    const shift = compact ? -260 * s : 0;
+    stageScale.style.transform = `translate(calc(-50% + ${shift}px), -50%) scale(${s})`;
+  }
+  addEventListener("resize", fit);
+  fit();
+
+  /* ------------------------------------------------ звёздное поле */
+  const cv = document.getElementById("field"), ctx = cv.getContext("2d");
+  const CX = 380, CY = 350;
+  const targets = [];
+  for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; targets.push([CX + Math.cos(a) * 132, CY + Math.sin(a) * 132, 2.2]); }
+  for (let i = 0; i < 26; i++) { const a = (i + .5) / 26 * Math.PI * 2; targets.push([CX + Math.cos(a) * 120, CY + Math.sin(a) * 120, 1.5]); }
+  for (let i = 0; i < 9; i++) { const y = CY - 190 + i * (380 / 8); targets.push([CX - 4, y, 1.7], [CX + 4, y, 1.7]); }
+  targets.push([CX, CY - 132, 3.4], [CX + 132, CY, 3.4], [CX, CY + 132, 3.4], [CX - 132, CY, 3.4]);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const stars = targets.map((t, i) => ({ sx: rnd(30, 730), sy: rnd(30, 770), tx: t[0], ty: t[1], r: t[2], d: i / targets.length * 0.5, tw: rnd(1.5, 4), ph: rnd(0, 6.28), conv: true }));
+  for (let i = 0; i < 26; i++) stars.push({ sx: rnd(30, 730), sy: rnd(30, 770), r: rnd(1, 2.4), tw: rnd(1, 5), ph: rnd(0, 6.28), conv: false });
+  const ease = t => 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
+  let g = 0, gTarget = 0.06, last = performance.now(), failed = false;
+  function draw(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    g += (gTarget - g) * Math.min(dt * 1.1, 1);
+    ctx.clearRect(0, 0, 760, 800);
+    for (const s of stars) {
+      let x = s.sx, y = s.sy, glow = .45;
+      if (s.conv) {
+        const p = ease((g - s.d * 0.4) / 0.6);
+        x = s.sx + (s.tx - s.sx) * p; y = s.sy + (s.ty - s.sy) * p;
+        glow = .45 + .5 * p;
+      }
+      const tw = .55 + .45 * Math.sin(now / 1000 * s.tw + s.ph);
+      const a = Math.min(glow * tw, 1);
+      ctx.beginPath();
+      ctx.fillStyle = failed ? `rgba(239,179,168,${a})` : `rgba(231,215,168,${a})`;
+      ctx.arc(x, y, s.r, 0, 6.29); ctx.fill();
+      if (s.r > 2.6) { ctx.beginPath(); ctx.fillStyle = `rgba(231,215,168,${a * .16})`; ctx.arc(x, y, s.r * 3.4, 0, 6.29); ctx.fill(); }
+    }
+    if (!reduce) requestAnimationFrame(draw);
+  }
+  if (!reduce) requestAnimationFrame(draw);
+
+  /* ------------------------------------------------ состояния UI */
   const reached = { preparing: performance.now() };
   function fmtElapsed(phase) {
     const seconds = ((reached[phase] ?? performance.now()) - reached.preparing) / 1000;
     return seconds < 0.05 ? "ок" : `ок · ${seconds.toFixed(1)} с`;
   }
+  function acknowledge() { try { if (edition) localStorage.setItem(seenKey, edition); } catch { /* остаётся премьерой */ } premiere = false; }
   function setPhase(phase) {
-    if (!(phase in reached)) reached[phase] = performance.now();
-    // Фазы не обязаны приходить по одной за тик: недостающим ранним ставим ту же метку.
-    const atFill = order.indexOf(phase in names ? phase : "preparing");
-    for (let i = 0; i < atFill; i++) if (!(order[i] in reached)) reached[order[i]] = reached[phase];
-    const at = order.indexOf(phase);
-    for (const [index, item] of [...document.querySelectorAll("#steps li")].entries()) {
-      item.classList.toggle("done", at > index || phase === "ready");
-      item.classList.toggle("current", at === index && phase !== "ready");
+    if (!(phase in reached)) {
+      reached[phase] = performance.now();
+      const idx = order.indexOf(phase);
+      for (let i = 0; i < idx; i++) if (!(order[i] in reached)) reached[order[i]] = reached[phase];
     }
-    for (const row of document.querySelectorAll("#stack .row")) {
-      const rowPhase = row.getAttribute("data-phase");
-      const value = document.getElementById(`v-${rowPhase}`);
-      const done = order.indexOf(rowPhase) < at || phase === "ready";
-      row.classList.toggle("active", rowPhase === phase && !done && phase !== "ready");
-      if (rowPhase === "migrations") {
-        if (phase === "migrations") value.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
-        else if (done) value.textContent = fmtElapsed("migrations");
-      } else if (done) value.textContent = fmtElapsed(rowPhase);
-    }
-    stage.textContent = `Фаза ${names[phase] ?? names.preparing}`;
+    const idx = order.indexOf(phase);
+    phaseRows.forEach((row, i) => {
+      row.classList.remove("active", "done");
+      if (failed) return;
+      if (i < idx) row.classList.add("done");
+      else if (i === idx && phase !== "ready") row.classList.add("active");
+      else if (phase === "ready") row.classList.add("done");
+    });
+    checkRows.forEach(row => {
+      const ri = order.indexOf(row.dataset.phase);
+      row.classList.toggle("active", !failed && ri === idx && phase !== "ready");
+      if (!failed && ri < idx) row.querySelector(".v").textContent = fmtElapsed(row.dataset.phase);
+      if (!failed && row.dataset.phase === "migrations" && ri === idx && phase !== "ready") row.querySelector(".v").textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+    });
+    gTarget = progress[phase] || 0.06;
+    fill.style.width = Math.round(gTarget * 100) + "%";
+    if (reduce) { mark.style.opacity = gTarget > .8 ? 1 : 0; if (!stopped) requestAnimationFrame(ts => draw(ts)); }
   }
-  setPhase("preparing");
-  if (!reduce) document.body.classList.add("is-motion");
-  function acknowledge() { try { if (edition) localStorage.setItem(seenKey, edition); } catch { /* остаётся премьерой в следующий раз */ } premiere = false; }
+  function revealMark() {
+    if (reduce || !mark.isConnected) { if (mark.isConnected) mark.style.opacity = 1; return; }
+    mark.style.transition = "opacity 1.2s ease";
+    mark.style.opacity = 1;
+    if (pulse.animate) pulse.animate([{ opacity: .8, transform: "scale(.72)" }, { opacity: 0, transform: "scale(1.25)" }], { duration: 900, easing: "cubic-bezier(.16,1,.3,1)" });
+  }
   function enterHold() {
     clearTimeout(holdTimer);
-    document.body.classList.remove("premiere");
     skip.hidden = true;
     acknowledge();
   }
   function skipPremiere(event) {
-    if (!document.body.classList.contains("premiere") || stopped) return;
+    if (!premiere || stopped) return;
     if (event) event.preventDefault();
+    gTarget = Math.max(gTarget, 0.9);
     enterHold();
   }
   if (premiere && !reduce) {
-    document.body.classList.add("premiere");
     skip.hidden = false;
-    hint.textContent = "Обновление подтверждено. Собираем навигационный знак.";
     skip.addEventListener("click", skipPremiere);
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" || event.key === "Enter" || event.key === " ") skipPremiere(event);
-    });
-    main.addEventListener("click", (event) => { if (event.target === skip || event.target === retry) return; skipPremiere(event); });
-    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 5200);
-  } else {
-    if (premiere) acknowledge();
-    hint.textContent = "Запускаем локальные службы на этом компьютере.";
-    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 1600);
-  }
+    addEventListener("keydown", e => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") skipPremiere(e); });
+    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 3400);
+  } else if (premiere) { acknowledge(); }
   const tick = setInterval(() => {
     const seconds = Math.floor((performance.now() - started) / 1000);
     document.getElementById("time").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
     if (seconds >= 20 && !stopped) hint.textContent = "Запуск занимает больше времени. При первом запуске и после обновления подготовка данных может длиться дольше.";
-    if (!stopped) {
-      progress = Math.min(92, progress + (seconds < 10 ? 2.2 : 0.35));
-      fill.style.width = `${progress}%`;
-      document.getElementById("percent").textContent = `${Math.round(progress)}%`;
-    }
-    if (reached.migrations && !reached.server && !stopped) {
-      const v = document.getElementById("v-migrations");
-      if (v.textContent.startsWith("идёт")) v.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+    if (!failed && reached.migrations && !reached.server && !stopped) {
+      const v = document.querySelector('.check[data-phase="migrations"] .v');
+      if (v && v.textContent.startsWith("идёт")) v.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
     }
   }, 1000);
   function fail(message, canCheck = false) {
-    stopped = true;
+    stopped = true; failed = true;
     clearTimeout(holdTimer);
-    document.body.classList.add("is-failed");
-    document.body.classList.remove("premiere");
+    const active = phaseRows.find(r => r.classList.contains("active"));
+    if (active) { active.classList.remove("active"); active.classList.add("failed"); }
+    phaseRows.forEach(r => { if (!r.classList.contains("done") && !r.classList.contains("failed")) r.style.opacity = .5; });
     skip.hidden = true;
     main.setAttribute("aria-busy", "false");
-    tag.textContent = "СБОЙ ПОСЛЕДОВАТЕЛЬНОСТИ";
-    stage.textContent = "Запуск остановлен";
-    document.querySelector(".nav.az").textContent = "СИГНАЛ ПОТЕРЯН";
-    // Ошибка пришла после фазы X: следующая за достигнутой и есть сорвавшаяся.
-    const at = order.findIndex((phase) => !(phase in reached));
-    const failedPhase = order[at === -1 ? order.length - 1 : at];
-    for (const [index, item] of [...document.querySelectorAll("#steps li")].entries()) {
-      item.classList.toggle("done", index < order.indexOf(failedPhase));
-      item.classList.toggle("failed", order[index] === failedPhase);
-      item.classList.toggle("current", false);
-    }
+    stage.textContent = "Не удалось запустить ORION";
+    navAz.textContent = "СИГНАЛ ПОТЕРЯН"; navAz.style.color = "#efb3a8";
     error.textContent = message;
     error.hidden = false;
     retry.hidden = !canCheck;
     hint.textContent = "Закройте приложение и запустите его снова. Если ошибка повторится, проверьте журнал запуска по указанному пути.";
-    document.getElementById("stack").hidden = true;
-    document.getElementById("fill").style.width = `${progress}%`;
     clearInterval(tick);
+    if (reduce) requestAnimationFrame(ts => draw(ts));
   }
   function depart() {
     if (stopped) return;
@@ -281,18 +260,14 @@ const STARS = [[86,118,3,"#D8C9A64D"],[152,66,2,"#FFFFFF59"],[242,152,4,"#D8C9A6
     clearInterval(tick);
     acknowledge();
     skip.hidden = true;
-    document.body.classList.add("is-ready");
     main.setAttribute("aria-busy", "false");
-    tag.textContent = "СИСТЕМЫ В НОРМЕ";
-    document.querySelector(".nav.az").textContent = "ОРБИТА ЗАНЯТА";
-    hint.textContent = "Все системы в норме. Открываем ORION";
+    stage.textContent = labels.ready;
     setPhase("ready");
-    fill.style.width = "100%";
-    document.getElementById("percent").textContent = "100%";
-    document.querySelectorAll("#stack .value").forEach((v, i) => { const phase = order[i]; v.textContent = fmtElapsed(phase); });
+    revealMark();
+    enter.style.opacity = 1;
+    navAz.textContent = "ОРБИТА ЗАНЯТА"; navAz.style.color = "#e7d7a8";
     if (reduce) { location.replace("/"); return; }
-    document.body.classList.add("is-depart");
-    setTimeout(() => location.replace("/"), 460);
+    setTimeout(() => location.replace("/"), 900);
   }
   async function poll() {
     try {
@@ -301,7 +276,9 @@ const STARS = [[86,118,3,"#D8C9A64D"],[152,66,2,"#FFFFFF59"],[242,152,4,"#D8C9A6
       const state = await response.json();
       failures = 0;
       if (state.phase === "error") { fail(state.error || "Закройте приложение и запустите его снова."); return; }
-      setPhase(state.phase in names ? state.phase : "preparing");
+      const label = labels[state.phase] || labels.preparing;
+      if (stage.textContent !== label) stage.textContent = label;
+      if (!stopped) setPhase(state.phase);
       if (state.phase === "ready") { depart(); return; }
     } catch {
       if (++failures >= 10) { fail("Не удаётся получить состояние оболочки.", true); return; }
