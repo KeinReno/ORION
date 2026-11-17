@@ -339,7 +339,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
                 // slower office disks. Let PostgreSQL finish recovery instead
                 // of treating a still-starting postmaster as a failed launch.
                 .arg("-t")
-                .arg("180")
+                .arg(crate::timeouts::PG_START_TIMEOUT.as_secs().to_string())
                 .arg("-D")
                 .arg(cluster.clone())
                 .arg("-l")
@@ -646,7 +646,7 @@ fn postgres_running(
         ))
         .map_err(|error| error.to_string())?;
     match supervisor
-        .wait_for_exit(pid, Duration::from_secs(30))
+        .wait_for_exit(pid, crate::timeouts::CHILD_EXIT_WAIT_CHUNK)
         .map_err(|error| error.to_string())?
     {
         Some(code) => classify_pg_status(code),
@@ -714,8 +714,8 @@ fn stop_postgres(
                 stop_code.expect("set above"),
             ))
         },
-        Duration::from_secs(520),
-        Duration::from_secs(1),
+        crate::timeouts::PG_STOP_OBSERVATION,
+        crate::timeouts::PG_STOP_POLL_INTERVAL,
     );
     log_startup_elapsed("postgres-stop", started);
     result
@@ -1344,7 +1344,7 @@ fn run_to_exit(supervisor: &mut Supervisor, spec: ProcessSpec) -> Result<(), Str
     let pid = supervisor.spawn(spec).map_err(|error| error.to_string())?;
     for _ in 0..20 {
         match supervisor
-            .wait_for_exit(pid, Duration::from_secs(30))
+            .wait_for_exit(pid, crate::timeouts::CHILD_EXIT_WAIT_CHUNK)
             .map_err(|error| error.to_string())?
         {
             Some(0) => return Ok(()),

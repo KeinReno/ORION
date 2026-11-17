@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[cfg(windows)]
 pub mod lifecycle;
@@ -22,6 +22,7 @@ pub mod rust_payload;
 pub mod rust_payload_supervisor;
 #[cfg(windows)]
 pub mod supervisor;
+pub mod timeouts;
 
 #[cfg(windows)]
 pub use lifecycle::restore_staged_backup;
@@ -252,7 +253,7 @@ fn public_profile(profile: &Profile) -> Value {
 
 async fn listening(port: u16) -> bool {
     tokio::time::timeout(
-        Duration::from_millis(200),
+        timeouts::RUNTIME_LISTEN_POLL_INTERVAL,
         tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port)),
     )
     .await
@@ -371,7 +372,7 @@ pub fn supervise_packaged_runtime(profile: &Profile) -> Result<(), String> {
     let pid = owned.spawn(spec).map_err(|error| error.to_string())?;
     loop {
         match owned
-            .wait_for_exit(pid, Duration::from_secs(60))
+            .wait_for_exit(pid, timeouts::RUNTIME_STOP_WAIT_CHUNK)
             .map_err(|error| error.to_string())?
         {
             Some(code) => {

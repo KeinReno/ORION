@@ -76,8 +76,8 @@ impl ApiCommand {
             lan_address: None,
             hostname: "localhost".into(),
             trial: false,
-            trial_timeout: Duration::from_secs(150),
-            poll_interval: Duration::from_secs(1),
+            trial_timeout: crate::timeouts::TRIAL_TIMEOUT,
+            poll_interval: crate::timeouts::API_POLL_INTERVAL,
         }
     }
 }
@@ -521,7 +521,7 @@ impl ApiSupervisorBackend for SystemApiBackend {
             if !api_listener_owned_by_job(process, request.api_port)? {
                 return Ok(false);
             }
-            let Some(health) = local_health(process.api_port, Duration::from_secs(2)) else {
+            let Some(health) = local_health(process.api_port, crate::timeouts::API_HEALTH_PROBE_TIMEOUT) else {
                 return Ok(false);
             };
             // Refuse a listener swap between the ownership check and HTTP probe.
