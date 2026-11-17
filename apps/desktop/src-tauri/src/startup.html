@@ -1,131 +1,152 @@
 <!doctype html>
 <html lang="ru" data-edition="{{STARTUP_EDITION}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Запуск ORION</title>
 <style>
-:root{color-scheme:dark;font-family:"Segoe UI",system-ui,sans-serif;background:#16171a;color:#edece8;--canvas:#16171A;--gold:#C9A86A;--gold-bright:#E7D7A8;--text:#EDECE8;--ink:#BEB9AF;--muted:#6E6A60;--danger:#EFB3A8;--danger-deep:#5A3630;--card:#1F1D1A;--ease:cubic-bezier(.16,1,.3,1)}
+:root{color-scheme:dark;font-family:"Segoe UI",system-ui,sans-serif;background:#16171a;color:#edece8;--canvas:#16171A;--gold:#C9A86A;--gold-bright:#E7D7A8;--text:#EDECE8;--ink:#BEB9AF;--muted:#6E6A60;--danger:#EFB3A8;--danger-deep:#5A3630;--card:#1F1D1A;--mono:Consolas,"Courier New",monospace;--ease:cubic-bezier(.16,1,.3,1)}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;overflow:hidden;background:var(--canvas)}
-/* Свет и орбиты за печатью (KUI: ld.glow / ld.orbit.a|b). */
-.field{position:fixed;inset:0;pointer-events:none;overflow:hidden}
-.field::before{content:"";position:absolute;left:50%;top:38%;width:500px;height:500px;margin:-250px 0 0 -250px;background:radial-gradient(circle,rgba(201,168,106,.2),transparent 66%)}
-.orbit{position:absolute;left:50%;top:38%;border-radius:50%;transform:translate(-50%,-50%)}
-.orbit-a{width:min(700px,150vmin);height:min(700px,150vmin);border:1px solid rgba(201,168,106,.12)}
-.orbit-b{width:min(980px,210vmin);height:min(980px,210vmin);border:1px solid rgba(201,168,106,.07)}
-main{position:relative;width:min(28rem,100%);display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px}
-.seal{position:relative;width:176px;height:176px;margin:0 0 24px}
-.plot{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.plot *{fill:none;stroke-linecap:round}
-.ring{stroke-dasharray:553;stroke-dashoffset:553}
-.ring.outer{stroke:#C9A86A99;stroke-width:1.5}
-.ring.inner{stroke:#E7D7A880;stroke-width:1;stroke-dasharray:1.6 4.6;stroke-dashoffset:540}
-.arc{stroke:var(--gold-bright);stroke-width:2.5;stroke-dasharray:553;stroke-dashoffset:300}
-.tick{fill:var(--gold-bright);stroke:none;opacity:0;transform-box:fill-box;transform-origin:center}
-.mark{width:124px;height:124px;object-fit:contain;display:block;position:absolute;left:26px;top:26px;mix-blend-mode:screen;z-index:1}
-.pill{display:none;align-self:center;margin:0 0 26px;padding:6px 14px;border:1px solid #C9A86A99;border-radius:999px;font-size:12px;letter-spacing:.08em;color:var(--gold)}
-body.premiere .pill{display:inline-block}
-h1{font-size:30px;font-weight:500;letter-spacing:.13em;margin:0;color:var(--text)}
-.role{color:var(--ink);font-size:14px;margin:10px 0 0}
-h2{font-weight:500;font-size:20px;line-height:1.4;margin:26px 0 0;color:var(--text);text-wrap:balance}
-.steps{display:flex;justify-content:center;align-items:center;gap:36px;margin:22px 0 0;list-style:none;padding:0}
-.steps li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap}
-.steps li .dot{width:8px;height:8px;border-radius:50%;border:1px solid #4A463C;flex:none}
-.steps li.done{color:#9A927E}
-.steps li.done .dot{display:none}
-.steps li.done .check{display:block;width:12px;height:12px;stroke:var(--gold);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.steps li.current{color:var(--gold-bright);font-weight:500}
-.steps li.current .dot{background:var(--gold);border-color:var(--gold)}
-.steps .check{display:none}
-p{font-size:14px;line-height:1.65;color:var(--ink);margin:0;max-width:46ch}
-#hint{margin-top:16px}
-.track{width:280px;height:2px;border-radius:1px;background:#FFFFFF14;margin-top:24px;overflow:hidden}
+body{margin:0;min-height:100vh;overflow:hidden;background:var(--canvas);display:flex}
+[hidden]{display:none!important}
+/* ---------------------------------------------------------- левая сцена */
+.sky{position:relative;flex:1 1 auto;min-width:0;overflow:hidden}
+.scene{position:absolute;left:50%;top:50%;width:760px;height:800px;transform:translate(-50%,-50%) scale(var(--sc,1));transform-origin:center}
+.haze{position:absolute;left:160px;top:120px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.09),transparent 66%)}
+.star{position:absolute;border-radius:50%}
+.orbit{position:absolute;left:230px;top:250px;width:300px;height:300px;border-radius:50%;border:1px dashed rgba(201,168,106,.16)}
+.orbit.arc{position:absolute;left:230px;top:250px;width:300px;height:300px;border:none}
+.trail{position:absolute;left:100px;top:120px;width:360px;height:280px}
+.probe{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#FFF4D4;box-shadow:0 0 22px 8px rgba(231,215,168,.35);offset-path:path("M10 270 Q 180 200 330 30");offset-rotate:0deg;opacity:0}
+body.is-motion .probe{animation:fly 5.2s var(--ease) both;animation-delay:1.2s}
+.plane{position:absolute;left:140px;top:230px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.1),transparent 66%)}
+.belt{position:absolute;border-radius:50%}
+.belt.b1{left:356px;top:366px;width:9px;height:9px;background:#C9A86A}
+.belt.b2{left:374px;top:384px;width:10px;height:10px;background:#D8BE85}
+.belt.b3{left:394px;top:400px;width:9px;height:9px;background:#C9A86A}
+.ecliptic{position:absolute;left:30px;top:560px;width:700px;border-top:1px dashed rgba(231,215,168,.12)}
+.ecliptic-label{position:absolute;left:600px;top:570px;font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted)}
+.nav{position:absolute;left:40px;font-family:var(--mono);font-size:11px;letter-spacing:2px}
+.nav.az{top:60px;color:var(--ink)}
+.nav.ra{top:86px;color:var(--muted)}
+.nav.dec{top:112px;color:var(--muted)}
+.assembly{position:absolute;left:296px;top:266px;width:168px;height:168px;opacity:.25}
+.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block}
+.dot{position:absolute;border-radius:50%;opacity:0}
+body.is-motion .dot{animation:dotin .5s var(--ease) both;animation-delay:calc(var(--i)*16ms + .3s)}
+body.premiere.is-motion .dot{animation-duration:.6s;animation-delay:calc(var(--i)*30ms + .4s)}
+/* ---------------------------------------------------------- консоль */
+.console{position:relative;flex:0 0 440px;border-left:1px solid #FFFFFF14;padding:60px 60px 40px 60px;display:flex;flex-direction:column;min-height:100vh}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--gold)}
+h1{font-size:44px;font-weight:500;letter-spacing:.11em;margin:18px 0 0;color:var(--text)}
+.role{color:var(--ink);font-size:13px;margin:14px 0 0}
+#hint{color:var(--muted);font-size:12px;margin:8px 0 0;min-height:1.2em}
+.phases{list-style:none;margin:36px 0 0;padding:0;display:flex;flex-direction:column;gap:16px}
+.phases li{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted)}
+.phases .icon{display:none;width:13px;height:13px;stroke:var(--gold);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.phases .fail{display:none;width:13px;height:13px;stroke:var(--danger);fill:none;stroke-width:2;stroke-linecap:round;flex:none}
+.phases .mark{width:9px;height:9px;border-radius:50%;border:1px solid #4A463C;flex:none;margin:0 2px}
+.phases li.done{color:#9A927E}
+.phases li.done .icon{display:block}
+.phases li.current{color:var(--gold-bright);font-weight:500}
+.phases li.current .mark{background:var(--gold);border-color:var(--gold)}
+.phases li.failed{color:var(--danger);font-weight:500}
+.phases li.failed .mark{display:none}
+.phases li.failed .fail{display:block}
+.stack{margin:52px 0 0;display:flex;flex-direction:column;gap:14px;font-family:var(--mono);font-size:12px}
+.stack .row{display:flex;justify-content:space-between;gap:16px}
+.stack .label{color:#9A927E}
+.stack .value{color:var(--muted)}
+.stack .row.active .label{color:var(--gold-bright)}
+.stack .row.active .value{color:var(--gold)}
+.trackwrap{margin-top:auto;padding-top:40px}
+.track{width:100%;height:2px;border-radius:1px;background:#FFFFFF14;overflow:hidden}
 .track i{display:block;height:100%;width:0;background:var(--gold);transition:width .6s var(--ease)}
-.time{margin-top:12px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
-#error{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--danger);margin-top:14px;font-size:13px;line-height:1.55}
-button{font:inherit;border:1px solid #4A463C;color:var(--text);background:transparent;border-radius:8px;padding:12px 22px;margin-top:22px;cursor:pointer}
+.meta{display:flex;justify-content:space-between;margin-top:12px;font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--ink)}
+#time{color:var(--muted)}
+.coords{margin-top:28px;font-family:var(--mono);font-size:11px;letter-spacing:2px;color:#55524A}
+#stage{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#error{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--danger);margin-top:16px;font-size:13px;line-height:1.55}
+button{font:inherit;border:1px solid #4A463C;color:var(--text);background:transparent;border-radius:8px;padding:12px 22px;margin-top:20px;cursor:pointer;align-self:flex-start}
 button:hover{border-color:#736342;background:#1F1D1A}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
 #retry{background:var(--gold);border-color:var(--gold);color:#16171A;font-weight:500}
 #retry:hover{background:var(--gold-bright);border-color:var(--gold-bright)}
-#skip{background:transparent;border-color:transparent;color:var(--ink);padding:6px 0;margin-top:18px}
+#skip{background:transparent;border-color:transparent;color:var(--ink);padding:6px 0;margin-top:14px;align-self:center}
 #skip:hover{background:transparent;color:var(--text)}
-#version{position:fixed;left:40px;bottom:28px;margin:0;font-family:Consolas,"Courier New",monospace;font-size:11px;color:#55524A;max-width:none}
-[hidden]{display:none!important}
 ::selection{background:#c9a86a;color:#16171a}
-body.is-motion{--draw:1.15s}
-body.is-motion.premiere{--draw:2.5s}
-body.is-motion .ring.outer{animation:ink var(--draw) var(--ease) forwards}
-body.is-motion .ring.inner{animation:ink var(--draw) var(--ease) forwards;animation-delay:calc(var(--draw)*.22)}
-body.is-motion .arc{animation:ink var(--draw) var(--ease) forwards;animation-delay:calc(var(--draw)*.3)}
-body.is-motion .t1{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw)*.48)}
-body.is-motion .t2{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw)*.58)}
-body.is-motion .t3{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw)*.68)}
-body.is-motion .t4{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw)*.78)}
-body.is-motion:not(.is-hold) .mark{opacity:0;animation:lock .5s var(--ease) both;animation-delay:calc(var(--draw)*.74)}
-body.is-motion.premiere .pulse{animation:bloom .85s var(--ease) both;animation-delay:calc(var(--draw)*.82)}
-body.is-motion.premiere:not(.is-hold) h1{animation:arrive .9s .9s var(--ease) both}
-body.is-motion.premiere:not(.is-hold) .role{animation:rise .7s 1.35s var(--ease) both}
-body.is-motion.premiere:not(.is-hold) h2,.is-motion.premiere:not(.is-hold) .steps,.is-motion.premiere:not(.is-hold) #hint{animation:rise .7s 1.7s var(--ease) both}
-body.is-depart .plot,body.is-failed .plot,body.is-depart .pulse{display:none}
-body.is-hold .mark,body.is-depart .mark,body.is-failed .mark{animation:none;opacity:1;filter:none}
-body.is-motion .field::before{animation:drift 16s ease-in-out infinite}
-body.is-motion .orbit-a{animation:spin 42s linear infinite}
-body.is-motion .orbit-b{animation:spin 68s linear infinite reverse}
-body.is-motion.is-hold .field::before{animation:breath 3.6s ease-in-out infinite}
-body.is-motion #stage.tick{animation:stage .22s var(--ease)}
-body.is-failed .field::before{background:radial-gradient(circle,rgba(201,117,106,.14),transparent 66%)}
-body.is-failed .ring.outer{stroke:#C9756A99}
-body.is-failed .ring.inner{stroke:#EFB3A866}
-body.is-failed .tick{fill:#C9756A}
-body.is-depart main{animation:leave .42s cubic-bezier(.4,0,1,1) forwards}
-body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hint,body.is-failed #error{animation:none;opacity:1;filter:none;transform:none}
-@keyframes ink{to{stroke-dashoffset:0}}
-@keyframes tickin{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
-@keyframes lock{from{opacity:0;filter:blur(6px)}to{opacity:1;filter:blur(0)}}
-@keyframes bloom{from{opacity:.8;transform:scale(.72)}to{opacity:0;transform:scale(1.22)}}
-@keyframes arrive{from{opacity:0;letter-spacing:.26em;filter:blur(6px)}to{opacity:1;letter-spacing:.13em;filter:blur(0)}}
-@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes breath{0%,100%{opacity:.5;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}
-@keyframes drift{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.7}50%{transform:translate3d(0,-18px,0) scale(1.05);opacity:1}}
-@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
-@keyframes stage{from{opacity:.45}to{opacity:1}}
-@keyframes leave{to{opacity:0;transform:translateY(-8px)}}
-@media(prefers-reduced-motion:reduce){
-  .plot,.pulse,.mark,h1,.role,h2,.steps,#hint,main,.field::before,.orbit{animation:none!important}
-  .plot,.pulse{display:none}
-  .mark{opacity:1;filter:none}
+/* ---------------------------------------------------------- состояния */
+body.is-motion .star{animation:twinkle 4s ease-in-out infinite;animation-delay:calc(var(--i)*.37s)}
+@keyframes twinkle{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes dotin{from{opacity:0;transform:scale(.4)}to{opacity:var(--o);transform:scale(1)}}
+@keyframes fly{0%{offset-distance:0%;opacity:0}12%{opacity:1}100%{offset-distance:100%;opacity:1}}
+body.is-failed .haze{background:radial-gradient(circle,rgba(201,117,106,.1),transparent 66%)}
+body.is-failed .tag{color:var(--danger)}
+body.is-failed .probe{background:var(--danger);box-shadow:0 0 22px 8px rgba(239,179,168,.3);animation:none;offset-distance:62%;opacity:1}
+body.is-failed .trail path#trailpath{stroke:#C9756A99}
+body.is-failed .trail path#trailfull{stroke:transparent}
+body.is-failed .orbit.arc path{stroke:transparent}
+body.is-failed .orbit{border-color:rgba(201,117,106,.16)}
+body.is-failed .nav.az{color:var(--danger)}
+body.is-failed .belt{opacity:.35}
+body.is-ready .tag{color:var(--gold)}
+body.is-ready .orbit{border-color:rgba(201,168,106,.55)}
+body.is-ready .orbit.arc path{stroke:var(--gold)}
+body.is-ready .plane{background:radial-gradient(circle,rgba(201,168,106,.15),transparent 66%)}
+body.is-ready .nav.az{color:var(--gold-bright)}
+body.is-depart main,body.is-depart .sky{animation:leave .42s cubic-bezier(.4,0,1,1) forwards}
+@keyframes leave{to{opacity:0}}
+@media(max-width:920px){
+  body{flex-direction:column;overflow:auto}
+  .sky{flex:0 0 47vh}
+  .console{flex:1 0 auto;min-height:0;border-left:none;border-top:1px solid #FFFFFF14;padding:28px 28px 24px}
+  h1{font-size:32px}
+  .stack{margin-top:28px}
+  .coords{margin-top:20px}
 }
-@media(max-width:500px){.steps{gap:18px;flex-wrap:wrap}#version{left:20px;bottom:16px}}
-</style></head><body><div class="field" aria-hidden="true"><span class="orbit orbit-a"></span><span class="orbit orbit-b"></span></div><main aria-busy="true" id="main">
-<span class="pill" id="pill">Обновление</span>
-<div class="seal">
-<svg class="plot" viewBox="0 0 176 176" aria-hidden="true">
-<circle class="ring outer" cx="88" cy="88" r="88"/>
-<circle class="ring inner" cx="88" cy="88" r="79"/>
-<path class="arc" d="M88 0 A88 88 0 1 1 36.3 159.2"/>
-<circle class="tick t1" cx="88" cy="3" r="3"/>
-<circle class="tick t2" cx="173" cy="88" r="3"/>
-<circle class="tick t3" cx="88" cy="173" r="3"/>
-<circle class="tick t4" cx="3" cy="88" r="3"/>
-</svg>
-<span class="pulse" aria-hidden="true"></span>
-<img class="mark" src="/__orion_startup/logo.png" alt="" width="124" height="124">
-</div>
-<h1>ORION</h1>
-<p class="role">Локальная рабочая среда</p>
-<h2 id="stage" role="status" aria-live="polite">Готовим рабочую среду</h2>
-<ul class="steps" id="steps" aria-hidden="true">
-  <li data-phase="preparing"><svg class="check" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><span class="dot"></span><span>Подготовка</span></li>
-  <li data-phase="database"><svg class="check" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><span class="dot"></span><span>База данных</span></li>
-  <li data-phase="migrations"><svg class="check" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><span class="dot"></span><span>Структура данных</span></li>
-  <li data-phase="server"><svg class="check" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><span class="dot"></span><span>Сервер</span></li>
-  <li data-phase="ready"><svg class="check" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><span class="dot"></span><span>Открытие</span></li>
-</ul>
-<p id="hint">Запускаем локальные службы на этом компьютере.</p>
-<div class="track" aria-hidden="true"><i id="fill"></i></div>
-<p class="time" id="time">00:00</p>
-<p id="error" role="alert" hidden></p>
-<button id="retry" type="button" hidden>Проверить ещё раз</button>
-<button id="skip" type="button" hidden>Пропустить</button>
-</main><p id="version"></p><script>
+@media(prefers-reduced-motion:reduce){
+  .dot,.star,.probe{animation:none!important}
+  .dot{opacity:var(--o)}
+  .probe{opacity:1;offset-distance:100%}
+}
+</style></head><body>
+<div class="sky" aria-hidden="true"><div class="scene" id="scene">
+  <div class="haze"></div>
+  <div class="orbit"></div>
+  <svg class="orbit arc" viewBox="0 0 300 300"><path d="M150 0 A150 150 0 0 1 300 150" fill="none" stroke="#C9A86A66" stroke-width="1.5" stroke-linecap="round"/></svg>
+  <div class="plane"></div>
+  <svg class="trail" viewBox="0 0 360 280"><path id="trailfull" d="M10 270 Q 180 200 330 30" fill="none" stroke="#E7D7A8B3" stroke-width="2" stroke-linecap="round"/><path id="trailpath" d="M10 270 Q 180 200 330 30" fill="none" stroke="transparent" stroke-width="2" stroke-linecap="round"/></svg>
+  <div class="probe"></div>
+  <span class="belt b1"></span><span class="belt b2"></span><span class="belt b3"></span>
+  <div class="ecliptic"></div><span class="ecliptic-label">ЭКЛИПТИКА</span>
+  <span class="nav az">АЗ 047.2°</span><span class="nav ra">RA 05h 35m</span><span class="nav dec">DEC −05° 23′</span>
+  <div class="assembly"><img src="/__orion_startup/logo.png" alt="" width="168" height="168"></div>
+</div></div>
+<main class="console" aria-busy="true" id="main">
+  <span class="tag" id="tag">ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА</span>
+  <h1>ORION</h1>
+  <p class="role">Навигация по личным и семейным делам</p>
+  <p id="hint"></p>
+  <h2 id="stage" role="status" aria-live="polite"></h2>
+  <ul class="phases" id="steps">
+    <li data-phase="preparing"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Ядро оболочки</span></li>
+    <li data-phase="database"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Хранилище данных</span></li>
+    <li data-phase="migrations"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Карты и индексы</span></li>
+    <li data-phase="server"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Службы приложения</span></li>
+    <li data-phase="ready"><svg class="icon" viewBox="0 0 12 12"><path d="M2 6.5 5 9l5-6"/></svg><svg class="fail" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg><span class="mark"></span><span>Выход на орбиту</span></li>
+  </ul>
+  <div class="stack" id="stack">
+    <div class="row" data-phase="preparing"><span class="label">Оболочка Tauri</span><span class="value" id="v-preparing">…</span></div>
+    <div class="row" data-phase="database"><span class="label">PostgreSQL 16</span><span class="value" id="v-database">…</span></div>
+    <div class="row" data-phase="migrations"><span class="label">Миграции</span><span class="value" id="v-migrations">…</span></div>
+  </div>
+  <div class="trackwrap">
+    <div class="track"><i id="fill"></i></div>
+    <div class="meta"><span id="time">00:00</span><span id="percent">0%</span></div>
+    <button id="skip" type="button" hidden>Пропустить</button>
+  </div>
+  <p id="error" role="alert" hidden></p>
+  <button id="retry" type="button" hidden>Проверить ещё раз</button>
+  <p class="coords" id="coords">СЕАНС 014 · КАНАЛ БЕТА · </p>
+</main><script>
+const ASSEMBLY = [[259,147,3,0.16,"#D8C9A6"],[597,106,3,0.16,"#D8C9A6"],[384,66,2,0.25,"#D8C9A6"],[203,436,2,0.36,"#D8C9A6"],[123,199,3,0.3,"#D8C9A6"],[81,461,2,0.39,"#D8C9A6"],[71,657,2,0.25,"#D8C9A6"],[406,450,3,0.35,"#D8C9A6"],[161,457,3,0.2,"#D8C9A6"],[105,551,3,0.16,"#D8C9A6"],[179,529,2,0.34,"#D8C9A6"],[356,704,2,0.22,"#D8C9A6"],[579,542,2,0.17,"#D8C9A6"],[243,395,2,0.33,"#D8C9A6"],[235,745,2,0.28,"#D8C9A6"],[151,285,2,0.26,"#D8C9A6"],[693,94,3,0.29,"#D8C9A6"],[634,264,3,0.24,"#D8C9A6"],[377,613,2,0.36,"#D8C9A6"],[681,380,3,0.17,"#D8C9A6"],[536,261,3,0.4,"#D8C9A6"],[598,244,2,0.37,"#D8C9A6"],[510,348,4,0.75,"#E7D7A8"],[508,371,4,0.96,"#E7D7A8"],[502,393,4,0.98,"#E7D7A8"],[526,434,3,0.35,"#E7D7A8"],[479,433,4,0.56,"#E7D7A8"],[463,449,4,0.51,"#E7D7A8"],[444,462,4,0.68,"#E7D7A8"],[437,508,3,0.35,"#E7D7A8"],[401,478,4,1.0,"#E7D7A8"],[378,480,4,0.85,"#E7D7A8"],[355,478,4,0.61,"#E7D7A8"],[320,508,3,0.35,"#E7D7A8"],[312,462,4,0.62,"#E7D7A8"],[293,449,4,0.86,"#E7D7A8"],[277,433,4,1.0,"#E7D7A8"],[231,434,3,0.35,"#E7D7A8"],[254,393,4,0.68,"#E7D7A8"],[248,371,4,0.51,"#E7D7A8"],[246,348,4,0.56,"#E7D7A8"],[211,319,3,0.35,"#E7D7A8"],[254,303,4,0.98,"#E7D7A8"],[264,282,4,0.96,"#E7D7A8"],[277,263,4,0.75,"#E7D7A8"],[269,218,3,0.35,"#E7D7A8"],[312,234,4,0.52,"#E7D7A8"],[333,224,4,0.72,"#E7D7A8"],[355,218,4,0.94,"#E7D7A8"],[378,178,3,0.35,"#E7D7A8"],[401,218,4,0.82,"#E7D7A8"],[423,224,4,0.58,"#E7D7A8"],[444,234,4,0.5,"#E7D7A8"],[488,218,3,0.35,"#E7D7A8"],[479,263,4,0.89,"#E7D7A8"],[492,282,4,1.0,"#E7D7A8"],[502,303,4,0.88,"#E7D7A8"],[546,319,3,0.35,"#E7D7A8"],[498,363,3,0.8,"#E7D7A8"],[491,391,3,0.8,"#E7D7A8"],[504,435,3,0.3,"#E7D7A8"],[458,438,3,0.8,"#E7D7A8"],[434,455,3,0.8,"#E7D7A8"],[415,496,3,0.3,"#E7D7A8"],[378,468,3,0.8,"#E7D7A8"],[350,465,3,0.8,"#E7D7A8"],[308,483,3,0.3,"#E7D7A8"],[299,438,3,0.8,"#E7D7A8"],[280,417,3,0.8,"#E7D7A8"],[236,402,3,0.3,"#E7D7A8"],[259,363,3,0.8,"#E7D7A8"],[259,334,3,0.8,"#E7D7A8"],[236,295,3,0.3,"#E7D7A8"],[280,280,3,0.8,"#E7D7A8"],[299,259,3,0.8,"#E7D7A8"],[308,214,3,0.3,"#E7D7A8"],[350,232,3,0.8,"#E7D7A8"],[378,228,3,0.8,"#E7D7A8"],[415,201,3,0.3,"#E7D7A8"],[434,242,3,0.8,"#E7D7A8"],[458,259,3,0.8,"#E7D7A8"],[504,262,3,0.3,"#E7D7A8"],[491,306,3,0.8,"#E7D7A8"],[498,334,3,0.8,"#E7D7A8"],[374,158,3,0.7,"#E7D7A8"],[382,158,3,0.7,"#E7D7A8"],[374,206,3,0.45,"#E7D7A8"],[382,206,3,0.45,"#E7D7A8"],[374,254,3,0.7,"#E7D7A8"],[382,254,3,0.7,"#E7D7A8"],[374,301,3,0.45,"#E7D7A8"],[382,301,3,0.45,"#E7D7A8"],[374,348,3,0.7,"#E7D7A8"],[382,348,3,0.7,"#E7D7A8"],[374,396,3,0.45,"#E7D7A8"],[382,396,3,0.45,"#E7D7A8"],[374,444,3,0.7,"#E7D7A8"],[382,444,3,0.7,"#E7D7A8"],[374,491,3,0.45,"#E7D7A8"],[382,491,3,0.45,"#E7D7A8"],[374,538,3,0.7,"#E7D7A8"],[382,538,3,0.7,"#E7D7A8"],[376,214,7,1.0,"#FFF4D4"],[508,346,7,1.0,"#FFF4D4"],[376,478,7,1.0,"#FFF4D4"],[244,346,7,1.0,"#FFF4D4"]];
+const STARS = [[86,118,3,"#D8C9A64D"],[152,66,2,"#FFFFFF59"],[242,152,4,"#D8C9A68C"],[312,82,2,"#FFFFFF40"],[394,128,3,"#FFFFFF59"],[478,68,2,"#D8C9A64D"],[560,146,3,"#FFFFFF52"],[648,88,2,"#FFFFFF38"],[704,198,3,"#D8C9A659"],[62,262,2,"#FFFFFF45"],[132,342,3,"#FFFFFF52"],[228,268,2,"#D8C9A640"],[302,372,2,"#FFFFFF4D"],[420,232,3,"#D8C9A659"],[522,252,2,"#FFFFFF45"],[636,328,3,"#FFFFFF4D"],[704,442,2,"#D8C9A64D"],[94,512,3,"#FFFFFF59"],[182,448,2,"#D8C9A638"],[268,592,3,"#FFFFFF4D"],[356,522,2,"#FFFFFF40"],[486,562,3,"#D8C9A652"],[588,486,2,"#FFFFFF45"],[668,588,3,"#FFFFFF52"],[122,662,2,"#D8C9A64D"],[332,682,2,"#FFFFFF40"],[468,702,3,"#D8C9A645"],[604,662,2,"#FFFFFF4D"],[704,722,2,"#FFFFFF38"]];
 (() => {
   const started = performance.now();
   let stopped = false, failures = 0, holdTimer = 0, progress = 0;
@@ -134,24 +155,61 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
   const seenKey = "orion.startup.edition";
   let premiere = false;
   try { premiere = edition !== "" && localStorage.getItem(seenKey) !== edition; } catch { premiere = false; }
-  const labels = { preparing: "Готовим рабочую среду", database: "Подключаем базу данных", migrations: "Проверяем структуру данных", server: "Запускаем локальный сервер", ready: "Открываем ORION" };
   const order = ["preparing", "database", "migrations", "server", "ready"];
-  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"), error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip"), fill = document.getElementById("fill"), pill = document.getElementById("pill");
-  if (edition) document.getElementById("version").textContent = `ORION ${edition}`;
-  if (edition && premiere) pill.textContent = `Обновление ${edition}`;
+  const names = { preparing: "ядра оболочки", database: "хранилища данных", migrations: "карт и индексов", server: "служб приложения", ready: "выхода на орбиту" };
+  const scene = document.getElementById("scene");
+  for (const [i, [x, y, s, c]] of STARS.entries()) {
+    const el = document.createElement("span");
+    el.className = "star";
+    el.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${c};--i:${i}`;
+    scene.appendChild(el);
+  }
+  for (const [i, [x, y, s, o, c]] of ASSEMBLY.entries()) {
+    const el = document.createElement("span");
+    el.className = "dot";
+    el.style.cssText = `left:${x}px;top:${y}px;width:${s}px;height:${s}px;background:${c};--i:${i};--o:${o}`;
+    scene.appendChild(el);
+  }
+  function scaleScene() {
+    const sky = document.querySelector(".sky");
+    scene.style.setProperty("--sc", Math.min(sky.clientWidth / 760, sky.clientHeight / 800).toFixed(3));
+  }
+  addEventListener("resize", scaleScene);
+  scaleScene();
+  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"), error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip"), fill = document.getElementById("fill"), tag = document.getElementById("tag");
+  if (edition) document.getElementById("coords").textContent = `СЕАНС 014 · КАНАЛ БЕТА · ${edition}`;
+  const reached = { preparing: performance.now() };
+  function fmtElapsed(phase) {
+    const seconds = ((reached[phase] ?? performance.now()) - reached.preparing) / 1000;
+    return seconds < 0.05 ? "ок" : `ок · ${seconds.toFixed(1)} с`;
+  }
   function setPhase(phase) {
+    if (!(phase in reached)) reached[phase] = performance.now();
+    // Фазы не обязаны приходить по одной за тик: недостающим ранним ставим ту же метку.
+    const atFill = order.indexOf(phase in names ? phase : "preparing");
+    for (let i = 0; i < atFill; i++) if (!(order[i] in reached)) reached[order[i]] = reached[phase];
     const at = order.indexOf(phase);
     for (const [index, item] of [...document.querySelectorAll("#steps li")].entries()) {
       item.classList.toggle("done", at > index || phase === "ready");
       item.classList.toggle("current", at === index && phase !== "ready");
     }
+    for (const row of document.querySelectorAll("#stack .row")) {
+      const rowPhase = row.getAttribute("data-phase");
+      const value = document.getElementById(`v-${rowPhase}`);
+      const done = order.indexOf(rowPhase) < at || phase === "ready";
+      row.classList.toggle("active", rowPhase === phase && !done && phase !== "ready");
+      if (rowPhase === "migrations") {
+        if (phase === "migrations") value.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+        else if (done) value.textContent = fmtElapsed("migrations");
+      } else if (done) value.textContent = fmtElapsed(rowPhase);
+    }
+    stage.textContent = `Фаза ${names[phase] ?? names.preparing}`;
   }
   setPhase("preparing");
   if (!reduce) document.body.classList.add("is-motion");
   function acknowledge() { try { if (edition) localStorage.setItem(seenKey, edition); } catch { /* остаётся премьерой в следующий раз */ } premiere = false; }
   function enterHold() {
     clearTimeout(holdTimer);
-    document.body.classList.add("is-hold");
     document.body.classList.remove("premiere");
     skip.hidden = true;
     acknowledge();
@@ -164,21 +222,31 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
   if (premiere && !reduce) {
     document.body.classList.add("premiere");
     skip.hidden = false;
+    hint.textContent = "Обновление подтверждено. Собираем навигационный знак.";
     skip.addEventListener("click", skipPremiere);
     window.addEventListener("keydown", (event) => {
       if (event.key === "Escape" || event.key === "Enter" || event.key === " ") skipPremiere(event);
     });
     main.addEventListener("click", (event) => { if (event.target === skip || event.target === retry) return; skipPremiere(event); });
-    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 3400);
+    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 5200);
   } else {
     if (premiere) acknowledge();
-    holdTimer = setTimeout(() => { if (!stopped) document.body.classList.add("is-hold"); }, 1600);
+    hint.textContent = "Запускаем локальные службы на этом компьютере.";
+    holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 1600);
   }
   const tick = setInterval(() => {
     const seconds = Math.floor((performance.now() - started) / 1000);
     document.getElementById("time").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
     if (seconds >= 20 && !stopped) hint.textContent = "Запуск занимает больше времени. При первом запуске и после обновления подготовка данных может длиться дольше.";
-    if (!stopped) { progress = Math.min(92, progress + (seconds < 10 ? 2.4 : 0.35)); fill.style.width = `${progress}%`; }
+    if (!stopped) {
+      progress = Math.min(92, progress + (seconds < 10 ? 2.2 : 0.35));
+      fill.style.width = `${progress}%`;
+      document.getElementById("percent").textContent = `${Math.round(progress)}%`;
+    }
+    if (reached.migrations && !reached.server && !stopped) {
+      const v = document.getElementById("v-migrations");
+      if (v.textContent.startsWith("идёт")) v.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+    }
   }, 1000);
   function fail(message, canCheck = false) {
     stopped = true;
@@ -187,13 +255,23 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
     document.body.classList.remove("premiere");
     skip.hidden = true;
     main.setAttribute("aria-busy", "false");
-    stage.textContent = "Не удалось запустить ORION";
+    tag.textContent = "СБОЙ ПОСЛЕДОВАТЕЛЬНОСТИ";
+    stage.textContent = "Запуск остановлен";
+    document.querySelector(".nav.az").textContent = "СИГНАЛ ПОТЕРЯН";
+    // Ошибка пришла после фазы X: следующая за достигнутой и есть сорвавшаяся.
+    const at = order.findIndex((phase) => !(phase in reached));
+    const failedPhase = order[at === -1 ? order.length - 1 : at];
+    for (const [index, item] of [...document.querySelectorAll("#steps li")].entries()) {
+      item.classList.toggle("done", index < order.indexOf(failedPhase));
+      item.classList.toggle("failed", order[index] === failedPhase);
+      item.classList.toggle("current", false);
+    }
     error.textContent = message;
     error.hidden = false;
     retry.hidden = !canCheck;
     hint.textContent = "Закройте приложение и запустите его снова. Если ошибка повторится, проверьте журнал запуска по указанному пути.";
-    document.getElementById("steps").hidden = true;
-    document.querySelector(".track").hidden = true;
+    document.getElementById("stack").hidden = true;
+    document.getElementById("fill").style.width = `${progress}%`;
     clearInterval(tick);
   }
   function depart() {
@@ -203,10 +281,15 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
     clearInterval(tick);
     acknowledge();
     skip.hidden = true;
+    document.body.classList.add("is-ready");
     main.setAttribute("aria-busy", "false");
-    stage.textContent = labels.ready;
-    fill.style.width = "100%";
+    tag.textContent = "СИСТЕМЫ В НОРМЕ";
+    document.querySelector(".nav.az").textContent = "ОРБИТА ЗАНЯТА";
+    hint.textContent = "Все системы в норме. Открываем ORION";
     setPhase("ready");
+    fill.style.width = "100%";
+    document.getElementById("percent").textContent = "100%";
+    document.querySelectorAll("#stack .value").forEach((v, i) => { const phase = order[i]; v.textContent = fmtElapsed(phase); });
     if (reduce) { location.replace("/"); return; }
     document.body.classList.add("is-depart");
     setTimeout(() => location.replace("/"), 460);
@@ -218,12 +301,7 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
       const state = await response.json();
       failures = 0;
       if (state.phase === "error") { fail(state.error || "Закройте приложение и запустите его снова."); return; }
-      const label = labels[state.phase] || labels.preparing;
-      if (stage.textContent !== label) {
-        stage.textContent = label;
-        if (!reduce && !document.body.classList.contains("premiere")) { stage.classList.remove("tick"); void stage.offsetWidth; stage.classList.add("tick"); }
-      }
-      setPhase(state.phase in labels ? state.phase : "preparing");
+      setPhase(state.phase in names ? state.phase : "preparing");
       if (state.phase === "ready") { depart(); return; }
     } catch {
       if (++failures >= 10) { fail("Не удаётся получить состояние оболочки.", true); return; }
