@@ -27,7 +27,7 @@ body.is-motion .probe{animation:fly 5.2s var(--ease) both;animation-delay:1.2s}
 .nav.ra{top:86px;color:var(--muted)}
 .nav.dec{top:112px;color:var(--muted)}
 .assembly{position:absolute;left:296px;top:266px;width:168px;height:168px;opacity:.25}
-.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block}
+.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block;border:0;background:transparent}
 .dot{position:absolute;border-radius:50%;opacity:0}
 body.is-motion .dot{animation:dotin .5s var(--ease) both;animation-delay:calc(var(--i)*16ms + .3s)}
 body.premiere.is-motion .dot{animation-duration:.6s;animation-delay:calc(var(--i)*30ms + .4s)}
@@ -116,7 +116,7 @@ body.is-depart main,body.is-depart .sky{animation:leave .42s cubic-bezier(.4,0,1
   <span class="belt b1"></span><span class="belt b2"></span><span class="belt b3"></span>
   <div class="ecliptic"></div><span class="ecliptic-label">ЭКЛИПТИКА</span>
   <span class="nav az">АЗ 047.2°</span><span class="nav ra">RA 05h 35m</span><span class="nav dec">DEC −05° 23′</span>
-  <div class="assembly"><img src="/__orion_startup/logo.png" alt="" width="168" height="168"></div>
+  <div class="assembly"><img src="/__orion_startup/logo.png" alt="" width="168" height="168" onerror="this.remove()"></div>
 </div></div>
 <main class="console" aria-busy="true" id="main">
   <span class="tag" id="tag">ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА</span>
