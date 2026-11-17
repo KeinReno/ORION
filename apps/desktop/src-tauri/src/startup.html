@@ -13,7 +13,7 @@ body{margin:0;min-height:100vh;overflow:hidden;background:var(--canvas);display:
 .orbit{position:absolute;left:230px;top:250px;width:300px;height:300px;border-radius:50%;border:1px dashed rgba(201,168,106,.16)}
 .orbit.arc{position:absolute;left:230px;top:250px;width:300px;height:300px;border:none}
 .trail{position:absolute;left:100px;top:120px;width:360px;height:280px}
-.probe{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#FFF4D4;box-shadow:0 0 22px 8px rgba(231,215,168,.35);offset-path:path("M10 270 Q 180 200 330 30");offset-rotate:0deg;opacity:0}
+.probe{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#FFF4D4;box-shadow:0 0 22px 8px rgba(231,215,168,.35);offset-path:path("M110 390 Q 280 320 430 150");offset-rotate:0deg;opacity:0}
 body.is-motion .probe{animation:fly 5.2s var(--ease) both;animation-delay:1.2s}
 .plane{position:absolute;left:140px;top:230px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.1),transparent 66%)}
 .belt{position:absolute;border-radius:50%}
@@ -27,7 +27,7 @@ body.is-motion .probe{animation:fly 5.2s var(--ease) both;animation-delay:1.2s}
 .nav.ra{top:86px;color:var(--muted)}
 .nav.dec{top:112px;color:var(--muted)}
 .assembly{position:absolute;left:296px;top:266px;width:168px;height:168px;opacity:.25}
-.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block;border:0;background:transparent}
+.assembly img{width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;display:block;border:0;background:transparent;-webkit-mask-image:radial-gradient(circle at 50% 50%,#000 52%,transparent 71%);mask-image:radial-gradient(circle at 50% 50%,#000 52%,transparent 71%)}
 .dot{position:absolute;border-radius:50%;opacity:0}
 body.is-motion .dot{animation:dotin .5s var(--ease) both;animation-delay:calc(var(--i)*16ms + .3s)}
 body.premiere.is-motion .dot{animation-duration:.6s;animation-delay:calc(var(--i)*30ms + .4s)}
