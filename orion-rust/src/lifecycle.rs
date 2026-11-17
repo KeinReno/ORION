@@ -137,6 +137,17 @@ pub fn supervise_direct(profile: &Profile) -> Result<(), String> {
 fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     let run_started = Instant::now();
     let requested_data = crate::resolve_existing_ancestor(&profile.data_dir)?;
+    crate::logging::init(&requested_data);
+    crate::logging::event(
+        "info",
+        "startup",
+        "supervise-direct begin",
+        serde_json::json!({
+            "apiPort": profile.api_port,
+            "pgPort": profile.pg_port,
+            "dataDir": profile.data_dir,
+        }),
+    );
     let root = runtime_root()?;
     let program_data = std::env::var_os("ProgramData")
         .map(PathBuf::from)
@@ -554,6 +565,15 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     // Keep a single cleanup path for every failure after starting PostgreSQL,
     // including provisioning, migrations, API spawn and API wait errors.
     log_startup_elapsed("supervise-direct-lifetime", run_started);
+    crate::logging::event(
+        if result.is_ok() { "info" } else { "error" },
+        "shutdown",
+        if result.is_ok() { "supervise-direct exit ok" } else { "supervise-direct exit error" },
+        match &result {
+            Ok(()) => serde_json::json!({ "ok": true }),
+            Err(error) => serde_json::json!({ "ok": false, "error": error }),
+        },
+    );
     let stop_result = if started_postgres {
         stop_postgres(&mut owned, &base_layout.pg_ctl, &root, &cluster)
     } else {
@@ -593,9 +613,13 @@ fn format_cleanup(
 }
 
 fn log_startup_elapsed(stage: &str, started: Instant) {
-    eprintln!(
-        "[orion-runtime] startup-stage={stage} elapsed-ms={}",
-        started.elapsed().as_millis()
+    let elapsed_ms = started.elapsed().as_millis();
+    eprintln!("[orion-runtime] startup-stage={stage} elapsed-ms={elapsed_ms}");
+    crate::logging::event(
+        "info",
+        stage,
+        "stage complete",
+        serde_json::json!({ "elapsedMs": elapsed_ms }),
     );
 }
 
