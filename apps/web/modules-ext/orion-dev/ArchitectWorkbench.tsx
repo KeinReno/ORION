@@ -13,6 +13,8 @@ import {
   type ArchitectMapDiff,
   type ArchitectSnapshotSummary,
   developmentGitGraphSchema,
+  developmentRepositoryBrowseSchema,
+  developmentRepositoryCandidateSchema,
   developmentRepositoryRemovedSchema,
   developmentRepositoryRootsSchema,
   developmentRepositorySchema,
@@ -21,7 +23,9 @@ import {
   type ArchitectProjectSchema,
   type ArchitectComparison,
   type DevelopmentGitGraph,
-  type DevelopmentRepository
+  type DevelopmentRepository,
+  type DevelopmentRepositoryBrowse,
+  type DevelopmentRepositoryCandidate
 } from "@orion/shared-types";
 import { Button } from "@orion/ui";
 import {
@@ -42,14 +46,22 @@ import {
   type OnMoveEnd
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Activity, AlertCircle, ArrowLeft, Box, Camera, CircleDot, Code2, FileQuestion, FileWarning, GitBranch, GitCompare, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import { Activity, AlertCircle, ArrowLeft, Box, Camera, CircleDot, Code2, FileQuestion, FileWarning, FolderOpen, GitBranch, GitCompare, Globe, LayoutGrid, LoaderCircle, RefreshCw, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import styles from "./architect-workbench.module.css";
 
-type Props = { workspaceId: string };
+type Props = { workspaceId: string; surface?: Surface; hideTabs?: boolean };
 type Surface = "map" | "git" | "compare" | "analyze";
 type FlowNodeData = { source: ArchitectNode | null; title: string; subtitle: string; kind: string; activity: { at: string; author: string | null } | null };
 type FlowNode = Node<FlowNodeData>;
+
+/** Десктоп ORION работает в Tauri — там есть нативный диалог выбора папки. В браузере (dev) его нет. */
+/** Имя папки из пути — предлагаем его как название репозитория. */
+function folderName(path: string): string {
+  const normalized = path.replace(/[\\/]+$/, "");
+  const segment = /[^\\/]+$/.exec(normalized);
+  return segment ? segment[0] : "";
+}
 
 /** Подпись давности: показывает только свежие изменения (до двух недель). */
 function activityLabel(at: string): string | null {
@@ -149,12 +161,14 @@ const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} Б` : bytes < 10
 const apiError = (error: unknown) => error instanceof Error ? error.message : "Не удалось выполнить запрос к ORION.";
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 
-export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
+export function ArchitectWorkbench({ workspaceId, surface: controlledSurface, hideTabs = false }: Props): React.ReactElement {
   const { api } = useCore();
   const client = useMemo(() => createModuleClient(api, workspaceModuleBase(workspaceId, "development")), [api, workspaceId]);
   const [repositories, setRepositories] = useState<DevelopmentRepository[]>([]);
   const [repositoryId, setRepositoryId] = useState("");
-  const [surface, setSurface] = useState<Surface>("map");
+  const [surfaceChoice, setSurfaceChoice] = useState<Surface>("map");
+  /** Внешняя вкладка панели управляет поверхностью (standalone «Архитектура»/«Git»); свой таб-бар прячем. */
+  const surface = controlledSurface ?? surfaceChoice;
   const [loadingRepos, setLoadingRepos] = useState(true);
   const [repositoryLoadFailed, setRepositoryLoadFailed] = useState(false);
   const [repoName, setRepoName] = useState("");
@@ -175,6 +189,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const [fullMap, setFullMap] = useState<ArchitectMap | null>(null);
   const [fullMapLoading, setFullMapLoading] = useState(false);
   const [allowedRoots, setAllowedRoots] = useState<string[]>([]);
+  const [candidates, setCandidates] = useState<DevelopmentRepositoryCandidate[]>([]);
   const [removing, setRemoving] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffBase, setDiffBase] = useState("");
@@ -223,6 +238,9 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     client.get("/git/repositories/allowed-roots", developmentRepositoryRootsSchema)
       .then(result => { if (live) setAllowedRoots(result.roots); })
       .catch(() => { /* Подсказка необязательна: форма работает и без списка корней. */ });
+    client.get("/git/repositories/candidates", developmentRepositoryCandidateSchema.array())
+      .then(rows => { if (live) setCandidates(rows); })
+      .catch(() => { /* Подсказка необязательна. */ });
     return () => { live = false; };
   }, [client]);
 
@@ -587,17 +605,44 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
     finally { setRemoving(false); }
   };
 
-  const register = async (event: FormEvent) => {
-    event.preventDefault();
+  const [initOffer, setInitOffer] = useState(false);
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [browseData, setBrowseData] = useState<DevelopmentRepositoryBrowse | null>(null);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState("");
+
+  const loadBrowse = async (path?: string) => {
+    setBrowseLoading(true); setBrowseError("");
+    try {
+      const query = path ? `?path=${encodeURIComponent(path)}` : "";
+      setBrowseData(await client.get(`/git/repositories/browse${query}`, developmentRepositoryBrowseSchema));
+    } catch (cause) { setBrowseError(apiError(cause)); }
+    finally { setBrowseLoading(false); }
+  };
+
+  const openBrowse = () => { setBrowseOpen(true); void loadBrowse(); };
+
+  const pickBrowse = () => {
+    if (!browseData) return;
+    setRepoPath(browseData.path);
+    setRepoName(current => current.trim() ? current : folderName(browseData.path));
+    setInitOffer(false); setError(""); setBrowseOpen(false);
+  };
+
+  const submitRegister = async (init: boolean) => {
     if (!repoName.trim() || !repoPath.trim() || registering) return;
-    setRegistering(true); setError("");
+    setRegistering(true); setError(""); setInitOffer(false);
     try {
       const body = { name: repoName.trim(), path: repoPath.trim(), taskRefPrefix: "#" };
-      const created = await client.post("/git/repositories", body, developmentRepositorySchema);
+      const created = await client.post(init ? "/git/repositories/init" : "/git/repositories", body, developmentRepositorySchema);
       setRepoName(""); setRepoPath("");
       await loadRepositories(created.id);
-    } catch (cause) { setError(apiError(cause)); }
-    finally { setRegistering(false); }
+    } catch (cause) {
+      const message = apiError(cause);
+      // Папка есть, а git-репозитория в ней нет — предлагаем создать его на месте.
+      if (!init && message.includes("нет .git")) setInitOffer(true);
+      setError(message);
+    } finally { setRegistering(false); }
   };
 
   const makeSchemaDraft = async () => {
@@ -634,7 +679,7 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
   const updateMapPath = (nextPath: string) => { setPath(nextPath); setSelected(null); setFlowNodeOverrides(null); void loadMap(repositoryId, nextPath); };
   /** Показать узел на карте: открыть его каталог и выделить его. */
   const revealNode = (node: ArchitectNode) => {
-    setSurface("map");
+    setSurfaceChoice("map");
     updateMapPath((node.parentId ?? "").replace(/\\/g, "/"));
     setSelected(node);
   };
@@ -650,12 +695,12 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
 
   return <section className={styles.root} aria-label="Архитектура и Git">
     <header className={styles.toolbar}>
-      <div className={styles.tabs} role="group" aria-label="Инструменты разработки">
-        <button type="button" aria-pressed={surface === "map"} className={surface === "map" ? styles.activeTab : ""} onClick={() => setSurface("map")}><Code2 size={15} /> Архитектура</button>
-        <button type="button" aria-pressed={surface === "git"} className={surface === "git" ? styles.activeTab : ""} onClick={() => setSurface("git")}><GitBranch size={15} /> История Git</button>
-        <button type="button" aria-pressed={surface === "compare"} className={surface === "compare" ? styles.activeTab : ""} onClick={() => setSurface("compare")}><CircleDot size={15} /> Сверка замысла</button>
-        <button type="button" aria-pressed={surface === "analyze"} className={surface === "analyze" ? styles.activeTab : ""} onClick={() => setSurface("analyze")}><Activity size={15} /> Анализ</button>
-      </div>
+      {!hideTabs && <div className={styles.tabs} role="group" aria-label="Инструменты разработки">
+        <button type="button" aria-pressed={surface === "map"} className={surface === "map" ? styles.activeTab : ""} onClick={() => setSurfaceChoice("map")}><Code2 size={15} /> Архитектура</button>
+        <button type="button" aria-pressed={surface === "git"} className={surface === "git" ? styles.activeTab : ""} onClick={() => setSurfaceChoice("git")}><GitBranch size={15} /> История Git</button>
+        <button type="button" aria-pressed={surface === "compare"} className={surface === "compare" ? styles.activeTab : ""} onClick={() => setSurfaceChoice("compare")}><CircleDot size={15} /> Сверка замысла</button>
+        <button type="button" aria-pressed={surface === "analyze"} className={surface === "analyze" ? styles.activeTab : ""} onClick={() => setSurfaceChoice("analyze")}><Activity size={15} /> Анализ</button>
+      </div>}
       {repositories.length > 0 && <label className={styles.repoSelect}><span>Репозиторий</span><select value={repositoryId} onChange={event => setRepositoryId(event.target.value)} aria-label="Выбрать репозиторий">{repositories.map(repo => <option key={repo.id} value={repo.id}>{repo.name}</option>)}</select></label>}
       {repositories.length > 0 && <Button size="sm" variant="ghost" disabled={removing || loadingRepos} title="Убрать репозиторий из ORION (каталог на диске не трогаем)" onClick={() => void removeRepository()}><Trash2 size={14} aria-hidden /> {removing ? "Убираем…" : "Удалить"}</Button>}
       {repositoryId && <Button size="sm" variant="ghost" disabled={loading || gitLoading || schemaLoading} onClick={() => surface === "map" ? void loadMap(repositoryId, path) : surface === "git" ? void loadGit() : void loadProjectSchema(repositoryId)}><RefreshCw size={14} aria-hidden /> Обновить</Button>}
@@ -667,14 +712,34 @@ export function ArchitectWorkbench({ workspaceId }: Props): React.ReactElement {
       <p>Проверьте подключение и повторите загрузку. После успешной проверки можно будет добавить разрешённый сервером репозиторий.</p>
       <Button variant="outline" disabled={loadingRepos} onClick={() => void loadRepositories()}>{loadingRepos ? "Загружаем…" : "Повторить загрузку"}</Button>
     </div> : repositories.length === 0 ? <div className={styles.emptyState}>
-      <span className={styles.emptyIcon}><Box size={22} /></span><h3>Добавьте рабочий репозиторий</h3>
-      <p>ORION построит карту структуры и связей, а также покажет локальную историю Git. Репозиторий можно добавить только из каталогов, разрешённых администратором сервера.</p>
-      <form className={styles.registerForm} onSubmit={event => void register(event)}>
+      <span className={styles.emptyIcon}><Box size={22} /></span><h3>Подключите рабочий репозиторий</h3>
+      <p>Укажите папку с кодом — ORION построит карту структуры и связей и покажет локальную историю Git. Выберите папку в проводнике, введите путь вручную или создайте репозиторий с нуля.</p>
+      <div><Button variant="outline" disabled={registering} onClick={openBrowse}><FolderOpen size={15} aria-hidden /> Обзор…</Button></div>
+      <form className={styles.registerForm} onSubmit={event => { event.preventDefault(); void submitRegister(false); }}>
         <label>Название<input required maxLength={120} value={repoName} onChange={event => setRepoName(event.target.value)} placeholder="Например, ORION-Rust" /></label>
-        <label>Путь на сервере<input required maxLength={4096} value={repoPath} onChange={event => setRepoPath(event.target.value)} placeholder="Путь внутри разрешённого корня" /></label>
-        <Button type="submit" disabled={registering || !repoName.trim() || !repoPath.trim()}>{registering ? "Проверяем…" : "Проверить и добавить"}</Button>
+        <label>Путь на этом компьютере<input required maxLength={4096} value={repoPath} onChange={event => { setRepoPath(event.target.value); setInitOffer(false); }} placeholder="Например, ~/projects/my-app" /></label>
+        <Button type="submit" disabled={registering || !repoName.trim() || !repoPath.trim()}>{registering ? "Проверяем…" : "Подключить"}</Button>
       </form>
-      {allowedRoots.length > 0 && <div className={styles.rootsHint}><strong>Разрешённые корни сервера</strong><ul>{allowedRoots.map(root => <li key={root}><code>{root}</code></li>)}</ul></div>}
+      {initOffer && <p role="status" className={styles.initOffer}>В этой папке пока нет git-репозитория. <button type="button" className={styles.initLink} disabled={registering} onClick={() => void submitRegister(true)}>Создать репозиторий здесь</button> — ORION инициализирует git и подключит папку.</p>}
+      {browseOpen && <div className={styles.browseOverlay} role="dialog" aria-modal="true" aria-label="Обзор папок">
+        <div className={styles.browse}>
+          <header className={styles.browseHead}><strong>Выберите папку репозитория</strong><button type="button" className={styles.browseClose} aria-label="Закрыть обзор" onClick={() => setBrowseOpen(false)}>✕</button></header>
+          <div className={styles.browsePath}><code>{browseData?.path ?? "…"}</code></div>
+          {browseError && <p role="alert" className={styles.browseError}>{browseError}</p>}
+          {browseLoading ? <p role="status" className={styles.browseLoading}>Читаем каталог…</p> : <ul className={styles.browseList}>
+            {browseData?.parent != null && <li><button type="button" className={styles.browseUp} onClick={() => void loadBrowse(browseData.parent ?? undefined)}><ArrowLeft size={14} aria-hidden /> Наверх</button></li>}
+            {browseData?.entries.map(entry => <li key={entry.name}><button type="button" className={styles.browseEntry} onClick={() => void loadBrowse(`${browseData.path}/${entry.name}`)}>
+              <span className={styles.browseName}>{entry.name}</span>
+              {entry.isGit && <span className={styles.browseGit}><GitBranch size={12} aria-hidden /> git-репозиторий</span>}
+              {entry.empty && <span className={styles.browseEmpty}>пустая</span>}
+            </button></li>)}
+            {browseData && browseData.entries.length === 0 && browseData.parent == null && <li className={styles.browseEmptyList}>В этом каталоге нет подпапок.</li>}
+          </ul>}
+          <footer className={styles.browseFoot}><Button size="sm" disabled={!browseData || browseLoading} onClick={pickBrowse}>Выбрать эту папку</Button><Button size="sm" variant="ghost" onClick={() => setBrowseOpen(false)}>Отмена</Button></footer>
+        </div>
+      </div>}
+      {candidates.length > 0 && <div className={styles.candidates}><strong>Найденные рядом репозитории</strong><div className={styles.candidateList} role="group" aria-label="Найденные репозитории">{candidates.map(item => <button key={item.path} type="button" className={styles.candidate} disabled={registering} title={item.path} onClick={() => { setRepoPath(item.path); setRepoName(current => current.trim() ? current : item.name); setInitOffer(false); setError(""); }}><span className={styles.candidateName}>{item.name}</span><code>{item.path}</code></button>)}</div><p className={styles.candidateHint}>Нажмите, чтобы подставить путь, затем «Подключить».</p></div>}
+      {allowedRoots.length > 0 && <div className={styles.rootsHint}><strong>Можно регистрировать репозитории внутри:</strong><ul>{allowedRoots.map(root => <li key={root}><code>{root}</code></li>)}</ul></div>}
     </div> : surface === "map" ? <>
       <div className={styles.summary}>
         <div className={styles.repoName}><span className={styles.statusDot} /> <strong>{currentRepo?.name}</strong><span className={styles.pathLabel}>{currentRepo?.path}</span></div>

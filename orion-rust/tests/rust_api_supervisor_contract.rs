@@ -8,6 +8,8 @@ mod rust_payload;
 mod rust_payload_supervisor;
 #[path = "../src/supervisor.rs"]
 mod supervisor;
+#[path = "../src/timeouts.rs"]
+mod timeouts;
 
 use rust_api::{api_mode, LanNodeConfig};
 use rust_api_supervisor::{

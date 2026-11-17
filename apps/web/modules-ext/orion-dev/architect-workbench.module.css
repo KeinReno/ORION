@@ -13,6 +13,36 @@
 .emptyState h3 { margin: 0; font-size: var(--font-title); font-weight: 600; }
 .emptyState p { margin: 0; color: var(--aw-muted); font-size: var(--font-label); line-height: 1.6; }
 .registerForm { display: grid; gap: 12px; margin-top: 5px; }
+.initOffer { margin: 0; border: 1px solid color-mix(in srgb, var(--aw-accent) 40%, var(--aw-border)); border-radius: 8px; padding: 10px 12px; background: color-mix(in srgb, var(--aw-accent) 8%, var(--aw-panel)); color: var(--aw-text); font-size: var(--font-label); line-height: 1.6; }
+.initLink { border: 0; padding: 0; background: none; color: var(--aw-accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.initLink:disabled { opacity: 0.6; cursor: default; }
+.candidates { display: grid; gap: 8px; }
+.candidates > strong { color: var(--aw-text); font-size: var(--font-label); font-weight: 600; }
+.candidateList { display: grid; gap: 6px; }
+.candidate { display: grid; gap: 3px; border: 1px solid var(--aw-border); border-radius: 8px; padding: 9px 11px; background: color-mix(in srgb, var(--aw-panel) 60%, var(--orion-color-canvas, #0f1012)); text-align: left; cursor: pointer; }
+.candidate:hover, .candidate:focus-visible { border-color: color-mix(in srgb, var(--aw-accent) 45%, var(--aw-border)); background: color-mix(in srgb, var(--aw-accent) 7%, var(--aw-panel)); outline: none; }
+.candidate:disabled { opacity: 0.6; cursor: default; }
+.candidateName { color: var(--aw-text); font-size: var(--font-label); font-weight: 600; }
+.candidate code { color: var(--aw-muted); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; font-size: var(--font-micro); overflow-wrap: anywhere; }
+.candidateHint { margin: 0; color: var(--aw-muted); font-size: var(--font-micro); }
+.browseOverlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--orion-color-canvas, #0f1012) 72%, transparent); }
+.browse { display: grid; gap: 10px; width: min(92vw, 560px); max-height: 80vh; border: 1px solid var(--aw-border); border-radius: 12px; padding: 14px; background: var(--aw-panel); box-shadow: 0 10px 30px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 55%, transparent); }
+.browseHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--aw-text); font-size: var(--font-title); }
+.browseClose { border: 0; padding: 4px 8px; background: none; color: var(--aw-muted); font-size: 15px; cursor: pointer; }
+.browseClose:hover { color: var(--aw-text); }
+.browsePath { border: 1px solid var(--aw-border); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--aw-panel) 60%, var(--orion-color-canvas, #0f1012)); }
+.browsePath code { color: var(--aw-accent); font-family: "IBM Plex Mono", Cascadia Mono, Consolas, monospace; font-size: var(--font-micro); overflow-wrap: anywhere; }
+.browseError { margin: 0; color: #fb7185; font-size: var(--font-label); }
+.browseLoading { margin: 0; color: var(--aw-muted); font-size: var(--font-label); }
+.browseList { display: grid; gap: 4px; margin: 0; padding: 2px; overflow: auto; list-style: none; }
+.browseUp, .browseEntry { display: flex; width: 100%; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 7px; padding: 8px 9px; background: transparent; color: var(--aw-text); font-size: var(--font-label); text-align: left; cursor: pointer; }
+.browseUp { color: var(--aw-muted); }
+.browseUp:hover, .browseEntry:hover, .browseEntry:focus-visible { border-color: color-mix(in srgb, var(--aw-accent) 30%, transparent); background: color-mix(in srgb, var(--aw-accent) 8%, transparent); outline: none; }
+.browseName { min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.browseGit { display: inline-flex; align-items: center; gap: 4px; border: 1px solid color-mix(in srgb, var(--aw-accent) 40%, var(--aw-border)); border-radius: 5px; padding: 1px 6px; color: var(--aw-accent); font-size: var(--font-micro); white-space: nowrap; }
+.browseEmpty { color: var(--aw-muted); font-size: var(--font-micro); white-space: nowrap; }
+.browseEmptyList { padding: 10px; color: var(--aw-muted); font-size: var(--font-label); text-align: center; }
+.browseFoot { display: flex; justify-content: flex-end; gap: 8px; }
 .registerForm label { display: grid; gap: 5px; color: var(--aw-muted); font-size: var(--font-label); }
 .registerForm input { min-height: 38px; border: 1px solid var(--aw-border); border-radius: 8px; padding: 0 10px; background: color-mix(in srgb, var(--aw-panel) 65%, var(--orion-color-canvas, #0f1012)); color: var(--aw-text); font-size: var(--font-label); }
 .registerForm input:focus-visible, .search input:focus-visible, .tabs button:focus-visible, .crumb:focus-visible { outline: 2px solid var(--aw-accent); outline-offset: 2px; }
@@ -195,7 +225,7 @@
   .explorerList button { width: 180px; flex: none; }
   .canvas { min-height: 280px; }
   .inspector { display: none; }
-  .mobileInspectorSelected { position: absolute; z-index: 40; top: 116px; right: 8px; left: 8px; display: flex; max-height: 220px; overflow: auto; isolation: isolate; border: 1px solid var(--aw-border); border-radius: 10px; background: var(--aw-panel); box-shadow: 0 5px 16px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 35%, transparent); }
+  .mobileInspectorSelected { position: fixed; z-index: 40; right: 8px; bottom: 8px; left: 8px; display: flex; max-height: 45vh; overflow: auto; isolation: isolate; border: 1px solid var(--aw-border); border-radius: 10px; background: var(--aw-panel); box-shadow: 0 5px 16px color-mix(in srgb, var(--orion-color-canvas, #0f1012) 35%, transparent); }
   .mobileInspectorSelected dl { grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 8px 0; }
   .mobileInspectorSelected dl div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px 8px; }
   .mobileInspectorSelected dt { min-width: 0; overflow-wrap: anywhere; }

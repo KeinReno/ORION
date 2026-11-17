@@ -68,6 +68,8 @@ export const SYNC_CLASSIFICATION: Record<string, SyncClassification> = {
   DevelopmentGitRepository: never("Локальный путь репозитория существует только на этом узле; перенос строки на другой компьютер дал бы нерабочий путь."),
   TaskCommitLink: strict("Привязка (taskId, repositoryId, sha) создаётся узлом по истории git; офлайн-запись дала бы дубль или ссылку на несуществующий коммит."),
   DevelopmentArchitectLayout: lww("later", "Раскладка карты и загруженная проектная схема — LWW по строке и ревизии; сами узлы каждый раз строятся анализатором."),
+  DevelopmentArchitectSnapshot: never("Снимки анализа привязаны к локальному репозиторию и его коммитам; между узлами не синхронизируются."),
+  DevelopmentWorkflow: lww("later", "Процессы Workbench — пользовательский контент пространства; полная замена графа — LWW по строке."),
   Milestone: lww("later", "Вехи проекта."),
   Goal: lww("later", "Цели."),
   Contact: lww("later", "Записная книжка пространства."),

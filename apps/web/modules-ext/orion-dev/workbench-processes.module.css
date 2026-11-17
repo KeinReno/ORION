@@ -1,0 +1,134 @@
+/* Architect / Workbench — «Процессы». KAIDEN: graphite canvas, gold accent, DM Mono-style micro labels. */
+.root { --wp-border: var(--orion-color-border, #3a3b3c); --wp-panel: var(--orion-color-elevated, #202123); --wp-canvas: var(--orion-color-canvas, #101112); --wp-muted: var(--orion-color-secondary, #b2b0a9); --wp-text: var(--orion-color-text, #f2f0ea); --wp-accent: rgb(var(--orion-accent, 201 168 106)); display: flex; min-height: 590px; flex-direction: column; overflow: hidden; border: 1px solid var(--wp-border); border-radius: 12px; background: var(--wp-panel); color: var(--wp-text); }
+.toolbar { display: flex; min-height: 54px; flex-wrap: wrap; align-items: center; gap: 10px; border-bottom: 1px solid var(--wp-border); padding: 8px 14px; }
+.toolbarTitle { display: inline-flex; align-items: center; gap: 8px; color: var(--wp-muted); font-size: var(--font-label); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.toolbarTitle > svg { color: var(--wp-accent); }
+.countBadge { min-width: 20px; border-radius: 10px; padding: 2px 6px; background: color-mix(in srgb, var(--wp-accent) 12%, var(--wp-panel)); color: var(--wp-text); text-align: center; font-size: var(--font-micro); }
+.alert { display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid color-mix(in srgb, #fb7185 42%, var(--wp-border)); padding: 10px 15px; background: color-mix(in srgb, #fb7185 10%, var(--wp-panel)); font-size: var(--font-label); }
+.alert svg { flex: none; margin-top: 1px; color: #fb7185; }
+.loading { display: flex; min-height: 150px; align-items: center; justify-content: center; gap: 9px; color: var(--wp-muted); font-size: var(--font-label); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Список процессов */
+.createForm { display: grid; gap: 10px; border-bottom: 1px solid var(--wp-border); padding: 14px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); }
+.createForm label { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-label); }
+.createForm input { min-height: 36px; border: 1px solid var(--wp-border); border-radius: 8px; padding: 0 10px; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-label); }
+.createForm input:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.createActions { display: flex; gap: 8px; }
+.list { display: grid; margin: 0; padding: 8px; list-style: none; }
+.list li { display: flex; align-items: center; gap: 6px; }
+.row { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 9px; padding: 11px 12px; background: transparent; color: var(--wp-text); text-align: left; cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
+.row:hover, .row:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 30%, var(--wp-border)); background: color-mix(in srgb, var(--wp-accent) 7%, var(--wp-panel)); outline: none; }
+.rowMain { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.rowMain strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); font-weight: 600; }
+.rowMain small { overflow: hidden; color: var(--wp-muted); font-size: var(--font-micro); text-overflow: ellipsis; white-space: nowrap; }
+.row time { flex: none; color: var(--wp-muted); font-size: var(--font-micro); font-variant-numeric: tabular-nums; }
+.emptyState { display: grid; width: min(100%, 620px); gap: 12px; align-self: center; padding: 48px 24px; }
+.emptyIcon { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid color-mix(in srgb, var(--wp-accent) 35%, var(--wp-border)); border-radius: 12px; background: color-mix(in srgb, var(--wp-accent) 9%, var(--wp-panel)); color: var(--wp-accent); }
+.emptyState h3 { margin: 0; font-size: var(--font-title); font-weight: 600; }
+.emptyState p { margin: 0; color: var(--wp-muted); font-size: var(--font-label); line-height: 1.6; }
+
+/* Чипы статусов */
+.chip { display: inline-flex; flex: none; align-items: center; border: 1px solid var(--wp-border); border-radius: 999px; padding: 2px 8px; font-size: var(--font-micro); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+.chip_pending { color: var(--wp-muted); }
+.chip_active { border-color: color-mix(in srgb, #60a5fa 45%, var(--wp-border)); color: #60a5fa; }
+.chip_done, .chip_pass { border-color: color-mix(in srgb, #10b981 45%, var(--wp-border)); color: #10b981; }
+.chip_blocked { border-color: color-mix(in srgb, #fb7185 45%, var(--wp-border)); color: #fb7185; }
+.chip_neutral { color: var(--wp-muted); }
+.chip_accent { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); color: var(--wp-accent); }
+.chip_warning { border-color: color-mix(in srgb, #f59e0b 45%, var(--wp-border)); color: #f59e0b; }
+.chip_success { border-color: color-mix(in srgb, #10b981 45%, var(--wp-border)); color: #10b981; }
+
+/* Редактор */
+.nameInput { min-width: 0; flex: 1; min-height: 34px; border: 1px solid transparent; border-radius: 7px; padding: 0 9px; background: transparent; color: var(--wp-text); font-size: var(--font-title); font-weight: 600; }
+.nameInput:hover { border-color: var(--wp-border); }
+.nameInput:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); outline: none; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); }
+.select { max-width: 220px; min-height: 32px; border: 1px solid var(--wp-border); border-radius: 6px; padding: 0 8px; background: var(--wp-panel); color: var(--wp-text); font-size: var(--font-label); }
+.select:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.saveState { margin-left: auto; color: var(--wp-muted); font-size: var(--font-micro); }
+.editorLayout { display: grid; min-height: 430px; flex: 1; grid-template-columns: minmax(170px, 200px) minmax(0, 1fr) minmax(190px, 240px); }
+
+/* Палитра */
+.palette { display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--wp-border); padding: 12px 10px; overflow: auto; }
+.palette h4 { margin: 6px 2px 2px; color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.paletteItem { display: flex; width: 100%; align-items: center; gap: 8px; border: 1px solid var(--wp-border); border-radius: 8px; padding: 8px 9px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-micro); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
+.paletteItem:hover, .paletteItem:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); background: color-mix(in srgb, var(--wp-accent) 8%, var(--wp-panel)); box-shadow: 0 0 14px color-mix(in srgb, var(--wp-accent) 18%, transparent); outline: none; }
+.paletteItem > svg { margin-left: auto; color: var(--wp-muted); }
+.edgeKindLabel { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-micro); }
+.paletteHint { margin: 4px 2px 0; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.55; }
+.paletteActions { margin-top: auto; display: flex; }
+
+/* Узлы схемы */
+.canvas { position: relative; z-index: 0; min-width: 0; min-height: 430px; background-color: color-mix(in srgb, var(--wp-panel) 92%, var(--wp-canvas)); background-image: radial-gradient(color-mix(in srgb, var(--wp-border) 55%, transparent) 1px, transparent 1px); background-size: 22px 22px; }
+.canvas :global(.react-flow__node) { font-family: inherit; }
+.nodeCard { position: relative; display: flex; width: 224px; align-items: flex-start; gap: 9px; border: 1px solid #3a3b3c; border-radius: 10px; padding: 11px 12px; background: linear-gradient(180deg, #202123 0%, #191a1b 100%); color: var(--wp-text); box-shadow: 0 8px 22px color-mix(in srgb, var(--wp-canvas) 30%, transparent); transition: border-color 140ms ease, box-shadow 140ms ease; }
+.nodeCard:hover { border-color: color-mix(in srgb, var(--wp-accent) 40%, #3a3b3c); box-shadow: 0 8px 26px color-mix(in srgb, var(--wp-accent) 16%, transparent), 0 0 0 1px color-mix(in srgb, var(--wp-accent) 22%, transparent); }
+.nodeCardSelected { border-color: var(--wp-accent); box-shadow: 0 0 0 1px var(--wp-accent), 0 0 18px color-mix(in srgb, var(--wp-accent) 30%, transparent); }
+.nodeIcon { display: grid; width: 26px; height: 26px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--wp-accent) 30%, var(--wp-border)); border-radius: 7px; background: color-mix(in srgb, var(--wp-accent) 8%, var(--wp-panel)); color: var(--wp-accent); font-size: 13px; }
+.nodeIcon_task { color: var(--wp-text); border-color: var(--wp-border); background: color-mix(in srgb, var(--wp-border) 20%, transparent); }
+.nodeIcon_agent { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 35%, var(--wp-border)); background: color-mix(in srgb, #60a5fa 9%, var(--wp-panel)); }
+.nodeIcon_decision { color: #f59e0b; border-color: color-mix(in srgb, #f59e0b 35%, var(--wp-border)); background: color-mix(in srgb, #f59e0b 9%, var(--wp-panel)); }
+.nodeIcon_result { color: #10b981; border-color: color-mix(in srgb, #10b981 35%, var(--wp-border)); background: color-mix(in srgb, #10b981 9%, var(--wp-panel)); }
+.nodeBody { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.nodeTitle { overflow: hidden; font-size: var(--font-label); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.nodeDescription { display: -webkit-box; overflow: hidden; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nodeAgent { color: var(--wp-accent); font-size: var(--font-micro); }
+.nodeHandle { width: 7px; height: 7px; border: 1px solid var(--wp-panel); background: var(--wp-accent); }
+.canvas :global(.react-flow__edge-text) { fill: var(--wp-muted); }
+.edgeFlow :global(.react-flow__path) { stroke: #d2ad69; stroke-width: 1.8; }
+.edgeSignal :global(.react-flow__path) { stroke: #b2b0a9; stroke-width: 1.4; stroke-dasharray: 6 5; }
+.edgeSignal :global(.react-flow__edge-text) { fill: var(--wp-muted); }
+.canvas :global(.react-flow__controls) { overflow: hidden; border: 1px solid var(--wp-border); border-radius: 8px; box-shadow: 0 3px 12px color-mix(in srgb, var(--wp-canvas) 30%, transparent); }
+.canvas :global(.react-flow__controls-button) { border-bottom-color: var(--wp-border); background: var(--wp-panel); fill: var(--wp-text); }
+.canvas :global(.react-flow__minimap) { border: 1px solid var(--wp-border); border-radius: 8px; background: var(--wp-panel); }
+.canvasEmpty { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 9px; pointer-events: none; color: var(--wp-muted); font-size: var(--font-label); text-align: center; }
+
+/* Инспектор */
+.inspector { display: flex; min-width: 0; flex-direction: column; gap: 10px; border-left: 1px solid var(--wp-border); padding: 13px; overflow: auto; }
+.inspectorTop { display: flex; align-items: center; gap: 8px; color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.field { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-micro); }
+.field input, .field textarea, .field select { width: 100%; min-height: 32px; border: 1px solid var(--wp-border); border-radius: 7px; padding: 6px 8px; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-label); }
+.field textarea { resize: vertical; line-height: 1.5; }
+.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.inspectorActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.inspectorEmpty { display: grid; flex: 1; align-content: center; justify-items: center; gap: 9px; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.5; text-align: center; }
+
+/* Трасса выполнения */
+.trace { border-top: 1px solid var(--wp-border); }
+.traceToggle { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 8px; border: 0; padding: 0 13px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.traceToggle:hover { color: var(--wp-text); }
+.traceToggle > svg { color: var(--wp-accent); }
+.traceTabs { display: inline-flex; gap: 4px; margin-left: auto; text-transform: none; letter-spacing: 0; }
+.traceTab { border: 1px solid transparent; border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.traceTab:hover { color: var(--wp-text); }
+.traceTabActive { border-color: color-mix(in srgb, var(--wp-accent) 35%, var(--wp-border)); background: color-mix(in srgb, var(--wp-accent) 10%, var(--wp-panel)); color: var(--wp-text); }
+.traceBody { max-height: 190px; overflow: auto; border-top: 1px solid var(--wp-border); padding: 8px 13px; background: color-mix(in srgb, var(--wp-canvas) 35%, var(--wp-panel)); }
+.traceList { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.traceList li { display: flex; align-items: baseline; gap: 10px; border-radius: 6px; padding: 6px 8px; background: color-mix(in srgb, var(--wp-border) 14%, transparent); font-size: var(--font-micro); }
+.traceList time { flex: none; min-width: 118px; color: var(--wp-muted); font-variant-numeric: tabular-nums; }
+.traceList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.traceList small { overflow: hidden; color: var(--wp-muted); text-overflow: ellipsis; white-space: nowrap; }
+.eventText { color: var(--wp-text); }
+.traceEmpty { display: grid; place-content: center; justify-items: center; gap: 8px; margin: 0; padding: 18px; color: var(--wp-muted); font-size: var(--font-micro); text-align: center; }
+
+@media (max-width: 900px) {
+  .editorLayout { grid-template-columns: minmax(140px, 180px) minmax(0, 1fr); }
+  .inspector { grid-column: 1 / -1; min-height: 110px; max-height: 200px; overflow: auto; border-top: 1px solid var(--wp-border); border-left: 0; }
+}
+@media (max-width: 640px) {
+  .root { min-height: 620px; }
+  .toolbar { align-items: flex-start; }
+  .saveState { order: 4; margin-left: 0; }
+  .editorLayout { position: relative; min-height: 420px; grid-template-columns: minmax(0, 1fr); }
+  .palette { flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--wp-border); }
+  .palette h4 { width: 100%; margin: 0; }
+  .paletteHint, .paletteActions { display: none; }
+  .canvas { min-height: 320px; }
+  .inspector { display: none; }
+  .row time { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+  .row, .paletteItem, .nodeCard { transition: none; }
+}

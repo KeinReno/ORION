@@ -25,14 +25,34 @@ export type DevelopmentRepository = z.infer<typeof developmentRepositorySchema>;
 export const developmentRepositoryRemovedSchema = z.void();
 
 /**
- * Каталоги, которые администратор сервера разрешил для регистрации репозиториев
- * (env `ORION_DEV_REPOSITORY_ROOTS`). Клиент показывает их как подсказку в форме регистрации,
- * чтобы не угадывать, какой путь сервер примет.
+ * Каталоги, внутри которых можно регистраровать репозитории: явные из
+ * `ORION_DEV_REPOSITORY_ROOTS`, а при их отсутствии — домашний каталог пользователя узла.
+ * Клиент показывает их как подсказку в форме регистрации, чтобы не угадывать, какой путь сервер примет.
  */
 export const developmentRepositoryRootsSchema = z.object({
   roots: z.array(z.string())
 });
 export type DevelopmentRepositoryRoots = z.infer<typeof developmentRepositoryRootsSchema>;
+
+/** Git-репозиторий, найденный рядом с разрешёнными корнями — подсказка для подключения в один клик. */
+export const developmentRepositoryCandidateSchema = z.object({
+  name: z.string(),
+  path: z.string()
+});
+export type DevelopmentRepositoryCandidate = z.infer<typeof developmentRepositoryCandidateSchema>;
+
+/** Каталог во встроенном обзоре: содержимое и признаки, нужные форме подключения. */
+export const developmentRepositoryBrowseSchema = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  entries: z.array(z.object({ name: z.string(), isGit: z.boolean(), empty: z.boolean() }))
+});
+export type DevelopmentRepositoryBrowse = z.infer<typeof developmentRepositoryBrowseSchema>;
+
+export const developmentRepositoryBrowseQuerySchema = z.object({
+  path: z.string().max(4096).optional()
+});
+export type DevelopmentRepositoryBrowseQuery = z.infer<typeof developmentRepositoryBrowseQuerySchema>;
 
 export const createDevelopmentRepositoryInputSchema = z.object({
   name: z.string().trim().min(1).max(120),

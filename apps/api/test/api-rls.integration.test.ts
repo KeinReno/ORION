@@ -525,6 +525,56 @@ describe("API workspace isolation", () => {
     expect(unprotected).toEqual([]);
   });
 
+  it("hides Workbench workflows from another workspace through RLS", async () => {
+    const owner = await register("workflow-owner");
+    const outsider = await register("workflow-outsider");
+    const workflowId = await prisma.withUser(owner.user.id, async (tx) => {
+      const workflow = await tx.developmentWorkflow.create({
+        data: { workspaceId: owner.workspaceId, name: "RLS workflow fixture", nodes: [], edges: [] }
+      });
+      return workflow.id;
+    });
+
+    const ownerRows = await prisma.withUser(owner.user.id, (tx) =>
+      tx.developmentWorkflow.findMany({ where: { id: workflowId } })
+    );
+    const outsiderRows = await prisma.withUser(outsider.user.id, (tx) =>
+      tx.developmentWorkflow.findMany({ where: { id: workflowId } })
+    );
+    expect(ownerRows).toHaveLength(1);
+    expect(outsiderRows).toHaveLength(0);
+  });
+
+  it("hides Architect snapshots from another workspace through RLS", async () => {
+    const owner = await register("architect-snapshot-owner");
+    const outsider = await register("architect-snapshot-outsider");
+    const snapshotId = await prisma.withUser(owner.user.id, async (tx) => {
+      const repository = await tx.developmentGitRepository.create({
+        data: { workspaceId: owner.workspaceId, name: "RLS fixture", path: `/tmp/orion-rls-${runId}` }
+      });
+      const snapshot = await tx.developmentArchitectSnapshot.create({
+        data: {
+          workspaceId: owner.workspaceId,
+          repositoryId: repository.id,
+          sha: "a".repeat(40),
+          nodes: [],
+          edges: [],
+          metrics: {}
+        }
+      });
+      return snapshot.id;
+    });
+
+    const ownerRows = await prisma.withUser(owner.user.id, (tx) =>
+      tx.developmentArchitectSnapshot.findMany({ where: { id: snapshotId } })
+    );
+    const outsiderRows = await prisma.withUser(outsider.user.id, (tx) =>
+      tx.developmentArchitectSnapshot.findMany({ where: { id: snapshotId } })
+    );
+    expect(ownerRows).toHaveLength(1);
+    expect(outsiderRows).toHaveLength(0);
+  });
+
   it("hides finance transaction lines from another workspace through RLS", async () => {
     const alice = await register("alice-finance");
     const bob = await register("bob-finance");

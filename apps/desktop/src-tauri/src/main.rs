@@ -180,6 +180,15 @@ fn reject_occupied_port(name: &str, port: u16, pids: &[u32]) -> Result<(), Strin
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
+fn local_runtime_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    if std::env::var_os("ORION_DESKTOP_DATA_DIR").is_some() {
+        return Ok(orion_runtime::load_profile()?.data_dir);
+    }
+    app.path().app_local_data_dir().map_err(|error| error.to_string())
+}
+
+#[cfg(all(windows, not(debug_assertions)))]
 fn start_local_runtime(
     app: &tauri::AppHandle,
 ) -> Result<(process_supervisor::Supervisor, u32), String> {
@@ -204,8 +213,7 @@ fn start_local_runtime(
             runtime_exe.display()
         ));
     }
-    let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let data_dir = local_runtime_data_dir(app)?;
     let shutdown_nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| format!("Не удалось подготовить сигнал завершения: {error}"))?
@@ -436,6 +444,35 @@ fn main() {
             payload_ui_smoke::setup(app)?;
             #[cfg(debug_assertions)]
             startup_smoke::setup(app)?;
+            #[cfg(all(windows, not(debug_assertions)))]
+            let profile_setup = local_runtime_data_dir(app.handle())
+                .and_then(|path| orion_runtime::lifecycle::ensure_private_dir(&path));
+            // Pre-flight: the webview user-data folder lives in the app data directory.
+            // When it is not writable (restricted ACL on a custom profile path, read-only
+            // media), WebView2 initialization hangs silently and NO WINDOW EVER APPEARS —
+            // the process keeps running with a healthy runtime and no visible error.
+            // Probe writability up front and surface a clear startup error instead.
+            #[cfg(all(windows, not(debug_assertions)))]
+            let webview_preflight: Result<(), String> = (|| {
+                use tauri::Manager;
+                let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+                std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+                let probe = dir.join(".webview-write-probe");
+                std::fs::write(&probe, b"ok").map_err(|e| format!("{}: {e}", dir.display()))?;
+                let _ = std::fs::remove_file(&probe);
+                Ok(())
+            })();
+            #[cfg(all(windows, not(debug_assertions)))]
+            if let Err(message) = &webview_preflight {
+                startup::set(app.handle(), "error", Some(format!(
+                    "Каталог профиля недоступен для записи ({message}). Запустите ORION Rust от имени администратора или переустановите приложение."
+                )));
+            }
+            #[cfg(all(windows, not(debug_assertions)))]
+            let profile_setup = match (&profile_setup, &webview_preflight) {
+                (Err(message), _) | (_, Err(message)) => Err(message.clone()),
+                (Ok(()), Ok(())) => Ok(()),
+            };
             let mut config = app.config().app.windows[0].clone();
             #[cfg(all(windows, not(debug_assertions)))]
             { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
@@ -446,9 +483,20 @@ fn main() {
                 // Dev build without smoke: load the Next dev server (tauri.conf.json devUrl).
                 // App("index.html") would hit the unregistered tauri:// protocol and the
                 // webview channel dies with FailedToReceiveMessage — no window appears.
-                config.url = tauri::WebviewUrl::External("about:blank".parse().expect("devUrl"));
+                config.url = tauri::WebviewUrl::External("http://localhost:3011".parse().expect("devUrl"));
             }
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+            #[cfg(all(windows, not(debug_assertions)))]
+            {
+                use tauri::Manager;
+                let probe = app.path().app_local_data_dir().map(|d| d.join("launcher.log"));
+                if let Ok(log) = probe {
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+                        use std::io::Write;
+                        let _ = writeln!(f, "[shell] building window: label={} url={:?}", config.label, config.url);
+                    }
+                }
+            }
             #[cfg(debug_assertions)]
             let window = if payload_ui_smoke::enabled() { window.initialization_script(payload_ui_smoke::FAKE_API) } else { window };
             #[cfg(debug_assertions)]
@@ -466,12 +514,32 @@ fn main() {
             }
             #[cfg(not(debug_assertions))]
             let built = window.build();
+            #[cfg(all(windows, not(debug_assertions)))]
+            {
+                // Diagnostics: a silent no-window start must leave a trace in launcher.log.
+                use tauri::Manager;
+                let probe = app.path().app_local_data_dir().map(|d| d.join("launcher.log"));
+                if let Ok(log) = probe {
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+                        use std::io::Write;
+                        match &built {
+                            Ok(w) => {
+                                let _ = writeln!(f, "[shell] window built: hwnd={:?} size={:?} visible={:?} title={:?}",
+                                    w.hwnd(), w.inner_size(), w.is_visible(), w.title());
+                            }
+                            Err(e) => {
+                                let _ = writeln!(f, "[shell] window build FAILED: {e}");
+                            }
+                        }
+                    }
+                }
+            }
             built?;
             #[cfg(all(windows, not(debug_assertions)))]
             {
                 let handle = app.handle().clone();
                 // setup must return immediately so Windows can paint and process input.
-                std::thread::spawn(move || { match start_local_runtime(&handle) {
+                std::thread::spawn(move || { match profile_setup.and_then(|()| start_local_runtime(&handle)) {
                     Ok((supervisor, pid)) => {
                         startup::set(&handle, "ready", None);
                         payload_ui::watch_selection(handle.clone());

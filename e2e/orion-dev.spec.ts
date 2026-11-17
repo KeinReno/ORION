@@ -1,242 +1,74 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { apiUrl, register, signIn } from "./support";
 
-test("review, import, reopen and repeat the catalog", async ({ page, request }, testInfo) => {
+// Architect / Workbench: процессы (воркфлоу), пустой старт без проектов по умолчанию.
+test("workbench: empty start, create a workflow process, edit and reopen", async ({ page, request }) => {
   const account = await register(request, "orion-dev");
   const headers = { Authorization: `Bearer ${account.accessToken}` };
   const base = `${apiUrl()}/workspaces/${account.workspaceId}`;
-  const project = await request.post(`${base}/projects`, { headers, data: { name: "ORION CORE", description: "User description" } });
-  expect(project.ok()).toBe(true);
-  await signIn(page, account);
   const pageErrors: string[] = [];
+  await signIn(page, account);
   page.on("pageerror", error => pageErrors.push(error.message));
+
   await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  const importButton = page.getByRole("button", { name: "Импортировать каталог", exact: true });
-  await page.getByRole("button", { name: "Импорт каталога", exact: true }).click();
-  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
-  await expect(importButton).toBeDisabled();
-  await page.getByRole("checkbox", { name: /Связать с существующим проектом/ }).check();
-  await expect(importButton).toBeDisabled();
-  await page.getByRole("checkbox", { name: /Импортировать этот план/ }).check();
-  await expect(importButton).toBeEnabled();
-  await page.getByRole("heading", { name: /Пространство:/ }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("review-desktop.png"), fullPage: true });
-  await importButton.click();
-  await expect(page.getByRole("region", { name: "Результат импорта" })).toBeVisible();
-  const projects = await (await request.get(`${base}/projects`, { headers })).json();
-  expect(projects.filter((row: { name: string }) => row.name === "ORION CORE")).toHaveLength(1);
-  expect(projects.find((row: { name: string }) => row.name === "ORION CORE").description).toBe("User description");
-  await page.reload();
-  await expect(page.getByRole("region", { name: "Состояние разработки" })).toBeVisible();
-  await page.getByRole("button", { name: "Импорт каталога", exact: true }).click();
-  await expect(page.getByText(/Уже связаны: 29/)).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: testInfo.outputPath("repeat-mobile.png"), fullPage: true });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole("checkbox", { name: /Импортировать этот план/ }).check();
-  await importButton.click();
-  await expect(page.getByText(/Создано проектов: 0; задач: 0; зависимостей: 0/)).toBeVisible();
+
+  // Панель переименована в Architect, первый экран — «Процессы» без ORION-проектов по умолчанию.
+  await expect(page.getByRole("button", { name: "Процессы", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Архитектура", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Git", exact: true })).toBeVisible();
+  await expect(page.getByText("Создайте первый процесс — визуальную схему работы над задачей")).toBeVisible();
+  await expect(page.getByText("Импорт каталога")).toHaveCount(0);
+
+  // Создаём процесс через UI.
+  await page.getByRole("button", { name: "Новый процесс", exact: true }).click();
+  await page.getByPlaceholder("Например, Проверка релиза 0.24").fill("Разработка модуля");
+  await page.getByRole("button", { name: "Создать процесс", exact: true }).click();
+
+  // Процесс появился в списке, открывается редактор со схемой.
+  await expect(page.getByText("Разработка модуля")).toBeVisible();
+  await page.getByText("Разработка модуля").click();
+  await expect(page.getByLabel("Схема процесса")).toBeVisible();
+  await expect(page.getByLabel("Добавить узел")).toBeVisible();
+
+  // Добавляем узлы: Задача → Агент → Результат.
+  await page.getByRole("button", { name: /Задача/ }).click();
+  await page.getByRole("button", { name: /Агент/ }).click();
+  await page.getByRole("button", { name: /Результат/ }).toHaveCount(1);
+  await page.getByLabel("Название процесса").fill("Разработка модуля v2");
+  await page.getByRole("button", { name: "К процессам" }).click();
+  await expect(page.getByText("Разработка модуля v2")).toBeVisible();
+
+  // Граф сохранился на сервере.
+  const list = await (await request.get(`${base}/development/workflows`, { headers })).json();
+  const saved = list.find((row: { name: string }) => row.name === "Разработка модуля v2");
+  expect(saved).toBeTruthy();
+  const full = await (await request.get(`${base}/development/workflows/${saved.id}`, { headers })).json();
+  expect(full.nodes.map((node: { type: string }) => node.type).sort()).toEqual(["agent", "result", "task"]);
   expect(pageErrors).toEqual([]);
 });
 
-test("stale preview preserves review and requires refresh", async ({ page, request }) => {
-  const account = await register(request, "orion-dev-stale");
-  await signIn(page, account);
-  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Импорт каталога", exact: true }).click();
-  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
-  await page.getByRole("checkbox", { name: /Импортировать этот план/ }).check();
-  const response = await request.post(`${apiUrl()}/workspaces/${account.workspaceId}/projects`, {
-    headers: { Authorization: `Bearer ${account.accessToken}` }, data: { name: "Created after preview" }
-  });
-  expect(response.ok()).toBe(true);
-  await page.getByRole("button", { name: "Импортировать каталог", exact: true }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "План изменился" })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: /Импортировать этот план/ })).toBeChecked();
-  await expect(page.getByRole("button", { name: "Импортировать каталог", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Обновить план" }).click();
-  await expect(page.getByRole("checkbox", { name: /Импортировать этот план/ })).not.toBeChecked();
-});
-
-test("lost apply response recovers from persisted mappings without duplicate writes", async ({ page, request }, testInfo) => {
-  const account = await register(request, "orion-dev-lost-response");
-  await signIn(page, account);
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Импорт каталога", exact: true }).click();
-  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
-  const acknowledgement = page.getByRole("checkbox", { name: /Импортировать этот план/ });
-  await acknowledgement.focus();
-  await page.keyboard.press("Space");
-  await expect(acknowledgement).toBeChecked();
-  let applied = 0;
-  await page.route("**/development-import/apply", async route => {
-    const response = await route.fetch();
-    expect(response.ok()).toBe(true);
-    applied++;
-    await route.abort("failed"); // commit succeeded, transport lost the response
-  });
-  const importButton = page.getByRole("button", { name: "Импортировать каталог", exact: true });
-  await importButton.click();
-  await expect(page.getByRole("alert").filter({ hasText: "Ответ об импорте не получен" })).toBeVisible();
-  await expect(importButton).toBeDisabled();
-  expect(applied).toBe(1);
-  await page.unroute("**/development-import/apply");
-  await page.getByRole("button", { name: "Обновить план" }).click();
-  await expect(page.getByText(/Уже связаны: 29/)).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole("heading", { name: /Пространство:/ }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("recovered-320.png"), fullPage: true });
-});
-
-test("stalled preview leaves a retry path", async ({ page, request }) => {
-  const account = await register(request, "orion-dev-timeout");
-  await signIn(page, account);
-  await page.route("**/development-import/preview", () => { /* leave transport pending */ });
-  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Импорт каталога", exact: true }).click();
-  await expect(page.getByText("Проверяем каталог и данные пространства…")).toBeVisible();
-  await expect(page.getByRole("alert").filter({ hasText: "Не удалось получить план" })).toBeVisible({ timeout: 35_000 });
-  await expect(page.getByRole("button", { name: "Обновить план" })).toBeEnabled();
-  await page.unroute("**/development-import/preview");
-  await page.getByRole("button", { name: "Обновить план" }).click();
-  await expect(page.getByRole("region", { name: "План импорта" })).toBeVisible();
-});
-
-
-test("overview uses canonical names, statuses and dependencies with no automatic writes", async ({ page, request }, testInfo) => {
-  const account = await register(request, "orion-dev-overview");
+test("workbench: workflows API validates input and isolates workspaces", async ({ request }) => {
+  const account = await register(request, "orion-dev");
   const headers = { Authorization: `Bearer ${account.accessToken}` };
-  const base = `${apiUrl()}/workspaces/${account.workspaceId}`;
-  await signIn(page, account);
-  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Подготовить пространство", exact: true }).click();
-  await page.getByRole("checkbox", { name: /Импортировать этот план/ }).check();
-  await page.getByRole("button", { name: "Импортировать каталог", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Результат импорта" })).toBeVisible();
-  const tasks = await (await request.get(`${base}/tasks`, { headers })).json();
-  const core = tasks.find((row: { title: string }) => row.title === "Verify event and module boundaries from code");
-  const projects = await (await request.get(`${base}/projects`, { headers })).json();
-  const project = projects.find((row: { name: string }) => row.name === "ORION CORE");
-  expect((await request.patch(`${base}/tasks/${core.id}`, { headers, data: { title: "Мой аудит ядра", status: "in_progress" } })).ok()).toBe(true);
-  expect((await request.patch(`${base}/projects/${project.id}`, { headers, data: { name: "Моё ядро" } })).ok()).toBe(true);
-  const writes: string[] = [];
-  page.on("request", req => { if (req.method() === "POST" && /development-import/.test(req.url())) writes.push(req.url()); });
-  await page.reload();
-  const overview = page.getByRole("region", { name: "Состояние разработки" });
-  await expect(overview).toContainText("13 направлений · 16 задач");
-  await expect(overview.locator("dl")).toContainText("В работе1");
-  const directions = page.getByRole("region", { name: "Направления", exact: true });
-  const taskList = page.getByRole("region", { name: "Задачи этапа", exact: true });
-  await expect(directions.getByRole("button", { name: /Моё ядро/ })).toBeVisible();
-  await expect(taskList.getByRole("button", { name: /Мой аудит ядра/ })).toContainText("В работе");
-  await page.screenshot({ path: testInfo.outputPath("overview-desktop.png"), fullPage: true });
-  await page.getByRole("combobox", { name: "Показать" }).selectOption("in_progress");
-  await expect(taskList.getByRole("button")).toHaveCount(1);
-  await page.getByRole("combobox", { name: "Показать" }).selectOption("done");
-  await expect(taskList).toContainText("Нет задач с выбранным статусом");
-  await page.getByRole("button", { name: "Агенты", exact: true }).click();
-  await expect(taskList.getByRole("button").filter({ hasText: "DEV-008" })).toContainText("Ожидает зависимостей");
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.getByRole("button", { name: "Все этапы", exact: true }).focus();
-  await page.keyboard.press("Enter");
-  await expect(taskList.getByRole("button")).toHaveCount(16);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "Обзор разработки", exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("overview-320.png"), fullPage: true });
-  await taskList.getByRole("button").last().scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("overview-320-last-task.png"), fullPage: true });
-  expect(writes).toEqual([]);
-  await page.route("**/development-import/preview", route => route.abort());
-  await page.getByRole("button", { name: "Обновить обзор" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Не удалось получить план" })).toBeVisible();
-  await expect(overview).not.toBeVisible();
-  await page.unroute("**/development-import/preview");
-  await page.getByRole("button", { name: "Обновить обзор" }).click();
-  await expect(overview).toBeVisible();
-  await taskList.getByRole("button").filter({ hasText: "DEV-001" }).click();
-  await expect(page.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue("Мой аудит ядра");
-  await page.goBack();
-  await page.getByRole("region", { name: "Направления", exact: true }).getByRole("button", { name: /Моё ядро/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/panel/project\\?instance=${project.id}`));
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "ORION DEV", exact: true }).click();
-  await page.getByRole("region", { name: "Задачи этапа", exact: true }).getByRole("button").filter({ hasText: "DEV-001" }).click();
-  await expect(page.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue("Мой аудит ядра");
-});
+  const base = `${apiUrl()}/workspaces/${account.workspaceId}/development/workflows`;
 
-test("Architect integrates repository map, read-only Git history and intent comparison", async ({ page, request }, testInfo) => {
-  const account = await register(request, "orion-dev-architect");
-  const repositoryPath = join(testInfo.outputDir, "architect-fixture");
-  mkdirSync(join(repositoryPath, "src"), { recursive: true });
-  writeFileSync(join(repositoryPath, "README.md"), "# Architect E2E fixture\n");
-  writeFileSync(join(repositoryPath, "src", "index.ts"), 'import { value } from "./value";\nexport const result = value;\n');
-  writeFileSync(join(repositoryPath, "src", "value.ts"), 'export const value = "ok";\n');
-  execFileSync("git", ["-C", repositoryPath, "init", "-b", "main"]);
-  execFileSync("git", ["-C", repositoryPath, "config", "user.name", "ORION E2E"]);
-  execFileSync("git", ["-C", repositoryPath, "config", "user.email", "orion-e2e@example.invalid"]);
-  execFileSync("git", ["-C", repositoryPath, "add", "."]);
-  execFileSync("git", ["-C", repositoryPath, "commit", "-m", "Create architecture fixture"]);
-  await signIn(page, account);
-  await page.goto(`/panel/orion-dev?workspaceId=${account.workspaceId}`);
-  await page.getByRole("button", { name: "Архитектура и Git", exact: true }).click();
+  const created = await request.post(base, { headers, data: { name: "API-процесс" } });
+  expect(created.status()).toBe(201);
+  const { id } = await created.json();
 
-  await expect(page.getByRole("heading", { name: "Добавьте рабочий репозиторий" })).toBeVisible();
-  await page.getByRole("textbox", { name: "Название" }).fill("ORION-Rust E2E");
-  await page.getByRole("textbox", { name: "Путь на сервере" }).fill(repositoryPath);
-  const registerResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().includes("/development/git/repositories"));
-  await page.getByRole("button", { name: "Проверить и добавить", exact: true }).click();
-  const registeredRepository = await (await registerResponse).json() as { id: string };
+  const bad = await request.post(base, { headers, data: { name: "" } });
+  expect(bad.status()).toBe(400);
 
-  const explorer = page.getByRole("complementary", { name: "Содержимое текущего каталога" });
-  await expect(explorer.getByRole("button", { name: /src/ })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("внутренних связей")).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("architect-desktop.png") });
-  await explorer.getByRole("button", { name: /src/ }).dblclick();
-  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
-  const mapSearch = page.getByRole("textbox", { name: "Поиск по карте" });
-  await mapSearch.fill("index.ts");
-  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
-  await expect(explorer.getByRole("button", { name: /value\.ts/ })).toHaveCount(0);
-  await mapSearch.fill("");
-  const mapNode = page.locator(".react-flow__node").first();
-  const mapNodeBounds = await mapNode.boundingBox();
-  expect(mapNodeBounds).not.toBeNull();
-  await page.mouse.move(mapNodeBounds!.x + mapNodeBounds!.width / 2, mapNodeBounds!.y + mapNodeBounds!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(mapNodeBounds!.x + mapNodeBounds!.width / 2 + 130, mapNodeBounds!.y + mapNodeBounds!.height / 2 + 90, { steps: 8 });
-  await page.mouse.up();
-  await expect(page.getByText("Раскладка сохранена", { exact: true })).toBeVisible({ timeout: 15_000 });
-  const layoutResponse = await request.get(`${apiUrl()}/workspaces/${account.workspaceId}/development/architect/${registeredRepository.id}/layout`, { headers: { Authorization: `Bearer ${account.accessToken}` } });
-  expect(layoutResponse.ok()).toBe(true);
-  const savedLayout = await layoutResponse.json() as { nodes: Array<{ id: string; x: number; y: number }> };
-  expect(savedLayout.nodes.some(node => node.id.startsWith("src/") && (node.x !== 0 || node.y !== 0))).toBe(true);
+  const node = { id: "n1", type: "task", title: "Задача", description: "", agentName: "", status: "pending", x: 0, y: 0 };
+  const updated = await request.put(`${base}/${id}`, { headers, data: { nodes: [node], edges: [] } });
+  expect(updated.status()).toBe(200);
+  expect((await updated.json()).nodes).toHaveLength(1);
 
-  await page.getByRole("button", { name: "История Git", exact: true }).click();
-  await expect(page.locator("ol").getByRole("listitem").first()).toBeVisible();
+  const other = await register(request, "orion-dev");
+  const foreign = await request.get(`${apiUrl()}/workspaces/${other.workspaceId}/development/workflows/${id}`, {
+    headers: { Authorization: `Bearer ${other.accessToken}` }
+  });
+  expect(foreign.status()).toBe(404);
 
-  await page.getByRole("button", { name: "Сверка замысла", exact: true }).click();
-  await page.getByRole("button", { name: "Черновик из карты", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Проектная схема JSON" })).toHaveValue(/"nodes"/);
-  await page.getByRole("button", { name: "Сохранить замысел", exact: true }).click();
-  await expect(page.getByText("Проектный замысел сохранён.")).toBeVisible();
-  await page.getByRole("button", { name: "Сверить с кодом", exact: true }).click();
-  await expect(page.getByText("Распознанные узлы и связи совпадают с сохранённым замыслом.")).toBeVisible({ timeout: 30_000 });
-
-  await page.getByRole("button", { name: "Архитектура", exact: true }).click();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await explorer.getByRole("button", { name: /src/ }).dblclick();
-  await expect(explorer.getByRole("button", { name: /index\.ts/ })).toBeVisible();
-  await explorer.getByRole("button", { name: /index\.ts/ }).click();
-  const mobileInspector = page.getByRole("complementary", { name: "Сведения об элементе" });
-  await expect(mobileInspector).toBeVisible();
-  await expect(page.getByText("Входящие связи", { exact: true })).toBeVisible();
-  const mobileInspectorBounds = await mobileInspector.boundingBox();
-  expect(mobileInspectorBounds).not.toBeNull();
-  expect(mobileInspectorBounds!.y + mobileInspectorBounds!.height).toBeLessThanOrEqual(844);
-  await page.screenshot({ path: testInfo.outputPath("architect-mobile.png"), fullPage: true });
+  expect((await request.delete(`${base}/${id}`, { headers })).status()).toBe(204);
 });

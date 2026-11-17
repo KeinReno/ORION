@@ -12,6 +12,8 @@ import { DevelopmentGitController } from "./git/development-git.controller";
 import { DevelopmentGitService } from "./git/development-git.service";
 import { DevelopmentTaskLinksController } from "./git/development-task-links.controller";
 import { DevelopmentTaskLinksService } from "./git/development-task-links.service";
+import { DevelopmentWorkflowsController } from "./workflows/development-workflows.controller";
+import { DevelopmentWorkflowsService } from "./workflows/development-workflows.service";
 
 /**
  * Development: reviewed import каталога (ADR-0045) + Git Workspace, привязки коммитов и Architect
@@ -25,8 +27,9 @@ import { DevelopmentTaskLinksService } from "./git/development-task-links.servic
     DevelopmentGitController,
     DevelopmentTaskLinksController,
     DevelopmentArchitectController,
-    DevelopmentAgentController
+    DevelopmentAgentController,
+    DevelopmentWorkflowsController
   ],
-  providers: [DevelopmentGitService, DevelopmentTaskLinksService, DevelopmentArchitectService]
+  providers: [DevelopmentGitService, DevelopmentTaskLinksService, DevelopmentArchitectService, DevelopmentWorkflowsService]
 })
 export class DevelopmentImportModule {}

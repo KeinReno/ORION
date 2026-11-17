@@ -5,6 +5,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFile
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeShellContract } from './runtime-shell-contract.mjs';
+import { removeEnvironmentFiles } from './runtime-stage-safety.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const stage = join(root, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime');
@@ -34,7 +35,10 @@ runPnpm(['--config.node-linker=hoisted', '--filter', '@orion/api', 'deploy', '--
 for (const name of ['.env', '.env.example', '.data', 'apps', 'tmp', 'src', 'test', 'tsconfig.json', 'tsconfig.test.json']) {
   rmSync(join(api, name), { recursive: true, force: true });
 }
-if (existsSync(join(api, '.env'))) throw new Error('Secret .env would be bundled');
+// Alternate developer profiles (for example .env.rust) must never travel
+// to another PC either. pnpm deploy can copy ignored files from the package.
+removeEnvironmentFiles(api);
+if (readdirSync(api).some(name => name === '.env' || name.startsWith('.env.'))) throw new Error('Secret environment file would be bundled');
 mkdirSync(join(api, 'development'), { recursive: true });
 cpSync(join(root, 'development', 'orion-dev.catalog.json'), join(api, 'development', 'orion-dev.catalog.json'));
 run(process.execPath, [join(api, 'node_modules', 'prisma', 'build', 'index.js'), 'generate', `--schema=${join(api, 'prisma', 'schema.prisma')}`], { ...process.env, DATABASE_URL: 'postgresql://placeholder:placeholder@127.0.0.1:5433/orion' });
@@ -62,12 +66,14 @@ const buildTag = process.env.ORION_BUILD_TAG || '';
 // Git может быть недоступен на сборочном хосте (нет PATH, sandbox); тогда фиксируем
 // метку окружения, а не падаем — build.json всегда должен существовать для диагностики обновлений.
 let commit = process.env.ORION_BUILD_COMMIT || 'unknown-commit';
+let dirty = null;
 try {
-  commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  dirty = Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: root, encoding: 'utf8' }).trim());
 } catch {
   console.warn('git недоступен на сборочном хосте — build.json получит commit=unknown-commit');
 }
-writeFileSync(join(stage, 'build.json'), JSON.stringify({ tag: buildTag, commit, builtAt: new Date().toISOString() }, null, 2));
+writeFileSync(join(stage, 'build.json'), JSON.stringify({ tag: buildTag, commit, dirty, builtAt: new Date().toISOString() }, null, 2));
 console.log(`Build tag: ${buildTag || '(не задана — обновления сочтут версию неизвестной)'} @ ${commit}`);
 // Agent Manual (TZ-02): shipped beside the runtime so the «Подключить агента» wizard can show its real path.
 cpSync(join(root, 'docs', 'AGENT_MANUAL.md'), join(stage, 'AGENT_MANUAL.md'));

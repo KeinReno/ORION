@@ -18,6 +18,6 @@ const GeneratedPetCarePanel: FunctionComponent<PanelComponentProps> = (props) =>
 export const generatedPanelDefinitions: Omit<PanelDefinition, "surfaces">[] = [
   { id: "agent-hub", label: "Agent Hub", icon: Network, component: GeneratedAgentHubPanel, moduleId: "agent-hub", group: "Инструменты" },
   { id: "chat-archive", label: "Архив чатов", icon: MessagesSquare, component: GeneratedChatArchivePanel, moduleId: "chat-archive", group: "Инструменты" },
-  { id: "orion-dev", label: "ORION DEV", icon: Code2, component: GeneratedOrionDevPanel, moduleId: "orion-dev", group: "Инструменты" },
+  { id: "orion-dev", label: "Architect", icon: Code2, component: GeneratedOrionDevPanel, moduleId: "orion-dev" },
   { id: "pet-care", label: "Питомцы", icon: PawPrint, component: GeneratedPetCarePanel, moduleId: "pet-care", group: "Семья и дом" }
 ];

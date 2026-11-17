@@ -1,6 +1,8 @@
 /**
  * Starts ORION from the current checkout (not a frozen tauri.exe).
- * Postgres → API :4000 → web :3010 → Tauri window (devUrl).
+ * Postgres → API :14000 → web :3011 → Tauri window (devUrl).
+ * Порты этой рабочей копии отличаются от установленной беты (:4000/:3010) намеренно —
+ * оба экземпляра могут работать одновременно.
  */
 import { spawn, spawnSync } from "node:child_process";
 import net from "node:net";
@@ -112,7 +114,7 @@ function checkSingleInstance() {
     return;
   }
   throw new Error(
-    `ORION уже запущен (процесс launch-desktop, pid ${pid}). Закрой существующее окно/процесс, прежде чем открывать новый — иначе второй экземпляр столкнётся с занятыми портами :4000/:3010.`
+    `ORION уже запущен (процесс launch-desktop, pid ${pid}). Закрой существующее окно/процесс, прежде чем открывать новый — иначе второй экземпляр столкнётся с занятыми портами :14000/:3011.`
   );
 }
 
@@ -169,13 +171,13 @@ function killTree(child) {
   child.kill("SIGTERM");
 }
 
-function startService(name, pnpmScript) {
+function startService(name, pnpmScript, env = {}) {
   const logFile = path.join(root, "tmp", `orion-${name}.log`);
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
   const fd = fs.openSync(logFile, "w");
   const child = spawn(`corepack pnpm ${pnpmScript}`, {
     cwd: root,
-    env: process.env,
+    env: { ...process.env, ...env },
     shell: true,
     windowsHide: true,
     stdio: ["ignore", fd, fd],
@@ -286,9 +288,29 @@ async function ensureDocker(seconds = 180) {
 }
 
 function postgresReady() {
-  return (
-    runQuiet("docker exec orion-postgres pg_isready -U orion -d orion").status === 0
-  );
+  // Готовность проверяем TCP-соединением с настроенной БД (host/port из apps/api/.env):
+  // postgres у пользователя может быть не докер-контейнером orion-postgres, а службой
+  // или контейнером с другим именем — порт из конфигурации решает, а не имя контейнера.
+  let url;
+  try {
+    const envFile = path.join(root, "apps", "api", ".env");
+    const configured = (() => {
+      for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+        const match = /^DATABASE_URL=(.*)$/.exec(line.trim());
+        if (match) return match[1].replace(/^"(.*)"$/, "$1");
+      }
+      return "postgres://127.0.0.1:5433/orion";
+    })();
+    url = new URL(configured);
+  } catch {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    const socket = net.connect({ port: Number(url.port || 5432), host: url.hostname, timeout: 1500 });
+    socket.once("connect", () => { socket.end(); resolve(true); });
+    socket.once("timeout", () => { socket.destroy(); resolve(false); });
+    socket.once("error", () => { socket.destroy(); resolve(false); });
+  });
 }
 
 async function main() {
@@ -299,7 +321,7 @@ async function main() {
 
   console.log(`ORION: ${root}`);
   console.log(
-    "Окно берёт http://localhost:3010 — текущий Next.js, не собранный exe.",
+    "Окно берёт http://localhost:3011 — текущий Next.js, не собранный exe.",
   );
 
   await ensureDocker();
@@ -309,14 +331,14 @@ async function main() {
 
   let pgOk = false;
   for (let i = 0; i < 120; i++) {
-    if (postgresReady()) {
+    if (await postgresReady()) {
       pgOk = true;
       break;
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
   if (!pgOk) {
-    throw new Error("Контейнер orion-postgres не готов. Проверь Docker Desktop.");
+    throw new Error("PostgreSQL не отвечает на настроенном порту. Проверь, что БД запущена.");
   }
 
   const envFile = path.join(root, "apps", "api", ".env");
@@ -334,30 +356,32 @@ async function main() {
   run("corepack pnpm --filter @orion/api prisma:migrate:deploy");
 
   let api = null;
-  if (!(await tcpOpen(4000))) {
-    console.log("API :4000…");
+  if (!(await tcpOpen(14000))) {
+    console.log("API :14000…");
+    // Порт этой рабочей копии задан умолчанием main.ts (14000): он не должен забирать
+    // порт установленной беты (:4000). Явный PORT в env по-прежнему побеждает.
     api = startService("api", "dev:api");
-    await waitApiReady(4000, 120, api);
+    await waitApiReady(14000, 120, api);
   } else {
     // Something is already listening — could be our own previous run, or an
     // unrelated process. Confirm it's actually the ORION API by hitting
     // /system/health, don't just trust the open TCP port ("занят порт" done-
     // criterion): proceeding blind here would open the Tauri window against
     // a service that silently fails every API call.
-    await waitApiReady(4000, 5, null);
-    console.log("API уже слушает :4000");
+    await waitApiReady(14000, 5, null);
+    console.log("API уже слушает :14000");
   }
 
   let web = null;
-  if (!(await tcpOpen(3010))) {
-    console.log("Web :3010…");
+  if (!(await tcpOpen(3011))) {
+    console.log("Web :3011…");
     web = startService("web", "dev:web");
-    await waitPort(3010, "Web", 120, web);
+    await waitPort(3011, "Web", 120, web);
   } else {
-    console.log("Web уже слушает :3010");
+    console.log("Web уже слушает :3011");
   }
 
-  console.log("Окно Tauri (hot reload с :3010)…");
+  console.log("Окно Tauri (hot reload с :3011)…");
   try {
     run("corepack pnpm dev:desktop");
   } finally {

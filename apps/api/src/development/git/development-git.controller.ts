@@ -3,6 +3,7 @@ import {
   createDevelopmentRepositoryInputSchema,
   developmentGitCompareQuerySchema,
   developmentGitGraphQuerySchema,
+  developmentRepositoryBrowseQuerySchema,
   updateDevelopmentRepositoryInputSchema,
   type CreateDevelopmentRepositoryInput,
   type DevelopmentGitCompare,
@@ -10,6 +11,9 @@ import {
   type DevelopmentGitGraph,
   type DevelopmentGitGraphQuery,
   type DevelopmentRepository,
+  type DevelopmentRepositoryBrowse,
+  type DevelopmentRepositoryBrowseQuery,
+  type DevelopmentRepositoryCandidate,
   type DevelopmentRepositoryRoots,
   type UpdateDevelopmentRepositoryInput
 } from "@orion/shared-types";
@@ -52,6 +56,17 @@ export class DevelopmentGitController {
     return this.git.registerRepository(user.userId, workspaceId, body);
   }
 
+  /** «Создать с нуля»: пустой каталог внутри разрешённого корня инициализируется как git-репозиторий. */
+  @Post("repositories/init")
+  @RequirePermission("orion-dev.development_import.create")
+  initRepository(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Body(new ZodValidationPipe(createDevelopmentRepositoryInputSchema)) body: CreateDevelopmentRepositoryInput
+  ): Promise<DevelopmentRepository> {
+    return this.git.initRepository(user.userId, workspaceId, body);
+  }
+
   @Patch("repositories/:repositoryId")
   @RequirePermission("orion-dev.development_import.update")
   updateRepository(
@@ -68,6 +83,24 @@ export class DevelopmentGitController {
   @RequirePermission("orion-dev.development_import.read")
   allowedRoots(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<DevelopmentRepositoryRoots> {
     return this.git.allowedRoots(user.userId, workspaceId);
+  }
+
+  /** Существующие git-репозитории рядом с разрешёнными корнями — подсказка для формы. */
+  @Get("repositories/candidates")
+  @RequirePermission("orion-dev.development_import.read")
+  candidates(@CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string): Promise<DevelopmentRepositoryCandidate[]> {
+    return this.git.candidates(user.userId, workspaceId);
+  }
+
+  /** Встроенный обзор каталогов (навигация только внутри разрешённых корней). */
+  @Get("repositories/browse")
+  @RequirePermission("orion-dev.development_import.read")
+  browse(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Query(new ZodValidationPipe(developmentRepositoryBrowseQuerySchema)) query: DevelopmentRepositoryBrowseQuery
+  ): Promise<DevelopmentRepositoryBrowse> {
+    return this.git.browse(user.userId, workspaceId, query.path ?? null);
   }
 
   @Delete("repositories/:repositoryId")

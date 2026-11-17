@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { DevelopmentGitService } from "./development-git.service";
 
 /** Лёгкие двойники зависимостей: allowedRoots проверяет членство, но не трогает БД дальше этого. */
@@ -24,8 +26,10 @@ describe("DevelopmentGitService.allowedRoots", () => {
     });
   });
 
-  it("возвращает пустой список, когда корни не заданы", async () => {
+  it("когда корни не заданы, разрешает домашний каталог узла", async () => {
     delete process.env.ORION_DEV_REPOSITORY_ROOTS;
-    await expect(makeService().allowedRoots("u1", "w1")).resolves.toEqual({ roots: [] });
+    await expect(makeService().allowedRoots("u1", "w1")).resolves.toEqual({
+      roots: [resolve(process.cwd(), homedir())]
+    });
   });
 });

@@ -1,7 +1,1 @@
 .workspace { container-type: inline-size; min-width: 0; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-top: 1.75rem; padding: 1.25rem 0; border-top: 1px solid rgb(var(--orion-color-border)); border-bottom: 1px solid rgb(var(--orion-color-border)); }
-.columns { display: grid; gap: 2rem; }
-@container (min-width: 640px) {
-  .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .columns { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); }
-}

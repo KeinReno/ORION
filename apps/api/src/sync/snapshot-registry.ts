@@ -141,6 +141,8 @@ export const SNAPSHOT_MODEL_REGISTRY: ModelClassification[] = [
   { model: "DevelopmentGitRepository", snapshotKey: "developmentGitRepositories", policy: "included", reason: "Зарегистрированные владельцем репозитории (имя, путь, префикс ссылки) — конфигурация пространства. На другом узле путь может не существовать: при чтении он проверяется заново." },
   { model: "TaskCommitLink", snapshotKey: "taskCommitLinks", policy: "included", reason: "Привязки коммитов к задачам — часть истории задачи (sha и подпись на момент привязки). Вставляются после Task и DevelopmentGitRepository." },
   { model: "DevelopmentArchitectLayout", snapshotKey: "developmentArchitectLayouts", policy: "included", reason: "Пользовательская раскладка карты и загруженная проектная схема — настройка пространства, не копия кода." },
+  { model: "DevelopmentArchitectSnapshot", snapshotKey: "developmentArchitectSnapshots", policy: "included", reason: "Зафиксированный результат анализа архитектуры на коммите — исторические данные пространства, сохраняемые для просмотра и сравнения." },
+  { model: "DevelopmentWorkflow", snapshotKey: "developmentWorkflows", policy: "included", reason: "Пользовательские процессы Workbench — пользовательский контент пространства; граф хранится целиком в строке." },
   { model: "Milestone", snapshotKey: "milestones", policy: "included", reason: "«План проекта» (v0.27) — веха, дочерняя к Project, родитель для Task.milestoneId." },
   { model: "MilestoneDependency", snapshotKey: "milestoneDependencies", policy: "included", reason: "Finish-to-start связи между вехами." },
   { model: "TaskStatusDefinition", snapshotKey: "taskStatusDefinitions", policy: "included", reason: "Tasks 2.0: пользовательские статусы пространства; вставляются до Task (statusId)." },

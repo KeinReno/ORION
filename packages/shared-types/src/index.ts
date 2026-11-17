@@ -109,3 +109,4 @@ export * from "./modules-ext/registry.generated";
 export * from "./publication";
 export * from "./development-git";
 export * from "./development-architect";
+export * from "./development-workflows";

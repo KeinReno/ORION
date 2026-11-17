@@ -203,9 +203,11 @@ export function collectModules(root = defaultRoot) {
     }
 
     const panel = manifest.web?.panel;
-    if (!panel || ["id", "label", "icon", "file", "export", "group"].some((key) => typeof panel[key] !== "string")) {
-      fail("web.panel = { id, label, icon, group, file, export }");
+    if (!panel || ["id", "label", "icon", "file", "export"].some((key) => typeof panel[key] !== "string")) {
+      fail("web.panel = { id, label, icon, file, export, group? }");
     } else {
+      // group опционален: без него панель попадает в верхний негруппированный кластер sidebar («Сегодня»).
+      if (panel.group != null && typeof panel.group !== "string") fail("web.panel.group — строка, если задана");
       if (!ICON_RE.test(panel.icon)) fail(`web.panel.icon "${panel.icon}" — имя компонента lucide-react`);
       if (panel.id !== catalog.panelId) fail("web.panel.id должен совпадать с catalog.panelId");
       if (!existsSync(join(root, `${PATHS.webExt}/${entry.name}/${panel.file}.tsx`))) fail(`нет файла ${PATHS.webExt}/${entry.name}/${panel.file}.tsx`);
@@ -479,10 +481,10 @@ export function renderOutputs(modules, root = defaultRoot, plugins = []) {
       `/** Панели подключаемых модулей; panel-registry.ts добавляет их к встроенным, поверхности (G17) выводит из манифеста сам. */\n` +
       `export const generatedPanelDefinitions: Omit<PanelDefinition, "surfaces">[] = [\n` +
       panels
-        .map(
-          (p) =>
-            `  { id: ${JSON.stringify(p.panel.id)}, label: ${JSON.stringify(p.panel.label)}, icon: ${p.panel.icon}, component: ${p.ident}, moduleId: ${JSON.stringify(p.m.id)}, group: ${JSON.stringify(p.panel.group)} }`
-        )
+        .map((p) => {
+          const group = typeof p.panel.group === "string" ? `, group: ${JSON.stringify(p.panel.group)}` : "";
+          return `  { id: ${JSON.stringify(p.panel.id)}, label: ${JSON.stringify(p.panel.label)}, icon: ${p.panel.icon}, component: ${p.ident}, moduleId: ${JSON.stringify(p.m.id)}${group} }`;
+        })
         .join(",\n") +
       (panels.length > 0 ? "\n" : "") +
       `];\n`

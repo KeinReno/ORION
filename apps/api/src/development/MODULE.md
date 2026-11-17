@@ -42,10 +42,13 @@ Review/apply contract and product decisions: [ADR-0045](../../../../docs/adr/ADR
 ## Git Workspace, commit links, Architect (задание 11)
 
 `DevelopmentGitRepository` is the only way a repository becomes readable: an owner/lead registers an
-absolute path inside `ORION_DEV_REPOSITORY_ROOTS`; the path is resolved with `realpath`, checked
-against every allowed root and confirmed to be a git work tree before it is stored. Every later read
-revalidates it, so removing a root from the environment closes access without deleting the record.
-No request ever carries a path to `git`.
+absolute path inside the allowed roots — explicit `ORION_DEV_REPOSITORY_ROOTS`, or the node user's
+home directory when the variable is unset, so a local node needs no env setup. The path is resolved
+with `realpath`, checked against every allowed root and confirmed to be a git work tree before it is
+stored; `POST …/repositories/init` instead creates a git repository (`git init`, branch `main`) in an
+empty or new folder inside the roots and registers it in one step. Every later read
+revalidates the stored path, so removing a root from the environment closes access without deleting
+the record. No request ever carries a path to `git`.
 
 Reads are `git log`, `for-each-ref`, `rev-parse` and `diff` only — executed with `execFile`, no
 shell. Graph history is capped (2,000 commits fetched, 500 per page by default) and cached in memory

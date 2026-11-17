@@ -9,6 +9,8 @@ import {
   type DevelopmentGitGraphQuery,
   type DevelopmentGitCompareQuery,
   type DevelopmentRepository,
+  type DevelopmentRepositoryBrowse,
+  type DevelopmentRepositoryCandidate,
   type DevelopmentRepositoryRoots,
   type UpdateDevelopmentRepositoryInput
 } from "@orion/shared-types";
@@ -16,8 +18,11 @@ import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import {
   GIT_HISTORY_FETCH_CAP,
-  configuredRepositoryRoots,
+  browseDirectory,
+  effectiveRepositoryRoots,
+  findRepositoryCandidates,
   resolveCommitSha,
+  resolveInitRepositoryPath,
   resolveRepositoryPath,
   runGit
 } from "./git-command";
@@ -87,6 +92,31 @@ export class DevelopmentGitService {
     });
   }
 
+  /**
+   * «Создать с нуля»: пустой (или ещё несуществующий) каталог внутри разрешённого корня
+   * превращается в git-репозиторий (`git init`, ветка `main`) и регистрируется. Идемпотентность
+   * по пути — как у обычной регистрации: повторный вызов для того же пути отвергается конфликтом.
+   */
+  async initRepository(userId: string, workspaceId: string, input: CreateDevelopmentRepositoryInput): Promise<DevelopmentRepository> {
+    let checked: { path: string };
+    try {
+      checked = await resolveInitRepositoryPath(input.path, effectiveRepositoryRoots());
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
+      const exists = await tx.developmentGitRepository.findFirst({ where: { workspaceId, path: checked.path } });
+      if (exists) throw new ConflictException("Этот репозиторий уже добавлен в пространство");
+      await fs.mkdir(checked.path, { recursive: true });
+      await runGit(checked.path, ["init", "-b", "main"]);
+      const row = await tx.developmentGitRepository.create({
+        data: { workspaceId, name: input.name, path: checked.path, taskRefPrefix: input.taskRefPrefix }
+      });
+      return toRepositoryDto(row);
+    });
+  }
+
   /** Меняются только подпись и конвенция ссылок; путь остаётся тем, что проверен при регистрации. */
   async updateRepository(userId: string, workspaceId: string, repositoryId: string, input: UpdateDevelopmentRepositoryInput): Promise<DevelopmentRepository> {
     return this.prisma.withUser(userId, async (tx) => {
@@ -110,14 +140,41 @@ export class DevelopmentGitService {
   }
 
   /**
-   * Разрешённые корни из настроек сервера. Это не секрет: они только сужают, какие пути сервер
-   * вообще примет, и подсказывают пользователю, откуда можно регистрировать репозитории.
+   * Действующие корни: явные из `ORION_DEV_REPOSITORY_ROOTS`, а если их нет — домашний каталог
+   * узла. Это не секрет: они только сужают, какие пути сервер вообще примет, и подсказывают
+   * пользователю, откуда можно регистрировать репозитории.
    */
   async allowedRoots(userId: string, workspaceId: string): Promise<DevelopmentRepositoryRoots> {
     await this.prisma.withUser(userId, async (tx) => {
       await this.workspaces.assertMemberTx(tx, userId, workspaceId);
     });
-    return { roots: configuredRepositoryRoots() };
+    return { roots: effectiveRepositoryRoots() };
+  }
+
+  /**
+   * Репозитории, найденные рядом с разрешёнными корнями, — подсказка для формы:
+   * пользователь подключает одним кликом вместо ручного ввода пути.
+   */
+  async candidates(userId: string, workspaceId: string): Promise<DevelopmentRepositoryCandidate[]> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    });
+    return findRepositoryCandidates(effectiveRepositoryRoots());
+  }
+
+  /**
+   * Встроенный обзор каталогов: навигация только внутри разрешённых корней. Путь приходит
+   * только сюда и валидируется заново — в `git` произвольные пути не попадают.
+   */
+  async browse(userId: string, workspaceId: string, path: string | null): Promise<DevelopmentRepositoryBrowse> {
+    await this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+    });
+    try {
+      return await browseDirectory(path, effectiveRepositoryRoots());
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 
   /** Репозиторий этого пространства; для чужих/несуществующих — 404, без утечки существования. */
@@ -330,7 +387,7 @@ export class DevelopmentGitService {
   /** Путь проверяется заново при каждом чтении: корень могли убрать из настроек уже после регистрации. */
   async usablePath(storedPath: string): Promise<string> {
     try {
-      return (await resolveRepositoryPath(storedPath, configuredRepositoryRoots())).path;
+      return (await resolveRepositoryPath(storedPath, effectiveRepositoryRoots())).path;
     } catch (error) {
       throw new ConflictException(`Репозиторий недоступен: ${(error as Error).message}`);
     }
@@ -338,7 +395,7 @@ export class DevelopmentGitService {
 
   private async checkRepositoryPath(path: string): Promise<{ path: string }> {
     try {
-      return await resolveRepositoryPath(path, configuredRepositoryRoots());
+      return await resolveRepositoryPath(path, effectiveRepositoryRoots());
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
