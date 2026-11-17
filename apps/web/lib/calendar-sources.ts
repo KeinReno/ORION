@@ -1,7 +1,7 @@
 "use client";
 
 import type { CalendarItem } from "@orion/ui";
-import type { ContactCard, Event, Note, OrionModuleId, RecurringTransaction, Task } from "@orion/shared-types";
+import type { ContactCard, Event, Note, OrionModuleId, PlanningBlock, RecurringTransaction, Task } from "@orion/shared-types";
 import { isTaskClosed, nextBirthday } from "@orion/shared-types";
 import { formatMoney } from "./format";
 
@@ -13,7 +13,7 @@ import { formatMoney } from "./format";
  * `panel-registry.ts`.
  */
 
-export type CalendarSourceId = "events" | "tasks" | "notes" | "finance" | "contacts";
+export type CalendarSourceId = "events" | "tasks" | "notes" | "finance" | "contacts" | "planning";
 
 export interface CalendarSourceMeta {
   id: CalendarSourceId;
@@ -27,7 +27,8 @@ export const CALENDAR_SOURCES: CalendarSourceMeta[] = [
   { id: "tasks", label: "Задачи", toneKey: "__task__" },
   { id: "notes", label: "Заметки", toneKey: "__note__" },
   { id: "finance", label: "Платежи", toneKey: "__finance__" },
-  { id: "contacts", label: "Дни рождения", toneKey: "__birthday__" }
+  { id: "contacts", label: "Дни рождения", toneKey: "__birthday__" },
+  { id: "planning", label: "План", toneKey: "__planning__" }
 ];
 
 /** Neighbour overlay. `null` = this panel's own events, always on while Calendar is open. */
@@ -36,7 +37,8 @@ export const CALENDAR_SOURCE_MODULE: Record<CalendarSourceId, OrionModuleId | nu
   tasks: "tasks",
   notes: "notes",
   finance: "finance",
-  contacts: "contacts"
+  contacts: "contacts",
+  planning: "planning"
 };
 
 export function eventItems(events: Event[] | undefined): CalendarItem[] {
@@ -95,6 +97,24 @@ export function financeItems(recurring: RecurringTransaction[] | undefined): Cal
       kind: "finance",
       readOnly: true
     }));
+}
+
+/**
+ * Planning time blocks (`planning.blocks`) — окна фокуса/встреч из модуля планирования.
+ * Read-only на календаре: перенос блока делается в планировании, где считаются конфликты.
+ */
+export const BLOCK_ITEM_PREFIX = "block-";
+
+export function blockItems(blocks: PlanningBlock[] | undefined): CalendarItem[] {
+  return (blocks ?? []).map((block) => ({
+    id: `block-${block.id}`,
+    start: block.startAt,
+    end: block.endAt,
+    label: block.title,
+    tone: "__planning__",
+    kind: "planning",
+    readOnly: true
+  }));
 }
 
 /** Prefix of a birthday pill id: `birthday-<contactId>-<year>`. */

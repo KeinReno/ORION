@@ -21,7 +21,7 @@ export interface CalendarItem {
   done?: boolean;
   /** Free key mapped to a stable colour from the curated palette. */
   tone?: string | null;
-  kind?: "task" | "note" | "event" | "finance" | "birthday";
+  kind?: "task" | "note" | "event" | "finance" | "birthday" | "planning";
   /** True ⇒ part of a recurring series (shows a ↻ marker). */
   recurring?: boolean;
   /** True ⇒ not draggable/resizable (e.g. a generated finance payment). */
@@ -32,7 +32,7 @@ export interface CalendarItem {
 export type CalendarItemMode = "move-resize" | "move" | "none";
 
 export function calendarItemMode(item: CalendarItem): CalendarItemMode {
-  if (item.readOnly || item.kind === "note" || item.kind === "finance" || item.kind === "birthday") return "none";
+  if (item.readOnly || item.kind === "note" || item.kind === "finance" || item.kind === "birthday" || item.kind === "planning") return "none";
   if (item.kind === "task") return "move";
   return "move-resize";
 }
@@ -173,7 +173,7 @@ const PALETTE: { fg: string; bg: string; border: string }[] = [
  * which name a palette slot directly (what the event form's swatch picker
  * stores). Anything else is hashed to a stable slot.
  */
-const FIXED_TONES: Record<string, number> = { __note__: 5, __finance__: 3, __event__: 0, __task__: 1, __birthday__: 8 };
+const FIXED_TONES: Record<string, number> = { __note__: 5, __finance__: 3, __event__: 0, __task__: 1, __birthday__: 8, __planning__: 2 };
 
 function toneIndex(tone: string): number {
   const fixed = FIXED_TONES[tone];

@@ -17,6 +17,9 @@ import {
   type EventRange
 } from "@orion/core-react";
 import type { CreateEventInput, Event, EventScope, UpdateEventInput } from "@orion/shared-types";
+import { planningBlockSchema } from "@orion/shared-types";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
+import { useQuery } from "@tanstack/react-query";
 import {
   Button,
   Calendar,
@@ -51,6 +54,8 @@ import { describeAuthError, describeError } from "../lib/error-message";
 import {
   CALENDAR_SOURCES,
   CALENDAR_SOURCE_MODULE,
+  BLOCK_ITEM_PREFIX,
+  blockItems,
   eventItems,
   birthdayItems,
   contactIdFromBirthdayItem,
@@ -169,6 +174,7 @@ export function CalendarPanel(): React.ReactElement {
   const financeOn = isEnabled("finance");
   const projectsOn = isEnabled("projects");
   const contactsOn = isEnabled("contacts");
+  const planningOn = isEnabled("planning");
 
   const [range, setRange] = useState<EventRange | undefined>(initialEventRange);
   const eventsQuery = useEvents(wsId, range);
@@ -192,6 +198,14 @@ export function CalendarPanel(): React.ReactElement {
 
   const [enabled, setEnabled] = useState<Set<CalendarSourceId>>(() => new Set());
   useEffect(() => setEnabled(loadEnabledSources()), []);
+  // P3-2: тайм-блоки планирования как источник календаря — только при включённом
+  // модуле и включённой легенде «План»; перенос блока не здесь (конфликты считает планирование).
+  const blocksQuery = useQuery({
+    queryKey: ["calendar", wsId, "planning-blocks", range?.from, range?.to],
+    queryFn: () => createModuleClient(api, workspaceModuleBase(wsId as string, "planning"))
+      .get("/blocks", planningBlockSchema.array()),
+    enabled: Boolean(wsId && planningOn && enabled.has("planning") && range)
+  });
   function toggleSource(id: CalendarSourceId): void {
     setEnabled((prev) => {
       const next = new Set(prev);
@@ -213,8 +227,9 @@ export function CalendarPanel(): React.ReactElement {
     if (enabled.has("notes")) out.push(...noteItems(notes));
     if (enabled.has("finance")) out.push(...financeItems(recurring));
     if (enabled.has("contacts")) out.push(...birthdayItems(contacts, range));
+    if (enabled.has("planning")) out.push(...blockItems(blocksQuery.data));
     return out;
-  }, [enabled, events, tasks, notes, recurring, contacts, range]);
+  }, [enabled, events, tasks, notes, recurring, contacts, range, blocksQuery.data]);
 
   // Search narrows what is drawn, never what is loaded: clearing it brings everything back.
   const [filter, setFilter] = useState("");
@@ -227,7 +242,8 @@ export function CalendarPanel(): React.ReactElement {
     eventsQuery,
     ...(tasksOn ? [tasksQuery] : []),
     ...(notesOn ? [notesQuery] : []),
-    ...(financeOn ? [recurringQuery] : [])
+    ...(financeOn ? [recurringQuery] : []),
+    ...(planningOn && enabled.has("planning") ? [blocksQuery] : [])
   ];
   const sourcesLoading = sourceQueries.some((query) => query.isLoading);
   const failedQueries = sourceQueries.filter((query) => query.isError);
@@ -304,6 +320,12 @@ export function CalendarPanel(): React.ReactElement {
       openEntity("contact", birthdayContactId);
       return;
     }
+    // P3-2: блок планирования открывает связанную задачу (глобальной панели планирования нет).
+    if (id.startsWith(BLOCK_ITEM_PREFIX)) {
+      const block = blocksQuery.data?.find((row) => `${BLOCK_ITEM_PREFIX}${row.id}` === id);
+      if (block?.taskId) openEntity("task", block.taskId);
+      return;
+    }
     const event = findEvent(id);
     if (event) {
       setSelected(event);
@@ -312,7 +334,7 @@ export function CalendarPanel(): React.ReactElement {
     if ((tasks ?? []).some((t) => t.id === id)) openEntity("task", id);
     else if ((notes ?? []).some((n) => n.id === id)) openEntity("note", id);
     else openPanel("finance");
-  }, [findEvent, tasks, notes]);
+  }, [findEvent, tasks, notes, blocksQuery.data]);
 
   const applyEventReschedule = useCallback((event: Event, payload: ReschedulePayload, editScope: EventScope): void => {
     const { masterId, occurrenceStart } = splitOccurrenceId(event.id);
