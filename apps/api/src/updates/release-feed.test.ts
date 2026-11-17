@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareRustTags, compareTags, extractSha256, parseRustTag, parseTag, pickInstallerAsset, pickLatestRelease, pickLatestRustRelease, type GithubRelease } from "./release-feed";
+import { compareRustTags, compareTags, extractSha256, parseRustTag, parseTag, pickInstallerAsset, pickLatestRelease, pickLatestRustRelease, pickRustInstallerAsset, type GithubRelease } from "./release-feed";
 
 const release = (tag: string, over: Partial<GithubRelease> = {}): GithubRelease => ({
   tag_name: tag,
@@ -35,6 +35,15 @@ describe("метки релизов", () => {
     expect(compareRustTags("v0.1.0-orion-rust-beta.10", "v0.1.0-orion-rust-beta.2")).toBeGreaterThan(0);
   });
 
+  it("принимает чистые Rust-метки 0.2.x и считает их новее бет той же версии", () => {
+    expect(parseRustTag("v0.2.1")).toEqual({ core: [0, 2, 1], beta: Number.POSITIVE_INFINITY });
+    expect(parseRustTag("v0.2.1-rc.1")).toBeNull();
+    expect(compareRustTags("v0.2.1", "v0.2.1-orion-rust-beta.5")).toBeGreaterThan(0);
+    expect(compareRustTags("v0.2.1", "v0.2.1")).toBe(0);
+    expect(compareRustTags("v0.2.1-orion-rust-beta.1", "v0.2.1")).toBeLessThan(0);
+    expect(compareRustTags("v0.2.2-orion-rust-beta.1", "v0.2.1")).toBeGreaterThan(0);
+  });
+
   it("сравнивает: бета 10 новее беты 2, чистая версия новее беты, большая версия новее всего", () => {
     expect(compareTags("v0.1.0-windows-beta.10", "v0.1.0-windows-beta.2")).toBeGreaterThan(0);
     expect(compareTags("v0.1.0", "v0.1.0-windows-beta.9")).toBeGreaterThan(0);
@@ -66,6 +75,28 @@ describe("выбор релиза", () => {
       rustRelease("v0.1.0-orion-rust-beta.11", { draft: true })
     ]);
     expect(chosen?.tag_name).toBe("v0.1.0-orion-rust-beta.10");
+  });
+
+  it("принимает реальную форму релиза 0.2.x: чистая метка, ассет с точкой и описание с checksum", () => {
+    const chosen = pickLatestRustRelease([
+      rustRelease("v0.2.1", {
+        assets: [{ id: 5, name: "ORION.Rust_0.2.1_x64-setup.exe", size: 100240659 }]
+      }),
+      rustRelease("v0.2.0", {
+        assets: [{ id: 6, name: "ORION-Rust_0.2.0_x64-setup.exe", size: 100 }]
+      })
+    ]);
+    expect(chosen?.tag_name).toBe("v0.2.1");
+    expect(chosen && pickRustInstallerAsset(chosen)?.name).toBe("ORION.Rust_0.2.1_x64-setup.exe");
+  });
+
+  it("чистая метка без описания (product id / SHA-256) не выбирается — fail-closed", () => {
+    expect(
+      pickLatestRustRelease([
+        rustRelease("v0.2.1", { body: null }),
+        rustRelease("v0.2.1", { body: "" })
+      ])
+    ).toBeNull();
   });
 
   it("без разрешения на беты — только обычные релизы", () => {
