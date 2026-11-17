@@ -1,4 +1,4 @@
-# Бенчмарк запуска ORION-R по docs/BENCHMARK_PROTOCOL.md.
+﻿# Бенчмарк запуска ORION-R по docs/BENCHMARK_PROTOCOL.md.
 # Пример: powershell -ExecutionPolicy Bypass -File scripts\benchmark-startup.ps1 -Runs 5 -Mode warm
 [CmdletBinding()]
 param(
