@@ -3,7 +3,7 @@
 import { useAddProjectGoalPlan, useEntityLinks, useMilestones, useProjectGoalsHistory, useTasks, useUpdateMilestone, useUpdateProjectGoal, useUpdateTask } from "@orion/core-react";
 import type { Goal, Project } from "@orion/shared-types";
 import { Badge, Button, Card, SegmentedControl, useToast } from "@orion/ui";
-import { ArrowLeft, GitBranch, Hand, History, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, GitBranch, Hand, History, LayoutGrid, Plus, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeError } from "../../lib/error-message";
@@ -13,6 +13,7 @@ import { buildConstellations, suggestCanvasPoint, type Lens, type Star } from ".
 import { goalsAt, progressDelta } from "../../lib/goal-history";
 import { applyPins, loadPins, loadViews, loadVisibleLinks, pinsOf, savePins, saveViews, saveVisibleLinks, type SkyPins, type SkyView } from "../../lib/goal-sky-layout";
 import { GoalInspector } from "./goal-inspector";
+import { GoalBoard } from "./goal-board";
 import { CanvasComposer } from "./canvas-composer";
 import { KIND_LABEL, SkyCanvas, STATE_LABEL } from "./sky-canvas";
 import styles from "./sky-canvas.module.css";
@@ -66,6 +67,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lens, setLens] = useState<Lens>("progress");
   const [arrange, setArrange] = useState(false);
+  const [boardMode, setBoardMode] = useState(false);
   const [editLinks, setEditLinks] = useState(false);
   const [pins, setPins] = useState<SkyPins>({});
   const [views, setViews] = useState<Record<string, SkyView>>({});
@@ -177,6 +179,8 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
       setSelectedId(null);
     }
   }, [openRoot, open]);
+  // Board is per-constellation: switching the root (or leaving) drops back to the sky canvas.
+  useEffect(() => setBoardMode(false), [openRoot]);
 
   const freeProjects = useMemo(() => {
     const planned = new Set(goals.flatMap((g) => g.plans.map((p) => p.projectId)));
@@ -371,18 +375,22 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{titles.get(open.rootId) ?? open.stars[0]?.label}</h2>
           {!readOnly ? (
             <>
-              <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: 0.5, screenY: 0.5, parentId: selected.id, contextStarId: null }); }} aria-label="Добавить элемент в созвездие">
+              {!boardMode ? <Button type="button" size="sm" variant="outline" onClick={() => { const point = suggestCanvasPoint(open.stars, selected); setComposer({ ...point, screenX: 0.5, screenY: 0.5, parentId: selected.id, contextStarId: null }); }} aria-label="Добавить элемент в созвездие">
                 <Plus className="mr-1 h-3.5 w-3.5" /> Добавить узел
-              </Button>
-              <Button type="button" size="sm" variant={arrange ? "outline" : "ghost"} aria-pressed={arrange} onClick={() => { setArrange(!arrange); setEditLinks(false); }} title="Shift+щелчок выделяет несколько звёзд. Перетащите выбранную, чтобы передвинуть группу только на вашей карте.">
+              </Button> : null}
+              {!boardMode ? <Button type="button" size="sm" variant={arrange ? "outline" : "ghost"} aria-pressed={arrange} onClick={() => { setArrange(!arrange); setEditLinks(false); }} title="Shift+щелчок выделяет несколько звёзд. Перетащите выбранную, чтобы передвинуть группу только на вашей карте.">
                 <Hand className="mr-1 h-3.5 w-3.5" />
                 Расположить
+              </Button> : null}
+              <Button type="button" size="sm" variant={boardMode ? "outline" : "ghost"} aria-pressed={boardMode} onClick={() => { setBoardMode(!boardMode); setArrange(false); setEditLinks(false); setLinkSource(null); setComposer(null); }} title="Серверная доска: раскладка общая для пространства, автораскладка не двигает ручные якоря.">
+                <LayoutGrid className="mr-1 h-3.5 w-3.5" />
+                Доска
               </Button>
-              <Button type="button" size="sm" variant={editLinks ? "outline" : "ghost"} aria-pressed={editLinks} onClick={() => { setEditLinks(!editLinks); setLinkSource(null); setArrange(false); setComposer(null); }} title="Перенос подцели или добавление проекта меняет связи для всего пространства">
+              {!boardMode ? <Button type="button" size="sm" variant={editLinks ? "outline" : "ghost"} aria-pressed={editLinks} onClick={() => { setEditLinks(!editLinks); setLinkSource(null); setArrange(false); setComposer(null); }} title="Перенос подцели или добавление проекта меняет связи для всего пространства">
                 <GitBranch className="mr-1 h-3.5 w-3.5" />
                 Изменить связи
-              </Button>
-              {pinned.length > 0 ? (
+              </Button> : null}
+              {pinned.length > 0 && !boardMode ? (
                 <Button type="button" size="sm" variant="ghost" onClick={() => resetPins(pinned)}>
                   <RotateCcw className="mr-1 h-3.5 w-3.5" />
                   Сбросить расположение
@@ -405,7 +413,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
 
         {timelineBar}
 
-        {!readOnly && editLinks ? <div className={styles.canvasLinkBar}>
+        {!readOnly && editLinks && !boardMode ? <div className={styles.canvasLinkBar}>
           <GitBranch size={16} aria-hidden />
           <span>{linkSource
             ? `Выберите второй узел. Задача → задача и веха → веха добавляют зависимость; задача → веха меняет этап задачи; цель → цель меняет родителя. Чтобы заменить зависимость, добавьте новую, затем снимите старую в инспекторе.`
@@ -414,7 +422,7 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
         </div> : null}
 
         <div className="grid min-w-0 items-start gap-4 [@container(min-width:850px)]:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="min-w-0 space-y-2">
+          {!boardMode ? <div className="min-w-0 space-y-2">
             <div className={styles.canvasStage}>
               {open.stars.length === 1 ? <div className={styles.canvasFirstHint}>Это ваша цель. Нажмите ПКМ на свободном месте, чтобы добавить первый узел.</div> : null}
               <div className={`${styles.atlasWideMap} ${open.stars.length === 1 ? styles.canvasFirstMap : ""}`}><SkyCanvas
@@ -494,9 +502,16 @@ export function ConstellationView({ workspaceId, goals, projects, focusedGoalId,
                   </div>
               </div>
             ) : null}
-          </div>
+          </div> : <div className="min-w-0 space-y-2">
+            {workspaceId ? <GoalBoard workspaceId={workspaceId} goalId={open.rootId} /> : null}
+          </div>}
 
-          {readOnly ? (
+          {boardMode && !readOnly ? (
+            <Card className="space-y-2 p-4" aria-label="О доске">
+              <p className="text-sm font-medium">Серверная доска</p>
+              <p className="text-label text-subtle-foreground">Позиции карточек общие для пространства: свежая правка побеждает, конфликт сохраняется с обеими версиями. «Автораскладка» расставляет узлы по зависимостям и не двигает те, что вы перетаскивали руками. Двойной ЛКМ по карточке открывает запись.</p>
+            </Card>
+          ) : readOnly ? (
             <PastCard star={selected} now={todayStars.get(selected.id)} />
           ) : selectedId === null ? (
             <Card className="space-y-2 p-4" aria-label="Поле созвездия">
