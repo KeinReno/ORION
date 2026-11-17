@@ -13,6 +13,9 @@ export default tseslint.config(
       "**/out/**",
       "**/target/**",
       "**/.tmp/**", // Local scratch builds are not source files.
+      "**/.tmp-*/**", // Root scratch dirs: .tmp-build/.tmp-test/.tmp-bin.
+      ".tools/**", // Self-hosted runner + local toolchain, not source.
+      ".pnpm-store/**", // Local pnpm store.
       "tmp/**", // Local build/extraction artifacts, never source code.
       "apps/compass-engine/**",
       "splash/_chromeprofile/**", // Одноразовый профиль Chromium для съёмки splash, не исходники
