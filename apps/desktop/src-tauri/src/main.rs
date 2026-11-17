@@ -52,13 +52,12 @@ fn edition_ports() -> Result<(u16, u16), String> {
 fn health_responds(api_port: u16) -> bool {
     use std::io::{Read, Write};
     use std::net::TcpStream;
-    use std::time::Duration;
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], api_port));
-    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, orion_runtime::timeouts::SHELL_HEALTH_CONNECT_TIMEOUT) else {
         return false;
     };
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+    let _ = stream.set_read_timeout(Some(orion_runtime::timeouts::SHELL_HEALTH_READ_TIMEOUT));
     if stream
         .write_all(b"GET /system/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
         .is_err()
@@ -247,7 +246,7 @@ fn start_local_runtime(
         .map_err(|error| format!("Не удалось безопасно запустить Rust runtime: {error}"))?;
     let started = Instant::now();
     let mut last_phase = String::new();
-    let deadline = Instant::now() + Duration::from_secs(360);
+    let deadline = Instant::now() + orion_runtime::timeouts::SHELL_READY_DEADLINE;
     while Instant::now() < deadline {
         startup::update_phase(app, &phase_file);
         let phase = fs::read(&phase_file).ok()
@@ -290,7 +289,7 @@ fn start_local_runtime(
                 log_file.display()
             ));
         }
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(orion_runtime::timeouts::SHELL_READY_POLL_INTERVAL);
     }
     Err(format!(
         "Локальный сервер не запустился за 360 секунд. Журнал: {}",
@@ -414,6 +413,7 @@ fn main() {
         })
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
             if let Ok(Some(urls)) = app.deep_link().get_current() {
@@ -446,7 +446,7 @@ fn main() {
                 // Dev build without smoke: load the Next dev server (tauri.conf.json devUrl).
                 // App("index.html") would hit the unregistered tauri:// protocol and the
                 // webview channel dies with FailedToReceiveMessage — no window appears.
-                config.url = tauri::WebviewUrl::External("http://localhost:3011".parse().expect("devUrl"));
+                config.url = tauri::WebviewUrl::External("about:blank".parse().expect("devUrl"));
             }
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
             #[cfg(debug_assertions)]
@@ -476,7 +476,7 @@ fn main() {
                         startup::set(&handle, "ready", None);
                         payload_ui::watch_selection(handle.clone());
                         loop {
-                            match supervisor.wait_for_exit(pid, std::time::Duration::from_secs(1)) {
+                            match supervisor.wait_for_exit(pid, orion_runtime::timeouts::API_POLL_INTERVAL) {
                                 Ok(Some(code)) => {
                                     startup::set(&handle, "error", Some(format!("Локальный launcher завершился ({code}); дочерние процессы остановлены.")));
                                     break;
@@ -525,7 +525,7 @@ fn main() {
                 if let Ok(mut writer) = RUNTIME_STDIN.lock() { writer.take(); }
                 let handle = app.clone();
                 std::thread::spawn(move || {
-                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(540);
+                    let deadline = std::time::Instant::now() + orion_runtime::timeouts::SHELL_EXIT_DEADLINE;
                     let mut reported = false;
                     // Never close the Job while PostgreSQL is still checkpointing.
                     while !RUNTIME_DONE.load(Ordering::SeqCst) {
