@@ -1,19 +1,55 @@
 "use client";
 
-import { KNOWLEDGE_KINDS, isKnowledgeInbox, type KnowledgeCategory, type KnowledgeItem, type KnowledgeKind } from "@orion/shared-types";
-import { useAddKnowledgeSource, useCreateFolder, useCreateKnowledgeCategory, useCreateKnowledgeItem, useDeleteKnowledgeCategory, useKnowledgeCategories, useKnowledgeItems, useUpdateKnowledgeItem, useUploadDocuments } from "@orion/core-react";
-import { Badge, Button, EmptyState, Input, PanelBody, PanelHeader, PanelShell, Select, SegmentedControl, cx, useContextMenuApi, useDebouncedValue, useToast } from "@orion/ui";
+import {
+  KNOWLEDGE_KINDS,
+  isKnowledgeInbox,
+  type KnowledgeCategory,
+  type KnowledgeItem,
+  type KnowledgeKind,
+  type KnowledgeStatus
+} from "@orion/shared-types";
+import {
+  useAddKnowledgeSource,
+  useCreateFolder,
+  useCreateKnowledgeCategory,
+  useCreateKnowledgeItem,
+  useDeleteKnowledgeCategory,
+  useKnowledgeCategories,
+  useKnowledgeItem,
+  useKnowledgeItems,
+  useUpdateKnowledgeItem,
+  useUploadDocuments
+} from "@orion/core-react";
+import {
+  Button,
+  EmptyState,
+  Input,
+  PanelBody,
+  PanelShell,
+  SegmentedControl,
+  cx,
+  useContextMenuApi,
+  useDebouncedValue,
+  useToast
+} from "@orion/ui";
+import { ArrowUpDown, BookOpen, FolderPlus, LayoutGrid, Library, List, Plus, Search } from "lucide-react";
 import JSZip from "jszip";
-import { FileUp, FolderPlus, Library, Link2, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { useKnowledgeFocusRequest } from "../lib/panel-bus";
-import { KnowledgeItemEditor } from "./knowledge/item-editor";
-import { KIND_ICON, KIND_LABEL, STATUS_LABEL, STATUS_TONE } from "./knowledge/knowledge-labels";
 import { relativeTime } from "../lib/format";
+import { KnowledgeItemEditor } from "./knowledge/item-editor";
+import { CollectionSidebar, type CollectionSelection } from "./knowledge/collection-sidebar";
+import { DropZone } from "./knowledge/drop-zone";
+import { InboxRow } from "./knowledge/inbox-row";
+import { KbdBar } from "./knowledge/kbd-bar";
+import { MaterialCard } from "./knowledge/material-card";
+import { KnowledgeReadingView } from "./knowledge/reading-view";
+import { StatusRibbon } from "./knowledge/status-ribbon";
+import { KIND_LABEL } from "./knowledge/knowledge-labels";
 
-type View = "library" | "inbox";
+type View = "library" | "inbox" | "reading" | "editing";
 type Sort = "updated" | "title" | "created";
 type ImportFile = { file: File; path: string };
 
@@ -41,6 +77,13 @@ async function expandArchives(files: File[]): Promise<ImportFile[]> {
   return expanded;
 }
 
+/**
+ * База знаний — редизайн «полки» (экраны 01–03 спецификации):
+ *  01 Библиотека: лента созревания, сайдбар коллекций, сетка карточек;
+ *  02 Входящие: DropZone, строки сырья с клавиатурным разбором (J/K/E/X);
+ *  03 Чтение: колонка материала + правая колонка (источник, связи, теги).
+ * Экраны 04/05 (читалка книг, просмотр документов) — этап 2, здесь не делаются.
+ */
 export function KnowledgePanel() {
   const { workspace } = useActiveWorkspace();
   const { isEnabled } = useEnabledModules();
@@ -49,23 +92,28 @@ export function KnowledgePanel() {
   const reportError = (error: unknown) => toast({ title: "Не удалось выполнить действие", description: error instanceof Error ? error.message : "Попробуйте ещё раз.", tone: "danger" });
   const workspaceId = workspace?.id;
   const [view, setView] = useState<View>("library");
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [editorDirty, setEditorDirty] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState<string | "all">("all");
-  const [showArchived, setShowArchived] = useState(false);
+  const [categoryId, setCategoryId] = useState<CollectionSelection>("all");
+  const [statusFilter, setStatusFilter] = useState<KnowledgeStatus | null>(null);
   const [title, setTitle] = useState("");
   const [sectionName, setSectionName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceDescription, setSourceDescription] = useState("");
   const [sort, setSort] = useState<Sort>("updated");
   const [kindFilter, setKindFilter] = useState<KnowledgeKind | "all">("all");
+  const [addMenu, setAddMenu] = useState(false);
+  const [sortMenu, setSortMenu] = useState(false);
+  const [inboxIndex, setInboxIndex] = useState(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const folderInput = useRef<HTMLInputElement | null>(null);
   const debounced = useDebouncedValue(query, 300);
   const categories = useKnowledgeCategories(workspaceId);
-  const items = useKnowledgeItems(workspaceId, showArchived, debounced);
-  const inbox = useKnowledgeItems(workspaceId, false, "");
+  const allItems = useKnowledgeItems(workspaceId, true, "");
+  const items = useKnowledgeItems(workspaceId, categoryId === "archive", debounced);
+  const detail = useKnowledgeItem(workspaceId, view === "reading" || view === "editing" ? (selectedId ?? undefined) : undefined);
   const createCategory = useCreateKnowledgeCategory(workspaceId ?? "");
   const deleteCategory = useDeleteKnowledgeCategory(workspaceId ?? "");
   const createItem = useCreateKnowledgeItem(workspaceId ?? "");
@@ -81,33 +129,72 @@ export function KnowledgePanel() {
       toast({ title: "Сначала сохраните материал", description: "В открытом материале есть несохранённые изменения.", tone: "default" });
       return;
     }
-    setView("library");
+    setView("reading");
     setCategoryId("all");
-    setShowArchived(false);
+    setStatusFilter(null);
     setKindFilter("all");
     setQuery("");
     setSelectedId(focusRequest.id);
   }, [focusRequest, editorDirty, toast]);
 
-  const inboxCount = (inbox.data ?? []).filter((item) => isKnowledgeInbox(item.status)).length;
+  /* Счётчики ленты и сайдбара — из полного списка, без учёта поиска. */
+  const ribbonCounts = useMemo(() => {
+    const counts: Record<KnowledgeStatus, number> = { captured: 0, draft: 0, review: 0, approved: 0, published: 0, archived: 0 };
+    for (const item of allItems.data ?? []) counts[item.status] += 1;
+    return counts;
+  }, [allItems.data]);
+  const sidebarCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0, archive: 0 };
+    for (const item of allItems.data ?? []) {
+      if (item.status === "archived") counts.archive += 1;
+      else {
+        counts.all += 1;
+        if (item.categoryId) counts[item.categoryId] = (counts[item.categoryId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [allItems.data]);
+
   const visible = useMemo(() => {
     const ids = categoryScope(categoryId, categories.data ?? []);
     const filtered = (items.data ?? []).filter((item) => {
+      if (categoryId === "archive") return item.status === "archived";
+      if (item.status === "archived") return false;
       if (ids && !ids.has(item.categoryId ?? "")) return false;
       if (kindFilter !== "all" && item.kind !== kindFilter) return false;
+      if (statusFilter && item.status !== statusFilter) return false;
       if (view === "inbox") return isKnowledgeInbox(item.status);
-      if (item.status === "archived") return showArchived;
       return !isKnowledgeInbox(item.status);
     });
     return filtered.sort((a, b) => sort === "title" ? a.title.localeCompare(b.title, "ru") : sort === "created" ? b.createdAt.localeCompare(a.createdAt) : b.updatedAt.localeCompare(a.updatedAt));
-  }, [items.data, categories.data, categoryId, view, showArchived, sort, kindFilter]);
+  }, [items.data, categories.data, categoryId, view, statusFilter, sort, kindFilter]);
+
+  const inboxVisible = view === "inbox" ? visible.filter((item) => isKnowledgeInbox(item.status)) : [];
+
+  /* Клавиатура входящих: J/K — навигация, E — принять, X — архив. */
+  useEffect(() => {
+    if (view !== "inbox") return;
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable]")) return;
+      const rows = inboxVisible;
+      if (rows.length === 0) return;
+      const key = event.key.toLowerCase();
+      if (key === "j" || event.key === "ArrowDown") { event.preventDefault(); setInboxIndex((i) => Math.min(i + 1, rows.length - 1)); }
+      else if (key === "k" || event.key === "ArrowUp") { event.preventDefault(); setInboxIndex((i) => Math.max(i - 1, 0)); }
+      else if (key === "e") { event.preventDefault(); const item = rows[Math.min(inboxIndex, rows.length - 1)]; if (item) accept(item); }
+      else if (key === "x") { event.preventDefault(); const item = rows[Math.min(inboxIndex, rows.length - 1)]; if (item) archive(item); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, inboxVisible, inboxIndex]);
 
   if (!workspaceId) {
     return (
       <PanelShell>
-        <PanelHeader icon={Library} title="База знаний" />
         <PanelBody className="[container-type:inline-size]">
-          <EmptyState title="Нет пространства" description="Выберите пространство, чтобы открыть базу знаний." />
+          <EmptyState icon={Library} title="Нет пространства" description="Выберите пространство, чтобы открыть базу знаний." />
         </PanelBody>
       </PanelShell>
     );
@@ -119,45 +206,53 @@ export function KnowledgePanel() {
       return;
     }
     setSelectedId(id);
+    setView(id ? "reading" : "library");
+  }
+
+  function accept(item: KnowledgeItem) {
+    updateItem.mutate({ itemId: item.id, input: { status: "draft", expectedRevision: item.revision } });
+  }
+  function archive(item: KnowledgeItem) {
+    updateItem.mutate({ itemId: item.id, input: { status: "archived", expectedRevision: item.revision } });
   }
 
   function create(name: string) {
     if (editorDirty) { selectItem(null); return; }
-    const next = name.trim();
-    if (!next) return;
+    const next = name.trim() || "Новый материал";
     void createItem
-      .mutateAsync({ title: next, categoryId: categoryId === "all" ? null : categoryId, status: "captured" })
+      .mutateAsync({ title: next, categoryId: categoryId !== "all" && categoryId !== "archive" ? categoryId : null, status: "captured" })
       .then((item) => {
         setTitle("");
-        setView("inbox");
         setSelectedId(item.id);
+        setView("editing");
       }).catch(reportError);
   }
 
-  async function importLink(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const url = sourceUrl.trim();
-    if (!url) return;
+  async function importLink(url: string, description = "") {
+    const link = url.trim();
+    if (!link) return;
     try {
       const item = await createItem.mutateAsync({
-        title: url.replace(/^https?:\/\//, "").split(/[/?#]/)[0] || "Новая ссылка",
-        summary: sourceDescription.trim(),
-        categoryId: categoryId === "all" ? null : categoryId,
+        title: link.replace(/^https?:\/\//, "").split(/[/?#]/)[0] || "Новая ссылка",
+        summary: description.trim(),
+        categoryId: categoryId !== "all" && categoryId !== "archive" ? categoryId : null,
         kind: "link",
-        status: "approved"
+        status: "captured"
       });
-      await addSource.mutateAsync({ itemId: item.id, input: { type: "url", sourceUrl: url, sourceTitle: url } });
+      await addSource.mutateAsync({ itemId: item.id, input: { type: "url", sourceUrl: link, sourceTitle: link } });
       setSourceUrl("");
       setSourceDescription("");
-      setSelectedId(item.id);
-      toast({ title: "Ссылка добавлена в библиотеку", tone: "success" });
+      setView("inbox");
+      toast({ title: "Ссылка во входящих", description: "Примите её, когда будете готовы.", tone: "success" });
+      void item;
     } catch (error) { reportError(error); }
   }
 
-  async function importFiles(files: FileList | null, folder = false) {
+  async function importFiles(files: FileList | File[] | null, folder = false) {
     if (!files?.length || !workspaceId) return;
+    const list = files instanceof FileList ? [...files] : files;
     try {
-      const expanded = await expandArchives([...files]);
+      const expanded = await expandArchives(list);
       const uploaded: Awaited<ReturnType<typeof uploadDocuments.mutateAsync>> = [];
       if (folder || expanded.some((entry) => entry.path.includes("/"))) {
         const folders = new Map<string, string | null>([["", null]]);
@@ -181,40 +276,32 @@ export function KnowledgePanel() {
         }
         for (const [path, group] of groups) uploaded.push(...await uploadDocuments.mutateAsync({ parentId: folders.get(path) ?? null, files: group }));
       } else {
-        uploaded.push(...await uploadDocuments.mutateAsync({ parentId: null, files: [...files] }));
+        uploaded.push(...await uploadDocuments.mutateAsync({ parentId: null, files: list }));
       }
       for (const document of uploaded) {
-        const item = await createItem.mutateAsync({ title: document.name.replace(/\.[^.]+$/, ""), categoryId: categoryId === "all" ? null : categoryId, kind: "fact", status: "approved" });
+        const item = await createItem.mutateAsync({ title: document.name.replace(/\.[^.]+$/, ""), categoryId: categoryId !== "all" && categoryId !== "archive" ? categoryId : null, kind: "fact", status: "captured" });
         await addSource.mutateAsync({ itemId: item.id, input: { type: "document", sourceTitle: document.name, documentId: document.id } });
       }
-      toast({ title: uploaded.length === 1 ? "Документ добавлен в библиотеку" : `Документов добавлено: ${uploaded.length}`, tone: "success" });
+      setView("inbox");
+      toast({ title: uploaded.length === 1 ? "Файл во входящих" : `Файлов во входящих: ${uploaded.length}`, tone: "success" });
     } catch (error) { reportError(error); }
     finally { if (fileInput.current) fileInput.current.value = ""; if (folderInput.current) folderInput.current.value = ""; }
   }
 
+  function itemMenu(item: KnowledgeItem): Array<{ label: string; onSelect: () => void } | "separator"> {
+    return [
+      { label: "Открыть", onSelect: () => selectItem(item.id) },
+      "separator",
+      item.status === "archived"
+        ? { label: "Вернуть из архива", onSelect: () => updateItem.mutate({ itemId: item.id, input: { status: "draft", expectedRevision: item.revision } }) }
+        : { label: "В архив", onSelect: () => updateItem.mutate({ itemId: item.id, input: { status: "archived", expectedRevision: item.revision } }) }
+    ];
+  }
+
+  const subtitle = view === "inbox" ? "Входящие — сырьё ждёт решения" : "Книги, документы и ссылки в свободных коллекциях";
+
   return (
     <PanelShell>
-      <PanelHeader
-        icon={Library}
-        title="База знаний"
-        subtitle="Книги, документы и ссылки — в свободных коллекциях. Проект не обязателен."
-        actions={
-          <SegmentedControl
-            aria-label="Вид базы знаний"
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "library", label: "Библиотека" },
-              { value: "inbox", label: inboxCount > 0 ? `Входящие ${inboxCount}` : "Входящие" }
-            ]}
-          />
-        }
-      >
-        <div className="relative w-full sm:w-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по тексту, тегам и источникам" aria-label="Поиск" className="pl-8" />
-        </div>
-      </PanelHeader>
       <PanelBody className="[container-type:inline-size]">
         {items.isError ? (
           <EmptyState
@@ -223,140 +310,243 @@ export function KnowledgePanel() {
             description="Связь с узлом прервалась. Повторите загрузку."
             action={<Button onClick={() => void items.refetch()}>Повторить</Button>}
           />
-        ) : (
+        ) : view === "reading" || view === "editing" ? (
           <>
-          <input ref={fileInput} type="file" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
-          <input ref={(element) => { folderInput.current = element; element?.setAttribute("webkitdirectory", ""); }} type="file" multiple hidden onChange={(event) => void importFiles(event.target.files, true)} />
-          <div className="grid h-full min-h-0 grid-cols-1 gap-3 [@container(min-width:800px)]:grid-cols-[14rem_minmax(16rem,21rem)_minmax(0,1fr)]">
-            <aside className={cx("flex min-h-0 flex-col gap-3 border-b border-border pb-3 [@container(min-width:800px)]:border-b-0 [@container(min-width:800px)]:border-r [@container(min-width:800px)]:pr-3", selectedId && "[@container(max-width:799px)]:hidden")}>
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-label font-semibold text-foreground">Коллекции</h2>
-                <Button size="sm" variant="ghost" aria-label="Создать коллекцию" title="Создать коллекцию" onClick={() => document.getElementById("knowledge-new-category")?.focus()}><FolderPlus className="h-4 w-4" /></Button>
+            {view === "editing" ? (
+              <div className="flex h-full flex-col">
+                <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+                  <Button size="sm" variant="ghost" onClick={() => { if (editorDirty) { toast({ title: "Сначала сохраните материал", tone: "default" }); return; } setView("reading"); }}>
+                    ← К чтению
+                  </Button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {selectedId ? (
+                    <KnowledgeItemEditor
+                      key={`${workspaceId}:${selectedId}`}
+                      onDirtyChange={setEditorDirty}
+                      workspaceId={workspaceId}
+                      itemId={selectedId}
+                      items={items.data ?? []}
+                      categories={categories.data ?? []}
+                      onOpenReading={() => {
+                        if (editorDirty) { toast({ title: "Сначала сохраните материал", description: "В открытом материале есть несохранённые изменения.", tone: "default" }); return; }
+                        setView("reading");
+                      }}
+                      onClosed={() => { setSelectedId(null); setEditorDirty(false); setView("library"); }}
+                    />
+                  ) : null}
+                </div>
               </div>
-              <nav aria-label="Коллекции базы знаний" className="min-h-0 space-y-1 overflow-auto">
-                <CollectionButton active={categoryId === "all"} count={(items.data ?? []).filter((item) => item.status !== "archived").length} onClick={() => setCategoryId("all")} label="Все материалы" />
-                {(categories.data ?? []).map((category) => {
-                  const count = (items.data ?? []).filter((item) => item.categoryId === category.id && item.status !== "archived").length;
-                  return <CollectionButton key={category.id} active={categoryId === category.id} count={count} onClick={() => setCategoryId(category.id)} label={category.name} depth={category.parentId ? 1 : 0} />;
-                })}
-              </nav>
-              <form className="flex gap-2 border-t border-border pt-3" onSubmit={(event) => { event.preventDefault(); const name = sectionName.trim(); if (!name) return; const parentId = categoryId === "all" ? null : parentForNewSection(categoryId, categories.data ?? []); void createCategory.mutateAsync({ name, parentId }).then(() => setSectionName("")).catch(reportError); }}>
-                <Input id="knowledge-new-category" value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder={categoryId === "all" ? "Новая коллекция" : "Подколлекция"} aria-label="Название коллекции" />
-                <Button type="submit" size="sm" variant="outline" aria-label="Добавить коллекцию" disabled={!sectionName.trim() || createCategory.isPending}><Plus className="h-4 w-4" /></Button>
-              </form>
-              <form onSubmit={(event) => void importLink(event)} className="space-y-2 border-t border-border pt-3">
-                <label className="text-label font-medium text-foreground" htmlFor="knowledge-source-url">Добавить ссылку</label>
-                <Input id="knowledge-source-url" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://github.com/…" />
-                <Input value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Краткое описание (необязательно)" aria-label="Краткое описание ссылки" />
-                <Button type="submit" size="sm" variant="outline" disabled={!sourceUrl.trim() || createItem.isPending || addSource.isPending} className="w-full"><Link2 className="h-4 w-4" /> Сохранить ссылку</Button>
-                {isEnabled("documents") ? <>
-                  <Button type="button" size="sm" variant="ghost" className="w-full" disabled={uploadDocuments.isPending || createFolder.isPending} onClick={() => fileInput.current?.click()}><FileUp className="h-4 w-4" /> Файлы и ZIP-архивы</Button>
-                  <Button type="button" size="sm" variant="ghost" className="w-full" disabled={uploadDocuments.isPending || createFolder.isPending} onClick={() => folderInput.current?.click()}><FolderPlus className="h-4 w-4" /> Импортировать папку</Button>
-                </> : null}
-              </form>
-            </aside>
-            <aside className={cx("flex min-h-0 flex-col gap-3", selectedId && "[@container(max-width:799px)]:hidden")}>
-              <form
-                className="flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  create(title);
-                }}
-              >
-                <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Новый материал" aria-label="Название нового материала" />
-                <Button type="submit" size="sm" disabled={!title.trim() || createItem.isPending}>
-                  <Plus className="h-4 w-4" /> Создать
+            ) : detail.data ? (
+              <KnowledgeReadingView
+                item={detail.data}
+                categories={categories.data ?? []}
+                onBack={() => selectItem(null)}
+                onEdit={() => setView("editing")}
+                onOpenItem={(id) => selectItem(id)}
+                menuItems={() => (detail.data ? itemMenu(detail.data) : [])}
+              />
+            ) : (
+              <EmptyState icon={Library} title="Материал не найден" description="Возможно, его удалили. Вернитесь в библиотеку." action={<Button onClick={() => selectItem(null)}>В библиотеку</Button>} />
+            )}
+          </>
+        ) : (
+          <div className="flex h-full min-h-0 flex-col">
+            {/* Шапка (экраны 01/02) */}
+            <header className="flex flex-wrap items-center gap-3 border-b border-border px-1 pb-4">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#C9A86A14] text-[#C9A86A]">
+                <BookOpen className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="mr-auto min-w-0">
+                <h1 className="text-[17px] font-semibold leading-tight text-foreground">База знаний</h1>
+                <p className="truncate text-[12px] text-[#6E6A60]">{subtitle}</p>
+              </div>
+              <div className="relative w-full sm:w-[280px]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6E6A60]" />
+                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={view === "inbox" ? "Поиск по входящим" : "Поиск по тексту и источникам"} aria-label="Поиск" className="h-9 pl-8" />
+              </div>
+              <SegmentedControl
+                aria-label="Вид базы знаний"
+                value={view === "inbox" ? "inbox" : "library"}
+                onChange={(next) => { setView(next as "library" | "inbox"); setInboxIndex(0); }}
+                size="sm"
+                options={[
+                  { value: "library", label: "Библиотека" },
+                  { value: "inbox", label: ribbonCounts.captured > 0 ? `Входящие ${ribbonCounts.captured}` : "Входящие" }
+                ]}
+              />
+              <SegmentedControl
+                aria-label="Вид списка"
+                value={layout}
+                onChange={(next) => setLayout(next as "grid" | "list")}
+                size="sm"
+                options={[
+                  { value: "grid", label: <LayoutGrid className="h-3.5 w-3.5" aria-label="Сетка" /> },
+                  { value: "list", label: <List className="h-3.5 w-3.5" aria-label="Список" /> }
+                ]}
+              />
+              <div className="relative">
+                <Button className="bg-[#C9A86A] text-[#1B1C1F] hover:bg-[#E7D7A8]" onClick={() => setAddMenu((open) => !open)} aria-expanded={addMenu}>
+                  <Plus className="h-4 w-4" /> Добавить
                 </Button>
-              </form>
-              <div className="flex flex-wrap items-center gap-2 text-label">
-                <span className="text-label font-semibold text-foreground">Материалы <span className="font-normal text-subtle-foreground">{visible.length}</span></span>
-                <Select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Сортировка материалов" className="ml-auto max-w-44">
-                  <option value="updated">Недавно изменены</option><option value="created">Сначала новые</option><option value="title">По названию</option>
-                </Select>
-                <Select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KnowledgeKind | "all")} aria-label="Фильтр по типу материала" className="max-w-40">
-                  <option value="all">Все типы</option>{KNOWLEDGE_KINDS.map((kind) => <option key={kind} value={kind}>{KIND_LABEL[kind]}</option>)}
-                </Select>
-                {categoryId !== "all" ? (
-                  <Button size="sm" variant="ghost" onClick={() => void deleteCategory.mutateAsync(categoryId).then(() => setCategoryId("all")).catch(reportError)}>
-                    Удалить раздел
+                {addMenu ? (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-xl border border-border bg-card p-1 shadow-lg" role="menu">
+                    <AddMenuItem onClick={() => { setAddMenu(false); document.getElementById("knowledge-new-title")?.focus(); }}>Новый материал</AddMenuItem>
+                    <AddMenuItem onClick={() => { setAddMenu(false); document.getElementById("knowledge-source-url")?.focus(); }}>Добавить ссылку</AddMenuItem>
+                    {isEnabled("documents") ? (
+                      <>
+                        <AddMenuItem onClick={() => { setAddMenu(false); fileInput.current?.click(); }}>Импорт файлов</AddMenuItem>
+                        <AddMenuItem onClick={() => { setAddMenu(false); folderInput.current?.click(); }}>Импорт папки</AddMenuItem>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </header>
+
+            {/* Лента созревания */}
+            <div className="flex flex-wrap items-center gap-2 px-1 pb-1 pt-3">
+              <StatusRibbon
+                counts={ribbonCounts}
+                active={statusFilter}
+                onSelect={(status) => {
+                  setStatusFilter(status);
+                  if (view === "inbox" && status && status !== "captured") setView("library");
+                }}
+              />
+              <div className="relative ml-auto">
+                <Button size="sm" variant="ghost" aria-expanded={sortMenu} onClick={() => setSortMenu((open) => !open)}>
+                  <ArrowUpDown className="h-3.5 w-3.5" /> Сортировка
+                </Button>
+                {sortMenu ? (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-border bg-card p-1 shadow-lg">
+                    <label className="block px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-wide text-[#6E6A60]">Порядок</label>
+                    {([["updated", "Недавно изменены"], ["created", "Сначала новые"], ["title", "По названию"]] as Array<[Sort, string]>).map(([value, label]) => (
+                      <AddMenuItem key={value} onClick={() => { setSort(value); }}>
+                        <span className={cx("flex items-center justify-between", sort === value ? "text-[#E7D7A8]" : "")}>{label}{sort === value ? "✓" : ""}</span>
+                      </AddMenuItem>
+                    ))}
+                    <label className="block px-2 pb-1 pt-2 text-[10px] uppercase tracking-wide text-[#6E6A60]">Тип</label>
+                    <AddMenuItem onClick={() => setKindFilter("all")}><span className={cx("flex items-center justify-between", kindFilter === "all" ? "text-[#E7D7A8]" : "")}>Все типы{kindFilter === "all" ? "✓" : ""}</span></AddMenuItem>
+                    {KNOWLEDGE_KINDS.map((kind) => (
+                      <AddMenuItem key={kind} onClick={() => setKindFilter(kind)}><span className={cx("flex items-center justify-between", kindFilter === kind ? "text-[#E7D7A8]" : "")}>{KIND_LABEL[kind]}{kindFilter === kind ? "✓" : ""}</span></AddMenuItem>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Создание: скрытые поля-источники для меню «Добавить» */}
+            <div className={cx("flex flex-wrap items-center gap-2 px-1 pt-2", sourceUrl || title ? "" : "hidden")}>
+              <Input id="knowledge-new-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название материала" aria-label="Название нового материала" className="h-8 w-56" />
+              <Button size="sm" disabled={createItem.isPending} onClick={() => { create(title); }}>Создать</Button>
+              <Input id="knowledge-source-url" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://…" aria-label="Адрес ссылки" className="h-8 w-64" />
+              <Input value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Описание (необязательно)" aria-label="Описание ссылки" className="h-8 w-52" />
+              <Button size="sm" variant="outline" disabled={!sourceUrl.trim() || createItem.isPending} onClick={() => void importLink(sourceUrl, sourceDescription)}>Сохранить ссылку</Button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 pt-3 [@container(min-width:900px)]:grid-cols-[220px_minmax(0,1fr)]">
+              <aside className="flex min-h-0 flex-col gap-2 [@container(max-width:899px)]:hidden">
+                <CollectionSidebar categories={categories.data ?? []} counts={sidebarCounts} activeId={categoryId} onSelect={setCategoryId} />
+                <form className="flex gap-2 border-t border-border pt-3" onSubmit={(event) => { event.preventDefault(); const name = sectionName.trim(); if (!name) return; const parentId = categoryId !== "all" && categoryId !== "archive" ? parentForNewSection(categoryId, categories.data ?? []) : null; void createCategory.mutateAsync({ name, parentId }).then(() => setSectionName("")).catch(reportError); }}>
+                  <Input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Новая коллекция" aria-label="Название коллекции" className="h-8" />
+                  <Button type="submit" size="sm" variant="outline" aria-label="Добавить коллекцию" disabled={!sectionName.trim() || createCategory.isPending}><FolderPlus className="h-4 w-4" /></Button>
+                </form>
+                {categoryId !== "all" && categoryId !== "archive" ? (
+                  <Button size="sm" variant="ghost" className="self-start text-[#6E6A60]" onClick={() => void deleteCategory.mutateAsync(categoryId).then(() => setCategoryId("all")).catch(reportError)}>
+                    Удалить коллекцию
                   </Button>
                 ) : null}
-                {view === "library" ? (
-                  <label className="flex items-center gap-2 text-label text-subtle-foreground">
-                    <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} className="accent-accent" />
-                    Архив
-                  </label>
-                ) : null}
-              </div>
-              <div className="min-h-0 flex-1 space-y-1 overflow-auto" aria-label="Список материалов">
-                {items.isLoading ? <p className="px-1 py-6 text-label text-subtle-foreground">Загрузка материалов…</p> : null}
-                {!items.isLoading && visible.length === 0 ? (
-                  <EmptyState
-                    title={query.trim() ? "Ничего не нашлось" : view === "inbox" ? "Входящие пусты" : "Библиотека пуста"}
-                    description={
-                      query.trim()
-                        ? "Смените запрос или вид."
-                        : view === "inbox"
-                          ? "Сырьё и материалы на проверке появятся здесь."
-                          : "Создайте первый материал — название уже в поле выше."
-                    }
-                  />
-                ) : null}
-                {visible.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    selected={selectedId === item.id}
-                    onOpen={() => selectItem(item.id)}
-                    onContextMenu={(event) =>
-                      showContextMenu(event, [
-                        { label: "Открыть", onSelect: () => selectItem(item.id) },
-                        "separator",
-                        item.status === "archived"
-                          ? { label: "Вернуть из архива", onSelect: () => updateItem.mutate({ itemId: item.id, input: { status: "draft", expectedRevision: item.revision } }) }
-                          : { label: "В архив", onSelect: () => updateItem.mutate({ itemId: item.id, input: { status: "archived", expectedRevision: item.revision } }) }
-                      ])
-                    }
-                    onAccept={
-                      view === "inbox"
-                        ? () => updateItem.mutate({ itemId: item.id, input: { status: "approved", expectedRevision: item.revision } })
-                        : undefined
-                    }
-                    onArchive={
-                      view === "inbox"
-                        ? () => updateItem.mutate({ itemId: item.id, input: { status: "archived", expectedRevision: item.revision } })
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-            </aside>
-            <section className={cx("min-h-0 min-w-0 overflow-auto", !selectedId && "[@container(max-width:799px)]:hidden")}>
-              {selectedId ? <Button variant="ghost" size="sm" className="mb-3 [@container(min-width:800px)]:hidden" onClick={() => selectItem(null)}>← К списку материалов</Button> : null}
-              {selectedId ? (
-                <KnowledgeItemEditor
-                  key={`${workspaceId}:${selectedId}`}
-                  onDirtyChange={setEditorDirty}
-                  workspaceId={workspaceId}
-                  itemId={selectedId}
-                  items={inbox.data ?? items.data ?? []}
-                  categories={categories.data ?? []}
-                  onClosed={() => { setSelectedId(null); setEditorDirty(false); }}
-                />
-              ) : (
-                <EmptyState icon={Library} title="Выберите материал" description="Слева — список. Источник открытого материала остаётся отдельно от текста." />
-              )}
-            </section>
+              </aside>
+
+              <section className="flex min-h-0 min-w-0 flex-col">
+                {view === "inbox" ? (
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <DropZone disabled={!isEnabled("documents") && false} onFiles={(files) => void importFiles(files)} onUrl={(url) => void importLink(url)} />
+                    <div className="min-h-0 flex-1 space-y-3 overflow-auto" aria-label="Входящие">
+                      {items.isLoading ? <p className="px-1 py-6 text-[13px] text-[#6E6A60]">Загрузка входящих…</p> : null}
+                      {!items.isLoading && inboxVisible.length === 0 ? (
+                        <EmptyState title="Входящие пусты" description="Перетащите файлы, вставьте ссылку — сырьё появится здесь." />
+                      ) : null}
+                      {inboxVisible.map((item, index) => (
+                        <InboxRow
+                          key={item.id}
+                          item={item}
+                          selected={index === Math.min(inboxIndex, inboxVisible.length - 1)}
+                          onAccept={() => accept(item)}
+                          onArchive={() => archive(item)}
+                          onContextMenu={(event) => showContextMenu(event, itemMenu(item))}
+                        />
+                      ))}
+                    </div>
+                    <KbdBar />
+                  </div>
+                ) : (
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="min-h-0 flex-1 overflow-auto pb-2" aria-label="Материалы библиотеки">
+                      {items.isLoading ? <p className="px-1 py-6 text-[13px] text-[#6E6A60]">Загрузка материалов…</p> : null}
+                      {!items.isLoading && visible.length === 0 ? (
+                        <EmptyState
+                          title={query.trim() ? "Ничего не нашлось" : categoryId === "archive" ? "Архив пуст" : "Библиотека пуста"}
+                          description={query.trim() ? "Смените запрос или снимите фильтры." : "Добавьте ссылку, файл или создайте материал кнопкой «Добавить»."}
+                        />
+                      ) : null}
+                      {layout === "grid" ? (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 [@container(min-width:1250px)]:grid-cols-3">
+                          {visible.map((item) => (
+                            <MaterialCard key={item.id} item={item} onOpen={() => selectItem(item.id)} onContextMenu={(event) => showContextMenu(event, itemMenu(item))} />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {visible.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => selectItem(item.id)}
+                              onContextMenu={(event) => showContextMenu(event, itemMenu(item))}
+                              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">{item.title}</span>
+                              <span className="shrink-0 text-[11px] text-[#6E6A60]">{KIND_LABEL[item.kind]}</span>
+                              <span className="shrink-0 font-mono text-[11px] text-[#6E6A60]">{relativeTime(item.updatedAt)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <footer className="flex items-center justify-between border-t border-border px-1 pt-3 font-mono text-[11px] text-[#6E6A60]">
+                      <span>{visible.length} материалов в библиотеке</span>
+                      <span>обновлено {visible[0] ? relativeTime(visible[0].updatedAt) : "—"}</span>
+                    </footer>
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
-          </>
         )}
+        <input ref={fileInput} type="file" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
+        <input ref={(element) => { folderInput.current = element; element?.setAttribute("webkitdirectory", ""); }} type="file" multiple hidden onChange={(event) => void importFiles(event.target.files, true)} />
       </PanelBody>
     </PanelShell>
   );
 }
 
-function categoryScope(selected: string | "all", categories: KnowledgeCategory[]): Set<string> | null {
-  if (selected === "all") return null;
+function AddMenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-foreground transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+    >
+      {children}
+    </button>
+  );
+}
+
+function categoryScope(selected: CollectionSelection, categories: KnowledgeCategory[]): Set<string> | null {
+  if (selected === "all" || selected === "archive") return null;
   const ids = new Set<string>([selected]);
   for (const category of categories) if (category.parentId === selected) ids.add(category.id);
   return ids;
@@ -366,62 +556,4 @@ function parentForNewSection(selected: string, categories: KnowledgeCategory[]):
   const current = categories.find((category) => category.id === selected);
   if (!current) return null;
   return current.parentId ?? current.id;
-}
-
-function CollectionButton({ active, count, label, depth = 0, onClick }: { active: boolean; count: number; label: string; depth?: number; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} aria-current={active ? "page" : undefined} className={cx("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-label transition-colors hover:bg-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60", active ? "bg-accent/10 text-accent-text" : "text-muted-foreground")} style={{ paddingLeft: `${8 + depth * 14}px` }}>
-      <Library className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="shrink-0 text-micro text-subtle-foreground">{count}</span>
-    </button>
-  );
-}
-
-function ItemRow({
-  item,
-  selected,
-  onOpen,
-  onContextMenu,
-  onAccept,
-  onArchive
-}: {
-  item: KnowledgeItem;
-  selected: boolean;
-  onOpen: () => void;
-  onContextMenu: (event: React.MouseEvent) => void;
-  onAccept?: () => void;
-  onArchive?: () => void;
-}) {
-  const Icon = KIND_ICON[item.kind];
-  return (
-    <div onContextMenu={onContextMenu} className={cx("rounded-md px-2 py-2 transition-colors", selected ? "bg-accent/10" : "hover:bg-card-hover")}>
-      <button type="button" onClick={onOpen} aria-current={selected ? "true" : undefined} className="w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60">
-        <p className="flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden />
-          <span className="min-w-0 flex-1 truncate text-label font-medium text-foreground">{item.title}</span>
-          <span className="shrink-0 text-micro text-subtle-foreground">{relativeTime(item.updatedAt)}</span>
-        </p>
-        {item.summary.trim() ? <p className="mt-1 line-clamp-2 pl-5 text-label text-muted-foreground">{item.summary}</p> : null}
-        <p className="mt-1 flex items-center gap-1.5 pl-5">
-          <Badge tone={STATUS_TONE[item.status]}>{STATUS_LABEL[item.status]}</Badge>
-          <span className="text-micro text-subtle-foreground">{KIND_LABEL[item.kind]}</span>
-        </p>
-      </button>
-      {onAccept || onArchive ? (
-        <div className="mt-2 flex gap-2 pl-5">
-          {onAccept ? (
-            <Button size="sm" variant="outline" onClick={onAccept}>
-              Принять
-            </Button>
-          ) : null}
-          {onArchive ? (
-            <Button size="sm" variant="ghost" onClick={onArchive}>
-              В архив
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }
