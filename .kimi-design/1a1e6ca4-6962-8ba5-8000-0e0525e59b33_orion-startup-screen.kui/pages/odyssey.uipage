@@ -1,0 +1,2374 @@
+name: Концепт «Одиссея»
+
+children:
+  - id: note.od.phase
+    type: text
+    position: [ 80, 60 ]
+    size: [ hug, hug ]
+    fontSize: 34
+    fontWeight: 600
+    color: "#000000"
+    content: Загрузка — 3 фазы
+
+  - id: note.od.ready
+    type: text
+    position: [ 1480, 60 ]
+    size: [ hug, hug ]
+    fontSize: 34
+    fontWeight: 600
+    color: "#000000"
+    content: На орбите
+
+  - id: note.od.error
+    type: text
+    position: [ 2880, 60 ]
+    size: [ hug, hug ]
+    fontSize: 34
+    fontWeight: 600
+    color: "#000000"
+    content: Сбой системы
+
+  - id: note.od.compact
+    type: text
+    position: [ 4280, 60 ]
+    size: [ hug, hug ]
+    fontSize: 34
+    fontWeight: 600
+    color: "#000000"
+    content: Сжатый вариант
+
+  # ============================================================ 1. ЗАГРУЗКА
+  - id: screen.odyssey
+    type: frame
+    position: [ 80, 120 ]
+    size: [ 1280, 800 ]
+    fill: $color.canvas
+    layout: { type: free, overflow: hidden }
+    children:
+      # ---------------- сцена
+      - id: od.sky
+        type: frame
+        position: [ 0, 0 ]
+        size: [ 760, 800 ]
+        layout: { type: free, overflow: hidden }
+        children:
+          - id: od.haze
+            type: ellipse
+            position: [ 160, 120 ]
+            size: [ 440, 440 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9A86A17" ]
+                - [ 1, "#C9A86A00" ]
+          # звёзды
+          - id: od.s01
+            type: ellipse
+            position: [ 86, 118 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A64D"
+          - id: od.s02
+            type: ellipse
+            position: [ 152, 66 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF59"
+          - id: od.s03
+            type: ellipse
+            position: [ 242, 152 ]
+            size: [ 4, 4 ]
+            fill: "#D8C9A68C"
+          - id: od.s04
+            type: ellipse
+            position: [ 312, 82 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: od.s05
+            type: ellipse
+            position: [ 394, 128 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: od.s06
+            type: ellipse
+            position: [ 478, 68 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: od.s07
+            type: ellipse
+            position: [ 560, 146 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: od.s08
+            type: ellipse
+            position: [ 648, 88 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF38"
+          - id: od.s09
+            type: ellipse
+            position: [ 704, 198 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: od.s10
+            type: ellipse
+            position: [ 62, 262 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: od.s11
+            type: ellipse
+            position: [ 132, 342 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: od.s12
+            type: ellipse
+            position: [ 228, 268 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A640"
+          - id: od.s13
+            type: ellipse
+            position: [ 302, 372 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF4D"
+          - id: od.s14
+            type: ellipse
+            position: [ 420, 232 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: od.s15
+            type: ellipse
+            position: [ 522, 252 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: od.s16
+            type: ellipse
+            position: [ 636, 328 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: od.s17
+            type: ellipse
+            position: [ 704, 442 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: od.s18
+            type: ellipse
+            position: [ 94, 512 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: od.s19
+            type: ellipse
+            position: [ 182, 448 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A638"
+          - id: od.s20
+            type: ellipse
+            position: [ 268, 592 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: od.s21
+            type: ellipse
+            position: [ 356, 522 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: od.s22
+            type: ellipse
+            position: [ 486, 562 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A652"
+          - id: od.s23
+            type: ellipse
+            position: [ 588, 486 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: od.s24
+            type: ellipse
+            position: [ 668, 588 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: od.s25
+            type: ellipse
+            position: [ 122, 662 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: od.s26
+            type: ellipse
+            position: [ 332, 682 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: od.s27
+            type: ellipse
+            position: [ 468, 702 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A645"
+          - id: od.s28
+            type: ellipse
+            position: [ 604, 662 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF4D"
+          - id: od.s29
+            type: ellipse
+            position: [ 704, 722 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF38"
+          # орбита и эклиптика
+          - id: od.orbit
+            type: ellipse
+            position: [ 230, 250 ]
+            size: [ 300, 300 ]
+            stroke: { color: "#C9A86A29", width: 1, style: custom, dash: [ 3, 7 ] }
+          - id: od.orbit.arc
+            type: path
+            position: [ 230, 250 ]
+            size: [ 300, 300 ]
+            viewBox: [ 300, 300 ]
+            path: "M150 0 A150 150 0 0 1 300 150"
+            stroke: { color: "#C9A86A66", width: 1.5, cap: round }
+          - id: od.trail
+            type: path
+            position: [ 100, 120 ]
+            size: [ 360, 280 ]
+            viewBox: [ 360, 280 ]
+            path: "M10 270 Q 180 200 330 30"
+            stroke: { color: "#E7D7A8B3", width: 2, cap: round }
+          - id: od.probe.glow
+            type: ellipse
+            position: [ 410, 140 ]
+            size: [ 60, 60 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#E7D7A899" ]
+                - [ 1, "#E7D7A800" ]
+          - id: od.probe
+            type: ellipse
+            position: [ 434, 164 ]
+            size: [ 12, 12 ]
+            fill: "#FFF4D4"
+          - id: od.probe.core
+            type: ellipse
+            position: [ 438, 168 ]
+            size: [ 4, 4 ]
+            fill: "#FFFFFF"
+          - id: od.plane.glow
+            type: ellipse
+            position: [ 140, 230 ]
+            size: [ 340, 340 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9A86A1A" ]
+                - [ 1, "#C9A86A00" ]
+          - id: od.belt.1
+            type: ellipse
+            position: [ 356, 366 ]
+            size: [ 9, 9 ]
+            fill: "#C9A86A"
+          - id: od.belt.2
+            type: ellipse
+            position: [ 374, 384 ]
+            size: [ 10, 10 ]
+            fill: "#D8BE85"
+          - id: od.belt.3
+            type: ellipse
+            position: [ 394, 400 ]
+            size: [ 9, 9 ]
+            fill: "#C9A86A"
+          - id: od.ecliptic
+            type: line
+            position: [ 30, 560 ]
+            size: [ 700, 0 ]
+            stroke: { color: "#E7D7A81F", width: 1, style: custom, dash: [ 2, 6 ] }
+          - id: od.ecliptic.label
+            type: text
+            position: [ 600, 570 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 10
+            letterSpacing: 3
+            color: "#6E6A60"
+            content: ЭКЛИПТИКА
+          # навигационные шкалы слева
+          - id: od.nav.az
+            type: text
+            position: [ 40, 60 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: $color.ink
+            content: АЗ 047.2°
+          - id: od.nav.ra
+            type: text
+            position: [ 40, 86 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: RA 05h 35m
+          - id: od.nav.dec
+            type: text
+            position: [ 40, 112 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: DEC −05° 23′
+      # ---------------- консоль
+      - id: od.divider
+        type: rect
+        position: [ 760, 40 ]
+        size: [ 1, 720 ]
+        fill: "#FFFFFF14"
+      - id: od.tag
+        type: text
+        position: [ 820, 60 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 3
+        color: $color.gold
+        content: ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА
+      - id: od.title
+        type: text
+        position: [ 820, 92 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 44
+        fontWeight: 500
+        letterSpacing: 5
+        color: $color.text
+        content: ORION
+      - id: od.role
+        type: text
+        position: [ 820, 152 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 13
+        color: $color.ink
+        content: Навигация по личным и семейным делам
+      # фазы
+      - id: od.phase.1
+        type: frame
+        position: [ 820, 212 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: od.phase.1.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: od.phase.1.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Ядро оболочки
+      - id: od.phase.2
+        type: frame
+        position: [ 820, 250 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: od.phase.2.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: od.phase.2.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Хранилище данных
+      - id: od.phase.3
+        type: frame
+        position: [ 820, 288 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: od.phase.3.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            fill: $color.gold
+          - id: od.phase.3.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            fontWeight: 500
+            color: $color.gold-bright
+            content: Карты и индексы
+      - id: od.phase.4
+        type: frame
+        position: [ 820, 326 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: od.phase.4.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: od.phase.4.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Службы приложения
+      - id: od.phase.5
+        type: frame
+        position: [ 820, 364 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: od.phase.5.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: od.phase.5.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Выход на орбиту
+      # стек проверок
+      - id: od.stack
+        type: frame
+        position: [ 820, 440 ]
+        size: [ 380, hug ]
+        layout: { type: flex, direction: column, gap: 14 }
+        children:
+          - id: od.check.1
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: od.check.1.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: "#9A927E"
+                content: Оболочка Tauri
+              - id: od.check.1.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.muted
+                content: ок · 0.4 с
+          - id: od.check.2
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: od.check.2.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: "#9A927E"
+                content: PostgreSQL 16
+              - id: od.check.2.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.muted
+                content: ок · 1.2 с
+          - id: od.check.3
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: od.check.3.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.gold-bright
+                content: Миграции
+              - id: od.check.3.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.gold
+                content: 14 / 21
+      - id: od.track
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 380, 2 ]
+        cornerRadius: 1
+        fill: "#FFFFFF14"
+      - id: od.track.fill
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 241, 2 ]
+        cornerRadius: 1
+        fill: $color.gold
+      - id: od.percent
+        type: text
+        position: [ 820, 664 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: $color.ink
+        content: 63%
+      - id: od.coords
+        type: text
+        position: [ 820, 740 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#55524A"
+        content: СЕАНС 014  ·  КАНАЛ БЕТА  ·  0.2.1
+
+  # ============================================================ 2. НА ОРБИТЕ
+  - id: screen.od.ready
+    type: frame
+    position: [ 1480, 120 ]
+    size: [ 1280, 800 ]
+    fill: $color.canvas
+    layout: { type: free, overflow: hidden }
+    children:
+      - id: odr.sky
+        type: frame
+        position: [ 0, 0 ]
+        size: [ 760, 800 ]
+        layout: { type: free, overflow: hidden }
+        children:
+          - id: odr.haze
+            type: ellipse
+            position: [ 160, 120 ]
+            size: [ 440, 440 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9A86A17" ]
+                - [ 1, "#C9A86A00" ]
+          - id: odr.s01
+            type: ellipse
+            position: [ 86, 118 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A64D"
+          - id: odr.s02
+            type: ellipse
+            position: [ 152, 66 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF59"
+          - id: odr.s03
+            type: ellipse
+            position: [ 242, 152 ]
+            size: [ 4, 4 ]
+            fill: "#D8C9A68C"
+          - id: odr.s04
+            type: ellipse
+            position: [ 312, 82 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: odr.s05
+            type: ellipse
+            position: [ 394, 128 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: odr.s06
+            type: ellipse
+            position: [ 478, 68 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: odr.s07
+            type: ellipse
+            position: [ 560, 146 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: odr.s08
+            type: ellipse
+            position: [ 648, 88 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF38"
+          - id: odr.s09
+            type: ellipse
+            position: [ 704, 198 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: odr.s10
+            type: ellipse
+            position: [ 62, 262 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: odr.s11
+            type: ellipse
+            position: [ 132, 342 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: odr.s12
+            type: ellipse
+            position: [ 228, 268 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A640"
+          - id: odr.s13
+            type: ellipse
+            position: [ 302, 372 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF4D"
+          - id: odr.s14
+            type: ellipse
+            position: [ 420, 232 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: odr.s15
+            type: ellipse
+            position: [ 522, 252 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: odr.s16
+            type: ellipse
+            position: [ 636, 328 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: odr.s17
+            type: ellipse
+            position: [ 704, 442 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: odr.s18
+            type: ellipse
+            position: [ 94, 512 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: odr.s19
+            type: ellipse
+            position: [ 182, 448 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A638"
+          - id: odr.s20
+            type: ellipse
+            position: [ 268, 592 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: odr.s21
+            type: ellipse
+            position: [ 356, 522 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: odr.s22
+            type: ellipse
+            position: [ 486, 562 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A652"
+          - id: odr.s23
+            type: ellipse
+            position: [ 588, 486 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF45"
+          - id: odr.s24
+            type: ellipse
+            position: [ 668, 588 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: odr.s25
+            type: ellipse
+            position: [ 122, 662 ]
+            size: [ 2, 2 ]
+            fill: "#D8C9A64D"
+          - id: odr.s26
+            type: ellipse
+            position: [ 332, 682 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: odr.s27
+            type: ellipse
+            position: [ 468, 702 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A645"
+          - id: odr.s28
+            type: ellipse
+            position: [ 604, 662 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF4D"
+          - id: odr.s29
+            type: ellipse
+            position: [ 704, 722 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF38"
+          # кольца плоскости зажжены
+          - id: odr.plane.glow
+            type: ellipse
+            position: [ 140, 230 ]
+            size: [ 340, 340 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9A86A26" ]
+                - [ 1, "#C9A86A00" ]
+          - id: odr.ring.outer
+            type: ellipse
+            position: [ 230, 250 ]
+            size: [ 300, 300 ]
+            stroke: { color: "#C9A86A8C", width: 1.5 }
+          - id: odr.ring.inner
+            type: ellipse
+            position: [ 238, 258 ]
+            size: [ 284, 284 ]
+            stroke: { color: "#E7D7A84D", width: 1, style: custom, dash: [ 3, 7 ] }
+          - id: odr.belt.1
+            type: ellipse
+            position: [ 356, 366 ]
+            size: [ 9, 9 ]
+            fill: "#C9A86A"
+          - id: odr.belt.2
+            type: ellipse
+            position: [ 374, 384 ]
+            size: [ 10, 10 ]
+            fill: "#D8BE85"
+          - id: odr.belt.3
+            type: ellipse
+            position: [ 394, 400 ]
+            size: [ 9, 9 ]
+            fill: "#C9A86A"
+          # звезда на орбите
+          - id: odr.probe.glow
+            type: ellipse
+            position: [ 500, 370 ]
+            size: [ 60, 60 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#E7D7A899" ]
+                - [ 1, "#E7D7A800" ]
+          - id: odr.probe
+            type: ellipse
+            position: [ 524, 394 ]
+            size: [ 12, 12 ]
+            fill: "#FFF4D4"
+          - id: odr.probe.core
+            type: ellipse
+            position: [ 528, 398 ]
+            size: [ 4, 4 ]
+            fill: "#FFFFFF"
+          - id: odr.ecliptic
+            type: line
+            position: [ 30, 560 ]
+            size: [ 700, 0 ]
+            stroke: { color: "#E7D7A81F", width: 1, style: custom, dash: [ 2, 6 ] }
+          - id: odr.ecliptic.label
+            type: text
+            position: [ 600, 570 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 10
+            letterSpacing: 3
+            color: "#6E6A60"
+            content: ЭКЛИПТИКА
+          - id: odr.nav.az
+            type: text
+            position: [ 40, 60 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: $color.gold-bright
+            content: ОРБИТА ЗАНЯТА
+          - id: odr.nav.ra
+            type: text
+            position: [ 40, 86 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: RA 05h 35m
+          - id: odr.nav.dec
+            type: text
+            position: [ 40, 112 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: DEC −05° 23′
+      - id: odr.divider
+        type: rect
+        position: [ 760, 40 ]
+        size: [ 1, 720 ]
+        fill: "#FFFFFF14"
+      - id: odr.tag
+        type: text
+        position: [ 820, 60 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 3
+        color: $color.gold
+        content: СИСТЕМЫ В НОРМЕ
+      - id: odr.title
+        type: text
+        position: [ 820, 92 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 44
+        fontWeight: 500
+        letterSpacing: 5
+        color: $color.text
+        content: ORION
+      - id: odr.role
+        type: text
+        position: [ 820, 152 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 13
+        color: $color.ink
+        content: Навигация по личным и семейным делам
+      - id: odr.phase.1
+        type: frame
+        position: [ 820, 212 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: odr.phase.1.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: odr.phase.1.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Ядро оболочки
+      - id: odr.phase.2
+        type: frame
+        position: [ 820, 250 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: odr.phase.2.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: odr.phase.2.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Хранилище данных
+      - id: odr.phase.3
+        type: frame
+        position: [ 820, 288 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: odr.phase.3.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: odr.phase.3.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Карты и индексы
+      - id: odr.phase.4
+        type: frame
+        position: [ 820, 326 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: odr.phase.4.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: odr.phase.4.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Службы приложения
+      - id: odr.phase.5
+        type: frame
+        position: [ 820, 364 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: odr.phase.5.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: odr.phase.5.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Выход на орбиту
+      - id: odr.stack
+        type: frame
+        position: [ 820, 440 ]
+        size: [ 380, hug ]
+        layout: { type: flex, direction: column, gap: 14 }
+        children:
+          - id: odr.check.1
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: odr.check.1.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: "#9A927E"
+                content: Оболочка Tauri
+              - id: odr.check.1.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.muted
+                content: ок · 0.4 с
+          - id: odr.check.2
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: odr.check.2.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: "#9A927E"
+                content: PostgreSQL 16
+              - id: odr.check.2.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.muted
+                content: ок · 1.2 с
+          - id: odr.check.3
+            type: frame
+            size: [ fill, hug ]
+            layout: { type: flex, justifyContent: spaceBetween }
+            children:
+              - id: odr.check.3.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: "#9A927E"
+                content: Миграции
+              - id: odr.check.3.value
+                type: text
+                size: [ hug, hug ]
+                fontFamily: IBM Plex Mono
+                fontSize: 12
+                color: $color.muted
+                content: ок · 2.7 с
+      - id: odr.track
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 380, 2 ]
+        cornerRadius: 1
+        fill: "#FFFFFF14"
+      - id: odr.track.fill
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 380, 2 ]
+        cornerRadius: 1
+        fill: $color.gold
+      - id: odr.enter
+        type: text
+        position: [ 820, 664 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 14
+        fontWeight: 500
+        color: $color.gold-bright
+        content: Все системы в норме. Открываем ORION
+      - id: odr.coords
+        type: text
+        position: [ 820, 740 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#55524A"
+        content: СЕАНС 014  ·  КАНАЛ БЕТА  ·  0.2.1
+
+  # ============================================================ 3. СБОЙ
+  - id: screen.od.error
+    type: frame
+    position: [ 2880, 120 ]
+    size: [ 1280, 800 ]
+    fill: $color.canvas
+    layout: { type: free, overflow: hidden }
+    children:
+      - id: ode.sky
+        type: frame
+        position: [ 0, 0 ]
+        size: [ 760, 800 ]
+        layout: { type: free, overflow: hidden }
+        children:
+          - id: ode.haze
+            type: ellipse
+            position: [ 160, 120 ]
+            size: [ 440, 440 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9756A1A" ]
+                - [ 1, "#C9756A00" ]
+          - id: ode.s01
+            type: ellipse
+            position: [ 86, 118 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A64D"
+          - id: ode.s03
+            type: ellipse
+            position: [ 242, 152 ]
+            size: [ 4, 4 ]
+            fill: "#D8C9A68C"
+          - id: ode.s05
+            type: ellipse
+            position: [ 394, 128 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: ode.s07
+            type: ellipse
+            position: [ 560, 146 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: ode.s09
+            type: ellipse
+            position: [ 704, 198 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: ode.s11
+            type: ellipse
+            position: [ 132, 342 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: ode.s14
+            type: ellipse
+            position: [ 420, 232 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A659"
+          - id: ode.s16
+            type: ellipse
+            position: [ 636, 328 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: ode.s18
+            type: ellipse
+            position: [ 94, 512 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF59"
+          - id: ode.s20
+            type: ellipse
+            position: [ 268, 592 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF4D"
+          - id: ode.s22
+            type: ellipse
+            position: [ 486, 562 ]
+            size: [ 3, 3 ]
+            fill: "#D8C9A652"
+          - id: ode.s24
+            type: ellipse
+            position: [ 668, 588 ]
+            size: [ 3, 3 ]
+            fill: "#FFFFFF52"
+          - id: ode.s26
+            type: ellipse
+            position: [ 332, 682 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF40"
+          - id: ode.s28
+            type: ellipse
+            position: [ 604, 662 ]
+            size: [ 2, 2 ]
+            fill: "#FFFFFF4D"
+          - id: ode.orbit
+            type: ellipse
+            position: [ 230, 250 ]
+            size: [ 300, 300 ]
+            stroke: { color: "#C9756A29", width: 1, style: custom, dash: [ 3, 7 ] }
+          # прерванный след
+          - id: ode.trail
+            type: path
+            position: [ 100, 120 ]
+            size: [ 360, 280 ]
+            viewBox: [ 360, 280 ]
+            path: "M10 270 Q 150 214 250 140"
+            stroke: { color: "#C9756A99", width: 2, cap: round }
+          - id: ode.probe.glow
+            type: ellipse
+            position: [ 320, 230 ]
+            size: [ 60, 60 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#EFB3A880" ]
+                - [ 1, "#EFB3A800" ]
+          - id: ode.probe
+            type: ellipse
+            position: [ 344, 254 ]
+            size: [ 12, 12 ]
+            fill: "#EFB3A8"
+          - id: ode.plane.glow
+            type: ellipse
+            position: [ 140, 230 ]
+            size: [ 340, 340 ]
+            fill:
+              type: radialGradient
+              stops:
+                - [ 0, "#C9A86A0F" ]
+                - [ 1, "#C9A86A00" ]
+          - id: ode.belt.1
+            type: ellipse
+            position: [ 356, 366 ]
+            size: [ 9, 9 ]
+            fill: "#6E5F46"
+          - id: ode.belt.2
+            type: ellipse
+            position: [ 374, 384 ]
+            size: [ 10, 10 ]
+            fill: "#6E5F46"
+          - id: ode.belt.3
+            type: ellipse
+            position: [ 394, 400 ]
+            size: [ 9, 9 ]
+            fill: "#6E5F46"
+          - id: ode.ecliptic
+            type: line
+            position: [ 30, 560 ]
+            size: [ 700, 0 ]
+            stroke: { color: "#E7D7A81F", width: 1, style: custom, dash: [ 2, 6 ] }
+          - id: ode.nav.az
+            type: text
+            position: [ 40, 60 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: $color.danger
+            content: СИГНАЛ ПОТЕРЯН
+          - id: ode.nav.ra
+            type: text
+            position: [ 40, 86 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: RA 05h 35m
+          - id: ode.nav.dec
+            type: text
+            position: [ 40, 112 ]
+            size: [ hug, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            letterSpacing: 2
+            color: "#6E6A60"
+            content: DEC −05° 23′
+      - id: ode.divider
+        type: rect
+        position: [ 760, 40 ]
+        size: [ 1, 720 ]
+        fill: "#FFFFFF14"
+      - id: ode.tag
+        type: text
+        position: [ 820, 60 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 3
+        color: $color.danger
+        content: СБОЙ ПОСЛЕДОВАТЕЛЬНОСТИ
+      - id: ode.title
+        type: text
+        position: [ 820, 92 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 44
+        fontWeight: 500
+        letterSpacing: 5
+        color: $color.text
+        content: ORION
+      - id: ode.role
+        type: text
+        position: [ 820, 152 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 13
+        color: $color.ink
+        content: Запуск остановлен на второй фазе
+      - id: ode.phase.1
+        type: frame
+        position: [ 820, 212 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: ode.phase.1.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: ode.phase.1.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Ядро оболочки
+      - id: ode.phase.2
+        type: frame
+        position: [ 820, 250 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: ode.phase.2.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:xmark
+            fill: $color.danger
+          - id: ode.phase.2.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            fontWeight: 500
+            color: $color.danger
+            content: Хранилище данных
+      - id: ode.phase.3
+        type: frame
+        position: [ 820, 288 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: ode.phase.3.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: ode.phase.3.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Карты и индексы
+      - id: ode.phase.4
+        type: frame
+        position: [ 820, 326 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: ode.phase.4.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: ode.phase.4.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Службы приложения
+      - id: ode.phase.5
+        type: frame
+        position: [ 820, 364 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: ode.phase.5.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: ode.phase.5.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Выход на орбиту
+      # карточка ошибки
+      - id: ode.card
+        type: frame
+        position: [ 820, 430 ]
+        size: [ 380, hug ]
+        layout: { type: flex, direction: column, gap: 10, padding: [ 16, 18 ] }
+        fill: $color.card
+        stroke: { color: $color.danger-deep, width: 1 }
+        cornerRadius: 12
+        children:
+          - id: ode.card.message
+            type: text
+            size: [ fill, hug ]
+            fontFamily: Onest
+            fontSize: 13
+            lineHeight: 20
+            color: $color.danger
+            content: Хранилище данных не отвечает. Проверьте, что PostgreSQL запущен и порт
+              5432 свободен.
+          - id: ode.card.log
+            type: text
+            size: [ fill, hug ]
+            fontFamily: IBM Plex Mono
+            fontSize: 11
+            lineHeight: 17
+            color: $color.muted
+            content: 'Журнал: C:\Users\admin\AppData\Roaming\orion\logs\startup.log'
+      - id: ode.actions
+        type: frame
+        position: [ 820, 596 ]
+        size: [ hug, hug ]
+        layout: { type: flex, gap: 12 }
+        children:
+          - id: ode.retry
+            type: frame
+            size: [ hug, hug ]
+            layout: { type: flex, padding: [ 12, 22 ] }
+            fill: $color.gold
+            cornerRadius: 8
+            children:
+              - id: ode.retry.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: Onest
+                fontSize: 14
+                fontWeight: 500
+                color: "#16171A"
+                content: Проверить ещё раз
+          - id: ode.logs
+            type: frame
+            size: [ hug, hug ]
+            layout: { type: flex, padding: [ 12, 22 ] }
+            cornerRadius: 8
+            stroke: { color: "#4A463C", width: 1 }
+            children:
+              - id: ode.logs.label
+                type: text
+                size: [ hug, hug ]
+                fontFamily: Onest
+                fontSize: 14
+                color: $color.ink
+                content: Открыть журнал
+      - id: ode.coords
+        type: text
+        position: [ 820, 740 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#55524A"
+        content: СЕАНС 014  ·  КАНАЛ БЕТА  ·  0.2.1
+
+  # ============================================================ 4. СЖАТЫЙ
+  - id: screen.od.compact
+    type: frame
+    position: [ 4280, 120 ]
+    size: [ 760, 800 ]
+    fill: $color.canvas
+    layout: { type: free, overflow: hidden }
+    children:
+      - id: odc.haze
+        type: ellipse
+        position: [ 160, 120 ]
+        size: [ 440, 440 ]
+        fill:
+          type: radialGradient
+          stops:
+            - [ 0, "#C9A86A17" ]
+            - [ 1, "#C9A86A00" ]
+      - id: odc.s01
+        type: ellipse
+        position: [ 86, 118 ]
+        size: [ 3, 3 ]
+        fill: "#D8C9A64D"
+      - id: odc.s03
+        type: ellipse
+        position: [ 242, 152 ]
+        size: [ 4, 4 ]
+        fill: "#D8C9A68C"
+      - id: odc.s05
+        type: ellipse
+        position: [ 394, 128 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF59"
+      - id: odc.s07
+        type: ellipse
+        position: [ 560, 146 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF52"
+      - id: odc.s09
+        type: ellipse
+        position: [ 704, 198 ]
+        size: [ 3, 3 ]
+        fill: "#D8C9A659"
+      - id: odc.s11
+        type: ellipse
+        position: [ 132, 342 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF52"
+      - id: odc.s14
+        type: ellipse
+        position: [ 420, 232 ]
+        size: [ 3, 3 ]
+        fill: "#D8C9A659"
+      - id: odc.s16
+        type: ellipse
+        position: [ 636, 328 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF4D"
+      - id: odc.s18
+        type: ellipse
+        position: [ 94, 512 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF59"
+      - id: odc.s20
+        type: ellipse
+        position: [ 268, 592 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF4D"
+      - id: odc.s22
+        type: ellipse
+        position: [ 486, 562 ]
+        size: [ 3, 3 ]
+        fill: "#D8C9A652"
+      - id: odc.s24
+        type: ellipse
+        position: [ 668, 588 ]
+        size: [ 3, 3 ]
+        fill: "#FFFFFF52"
+      - id: odc.orbit
+        type: ellipse
+        position: [ 280, 150 ]
+        size: [ 200, 200 ]
+        stroke: { color: "#C9A86A29", width: 1, style: custom, dash: [ 3, 7 ] }
+      - id: odc.trail
+        type: path
+        position: [ 120, 120 ]
+        size: [ 260, 200 ]
+        viewBox: [ 260, 200 ]
+        path: "M10 190 Q 130 140 230 20"
+        stroke: { color: "#E7D7A8B3", width: 2, cap: round }
+      - id: odc.probe.glow
+        type: ellipse
+        position: [ 322, 112 ]
+        size: [ 56, 56 ]
+        fill:
+          type: radialGradient
+          stops:
+            - [ 0, "#E7D7A899" ]
+            - [ 1, "#E7D7A800" ]
+      - id: odc.probe
+        type: ellipse
+        position: [ 344, 134 ]
+        size: [ 12, 12 ]
+        fill: "#FFF4D4"
+      - id: odc.title
+        type: text
+        position: [ 0, 400 ]
+        size: [ 760, 40 ]
+        align: [ center, middle ]
+        fontFamily: Onest
+        fontSize: 32
+        fontWeight: 500
+        letterSpacing: 5
+        color: $color.text
+        content: ORION
+      - id: odc.status
+        type: frame
+        position: [ 0, 458 ]
+        size: [ 760, hug ]
+        layout: { type: flex, justifyContent: center, alignItems: center, gap: 8 }
+        children:
+          - id: odc.status.dot
+            type: ellipse
+            size: [ 7, 7 ]
+            fill: $color.gold
+          - id: odc.status.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.ink
+            content: Карты и индексы
+      - id: odc.track
+        type: rect
+        position: [ 0, 798 ]
+        size: [ 760, 2 ]
+        fill: "#FFFFFF10"
+      - id: odc.track.fill
+        type: rect
+        position: [ 0, 798 ]
+        size: [ 479, 2 ]
+        fill: $color.gold
+      - id: odc.coords
+        type: text
+        position: [ 40, 756 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#55524A"
+        content: 0.2.1
+  - id: screen.od.assembly
+    type: frame
+    position: [ 5240, 120 ]
+    size: [ 1280, 800 ]
+    fill: $color.canvas
+    layout: { type: free, overflow: hidden }
+    children:
+      - id: oda.haze
+        type: ellipse
+        position: [ 160, 120 ]
+        size: [ 440, 440 ]
+        fill:
+          type: radialGradient
+          stops:
+            - [ 0, "#C9A86A17" ]
+            - [ 1, "#C9A86A00" ]
+      - id: oda.d000
+        type: ellipse
+        position: [ 259, 147 ]
+        size: [ 3, 3 ]
+        opacity: 0.16
+        fill: "#D8C9A6"
+      - id: oda.d001
+        type: ellipse
+        position: [ 597, 106 ]
+        size: [ 3, 3 ]
+        opacity: 0.16
+        fill: "#D8C9A6"
+      - id: oda.d002
+        type: ellipse
+        position: [ 384, 66 ]
+        size: [ 2, 2 ]
+        opacity: 0.25
+        fill: "#D8C9A6"
+      - id: oda.d003
+        type: ellipse
+        position: [ 203, 436 ]
+        size: [ 2, 2 ]
+        opacity: 0.36
+        fill: "#D8C9A6"
+      - id: oda.d004
+        type: ellipse
+        position: [ 123, 199 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#D8C9A6"
+      - id: oda.d005
+        type: ellipse
+        position: [ 81, 461 ]
+        size: [ 2, 2 ]
+        opacity: 0.39
+        fill: "#D8C9A6"
+      - id: oda.d006
+        type: ellipse
+        position: [ 71, 657 ]
+        size: [ 2, 2 ]
+        opacity: 0.25
+        fill: "#D8C9A6"
+      - id: oda.d007
+        type: ellipse
+        position: [ 406, 450 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#D8C9A6"
+      - id: oda.d008
+        type: ellipse
+        position: [ 161, 457 ]
+        size: [ 3, 3 ]
+        opacity: 0.2
+        fill: "#D8C9A6"
+      - id: oda.d009
+        type: ellipse
+        position: [ 105, 551 ]
+        size: [ 3, 3 ]
+        opacity: 0.16
+        fill: "#D8C9A6"
+      - id: oda.d010
+        type: ellipse
+        position: [ 179, 529 ]
+        size: [ 2, 2 ]
+        opacity: 0.34
+        fill: "#D8C9A6"
+      - id: oda.d011
+        type: ellipse
+        position: [ 356, 704 ]
+        size: [ 2, 2 ]
+        opacity: 0.22
+        fill: "#D8C9A6"
+      - id: oda.d012
+        type: ellipse
+        position: [ 579, 542 ]
+        size: [ 2, 2 ]
+        opacity: 0.17
+        fill: "#D8C9A6"
+      - id: oda.d013
+        type: ellipse
+        position: [ 243, 395 ]
+        size: [ 2, 2 ]
+        opacity: 0.33
+        fill: "#D8C9A6"
+      - id: oda.d014
+        type: ellipse
+        position: [ 235, 745 ]
+        size: [ 2, 2 ]
+        opacity: 0.28
+        fill: "#D8C9A6"
+      - id: oda.d015
+        type: ellipse
+        position: [ 151, 285 ]
+        size: [ 2, 2 ]
+        opacity: 0.26
+        fill: "#D8C9A6"
+      - id: oda.d016
+        type: ellipse
+        position: [ 693, 94 ]
+        size: [ 3, 3 ]
+        opacity: 0.29
+        fill: "#D8C9A6"
+      - id: oda.d017
+        type: ellipse
+        position: [ 634, 264 ]
+        size: [ 3, 3 ]
+        opacity: 0.24
+        fill: "#D8C9A6"
+      - id: oda.d018
+        type: ellipse
+        position: [ 377, 613 ]
+        size: [ 2, 2 ]
+        opacity: 0.36
+        fill: "#D8C9A6"
+      - id: oda.d019
+        type: ellipse
+        position: [ 681, 380 ]
+        size: [ 3, 3 ]
+        opacity: 0.17
+        fill: "#D8C9A6"
+      - id: oda.d020
+        type: ellipse
+        position: [ 536, 261 ]
+        size: [ 3, 3 ]
+        opacity: 0.4
+        fill: "#D8C9A6"
+      - id: oda.d021
+        type: ellipse
+        position: [ 598, 244 ]
+        size: [ 2, 2 ]
+        opacity: 0.37
+        fill: "#D8C9A6"
+      - id: oda.d022
+        type: ellipse
+        position: [ 510, 348 ]
+        size: [ 4, 4 ]
+        opacity: 0.75
+        fill: "#E7D7A8"
+      - id: oda.d023
+        type: ellipse
+        position: [ 508, 371 ]
+        size: [ 4, 4 ]
+        opacity: 0.96
+        fill: "#E7D7A8"
+      - id: oda.d024
+        type: ellipse
+        position: [ 502, 393 ]
+        size: [ 4, 4 ]
+        opacity: 0.98
+        fill: "#E7D7A8"
+      - id: oda.d025
+        type: ellipse
+        position: [ 526, 434 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d026
+        type: ellipse
+        position: [ 479, 433 ]
+        size: [ 4, 4 ]
+        opacity: 0.56
+        fill: "#E7D7A8"
+      - id: oda.d027
+        type: ellipse
+        position: [ 463, 449 ]
+        size: [ 4, 4 ]
+        opacity: 0.51
+        fill: "#E7D7A8"
+      - id: oda.d028
+        type: ellipse
+        position: [ 444, 462 ]
+        size: [ 4, 4 ]
+        opacity: 0.68
+        fill: "#E7D7A8"
+      - id: oda.d029
+        type: ellipse
+        position: [ 437, 508 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d030
+        type: ellipse
+        position: [ 401, 478 ]
+        size: [ 4, 4 ]
+        opacity: 1.0
+        fill: "#E7D7A8"
+      - id: oda.d031
+        type: ellipse
+        position: [ 378, 480 ]
+        size: [ 4, 4 ]
+        opacity: 0.85
+        fill: "#E7D7A8"
+      - id: oda.d032
+        type: ellipse
+        position: [ 355, 478 ]
+        size: [ 4, 4 ]
+        opacity: 0.61
+        fill: "#E7D7A8"
+      - id: oda.d033
+        type: ellipse
+        position: [ 320, 508 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d034
+        type: ellipse
+        position: [ 312, 462 ]
+        size: [ 4, 4 ]
+        opacity: 0.62
+        fill: "#E7D7A8"
+      - id: oda.d035
+        type: ellipse
+        position: [ 293, 449 ]
+        size: [ 4, 4 ]
+        opacity: 0.86
+        fill: "#E7D7A8"
+      - id: oda.d036
+        type: ellipse
+        position: [ 277, 433 ]
+        size: [ 4, 4 ]
+        opacity: 1.0
+        fill: "#E7D7A8"
+      - id: oda.d037
+        type: ellipse
+        position: [ 231, 434 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d038
+        type: ellipse
+        position: [ 254, 393 ]
+        size: [ 4, 4 ]
+        opacity: 0.68
+        fill: "#E7D7A8"
+      - id: oda.d039
+        type: ellipse
+        position: [ 248, 371 ]
+        size: [ 4, 4 ]
+        opacity: 0.51
+        fill: "#E7D7A8"
+      - id: oda.d040
+        type: ellipse
+        position: [ 246, 348 ]
+        size: [ 4, 4 ]
+        opacity: 0.56
+        fill: "#E7D7A8"
+      - id: oda.d041
+        type: ellipse
+        position: [ 211, 319 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d042
+        type: ellipse
+        position: [ 254, 303 ]
+        size: [ 4, 4 ]
+        opacity: 0.98
+        fill: "#E7D7A8"
+      - id: oda.d043
+        type: ellipse
+        position: [ 264, 282 ]
+        size: [ 4, 4 ]
+        opacity: 0.96
+        fill: "#E7D7A8"
+      - id: oda.d044
+        type: ellipse
+        position: [ 277, 263 ]
+        size: [ 4, 4 ]
+        opacity: 0.75
+        fill: "#E7D7A8"
+      - id: oda.d045
+        type: ellipse
+        position: [ 269, 218 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d046
+        type: ellipse
+        position: [ 312, 234 ]
+        size: [ 4, 4 ]
+        opacity: 0.52
+        fill: "#E7D7A8"
+      - id: oda.d047
+        type: ellipse
+        position: [ 333, 224 ]
+        size: [ 4, 4 ]
+        opacity: 0.72
+        fill: "#E7D7A8"
+      - id: oda.d048
+        type: ellipse
+        position: [ 355, 218 ]
+        size: [ 4, 4 ]
+        opacity: 0.94
+        fill: "#E7D7A8"
+      - id: oda.d049
+        type: ellipse
+        position: [ 378, 178 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d050
+        type: ellipse
+        position: [ 401, 218 ]
+        size: [ 4, 4 ]
+        opacity: 0.82
+        fill: "#E7D7A8"
+      - id: oda.d051
+        type: ellipse
+        position: [ 423, 224 ]
+        size: [ 4, 4 ]
+        opacity: 0.58
+        fill: "#E7D7A8"
+      - id: oda.d052
+        type: ellipse
+        position: [ 444, 234 ]
+        size: [ 4, 4 ]
+        opacity: 0.5
+        fill: "#E7D7A8"
+      - id: oda.d053
+        type: ellipse
+        position: [ 488, 218 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d054
+        type: ellipse
+        position: [ 479, 263 ]
+        size: [ 4, 4 ]
+        opacity: 0.89
+        fill: "#E7D7A8"
+      - id: oda.d055
+        type: ellipse
+        position: [ 492, 282 ]
+        size: [ 4, 4 ]
+        opacity: 1.0
+        fill: "#E7D7A8"
+      - id: oda.d056
+        type: ellipse
+        position: [ 502, 303 ]
+        size: [ 4, 4 ]
+        opacity: 0.88
+        fill: "#E7D7A8"
+      - id: oda.d057
+        type: ellipse
+        position: [ 546, 319 ]
+        size: [ 3, 3 ]
+        opacity: 0.35
+        fill: "#E7D7A8"
+      - id: oda.d058
+        type: ellipse
+        position: [ 498, 363 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d059
+        type: ellipse
+        position: [ 491, 391 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d060
+        type: ellipse
+        position: [ 504, 435 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d061
+        type: ellipse
+        position: [ 458, 438 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d062
+        type: ellipse
+        position: [ 434, 455 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d063
+        type: ellipse
+        position: [ 415, 496 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d064
+        type: ellipse
+        position: [ 378, 468 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d065
+        type: ellipse
+        position: [ 350, 465 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d066
+        type: ellipse
+        position: [ 308, 483 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d067
+        type: ellipse
+        position: [ 299, 438 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d068
+        type: ellipse
+        position: [ 280, 417 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d069
+        type: ellipse
+        position: [ 236, 402 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d070
+        type: ellipse
+        position: [ 259, 363 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d071
+        type: ellipse
+        position: [ 259, 334 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d072
+        type: ellipse
+        position: [ 236, 295 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d073
+        type: ellipse
+        position: [ 280, 280 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d074
+        type: ellipse
+        position: [ 299, 259 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d075
+        type: ellipse
+        position: [ 308, 214 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d076
+        type: ellipse
+        position: [ 350, 232 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d077
+        type: ellipse
+        position: [ 378, 228 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d078
+        type: ellipse
+        position: [ 415, 201 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d079
+        type: ellipse
+        position: [ 434, 242 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d080
+        type: ellipse
+        position: [ 458, 259 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d081
+        type: ellipse
+        position: [ 504, 262 ]
+        size: [ 3, 3 ]
+        opacity: 0.3
+        fill: "#E7D7A8"
+      - id: oda.d082
+        type: ellipse
+        position: [ 491, 306 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d083
+        type: ellipse
+        position: [ 498, 334 ]
+        size: [ 3, 3 ]
+        opacity: 0.8
+        fill: "#E7D7A8"
+      - id: oda.d084
+        type: ellipse
+        position: [ 374, 158 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d085
+        type: ellipse
+        position: [ 382, 158 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d086
+        type: ellipse
+        position: [ 374, 206 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d087
+        type: ellipse
+        position: [ 382, 206 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d088
+        type: ellipse
+        position: [ 374, 254 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d089
+        type: ellipse
+        position: [ 382, 254 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d090
+        type: ellipse
+        position: [ 374, 301 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d091
+        type: ellipse
+        position: [ 382, 301 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d092
+        type: ellipse
+        position: [ 374, 348 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d093
+        type: ellipse
+        position: [ 382, 348 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d094
+        type: ellipse
+        position: [ 374, 396 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d095
+        type: ellipse
+        position: [ 382, 396 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d096
+        type: ellipse
+        position: [ 374, 444 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d097
+        type: ellipse
+        position: [ 382, 444 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d098
+        type: ellipse
+        position: [ 374, 491 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d099
+        type: ellipse
+        position: [ 382, 491 ]
+        size: [ 3, 3 ]
+        opacity: 0.45
+        fill: "#E7D7A8"
+      - id: oda.d100
+        type: ellipse
+        position: [ 374, 538 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d101
+        type: ellipse
+        position: [ 382, 538 ]
+        size: [ 3, 3 ]
+        opacity: 0.7
+        fill: "#E7D7A8"
+      - id: oda.d102
+        type: ellipse
+        position: [ 376, 214 ]
+        size: [ 7, 7 ]
+        fill: "#FFF4D4"
+      - id: oda.d103
+        type: ellipse
+        position: [ 508, 346 ]
+        size: [ 7, 7 ]
+        fill: "#FFF4D4"
+      - id: oda.d104
+        type: ellipse
+        position: [ 376, 478 ]
+        size: [ 7, 7 ]
+        fill: "#FFF4D4"
+      - id: oda.d105
+        type: ellipse
+        position: [ 244, 346 ]
+        size: [ 7, 7 ]
+        fill: "#FFF4D4"
+      - id: oda.logo
+        type: rect
+        position: [ 296, 266 ]
+        size: [ 168, 168 ]
+        opacity: 0.25
+        fill: { type: image, src: assets/logo.png, fit: contain }
+      - id: oda.ecliptic
+        type: line
+        position: [ 30, 560 ]
+        size: [ 700, 0 ]
+        stroke: { color: "#E7D7A81F", width: 1, style: custom, dash: [ 2, 6 ] }
+      - id: oda.ecliptic.label
+        type: text
+        position: [ 600, 570 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 10
+        letterSpacing: 3
+        color: "#6E6A60"
+        content: ЭКЛИПТИКА
+      - id: oda.nav.az
+        type: text
+        position: [ 40, 60 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#BEB9AF"
+        content: АЗ 047.2°
+      - id: oda.nav.ra
+        type: text
+        position: [ 40, 86 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#6E6A60"
+        content: RA 05h 35m
+      - id: oda.nav.dec
+        type: text
+        position: [ 40, 112 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#6E6A60"
+        content: DEC −05° 23′
+      - id: oda.divider
+        type: rect
+        position: [ 760, 40 ]
+        size: [ 1, 720 ]
+        fill: "#FFFFFF14"
+      - id: oda.tag
+        type: text
+        position: [ 820, 60 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 3
+        color: $color.gold
+        content: ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА
+      - id: oda.title
+        type: text
+        position: [ 820, 92 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 44
+        fontWeight: 500
+        letterSpacing: 5
+        color: $color.text
+        content: ORION
+      - id: oda.role
+        type: text
+        position: [ 820, 152 ]
+        size: [ hug, hug ]
+        fontFamily: Onest
+        fontSize: 13
+        color: $color.ink
+        content: Навигация по личным и семейным делам
+      - id: oda.phase.0
+        type: frame
+        position: [ 820, 212 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: oda.phase.0.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: oda.phase.0.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Ядро оболочки
+      - id: oda.phase.1
+        type: frame
+        position: [ 820, 250 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: oda.phase.1.icon
+            type: svg
+            size: [ 13, 13 ]
+            icon: fas:check
+            fill: $color.gold
+          - id: oda.phase.1.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: "#9A927E"
+            content: Хранилище данных
+      - id: oda.phase.2
+        type: frame
+        position: [ 820, 288 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: oda.phase.2.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            fill: $color.gold
+          - id: oda.phase.2.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            fontWeight: 500
+            color: $color.gold-bright
+            content: Карты и индексы
+      - id: oda.phase.3
+        type: frame
+        position: [ 820, 326 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: oda.phase.3.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: oda.phase.3.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Службы приложения
+      - id: oda.phase.4
+        type: frame
+        position: [ 820, 364 ]
+        size: [ hug, hug ]
+        layout: { type: flex, alignItems: center, gap: 12 }
+        children:
+          - id: oda.phase.4.dot
+            type: ellipse
+            size: [ 9, 9 ]
+            stroke: { color: "#4A463C", width: 1 }
+          - id: oda.phase.4.label
+            type: text
+            size: [ hug, hug ]
+            fontFamily: Onest
+            fontSize: 14
+            color: $color.muted
+            content: Выход на орбиту
+      - id: oda.track
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 380, 2 ]
+        cornerRadius: 1
+        fill: "#FFFFFF14"
+      - id: oda.track.fill
+        type: rect
+        position: [ 820, 646 ]
+        size: [ 198, 2 ]
+        cornerRadius: 1
+        fill: $color.gold
+      - id: oda.percent
+        type: text
+        position: [ 820, 664 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: $color.ink
+        content: 52%
+      - id: oda.coords
+        type: text
+        position: [ 820, 740 ]
+        size: [ hug, hug ]
+        fontFamily: IBM Plex Mono
+        fontSize: 11
+        letterSpacing: 2
+        color: "#55524A"
+        content: СЕАНС 014  ·  КАНАЛ БЕТА  ·  0.2.1
