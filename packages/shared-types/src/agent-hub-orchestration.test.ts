@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AgentHubTransitionError, createAgentHubExecution, transitionAgentHubExecution } from "./agent-hub-lifecycle";
-import { effectiveAgentHubDelegationDepth, planAgentHubDelegation } from "./agent-hub-orchestration";
+import { effectiveAgentHubDelegationDepth, planAgentHubDelegation, agentHubApprovalPauseRequired, agentHubDelegationPolicySchema } from "./agent-hub-orchestration";
 import type { AgentHubExecution } from "./agent-hub";
 
 const t0 = "2026-11-11T12:00:00.000Z";
@@ -96,5 +96,24 @@ describe("delegation guard", () => {
     expect(effectiveAgentHubDelegationDepth(2, 5)).toBe(2);
     expect(effectiveAgentHubDelegationDepth(99, undefined)).toBe(6);
     expect(effectiveAgentHubDelegationDepth(0, undefined)).toBe(1);
+  });
+});
+
+describe("agentHubApprovalPauseRequired (P3-1: подтверждения только для не-админов)", () => {
+  it("non_admin: админ-агент действует без паузы, остальные — с паузой", () => {
+    expect(agentHubApprovalPauseRequired("non_admin", true)).toBe(false);
+    expect(agentHubApprovalPauseRequired("non_admin", false)).toBe(true);
+  });
+
+  it("all: пауза независимо от прав", () => {
+    expect(agentHubApprovalPauseRequired("all", true)).toBe(true);
+    expect(agentHubApprovalPauseRequired("all", false)).toBe(true);
+  });
+
+  it("политика парсится с дефолтом non_admin для старых записей", () => {
+    const legacy = agentHubDelegationPolicySchema.parse({ workspaceId: "ws", maxDelegationDepth: 3, updatedAt: null });
+    expect(legacy.approvals).toBe("non_admin");
+    const explicit = agentHubDelegationPolicySchema.parse({ workspaceId: "ws", maxDelegationDepth: 3, approvals: "all", updatedAt: null });
+    expect(explicit.approvals).toBe("all");
   });
 });

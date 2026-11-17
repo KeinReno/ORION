@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import {
   AGENT_HUB_DEFAULT_MAX_DELEGATION_DEPTH,
+  agentHubApprovalPauseRequired,
   agentHubDelegationPolicySchema,
   effectiveAgentHubDelegationDepth,
   planAgentHubDelegation,
@@ -59,10 +60,12 @@ export class AgentHubDelegationService {
     return row?.maxDelegationDepth ?? AGENT_HUB_DEFAULT_MAX_DELEGATION_DEPTH;
   }
 
-  private policyDto(workspaceId: string, row: { maxDelegationDepth: number; updatedAt: Date } | null): AgentHubDelegationPolicy {
+  private policyDto(workspaceId: string, row: { maxDelegationDepth: number; approvals?: string; updatedAt: Date } | null): AgentHubDelegationPolicy {
     return agentHubDelegationPolicySchema.parse({
       workspaceId,
       maxDelegationDepth: row?.maxDelegationDepth ?? AGENT_HUB_DEFAULT_MAX_DELEGATION_DEPTH,
+      // Старые строки без колонки (до миграции) получают дефолт схемы.
+      ...(row?.approvals ? { approvals: row.approvals } : {}),
       updatedAt: row?.updatedAt.toISOString() ?? null
     });
   }
@@ -75,15 +78,15 @@ export class AgentHubDelegationService {
     });
   }
 
-  /** Only the workspace owner/lead sets the delegating limit; agents can never raise it. */
+  /** Only the workspace owner/lead sets the delegating limit and the approval gate; agents can never raise them. */
   async setPolicy(userId: string, workspaceId: string, input: AgentHubDelegationPolicyInput): Promise<AgentHubDelegationPolicy> {
     return this.prisma.withUser(userId, async tx => {
       await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
       await this.modules.assertEnabledTx(tx, userId, workspaceId, "agent-hub");
       const row = await tx.agentHubPolicy.upsert({
         where: { workspaceId },
-        create: { workspaceId, maxDelegationDepth: input.maxDelegationDepth, updatedById: userId },
-        update: { maxDelegationDepth: input.maxDelegationDepth, updatedById: userId }
+        create: { workspaceId, maxDelegationDepth: input.maxDelegationDepth, approvals: input.approvals ?? "non_admin", updatedById: userId },
+        update: { maxDelegationDepth: input.maxDelegationDepth, ...(input.approvals ? { approvals: input.approvals } : {}), updatedById: userId }
       });
       return this.policyDto(workspaceId, row);
     });
@@ -204,16 +207,42 @@ export class AgentHubDelegationService {
     });
   }
 
-  /** An agent above read-only asks a human to decide; the execution pauses until then. */
+  /**
+   * An agent above read-only asks a human to decide; the execution pauses until then.
+   * P3-1: с политикой `non_admin` (дефолт) администратор — токен с режимом `admin`, выбранным
+   * владельцем при выпуске credential — не встаёт на паузу: запрос фиксируется в trace как
+   * auto_approved, исполнение продолжает работу. Политика `all` возвращает поведение
+   * задания 09 (пауза для каждого запроса).
+   */
   async requestApproval(agent: AgentContext, executionId: string, input: AgentHubApprovalRequestInput): Promise<AgentHubExecution> {
     return this.prisma.withUser(agent.userId, async tx => {
       await this.assertEnabledTx(tx, agent.userId, agent.workspaceId);
       const row = await this.transitions.loadTx(tx, agent.workspaceId, executionId);
       await this.transitions.accessibleTx(tx, agent, row);
       const profileId = await this.transitions.profileIdForTokenTx(tx, agent.workspaceId, agent.tokenId);
+      const now = new Date();
+
+      const policyRow = await tx.agentHubPolicy.findUnique({ where: { workspaceId: agent.workspaceId }, select: { approvals: true } });
+      // Колонка TEXT: неизвестное значение трактуем как дефолт пространства.
+      const approvals: "non_admin" | "all" = policyRow?.approvals === "all" ? "all" : "non_admin";
+      // P3-1: «Администратор» — режим токена (agentMode === "admin"), выбранный владельцем при выпуске.
+      const isAdminAgent = agent.mode === "admin";
+      if (!agentHubApprovalPauseRequired(approvals, isAdminAgent)) {
+        await tx.agentHubTraceStep.create({
+          data: {
+            workspaceId: agent.workspaceId, executionId: row.id,
+            stepId: `approval-auto:${row.revision + 1}`, parentStepId: null,
+            type: "approval_wait", name: "auto_approved", agentId: profileId, actorId: agent.tokenId,
+            payload: { action: input.action, reason: input.reason, state: "auto_approved", mode: agent.mode } as Prisma.InputJsonValue,
+            at: now
+          }
+        });
+        return executionDto(row);
+      }
+
       const next = await this.transitions.commitTx(tx, row, {
         type: "request_approval", expectedRevision: input.expectedRevision,
-        at: new Date().toISOString(), workerId: agent.tokenId,
+        at: now.toISOString(), workerId: agent.tokenId,
         action: input.action, reason: input.reason
       }, agent.tokenId, { action: input.action, reason: input.reason });
       await tx.agentHubTraceStep.create({
@@ -222,7 +251,7 @@ export class AgentHubDelegationService {
           stepId: `approval-wait:${next.revision}`, parentStepId: null,
           type: "approval_wait", name: "requested", agentId: profileId, actorId: agent.tokenId,
           payload: { action: input.action, reason: input.reason, state: "pending" } as Prisma.InputJsonValue,
-          at: new Date()
+          at: now
         }
       });
       return next;

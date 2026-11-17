@@ -198,6 +198,56 @@ describe("Agent Hub 2.0: orchestration, trace and memory", () => {
     expect(rejected.data).toMatchObject({ status: "failed", blockedReason: "Р—Р°РїСЂРµС‰РµРЅРѕ РїРѕР»РёС‚РёРєРѕР№", approval: null });
   });
 
+  it("P3-1: admin agents skip the approval pause under non_admin policy; policy \"all\" pauses everyone", async () => {
+    const s = await setup();
+    const issueAdmin = async (name: string) => {
+      const created = await s.human<{ id: string; secret: string }>("POST", "/agent-tokens", {
+        // P3-1: режим admin — «Администратор» для политики подтверждений.
+        name, mode: "admin", expiresInDays: 7, scopes: ["tasks:read"],
+        modulePermissions: [
+          "agent-hub.execution.read", "agent-hub.execution.create"
+        ]
+      });
+      expect(created.status, JSON.stringify(created.data)).toBe(201);
+      return {
+        ...created.data,
+        call: <T = unknown>(method: string, path: string, body?: unknown) =>
+          request<T>(method, `/ai/v1/agent-hub${path}`, created.data.secret, body)
+      };
+    };
+
+    // non_admin (default): admin agent does not pause; trace records auto_approved.
+    const run = await s.createRun();
+    const admin = await issueAdmin("Admin worker");
+    await s.profile("Admin worker", admin.id);
+    await s.start(admin, run.id);
+    const auto = await admin.call<AgentHubExecution>("POST", `/executions/${run.id}/request-approval`, {
+      expectedRevision: 2, action: "documents.document.update", reason: "trusted admin operation"
+    });
+    expect(auto.status, JSON.stringify(auto.data)).toBe(201);
+    expect(auto.data).toMatchObject({ status: "working", approval: null });
+    const trace = await s.human<{ steps: Array<{ type: string; name: string }> }>("GET", `/agent-hub/executions/${run.id}/trace`);
+    expect(trace.status).toBe(200);
+    expect(trace.data.steps.some(step => step.type === "approval_wait" && step.name === "auto_approved")).toBe(true);
+
+    // policy "all": even the admin pauses, and the owner decides.
+    const policy = await s.human<AgentHubDelegationPolicy>("PUT", "/agent-hub/policy", { maxDelegationDepth: 3, approvals: "all" });
+    expect(policy.status).toBe(200);
+    expect(policy.data.approvals).toBe("all");
+    const paused = await admin.call<AgentHubExecution>("POST", `/executions/${run.id}/request-approval`, {
+      expectedRevision: 2, action: "documents.document.update", reason: "policy all pauses everyone"
+    });
+    expect(paused.status, JSON.stringify(paused.data)).toBe(201);
+    expect(paused.data).toMatchObject({ status: "waiting_approval" });
+    const approved = await s.human<AgentHubExecution>("POST", `/agent-hub/executions/${run.id}/approve`, { expectedRevision: 3 });
+    expect(approved.status).toBe(201);
+
+    // Back to non_admin: the owner can flip the gate back.
+    const back = await s.human<AgentHubDelegationPolicy>("PUT", "/agent-hub/policy", { maxDelegationDepth: 3, approvals: "non_admin" });
+    expect(back.status).toBe(200);
+    expect(back.data.approvals).toBe("non_admin");
+  });
+
   it("builds the trace tree with tool_call/tool_result pairs and filters it", async () => {
     const s = await setup();
     const run = await s.createRun();
