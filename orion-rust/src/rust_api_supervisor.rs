@@ -459,12 +459,10 @@ impl ApiSupervisorBackend for SystemApiBackend {
                 return Err("API output pipe reader failed".into());
             }
             if !process.listening_reported {
-                let output = process.output.lock().expect("output lock");
+                let mut output = process.output.lock().expect("output lock");
                 const LISTENING: &[u8] = b" listening on http://";
                 if output
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>()
+                    .make_contiguous()
                     .windows(LISTENING.len())
                     .any(|window| window == LISTENING)
                 {
@@ -699,16 +697,17 @@ impl SystemApiBackend {
         let (stderr_reader, stderr_writer) =
             anonymous_pipe().map_err(|e| format!("create API stderr pipe: {e}"))?;
         let stdin = File::open("NUL").map_err(|e| format!("open API stdin: {e}"))?;
-        let mut spec = ProcessSpec::new(request.command.program.clone())
-            .current_dir(request.command.cwd.clone())
-            .stdio_handles(
-                stdin.as_raw_handle() as usize,
-                stdout_writer.as_raw_handle() as usize,
-                stderr_writer.as_raw_handle() as usize,
-            );
+        let mut spec =
+            crate::supervisor::contained(ProcessSpec::new(request.command.program.clone()))
+                .allow_env("ORION_LAN_BIND")
+                .current_dir(request.command.cwd.clone())
+                .stdio_handles(
+                    stdin.as_raw_handle() as usize,
+                    stdout_writer.as_raw_handle() as usize,
+                    stderr_writer.as_raw_handle() as usize,
+                );
 
-        // Mirror launcher.cjs: inherit the caller environment, apply the prepared
-        // base values, then overlay build, trial, and per-attempt node-mode values.
+        // Overlay build, trial, and node-mode values on the explicitly prepared environment.
         let mut overrides = BTreeMap::new();
         for (name, value) in &request.command.base_env {
             insert_env(&mut overrides, name.clone(), value.clone());
@@ -757,7 +756,7 @@ impl SystemApiBackend {
             );
         }
         for (name, value) in overrides {
-            spec = spec.env_inherited(name, value);
+            spec = spec.env(name, value);
         }
         for arg in &request.command.args {
             spec = spec.arg(arg.clone());
@@ -929,13 +928,7 @@ fn spawn_pipe_reader(
                     }
                 }
             }
-            let tail = if !pending.is_empty() {
-                let mut tail = redact_complete_prefix(&mut pending, &redactions);
-                tail.extend_from_slice(&pending);
-                tail
-            } else {
-                Vec::new()
-            };
+            let tail = redact_final_output(&mut pending, &redactions);
             publish_api_output(&output, stream, &tail);
         })
 }
@@ -991,6 +984,16 @@ fn is_sensitive_env_name(name: &str) -> bool {
 
 /// Emit bytes as soon as they cannot be the prefix of an environment secret
 /// split across reads. Only a potential secret prefix is held between reads.
+#[cfg(any(windows, test))]
+pub(crate) fn redact_final_output(pending: &mut Vec<u8>, redactions: &[Vec<u8>]) -> Vec<u8> {
+    let mut output = redact_complete_prefix(pending, redactions);
+    if !pending.is_empty() {
+        output.extend_from_slice(b"[REDACTED]");
+        pending.clear();
+    }
+    output
+}
+
 pub(crate) fn redact_complete_prefix(pending: &mut Vec<u8>, redactions: &[Vec<u8>]) -> Vec<u8> {
     let mut output = Vec::new();
     let mut offset = 0;

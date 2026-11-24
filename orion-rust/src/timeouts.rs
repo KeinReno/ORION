@@ -7,6 +7,7 @@
 
 use std::time::Duration;
 
+// Tauri imports SHELL_* directly through orion_runtime::timeouts.
 // --- Шелл (apps/desktop/src-tauri): ожидание готовности и завершения ---
 
 /// Дедлайн готовности: сколько шелл ждёт phase=ready от локального runtime.
@@ -44,6 +45,8 @@ pub const API_HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 /// Чанк ожидания завершения дочернего процесса; ожидание суммируется
 /// вызывающей стороной (например, run_to_exit делает 20 чанков).
 pub const CHILD_EXIT_WAIT_CHUNK: Duration = Duration::from_secs(30);
+/// Maximum wall time for initdb, pg_ctl start, provisioning, or Prisma deploy.
+pub const STARTUP_STEP_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
 /// Дедлайн `pg_ctl start -w`: recovery на медленных офисных дисках может
 /// идти дольше дефолтных 60 секунд pg_ctl.

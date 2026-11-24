@@ -84,11 +84,12 @@ export function writeJsonAtomic(file: string, value: unknown, mode = 0o600): voi
 export function loadNodeConfig(dir = nodeDir()): LanNodeConfig {
   const file = path.join(dir, "lan-node.json");
   const stored = readJson<Partial<LanNodeConfig>>(file);
+  const port = stored?.port;
   const config: LanNodeConfig = {
     nodeId: stored?.nodeId ?? randomUUID(),
     name: stored?.name?.trim() || defaultNodeName(),
     mode: stored?.mode === "host" || stored?.mode === "client" ? stored.mode : "local",
-    port: Number.isInteger(stored?.port) ? (stored!.port as number) : LAN_DEFAULT_PORT,
+    port: typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : LAN_DEFAULT_PORT,
     ownerUserId: stored?.ownerUserId ?? null,
     loginPolicy: stored?.loginPolicy === "strict" ? "strict" : "home",
     aiBridgeOverride: typeof stored?.aiBridgeOverride === "boolean" ? stored.aiBridgeOverride : null

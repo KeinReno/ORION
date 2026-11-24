@@ -50,3 +50,13 @@ took 11,368 ms. These are single-run measurements on a debug Windows build
 with freshly copied files. The rehearsal exercised the Rust supervisor and
 bundled Node/PostgreSQL directly. Installed Tauri startup and WebView ACK
 remain separate acceptance checks.
+
+
+The diagnostic phase reflects the last recognized value in
+`startup-state.json` and is null when no phase is available. The listener
+flags show the result of live loopback probes. Installed Tauri startup
+uses its own phase-file and API health checks.
+
+Provisioning and migrations run in separate Windows Jobs. A timeout ends
+the failed step and its descendants. PostgreSQL stays in the runtime Job
+for the normal shutdown sequence.

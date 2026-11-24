@@ -132,6 +132,7 @@ pub enum PayloadError {
     InvalidEnvelope,
     InvalidSignature,
     IncompatibleBase,
+    InvalidBaseBuild,
     InvalidManifest,
     UnsafePath,
     IncompletePayload,
@@ -150,6 +151,9 @@ impl PayloadError {
             Self::InvalidSignature => "Invalid payload signature",
             Self::IncompatibleBase => {
                 "Payload incompatible with shell or database; use full installer"
+            }
+            Self::InvalidBaseBuild => {
+                "Runtime build.json is missing, invalid, or has no valid release tag"
             }
             Self::InvalidManifest => "Invalid payload manifest",
             Self::UnsafePath => "Unsafe Windows payload path",
@@ -327,12 +331,13 @@ pub fn base_info_from_runtime<C: PayloadCrypto>(
     crypto: &C,
 ) -> Result<BaseInfo, PayloadError> {
     ensure_directory_not_link(runtime)?;
-    let build: serde_json::Value = read_json(&runtime.join("build.json"))?;
+    let build: serde_json::Value =
+        read_json(&runtime.join("build.json")).map_err(|_| PayloadError::InvalidBaseBuild)?;
     let base_tag = build
         .get("tag")
         .and_then(serde_json::Value::as_str)
         .filter(|tag| tag_is_valid(tag))
-        .ok_or(PayloadError::InvalidManifest)?
+        .ok_or(PayloadError::InvalidBaseBuild)?
         .to_owned();
     let shell_bytes =
         fs::read(runtime.join("shell-contract.json")).map_err(|_| PayloadError::InvalidManifest)?;
@@ -442,6 +447,42 @@ pub const STALE_VERSION_TTL: Duration = Duration::from_secs(48 * 60 * 60);
 /// старше `max_age`. Возвращает число удалённых каталогов; ошибки чтения
 /// отдельных записей пропускаются, сама ротация никогда не ломает выбор
 /// версии — её вызывают после успешной записи state.
+pub(crate) fn prune_stale_temp_files(directory: &Path, matches_name: impl Fn(&str) -> bool) {
+    let now = SystemTime::now();
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_str().is_some_and(&matches_name) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if metadata.file_attributes() & 0x400 != 0 {
+                continue;
+            }
+        }
+        if metadata.is_file()
+            && metadata
+                .modified()
+                .ok()
+                .and_then(|time| now.duration_since(time).ok())
+                .is_some_and(|age| age >= STALE_VERSION_TTL)
+        {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("Could not remove stale runtime temporary file: {error}");
+                }
+            }
+        }
+    }
+}
+
 pub fn prune_stale_versions(data: &Path, max_age: Duration) -> Result<usize, PayloadError> {
     let state = read_selection_state(data)?;
     let referenced = [
@@ -550,6 +591,23 @@ pub fn write_selection_state_atomic(
         }
         Err(_) => return Err(PayloadError::InvalidManifest),
     }
+    prune_stale_temp_files(parent, |name| {
+        let Some(suffix) = name
+            .strip_prefix("state.json.")
+            .and_then(|name| name.strip_suffix(".tmp"))
+        else {
+            return false;
+        };
+        let mut parts = suffix.split('.');
+        parts.next().is_some_and(|pid| pid.parse::<u32>().is_ok())
+            && parts
+                .next()
+                .is_some_and(|nonce| u128::from_str_radix(nonce, 16).is_ok())
+            && parts
+                .next()
+                .is_some_and(|seq| u64::from_str_radix(seq, 16).is_ok())
+            && parts.next().is_none()
+    });
     let state_exists = match fs::symlink_metadata(&path) {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
             return Err(PayloadError::UnsafePath)
@@ -884,12 +942,18 @@ pub fn select_installed_payload<C: PayloadCrypto>(
     crypto: &C,
 ) -> Result<InstalledSelection, PayloadError> {
     let base_build =
-        fs::read(runtime.join("build.json")).map_err(|_| PayloadError::InvalidManifest)?;
+        fs::read(runtime.join("build.json")).map_err(|_| PayloadError::InvalidBaseBuild)?;
     let base_id = crypto.sha256_hex(&base_build);
     let mut state = read_selection_state(data)?;
     let selection = select_payload(&mut state, &base_id, |candidate| {
         public_key_pem.is_some_and(|key| {
-            verify_persisted_version(runtime, data, candidate, key, crypto).is_ok()
+            match verify_persisted_version(runtime, data, candidate, key, crypto) {
+                Ok(_) => true,
+                Err(error) => {
+                    eprintln!("Could not verify payload {candidate}: {}", error.message());
+                    false
+                }
+            }
         })
     })?;
     write_selection_state_atomic(data, &state)?;

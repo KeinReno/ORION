@@ -155,7 +155,8 @@ fn prune_stale_copies(target: &Path) {
     else {
         return;
     };
-    let prefix = format!("{name}-stale-");
+    let stale_prefix = format!("{name}-stale-");
+    let stage_prefix = format!("{name}-stage-");
     let entries = match fs::read_dir(parent) {
         Ok(entries) => entries,
         Err(error) => {
@@ -166,20 +167,26 @@ fn prune_stale_copies(target: &Path) {
     for entry in entries {
         let result = entry.and_then(|entry| {
             let filename = entry.file_name();
-            let generation = filename
-                .to_str()
-                .and_then(|name| name.strip_prefix(&prefix))
+            let Some(name) = filename.to_str() else {
+                return Ok(());
+            };
+            let stage = name.starts_with(&stage_prefix);
+            let generation = name
+                .strip_prefix(&stage_prefix)
+                .or_else(|| name.strip_prefix(&stale_prefix))
                 .and_then(|suffix| suffix.split_once('-'))
                 .and_then(|(pid, stamp)| {
-                    Some((pid.parse::<u32>().ok()?, stamp.parse::<u128>().ok()?))
+                    pid.parse::<u32>().ok()?;
+                    stamp.parse::<u128>().ok()
                 });
-            if generation.is_some_and(|(_, stamp)| stamp < cutoff)
+            if generation.is_some_and(|stamp| stamp < cutoff)
                 && is_plain_directory(&entry.path())?
-                && entry
-                    .path()
-                    .join(COPY_MARKER)
-                    .symlink_metadata()
-                    .is_ok_and(|m| m.is_file())
+                && (stage
+                    || entry
+                        .path()
+                        .join(COPY_MARKER)
+                        .symlink_metadata()
+                        .is_ok_and(|m| m.is_file()))
             {
                 fs::remove_dir_all(entry.path())?;
             }
@@ -476,7 +483,13 @@ mod tests {
             target.file_name().unwrap().to_string_lossy()
         ));
         fs::create_dir(&unrelated).unwrap();
+        let interrupted_stage = target.with_file_name(format!(
+            "{}-stage-44-1",
+            target.file_name().unwrap().to_string_lossy()
+        ));
+        fs::create_dir(&interrupted_stage).unwrap();
         prepare_postgres_binaries(&paths, "1.2.4").unwrap();
+        assert!(!interrupted_stage.exists());
         assert!(!expired.exists());
         assert!(unrelated.is_dir());
         fs::remove_dir_all(root).expect("cleanup");

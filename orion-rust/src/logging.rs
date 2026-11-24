@@ -10,7 +10,6 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 const LOG_ROTATION_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -56,7 +55,7 @@ pub fn event(level: &str, stage: &str, message: &str, fields: serde_json::Value)
     let Ok(mut guard) = WRITER.lock() else { return };
     let Some(log) = guard.as_mut() else { return };
     let mut record = serde_json::json!({
-        "ts": humantime(),
+        "ts": rfc3339_now(),
         "level": level,
         "stage": stage,
         "msg": message,
@@ -76,31 +75,38 @@ pub fn event(level: &str, stage: &str, message: &str, fields: serde_json::Value)
     }
 }
 
-fn humantime() -> String {
-    let Ok(duration) = SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
-        return "unknown".to_owned();
-    };
-    let secs = duration.as_secs() as i64;
-    // RFC3339 без внешних зависимостей: chrono уже есть в зависимостях lib.
-    let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0);
-    match datetime {
-        Some(value) => value.to_rfc3339(),
-        None => format!("{secs}"),
+#[cfg(windows)]
+pub(super) fn rotate_if_large(path: &Path, limit: u64) {
+    if path
+        .metadata()
+        .is_ok_and(|metadata| metadata.len() >= limit)
+    {
+        if let Err(error) = std::fs::rename(path, path.with_extension("log.1")) {
+            eprintln!("Could not rotate {}: {error}", path.display());
+        }
     }
+}
+
+pub(super) fn rfc3339_now() -> String {
+    chrono::Utc::now().to_rfc3339()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    static LOG_TEST: Mutex<()> = Mutex::new(());
+
     #[test]
     fn event_without_init_is_a_noop() {
+        let _test = LOG_TEST.lock().unwrap();
         // До init() событие не паникует и никуда не пишет.
         event("info", "test", "no-op", serde_json::json!({}));
     }
 
     #[test]
     fn event_writes_json_line_with_merged_fields() {
+        let _test = LOG_TEST.lock().unwrap();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target")
             .join("logging-tests")

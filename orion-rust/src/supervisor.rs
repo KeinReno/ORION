@@ -43,6 +43,22 @@ pub struct ProcessSpec {
     pub stdio_handles: Option<[usize; 3]>,
 }
 
+#[cfg(windows)]
+pub(crate) fn contained(spec: ProcessSpec) -> ProcessSpec {
+    spec.isolated_environment()
+        .allow_env("SystemRoot")
+        .allow_env("WINDIR")
+        .allow_env("PATH")
+        .allow_env("PATHEXT")
+        .allow_env("SystemDrive")
+        .allow_env("TEMP")
+        .allow_env("TMP")
+        .allow_env("USERPROFILE")
+        .allow_env("APPDATA")
+        .allow_env("LOCALAPPDATA")
+        .allow_env("ProgramData")
+}
+
 impl ProcessSpec {
     pub fn new(program: impl Into<PathBuf>) -> Self {
         Self {
@@ -1031,6 +1047,8 @@ mod windows {
                 && unsafe { WaitForSingleObject(self.process, 0) } != WAIT_OBJECT_0
             {
                 let process_error = last_error("TerminateProcess(suspended child)");
+                // SAFETY: this path runs before the initial thread is resumed.
+                // The handle remains owned here and the thread has run no child code.
                 if self.thread.is_null() || unsafe { TerminateThread(self.thread, 1) } == 0 {
                     return Err(SupervisorError(format!(
                         "{process_error}; TerminateThread(suspended child) failed: {}",

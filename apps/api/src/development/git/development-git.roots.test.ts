@@ -20,10 +20,10 @@ describe("DevelopmentGitService.allowedRoots", () => {
   });
 
   it("отдаёт корни из ORION_DEV_REPOSITORY_ROOTS (разделители `;` и перевод строки)", async () => {
-    process.env.ORION_DEV_REPOSITORY_ROOTS = "C:\\repos; D:\\work\nE:\\legacy";
-    await expect(makeService().allowedRoots("u1", "w1")).resolves.toEqual({
-      roots: ["C:\\repos", "D:\\work", "E:\\legacy"]
-    });
+    const roots = ["repos", "work", "legacy"].map((name) => resolve(process.cwd(), name));
+    process.env.ORION_DEV_REPOSITORY_ROOTS = `${roots[0]}; ${roots[1]}
+${roots[2]}`;
+    await expect(makeService().allowedRoots("u1", "w1")).resolves.toEqual({ roots });
   });
 
   it("когда корни не заданы, разрешает домашний каталог узла", async () => {

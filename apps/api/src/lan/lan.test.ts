@@ -341,6 +341,10 @@ describe("node config files", () => {
     const first = loadNodeConfig(dir);
     expect(first.mode).toBe("local");
     expect(loadNodeConfig(dir).nodeId).toBe(first.nodeId);
+    for (const port of [-5, 0, 65536, 99999]) {
+      saveNodeConfig({ ...first, port }, dir);
+      expect(loadNodeConfig(dir).port).toBe(first.port);
+    }
     saveClientBinding({ nodeId: "h", name: "Дом", address: "192.168.1.2", port: 4443, fingerprint: "AA", certPem: "pem", deviceToken: "t", pairedAt: "" }, dir);
     saveNodeConfig({ ...first, mode: "client" }, dir);
     saveNodeConfig({ ...loadNodeConfig(dir), mode: "local" }, dir);

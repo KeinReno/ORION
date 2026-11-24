@@ -31,7 +31,9 @@ impl LanNodeConfig {
 
     /// The launcher accepts an integer port and otherwise uses 4443.
     pub fn effective_port(&self) -> i64 {
-        self.port.unwrap_or(DEFAULT_LAN_PORT)
+        self.port
+            .filter(|port| (1..=65535).contains(port))
+            .unwrap_or(DEFAULT_LAN_PORT)
     }
 }
 
@@ -203,6 +205,7 @@ pub fn api_exit_decision(
 
 /// Mirrors launcher `failureReason`: prefer an Error line, retain following `- `
 /// details, strip ANSI color codes, and bound the displayed reason to 400 chars.
+// Prefer known NestJS startup messages and network error codes; fall back to the last log line.
 pub fn failure_reason(output: &str) -> String {
     let lines: Vec<String> = output
         .lines()
@@ -311,6 +314,7 @@ fn redact_url_credentials(value: &str) -> String {
     result
 }
 
+// Strip CSI sequences from terminal output; OSC commands are outside this parser.
 fn strip_ansi(value: &str) -> String {
     let bytes = value.as_bytes();
     let mut result = String::with_capacity(value.len());

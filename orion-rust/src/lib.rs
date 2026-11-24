@@ -202,6 +202,16 @@ pub async fn serve(profile: Profile) -> Result<(), String> {
             )
         }
     };
+    #[cfg(windows)]
+    if !profile.data_dir.exists() {
+        let parent = profile
+            .data_dir
+            .parent()
+            .ok_or("Diagnostics profile has no parent")?;
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        lifecycle::ensure_private_dir(&profile.data_dir)?;
+    }
+    #[cfg(not(windows))]
     std::fs::create_dir_all(&profile.data_dir)
         .map_err(|error| format!("Не удалось создать каталог данных: {error}"))?;
     let marker = serde_json::json!({
@@ -214,8 +224,12 @@ pub async fn serve(profile: Profile) -> Result<(), String> {
         "nest": "launcher",
         "postgres": "launcher",
     });
+    let marker_path = profile.data_dir.join("rust-runtime.json");
+    #[cfg(windows)]
+    lifecycle::write_json_atomic(&marker_path, &marker)?;
+    #[cfg(not(windows))]
     std::fs::write(
-        profile.data_dir.join("rust-runtime.json"),
+        marker_path,
         serde_json::to_vec_pretty(&marker).unwrap_or_default(),
     )
     .map_err(|error| format!("Не удалось записать rust-runtime.json: {error}"))?;
@@ -224,7 +238,7 @@ pub async fn serve(profile: Profile) -> Result<(), String> {
         diagnostics_token_hash,
         profile: profile.clone(),
         started: Instant::now(),
-        started_at: chrono::Utc::now().to_rfc3339(),
+        started_at: logging::rfc3339_now(),
     });
     let app = Router::new()
         .route("/health", get(health))
@@ -235,6 +249,15 @@ pub async fn serve(profile: Profile) -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(&address)
         .await
         .map_err(|error| format!("Диагностика не слушаёт {address}: {error}"))?;
+    logging::init(&profile.data_dir);
+    logging::event(
+        "info",
+        "diagnostics",
+        "Diagnostics listener started",
+        serde_json::json!({
+            "runtimePort": profile.runtime_port
+        }),
+    );
     axum::serve(listener, app)
         .await
         .map_err(|error| format!("Сервер диагностики остановился: {error}"))
@@ -275,11 +298,26 @@ async fn diagnostics(
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     authorize_diagnostics(&state, &headers)?;
+    let startup_phase = std::fs::read(state.profile.data_dir.join("startup-state.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|snapshot| {
+            snapshot
+                .get("phase")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .filter(|phase| {
+            matches!(
+                phase.as_str(),
+                "preparing" | "database" | "migrations" | "server"
+            )
+        });
     let api_up = listening(state.profile.api_port).await;
     let pg_up = listening(state.profile.pg_port).await;
     Ok(Json(serde_json::json!({
         "edition": state.profile.edition,
-        "phase": "runtime-ready",
+        "phase": startup_phase,
         "startedAt": state.started_at,
         "uptimeMs": state.started.elapsed().as_millis(),
         "apiPort": state.profile.api_port,
@@ -416,7 +454,7 @@ pub fn supervise_packaged_runtime(profile: &Profile) -> Result<(), String> {
         return Err("В каталоге runtime нет node.exe или launcher.cjs".to_owned());
     }
     let mut owned = supervisor::Supervisor::new().map_err(|error| error.to_string())?;
-    let spec = lifecycle::contained(supervisor::ProcessSpec::new(node))
+    let spec = supervisor::contained(supervisor::ProcessSpec::new(node))
         .arg(launcher)
         .current_dir(&root)
         .allow_env("ORION_RUST_RUNTIME_BIN")

@@ -281,7 +281,7 @@ function lanEnv(forceLocal) {
   let node = null;
   try { node = JSON.parse(fs.readFileSync(path.join(data, 'lan-node.json'), 'utf8')); } catch { /* файла нет — «Локальный» */ }
   if (forceLocal || !node || node.mode !== 'host') return { ORION_MODE: 'local', HOST: '127.0.0.1' };
-  const port = Number.isInteger(node.port) ? node.port : 4443;
+  const port = Number.isInteger(node.port) && node.port >= 1 && node.port <= 65535 ? node.port : 4443;
   const address = homeLanAddress();
   return {
     ORION_MODE: 'server', ORION_LAN_HOST: '1', HOST: '127.0.0.1',

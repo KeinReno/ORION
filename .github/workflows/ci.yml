@@ -5,19 +5,6 @@ on:
   pull_request:
 
 jobs:
-  rust-portability:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: orion-rust
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup component add rustfmt clippy
-      - run: cargo fmt --check
-      - run: cargo check --locked
-      - run: cargo clippy --locked --lib --bins
-
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30

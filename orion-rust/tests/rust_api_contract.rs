@@ -38,6 +38,13 @@ fn host_mode_builds_launcher_compatible_overlay_and_port_fallback() {
         Some("https://orion-pc:4443")
     );
     assert_eq!(missing_port.effective_port(), DEFAULT_LAN_PORT);
+    for port in [-5, 0, 65536, 99999] {
+        let config = LanNodeConfig {
+            mode: "host".into(),
+            port: Some(port),
+        };
+        assert_eq!(config.effective_port(), DEFAULT_LAN_PORT);
+    }
 }
 
 #[test]

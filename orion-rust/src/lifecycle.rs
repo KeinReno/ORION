@@ -3,7 +3,7 @@
 use crate::runtime_compat::{prepare_postgres_binaries, resolve_runtime_paths};
 use crate::rust_api_supervisor::{ApiCommand, SupervisorOutcome, SystemApiBackend};
 use crate::rust_payload_supervisor::PayloadSupervisorAdapter;
-use crate::supervisor::{ProcessSpec, Supervisor};
+use crate::supervisor::{contained, ProcessSpec, Supervisor};
 use crate::Profile;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -211,6 +211,16 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     );
     let mut owned = Supervisor::new().map_err(|error| error.to_string())?;
 
+    crate::rust_payload::prune_stale_temp_files(&requested_data, |name| {
+        name.strip_prefix(".orion-status-")
+            .and_then(|name| name.strip_suffix(".tmp"))
+            .and_then(|name| name.split_once('-'))
+            .is_some_and(|(pid, nonce)| {
+                pid.parse::<u32>().is_ok()
+                    && nonce.len() == 16
+                    && nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+    });
     startup_phase(&requested_data, "preparing")?;
     let mut api_template = api_template(
         &base_layout,
@@ -305,6 +315,8 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
         log_startup_elapsed("postgres-status", postgres_status_started);
         if !already_running {
             let postgres_start_started = Instant::now();
+            let postgres_log = paths.effective_data_dir.join("postgres.log");
+            crate::logging::rotate_if_large(&postgres_log, 8 * 1024 * 1024);
             let start = contained(ProcessSpec::new(&base_layout.pg_ctl).current_dir(&root))
                 .arg("start")
                 .arg("-w")
@@ -316,7 +328,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
                 .arg("-D")
                 .arg(cluster.clone())
                 .arg("-l")
-                .arg(paths.effective_data_dir.join("postgres.log"))
+                .arg(postgres_log)
                 .arg("-o")
                 .arg(format!("-p {} -h 127.0.0.1", effective_profile.pg_port));
             match run_to_exit(&mut owned, start) {
@@ -349,8 +361,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
             "orion-pg-setup",
             PG_SETUP_JS,
             |setup| {
-                run_to_exit(
-                    &mut owned,
+                run_isolated_step(
                     contained(
                         ProcessSpec::new(&base_layout.node)
                             .current_dir(&base_layout.api)
@@ -378,8 +389,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
 
         startup_phase(&requested_data, "migrations")?;
         let migration_started = Instant::now();
-        let migration = run_to_exit(
-            &mut owned,
+        let migration = run_isolated_step(
             contained(
                 ProcessSpec::new(&base_layout.node)
                     .current_dir(&base_layout.api)
@@ -935,7 +945,7 @@ fn startup_phase(requested_data: &Path, phase: &str) -> Result<(), String> {
     )
 }
 
-fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), String> {
+pub(super) fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), String> {
     let parent = path.parent().ok_or("runtime status file has no parent")?;
     fs::create_dir_all(parent)
         .map_err(|error| format!("Не удалось создать каталог статуса: {error}"))?;
@@ -1108,49 +1118,18 @@ pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
 }
 
 fn prune_stale_secret_files(directory: &Path) {
-    use std::os::windows::fs::MetadataExt;
-
-    const RETENTION: std::time::Duration = std::time::Duration::from_secs(48 * 60 * 60);
-    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-    let now = std::time::SystemTime::now();
-    let Ok(entries) = fs::read_dir(directory) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else { continue };
-        let generated_config = name
-            .strip_prefix("local-runtime-")
-            .and_then(|name| name.strip_suffix(".tmp"))
-            .and_then(|name| name.split_once('-'))
-            .is_some_and(|(pid, nonce)| {
-                pid.parse::<u32>().is_ok()
-                    && nonce.len() == 16
-                    && nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
-            });
-        if name != "initdb-password.tmp" && !generated_config {
-            continue;
-        }
-        let path = entry.path();
-        let Ok(metadata) = fs::symlink_metadata(&path) else {
-            continue;
-        };
-        if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-            continue;
-        }
-        if metadata
-            .modified()
-            .ok()
-            .and_then(|modified| now.duration_since(modified).ok())
-            .is_some_and(|age| age >= RETENTION)
-        {
-            if let Err(error) = fs::remove_file(path) {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    eprintln!("Could not prune a stale runtime secret file: {error}");
-                }
-            }
-        }
-    }
+    crate::rust_payload::prune_stale_temp_files(directory, |name| {
+        name == "initdb-password.tmp"
+            || name
+                .strip_prefix("local-runtime-")
+                .and_then(|name| name.strip_suffix(".tmp"))
+                .and_then(|name| name.split_once('-'))
+                .is_some_and(|(pid, nonce)| {
+                    pid.parse::<u32>().is_ok()
+                        && nonce.len() == 16
+                        && nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+                })
+    });
 }
 
 fn private_new_file(path: &Path) -> Result<fs::File, String> {
@@ -1205,40 +1184,37 @@ fn with_private_script<T>(
     }
 }
 
-pub(crate) fn contained(spec: ProcessSpec) -> ProcessSpec {
-    spec.isolated_environment()
-        .allow_env("SystemRoot")
-        .allow_env("WINDIR")
-        .allow_env("PATH")
-        .allow_env("PATHEXT")
-        .allow_env("SystemDrive")
-        .allow_env("TEMP")
-        .allow_env("TMP")
-        .allow_env("USERPROFILE")
-        .allow_env("APPDATA")
-        .allow_env("LOCALAPPDATA")
-        .allow_env("ProgramData")
+fn run_isolated_step(spec: ProcessSpec) -> Result<(), String> {
+    run_isolated_step_with_timeout(spec, crate::timeouts::STARTUP_STEP_TIMEOUT)
+}
+
+fn run_isolated_step_with_timeout(spec: ProcessSpec, timeout: Duration) -> Result<(), String> {
+    let mut step = Supervisor::new().map_err(|error| error.to_string())?;
+    run_to_exit_with_timeout(&mut step, spec, timeout)
 }
 
 fn run_to_exit(supervisor: &mut Supervisor, spec: ProcessSpec) -> Result<(), String> {
+    run_to_exit_with_timeout(supervisor, spec, crate::timeouts::STARTUP_STEP_TIMEOUT)
+}
+
+fn run_to_exit_with_timeout(
+    supervisor: &mut Supervisor,
+    spec: ProcessSpec,
+    timeout: Duration,
+) -> Result<(), String> {
     let pid = supervisor.spawn(spec).map_err(|error| error.to_string())?;
-    for _ in 0..20 {
-        match supervisor
-            .wait_for_exit(pid, crate::timeouts::CHILD_EXIT_WAIT_CHUNK)
-            .map_err(|error| error.to_string())?
-        {
-            Some(0) => return Ok(()),
-            Some(code) => {
-                return Err(format!("шаг запуска завершился с кодом {code}"));
-            }
-            None => continue,
-        }
+    match supervisor
+        .wait_for_exit(pid, timeout)
+        .map_err(|error| error.to_string())?
+    {
+        Some(0) => Ok(()),
+        Some(code) => Err(format!("шаг запуска завершился с кодом {code}")),
+        None => Err(format_step_timeout(
+            supervisor
+                .terminate_all()
+                .map_err(|error| error.to_string()),
+        )),
     }
-    Err(format_step_timeout(
-        supervisor
-            .terminate_all()
-            .map_err(|error| error.to_string()),
-    ))
 }
 
 fn format_step_timeout(cleanup: Result<(), String>) -> String {
@@ -1432,7 +1408,7 @@ fn random_bytes(len: usize) -> Result<Vec<u8>, String> {
 pub fn restore_staged_backup(_source_dir: &Path, _profile: &Profile) -> Result<(), String> {
     Err(concat!(
         "Команда переноса подготовленной копии отключена. Данные не изменялись. ",
-        "Для полной резервной копии ORION-R используйте процедуру API из docs/DEPLOYMENT_READINESS.md."
+        "Для полной резервной копии ORION-Rust используйте процедуру API из docs/DEPLOYMENT_READINESS.md."
     ).to_owned())
 }
 
@@ -1499,7 +1475,7 @@ mod tests {
                 .expect("grant Everyone read access to disposable fixture");
         assert!(status.status.success());
         let error = ensure_private_dir(&data).expect_err("broad ACL must be refused");
-        assert!(!error.starts_with("Could not read the ACL"), "{error}");
+        assert!(error.contains("общей группы"), "{error}");
     }
 
     #[test]
@@ -1757,6 +1733,21 @@ module.exports = { PrismaClient };
             run_to_exit(&mut supervisor, start)
                 .map_err(|error| format!("pg_ctl start: {error}"))?;
             postgres_started = true;
+            let stalled_migration =
+                contained(ProcessSpec::new(&layout.node).current_dir(&layout.api))
+                    .arg("-e")
+                    .arg("setInterval(() => {}, 1000)");
+            let timeout =
+                run_isolated_step_with_timeout(stalled_migration, Duration::from_millis(500))
+                    .expect_err("stalled startup step should time out");
+            assert_eq!(timeout, format_step_timeout(Ok(())));
+            assert!(postgres_running(
+                &mut supervisor,
+                &layout.pg_ctl,
+                &runtime,
+                &cluster
+            )?);
+
             let postmaster_pid = fs::read_to_string(cluster.join("postmaster.pid"))
                 .ok()
                 .and_then(|text| {
@@ -1768,8 +1759,7 @@ module.exports = { PrismaClient };
 
             let identity = data.join("orion-pg-identity.cjs");
             fs::write(&identity, IDENTITY_JS).map_err(|error| error.to_string())?;
-            run_to_exit(
-                &mut supervisor,
+            run_isolated_step(
                 contained(
                     ProcessSpec::new(&layout.node)
                         .current_dir(&layout.api)
@@ -1784,7 +1774,7 @@ module.exports = { PrismaClient };
 
             let provision = data.join("orion-provision.cjs");
             fs::write(&provision, PROVISION_JS).map_err(|error| error.to_string())?;
-            let mut run_provision = || {
+            let run_provision = || {
                 let spec = contained(
                     ProcessSpec::new(&layout.node)
                         .current_dir(&layout.api)
@@ -1794,13 +1784,12 @@ module.exports = { PrismaClient };
                 .env("DATABASE_URL", &database_url)
                 .env("ORION_API_PACKAGE_JSON", layout.api.join("package.json"))
                 .env("ORION_APP_PASSWORD", &config.app_password);
-                run_to_exit(&mut supervisor, spec)
+                run_isolated_step(spec)
             };
             run_provision().map_err(|error| format!("first provisioning pass: {error}"))?;
             run_provision().map_err(|error| format!("idempotent provisioning pass: {error}"))?;
 
-            run_to_exit(
-                &mut supervisor,
+            run_isolated_step(
                 contained(
                     ProcessSpec::new(&layout.node)
                         .current_dir(&layout.api)

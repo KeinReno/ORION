@@ -426,7 +426,7 @@ fn system_backend_uses_api_job_drains_both_streams_and_applies_case_insensitive_
     assert!(output.contains("stderr-proof"));
     assert!(output.contains("mode=local"));
     assert!(output.contains("inherited-override=base-value"));
-    assert!(output.contains("parent-inherited=preserved-parent-value"));
+    assert!(output.lines().any(|line| line == "parent-inherited="));
 }
 
 #[cfg(windows)]
@@ -640,4 +640,17 @@ fn secret_redaction_handles_a_value_split_between_pipe_reads() {
     result.extend(second);
     result.extend(pending);
     assert_eq!(result, b"prefix [REDACTED] suffix");
+}
+
+#[test]
+fn closing_the_output_pipe_redacts_an_incomplete_secret() {
+    use rust_api_supervisor::{redact_complete_prefix, redact_final_output};
+
+    let secrets = [b"synthetic-token-123".to_vec()];
+    let mut pending = b"startup failed: synthetic-token".to_vec();
+    let mut output = redact_complete_prefix(&mut pending, &secrets);
+    output.extend(redact_final_output(&mut pending, &secrets));
+
+    assert_eq!(output, b"startup failed: [REDACTED]");
+    assert!(pending.is_empty());
 }

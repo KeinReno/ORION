@@ -96,8 +96,12 @@ fn read_dacl(path: &Path) -> io::Result<String> {
 }
 
 pub(super) fn verify_existing_acl(path: &Path, sid: &str) -> Result<(), String> {
-    let sddl = read_dacl(path)
-        .map_err(|error| format!("Could not read the ACL of {}: {error}", path.display()))?;
+    let sddl = read_dacl(path).map_err(|error| {
+        format!(
+            "Не удалось прочитать ACL каталога {}: {error}",
+            path.display()
+        )
+    })?;
     verify_acl_policy(&sddl, sid)
 }
 
@@ -108,11 +112,15 @@ fn verify_acl_policy(sddl: &str, sid: &str) -> Result<(), String> {
         .skip(1)
         .filter_map(|ace| ace.split(')').next())
         .collect();
+    let user = sid.to_ascii_uppercase();
     for ace in &entries {
         let fields: Vec<&str> = ace.split(';').collect();
-        if fields.len() >= 6
-            && matches!(fields[0], "A" | "OA" | "XA" | "ZA")
-            && broad_acl_principal(fields[5])
+        if fields.len() < 6 || !fields[1].len().is_multiple_of(2) {
+            return Err("Некорректная запись ACL каталога".into());
+        }
+        if matches!(fields[0], "A" | "OA" | "XA" | "ZA")
+            && fields[5] != user
+            && !matches!(fields[5], "SY" | "BA" | "S-1-5-18" | "S-1-5-32-544")
         {
             return Err(
                 "Существующий каталог имеет разрешение для общей группы; отказ без изменения ACL."
@@ -120,12 +128,15 @@ fn verify_acl_policy(sddl: &str, sid: &str) -> Result<(), String> {
             );
         }
     }
-    let user = sid.to_ascii_uppercase();
     let user_denied = entries.iter().any(|ace| {
         let fields: Vec<&str> = ace.split(';').collect();
         fields.len() >= 6
             && matches!(fields[0], "D" | "OD" | "XD")
-            && fields[5] == user
+            && (fields[5] == user
+                || matches!(
+                    fields[5],
+                    "WD" | "AU" | "BU" | "S-1-1-0" | "S-1-5-11" | "S-1-5-32-545"
+                ))
             && !fields[1]
                 .as_bytes()
                 .as_chunks::<2>()
@@ -135,7 +146,7 @@ fn verify_acl_policy(sddl: &str, sid: &str) -> Result<(), String> {
             && !matches!(fields[2], "" | "0X0")
     });
     if user_denied {
-        return Err("The existing ACL denies access to the current user".into());
+        return Err("ACL каталога запрещает доступ текущему пользователю".into());
     }
     let has_full_user_access = entries.iter().any(|ace| {
         let fields: Vec<&str> = ace.split(';').collect();
@@ -156,33 +167,22 @@ fn verify_acl_policy(sddl: &str, sid: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn broad_acl_principal(principal: &str) -> bool {
-    [
-        "S-1-1-0",
-        "S-1-5-11",
-        "S-1-5-32-545",
-        "S-1-15-2-1",
-        "S-1-15-2-2",
-        // SDDL commonly abbreviates these well-known SIDs.
-        "WD", // Everyone
-        "AU", // Authenticated Users
-        "BU", // Builtin Users
-        "AC", // All Application Packages
-    ]
-    .contains(&principal)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn acl_rejects_well_known_groups_in_sid_and_sddl_alias_forms() {
-        for principal in ["AU", "BU", "WD", "AC", "S-1-5-11", "S-1-1-0"] {
-            assert!(broad_acl_principal(principal), "{principal}");
+    fn rejects_grants_to_unexpected_principals() {
+        let sid = "S-1-5-21-1-2-3-1001";
+        for principal in ["WD", "AN", "CG", "S-1-5-21-1-2-3-1002"] {
+            assert!(
+                verify_acl_policy(&format!("D:P(A;;FA;;;{sid})(A;;FR;;;{principal})"), sid)
+                    .is_err()
+            );
         }
-        assert!(!broad_acl_principal("SY"));
-        assert!(!broad_acl_principal("BA"));
+        assert!(
+            verify_acl_policy(&format!("D:P(A;;FA;;;{sid})(A;;FA;;;SY)(A;;FA;;;BA)"), sid).is_ok()
+        );
     }
 
     #[test]
@@ -191,5 +191,16 @@ mod tests {
         assert!(verify_acl_policy(&format!("D:P(D;;WD;;;{sid})(A;;FA;;;{sid})"), sid).is_err());
         assert!(verify_acl_policy(&format!("D:P(A;OIIO;FA;;;{sid})"), sid).is_err());
         assert!(verify_acl_policy(&format!("D:P(A;OICI;FA;;;{sid})"), sid).is_ok());
+        for principal in ["WD", "AU", "BU"] {
+            assert!(
+                verify_acl_policy(&format!("D:P(D;;WD;;;{principal})(A;;FA;;;{sid})"), sid)
+                    .is_err()
+            );
+            assert!(verify_acl_policy(
+                &format!("D:P(D;OIIO;WD;;;{principal})(A;;FA;;;{sid})"),
+                sid
+            )
+            .is_ok());
+        }
     }
 }

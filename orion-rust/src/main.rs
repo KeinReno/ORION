@@ -1,13 +1,16 @@
+const HELP: &str = if cfg!(windows) {
+    "Commands: show, serve
+Windows commands: supervise, supervise-launcher, supervise-direct, restore (disabled)"
+} else {
+    "Commands: show, serve"
+};
+
 fn main() {
     let command = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "serve".to_owned());
     if matches!(command.as_str(), "help" | "--help" | "-h") {
-        println!("Commands: show, serve");
-        #[cfg(windows)]
-        println!(
-            "Windows commands: supervise, supervise-launcher, supervise-direct, restore (disabled)"
-        );
+        println!("{HELP}");
         return;
     }
     let profile = orion_runtime::load_profile().unwrap_or_else(|error| {
@@ -62,7 +65,8 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Команды: show, serve, supervise, supervise-launcher, supervise-direct. Неизвестно: {}", command);
+            eprintln!("Unknown command: {command}");
+            eprintln!("{HELP}");
             std::process::exit(2);
         }
     }

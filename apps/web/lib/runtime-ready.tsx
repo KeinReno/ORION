@@ -16,7 +16,10 @@ export function RuntimeReady(): null {
       checking = true;
       try {
         const response = await fetch(`${LOCAL_API_URL}/updates/ui-ready`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tag }), signal: AbortSignal.timeout(3000) });
-        if (response.ok && !stopped) acknowledged = true;
+        if (response.ok) {
+          const result: { accepted?: boolean } = await response.json();
+          if (result?.accepted === true && !stopped) acknowledged = true;
+        }
       } catch { /* API may still be starting or rolling back. */ }
       finally { checking = false; }
     };
