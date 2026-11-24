@@ -1,4 +1,4 @@
-//! Структурные события запуска и остановки ORION-R.
+//! Структурные события запуска и остановки ORION-Rust.
 //!
 //! Человекочитаемый вывод остаётся в launcher.log (eprintln); сюда пишется
 //! машиночитаемая копия ключевых событий — JSON Lines в
@@ -8,26 +8,53 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
-static WRITER: Mutex<Option<File>> = Mutex::new(None);
+const LOG_ROTATION_BYTES: u64 = 8 * 1024 * 1024;
 
-/// Открывает (или переводит) журнал в каталоге данных. Вызывается один раз
-/// в начале supervise-direct; до инициализации события молча пропускаются.
+struct RuntimeLog {
+    path: PathBuf,
+    file: Option<File>,
+}
+
+static WRITER: Mutex<Option<RuntimeLog>> = Mutex::new(None);
+
+/// Open the structured journal for the selected runtime profile.
 pub fn init(data_dir: &Path) {
-    let path = data_dir.join("runtime.jsonl");
-    let file = OpenOptions::new().create(true).append(true).open(&path);
     if let Ok(mut guard) = WRITER.lock() {
-        *guard = file.ok();
+        let path = data_dir.join("runtime.jsonl");
+        *guard = None;
+        let mut log = RuntimeLog { path, file: None };
+        log.open_or_rotate(0);
+        *guard = Some(log);
+    }
+}
+
+impl RuntimeLog {
+    fn open_or_rotate(&mut self, incoming_bytes: u64) {
+        let current_size = self.path.metadata().map_or(0, |metadata| metadata.len());
+        if current_size > 0 && current_size.saturating_add(incoming_bytes) >= LOG_ROTATION_BYTES {
+            self.file = None;
+            if let Err(error) = std::fs::rename(&self.path, self.path.with_extension("jsonl.1")) {
+                eprintln!("Could not rotate runtime.jsonl: {error}");
+            }
+        }
+        if self.file.is_none() {
+            self.file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+                .ok();
+        }
     }
 }
 
 /// Одно структурное событие. `fields` мержится в корень записи.
 pub fn event(level: &str, stage: &str, message: &str, fields: serde_json::Value) {
     let Ok(mut guard) = WRITER.lock() else { return };
-    let Some(file) = guard.as_mut() else { return };
+    let Some(log) = guard.as_mut() else { return };
     let mut record = serde_json::json!({
         "ts": humantime(),
         "level": level,
@@ -42,8 +69,11 @@ pub fn event(level: &str, stage: &str, message: &str, fields: serde_json::Value)
         Err(_) => return,
     };
     line.push('\n');
-    let _ = file.write_all(line.as_bytes());
-    let _ = file.flush();
+    log.open_or_rotate(line.len() as u64);
+    if let Some(file) = log.file.as_mut() {
+        let _ = file.write_all(line.as_bytes());
+        let _ = file.flush();
+    }
 }
 
 fn humantime() -> String {

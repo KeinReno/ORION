@@ -298,15 +298,9 @@ fn failed_host_spawn_fails_over_to_local_once() {
             ..script(1, "")
         },
     ]);
-    let result = supervise_api(&mut backend, command(&dir)).unwrap();
+    let error = supervise_api(&mut backend, command(&dir)).unwrap_err();
     assert_eq!(backend.launched_modes, ["server", "local"]);
-    assert_eq!(
-        result,
-        SupervisorOutcome::Exited {
-            code: 1,
-            payload_trial_rolled_back: false
-        }
-    );
+    assert!(error.contains("local start failed"));
 }
 
 #[cfg(windows)]

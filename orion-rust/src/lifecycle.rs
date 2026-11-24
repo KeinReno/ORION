@@ -165,7 +165,8 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     validate_profile_paths(profile, &requested_data, &paths.effective_data_dir)?;
 
     // Preserve the existing location of databases whose requested path is Unicode.
-    if normalized_path(&paths.effective_data_dir) != normalized_path(&requested_data) {
+    if crate::normalized_path(&paths.effective_data_dir) != crate::normalized_path(&requested_data)
+    {
         ensure_private_dir(&paths.fallback_root)?;
     }
     let effective_profile = Profile {
@@ -186,13 +187,14 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     let base_layout = layout(&root, &pg_root, &root)?;
     let cluster = paths.effective_data_dir.join("postgres");
     let resolved_cluster = crate::resolve_existing_ancestor(&cluster)?;
-    if normalized_path(&resolved_cluster) != normalized_path(&cluster) {
+    if crate::normalized_path(&resolved_cluster) != crate::normalized_path(&cluster) {
         return Err("Каталог PostgreSQL является ссылкой/junction; данные не изменялись.".into());
     }
     preflight_config(
         &paths.effective_data_dir.join("local-runtime.json"),
         &cluster,
     )?;
+    prune_stale_secret_files(&paths.effective_data_dir);
     let secrets = load_or_create_secrets(&paths.effective_data_dir.join("local-runtime.json"))?;
     ensure_private_dir(&cluster)?;
     let admin_url = postgres_url(
@@ -209,8 +211,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     );
     let mut owned = Supervisor::new().map_err(|error| error.to_string())?;
 
-    // Selection is performed before PostgreSQL or schema work. The update
-    // adapter verifies the signed payload and returns a complete app command.
     startup_phase(&requested_data, "preparing")?;
     let mut api_template = api_template(
         &base_layout,
@@ -227,12 +227,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     };
     let mut payload =
         PayloadSupervisorAdapter::new(&root, &paths.effective_data_dir, public_key, 0);
-    let payload_select_started = Instant::now();
-    api_template = payload
-        .select_application(&api_template)
-        .map_err(|error| format!("Не удалось выбрать приложение: {error}"))?;
-    log_startup_elapsed("payload-select", payload_select_started);
-    write_app_runtime(&requested_data, &api_template)?;
     let shutdown = Arc::new(AtomicBool::new(false));
     if std::env::var("ORION_SHUTDOWN_ON_STDIN_EOF").ok().as_deref() == Some("1") {
         let shutdown_flag = Arc::clone(&shutdown);
@@ -256,32 +250,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
                 format!("Не удалось запустить контроль штатного завершения: {error}")
             })?;
     }
-    let selected_app_root = api_template
-        .cwd
-        .parent()
-        .ok_or("Выбранный API каталог не имеет корня приложения")?;
-    let mut selected_layout = match layout(&root, &pg_root, selected_app_root) {
-        Ok(layout) => layout,
-        Err(candidate_error) if api_template.trial => {
-            payload.settle_trial(false).map_err(|rollback| {
-                format!("{candidate_error}; не удалось откатить обновление: {rollback}")
-            })?;
-            api_template = payload
-                .select_application(&api_template)
-                .map_err(|selection| {
-                    format!("{candidate_error}; не удалось выбрать прежнюю версию: {selection}")
-                })?;
-            write_app_runtime(&requested_data, &api_template)?;
-            let fallback_root = api_template
-                .cwd
-                .parent()
-                .ok_or("Выбранный API каталог не имеет корня приложения")?;
-            layout(&root, &pg_root, fallback_root).map_err(|fallback_error| {
-                format!("{candidate_error}; прежняя версия выбрана, но runtime неполон: {fallback_error}")
-            })?
-        }
-        Err(error) => return Err(error),
-    };
     let mut started_postgres = false;
 
     // Enclose initialization and `pg_ctl start` in the same cleanup scope as
@@ -289,11 +257,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     // launched postmaster, so we must still inspect and stop our cluster.
     let result = (|| -> Result<(), String> {
         if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
             return Ok(());
         }
         startup_phase(&requested_data, "database")?;
@@ -332,11 +295,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
             init_result?;
         }
         if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
             return Ok(());
         }
 
@@ -379,11 +337,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
             }
         }
         if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
             return Ok(());
         }
 
@@ -400,18 +353,14 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
                     &mut owned,
                     contained(
                         ProcessSpec::new(&base_layout.node)
-                            .current_dir(&selected_layout.api)
+                            .current_dir(&base_layout.api)
                             .arg(setup),
                     )
                     .env("ORION_ADMIN_URL", &admin_url)
                     .env("DATABASE_URL", &database_url)
                     .env(
                         "ORION_API_PACKAGE_JSON",
-                        selected_layout
-                            .api
-                            .join("package.json")
-                            .display()
-                            .to_string(),
+                        base_layout.api.join("package.json").display().to_string(),
                     )
                     .env("ORION_APP_PASSWORD", &secrets.app_password)
                     .env(
@@ -424,11 +373,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
         )?;
         log_startup_elapsed("postgres-identity+provisioning", setup_started);
         if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
             return Ok(());
         }
 
@@ -438,125 +382,67 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
             &mut owned,
             contained(
                 ProcessSpec::new(&base_layout.node)
-                    .current_dir(&selected_layout.api)
-                    .arg(&selected_layout.prisma)
+                    .current_dir(&base_layout.api)
+                    .arg(&base_layout.prisma)
                     .arg("migrate")
                     .arg("deploy")
-                    .arg(format!("--schema={}", selected_layout.schema.display())),
+                    .arg(format!("--schema={}", base_layout.schema.display())),
             )
             .env("DATABASE_URL", &database_url)
             .env(
                 "ORION_API_PACKAGE_JSON",
-                selected_layout
-                    .api
-                    .join("package.json")
-                    .display()
-                    .to_string(),
+                base_layout.api.join("package.json").display().to_string(),
             ),
         );
         log_startup_elapsed("prisma-migrate", migration_started);
-        if let Err(migration_error) = migration {
-            if !api_template.trial {
-                return Err(migration_error);
-            }
-
-            // A pending payload is already marked as a trial before migrations
-            // run. Match launcher.cjs startup recovery: reject the candidate,
-            // select the previous verified app, and apply its migrations before
-            // exposing the API. Keep the database and all payload directories.
-            payload.settle_trial(false).map_err(|rollback| {
-                format!("{migration_error}; не удалось откатить обновление: {rollback}")
-            })?;
-            api_template = payload
-                .select_application(&api_template)
-                .map_err(|selection| {
-                    format!("{migration_error}; не удалось выбрать прежнюю версию: {selection}")
-                })?;
-            let fallback_root = api_template
-                .cwd
-                .parent()
-                .ok_or("Выбранный API каталог не имеет корня приложения")?;
-            selected_layout = layout(&root, &pg_root, fallback_root)?;
-            write_app_runtime(&requested_data, &api_template)?;
-            if shutdown.load(Ordering::Acquire) {
-                return Ok(());
-            }
-            startup_phase(&requested_data, "migrations")?;
-            run_to_exit(
-                &mut owned,
-                contained(
-                    ProcessSpec::new(&base_layout.node)
-                        .current_dir(&selected_layout.api)
-                        .arg(&selected_layout.prisma)
-                        .arg("migrate")
-                        .arg("deploy")
-                        .arg(format!("--schema={}", selected_layout.schema.display())),
-                )
-                .env("DATABASE_URL", &database_url)
-                .env(
-                    "ORION_API_PACKAGE_JSON",
-                    selected_layout
-                        .api
-                        .join("package.json")
-                        .display()
-                        .to_string(),
-                ),
-            )
-            .map_err(|fallback_error| {
-                format!("{migration_error}; откат выполнен, но миграции прежней версии не прошли: {fallback_error}")
-            })?;
-        }
+        migration?;
         if shutdown.load(Ordering::Acquire) {
-            if api_template.trial {
-                payload
-                    .settle_trial(false)
-                    .map_err(|error| error.to_string())?;
-            }
             return Ok(());
         }
+
+        // Payloads must match the installed base database hash. Only the base
+        // runs migrations, so a failed trial needs no schema rollback.
+        let payload_select_started = Instant::now();
+        api_template = payload
+            .select_application(&api_template)
+            .map_err(|error| format!("Не удалось выбрать приложение: {error}"))?;
+        log_startup_elapsed("payload-select", payload_select_started);
+        write_app_runtime(&requested_data, &api_template)?;
+        let selected_app_root = api_template
+            .cwd
+            .parent()
+            .ok_or("Выбранный API каталог не имеет корня приложения")?;
+        match layout(&root, &pg_root, selected_app_root) {
+            Ok(layout) => layout,
+            Err(candidate_error) if api_template.trial => {
+                payload.settle_trial(false).map_err(|rollback| {
+                    format!("{candidate_error}; не удалось откатить обновление: {rollback}")
+                })?;
+                api_template = payload
+                    .select_application(&api_template)
+                    .map_err(|selection| {
+                        format!("{candidate_error}; не удалось выбрать прежнюю версию: {selection}")
+                    })?;
+                write_app_runtime(&requested_data, &api_template)?;
+                let fallback_root = api_template
+                    .cwd
+                    .parent()
+                    .ok_or("Выбранный API каталог не имеет корня приложения")?;
+                layout(&root, &pg_root, fallback_root).map_err(|fallback_error| {
+                    format!("{candidate_error}; прежняя версия выбрана, но runtime неполон: {fallback_error}")
+                })?
+            }
+            Err(error) => return Err(error),
+        };
+
         startup_phase(&requested_data, "server")?;
         let mut backend = SystemApiBackend::new(paths.effective_data_dir.join("lan-node.json"));
         backend = backend
             .with_payload_adapter(payload)
             .with_shutdown_flag(Arc::clone(&shutdown));
-        let node = base_layout.node.clone();
-        let api_database_url = database_url.clone();
-        let app_runtime_path = requested_data.join("app-runtime.json");
-        backend = backend.with_prepare_application(move |command| {
-            write_app_runtime(
-                app_runtime_path
-                    .parent()
-                    .ok_or("app-runtime.json has no parent")?,
-                command,
-            )?;
-            let api_dir = command.cwd.clone();
-            let prisma = api_dir.join("node_modules/prisma/build/index.js");
-            let schema = api_dir.join("prisma/schema.prisma");
-            if !prisma.is_file() || !schema.is_file() {
-                return Err("Выбранная версия не содержит Prisma migration runtime".into());
-            }
-            let mut migration_job = Supervisor::new().map_err(|error| error.to_string())?;
-            let migration_started = Instant::now();
-            let migration = run_to_exit(
-                &mut migration_job,
-                contained(
-                    ProcessSpec::new(&node)
-                        .current_dir(&api_dir)
-                        .arg(prisma)
-                        .arg("migrate")
-                        .arg("deploy")
-                        .arg(format!("--schema={}", schema.display())),
-                )
-                .env("DATABASE_URL", &api_database_url)
-                .env(
-                    "ORION_API_PACKAGE_JSON",
-                    api_dir.join("package.json").display().to_string(),
-                ),
-            );
-            log_startup_elapsed("prisma-migrate-fallback", migration_started);
-            migration?;
-            Ok(())
-        });
+        let app_runtime_dir = requested_data.clone();
+        backend = backend
+            .with_prepare_application(move |command| write_app_runtime(&app_runtime_dir, command));
         match crate::rust_api_supervisor::supervise_api(&mut backend, api_template)? {
             SupervisorOutcome::Shutdown => Ok(()),
             SupervisorOutcome::Exited { code: 0, .. } => {
@@ -644,9 +530,9 @@ fn write_shutdown_marker(requested_data: &Path, marker: &Path) -> Result<(), Str
         .and_then(|value| value.to_str())
         .ok_or("shutdown marker must have a plain filename")?;
     if !marker.is_absolute()
-        || marker
-            .parent()
-            .is_none_or(|parent| normalized_path(parent) != normalized_path(requested_data))
+        || marker.parent().is_none_or(|parent| {
+            crate::normalized_path(parent) != crate::normalized_path(requested_data)
+        })
         || !file_name.starts_with("runtime-stopped-")
         || !file_name.ends_with(".marker")
     {
@@ -1109,14 +995,6 @@ fn primary_lan_ipv4() -> Option<String> {
     Some(address.to_string())
 }
 
-fn normalized_path(path: &Path) -> String {
-    path.to_string_lossy()
-        .replace('/', "\\")
-        .trim_start_matches("\\\\?\\")
-        .trim_end_matches('\\')
-        .to_ascii_lowercase()
-}
-
 /// Create a private runtime directory or verify access to an existing directory.
 pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
     let created = match fs::create_dir(path) {
@@ -1162,8 +1040,9 @@ pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
         }
         let sid_line = String::from_utf8_lossy(&sid_output.stdout);
         let sid = match sid_line
-            .split(',')
-            .nth(1)
+            // whoami /user emits two columns; the SID is the last one.
+            .rsplit_once(',')
+            .map(|(_, sid)| sid)
             .map(|part| part.trim().trim_matches('"'))
             .filter(|value| value.starts_with("S-1-"))
         {
@@ -1204,7 +1083,7 @@ pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
                 ));
             }
         } else {
-            verify_existing_acl(path, sid, &system_root)?;
+            crate::windows_acl::verify_existing_acl(path, sid)?;
         }
     }
     #[cfg(unix)]
@@ -1228,82 +1107,50 @@ pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
-fn verify_existing_acl(path: &Path, sid: &str, system_root: &Path) -> Result<(), String> {
-    let powershell = system_root
-        .join("System32")
-        .join("WindowsPowerShell")
-        .join("v1.0")
-        .join("powershell.exe");
-    let output = std::process::Command::new(powershell)
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$ErrorActionPreference = 'Stop'; Import-Module (Join-Path $PSHOME 'Modules\\Microsoft.PowerShell.Security\\Microsoft.PowerShell.Security.psd1') -ErrorAction Stop; (Get-Acl -LiteralPath $env:ORION_ACL_PATH).Sddl",
-        ])
-        .env("ORION_ACL_PATH", path)
-        .output()
-        .map_err(|error| {
-            format!(
-                "Не удалось прочитать ACL каталога {}: {error}",
-                path.display()
-            )
-        })?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-        let detail = if !stderr.is_empty() { stderr } else { stdout };
-        return Err(format!(
-            "Не удалось прочитать ACL существующего каталога (PowerShell exit {:?}): {}; отказ без изменения ACL.",
-            output.status.code(),
-            detail.chars().take(1200).collect::<String>()
-        ));
-    }
-    let sddl = String::from_utf8_lossy(&output.stdout).to_ascii_uppercase();
-    let entries: Vec<&str> = sddl
-        .split('(')
-        .skip(1)
-        .filter_map(|ace| ace.split(')').next())
-        .collect();
-    for ace in &entries {
-        let fields: Vec<&str> = ace.split(';').collect();
-        if fields.len() >= 6 && fields[0] == "A" && broad_acl_principal(fields[5]) {
-            return Err(
-                "Существующий каталог имеет разрешение для общей группы; отказ без изменения ACL."
-                    .into(),
-            );
+fn prune_stale_secret_files(directory: &Path) {
+    use std::os::windows::fs::MetadataExt;
+
+    const RETENTION: std::time::Duration = std::time::Duration::from_secs(48 * 60 * 60);
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    let now = std::time::SystemTime::now();
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let generated_config = name
+            .strip_prefix("local-runtime-")
+            .and_then(|name| name.strip_suffix(".tmp"))
+            .and_then(|name| name.split_once('-'))
+            .is_some_and(|(pid, nonce)| {
+                pid.parse::<u32>().is_ok()
+                    && nonce.len() == 16
+                    && nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+            });
+        if name != "initdb-password.tmp" && !generated_config {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            continue;
+        }
+        if metadata
+            .modified()
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age >= RETENTION)
+        {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("Could not prune a stale runtime secret file: {error}");
+                }
+            }
         }
     }
-    let user = sid.to_ascii_uppercase();
-    let has_full_user_access = entries.iter().any(|ace| {
-        let fields: Vec<&str> = ace.split(';').collect();
-        fields.len() >= 6
-            && fields[0] == "A"
-            && fields[5] == user
-            && (fields[2] == "FA" || fields[2] == "0X1F01FF")
-    });
-    if !has_full_user_access {
-        return Err("Не подтверждён полный доступ текущего пользователя к существующему каталогу; отказ без изменения ACL.".into());
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn broad_acl_principal(principal: &str) -> bool {
-    [
-        "S-1-1-0",
-        "S-1-5-11",
-        "S-1-5-32-545",
-        "S-1-15-2-1",
-        "S-1-15-2-2",
-        // SDDL commonly abbreviates these well-known SIDs.
-        "WD", // Everyone
-        "AU", // Authenticated Users
-        "BU", // Builtin Users
-        "AC", // All Application Packages
-    ]
-    .contains(&principal)
 }
 
 fn private_new_file(path: &Path) -> Result<fs::File, String> {
@@ -1358,7 +1205,7 @@ fn with_private_script<T>(
     }
 }
 
-fn contained(spec: ProcessSpec) -> ProcessSpec {
+pub(crate) fn contained(spec: ProcessSpec) -> ProcessSpec {
     spec.isolated_environment()
         .allow_env("SystemRoot")
         .allow_env("WINDIR")
@@ -1576,22 +1423,9 @@ fn base64_secret(bytes: usize) -> Result<String, String> {
 
 fn random_bytes(len: usize) -> Result<Vec<u8>, String> {
     let mut buffer = vec![0u8; len];
-    let status =
-        unsafe { BCryptGenRandom(std::ptr::null_mut(), buffer.as_mut_ptr(), len as u32, 2) };
-    if status != 0 {
-        return Err(format!("Не удалось получить случайные байты ({status})"));
-    }
+    getrandom::getrandom(&mut buffer)
+        .map_err(|error| format!("Could not generate runtime random bytes: {error}"))?;
     Ok(buffer)
-}
-
-#[link(name = "bcrypt")]
-extern "system" {
-    fn BCryptGenRandom(
-        algorithm: *mut std::ffi::c_void,
-        buffer: *mut u8,
-        length: u32,
-        flags: u32,
-    ) -> i32;
 }
 
 /// Reject the legacy staged migration command without accessing the backup or target.
@@ -1650,13 +1484,22 @@ mod tests {
     }
 
     #[test]
-    #[cfg(windows)]
-    fn acl_rejects_well_known_groups_in_sid_and_sddl_alias_forms() {
-        for principal in ["AU", "BU", "WD", "AC", "S-1-5-11", "S-1-1-0"] {
-            assert!(broad_acl_principal(principal), "{principal}");
-        }
-        assert!(!broad_acl_principal("SY"));
-        assert!(!broad_acl_principal("BA"));
+    fn native_acl_check_accepts_private_directory_and_rejects_broad_grant() {
+        let profile = DisposableTestProfile::create();
+        let data = profile.path("acl fixture [test]");
+        ensure_private_dir(&data).expect("create private directory");
+        ensure_private_dir(&data).expect("read private DACL");
+
+        let system_root = std::env::var_os("SystemRoot").expect("SystemRoot");
+        let status =
+            std::process::Command::new(PathBuf::from(system_root).join("System32/icacls.exe"))
+                .arg(&data)
+                .args(["/grant", "*S-1-1-0:(RX)"])
+                .output()
+                .expect("grant Everyone read access to disposable fixture");
+        assert!(status.status.success());
+        let error = ensure_private_dir(&data).expect_err("broad ACL must be refused");
+        assert!(!error.starts_with("Could not read the ACL"), "{error}");
     }
 
     #[test]

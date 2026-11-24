@@ -2,6 +2,14 @@ fn main() {
     let command = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "serve".to_owned());
+    if matches!(command.as_str(), "help" | "--help" | "-h") {
+        println!("Commands: show, serve");
+        #[cfg(windows)]
+        println!(
+            "Windows commands: supervise, supervise-launcher, supervise-direct, restore (disabled)"
+        );
+        return;
+    }
     let profile = orion_runtime::load_profile().unwrap_or_else(|error| {
         eprintln!("{error}");
         std::process::exit(2);

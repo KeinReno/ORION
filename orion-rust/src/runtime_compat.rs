@@ -11,9 +11,10 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const COPY_MARKER: &str = ".orion-pg-copy";
+const STALE_COPY_RETENTION: Duration = Duration::from_secs(48 * 60 * 60);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RuntimePaths {
@@ -93,6 +94,7 @@ pub fn prepare_postgres_binaries(paths: &RuntimePaths, version: &str) -> Result<
     ensure_no_link_components(&paths.effective_pg_dir)?;
     if marker_matches(&paths.effective_pg_dir, version)? {
         verify_pg_binaries(&paths.effective_pg_dir)?;
+        prune_stale_copies(&paths.effective_pg_dir);
         return Ok(paths.effective_pg_dir.clone());
     }
 
@@ -125,14 +127,81 @@ pub fn prepare_postgres_binaries(paths: &RuntimePaths, version: &str) -> Result<
         None
     };
     if let Err(error) = fs::rename(&stage, &paths.effective_pg_dir) {
-        if let Some(stale) = stale.as_ref() {
-            let _ = fs::rename(stale, &paths.effective_pg_dir);
-        }
+        let rollback_error = stale
+            .as_ref()
+            .and_then(|stale| fs::rename(stale, &paths.effective_pg_dir).err());
         let _ = fs::remove_dir_all(&stage);
-        return Err(format!("Не удалось опубликовать копию PostgreSQL: {error}"));
+        let mut message = format!("Could not publish PostgreSQL mirror: {error}");
+        if let Some(rollback_error) = rollback_error {
+            message.push_str(&format!(
+                "; could not restore the previous mirror: {rollback_error}"
+            ));
+        }
+        return Err(message);
     }
     verify_pg_binaries(&paths.effective_pg_dir)?;
+    prune_stale_copies(&paths.effective_pg_dir);
     Ok(paths.effective_pg_dir.clone())
+}
+
+fn prune_stale_copies(target: &Path) {
+    let (Some(parent), Some(name)) = (target.parent(), target.file_name().and_then(OsStr::to_str))
+    else {
+        return;
+    };
+    let Ok(cutoff) = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|age| age.saturating_sub(STALE_COPY_RETENTION).as_nanos())
+    else {
+        return;
+    };
+    let prefix = format!("{name}-stale-");
+    let entries = match fs::read_dir(parent) {
+        Ok(entries) => entries,
+        Err(error) => {
+            eprintln!("Could not list stale PostgreSQL mirrors: {error}");
+            return;
+        }
+    };
+    for entry in entries {
+        let result = entry.and_then(|entry| {
+            let filename = entry.file_name();
+            let generation = filename
+                .to_str()
+                .and_then(|name| name.strip_prefix(&prefix))
+                .and_then(|suffix| suffix.split_once('-'))
+                .and_then(|(pid, stamp)| {
+                    Some((pid.parse::<u32>().ok()?, stamp.parse::<u128>().ok()?))
+                });
+            if generation.is_some_and(|(_, stamp)| stamp < cutoff)
+                && is_plain_directory(&entry.path())?
+                && entry
+                    .path()
+                    .join(COPY_MARKER)
+                    .symlink_metadata()
+                    .is_ok_and(|m| m.is_file())
+            {
+                fs::remove_dir_all(entry.path())?;
+            }
+            Ok(())
+        });
+        if let Err(error) = result {
+            eprintln!("Could not prune a stale PostgreSQL mirror: {error}");
+        }
+    }
+}
+
+fn is_plain_directory(path: &Path) -> io::Result<bool> {
+    let metadata = fs::symlink_metadata(path)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Ok(false);
+        }
+    }
+    Ok(metadata.file_type().is_dir())
 }
 
 pub fn path_is_ascii(path: &Path) -> bool {
@@ -394,6 +463,22 @@ mod tests {
             .filter(|entry| entry.file_name().to_string_lossy().contains("stale-"))
             .count();
         assert_eq!(stale_count, 1, "old copy should be retained for recovery");
+
+        let expired_name = format!(
+            "{}-stale-42-1",
+            target.file_name().unwrap().to_string_lossy()
+        );
+        let expired = target.with_file_name(expired_name);
+        fs::create_dir(&expired).unwrap();
+        fs::write(expired.join(COPY_MARKER), "old").unwrap();
+        let unrelated = target.with_file_name(format!(
+            "{}-stale-43-1",
+            target.file_name().unwrap().to_string_lossy()
+        ));
+        fs::create_dir(&unrelated).unwrap();
+        prepare_postgres_binaries(&paths, "1.2.4").unwrap();
+        assert!(!expired.exists());
+        assert!(unrelated.is_dir());
         fs::remove_dir_all(root).expect("cleanup");
         fs::remove_dir_all(pd).expect("cleanup fallback");
     }

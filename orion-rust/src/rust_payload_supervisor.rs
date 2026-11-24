@@ -1,7 +1,7 @@
 //! Adapter between the installed payload selector and API supervisor.
 //!
 //! Registered in the production path: `lifecycle.rs` primes the adapter
-//! before database work, and `SystemApiBackend` reuses it for trial ACK and
+//! after base database setup, and `SystemApiBackend` reuses it for trial ACK and
 //! rollback transitions. Selection builds a complete API command; it does
 //! not launch a process. The supervisor owns the ACK/health/listener gate
 //! and calls `settle_trial(true)` only after that gate.
@@ -33,6 +33,11 @@ impl From<PayloadError> for AdapterError {
 impl std::fmt::Display for AdapterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Payload(PayloadError::SelectionWriteFailed(Some(code))) => write!(
+                f,
+                "payload selection failed: {}",
+                std::io::Error::from_raw_os_error(*code)
+            ),
             Self::Payload(error) => write!(f, "payload selection failed: {}", error.message()),
             Self::InvalidRuntime => f.write_str("selected runtime is incomplete"),
             Self::InvalidCommand => f.write_str("API command has no unique entrypoint argument"),

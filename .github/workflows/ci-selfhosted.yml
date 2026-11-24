@@ -26,8 +26,6 @@ jobs:
       DATABASE_URL: postgresql://orion:orion_local_dev@127.0.0.1:5433/orion
       APP_DATABASE_URL: postgresql://orion_app:OcjNaKnQFUp0gdwdju-cSP9T_0gaiOZI@127.0.0.1:5433/orion
       JWT_SECRET: ci-only-secret-with-sufficient-length
-      # Test-only key; must decode from base64 to exactly 32 bytes (sync-crypto.ts).
-      SYNC_SECRET: gqnzEEdiChs+nfvHWYR9NA36qBGOCjVZq0xqXHtdHn8=
       STORAGE_DRIVER: local
       STORAGE_DIR: ./tmp/ci-documents
       CI: "true"
@@ -44,6 +42,8 @@ jobs:
         with:
           components: clippy
 
+      - name: Generate disposable sync key
+        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV, 'SYNC_SECRET=' + require('node:crypto').randomBytes(32).toString('base64') + '\n')"
       - run: pnpm install --frozen-lockfile
 
       # Local PostgreSQL without Docker (scripts/postgres.mjs, port 5433).

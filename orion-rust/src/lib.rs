@@ -5,8 +5,14 @@
 //! и не читает. Команда `supervise` напрямую владеет PostgreSQL и API через Rust
 //! Job Objects; `supervise-launcher` оставлен для диагностики.
 
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{
+    extract::State,
+    http::{header, HeaderMap, StatusCode},
+    routing::get,
+    Json, Router,
+};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,6 +30,8 @@ pub mod rust_payload_supervisor;
 #[cfg(windows)]
 pub mod supervisor;
 pub mod timeouts;
+#[cfg(windows)]
+mod windows_acl;
 
 #[cfg(windows)]
 pub use lifecycle::restore_staged_backup;
@@ -56,6 +64,7 @@ pub struct Profile {
 
 #[derive(Clone)]
 struct RuntimeState {
+    diagnostics_token_hash: Option<[u8; 32]>,
     profile: Profile,
     started: Instant,
     started_at: String,
@@ -145,8 +154,8 @@ pub fn assert_isolated(
     forbidden_api: u16,
     forbidden_pg: u16,
 ) -> Result<(), String> {
-    let data = norm(&resolve_existing_ancestor(&profile.data_dir)?);
-    let prod = norm(&resolve_existing_ancestor(production)?);
+    let data = normalized_path(&resolve_existing_ancestor(&profile.data_dir)?);
+    let prod = normalized_path(&resolve_existing_ancestor(production)?);
     if data == prod || data.starts_with(&(prod.clone() + "\\")) {
         return Err(format!(
             "ORION Rust не использует каталог обычного ORION ({}).",
@@ -176,6 +185,23 @@ pub fn assert_isolated(
 }
 
 pub async fn serve(profile: Profile) -> Result<(), String> {
+    let diagnostics_token_hash = match std::env::var("ORION_RUNTIME_DIAGNOSTICS_TOKEN") {
+        Ok(token)
+            if token.len() >= 32
+                && token
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')) =>
+        {
+            Some(Sha256::digest(token.as_bytes()).into())
+        }
+        Err(std::env::VarError::NotPresent) => None,
+        _ => {
+            return Err(
+                "ORION_RUNTIME_DIAGNOSTICS_TOKEN must contain at least 32 base64url characters"
+                    .into(),
+            )
+        }
+    };
     std::fs::create_dir_all(&profile.data_dir)
         .map_err(|error| format!("Не удалось создать каталог данных: {error}"))?;
     let marker = serde_json::json!({
@@ -195,6 +221,7 @@ pub async fn serve(profile: Profile) -> Result<(), String> {
     .map_err(|error| format!("Не удалось записать rust-runtime.json: {error}"))?;
 
     let state = Arc::new(RuntimeState {
+        diagnostics_token_hash,
         profile: profile.clone(),
         started: Instant::now(),
         started_at: chrono::Utc::now().to_rfc3339(),
@@ -217,14 +244,40 @@ async fn health() -> Json<Value> {
     Json(serde_json::json!({ "status": "ok", "edition": "orion-rust" }))
 }
 
-async fn profile_view(State(state): State<Arc<RuntimeState>>) -> Json<Value> {
-    Json(public_profile(&state.profile))
+fn authorize_diagnostics(state: &RuntimeState, headers: &HeaderMap) -> Result<(), StatusCode> {
+    let expected = state.diagnostics_token_hash.ok_or(StatusCode::NOT_FOUND)?;
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let actual = Sha256::digest(token.as_bytes());
+    let difference = expected
+        .iter()
+        .zip(actual)
+        .fold(0, |diff, (a, b)| diff | (a ^ b));
+    if difference != 0 {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
 }
 
-async fn diagnostics(State(state): State<Arc<RuntimeState>>) -> Json<Value> {
+async fn profile_view(
+    State(state): State<Arc<RuntimeState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    authorize_diagnostics(&state, &headers)?;
+    Ok(Json(public_profile(&state.profile)))
+}
+
+async fn diagnostics(
+    State(state): State<Arc<RuntimeState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    authorize_diagnostics(&state, &headers)?;
     let api_up = listening(state.profile.api_port).await;
     let pg_up = listening(state.profile.pg_port).await;
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "edition": state.profile.edition,
         "phase": "runtime-ready",
         "startedAt": state.started_at,
@@ -238,7 +291,7 @@ async fn diagnostics(State(state): State<Arc<RuntimeState>>) -> Json<Value> {
         "nest": "not-started-by-this-process",
         "postgres": "not-started-by-this-process",
         "productionDataUntouched": true,
-    }))
+    })))
 }
 
 fn public_profile(profile: &Profile) -> Value {
@@ -282,7 +335,7 @@ fn env_port(name: &str, default: u16) -> Result<u16, String> {
     }
 }
 
-fn norm(path: &Path) -> String {
+fn normalized_path(path: &Path) -> String {
     path.to_string_lossy()
         .replace('/', "\\")
         .trim_start_matches("\\\\?\\")
@@ -361,15 +414,16 @@ pub fn supervise_packaged_runtime(profile: &Profile) -> Result<(), String> {
     if !node.is_file() || !launcher.is_file() {
         return Err("В каталоге runtime нет node.exe или launcher.cjs".to_owned());
     }
-    std::env::set_var("ORION_DESKTOP_DATA_DIR", &profile.data_dir);
-    std::env::set_var("ORION_DESKTOP_API_PORT", profile.api_port.to_string());
-    std::env::set_var("ORION_DESKTOP_PG_PORT", profile.pg_port.to_string());
-    std::env::set_var("ORION_RUST_RUNTIME_PORT", profile.runtime_port.to_string());
-    std::env::set_var("ORION_EDITION", "rust");
     let mut owned = supervisor::Supervisor::new().map_err(|error| error.to_string())?;
-    let spec = supervisor::ProcessSpec::new(node)
+    let spec = lifecycle::contained(supervisor::ProcessSpec::new(node))
         .arg(launcher)
-        .current_dir(&root);
+        .current_dir(&root)
+        .allow_env("ORION_RUST_RUNTIME_BIN")
+        .env("ORION_DESKTOP_DATA_DIR", profile.data_dir.as_os_str())
+        .env("ORION_DESKTOP_API_PORT", profile.api_port.to_string())
+        .env("ORION_DESKTOP_PG_PORT", profile.pg_port.to_string())
+        .env("ORION_RUST_RUNTIME_PORT", profile.runtime_port.to_string())
+        .env("ORION_EDITION", "rust");
     let pid = owned.spawn(spec).map_err(|error| error.to_string())?;
     loop {
         match owned

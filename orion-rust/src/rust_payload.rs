@@ -139,6 +139,8 @@ pub enum PayloadError {
     PathCollision,
     InvalidFileHash,
     InvalidSelection,
+    SelectionWriteFailed(Option<i32>),
+    RotationDirectoryUnreadable,
 }
 
 impl PayloadError {
@@ -156,6 +158,8 @@ impl PayloadError {
             Self::PathCollision => "Payload path collision",
             Self::InvalidFileHash => "File integrity failure",
             Self::InvalidSelection => "Invalid payload selection",
+            Self::SelectionWriteFailed(_) => "Could not replace payload selection state",
+            Self::RotationDirectoryUnreadable => "Could not read the payload rotation directory",
         }
     }
 }
@@ -455,7 +459,7 @@ pub fn prune_stale_versions(data: &Path, max_age: Duration) -> Result<usize, Pay
     let entries = match fs::read_dir(&versions) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-        Err(_) => return Err(PayloadError::InvalidManifest),
+        Err(_) => return Err(PayloadError::RotationDirectoryUnreadable),
     };
     let now = SystemTime::now();
     let mut removed = 0;
@@ -485,8 +489,10 @@ pub fn prune_stale_versions(data: &Path, max_age: Duration) -> Result<usize, Pay
         if age < max_age {
             continue;
         }
-        if fs::remove_dir_all(entry.path()).is_ok() {
-            removed += 1;
+        match fs::remove_dir_all(entry.path()) {
+            Ok(()) => removed += 1,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => eprintln!("Could not prune stale payload version {name}: {error}"),
         }
     }
     Ok(removed)
@@ -609,13 +615,16 @@ fn replace_file(source: &Path, destination: &Path) -> Result<(), PayloadError> {
             )
         };
         if ok == 0 {
-            return Err(PayloadError::InvalidManifest);
+            return Err(PayloadError::SelectionWriteFailed(
+                std::io::Error::last_os_error().raw_os_error(),
+            ));
         }
         Ok(())
     }
     #[cfg(not(windows))]
     {
-        fs::rename(source, destination).map_err(|_| PayloadError::InvalidManifest)
+        fs::rename(source, destination)
+            .map_err(|error| PayloadError::SelectionWriteFailed(error.raw_os_error()))
     }
 }
 

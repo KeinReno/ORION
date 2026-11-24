@@ -139,6 +139,15 @@ fn signed_manifest_requires_signature_valid_shape_and_matching_base() {
 
     let wrong_base = BaseInfo {
         shell_hash: "b".repeat(64),
+        ..base.clone()
+    };
+    assert_eq!(
+        verify_signed_manifest(&envelope, b"test-key", &wrong_base, &crypto),
+        Err(PayloadError::IncompatibleBase)
+    );
+
+    let wrong_base = BaseInfo {
+        database_hash: "b".repeat(64),
         ..base
     };
     assert_eq!(

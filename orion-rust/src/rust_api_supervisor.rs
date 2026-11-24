@@ -192,10 +192,10 @@ pub fn supervise_api<B: ApiSupervisorBackend>(
                     backend.sleep(Duration::from_millis(RESTART_DELAY_MS));
                     continue;
                 }
-                return Ok(SupervisorOutcome::Exited {
-                    code: 1,
-                    payload_trial_rolled_back: any_trial_rolled_back,
-                });
+                return Err(format!(
+                    "Не удалось запустить API: {}",
+                    failure_reason(&error)
+                ));
             }
         };
 
