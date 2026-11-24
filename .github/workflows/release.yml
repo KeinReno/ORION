@@ -28,6 +28,20 @@ jobs:
           ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
 
+      - name: Verify release source
+        id: source
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          commit=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          test "$(git rev-parse HEAD)" = "$commit"
+          if [[ "$TAG" == v*-orion-rust-beta.* ]] && ! git cat-file -e "$commit:orion-rust/Cargo.toml"; then
+            echo "::error::Release tag $TAG does not contain the ORION Rust runtime"
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-node@v4
@@ -68,7 +82,7 @@ jobs:
           echo "## Установщик" >> "$GITHUB_STEP_SUMMARY"
           echo "- Файл: \`$(basename "$file")\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- SHA-256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Коммит: \`${{ inputs.tag || github.ref_name }}@${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Коммит: \`${{ inputs.tag || github.ref_name }}@${{ steps.source.outputs.commit }}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload asset to the release
         shell: bash

@@ -23,12 +23,12 @@ jobs:
     runs-on: [self-hosted, windows]
     timeout-minutes: 90
     env:
-      DATABASE_URL: postgresql://orion:orion_local_dev@127.0.0.1:5433/orion
-      APP_DATABASE_URL: postgresql://orion_app:OcjNaKnQFUp0gdwdju-cSP9T_0gaiOZI@127.0.0.1:5433/orion
+      DATABASE_URL: postgresql://orion:orion_local_dev@127.0.0.1:15433/orion
       JWT_SECRET: ci-only-secret-with-sufficient-length
       STORAGE_DRIVER: local
       STORAGE_DIR: ./tmp/ci-documents
       CI: "true"
+      ORION_PG_PORT: "15433"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -46,8 +46,14 @@ jobs:
         run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV, 'SYNC_SECRET=' + require('node:crypto').randomBytes(32).toString('base64') + '\n')"
       - run: pnpm install --frozen-lockfile
 
-      # Local PostgreSQL without Docker (scripts/postgres.mjs, port 5433).
+      - name: Choose disposable PostgreSQL cluster directory
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP ("orion-ci-pg-" + [guid]::NewGuid().ToString("N"))
+          "ORION_PG_DATA=$path" >> $env:GITHUB_ENV
+      # Keep the CI database separate from the runner's development cluster.
       - run: pnpm db:up
+      - run: node scripts/prepare-ci-db-login.mjs
       - run: pnpm db:generate
       - run: pnpm --filter @orion/api prisma:migrate:deploy
 
@@ -74,5 +80,5 @@ jobs:
         run: cargo check
 
       - name: Stop PostgreSQL
-        if: always()
+        if: always() && env.ORION_PG_DATA != ''
         run: pnpm db:down

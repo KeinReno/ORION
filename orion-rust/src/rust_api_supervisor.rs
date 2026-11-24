@@ -13,7 +13,7 @@ use crate::rust_payload_supervisor::PayloadSupervisorAdapter;
 #[cfg(windows)]
 use crate::supervisor::{ProcessSpec, Supervisor};
 use std::collections::BTreeMap;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::collections::VecDeque;
 use std::ffi::OsString;
 #[cfg(windows)]
@@ -28,13 +28,14 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::sync::Mutex;
 use std::thread;
 #[cfg(windows)]
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+#[cfg(any(windows, test))]
 const OUTPUT_LIMIT: usize = 20_000;
 
 #[derive(Clone, Debug)]
@@ -939,12 +940,14 @@ fn spawn_pipe_reader(
         })
 }
 
+#[cfg(any(windows, test))]
 #[derive(Clone, Copy)]
 enum OutputStream {
     Stdout,
     Stderr,
 }
 
+#[cfg(any(windows, test))]
 fn publish_api_output(output: &Arc<Mutex<VecDeque<u8>>>, stream: OutputStream, bytes: &[u8]) {
     if bytes.is_empty() {
         return;

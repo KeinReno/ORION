@@ -401,6 +401,7 @@ pub fn supervise_direct(profile: &Profile) -> Result<(), String> {
     lifecycle::supervise_direct(profile)
 }
 
+#[cfg(windows)]
 pub fn supervise_packaged_runtime(profile: &Profile) -> Result<(), String> {
     let runtime_root = std::env::var("ORION_RUNTIME_ROOT").map_err(|_| {
         "Задайте ORION_RUNTIME_ROOT — каталог packaged runtime с node.exe и launcher.cjs".to_owned()
