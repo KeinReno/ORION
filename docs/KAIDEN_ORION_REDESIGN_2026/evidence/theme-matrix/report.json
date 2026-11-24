@@ -1,18 +1,14 @@
 {
   "precision": {
     "projects-1600": {
-      "checked": 80,
+      "checked": 118,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "focus-projects": [
       {
-        "name": "Дом",
-        "visible": true
-      },
-      {
-        "name": "Контакты",
+        "name": "Ещё действия: Проекты",
         "visible": true
       },
       {
@@ -20,103 +16,7 @@
         "visible": true
       },
       {
-        "name": "Время",
-        "visible": true
-      },
-      {
-        "name": "Привычки",
-        "visible": true
-      },
-      {
-        "name": "Возможности",
-        "visible": true
-      }
-    ],
-    "tasks-1600": {
-      "checked": 104,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "tasks-menu-1600": {
-      "checked": 111,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "notes-1600": {
-      "checked": 73,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "documents-1600": {
-      "checked": 72,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "calendar-1600": {
-      "checked": 122,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "projects-error-1600": {
-      "checked": 50,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "projects-390": {
-      "checked": 36,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "tasks-390": {
-      "checked": 33,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "notes-390": {
-      "checked": 26,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "documents-390": {
-      "checked": 16,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "calendar-390": {
-      "checked": 76,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    }
-  },
-  "arctic-saved": {
-    "projects-1600": {
-      "checked": 80,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "focus-projects": [
-      {
-        "name": "Дом",
-        "visible": true
-      },
-      {
-        "name": "Контакты",
-        "visible": true
-      },
-      {
-        "name": "Цели",
+        "name": "Ещё действия: Цели",
         "visible": true
       },
       {
@@ -124,158 +24,58 @@
         "visible": true
       },
       {
-        "name": "Привычки",
-        "visible": true
-      },
-      {
-        "name": "Возможности",
-        "visible": true
-      }
-    ],
-    "tasks-1600": {
-      "checked": 104,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "tasks-menu-1600": {
-      "checked": 111,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "notes-1600": {
-      "checked": 73,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "documents-1600": {
-      "checked": 72,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "calendar-1600": {
-      "checked": 122,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "projects-error-1600": {
-      "checked": 50,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "projects-390": {
-      "checked": 36,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "tasks-390": {
-      "checked": 33,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "notes-390": {
-      "checked": 26,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "documents-390": {
-      "checked": 16,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "calendar-390": {
-      "checked": 76,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    }
-  },
-  "user-midnight": {
-    "projects-1600": {
-      "checked": 80,
-      "belowTarget": 0,
-      "below2": 0,
-      "worst": []
-    },
-    "focus-projects": [
-      {
-        "name": "Дом",
-        "visible": true
-      },
-      {
-        "name": "Контакты",
-        "visible": true
-      },
-      {
-        "name": "Цели",
-        "visible": true
-      },
-      {
-        "name": "Время",
+        "name": "Ещё действия: Время",
         "visible": true
       },
       {
         "name": "Привычки",
         "visible": true
-      },
-      {
-        "name": "Возможности",
-        "visible": true
       }
     ],
     "tasks-1600": {
-      "checked": 104,
+      "checked": 145,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "tasks-menu-1600": {
-      "checked": 111,
+      "checked": 153,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "notes-1600": {
-      "checked": 73,
+      "checked": 110,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "documents-1600": {
-      "checked": 72,
+      "checked": 99,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "calendar-1600": {
-      "checked": 122,
+      "checked": 153,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "projects-error-1600": {
-      "checked": 50,
+      "checked": 86,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "projects-390": {
-      "checked": 36,
+      "checked": 41,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "tasks-390": {
-      "checked": 34,
+      "checked": 31,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
@@ -287,13 +87,213 @@
       "worst": []
     },
     "documents-390": {
+      "checked": 18,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "calendar-390": {
+      "checked": 70,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    }
+  },
+  "arctic-saved": {
+    "projects-1600": {
+      "checked": 118,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "focus-projects": [
+      {
+        "name": "Ещё действия: Проекты",
+        "visible": true
+      },
+      {
+        "name": "Цели",
+        "visible": true
+      },
+      {
+        "name": "Ещё действия: Цели",
+        "visible": true
+      },
+      {
+        "name": "Время",
+        "visible": true
+      },
+      {
+        "name": "Ещё действия: Время",
+        "visible": true
+      },
+      {
+        "name": "Привычки",
+        "visible": true
+      }
+    ],
+    "tasks-1600": {
+      "checked": 145,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "tasks-menu-1600": {
+      "checked": 153,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "notes-1600": {
+      "checked": 110,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "documents-1600": {
+      "checked": 99,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "calendar-1600": {
+      "checked": 153,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "projects-error-1600": {
+      "checked": 85,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "projects-390": {
+      "checked": 40,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "tasks-390": {
+      "checked": 30,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "notes-390": {
+      "checked": 26,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "documents-390": {
       "checked": 17,
       "belowTarget": 0,
       "below2": 0,
       "worst": []
     },
     "calendar-390": {
-      "checked": 77,
+      "checked": 69,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    }
+  },
+  "user-midnight": {
+    "projects-1600": {
+      "checked": 118,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "focus-projects": [
+      {
+        "name": "Ещё действия: Проекты",
+        "visible": true
+      },
+      {
+        "name": "Цели",
+        "visible": true
+      },
+      {
+        "name": "Ещё действия: Цели",
+        "visible": true
+      },
+      {
+        "name": "Время",
+        "visible": true
+      },
+      {
+        "name": "Ещё действия: Время",
+        "visible": true
+      },
+      {
+        "name": "Привычки",
+        "visible": true
+      }
+    ],
+    "tasks-1600": {
+      "checked": 145,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "tasks-menu-1600": {
+      "checked": 153,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "notes-1600": {
+      "checked": 110,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "documents-1600": {
+      "checked": 99,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "calendar-1600": {
+      "checked": 153,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "projects-error-1600": {
+      "checked": 85,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "projects-390": {
+      "checked": 40,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "tasks-390": {
+      "checked": 30,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "notes-390": {
+      "checked": 26,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "documents-390": {
+      "checked": 17,
+      "belowTarget": 0,
+      "below2": 0,
+      "worst": []
+    },
+    "calendar-390": {
+      "checked": 69,
       "belowTarget": 0,
       "below2": 0,
       "worst": []

@@ -41,9 +41,13 @@ test("project logbook links an existing task and exposes predecessor/successor d
     target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
   }, task.id);
   await page.getByRole("textbox", { name: "Комментарий к задаче Проверить восстановление" }).fill("Нужна проверка на чистом профиле");
-  await page.getByRole("button", { name: "Добавить запись", exact: true }).click();
+  const addEntry = page.getByRole("button", { name: "Добавить запись", exact: true });
+  await expect(addEntry).toBeDisabled();
+  await page.getByRole("textbox", { name: "Обоснование решения", exact: true }).fill("Проверка нужна до развёртывания");
+  await addEntry.click();
   await expect(page.getByText("Берём проверку в текущий цикл", { exact: true })).toBeVisible();
   await expect(page.getByText("Нужна проверка на чистом профиле", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Обоснование: Проверка нужна до развёртывания/)).toBeVisible();
   await expect(page.getByText("QA-v2 · todo", { exact: true })).toBeVisible();
 
   await page.getByRole("combobox", { name: "Тип связи" }).selectOption("continues");

@@ -42,6 +42,7 @@
 | GET | `planning/blocks/:blockId` | `planning.block.read` | Один блок с конфликтами |
 | PATCH | `planning/blocks/:blockId` | `planning.block.update` | Правка полей/окна, CAS по `expectedRevision` |
 | POST | `planning/blocks/:blockId/move` | `planning.block.update` | Перенос окна; без `endAt` длительность сохраняется |
+| POST | `planning/blocks/:blockId/move-preview` | `planning.block.update` | Предпросмотр нового окна, пересечений и зависимостей без записи и события |
 | DELETE | `planning/blocks/:blockId` | `planning.block.delete` | Удалить блок (204) |
 | GET | `planning/gantt?projectId=` | `planning.view.read` | Задачи и вехи проекта, зависимости, CPM |
 | POST | `planning/reschedule-impact` | `planning.view.read` | **Только расчёт** последствий переноса задачи |

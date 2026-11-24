@@ -80,7 +80,8 @@ export class DevelopmentArchitectService {
       edges: analysis.edges,
       metrics: analysis.metrics,
       layoutRevision: layout?.revision ?? 0,
-      truncated: analysis.truncated
+      truncated: analysis.truncated,
+      launches: analysis.launches
     };
   }
 

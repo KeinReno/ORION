@@ -4,6 +4,7 @@ import { Module } from "@nestjs/common";
 import { AgentCoreModule } from "../ai/agent-core.module";
 import { AuthModule } from "../auth/auth.module";
 import { InboxItemsModule } from "../inbox/public/inbox-items.module";
+import { ModulesModule } from "../modules/modules.module";
 import { ProjectReferencesModule } from "../projects/public/project-references.module";
 import { SearchRegistryModule } from "../search/search-registry.module";
 import { WorkspacesModule } from "../workspaces/workspaces.module";
@@ -17,7 +18,7 @@ import { KnowledgeService } from "./knowledge.service";
 import { KnowledgeSettingsService } from "./knowledge-settings.service";
 
 @Module({
-  imports: [PublicationRegistryModule, AuthModule, WorkspacesModule, ProjectReferencesModule, AgentCoreModule, InboxItemsModule, SearchRegistryModule],
+  imports: [PublicationRegistryModule, AuthModule, WorkspacesModule, ProjectReferencesModule, AgentCoreModule, InboxItemsModule, SearchRegistryModule, ModulesModule],
   controllers: [KnowledgeController, KnowledgeAgentController],
   providers: [
     KnowledgePublicationAdapter,

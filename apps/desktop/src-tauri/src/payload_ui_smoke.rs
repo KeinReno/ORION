@@ -1,6 +1,6 @@
 //! Debug-only native protocol rehearsal. Isolated identifier, fake API, no database or external navigation.
-use tauri::{Manager, Webview};
 use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{Manager, Webview};
 static STARTED: AtomicBool = AtomicBool::new(false);
 
 pub fn enabled() -> bool {
@@ -8,12 +8,19 @@ pub fn enabled() -> bool {
 }
 
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    if !enabled() { return Ok(()); }
-    if app.config().identifier != "com.orion.payload-smoke" { return Err("Isolated smoke identifier required".into()); }
+    if !enabled() {
+        return Ok(());
+    }
+    if app.config().identifier != "com.orion.payload-smoke" {
+        return Err("Isolated smoke identifier required".into());
+    }
     let root = std::fs::canonicalize(std::env::var("ORION_PAYLOAD_UI_SMOKE_ROOT")?)?;
     let data = app.path().app_local_data_dir()?;
     std::fs::create_dir_all(&data)?;
-    std::fs::write(data.join("app-runtime.json"), serde_json::to_vec(&serde_json::json!({"web": root}))?)?;
+    std::fs::write(
+        data.join("app-runtime.json"),
+        serde_json::to_vec(&serde_json::json!({"web": root}))?,
+    )?;
     Ok(())
 }
 
@@ -30,13 +37,23 @@ pub const FAKE_API: &str = r#"(() => {
 })()"#;
 
 pub fn loaded(view: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
-    if !enabled() || view.app_handle().config().identifier != "com.orion.payload-smoke" || view.label() != "main"
+    if !enabled()
+        || view.app_handle().config().identifier != "com.orion.payload-smoke"
+        || view.label() != "main"
         || !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
-        || STARTED.swap(true, Ordering::SeqCst) { return; }
-    let Ok(report) = std::env::var("ORION_PAYLOAD_UI_SMOKE_REPORT") else { return; };
-    if !report.starts_with("http://127.0.0.1:") { return; }
+        || STARTED.swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+    let Ok(report) = std::env::var("ORION_PAYLOAD_UI_SMOKE_REPORT") else {
+        return;
+    };
+    if !report.starts_with("http://127.0.0.1:") {
+        return;
+    }
     let report = serde_json::to_string(&report).unwrap();
-    let js = format!(r#"(async () => {{
+    let js = format!(
+        r#"(async () => {{
       const result = {{origin:location.origin, checks:[]}};
       try {{
         for (let n=0;n<150;n++) {{
@@ -57,6 +74,7 @@ pub fn loaded(view: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
         result.ok=true;
       }} catch(e) {{ result.ok=false; result.error=String(e); }}
       await fetch({report},{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(result)}});
-    }})()"#);
+    }})()"#
+    );
     let _ = view.eval(&js);
 }

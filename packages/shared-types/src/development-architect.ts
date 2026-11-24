@@ -65,6 +65,13 @@ export const architectMapQuerySchema = z.object({
 });
 export type ArchitectMapQuery = z.infer<typeof architectMapQuerySchema>;
 
+export const architectLaunchSchema = z.object({
+  path: z.string(),
+  kind: z.enum(["main", "route", "cron", "script"]),
+  label: z.string()
+});
+export type ArchitectLaunch = z.infer<typeof architectLaunchSchema>;
+
 export const architectMapSchema = z.object({
   repository: z.object({ id: z.string(), name: z.string() }),
   /** Запрошенный подкаталог (`""` — корень). */
@@ -75,7 +82,9 @@ export const architectMapSchema = z.object({
   /** Ревизия сохранённой раскладки; `0` — раскладки ещё нет. */
   layoutRevision: z.number().int().nonnegative(),
   /** Анализ упёрся в потолок файлов: карта неполная. */
-  truncated: z.boolean()
+  truncated: z.boolean(),
+  /** Что файлы карты реально стартуют: вход, маршрут, расписание, скрипт. Пустой массив — ничего не найдено. */
+  launches: z.array(architectLaunchSchema)
 });
 export type ArchitectMap = z.infer<typeof architectMapSchema>;
 

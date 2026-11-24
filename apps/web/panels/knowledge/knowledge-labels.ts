@@ -49,6 +49,15 @@ export const KIND_ICON: Record<KnowledgeKind, React.ComponentType<{ className?: 
   link: Link2
 };
 
+/** Цвет типа материала (чипы, иконки источников). Тонированные фоны — цвет + «1F». */
+export const KIND_COLOR: Record<KnowledgeKind, string> = {
+  method: "#C9A86A",
+  tool: "#A78BFA",
+  fact: "#60A5FA",
+  opinion: "#F59E0B",
+  link: "#34D399"
+};
+
 export const SOURCE_LABEL: Record<KnowledgeSourceType, string> = {
   url: "Ссылка",
   note: "Заметка",

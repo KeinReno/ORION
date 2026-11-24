@@ -1,0 +1,12 @@
+{
+  "productName": "ORION Rust Preview",
+  "identifier": "com.orion.rust.preview",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ORION Rust · актуальный исходник"
+      }
+    ]
+  }
+}

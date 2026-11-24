@@ -83,12 +83,16 @@ describe("agent client install", () => {
         const aclFile = path.join(dir, "acl.txt");
         execFileSync(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "icacls.exe"), [tokenPath, "/save", aclFile], { windowsHide: true, stdio: "pipe" });
         const sddl = fs.readFileSync(aclFile, "utf16le");
-        expect(sddl).toContain("D:P");
-        expect(sddl.match(/\(A;/g)).toHaveLength(3);
-        expect(sddl).toContain(";;;SY)");
-        expect(sddl).toContain(";;;BA)");
-        expect(sddl).toMatch(/;;;S-1-5-21-[\d-]+\)/);
-        expect(sddl).not.toContain(";ID;");
+        const daclStart = sddl.indexOf("D:");
+        const saclStart = sddl.indexOf("S:", daclStart + 2);
+        expect(daclStart).toBeGreaterThanOrEqual(0);
+        const dacl = sddl.slice(daclStart, saclStart < 0 ? undefined : saclStart);
+        expect(dacl).toContain("D:P");
+        expect(dacl.match(/\(A;/g)).toHaveLength(3);
+        expect(dacl).toContain(";;;SY)");
+        expect(dacl).toContain(";;;BA)");
+        expect(dacl).toMatch(/;;;S-1-5-21-[\d-]+\)/);
+        expect(dacl).not.toContain(";ID;");
       }
       expect(() => writePrivateAgentToken(tokenPath, "not-a-token")).toThrow();
     } finally {

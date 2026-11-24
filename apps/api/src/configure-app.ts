@@ -3,6 +3,7 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { isIP } from "node:net";
 import { AgentDeleteReasonInterceptor } from "./ai/agent-delete-reason.interceptor";
 import { HttpExceptionFilter } from "./common/http-exception.filter";
+import { createHostGuard } from "./common/host-guard";
 import { RequestLoggingInterceptor } from "./common/request-logging.interceptor";
 import { configureLan } from "./lan/configure-lan";
 
@@ -22,6 +23,16 @@ export function configureApp(app: INestApplication): void {
     .map((origin) => origin.trim())
     .filter(Boolean);
   const origins = [...new Set([...configuredOrigins, ...DEFAULT_DESKTOP_ORIGINS])];
+
+  // P0-1: DNS-rebinding guard — раньше любого маршрута. CORS ниже запрещает
+  // читать ответ, но не выполнять запрос; этот слой отсекает чужие Host/Origin
+  // до обработчиков. Extra-хосты — через ORION_ALLOWED_EXTRA_HOSTS.
+  (app as NestExpressApplication).use(
+    createHostGuard({
+      allowedOrigins: origins,
+      extraHosts: (process.env.ORION_ALLOWED_EXTRA_HOSTS ?? "").split(",").map((host) => host.trim()).filter(Boolean)
+    })
+  );
 
   // The default JSON limit (100 kB) is smaller than a 2000-row import batch; everything else stays tiny.
   (app as NestExpressApplication).useBodyParser("json", { limit: "2mb" });

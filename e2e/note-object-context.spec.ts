@@ -85,11 +85,13 @@ test("note inspector stays beside text, adapts without losing fields; compose st
   await editor.getByRole("button", { name: "Свойства, связи и доступ", exact: true }).click();
   const inspector = page.getByRole("complementary", { name: "Свойства заметки", exact: true });
   await expect(inspector).toBeVisible(); await expect(title).toBeVisible();
-  await inspector.getByRole("combobox", { name: "Проект", exact: true }).selectOption(project.id);
+  const projectPicker = inspector.getByRole("combobox", { name: "Проект", exact: true });
+  await projectPicker.click();
+  await page.getByRole("option", { name: "Проект заметки", exact: true }).click();
   await page.screenshot({ path: "tmp/redesign/note-inspector-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(title).toBeHidden();
-  await expect(inspector.getByRole("combobox", { name: "Проект", exact: true })).toHaveValue(project.id);
+  await expect(projectPicker).toHaveValue("Проект заметки");
   await expect.poll(() => inspector.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   await page.screenshot({ path: "tmp/redesign/note-inspector-mobile.png" });
   await inspector.getByRole("button", { name: "Вернуться к тексту заметки", exact: true }).click();

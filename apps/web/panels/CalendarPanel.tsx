@@ -17,6 +17,9 @@ import {
   type EventRange
 } from "@orion/core-react";
 import type { CreateEventInput, Event, EventScope, UpdateEventInput } from "@orion/shared-types";
+import { planningBlockMoveResultSchema, planningBlockSchema, type PlanningBlock, type PlanningBlockMoveResult } from "@orion/shared-types";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
+import { useQuery } from "@tanstack/react-query";
 import {
   Button,
   Calendar,
@@ -51,6 +54,8 @@ import { describeAuthError, describeError } from "../lib/error-message";
 import {
   CALENDAR_SOURCES,
   CALENDAR_SOURCE_MODULE,
+  BLOCK_ITEM_PREFIX,
+  blockItems,
   eventItems,
   birthdayItems,
   contactIdFromBirthdayItem,
@@ -59,7 +64,7 @@ import {
   taskItems,
   type CalendarSourceId
 } from "../lib/calendar-sources";
-import { openEntity, openPanel, useEventFocusRequest } from "../lib/panel-bus";
+import { openEntity, openPanel, useEventFocusRequest, useTaskPlanningRequest } from "../lib/panel-bus";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EventForm, type EventFormValues } from "./event-form";
@@ -169,6 +174,7 @@ export function CalendarPanel(): React.ReactElement {
   const financeOn = isEnabled("finance");
   const projectsOn = isEnabled("projects");
   const contactsOn = isEnabled("contacts");
+  const planningOn = isEnabled("planning");
 
   const [range, setRange] = useState<EventRange | undefined>(initialEventRange);
   const eventsQuery = useEvents(wsId, range);
@@ -192,6 +198,18 @@ export function CalendarPanel(): React.ReactElement {
 
   const [enabled, setEnabled] = useState<Set<CalendarSourceId>>(() => new Set());
   useEffect(() => setEnabled(loadEnabledSources()), []);
+  // P3-2: тайм-блоки планирования как источник календаря — только при включённом
+  // модуле и включённой легенде «План»; перенос блока не здесь (конфликты считает планирование).
+  const blocksQuery = useQuery({
+    queryKey: ["calendar", wsId, "planning-blocks", range?.from, range?.to],
+    queryFn: () => {
+      if (!wsId || !range) throw new Error("Для загрузки плана нужен диапазон календаря");
+      const params = new URLSearchParams({ from: range.from, to: range.to });
+      return createModuleClient(api, workspaceModuleBase(wsId, "planning"))
+        .get(`/blocks?${params}`, planningBlockSchema.array());
+    },
+    enabled: Boolean(wsId && planningOn && enabled.has("planning") && range)
+  });
   function toggleSource(id: CalendarSourceId): void {
     setEnabled((prev) => {
       const next = new Set(prev);
@@ -213,8 +231,9 @@ export function CalendarPanel(): React.ReactElement {
     if (enabled.has("notes")) out.push(...noteItems(notes));
     if (enabled.has("finance")) out.push(...financeItems(recurring));
     if (enabled.has("contacts")) out.push(...birthdayItems(contacts, range));
+    if (enabled.has("planning")) out.push(...blockItems(blocksQuery.data));
     return out;
-  }, [enabled, events, tasks, notes, recurring, contacts, range]);
+  }, [enabled, events, tasks, notes, recurring, contacts, range, blocksQuery.data]);
 
   // Search narrows what is drawn, never what is loaded: clearing it brings everything back.
   const [filter, setFilter] = useState("");
@@ -227,13 +246,19 @@ export function CalendarPanel(): React.ReactElement {
     eventsQuery,
     ...(tasksOn ? [tasksQuery] : []),
     ...(notesOn ? [notesQuery] : []),
-    ...(financeOn ? [recurringQuery] : [])
+    ...(financeOn ? [recurringQuery] : []),
+    ...(planningOn && enabled.has("planning") ? [blocksQuery] : [])
   ];
   const sourcesLoading = sourceQueries.some((query) => query.isLoading);
   const failedQueries = sourceQueries.filter((query) => query.isError);
   const sourcesError = failedQueries[0]?.error;
 
   const [newSlot, setNewSlot] = useState<SlotCreatePayload | null>(null);
+  const [blockEditor, setBlockEditor] = useState<{ block?: PlanningBlock; start: string } | null>(null);
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [blockPreview, setBlockPreview] = useState<PlanningBlockMoveResult | null>(null);
+  const [blockTaskId, setBlockTaskId] = useState("");
+  const [blockDuration, setBlockDuration] = useState(60);
   const [showHelp, setShowHelp] = useState(false);
   // Tasks and notes are created through their own modules' API — never as a second Event.
   const [quick, setQuick] = useState<"task" | "note" | null>(null);
@@ -276,6 +301,18 @@ export function CalendarPanel(): React.ReactElement {
   focusedIdRef.current = focusedId;
   const [pendingScope, setPendingScope] = useState<PendingScope | null>(null);
   const eventFocus = useEventFocusRequest();
+  const taskPlanning = useTaskPlanningRequest();
+  const handledPlanning = useRef<number | null>(null);
+  useEffect(() => {
+    if (!planningOn || !taskPlanning || taskPlanning.workspaceId !== wsId || handledPlanning.current === taskPlanning.nonce) return;
+    const task = tasks?.find((row) => row.id === taskPlanning.id);
+    if (!task) return;
+    handledPlanning.current = taskPlanning.nonce;
+    setBlockTaskId(task.id);
+    setBlockDuration(Math.min(1440, Math.max(1, task.estimatedMinutes || 60)));
+    setBlockPreview(null);
+    setBlockEditor({ start: new Date().toISOString() });
+  }, [planningOn, taskPlanning, wsId, tasks]);
 
   useEffect(() => {
     if (!eventFocus || eventFocus.workspaceId !== wsId) return;
@@ -304,6 +341,14 @@ export function CalendarPanel(): React.ReactElement {
       openEntity("contact", birthdayContactId);
       return;
     }
+    if (id.startsWith(BLOCK_ITEM_PREFIX)) {
+      const block = blocksQuery.data?.find((row) => `${BLOCK_ITEM_PREFIX}${row.id}` === id);
+      if (block) {
+        setBlockPreview(null);
+        setBlockEditor({ block, start: block.startAt });
+      }
+      return;
+    }
     const event = findEvent(id);
     if (event) {
       setSelected(event);
@@ -312,7 +357,7 @@ export function CalendarPanel(): React.ReactElement {
     if ((tasks ?? []).some((t) => t.id === id)) openEntity("task", id);
     else if ((notes ?? []).some((n) => n.id === id)) openEntity("note", id);
     else openPanel("finance");
-  }, [findEvent, tasks, notes]);
+  }, [findEvent, tasks, notes, blocksQuery.data]);
 
   const applyEventReschedule = useCallback((event: Event, payload: ReschedulePayload, editScope: EventScope): void => {
     const { masterId, occurrenceStart } = splitOccurrenceId(event.id);
@@ -370,7 +415,7 @@ export function CalendarPanel(): React.ReactElement {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
-      if (!panelVisible || selected || newSlot || pendingScope) return;
+      if (!panelVisible || selected || newSlot || pendingScope || blockEditor) return;
       if (isTypingTarget(event.target)) return;
       // Controls and object-opening menus own their keys; don't navigate or
       // reschedule the focused calendar item while the user operates them.
@@ -404,7 +449,7 @@ export function CalendarPanel(): React.ReactElement {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelVisible, selected, newSlot, pendingScope, items, focusedId, sortedItemIds, openItem, reschedule]);
+  }, [panelVisible, selected, newSlot, pendingScope, blockEditor, items, focusedId, sortedItemIds, openItem, reschedule]);
 
   async function create(values: EventFormValues): Promise<void> {
     try {
@@ -520,17 +565,23 @@ export function CalendarPanel(): React.ReactElement {
             <Button size="sm" onClick={() => setNewSlot({ start: new Date().toISOString(), allDay: false })}>
               <Plus className="h-4 w-4" /> Событие
             </Button>
-            {tasksOn || notesOn ? (
+            {tasksOn || notesOn || planningOn ? (
               <DropdownMenu
                 align="end"
                 trigger={({ toggle }) => (
-                  <Button size="sm" variant="outline" onClick={toggle} aria-label="Создать задачу или заметку">
-                    <Plus className="h-4 w-4" /> {tasksOn && notesOn ? "Задача / заметка" : tasksOn ? "Задача" : "Заметка"}
+                  <Button size="sm" variant="outline" onClick={toggle} aria-label={tasksOn || notesOn ? "Создать задачу или заметку" : "Создать тайм-блок"}>
+                    <Plus className="h-4 w-4" /> {tasksOn && notesOn ? "Задача / заметка" : tasksOn ? "Задача" : notesOn ? "Заметка" : "Тайм-блок"}
                   </Button>
                 )}
                 items={[
                   ...(tasksOn ? [{ label: "Задачу со сроком…", icon: ListTodo, onSelect: () => setQuick("task") }] : []),
-                  ...(notesOn ? [{ label: "Заметку на дату…", icon: FileText, onSelect: () => setQuick("note") }] : [])
+                  ...(notesOn ? [{ label: "Заметку на дату…", icon: FileText, onSelect: () => setQuick("note") }] : []),
+                  ...(planningOn ? [{ label: "Тайм-блок…", icon: ListTodo, onSelect: () => {
+                    setBlockTaskId("");
+                    setBlockDuration(60);
+                    setBlockPreview(null);
+                    setBlockEditor({ start: new Date().toISOString() });
+                  } }] : [])
                 ]}
               />
             ) : null}
@@ -614,6 +665,87 @@ export function CalendarPanel(): React.ReactElement {
         )}
       </PanelBody>
 
+      <Modal open={blockEditor !== null} onClose={() => { if (!savingBlock) setBlockEditor(null); }} title={blockEditor?.block ? "Перенести тайм-блок" : "Новый тайм-блок"} size="sm">
+        {blockEditor && !blockEditor.block && tasksOn && (
+          <label className="mb-3 flex flex-col gap-1 text-label text-subtle-foreground">
+            Связанная задача
+            <select className="rounded-md border border-border bg-background p-2" value={blockTaskId} onChange={(event) => setBlockTaskId(event.target.value)} disabled={savingBlock}>
+              <option value="">Без задачи</option>
+              {(tasks ?? []).filter((task) => task.status !== "done" && task.status !== "canceled").map((task) => (
+                <option key={task.id} value={task.id}>{task.title}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {blockEditor && !blockEditor.block && (
+          <label className="mb-3 flex flex-col gap-1 text-label text-subtle-foreground">
+            Длительность, мин
+            <Input type="number" min={1} max={1440} step={1} value={blockDuration || ""} onChange={(event) => setBlockDuration(Number(event.target.value))} disabled={savingBlock} />
+          </label>
+        )}
+        {blockEditor && (
+          <QuickCreateForm
+            key={blockEditor.block?.id ?? blockTaskId}
+            kind="block"
+            defaultWhen={blockEditor.start}
+            defaultTitle={blockEditor.block?.title ?? tasks?.find((task) => task.id === blockTaskId)?.title.slice(0, 200)}
+            titleReadOnly={Boolean(blockEditor.block)}
+            submitLabel={blockEditor.block ? (blockPreview ? "Подтвердить перенос" : "Проверить перенос") : undefined}
+            onWhenChange={() => setBlockPreview(null)}
+            busy={savingBlock}
+            submitDisabled={!blockEditor.block && (!Number.isInteger(blockDuration) || blockDuration < 1 || blockDuration > 1440)}
+            onCancel={() => setBlockEditor(null)}
+            onSubmit={async (title, startAt) => {
+              if (!wsId || savingBlock) return;
+              const client = createModuleClient(api, workspaceModuleBase(wsId, "planning"));
+              const block = blockEditor.block;
+              setSavingBlock(true);
+              try {
+                if (block && blockPreview?.block.startAt !== startAt) {
+                  const preview = await client.post(
+                    `/blocks/${encodeURIComponent(block.id)}/move-preview`,
+                    { startAt, expectedRevision: block.revision },
+                    planningBlockMoveResultSchema
+                  );
+                  setBlockPreview(preview);
+                  return;
+                }
+                const result = block
+                  ? await client.post(`/blocks/${encodeURIComponent(block.id)}/move`, { startAt, expectedRevision: block.revision }, planningBlockMoveResultSchema)
+                  : await client.post("/blocks", { title, startAt, endAt: new Date(Date.parse(startAt) + blockDuration * 60_000).toISOString(), taskId: blockTaskId || null }, planningBlockSchema);
+                if (!enabled.has("planning")) toggleSource("planning");
+                else void blocksQuery.refetch();
+                setBlockEditor(null);
+                toast({
+                  title: block ? "Тайм-блок перенесён" : "Тайм-блок создан",
+                  description: [
+                    ...result.conflicts.map((conflict) => `${conflict.title} · пересечение ${conflict.minutes} мин`),
+                    ...("impact" in result && result.impact.affectedTaskIds.length
+                      ? [`Зависимых задач: ${result.impact.affectedTaskIds.length}`]
+                      : [])
+                  ].join("\n") || undefined
+                });
+              } catch (error) {
+                toast({ title: "Не удалось сохранить тайм-блок", description: describeAuthError(error), tone: "danger" });
+              } finally {
+                setSavingBlock(false);
+              }
+            }}
+          />
+        )}
+        {blockEditor?.block && blockPreview && (
+          <div className="mt-3 space-y-1 text-label" role="status">
+            <p>{blockPreview.conflicts.length ? "Пересечения в новом времени" : "Пересечений нет"}</p>
+            <ul className="list-disc ps-5">
+              {blockPreview.conflicts.map((conflict) => (
+                <li key={`${conflict.kind}:${conflict.id}`}>{conflict.title} · {conflict.minutes} мин</li>
+              ))}
+            </ul>
+            <p>Зависимых задач: {blockPreview.impact.affectedTaskIds.length}</p>
+            <p className="text-subtle-foreground">До подтверждения время блока не изменится.</p>
+          </div>
+        )}
+      </Modal>
       <Modal open={quick !== null} onClose={() => setQuick(null)} title={quick === "task" ? "Новая задача" : "Новая заметка"} size="sm">
         {quick ? (
           <QuickCreateForm
@@ -740,16 +872,29 @@ function CalendarSkeleton(): React.ReactElement {
 function QuickCreateForm({
   kind,
   busy,
+  defaultWhen,
+  defaultTitle = "",
+  titleReadOnly = false,
+  submitLabel = "Создать",
+  submitDisabled = false,
+  onWhenChange,
   onCancel,
   onSubmit
 }: {
-  kind: "task" | "note";
+  kind: "task" | "note" | "block";
   busy: boolean;
+  defaultWhen?: string;
+  defaultTitle?: string;
+  titleReadOnly?: boolean;
+  submitLabel?: string;
+  submitDisabled?: boolean;
+  onWhenChange?: () => void;
   onCancel: () => void;
   onSubmit: (title: string, whenIso: string) => void | Promise<void>;
 }): React.ReactElement {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(defaultTitle);
   const [when, setWhen] = useState(() => {
+    if (defaultWhen) return toDatetimeLocal(defaultWhen);
     const next = new Date();
     next.setMinutes(0, 0, 0);
     next.setHours(next.getHours() + 1);
@@ -762,20 +907,20 @@ function QuickCreateForm({
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (ready && whenIso) void onSubmit(title.trim(), whenIso);
+        if (ready && whenIso && !busy && !submitDisabled) void onSubmit(title.trim(), whenIso);
       }}
     >
-      <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название" aria-label="Название" autoFocus required />
+      <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название" aria-label="Название" autoFocus readOnly={titleReadOnly} maxLength={kind === "block" ? 200 : undefined} required />
       <label className="flex flex-col gap-1 text-label text-subtle-foreground">
-        {kind === "task" ? "Срок" : "Показать в календаре"}
-        <Input type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} required />
+        {kind === "task" ? "Срок" : kind === "block" ? "Начало" : "Показать в календаре"}
+        <Input type="datetime-local" value={when} disabled={busy} onChange={(event) => { setWhen(event.target.value); onWhenChange?.(); }} required />
       </label>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="subtle" size="sm" onClick={onCancel}>
+        <Button type="button" variant="subtle" size="sm" disabled={busy} onClick={onCancel}>
           Отмена
         </Button>
-        <Button type="submit" size="sm" disabled={busy || !ready}>
-          Создать
+        <Button type="submit" size="sm" disabled={busy || !ready || submitDisabled}>
+          {submitLabel}
         </Button>
       </div>
     </form>

@@ -106,6 +106,18 @@ export class PlanningController {
     return this.blocks.move(user.userId, workspaceId, blockId, body);
   }
 
+  @Post("blocks/:blockId/move-preview")
+  @HttpCode(200)
+  @RequirePermission("planning.block.update")
+  previewBlockMove(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("blockId") blockId: string,
+    @Body(new ZodValidationPipe(movePlanningBlockInputSchema)) body: MovePlanningBlockInput
+  ): Promise<PlanningBlockMoveResult> {
+    return this.blocks.previewMove(user.userId, workspaceId, blockId, body);
+  }
+
   @Delete("blocks/:blockId")
   @HttpCode(204)
   @RequirePermission("planning.block.delete")

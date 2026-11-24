@@ -16,6 +16,7 @@ import {
   TASK_STATUS_ORDER
 } from "../lib/task-labels";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
+import { draftStorageKey, usePersistedDraft, writeDraft } from "../lib/draft-storage";
 import { TaskChecklist } from "./tasks/task-checklist";
 
 /**
@@ -76,8 +77,12 @@ export function TaskForm({
   submitLabel,
   onSubmit,
   onCancel,
-  onDelete
+  onDelete,
+  draftWorkspaceId,
+  draftUserId
 }: {
+  draftWorkspaceId?: string;
+  draftUserId?: string;
   initial?: Task;
   /** Pre-fill the due field when creating (e.g. the day clicked in the calendar). */
   defaultDueAt?: string | null;
@@ -106,8 +111,15 @@ export function TaskForm({
   onCancel: () => void;
   onDelete?: () => void;
 }): React.ReactElement {
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
+  const [localTitle, setLocalTitle] = useState(initial?.title ?? "");
+  const [localDescription, setLocalDescription] = useState(initial?.description ?? "");
+  const persistDraft = !initial && Boolean(draftWorkspaceId && draftUserId);
+  const titleDraftName = `new-task-title:${draftUserId}`;
+  const descriptionDraftName = `new-task-description:${draftUserId}`;
+  const [draftTitle, setDraftTitle] = usePersistedDraft(persistDraft ? draftWorkspaceId : undefined, titleDraftName);
+  const [draftDescription, setDraftDescription] = usePersistedDraft(persistDraft ? draftWorkspaceId : undefined, descriptionDraftName);
+  const [title, setTitle] = persistDraft ? [draftTitle, setDraftTitle] : [localTitle, setLocalTitle];
+  const [description, setDescription] = persistDraft ? [draftDescription, setDraftDescription] : [localDescription, setLocalDescription];
   const [checklist, setChecklist] = useState<TaskChecklistItem[]>(initial?.checklist ?? []);
   useUnsavedDraft(title.trim() !== (initial?.title ?? "").trim() || description.trim() !== (initial?.description ?? "").trim());
   const [dueAt, setDueAt] = useState(toDatetimeLocal(initial?.dueAt ?? defaultDueAt ?? null));
@@ -170,6 +182,10 @@ export function TaskForm({
           checklist: checklist.filter((item) => item.title.trim()).map((item) => ({ ...item, title: item.title.trim() })),
           ...(members ? { assigneeId: assigneeId || null } : {})
         });
+        if (persistDraft && draftWorkspaceId) {
+          writeDraft(window.localStorage, draftStorageKey(draftWorkspaceId, titleDraftName), "");
+          writeDraft(window.localStorage, draftStorageKey(draftWorkspaceId, descriptionDraftName), "");
+        }
       } catch (error) {
         setFormError(describeTaskFormError(error));
       }

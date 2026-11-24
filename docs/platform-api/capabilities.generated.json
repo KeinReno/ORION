@@ -120,9 +120,9 @@
     {
       "id": "orion-dev",
       "kind": "module",
-      "version": "1.1.0",
-      "title": "ORION DEV",
-      "description": "Обзор разработки, безопасный импорт каталога, карта репозитория и история Git.",
+      "version": "1.2.0",
+      "title": "Architect",
+      "description": "Рабочее пространство Architect: проектирование архитектуры ПО, карта кодовой базы, процессы и история Git.",
       "requires": {
         "platform": "^1.12.0",
         "modules": [
@@ -652,6 +652,7 @@
         "FinanceDraft",
         "FinanceExchangeRate",
         "FinanceObligation",
+        "FinanceSettings",
         "FinanceSettlement",
         "FinanceSplit",
         "FinanceSplitShare",
@@ -1483,6 +1484,30 @@
       "dataModels": []
     },
     {
+      "id": "tasks-development-trace",
+      "kind": "plugin",
+      "version": "1.0.0",
+      "title": "Проверки Architect",
+      "description": "Связанные коммиты и сохранённый структурный анализ ревизий.",
+      "requires": {
+        "platform": "^1.0.0",
+        "modules": [
+          "tasks"
+        ],
+        "optionalModules": []
+      },
+      "permissions": [],
+      "surfaces": [],
+      "contributions": {},
+      "events": {
+        "publishes": [],
+        "subscribes": []
+      },
+      "migrations": [],
+      "sourceDirectory": "apps/web/plugins/tasks-development-trace",
+      "dataModels": []
+    },
+    {
       "id": "tasks-kanban",
       "kind": "plugin",
       "version": "1.0.0",
@@ -2271,9 +2296,12 @@
       "ContactInteraction": "contacts",
       "ContactRelation": "contacts",
       "DevelopmentArchitectLayout": "development",
+      "DevelopmentArchitectSnapshot": "development",
+      "DevelopmentArchitectureDiagram": "development",
       "DevelopmentCatalogMapping": "development",
       "DevelopmentGitRepository": "development",
       "DevelopmentImportConsent": "development",
+      "DevelopmentWorkflow": "development",
       "Document": "documents",
       "DocumentAnnotation": "documents",
       "DocumentVersion": "documents",
@@ -2285,6 +2313,7 @@
       "FinanceDraft": "finance",
       "FinanceExchangeRate": "finance",
       "FinanceObligation": "finance",
+      "FinanceSettings": "finance",
       "FinanceSettlement": "finance",
       "FinanceSplit": "finance",
       "FinanceSplitShare": "finance",
@@ -2549,7 +2578,9 @@
     "packages/shared-types/src/contact-io.ts",
     "packages/shared-types/src/contact.ts",
     "packages/shared-types/src/development-architect.ts",
+    "packages/shared-types/src/development-architecture.ts",
     "packages/shared-types/src/development-git.ts",
+    "packages/shared-types/src/development-workflows.ts",
     "packages/shared-types/src/document.ts",
     "packages/shared-types/src/domain-events.ts",
     "packages/shared-types/src/event.ts",
@@ -2847,8 +2878,8 @@
     "tasks.status.manage",
     "tasks.field.manage",
     "tasks.recurrence.manage",
-    "entity-links.read",
-    "entity-links.manage",
+    "entity-links.link.read",
+    "entity-links.link.manage",
     "projects.template.read",
     "projects.template.create",
     "projects.template.update",

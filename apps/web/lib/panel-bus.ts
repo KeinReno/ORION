@@ -157,6 +157,7 @@ const noteChannel = makeFocusChannel("notes");
 const knowledgeChannel = makeFocusChannel("knowledge");
 export interface EntityFocusRequest { id: string; nonce: number; workspaceId: string | null }
 const eventChannel = makeIntentChannel<EntityFocusRequest>("calendar");
+const taskPlanningChannel = makeIntentChannel<EntityFocusRequest>("calendar");
 const documentChannel = makeFocusChannel("documents");
 const transactionChannel = makeIntentChannel<EntityFocusRequest>("finance");
 const contactChannel = makeIntentChannel<EntityFocusRequest>("contacts");
@@ -198,6 +199,10 @@ export const useKnowledgeFocusRequest = knowledgeChannel.useFocusRequest;
 /** Open the Calendar panel and select an event (notification bell, inbox). */
 export function focusEvent(id: string): void { eventChannel.emit({ id, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() }); }
 export const useEventFocusRequest = eventChannel.useIntent;
+export function planTaskOnCalendar(taskId: string): void {
+  taskPlanningChannel.emit({ id: taskId, nonce: ++focusNonce, workspaceId: getActiveWorkspaceId() });
+}
+export const useTaskPlanningRequest = taskPlanningChannel.useIntent;
 
 /**
  * U02 (24-CONNECTED-CORE-BACKLOG.md) — the connected-materials block

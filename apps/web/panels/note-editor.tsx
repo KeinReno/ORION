@@ -1,6 +1,10 @@
 "use client";
 
-import { useCaptureInboxItem, useCreateAndLink, usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences, useUploadNoteAttachments } from "@orion/core-react";
+import { useCaptureInboxItem, useCore, useCreateAndLink, usePublishObjectContext, useNoteBacklinks, useNoteTitles, usePreferences, useSession, useUploadNoteAttachments } from "@orion/core-react";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
+import { draftStorageKey, readDraft, writeDraft } from "../lib/draft-storage";
 import { noteNumberLabel, type Note, type Project } from "@orion/shared-types";
 import {
   AutosaveStatus,
@@ -59,7 +63,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type MouseEvent, type MutableRefObject } from "react";
 import { copyNoteMarkdown, downloadNote } from "../lib/note-export";
-import { openPanel, openSend } from "../lib/panel-bus";
+import { focusKnowledge, openPanel, openSend } from "../lib/panel-bus";
 import { buildPanelDragId } from "../lib/panel-drag";
 import { panelDragHandleProps } from "../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../lib/panel-window";
@@ -104,6 +108,17 @@ export interface NoteEditorInput {
  * (list/search/filters stay in NotesPanel.tsx). Same split as
  * TasksPanel → task-card: the panel is layout, this file is the editor.
  */
+const NOTE_DRAFT_LIMIT = 256_000;
+const noteDraftSchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  body: z.string(),
+  tags: z.array(z.string()),
+  eventAt: z.string(),
+  projectId: z.string(),
+  createPrivate: z.boolean()
+});
+
 export function NoteEditor({
   note,
   workspaceId,
@@ -111,6 +126,7 @@ export function NoteEditor({
   busy,
   standalone,
   compact = false,
+  composingTemplate = false,
   onCreate,
   onSave,
   onClose,
@@ -131,6 +147,7 @@ export function NoteEditor({
   /** Already its own dock panel / window: no "open in a panel" actions. */
   standalone?: boolean;
   compact?: boolean;
+  composingTemplate?: boolean;
   onCreate: (input: NoteEditorInput) => Promise<void>;
   /**
    * Throws an `AutosaveConflict` (see `../lib/note-autosave`) on a 409 CAS
@@ -152,6 +169,20 @@ export function NoteEditor({
   onDelete?: (note: Note) => void;
 }): React.ReactElement {
   const { toast } = useToast();
+  const { api } = useCore();
+  const queryClient = useQueryClient();
+  const importToKnowledge = useMutation({
+    mutationFn: (noteId: string) => {
+      if (!workspaceId) throw new Error("Рабочее пространство не выбрано");
+      return createModuleClient(api, workspaceModuleBase(workspaceId, "knowledge"))
+        .post(`/from-note/${encodeURIComponent(noteId)}`, undefined, z.object({ itemId: z.string() }));
+    },
+    onSuccess: ({ itemId }) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-items", workspaceId] });
+      focusKnowledge(itemId);
+    },
+    onError: (error) => toast({ title: "Не удалось создать материал", description: describeError(error), tone: "danger" })
+  });
   const { isEnabled } = useEnabledModules();
   const calendarOn = isEnabled("calendar");
   const showIds = usePreferences().data?.showNoteIds ?? false;
@@ -166,6 +197,37 @@ export function NoteEditor({
   const [eventAt, setEventAt] = useState(toDatetimeLocal(note?.eventAt ?? null));
   const [projectId, setProjectId] = useState(note?.projectId ?? "");
   const [createPrivate, setCreatePrivate] = useState(false);
+  const { user } = useSession();
+  const draftKey = !note && workspaceId && user?.id
+    ? draftStorageKey(workspaceId, `new-${composingTemplate ? "note-template" : "note"}:${user.id}`)
+    : null;
+  const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      const saved = noteDraftSchema.safeParse(JSON.parse(readDraft(window.localStorage, draftKey, NOTE_DRAFT_LIMIT) || "null"));
+      if (saved.success) {
+        setTitle(saved.data.title);
+        setSummary(saved.data.summary);
+        setBody(saved.data.body);
+        setTags(saved.data.tags);
+        setEventAt(saved.data.eventAt);
+        setProjectId(saved.data.projectId);
+        setCreatePrivate(saved.data.createPrivate);
+      }
+    } catch {
+      // Storage can contain an old or incomplete draft.
+    } finally {
+      setRestoredDraftKey(draftKey);
+    }
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey || restoredDraftKey !== draftKey) return;
+    const hasDraft = title || summary || body || tags.length || eventAt || projectId || createPrivate;
+    writeDraft(window.localStorage, draftKey, hasDraft
+      ? JSON.stringify({ title, summary, body, tags, eventAt, projectId, createPrivate })
+      : "", NOTE_DRAFT_LIMIT);
+  }, [draftKey, restoredDraftKey, title, summary, body, tags, eventAt, projectId, createPrivate]);
   const [mode, setMode] = useState<EditorMode>("edit");
   const [historyOpen, setHistoryOpen] = useState(false);
   // The history button exists only while a plugin fills `notes.history`.
@@ -460,6 +522,7 @@ export function NoteEditor({
       runSave();
     } else {
       await onCreate({ title, summary, body, tags, eventAt: fromDatetimeLocal(eventAt), projectId: projectId || null, ...(createPrivate ? { isPrivate: true } : {}) });
+      if (draftKey) writeDraft(window.localStorage, draftKey, "");
     }
   }
 
@@ -506,6 +569,9 @@ export function NoteEditor({
     }
     if (onDuplicate) {
       menuItems.push({ label: "Дублировать", icon: Copy, onSelect: () => onDuplicate(note) });
+    }
+    if (isEnabled("knowledge") && !note.isPrivate && !note.deletedAt) {
+      menuItems.push({ label: "Создать материал из сохранённой заметки", icon: Copy, disabled: importToKnowledge.isPending, onSelect: () => importToKnowledge.mutate(note.id) });
     }
     menuItems.push(
       { label: "Скачать как .md", icon: Download, onSelect: () => downloadNote(note) },

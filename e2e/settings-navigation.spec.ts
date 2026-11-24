@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { chooseMenu, register, signIn } from "./support";
+import { register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
@@ -20,9 +20,10 @@ test("settings: grouped by who a change affects, search lands on the field, prof
 
   // «Анимации» is a personal appearance option; switching it is saved and marks <html>.
   await nav.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await page.getByRole("tab", { name: "Выключены", exact: true }).click();
+  const motion = page.getByRole("tablist", { name: "Анимации", exact: true });
+  await motion.getByRole("tab", { name: "Выключены", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-motion", "off");
-  await page.getByRole("tab", { name: "Спокойные", exact: true }).click();
+  await motion.getByRole("tab", { name: "Спокойные", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-motion", "calm");
 
   // A workspace tab names the workspace it changes.
@@ -36,7 +37,7 @@ test("settings: grouped by who a change affects, search lands on the field, prof
 
   // Appearance no longer carries the time zone, dashboard widget ids or the theme library.
   await nav.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Оформление Orion", exact: true })).toBeVisible();
+  await expect(motion).toBeVisible();
   await expect(page.getByText("Часовой пояс", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Библиотека тем", exact: true })).toHaveCount(0);
 
@@ -52,13 +53,12 @@ test("settings: grouped by who a change affects, search lands on the field, prof
   await expect(sheet.getByRole("switch", { name: "Номера заметок", exact: true })).toBeVisible();
   await expect(sheet.getByText("Акцент", { exact: true })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Внешний вид приложения", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Оформление Orion", exact: true })).toBeVisible();
+  await expect(motion).toBeVisible();
 
   // The account opens as the profile tab, without leaving the workbench (Precision header avatar).
-  await chooseMenu(page, "Оформление Orion", "KAIDEN Precision");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
   await nav.getByRole("button", { name: "Обновления", exact: true }).click();
-  await page.getByRole("button", { name: "Учётная запись", exact: true }).click();
+  await nav.getByRole("button", { name: "Профиль", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("Загрузить фото", { exact: true })).toBeVisible();
 });

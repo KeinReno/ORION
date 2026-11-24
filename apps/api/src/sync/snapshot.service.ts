@@ -82,6 +82,9 @@ const SNAPSHOT_MODELS: ModelSpec[] = [
   // 11: репозитории — конфигурация пространства, ни от чего не зависят; раскладка — после них.
   spec("developmentGitRepositories", (tx) => tx.developmentGitRepository),
   spec("developmentArchitectLayouts", (tx) => tx.developmentArchitectLayout),
+  spec("developmentArchitectSnapshots", (tx) => tx.developmentArchitectSnapshot),
+  spec("developmentWorkflows", (tx) => tx.developmentWorkflow),
+  spec("developmentArchitectureDiagrams", (tx) => tx.developmentArchitectureDiagram),
   spec("homes", (tx) => tx.home),
   spec("meters", (tx) => tx.meter),
   spec("meterReadings", (tx) => tx.meterReading),

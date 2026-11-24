@@ -13,20 +13,20 @@ export function draftStorageKey(workspaceId: string, name: string): string {
   return `${DRAFTS_PREFIX}${workspaceId}:${name}`;
 }
 
-export function readDraft(storage: Pick<Storage, "getItem">, key: string): string {
+export function readDraft(storage: Pick<Storage, "getItem">, key: string, maxLength = DRAFT_MAX_LENGTH): string {
   try {
     const raw = JSON.parse(storage.getItem(key) ?? "null") as { text?: unknown } | null;
-    return raw && typeof raw.text === "string" ? raw.text.slice(0, DRAFT_MAX_LENGTH) : "";
+    return raw && typeof raw.text === "string" ? raw.text.slice(0, maxLength) : "";
   } catch {
     return "";
   }
 }
 
 /** Stores `text`, or removes the entry when it is blank. */
-export function writeDraft(storage: Pick<Storage, "setItem" | "removeItem">, key: string, text: string): void {
+export function writeDraft(storage: Pick<Storage, "setItem" | "removeItem">, key: string, text: string, maxLength = DRAFT_MAX_LENGTH): void {
   try {
     if (text.trim() === "") storage.removeItem(key);
-    else storage.setItem(key, JSON.stringify({ text: text.slice(0, DRAFT_MAX_LENGTH), savedAt: Date.now() }));
+    else storage.setItem(key, JSON.stringify({ text: text.slice(0, maxLength), savedAt: Date.now() }));
   } catch {
     /* a convenience only */
   }

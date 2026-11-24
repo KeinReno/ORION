@@ -1,6 +1,8 @@
 "use client";
 
 import { useCore } from "@orion/core-react";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useBulkDocuments,
   useCreateFolder,
@@ -59,7 +61,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { DOC_GROUP_LABEL, documentGroup, documentIcon, formatBytes, type DocGroup } from "../lib/document-icons";
 import { relativeTime } from "../lib/format";
-import { openSend } from "../lib/panel-bus";
+import { focusKnowledge, openSend } from "../lib/panel-bus";
+import { useEnabledModules } from "../lib/use-enabled-modules";
+import { describeError } from "../lib/error-message";
 import { FilterChip } from "../components/filter-chip";
 import { useActiveWorkspace } from "../lib/use-active-workspace";
 import { nextListId } from "../lib/list-nav";
@@ -71,7 +75,7 @@ import { AgentTouchSlot } from "../lib/agent-presence";
 import { useDocumentFocusRequest } from "../lib/panel-bus";
 import { useUnsavedDraft } from "../lib/unsaved-drafts";
 import { useViewState } from "../lib/use-view-state";
-import { documentsViewStateSchema } from "@orion/shared-types";
+import { documentsViewStateSchema, knowledgeImportReportSchema } from "@orion/shared-types";
 
 type SortKey = "name" | "date" | "size" | "type";
 type Layout = "list" | "grid";
@@ -83,6 +87,23 @@ export function DocumentsPanel(): React.ReactElement {
   const workspaceId = workspace?.id;
   const { api } = useCore();
   const { toast } = useToast();
+  const { isEnabled } = useEnabledModules();
+  const queryClient = useQueryClient();
+  const importToKnowledge = useMutation({
+    mutationFn: async (documentId: string) => {
+      if (!workspaceId) throw new Error("Рабочее пространство не выбрано");
+      const report = await createModuleClient(api, workspaceModuleBase(workspaceId, "knowledge"))
+        .post("/import/documents", { documentIds: [documentId], status: "captured" }, knowledgeImportReportSchema);
+      const result = report.results[0];
+      if (!result?.ok || !result.itemId) throw new Error(result?.error ?? "Материал не создан");
+      return result.itemId;
+    },
+    onSuccess: (itemId) => {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-items", workspaceId] });
+      focusKnowledge(itemId);
+    },
+    onError: (error) => toast({ title: "Не удалось создать материал", description: describeError(error), tone: "danger" })
+  });
   // ORION-07: right-click on a row — same items as its "⋯" menu (docMenuItems below).
   const showContextMenu = useContextMenuApi();
 
@@ -560,6 +581,7 @@ export function DocumentsPanel(): React.ReactElement {
             ? []
             : [
                 { label: "Скачать", icon: Download, onSelect: () => void download(doc) },
+                ...(isEnabled("knowledge") ? [{ label: "Создать материал базы знаний", icon: Pencil, disabled: importToKnowledge.isPending, onSelect: () => importToKnowledge.mutate(doc.id) }] : []),
                 { label: "Отправить на устройство", icon: Send, onSelect: () => workspaceId && openSend({ kind: "documents", workspaceId, documentIds: [doc.id] }) },
                 { label: "Заменить содержимое…", icon: Upload, onSelect: () => triggerReplace(doc) },
                 ...historyActions.map((label) => ({ label, icon: History, onSelect: () => setHistoryTarget(doc) }))
@@ -894,6 +916,8 @@ export function DocumentsPanel(): React.ReactElement {
             exit={{ opacity: 0, y: 12 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
             className="sticky bottom-0 mt-2"
+            role="group"
+            aria-label="Выбранные документы"
           >
             <ActionBar count={checkedList.length} onClear={() => setChecked(new Set())}>
               <Button size="sm" variant="subtle" className="shrink-0 whitespace-nowrap" onClick={() => setMoveTargets(checkedList)}>

@@ -36,7 +36,7 @@ for (const width of [1280, 390]) {
     const name = sample.getByLabel("Название образца", { exact: true });
     await expect(name).toHaveCSS("color", "rgb(23, 33, 43)");
     await name.fill("Сохранённый ввод образца");
-    await expect(name).toHaveCSS("border-color", "rgba(48, 92, 140, 0.7)");
+    await expect(name).toHaveCSS("border-color", "rgb(48, 92, 140)");
     await sample.getByRole("button", { name: "Показать уведомление", exact: true }).click();
     const toast = page.locator(".pointer-events-auto").filter({ hasText: "Проверочное уведомление" });
     await expect(toast).toHaveAttribute("data-kaiden-theme", "arctic");
@@ -50,7 +50,7 @@ for (const width of [1280, 390]) {
     await testInfo.attach(`arctic-dialog-${width}.png`, { body: await page.screenshot(), contentType: "image/png" });
     await dialog.getByRole("button", { name: "Отменить предпросмотр", exact: true }).click();
     await expect(dialog.getByLabel("Черновик образца", { exact: true })).toHaveValue("Не терять при отмене темы");
-    await expect(dialog).toHaveCSS("background-color", "rgba(20, 20, 25, 0.85)");
+    await expect(dialog).toHaveCSS("background-color", "rgba(29, 30, 34, 0.85)");
     await expect(dialog).toHaveCSS("color-scheme", "dark");
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);

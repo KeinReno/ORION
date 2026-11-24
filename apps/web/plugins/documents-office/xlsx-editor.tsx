@@ -341,19 +341,24 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-        <Button size="sm" variant="outline" onClick={() => setChartOpen((v) => !v)}>
+        <Button size="sm" variant="outline" disabled={state.unsupportedObjects} onClick={() => setChartOpen((v) => !v)}>
           <BarChart3 className="h-4 w-4" /> Вставить диаграмму
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setPivotOpen((v) => !v)}>
+        <Button size="sm" variant="outline" disabled={state.unsupportedObjects} onClick={() => setPivotOpen((v) => !v)}>
           <Table2 className="h-4 w-4" /> Вставить сводную таблицу
         </Button>
         <div className="ml-auto flex items-center gap-2">
           <AutosaveStatus state={replaceContent.isPending ? "saving" : replaceContent.isError ? "error" : dirty ? "dirty" : "saved"} />
-          <Button size="sm" onClick={() => void save()} status={replaceContent.isPending ? "pending" : "idle"}>
+          <Button size="sm" disabled={state.unsupportedObjects} onClick={() => void save()} status={replaceContent.isPending ? "pending" : "idle"}>
             <Save className="h-4 w-4" /> Сохранить
           </Button>
         </div>
       </div>
+      {state.unsupportedObjects ? (
+        <p role="status" className="border-b border-border px-3 py-2 text-label text-warning">
+          Книга открыта для просмотра. В ней есть диаграммы или сводные таблицы, которые редактор не может сохранить. Исходный файл доступен в документах.
+        </p>
+      ) : null}
 
       {chartOpen ? (
         <div className="flex shrink-0 flex-wrap items-end gap-2 border-b border-border bg-card px-3 py-2">
@@ -463,6 +468,7 @@ export default function XlsxEditor({ workspaceId, doc, blob, onParseFailed, onDi
                   return (
                     <td key={c} className="border border-border p-0">
                       <input
+                        readOnly={state.unsupportedObjects}
                         defaultValue={String(editValue)}
                         key={`${r}-${c}-${dirty ? "d" : "c"}`}
                         onBlur={(e) => {

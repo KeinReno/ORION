@@ -25,6 +25,7 @@
     "test:e2e:local": "node scripts/e2e-local.mjs",
     "ops:restore-rehearsal": "node scripts/restore-rehearsal.mjs",
     "architecture-check": "node scripts/architecture-check.mjs",
+    "paths:check": "node scripts/no-absolute-paths.mjs",
     "module-docs": "node scripts/module-docs.mjs",
     "module-docs:check": "node scripts/module-docs.mjs --check",
     "module-registry": "node scripts/module-registry.mjs",

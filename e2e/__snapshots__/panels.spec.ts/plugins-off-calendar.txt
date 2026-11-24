@@ -5,6 +5,7 @@ button: Заметки
 button: Как пользоваться календарём
 button: Назад
 button: Перейти к дате
+button: План
 button: Платежи
 button: Сегодня
 button: Событие

@@ -59,9 +59,26 @@ function readJson<T>(file: string): T | null {
 /** Атомарная запись: временный файл + rename, чтобы обрыв не оставил полуфайл. */
 export function writeJsonAtomic(file: string, value: unknown, mode = 0o600): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode });
-  fs.renameSync(tmp, file);
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode });
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        fs.renameSync(tmp, file);
+        return;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || attempt >= 5) throw error;
+        // Windows scanners can briefly hold the destination while it is atomically replaced.
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 * (attempt + 1));
+      }
+    }
+  } catch (error) {
+    // Successful rename consumes the temp file. On failure preserve the
+    // original error even if Windows also prevents best-effort cleanup.
+    try { fs.unlinkSync(tmp); } catch { /* The target was never removed. */ }
+    throw error;
+  }
 }
 
 export function loadNodeConfig(dir = nodeDir()): LanNodeConfig {

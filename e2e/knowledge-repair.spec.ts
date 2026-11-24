@@ -12,6 +12,7 @@ test("knowledge preserves failed edits and fits a narrow panel", async ({ page, 
   await signIn(page, account);
   await page.goto(`/panel/knowledge?workspaceId=${account.workspaceId}`);
   await page.getByRole("button", { name: /Первый материал/ }).click();
+  await page.getByRole("button", { name: "Редактировать", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveValue("Первый материал");
   const listReads: string[] = [];
   page.on("request", req => {
@@ -22,18 +23,23 @@ test("knowledge preserves failed edits and fits a narrow panel", async ({ page, 
     else await route.continue();
   });
   await page.getByRole("textbox", { name: "Название", exact: true }).fill("Сохранить мой текст");
-  await expect(page.getByText("Не удалось сохранить материал")).toBeVisible();
-  await page.getByRole("button", { name: /Второй материал/ }).click();
+  const error = page.getByText("Не удалось сохранить материал", { exact: true });
+  await expect(error).toBeVisible();
+  await error.locator("../..").getByRole("button", { name: "Закрыть", exact: true }).click();
+  const backToReading = page.getByRole("button", { name: "← К чтению", exact: true });
+  await backToReading.click();
+  await expect(page.getByText("Сначала сохраните материал")).toBeVisible();
+  await page.getByText("Сначала сохраните материал", { exact: true }).locator("../..").getByRole("button", { name: "Закрыть", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Название", exact: true })).toHaveValue("Сохранить мой текст");
   await page.unroute("**/knowledge/items/*");
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Сохранено" })).toBeVisible();
-  await page.getByRole("button", { name: "Закрыть", exact: true }).first().click();
+  expect(listReads).toEqual([]);
+  await backToReading.click();
   await expect(page.getByText("Не удалось сохранить материал")).toBeHidden();
   await expect(page.getByText("Сначала сохраните материал")).toBeHidden({ timeout: 15000 });
-  expect(listReads).toEqual([]);
   await page.setViewportSize({ width: 600, height: 900 });
-  await expect(page.getByRole("button", { name: "← К списку материалов" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "← Библиотека", exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/knowledge-narrow.png", fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 });

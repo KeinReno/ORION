@@ -34,9 +34,7 @@ pub fn event(level: &str, stage: &str, message: &str, fields: serde_json::Value)
         "stage": stage,
         "msg": message,
     });
-    if let (Some(record_map), serde_json::Value::Object(extra)) =
-        (record.as_object_mut(), fields)
-    {
+    if let (Some(record_map), serde_json::Value::Object(extra)) = (record.as_object_mut(), fields) {
         record_map.extend(extra);
     }
     let mut line = match serde_json::to_string(&record) {
@@ -80,7 +78,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         init(&root);
-        event("info", "startup", "probe", serde_json::json!({"elapsedMs": 42}));
+        event(
+            "info",
+            "startup",
+            "probe",
+            serde_json::json!({"elapsedMs": 42}),
+        );
         let line = std::fs::read_to_string(root.join("runtime.jsonl")).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
         assert_eq!(parsed["level"], "info");

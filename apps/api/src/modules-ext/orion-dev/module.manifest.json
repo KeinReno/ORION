@@ -1,18 +1,18 @@
 {
   "id": "orion-dev",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "requires": { "platform": "^1.12.0", "modules": ["projects", "tasks"] },
   "catalog": {
-    "kind": "additional", "required": false, "label": "ORION DEV",
-    "summary": "Обзор разработки, безопасный импорт каталога, карта репозитория и история Git.",
-    "owns": "Рабочая поверхность разработки, проверка импорта, реестр разрешённых репозиториев, архитектурная карта и пользовательская раскладка.",
+    "kind": "additional", "required": false, "label": "Architect",
+    "summary": "Рабочее пространство Architect: проектирование архитектуры ПО, карта кодовой базы, процессы и история Git.",
+    "owns": "Три самостоятельных режима Architect: авторские типизированные архитектурные схемы, рабочие процессы, карта и история зарегистрированных Git-репозиториев.",
     "livesWithout": "Не требует запущенных агентов или внешнего AI API.",
-    "provides": ["Обзор направлений и задач", "Этапы разработки", "Предварительный план", "Подтверждение совпадений", "Атомарный импорт", "Карта структуры и импортов репозитория", "История Git только для чтения", "Сверка проектного замысла с распознанной структурой"],
-    "optionalDependencies": [], "disableBehavior": "Скрывает панель и закрывает API ORION DEV; проекты, задачи, сопоставления, регистрации репозиториев и раскладки сохраняются.",
+    "provides": ["Проектирование архитектуры ПО из типизированных узлов и отношений", "Визуальные процессы: задачи, агенты, доказательства, решения, результат", "Карта структуры и импортов репозитория", "История Git только для чтения", "Сверка проектного замысла с распознанной структурой"],
+    "optionalDependencies": [], "disableBehavior": "Скрывает панель и закрывает API Architect; процессы, регистрации репозиториев и раскладки сохраняются.",
     "panelId": "orion-dev", "defaultEnabled": true
   },
   "permissions": { "primaryResource": "development_import" },
   "api": { "module": { "file": "orion-dev.module", "export": "OrionDevModule" }, "probePath": "/development-import/preview" },
-  "web": { "panel": { "id": "orion-dev", "label": "ORION DEV", "icon": "Code2", "group": "Инструменты", "file": "OrionDevPanel", "export": "OrionDevPanel" } },
+  "web": { "panel": { "id": "orion-dev", "label": "Architect", "icon": "Code2", "file": "OrionDevPanel", "export": "OrionDevPanel" } },
   "data": { "models": [] }
 }

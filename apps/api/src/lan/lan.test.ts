@@ -5,12 +5,12 @@ import https from "node:https";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LAN_DEVICE_TOKEN_HEADER } from "@orion/shared-types";
 import { DeviceStore } from "./device-store";
 import { createDeviceTrustMiddleware, isLoopbackAddress, isOpenLanPath } from "./device-trust.middleware";
 import { firewallAddCommands } from "./firewall";
-import { clearClientBinding, loadClientBinding, loadNodeConfig, saveClientBinding, saveNodeConfig } from "./node-config";
+import { clearClientBinding, loadClientBinding, loadNodeConfig, saveClientBinding, saveNodeConfig, writeJsonAtomic } from "./node-config";
 import { codesEqual, computePairingCode } from "./pairing-code";
 import { PAIR_MAX_ATTEMPTS, PAIR_TTL_MS, PairingRegistry } from "./pairing-registry";
 import { observeCertificate, pinnedJson } from "./pinned-request";
@@ -26,6 +26,39 @@ beforeEach(() => {
 afterEach(async () => {
   while (closers.length) await closers.pop()!();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+describe("writeJsonAtomic", () => {
+  it("сохраняет прежнее состояние и убирает временный файл при постоянном отказе", () => {
+    const file = path.join(dir, "atomic-state.json");
+    fs.writeFileSync(file, '{"previous":true}');
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw Object.assign(new Error("access denied"), { code: "EPERM" });
+    });
+    try {
+      expect(() => writeJsonAtomic(file, { current: true })).toThrow("access denied");
+      expect(rename).toHaveBeenCalledTimes(process.platform === "win32" ? 6 : 1);
+      expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({ previous: true });
+      expect(fs.readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    } finally {
+      rename.mockRestore();
+    }
+  });
+
+  it.skipIf(process.platform !== "win32")("повторяет временный Windows rename EPERM и сохраняет атомарный файл", () => {
+    const file = path.join(dir, "atomic-state.json");
+    fs.writeFileSync(file, "{\"previous\":true}");
+    const rename = vi.spyOn(fs, "renameSync");
+    rename.mockImplementationOnce(() => { throw Object.assign(new Error("temporary lock"), { code: "EPERM" }); });
+    try {
+      writeJsonAtomic(file, { current: true });
+      expect(rename).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({ current: true });
+      expect(fs.readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    } finally {
+      rename.mockRestore();
+    }
+  });
 });
 
 function listenHttps(app: http.RequestListener, cert: { keyPem: string; certPem: string }): Promise<number> {

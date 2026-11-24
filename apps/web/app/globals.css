@@ -477,7 +477,7 @@ html[data-orion-design="precision"] body {
 [data-orion-design="precision"] .dockview-theme-abyss {
   --dv-background-color: rgb(var(--orion-color-surface)) !important;
   --dv-group-view-background-color: rgb(var(--orion-color-surface)) !important;
-  --dv-tabs-and-actions-container-background-color: rgb(var(--orion-color-canvas)) !important;
+  --dv-tabs-and-actions-container-background-color: rgb(var(--orion-color-elevated)) !important;
   --dv-activegroup-visiblepanel-tab-background-color: rgb(var(--orion-color-surface)) !important;
   --dv-activegroup-visiblepanel-tab-color: rgb(var(--orion-color-text)) !important;
   --dv-activegroup-hiddenpanel-tab-color: rgb(var(--orion-color-secondary)) !important;

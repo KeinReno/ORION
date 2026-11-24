@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { apiUrl, chooseMenu, disableAllPlugins, register, signIn } from "./support";
+import { apiUrl, disableAllPlugins, register, signIn } from "./support";
 
 test.use({ reducedMotion: "reduce" });
 
-test("saved Precision shell, real project context, pins, inspector, rollback and workspace isolation", async ({ page, request }, testInfo) => {
+test("Precision shell, real project context, pins, inspector, preview cancellation and workspace isolation", async ({ page, request }, testInfo) => {
   const account = await register(request, "precision-shell");
   const headers = { Authorization: `Bearer ${account.accessToken}` };
   const projectResponse = await request.post(`${apiUrl()}/workspaces/${account.workspaceId}/projects`, { headers, data: { name: "Проект первого пространства", description: "Демонстрационный проект оболочки", contextNote: "Сохранённый контекст проекта" } });
@@ -12,15 +12,13 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   const secondResponse = await request.post(`${apiUrl()}/workspaces`, { headers, data: { name: "Другое пространство" } });
   expect(secondResponse.ok()).toBe(true);
   const second = await secondResponse.json();
-  await request.patch(`${apiUrl()}/settings/preferences`, { headers, data: { accent: "blue", backgroundStyle: "grid", surfaceStyle: "glass", sidebarFolders: [{ id: "work", name: "Моя работа", collapsed: true, items: ["tasks", "projects"] }] } });
+  await request.patch(`${apiUrl()}/settings/preferences`, { headers, data: { theme: "kaiden-precision", accent: "blue", backgroundStyle: "grid", surfaceStyle: "glass", sidebarFolders: [{ id: "work", name: "Моя работа", collapsed: true, items: ["tasks", "projects"] }] } });
   await signIn(page, account);
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
   await page.getByRole("textbox", { name: "Быстрый ввод", exact: true }).fill("Черновик переживает смену оформления");
   await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await chooseMenu(page, "Оформление Orion", "KAIDEN Precision");
   await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
   await page.getByRole("button", { name: "Темы", exact: true }).click();
   await page.getByRole("region", { name: "Библиотека тем", exact: true }).getByRole("button", { name: "Открыть тему «Arctic» в редакторе", exact: true }).click();
@@ -31,8 +29,11 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await expect(themePreview.locator('[data-kaiden-theme="kaiden-precision"]')).toHaveCount(1);
   const context = page.getByRole("complementary", { name: "Контекст пространства", exact: true });
   await expect(context.getByRole("button", { name: "Проект первого пространства", exact: true })).toBeVisible();
-  // A saved collapsed folder must not swallow module icons in the global rail.
+  // A saved collapsed folder stays collapsed, and its sections are reachable after expansion.
   const modules = page.getByRole("navigation", { name: "Разделы", exact: true });
+  const workFolder = modules.getByRole("button", { name: /^Папка «Моя работа»/ });
+  await expect(workFolder).toHaveAttribute("aria-expanded", "false");
+  await workFolder.click();
   await expect(modules.getByRole("button", { name: "Задачи", exact: true })).toBeVisible();
   await modules.getByRole("button", { name: "Дашборд", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Быстрый ввод", exact: true })).toHaveValue("Черновик переживает смену оформления");
@@ -72,16 +73,11 @@ test("saved Precision shell, real project context, pins, inspector, rollback and
   await page.getByRole("textbox", { name: "Найти пространство", exact: true }).fill("precision-shell");
   await page.getByRole("option", { name: /precision-shell/ }).click();
   await expect(context.getByRole("region", { name: "Закреплённые проекты", exact: true }).getByRole("button", { name: "Проект первого пространства", exact: true })).toBeVisible();
-  // Roll back through the same saved preference; other personal choices are retained.
-  await page.getByRole("button", { name: "Настройки", exact: true }).click();
-  await page.getByRole("button", { name: "Внешний вид", exact: true }).click();
-  await chooseMenu(page, "Оформление Orion", "Прежний интерфейс");
-  await expect(page.locator("html")).toHaveAttribute("data-orion-design", "legacy");
-  await expect(detached.locator("html")).toHaveAttribute("data-orion-design", "legacy");
+  await expect(page.locator("html")).toHaveAttribute("data-orion-design", "precision");
+  await expect(detached.locator("html")).toHaveAttribute("data-orion-design", "precision");
   await detached.close();
-  await expect(context).toHaveCount(0);
   const saved = await (await request.get(`${apiUrl()}/settings/preferences`, { headers })).json();
-  expect(saved).toMatchObject({ theme: "dark", accent: "blue", backgroundStyle: "grid", surfaceStyle: "glass" });
+  expect(saved).toMatchObject({ accent: "blue", backgroundStyle: "grid", surfaceStyle: "glass" });
   expect(saved.sidebarFolders[0].items).toEqual(["tasks", "projects"]);
   expect(errors).toEqual([]);
   expect(second.id).not.toBe(account.workspaceId); expect(project.workspaceId).toBe(account.workspaceId);

@@ -10,47 +10,97 @@ pub struct Status {
     pub error: Option<String>,
 }
 impl Default for Status {
-    fn default() -> Self { Self { phase: "preparing".into(), error: None } }
+    fn default() -> Self {
+        Self {
+            phase: "preparing".into(),
+            error: None,
+        }
+    }
 }
 pub type State = Mutex<Status>;
 
 pub fn set(app: &tauri::AppHandle, phase: &str, error: Option<String>) {
-    *app.state::<State>().lock().unwrap() = Status { phase: phase.into(), error };
+    *app.state::<State>().lock().unwrap() = Status {
+        phase: phase.into(),
+        error,
+    };
 }
 pub fn ready(app: &tauri::AppHandle) -> bool {
     app.state::<State>().lock().unwrap().phase == "ready"
 }
 #[cfg(all(windows, not(debug_assertions)))]
 pub fn update_phase(app: &tauri::AppHandle, file: &std::path::Path) {
-    let phase = std::fs::read(file).ok().and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|value| value.get("phase").and_then(|s| s.as_str()).map(str::to_owned));
-    if let Some(phase) = phase.filter(|p| matches!(p.as_str(), "preparing" | "database" | "migrations" | "server")) {
+    let phase = std::fs::read(file)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|value| {
+            value
+                .get("phase")
+                .and_then(|s| s.as_str())
+                .map(str::to_owned)
+        });
+    if let Some(phase) = phase.filter(|p| {
+        matches!(
+            p.as_str(),
+            "preparing" | "database" | "migrations" | "server"
+        )
+    }) {
         set(app, &phase, None);
     }
 }
-pub fn respond(app: &tauri::AppHandle, request: &http::Request<Vec<u8>>) -> Option<http::Response<Vec<u8>>> {
+pub fn respond(
+    app: &tauri::AppHandle,
+    request: &http::Request<Vec<u8>>,
+) -> Option<http::Response<Vec<u8>>> {
     let path = request.uri().path();
-    if path != PATH && path != format!("{PATH}/status") && path != format!("{PATH}/logo.png") { return None; }
+    if path != PATH && path != format!("{PATH}/status") && path != format!("{PATH}/logo.png") {
+        return None;
+    }
     if !matches!(request.method().as_str(), "GET" | "HEAD") {
         return Some(http::Response::builder().status(405).body(vec![]).unwrap());
     }
     let (mime, bytes) = if path.ends_with("/status") {
-        ("application/json", serde_json::to_vec(&*app.state::<State>().lock().unwrap()).unwrap())
+        (
+            "application/json",
+            serde_json::to_vec(&*app.state::<State>().lock().unwrap()).unwrap(),
+        )
     } else if path.ends_with("/logo.png") {
-        ("image/png", include_bytes!("../../../web/public/kaiden-192.png").to_vec())
+        (
+            "image/png",
+            include_bytes!("../../../web/public/kaiden-192.png").to_vec(),
+        )
     } else {
         // Shell version is the premiere key: a new installer replays the longer opening once.
         // Payload updates do not ship this page, so they must not reset it.
-        ("text/html; charset=utf-8", include_str!("startup.html").replace("{{STARTUP_EDITION}}", env!("CARGO_PKG_VERSION")).into_bytes())
+        (
+            "text/html; charset=utf-8",
+            include_str!("startup.html")
+                .replace("{{STARTUP_EDITION}}", env!("CARGO_PKG_VERSION"))
+                .into_bytes(),
+        )
     };
-    Some(http::Response::builder().header("Content-Type", mime).header("Cache-Control", "no-store")
-        .header("X-Content-Type-Options", "nosniff")
-        .header("Content-Security-Policy", super::payload_ui::csp(std::str::from_utf8(&bytes).unwrap_or("")))
-        .body(if request.method() == "HEAD" { vec![] } else { bytes }).unwrap())
+    Some(
+        http::Response::builder()
+            .header("Content-Type", mime)
+            .header("Cache-Control", "no-store")
+            .header("X-Content-Type-Options", "nosniff")
+            .header(
+                "Content-Security-Policy",
+                super::payload_ui::csp(std::str::from_utf8(&bytes).unwrap_or("")),
+            )
+            .body(if request.method() == "HEAD" {
+                vec![]
+            } else {
+                bytes
+            })
+            .unwrap(),
+    )
 }
 
 #[cfg(debug_assertions)]
-pub fn smoke_enabled() -> bool { std::env::var_os("ORION_STARTUP_SMOKE").is_some() }
+pub fn smoke_enabled() -> bool {
+    std::env::var_os("ORION_STARTUP_SMOKE").is_some()
+}
 
 #[cfg(test)]
 mod tests {
@@ -58,8 +108,12 @@ mod tests {
     #[test]
     fn starts_pending_and_serializes_failures_as_data() {
         assert_eq!(Status::default().phase, "preparing");
-        let failed = Status { phase: "error".into(), error: Some("<script>private path</script>".into()) };
-        let value: serde_json::Value = serde_json::from_slice(&serde_json::to_vec(&failed).unwrap()).unwrap();
+        let failed = Status {
+            phase: "error".into(),
+            error: Some("<script>private path</script>".into()),
+        };
+        let value: serde_json::Value =
+            serde_json::from_slice(&serde_json::to_vec(&failed).unwrap()).unwrap();
         assert_eq!(value["error"], "<script>private path</script>");
     }
     #[test]

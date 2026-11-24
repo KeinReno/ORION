@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeShellContract } from './runtime-shell-contract.mjs';
+import { removeEnvironmentFiles } from './runtime-stage-safety.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = [];
@@ -20,6 +21,13 @@ function put(dir, name, data) {
 afterEach(() => { for (const dir of temporary.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 
 describe('packaged ORION-R runtime configuration', () => {
+  it('removes every developer environment profile from the deployed API', () => {
+    const dir = scratch();
+    for (const name of ['.env', '.env.rust', '.env.local', '.env.example', '.environment', 'src/main.js']) put(dir, name, 'fixture');
+    removeEnvironmentFiles(dir);
+    expect(fs.readdirSync(dir).sort()).toEqual(['.environment', 'src']);
+    expect(fs.readFileSync(path.join(dir, 'src/main.js'), 'utf8')).toBe('fixture');
+  });
   it('reads the edition beside the launcher without a source checkout', () => {
     const dir = scratch();
     const runtime = path.join(dir, 'runtime');

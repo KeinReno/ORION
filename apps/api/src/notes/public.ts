@@ -8,3 +8,11 @@ export async function readKnowledgeSourceTitle(tx: Prisma.TransactionClient, wor
   });
   return row?.title ?? null;
 }
+
+/** Only shared notes can be copied into a workspace material. */
+export function readSharedKnowledgeSource(tx: Prisma.TransactionClient, workspaceId: string, id: string) {
+  return tx.note.findFirst({
+    where: { id, workspaceId, deletedAt: null, privateToUserId: null },
+    select: { title: true, summary: true, body: true }
+  });
+}

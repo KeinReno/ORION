@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-pub mod logging;
 #[cfg(windows)]
 pub mod lifecycle;
+pub mod logging;
 #[cfg(windows)]
 pub mod runtime_compat;
 pub mod rust_api;

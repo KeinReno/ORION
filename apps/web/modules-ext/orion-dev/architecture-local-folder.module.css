@@ -1,0 +1,52 @@
+.localFolderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 3px;
+}
+
+.localFolderStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ac-muted, #9b9da2);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.localFolderStatus svg {
+  flex: none;
+  color: var(--ac-gold, #d7b36b);
+}
+
+.clearLocalFolder {
+  display: grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ac-muted, #9b9da2);
+  cursor: pointer;
+}
+
+.clearLocalFolder:hover {
+  background: var(--ac-raised, #22252a);
+  color: var(--ac-text, #f2f0ea);
+}
+
+@media (max-width: 680px) {
+  .localFolderRow {
+    flex-wrap: wrap;
+  }
+
+  .localFolderStatus {
+    flex: 1 1 100%;
+  }
+}

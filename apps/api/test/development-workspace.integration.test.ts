@@ -260,6 +260,21 @@ describe("11 — Git Workspace, привязки коммитов, Architect и 
     expect(trace.data.qa.available).toBe(false);
     expect(trace.data.release.linked).toBe(false);
 
+    const snapshot = await call(
+      `/workspaces/${owner.workspaceId}/development/architect/${repositoryId}/snapshots`,
+      "POST", owner.accessToken, { ref: links.data[0]!.sha }
+    );
+    expect(snapshot.status, JSON.stringify(snapshot.data)).toBe(201);
+    const analyzedTrace = await call<typeof trace.data>(
+      `/workspaces/${owner.workspaceId}/tasks/${task42}/trace`, "GET", owner.accessToken
+    );
+    expect(analyzedTrace.data.qa.available).toBe(true);
+    expect(analyzedTrace.data.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "check", placeholder: false, links: expect.arrayContaining([
+        expect.objectContaining({ type: "commit", id: links.data[0]!.sha })
+      ]) })
+    ]));
+
     // Ручная привязка коммита без ссылки в сообщении.
     const manual = await call<{ id: string; manual: boolean; sha: string }>(
       `/workspaces/${owner.workspaceId}/tasks/${task42}/commit-links`,

@@ -2,10 +2,10 @@
 mod rust_payload;
 
 use rust_payload::{
-    queue_payload, select_payload, settle_trial, trial_ready, validate_manifest, verify_file_bytes,
-    verify_signed_manifest, BaseInfo, PayloadCrypto, PayloadEnvelope, PayloadError, PayloadFile,
-    PayloadManifest, SelectionState, prune_stale_versions, version_root,
-    write_selection_state_atomic, STALE_VERSION_TTL,
+    prune_stale_versions, queue_payload, select_payload, settle_trial, trial_ready,
+    validate_manifest, verify_file_bytes, verify_signed_manifest, version_root,
+    write_selection_state_atomic, BaseInfo, PayloadCrypto, PayloadEnvelope, PayloadError,
+    PayloadFile, PayloadManifest, SelectionState, STALE_VERSION_TTL,
 };
 
 struct TestCrypto {
@@ -270,7 +270,10 @@ fn prune_stale_versions_removes_unreferenced_and_keeps_referenced_and_fresh() {
 
     // Нулевой TTL: все нереференсные каталоги удаляются независимо от
     // возраста, референсный (active в state.json) не трогаем никогда.
-    assert_eq!(prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(), 2);
+    assert_eq!(
+        prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(),
+        2
+    );
     assert!(active.exists());
     assert!(!stale.exists());
     assert!(!fresh.exists());
@@ -286,6 +289,9 @@ fn prune_stale_versions_removes_unreferenced_and_keeps_referenced_and_fresh() {
 #[test]
 fn prune_stale_versions_tolerates_missing_versions_dir() {
     let root = temp_data_root("empty");
-    assert_eq!(prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(), 0);
+    assert_eq!(
+        prune_stale_versions(&root, std::time::Duration::ZERO).unwrap(),
+        0
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

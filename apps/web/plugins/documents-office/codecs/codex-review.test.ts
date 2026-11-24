@@ -5,6 +5,15 @@ import { addChart, addPivotTable, recalculate, workbookStateToXlsx, xlsxToWorkbo
 import { tiptapJsonToDocx } from "./docx-codec";
 
 describe("REVIEW office preservation", () => {
+  it("blocks saving a workbook with an unrecognized chart part", async () => {
+    const source = new ExcelJS.Workbook();
+    source.addWorksheet("Sales").getCell("A1").value = 42;
+    const zip = await JSZip.loadAsync(await source.xlsx.writeBuffer());
+    zip.file("xl/charts/chartEx1.xml", "<unsupportedChart/>");
+    const state = await xlsxToWorkbookState(await zip.generateAsync({ type: "arraybuffer" }));
+    expect(state.unsupportedObjects).toBe(true);
+    await expect(workbookStateToXlsx(recalculate(state))).rejects.toThrow("Сохранение недоступно");
+  });
   it("preserves chart and pivot definitions when recalculating cells", () => {
     let state: WorkbookState = {sheets:[{name:"Sales",rows:[[{value:"Region"},{value:"Total"}],[{value:"North"},{value:10}]]}]};
     state = addChart(state,{sheetId:"Sales",dataRange:"A1:B2",chartType:"bar"});

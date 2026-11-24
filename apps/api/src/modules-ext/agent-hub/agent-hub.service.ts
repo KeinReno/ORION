@@ -104,6 +104,21 @@ export class AgentHubService {
     }
   }
 
+  async review(
+    userId: string, workspaceId: string, id: string, expectedRevision: number, reason?: string
+  ): Promise<AgentHubExecution> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberRoleTx(tx, userId, workspaceId, ["owner", "lead"]);
+      const row = await this.transitions.loadTx(tx, workspaceId, id);
+      const review = { expectedRevision, reviewerId: userId, at: new Date().toISOString() };
+      return this.transitions.commitTx(tx, row, reason
+        ? { ...review, type: "return_for_rework", reason }
+        : { ...review, type: "verify" }, userId, {
+        reviewerId: userId, reason: reason ?? null, evidenceRefs: row.evidenceRefs, resultSummary: row.resultSummary
+      });
+    });
+  }
+
   /** Only the signed-in owner/lead may cancel from the human API. */
   async cancel(userId: string, workspaceId: string, id: string, expectedRevision: number): Promise<AgentHubExecution> {
     return this.prisma.withUser(userId, async (tx) => {

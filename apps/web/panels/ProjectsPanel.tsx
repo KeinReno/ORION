@@ -54,6 +54,7 @@ import {
 } from "../lib/project-status";
 import { ProjectAttentionBand } from "./projects/project-attention";
 import { ProjectOpsView } from "./projects/project-ops";
+import { ProjectPortfolioDialog, ProjectTemplateDialog } from "./projects/project-center-dialogs";
 import { ExtensionSlot, useSlotContributions } from "../lib/extensions/slot";
 
 /**
@@ -92,6 +93,7 @@ export function ProjectsPanel(): React.ReactElement {
   const { toast } = useToast();
 
   const [creating, setCreating] = useState(false);
+  const [centerDialog, setCenterDialog] = useState<"portfolio" | "template" | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | null>(null);
   const [sort, setSort] = useState<ProjectBoardSort>("lifecycle");
@@ -323,9 +325,13 @@ export function ProjectsPanel(): React.ReactElement {
             : undefined
         }
         actions={
-          <Button size="sm" onClick={() => setCreating(true)} disabled={!workspaceId}>
-            <Plus className="h-4 w-4" /> Новый проект
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="subtle" disabled={!workspaceId} onClick={() => setCenterDialog("portfolio")}>Портфель</Button>
+            <Button size="sm" variant="subtle" disabled={!workspaceId} onClick={() => setCenterDialog("template")}>Из шаблона</Button>
+            <Button size="sm" onClick={() => setCreating(true)} disabled={!workspaceId}>
+              <Plus className="h-4 w-4" /> Новый проект
+            </Button>
+          </div>
         }
       >
         <div className="relative w-full sm:w-56">
@@ -371,6 +377,9 @@ export function ProjectsPanel(): React.ReactElement {
           <div className="mt-2 flex flex-col items-stretch gap-2">{viewControls}</div>
         </details>
       </PanelHeader>
+
+      {workspaceId && centerDialog === "portfolio" ? <ProjectPortfolioDialog key={workspaceId} workspaceId={workspaceId} tasks={allTasks ?? []} close={() => setCenterDialog(null)} /> : null}
+      {workspaceId && centerDialog === "template" ? <ProjectTemplateDialog key={workspaceId} workspaceId={workspaceId} close={() => setCenterDialog(null)} /> : null}
 
       <PanelBody className="[container-type:inline-size]">
         {loading ? (

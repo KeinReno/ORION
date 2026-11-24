@@ -32,7 +32,6 @@ import { Badge, Button, ConfirmDialog, DropdownMenu, Input, MarkdownEditor, Sele
 import { BookOpen, Check, ChevronDown, Library, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { KIND_ICON, KIND_LABEL, RELATION_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, VISIBILITY_LABEL } from "./knowledge-labels";
-import { KnowledgeReadingView } from "./reading-view";
 import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { openEntity } from "../../lib/panel-bus";
 
@@ -94,7 +93,8 @@ export function KnowledgeItemEditor({
   items,
   categories,
   onClosed,
-  onDirtyChange
+  onDirtyChange,
+  onOpenReading
 }: {
   workspaceId: string;
   itemId: string;
@@ -102,6 +102,8 @@ export function KnowledgeItemEditor({
   categories: KnowledgeCategory[];
   onClosed: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** Панель владеет экраном чтения (экран 03): редактор просит её вместо встроенного режима. */
+  onOpenReading?: () => void;
 }) {
   const detail = useKnowledgeItem(workspaceId, itemId);
   const { isEnabled } = useEnabledModules();
@@ -113,7 +115,6 @@ export function KnowledgeItemEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [conflict, setConflict] = useState<KnowledgeItemDetail | null>(null);
-  const [reading, setReading] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const draftRef = useRef<Draft | null>(null);
   const dirty = useRef(false);
@@ -133,8 +134,6 @@ export function KnowledgeItemEditor({
       return fromDetail(detail.data);
     });
   }, [detail.data]);
-  // Switching to another material while reading would show the wrong one's text under the toggle.
-  useEffect(() => setReading(false), [itemId]);
 
   function edit(patch: Partial<Draft>) {
     dirty.current = true;
@@ -233,7 +232,6 @@ export function KnowledgeItemEditor({
   const item = detail.data;
   const contextCount = item.sources.length + item.relations.length + item.backlinks.length + (item.projectId ? 1 : 0);
 
-  if (reading) return <KnowledgeReadingView item={item} onExit={() => setReading(false)} />;
 
   return (
     <div className="min-w-0 space-y-4">
@@ -286,7 +284,7 @@ export function KnowledgeItemEditor({
         <KnowledgeKindMenu kind={draft.kind} onChange={(kind) => edit({ kind })} />
         <KnowledgeVisibilityMenu visibility={draft.visibility} onChange={(visibility) => edit({ visibility })} />
         <span className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setReading(true)} disabled={!draft.body.trim()} title={!draft.body.trim() ? "В материале пока нет текста" : undefined}>
+        <Button size="sm" variant="outline" onClick={() => (onOpenReading ? onOpenReading() : undefined)} disabled={!draft.body.trim()} title={!draft.body.trim() ? "В материале пока нет текста" : undefined}>
           <BookOpen className="h-3.5 w-3.5" /> Режим чтения
         </Button>
         <Button size="sm" variant="outline" onClick={() => setContextOpen(true)}>

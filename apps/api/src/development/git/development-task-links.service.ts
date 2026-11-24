@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import {
+  architectMetricsSchema,
   parseCommitTaskRefs,
   type CreateTaskCommitLinkInput,
   type TaskCommitLink,
@@ -23,7 +24,7 @@ export interface SyncLinksResult {
 }
 
 const MAX_REFS_PER_SYNC = 200;
-const QA_REASON = "Проверки QA-v2/v3 пока вне ядра: контракт объявлен, исполнителя проверок нет.";
+const QA_REASON = "Для связанных ревизий ещё нет сохранённых результатов анализа Architect.";
 const RELEASE_REASON = "Релизы обновлений не привязаны к задаче: в этом пространстве нет записи о выпуске.";
 
 /**
@@ -157,8 +158,7 @@ export class DevelopmentTaskLinksService {
 
   /**
    * Единая цепочка: создание → поручение → изменения → коммиты → проверки → релиз.
-   * Проверки и релиз честно помечены `placeholder: true`, пока в ядре нет их исполнения: пустая
-   * строка «всё проверено» была бы утверждением, которого никто не делал.
+   * Для проверки используем только сохранённый результат анализа той же пары репозиторий/SHA.
    */
   async trace(userId: string, workspaceId: string, taskId: string): Promise<TaskTrace> {
     return this.prisma.withUser(userId, async (tx) => {
@@ -231,11 +231,32 @@ export class DevelopmentTaskLinksService {
         });
       }
 
-      entries.push({
+      const snapshots = links.length ? await tx.developmentArchitectSnapshot.findMany({
+        where: { workspaceId, OR: links.map(({ repositoryId, sha }) => ({ repositoryId, sha })) },
+        select: { id: true, repositoryId: true, sha: true, createdAt: true, metrics: true, truncated: true }
+      }) : [];
+      for (const snapshot of snapshots) {
+        const metrics = architectMetricsSchema.safeParse(snapshot.metrics);
+        entries.push({
+          id: `check:${snapshot.id}`,
+          kind: "check",
+          at: snapshot.createdAt.toISOString(),
+          title: `Структурный анализ Architect · ${snapshot.sha.slice(0, 8)}`,
+          detail: metrics.success ? `Файлов: ${metrics.data.files} · Внутренних связей: ${metrics.data.internalEdges} · Внешних связей: ${metrics.data.externalEdges}` : null,
+          status: snapshot.truncated ? "Карта неполная" : "Карта построена",
+          links: [
+            { type: "architect-snapshot", id: snapshot.id, url: null },
+            { type: "commit", id: snapshot.sha, url: null },
+            { type: "repository", id: snapshot.repositoryId, url: null }
+          ],
+          placeholder: false
+        });
+      }
+      if (!snapshots.length) entries.push({
         id: `check:${source.id}`,
         kind: "check",
         at: null,
-        title: "Проверки: контракт есть, исполнителя нет",
+        title: "Нет результатов анализа",
         detail: QA_REASON,
         status: null,
         links: [],
@@ -265,7 +286,7 @@ export class DevelopmentTaskLinksService {
         title: source.title,
         status: source.status,
         entries,
-        qa: { available: false as const, reason: QA_REASON },
+        qa: { available: snapshots.length > 0, reason: snapshots.length ? "Показан сохранённый структурный анализ Architect." : QA_REASON },
         release: { linked: false, tag: null }
       };
     });

@@ -21,6 +21,6 @@ Projects читает заголовок/статус/проект сущест�
 - Права: `tasks.task.read`, `tasks.task.create`, `tasks.task.update`, `tasks.task.delete`, `tasks.status.manage`, `tasks.field.manage`, `tasks.recurrence.manage`.
 - Модуль владеет: Задачи, подзадачи, зависимости, сохранённые виды.
 - Соседи: жёсткие: —; мягкие: `projects`, `calendar`, `time`; чужие данные читать только через их публичный контракт, мягких соседей спрашивать через `isEnabled`.
-- Расширения: плагины: `team`, `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`.
+- Расширения: плагины: `team`, `tasks-saved-views`, `tasks-comments`, `tasks-development-trace`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning`.
 - Выключение модуля не удаляет данные; новые таблицы — только с ENABLE + FORCE RLS и записью в реестре снапшота.
 <!-- generated:manifest:end -->

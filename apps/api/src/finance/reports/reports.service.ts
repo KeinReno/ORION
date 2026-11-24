@@ -1,11 +1,18 @@
 import { Injectable } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
 import { DEFAULT_FINANCE_CURRENCY, type CategoryBreakdownEntry, type MonthlyFinanceSummary } from "@orion/shared-types";
 import { PrismaService } from "../../common/prisma.service";
 import { WorkspacesService } from "../../workspaces/workspaces.service";
 import { explicitRange, monthRange, toMonthKey } from "../finance-refs.util";
 
 const MAX_MONTHS = 24;
+
+interface MonthlyTotal {
+  month: string;
+  currency: string;
+  income: bigint;
+  expense: bigint;
+  transfer: bigint;
+}
 
 @Injectable()
 export class ReportsService {
@@ -49,20 +56,50 @@ export class ReportsService {
         : [{ currency: DEFAULT_FINANCE_CURRENCY, starting: 0 }];
 
       const keys = lastMonthKeys(count);
+      const start = monthRange(keys[0])!.start;
+      const end = monthRange(keys[keys.length - 1])!.end;
+      // Resolve transaction and account visibility once per transaction under RLS.
+      // Joining lines afterwards avoids rechecking those policies for each aggregate.
+      const totals = await tx.$queryRaw<MonthlyTotal[]>`
+        WITH visible_transactions AS MATERIALIZED (
+          SELECT t.id, t.type, to_char(t."occurredAt", 'YYYY-MM') AS month,
+            source.currency, destination.currency AS destination_currency
+          FROM "finance_transactions" t
+          JOIN "finance_accounts" source ON source.id = t."accountId"
+          LEFT JOIN "finance_accounts" destination ON destination.id = t."toAccountId"
+          WHERE t."workspaceId" = ${workspaceId}
+            AND t."occurredAt" >= ${start.toISOString()}::timestamp
+            AND t."occurredAt" < ${end.toISOString()}::timestamp
+            AND (t.type <> 'transfer' OR source.currency <> destination.currency)
+        ), amounts AS (
+          SELECT t.month, t.currency, t.destination_currency, t.type, sum(l.amount) AS total
+          FROM visible_transactions t
+          JOIN "finance_transaction_lines" l ON l."transactionId" = t.id
+          WHERE l."workspaceId" = ${workspaceId}
+          GROUP BY t.month, t.currency, t.destination_currency, t.type
+        ), flows AS (
+          SELECT month, currency,
+            CASE WHEN type = 'income' THEN total ELSE 0 END AS income,
+            CASE WHEN type = 'expense' THEN total ELSE 0 END AS expense,
+            CASE WHEN type = 'transfer' THEN -total ELSE 0 END AS transfer
+          FROM amounts
+          UNION ALL
+          SELECT month, destination_currency, 0, 0, total FROM amounts WHERE type = 'transfer'
+        )
+        SELECT month, currency, sum(income)::bigint AS income, sum(expense)::bigint AS expense,
+          sum(transfer)::bigint AS transfer
+        FROM flows
+        GROUP BY month, currency
+      `;
+      const byCurrencyMonth = new Map(totals.map((row) => [`${row.currency}:${row.month}`, row]));
       const results: MonthlyFinanceSummary[] = [];
       for (const { currency, starting } of currencies) {
         let netWorth = starting;
         for (const key of keys) {
-          const range = monthRange(key) as { start: Date; end: Date };
-          const [income, expense] = await Promise.all([
-            sumLines(tx, workspaceId, "income", range, currency),
-            sumLines(tx, workspaceId, "expense", range, currency)
-          ]);
-          const [transferIn, transferOut] = await Promise.all([
-            sumCrossCurrencyTransfers(tx, workspaceId, range, currency, "in"),
-            sumCrossCurrencyTransfers(tx, workspaceId, range, currency, "out")
-          ]);
-          netWorth += income - expense + transferIn - transferOut;
+          const month = byCurrencyMonth.get(`${currency}:${key}`);
+          const income = Number(month?.income ?? 0);
+          const expense = Number(month?.expense ?? 0);
+          netWorth += income - expense + Number(month?.transfer ?? 0);
           results.push({ month: key, currency, income, expense, netWorth });
         }
       }
@@ -124,39 +161,6 @@ export class ReportsService {
       }));
     });
   }
-}
-
-async function sumLines(
-  tx: Prisma.TransactionClient,
-  workspaceId: string,
-  type: "income" | "expense",
-  range: { start: Date; end: Date },
-  currency: string
-): Promise<number> {
-  const sum = await tx.transactionLine.aggregate({
-    where: { workspaceId, transaction: { type, account: { currency }, occurredAt: { gte: range.start, lt: range.end } } },
-    _sum: { amount: true }
-  });
-  return sum._sum.amount ?? 0;
-}
-
-/** Transfers in this period from another currency into `currency` ("in") or out of `currency` into another ("out"). */
-async function sumCrossCurrencyTransfers(
-  tx: Prisma.TransactionClient,
-  workspaceId: string,
-  range: { start: Date; end: Date },
-  currency: string,
-  direction: "in" | "out"
-): Promise<number> {
-  const accounts =
-    direction === "in"
-      ? { account: { currency: { not: currency } }, toAccount: { is: { currency } } }
-      : { account: { currency }, toAccount: { is: { currency: { not: currency } } } };
-  const sum = await tx.transactionLine.aggregate({
-    where: { workspaceId, transaction: { type: "transfer", ...accounts, occurredAt: { gte: range.start, lt: range.end } } },
-    _sum: { amount: true }
-  });
-  return sum._sum.amount ?? 0;
 }
 
 /** `count` "YYYY-MM" keys, oldest first, ending with the current calendar month. */

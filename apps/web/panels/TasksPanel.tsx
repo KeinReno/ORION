@@ -835,6 +835,9 @@ export function TasksPanel(): React.ReactElement {
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Новая задача" size="md">
         <TaskForm
+          key={`${workspace?.id}:${sessionUser?.id}`}
+          draftWorkspaceId={workspace?.id}
+          draftUserId={sessionUser?.id}
           projects={isEnabled("projects") ? (projectList ?? []) : undefined}
           members={teamOn ? (memberList ?? []) : undefined}
           // In «Только мои» a new unassigned task would vanish from the board

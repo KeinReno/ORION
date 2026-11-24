@@ -1,0 +1,218 @@
+/* Architect / Workbench — «Процессы». KAIDEN: graphite canvas, gold accent, DM Mono-style micro labels. */
+.root { --wp-border: rgb(var(--orion-color-border, 58 59 60)); --wp-panel: rgb(var(--orion-color-elevated, 32 33 35)); --wp-canvas: rgb(var(--orion-color-canvas, 16 17 18)); --wp-muted: rgb(var(--orion-color-secondary, 178 176 169)); --wp-text: rgb(var(--orion-color-text, 242 240 234)); --wp-accent: rgb(var(--orion-accent, 201 168 106)); --wp-node: color-mix(in srgb, var(--wp-panel) 86%, var(--wp-text)); --wp-node-border: color-mix(in srgb, var(--wp-border) 70%, var(--wp-text)); display: flex; min-height: 590px; flex-direction: column; overflow: hidden; border: 1px solid var(--wp-border); border-radius: 12px; background: var(--wp-panel); color: var(--wp-text); }
+.toolbar { display: flex; min-height: 54px; flex-wrap: wrap; align-items: center; gap: 10px; border-bottom: 1px solid var(--wp-border); padding: 8px 14px; }
+.toolbarTitle { display: inline-flex; align-items: center; gap: 8px; color: var(--wp-muted); font-size: var(--font-label); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.toolbarTitle > svg { color: var(--wp-accent); }
+.countBadge { min-width: 20px; border-radius: 10px; padding: 2px 6px; background: color-mix(in srgb, var(--wp-accent) 12%, var(--wp-panel)); color: var(--wp-text); text-align: center; font-size: var(--font-micro); }
+.alert { display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid color-mix(in srgb, #fb7185 42%, var(--wp-border)); padding: 10px 15px; background: color-mix(in srgb, #fb7185 10%, var(--wp-panel)); font-size: var(--font-label); }
+.alert svg { flex: none; margin-top: 1px; color: #fb7185; }
+.loading { display: flex; min-height: 150px; align-items: center; justify-content: center; gap: 9px; color: var(--wp-muted); font-size: var(--font-label); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Список процессов */
+.createForm { display: grid; gap: 10px; border-bottom: 1px solid var(--wp-border); padding: 14px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); }
+.createForm label { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-label); }
+.createForm input { min-height: 36px; border: 1px solid var(--wp-border); border-radius: 8px; padding: 0 10px; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-label); }
+.createForm input:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.createActions { display: flex; gap: 8px; }
+.list { display: grid; margin: 0; padding: 8px; list-style: none; }
+.list li { display: flex; align-items: center; gap: 6px; }
+.row { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 9px; padding: 11px 12px; background: transparent; color: var(--wp-text); text-align: left; cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
+.row:hover, .row:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 30%, var(--wp-border)); background: color-mix(in srgb, var(--wp-accent) 7%, var(--wp-panel)); outline: none; }
+.rowMain { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.rowMain strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-label); font-weight: 600; }
+.rowMain small { overflow: hidden; color: var(--wp-muted); font-size: var(--font-micro); text-overflow: ellipsis; white-space: nowrap; }
+.row time { flex: none; color: var(--wp-muted); font-size: var(--font-micro); font-variant-numeric: tabular-nums; }
+.emptyState { display: grid; width: min(100%, 620px); gap: 12px; align-self: center; padding: 48px 24px; }
+.emptyIcon { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid color-mix(in srgb, var(--wp-accent) 35%, var(--wp-border)); border-radius: 12px; background: color-mix(in srgb, var(--wp-accent) 9%, var(--wp-panel)); color: var(--wp-accent); }
+.emptyState h3 { margin: 0; font-size: var(--font-title); font-weight: 600; }
+.emptyState p { margin: 0; color: var(--wp-muted); font-size: var(--font-label); line-height: 1.6; }
+
+/* Чипы статусов */
+.chip { display: inline-flex; flex: none; align-items: center; border: 1px solid var(--wp-border); border-radius: 999px; padding: 2px 8px; font-size: var(--font-micro); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+.chip_pending { color: var(--wp-muted); }
+.chip_active { border-color: color-mix(in srgb, #60a5fa 45%, var(--wp-border)); color: #60a5fa; }
+.chip_done, .chip_pass { border-color: color-mix(in srgb, #10b981 45%, var(--wp-border)); color: #10b981; }
+.chip_blocked { border-color: color-mix(in srgb, #fb7185 45%, var(--wp-border)); color: #fb7185; }
+.chip_neutral { color: var(--wp-muted); }
+.chip_accent { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); color: var(--wp-accent); }
+.chip_warning { border-color: color-mix(in srgb, #f59e0b 45%, var(--wp-border)); color: #f59e0b; }
+.chip_success { border-color: color-mix(in srgb, #10b981 45%, var(--wp-border)); color: #10b981; }
+
+/* Редактор */
+.nameInput { min-width: 0; flex: 1; min-height: 34px; border: 1px solid transparent; border-radius: 7px; padding: 0 9px; background: transparent; color: var(--wp-text); font-size: var(--font-title); font-weight: 600; }
+.nameInput:hover { border-color: var(--wp-border); }
+.nameInput:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); outline: none; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); }
+.select { max-width: 220px; min-height: 32px; border: 1px solid var(--wp-border); border-radius: 6px; padding: 0 8px; background: var(--wp-panel); color: var(--wp-text); font-size: var(--font-label); }
+.select:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.saveState { margin-left: auto; color: var(--wp-muted); font-size: var(--font-micro); }
+.editorLayout { display: grid; min-height: 500px; flex: 1; grid-template-columns: minmax(156px, 180px) minmax(0, 1fr) minmax(220px, 264px); }
+
+/* Палитра */
+.palette { display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--wp-border); padding: 12px 10px; overflow: auto; }
+.palette h4 { margin: 6px 2px 2px; color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.paletteItem { display: flex; width: 100%; align-items: center; gap: 8px; border: 1px solid var(--wp-border); border-radius: 8px; padding: 8px 9px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-label); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
+.paletteItem:hover, .paletteItem:focus-visible { border-color: color-mix(in srgb, var(--wp-accent) 45%, var(--wp-border)); background: color-mix(in srgb, var(--wp-accent) 8%, var(--wp-panel)); box-shadow: 0 0 14px color-mix(in srgb, var(--wp-accent) 18%, transparent); outline: none; }
+.paletteItem > svg { margin-left: auto; color: var(--wp-muted); }
+.edgeKindLabel { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-micro); }
+.paletteHint { margin: 4px 2px 0; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.55; }
+.paletteActions { margin-top: auto; display: flex; }
+
+/* Узлы схемы */
+.canvas { position: relative; z-index: 0; min-width: 0; min-height: 500px; background: var(--wp-canvas); }
+.canvas :global(.react-flow__node) { font-family: inherit; }
+.nodeCard { position: relative; display: grid; width: 232px; min-height: 126px; align-content: start; gap: 8px; border: 1px solid var(--wp-node-border); border-radius: 10px; padding: 12px 13px; background: var(--wp-node); color: var(--wp-text); box-shadow: 0 5px 16px color-mix(in srgb, var(--wp-canvas) 48%, transparent); transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
+.nodeCard:hover { border-color: color-mix(in srgb, var(--wp-accent) 55%, var(--wp-node-border)); box-shadow: 0 8px 24px color-mix(in srgb, var(--wp-canvas) 58%, transparent), 0 0 0 1px color-mix(in srgb, var(--wp-accent) 18%, transparent); }
+.nodeCardSelected { border-color: var(--wp-accent); background: color-mix(in srgb, var(--wp-node) 92%, var(--wp-accent)); outline: 2px solid color-mix(in srgb, var(--wp-accent) 80%, transparent); outline-offset: 2px; box-shadow: 0 8px 24px color-mix(in srgb, var(--wp-canvas) 62%, transparent), 0 0 24px color-mix(in srgb, var(--wp-accent) 17%, transparent); }
+.nodeHeader { display: flex; min-height: 27px; align-items: center; gap: 8px; }
+.nodeKind { color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
+.nodeIcon { display: grid; width: 26px; height: 26px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--wp-accent) 30%, var(--wp-border)); border-radius: 7px; background: color-mix(in srgb, var(--wp-accent) 8%, var(--wp-panel)); color: var(--wp-accent); font-size: 13px; }
+.nodeIcon_task { color: var(--wp-text); border-color: var(--wp-border); background: color-mix(in srgb, var(--wp-border) 20%, transparent); }
+.nodeIcon_agent { color: #60a5fa; border-color: color-mix(in srgb, #60a5fa 35%, var(--wp-border)); background: color-mix(in srgb, #60a5fa 9%, var(--wp-panel)); }
+.nodeIcon_decision { color: #f59e0b; border-color: color-mix(in srgb, #f59e0b 35%, var(--wp-border)); background: color-mix(in srgb, #f59e0b 9%, var(--wp-panel)); }
+.nodeIcon_result { color: #10b981; border-color: color-mix(in srgb, #10b981 35%, var(--wp-border)); background: color-mix(in srgb, #10b981 9%, var(--wp-panel)); }
+.nodeTitle { display: -webkit-box; overflow: hidden; min-width: 0; color: var(--wp-text); font-size: var(--font-label); font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nodeDescription { display: -webkit-box; overflow: hidden; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nodeFooter { display: flex; min-height: 22px; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 2px; }
+.nodeAgent { overflow: hidden; color: var(--wp-accent); font-size: var(--font-micro); text-overflow: ellipsis; white-space: nowrap; }
+.nodeHandle { width: 9px; height: 9px; border: 2px solid var(--wp-canvas); background: var(--wp-accent); }
+.edgeFlow :global(.react-flow__edge-path) { stroke: var(--wp-accent); stroke-width: 2; }
+.edgeSignal :global(.react-flow__edge-path) { stroke: var(--wp-muted); stroke-width: 1.7; stroke-dasharray: 6 5; }
+.canvas :global(.react-flow__edge.selected .react-flow__edge-path) { stroke-width: 3; }
+.canvas :global(.react-flow__controls) { overflow: hidden; border: 1px solid var(--wp-border); border-radius: 8px; box-shadow: 0 3px 12px color-mix(in srgb, var(--wp-canvas) 30%, transparent); }
+.canvas :global(.react-flow__controls-button) { border-bottom-color: var(--wp-border); background: var(--wp-panel); fill: var(--wp-text); }
+.canvas :global(.react-flow__minimap) { border: 1px solid var(--wp-border); border-radius: 8px; background: var(--wp-panel); }
+.canvasToolbar { display: flex; min-height: 40px; align-items: center; gap: 3px; border: 1px solid var(--wp-border); border-radius: 10px; padding: 4px; background: color-mix(in srgb, var(--wp-panel) 94%, var(--wp-canvas)); box-shadow: 0 6px 22px color-mix(in srgb, var(--wp-canvas) 72%, transparent); }
+.canvasToolbar button { display: grid; width: 31px; height: 30px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--wp-text); cursor: pointer; }
+.canvasToolbar button:hover:not(:disabled), .canvasToolbar button[aria-pressed="true"] { background: color-mix(in srgb, var(--wp-accent) 14%, var(--wp-panel)); color: var(--wp-accent); }
+.canvasToolbar button:disabled { color: var(--wp-muted); opacity: .45; cursor: not-allowed; }
+.canvasToolbar button:focus-visible, .canvasMenu button:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 1px; }
+.zoomValue { min-width: 39px; color: var(--wp-muted); font-size: var(--font-micro); font-variant-numeric: tabular-nums; text-align: center; }
+.toolbarDivider, .canvasMenuDivider { width: 1px; height: 20px; margin: 0 3px; background: var(--wp-border); }
+.canvasMenu { position: absolute; z-index: 12; display: grid; min-width: 218px; gap: 3px; border: 1px solid var(--wp-border); border-radius: 9px; padding: 7px; background: color-mix(in srgb, var(--wp-panel) 96%, var(--wp-canvas)); box-shadow: 0 12px 36px color-mix(in srgb, var(--wp-canvas) 78%, transparent); }
+.canvasMenuLabel { padding: 5px 7px; color: var(--wp-muted); font-size: var(--font-micro); font-weight: 650; letter-spacing: .045em; }
+.canvasMenu button { display: flex; min-height: 34px; align-items: center; gap: 9px; border: 0; border-radius: 6px; padding: 5px 7px; background: transparent; color: var(--wp-text); font-size: var(--font-label); text-align: left; cursor: pointer; }
+.canvasMenu button:hover { background: color-mix(in srgb, var(--wp-accent) 10%, var(--wp-panel)); }
+.canvasMenuDivider { width: auto; height: 1px; margin: 4px 2px; }
+.canvas :global(.react-flow__attribution) { border: 1px solid var(--wp-border); border-radius: 4px 0 0 0; background: color-mix(in srgb, var(--wp-panel) 92%, var(--wp-canvas)); color: var(--wp-muted); opacity: .82; }
+.canvas :global(.react-flow__attribution a) { color: var(--wp-accent); }
+.canvasEmpty { position: absolute; z-index: 5; inset: 0; display: grid; place-content: center; justify-items: center; gap: 9px; pointer-events: none; color: var(--wp-muted); font-size: var(--font-label); text-align: center; }
+
+/* Инспектор */
+.inspector { display: flex; min-width: 0; flex-direction: column; gap: 12px; border-left: 1px solid var(--wp-border); padding: 17px 15px; background: color-mix(in srgb, var(--wp-panel) 92%, var(--wp-text)); overflow: auto; }
+.inspectorHeading { display: grid; gap: 8px; border-bottom: 1px solid var(--wp-border); padding-bottom: 11px; }
+.inspectorHeading h3 { overflow-wrap: anywhere; margin: 0; color: var(--wp-text); font-size: var(--font-title); font-weight: 600; line-height: 1.35; }
+.relationSection { display: grid; gap: 7px; border-top: 1px solid var(--wp-border); padding-top: 10px; }
+.relationSection h4 { display: flex; align-items: center; justify-content: space-between; margin: 0; color: var(--wp-text); font-size: var(--font-micro); font-weight: 650; }
+.relationSection h4 span { color: var(--wp-muted); font-variant-numeric: tabular-nums; }
+.relationSection ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.relationSection li { display: flex; min-width: 0; align-items: center; gap: 3px; border: 1px solid var(--wp-border); border-radius: 7px; padding: 3px; background: color-mix(in srgb, var(--wp-panel) 72%, var(--wp-canvas)); }
+.relationTarget { display: grid; min-width: 0; flex: 1; grid-template-columns: 16px minmax(0, 1fr); align-items: center; column-gap: 5px; border: 0; border-radius: 5px; padding: 4px; background: transparent; color: var(--wp-text); text-align: left; cursor: pointer; }
+.relationTarget > svg { grid-row: span 2; color: var(--wp-accent); }
+.relationTarget span { overflow: hidden; font-size: var(--font-micro); text-overflow: ellipsis; white-space: nowrap; }
+.relationTarget small { color: var(--wp-muted); font-size: 10px; }
+.relationTarget:hover { background: color-mix(in srgb, var(--wp-accent) 9%, var(--wp-panel)); }
+.unlinkButton { display: grid; width: 27px; height: 27px; flex: none; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--wp-muted); cursor: pointer; }
+.unlinkButton:hover { background: color-mix(in srgb, #fb7185 14%, var(--wp-panel)); color: #fb7185; }
+.relationSection > p { margin: 0; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.45; }
+.inspectorTop { display: flex; align-items: center; gap: 8px; color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.field { display: grid; gap: 5px; color: var(--wp-muted); font-size: var(--font-micro); }
+.field input, .field textarea, .field select { width: 100%; min-height: 32px; border: 1px solid var(--wp-border); border-radius: 7px; padding: 6px 8px; background: color-mix(in srgb, var(--wp-panel) 65%, var(--wp-canvas)); color: var(--wp-text); font-size: var(--font-label); }
+.field textarea { resize: vertical; line-height: 1.5; }
+.field input:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--wp-accent); outline-offset: 2px; }
+.inspectorActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.inspectorEmpty { display: grid; flex: 1; align-content: center; justify-items: center; gap: 9px; color: var(--wp-muted); font-size: var(--font-micro); line-height: 1.5; text-align: center; }
+
+/* Трасса выполнения */
+.trace { border-top: 1px solid var(--wp-border); }
+.traceToggle { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 8px; border: 0; padding: 0 13px; background: color-mix(in srgb, var(--wp-panel) 70%, var(--wp-canvas)); color: var(--wp-muted); font-size: var(--font-micro); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.traceToggle:hover { color: var(--wp-text); }
+.traceToggle > svg { color: var(--wp-accent); }
+.traceBody { max-height: 190px; overflow: auto; border-top: 1px solid var(--wp-border); padding: 8px 13px; background: color-mix(in srgb, var(--wp-canvas) 35%, var(--wp-panel)); }
+.traceList { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.traceList li { display: flex; align-items: baseline; gap: 10px; border-radius: 6px; padding: 6px 8px; background: color-mix(in srgb, var(--wp-border) 14%, transparent); font-size: var(--font-micro); }
+.traceList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.traceList small { overflow: hidden; color: var(--wp-muted); text-overflow: ellipsis; white-space: nowrap; }
+.eventText { color: var(--wp-text); }
+.traceEmpty { display: grid; place-content: center; justify-items: center; gap: 8px; margin: 0; padding: 18px; color: var(--wp-muted); font-size: var(--font-micro); text-align: center; }
+
+@media (min-width: 901px) {
+  .editorLayout { flex: none; height: min(62vh, 760px); grid-template-rows: minmax(500px, 1fr); }
+  .palette, .inspector, .canvas { min-height: 0; }
+}
+@media (max-width: 900px) {
+  .editorLayout { grid-template-columns: minmax(140px, 180px) minmax(0, 1fr); }
+  .inspector { grid-column: 1 / -1; min-height: 110px; max-height: 200px; overflow: auto; border-top: 1px solid var(--wp-border); border-left: 0; }
+}
+@media (max-width: 640px) {
+  .root { min-height: 620px; }
+  .toolbar { align-items: flex-start; }
+  .saveState { order: 4; margin-left: 0; }
+  .editorLayout { position: relative; min-height: 420px; grid-template-columns: minmax(0, 1fr); }
+  .palette { flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--wp-border); }
+  .palette h4 { width: 100%; margin: 0; }
+  .paletteHint, .paletteActions { display: none; }
+  .canvas { min-height: 320px; }
+  .inspector { min-height: 100px; max-height: none; border-left: 0; border-top: 1px solid var(--wp-border); }
+  .row time { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+  .row, .paletteItem, .nodeCard { transition: none; }
+}
+
+.summaryCount { margin-left: auto; color: var(--wp-muted); font-variant-numeric: tabular-nums; }
+.summaryRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; padding: 6px; border-radius: 6px; text-align: left; }
+.summaryRow:hover { background: var(--wp-panel); }
+.summaryRow:focus-visible { outline: 2px solid var(--wp-accent); }
+
+.editorLayout {
+  position: relative;
+  display: block;
+  flex: none;
+  height: var(--architect-canvas-height, 500px);
+  min-height: 0;
+}
+
+.canvas { height: 100%; min-height: 0; }
+
+.palette,
+.inspector {
+  position: absolute;
+  z-index: 5;
+  inset-block: 0;
+  width: min(260px, 74%);
+  min-height: 0;
+  max-height: none;
+  background: var(--wp-panel);
+  box-shadow: 0 8px 24px #0006;
+}
+
+.palette { inset-inline-start: 0; align-content: start; flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+.inspector { inset-inline-end: 0; }
+
+.palette[hidden],
+.inspector[hidden] { display: none; }
+
+@container (max-width: 560px) {
+  .inspector {
+    inset: auto 0 0;
+    width: auto;
+    max-height: 47%;
+  }
+}
+
+@container  (min-width: 561px) {
+  .editorLayout[data-palette="true"] {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .editorLayout[data-palette="true"] .palette {
+    position: relative;
+    width: auto;
+    box-shadow: none;
+  }
+}

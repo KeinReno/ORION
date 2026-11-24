@@ -20,6 +20,18 @@ apps/desktop/src-tauri/resources/runtime/
 tmp/
 *.stackdump
 
+# Scratch and tool dirs at repo root: live dev data (.tmp-test is the running
+# dev-stack data dir), build scratch, local pnpm store, self-hosted runner.
+/.tmp-build/
+/.tmp-bin/
+/.tmp-test/
+/.tmp-log.ps1
+/.pnpm-store/
+/.tools/
+
+# Chromium profile captured by splash/ scripts — regenerable, never source.
+splash/_chromeprofile/
+
 # Portable Postgres data dir (pnpm db:up). Survives db:down; delete to re-init.
 infra/postgres/data/
 

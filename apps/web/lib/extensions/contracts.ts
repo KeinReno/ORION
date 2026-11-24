@@ -481,7 +481,7 @@ export interface SlotMeta {
   "notes.history": { buttonLabel: string };
   "time.billing": { api: TimeBillingApi };
   /** `before`: the tab goes before the built-in ones (default after them). */
-  "tasks.detail.tabs": { tabId: string; label: string; before?: boolean };
+  "tasks.detail.tabs": { tabId: string; label: string; before?: boolean; needsModule?: OrionModuleId };
   "tasks.context.actions": { actionId: string; label: string };
   "tasks.views": TasksViewMeta;
   "notes.templates": { toggleLabel: (note: Note) => string };

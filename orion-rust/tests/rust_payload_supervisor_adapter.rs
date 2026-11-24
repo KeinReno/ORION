@@ -8,3 +8,5 @@ mod rust_payload;
 mod rust_payload_supervisor;
 #[path = "../src/supervisor.rs"]
 mod supervisor;
+#[path = "../src/timeouts.rs"]
+mod timeouts;

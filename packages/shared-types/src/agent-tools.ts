@@ -1226,6 +1226,53 @@ const CORE_MODULE_AGENT_TOOLS: readonly AgentToolDef[] = [
     example: { repositoryId: "<id репозитория>" },
     permission: "orion-dev.development_import.read",
     moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architecture_diagrams",
+    group: "modules",
+    effect: "read",
+    description: "Список авторских схем проектной архитектуры ORION Architect в текущем пространстве: название, описание, число узлов и связей, ревизия. Это не автоматически построенная карта файлов. Требуется разрешение orion-dev.development_import.read.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/development/architect/diagrams" },
+    input: obj({}),
+    permission: "orion-dev.development_import.read",
+    moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architecture_diagram",
+    group: "modules",
+    effect: "read",
+    description: "Прочитать авторскую архитектурную схему со всеми типизированными узлами, отношениями и камерой. Требуется разрешение orion-dev.development_import.read.",
+    scopes: null,
+    http: { method: "GET", path: "/ai/v1/development/architect/diagrams/{diagramId}" },
+    input: obj({ diagramId: str("id схемы из orion_architecture_diagrams") }, ["diagramId"]),
+    example: { diagramId: "<id схемы>" },
+    permission: "orion-dev.development_import.read",
+    moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architecture_create",
+    group: "modules",
+    effect: "create",
+    description: "Создать пустую авторскую схему архитектуры в ORION Architect. Добавление модели и связей выполняется через orion_architecture_update; не создавайте схему без запроса пользователя. Требуется разрешение orion-dev.development_import.create.",
+    scopes: null,
+    http: { method: "POST", path: "/ai/v1/development/architect/diagrams" },
+    input: obj({ name: str("Название схемы"), description: str("Что описывает схема") }, ["name"]),
+    example: { name: "Схема авторизации", description: "Поток входа и границы доверия" },
+    permission: "orion-dev.development_import.create",
+    moduleId: "orion-dev"
+  },
+  {
+    name: "orion_architecture_update",
+    group: "modules",
+    effect: "update",
+    description: "Изменить содержимое авторской архитектурной схемы полным графом с ожидаемой ревизией. Менеджер применяет правку, помощник создаёт запрос человеку на утверждение. Передайте узлы и отношения целиком из прочитанной схемы, чтобы не затереть параллельные изменения. Требуется разрешение orion-dev.development_import.update.",
+    scopes: null,
+    http: { method: "PATCH", path: "/ai/v1/development/architect/diagrams/{diagramId}" },
+    input: obj({ diagramId: str("id схемы"), name: str("Название"), description: str("Описание"), graph: { type: "object", description: "Полный граф: nodes, edges, viewport" }, expectedRevision: { type: "number", description: "revision из orion_architecture_diagram" }, reason: str("Кратко, зачем предлагается изменение") }, ["diagramId", "name", "description", "graph", "expectedRevision"]),
+    example: { diagramId: "<id схемы>", name: "Схема авторизации", description: "Вход пользователя", graph: { nodes: [], edges: [], viewport: null }, expectedRevision: 1, reason: "Добавить узел API шлюза" },
+    permission: "orion-dev.development_import.update",
+    moduleId: "orion-dev"
   }
 ];
 

@@ -82,6 +82,7 @@ export const agentHubCommandSchema = z.discriminatedUnion("type", [
   z.object({ ...commandFields, type: z.literal("block"), workerId: z.string().min(1), reason: z.string().trim().min(1).max(2000) }),
   z.object({ ...commandFields, type: z.literal("submit"), workerId: z.string().min(1), evidenceRefs: z.array(z.string().min(1)).min(1), summary: z.string().trim().min(1).max(4000).optional() }),
   z.object({ ...commandFields, type: z.literal("verify"), reviewerId: z.string().min(1) }),
+  z.object({ ...commandFields, type: z.literal("return_for_rework"), reviewerId: z.string().min(1), reason: z.string().trim().min(1).max(2000) }),
   z.object({ ...commandFields, type: z.literal("fail"), workerId: z.string().min(1), reason: z.string().trim().min(1).max(2000), summary: z.string().trim().min(1).max(4000).optional() }),
   z.object({ ...commandFields, type: z.literal("expire") }),
   z.object({ ...commandFields, type: z.literal("requeue") }),

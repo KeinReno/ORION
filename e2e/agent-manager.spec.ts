@@ -37,7 +37,7 @@ test("помощник предлагает правку: превью → по�
   await openAgents(page, account.workspaceId);
 
   // The token list shows the mode; the proposal shows what changes.
-  await expect(page.getByLabel("Режим: Claude E2E")).toHaveValue("assistant");
+  await expect(page.getByLabel("Режим: Claude E2E")).toHaveText("Помощник");
   const proposals = page.getByRole("region", { name: "Запросы агентов" });
   await expect(proposals.getByText(/изменить задачу «Исходная задача»/i)).toBeVisible();
   await expect(proposals.getByRole("cell", { name: "Исходная задача" })).toBeVisible();
@@ -51,10 +51,12 @@ test("помощник предлагает правку: превью → по�
   // The journal says what was done, and filters narrow it.
   await page.getByRole("tab", { name: "Журнал", exact: true }).click();
   await expect(page.getByText("Создал заметку «Заметка агента»")).toBeVisible();
-  await page.getByLabel("Результат").selectOption("proposed");
+  await page.getByLabel("Результат").click();
+  await page.getByRole("option", { name: "Предложено", exact: true }).click();
   await expect(page.getByText("Создал заметку «Заметка агента»")).toHaveCount(0);
   await expect(page.getByText("Предложил: изменить задачу «Исходная задача»", { exact: true })).toBeVisible();
-  await page.getByLabel("Результат").selectOption("");
+  await page.getByLabel("Результат").click();
+  await page.getByRole("option", { name: "Любой результат", exact: true }).click();
 
   // Undo a creation: the note lands in the trash, it is not hard-deleted.
   await page.getByRole("button", { name: "Отменить создание" }).first().click();

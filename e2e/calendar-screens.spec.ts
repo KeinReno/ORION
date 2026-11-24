@@ -67,7 +67,10 @@ test("calendar screens: month, week, agenda, narrow", async ({ page, request }) 
   // The month shot shows the month: tab selected and the weekday header of the grid present.
   await tab("Месяц").click();
   await expect(tab("Месяц")).toHaveAttribute("aria-selected", "true");
-  await expect(narrow.getByText("Октябрь 2026")).toBeVisible();
+  const month = new Intl.DateTimeFormat("ru-RU", {
+    month: "long", year: "numeric", timeZone: "Europe/Moscow"
+  }).format(now).replace(/\s+г\.$/u, "");
+  await expect(narrow.getByText(new RegExp(`^${month}$`, "iu"))).toBeVisible();
   await expect(narrow.getByText("Пн", { exact: true })).toBeVisible();
   await expect(narrow.getByText("Ближайшее")).toHaveCount(0);
   await shot(page, "month-390");

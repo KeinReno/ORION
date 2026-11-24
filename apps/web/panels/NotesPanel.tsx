@@ -831,8 +831,9 @@ export function NotesPanel(): React.ReactElement {
   const editor =
     composing || selected ? (
       <NoteEditor
-        key={`${selected?.id ?? NEW_NOTE}:${editorReloadKey}`}
+        key={`${workspace?.id}:${templatesView}:${selected?.id ?? NEW_NOTE}:${editorReloadKey}`}
         note={selected}
+        composingTemplate={templatesView}
         compact={!twoPane}
         workspaceId={workspace?.id}
         projects={isEnabled("projects") ? (projectList ?? []) : undefined}

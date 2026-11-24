@@ -1,10 +1,12 @@
 "use client";
 
 import { useObjectNavigation } from "../lib/use-object-navigation";
+import { createModuleClient, workspaceModuleBase } from "@orion/core";
 import {
   useArchiveProject,
   useCreateNote,
   useCreateTask,
+  useCore,
   useMilestones,
   useProject,
   useProjects,
@@ -15,6 +17,8 @@ import {
 import {
   formatDuration,
   isProjectOverdue,
+  isoWeekKey,
+  timeAnalyticsSchema,
   type Milestone,
   type ProjectActivity,
   type ProjectDetail,
@@ -65,7 +69,7 @@ import {
   TriangleAlert
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { SectionTabs, sectionTabTitle, useSectionView, type SectionTab } from "../components/section-tabs";
 import { EntityLinksSection } from "../components/entity-links";
 import { describeError } from "../lib/error-message";
@@ -807,7 +811,7 @@ function OverviewTab({
 
         <ExtensionSlot name="projects.overview.side" props={{ workspaceId, projectId: project.id, projectName: project.name }} />
 
-        <MoneyTimeCard project={project} financeOn={financeOn} timeOn={timeOn} tasksOn={tasksOn} onEdit={onEditProject} />
+        <MoneyTimeCard workspaceId={workspaceId} project={project} financeOn={financeOn} timeOn={timeOn} tasksOn={tasksOn} tasks={tasks} onEdit={onEditProject} />
 
         <Card className="px-4 py-3">
           <SideTitle>Состав</SideTitle>
@@ -935,18 +939,33 @@ function ActivityList({ items, onPlan, onTask }: { items: ProjectActivity[]; onP
  * An unset budget or estimate says what to do about it instead of printing «не задан».
  */
 function MoneyTimeCard({
+  workspaceId,
   project,
   financeOn,
   timeOn,
   tasksOn,
+  tasks,
   onEdit
 }: {
+  workspaceId: string | undefined;
   project: ProjectDetail;
   financeOn: boolean;
   timeOn: boolean;
   tasksOn: boolean;
+  tasks: Task[];
   onEdit: () => void;
 }): React.ReactElement | null {
+  const { api } = useCore();
+  const analytics = useQuery({
+    queryKey: ["time", workspaceId, "project-analytics", project.id],
+    queryFn: () => {
+      if (!workspaceId) throw new Error("Рабочее пространство не выбрано");
+      const params = new URLSearchParams({ projectId: project.id });
+      return createModuleClient(api, workspaceModuleBase(workspaceId, "time"))
+        .get(`/analytics?${params}`, timeAnalyticsSchema);
+    },
+    enabled: Boolean(workspaceId && timeOn)
+  });
   if (!financeOn && !timeOn) return null;
   const budget = project.budgetAmount;
   const overspent = budget !== null && budget > 0 && project.spentAmount > budget;
@@ -954,6 +973,8 @@ function MoneyTimeCard({
   const planned = tasksOn ? project.plannedMinutes : null;
   const timePercent = planned && planned > 0 ? Math.min(100, Math.round((project.trackedMinutes / planned) * 100)) : null;
   const overtime = planned !== null && planned > 0 && project.trackedMinutes > planned;
+  const taskActual = new Map(analytics.data?.plan.tasks.map((task) => [task.taskId, task.actualMinutes]));
+  const weekActual = analytics.data?.plan.weeks.find((week) => week.week === isoWeekKey())?.actualMinutes ?? 0;
 
   return (
     <Card className="space-y-4 px-4 py-3">
@@ -998,6 +1019,26 @@ function MoneyTimeCard({
             {overtime ? " · больше плана" : ""}
           </p>
           {project.trackedMinutes > 0 ? <p className="text-micro text-subtle-foreground">Стоимость времени: {timeCostLabel(project)}</p> : null}
+          {analytics.data ? <p className="text-micro text-subtle-foreground">Учтено на этой неделе: {formatDuration(weekActual)}</p> : null}
+          {analytics.isError ? <p className="text-micro text-subtle-foreground">Не удалось загрузить разбивку времени.</p> : null}
+          {tasksOn && analytics.data && tasks.length > 0 ? (
+            <details className="text-label">
+              <summary className="cursor-pointer">План и факт по задачам</summary>
+              <ul className="mt-2 space-y-2">
+                {tasks.map((task) => {
+                  const actual = taskActual.get(task.id) ?? 0;
+                  return (
+                    <li key={task.id} className="flex flex-wrap justify-between gap-1">
+                      <button type="button" className="text-accent-text hover:underline" onClick={() => openEntity("task", task.id)}>{task.title}</button>
+                      <span className={task.estimatedMinutes !== null && actual > task.estimatedMinutes ? "text-destructive" : "text-subtle-foreground"}>
+                        {formatDuration(actual)} / {task.estimatedMinutes === null ? "без оценки" : formatDuration(task.estimatedMinutes)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
+          ) : null}
           <button type="button" onClick={() => openPanel("time")} className="inline-flex items-center gap-1 text-micro text-subtle-foreground hover:text-foreground">
             <Timer className="h-3 w-3" aria-hidden /> Открыть учёт времени
           </button>

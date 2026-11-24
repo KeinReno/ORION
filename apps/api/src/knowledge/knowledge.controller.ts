@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import {
   createKnowledgeCategoryInputSchema,
   createKnowledgeItemInputSchema,
@@ -86,6 +86,15 @@ export class KnowledgeController {
     @Body(new ZodValidationPipe(knowledgeImportDocumentsInputSchema)) input: KnowledgeImportDocumentsInput
   ): Promise<KnowledgeImportReport> {
     return this.importService.importDocuments(user.userId, workspaceId, input);
+  }
+
+  @Post("from-note/:noteId")
+  fromNote(
+    @CurrentUser() user: RequestUser,
+    @Param("workspaceId") workspaceId: string,
+    @Param("noteId", ParseUUIDPipe) noteId: string
+  ): Promise<{ itemId: string }> {
+    return this.importService.fromNote(user.userId, workspaceId, noteId);
   }
 
   /** «Сохранить входящее в базу знаний» (п. 6.4); запись из входящих удаляется только по `deleteFromInbox`. */

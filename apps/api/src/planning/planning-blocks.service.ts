@@ -153,6 +153,27 @@ export class PlanningBlocksService {
     });
   }
 
+  async previewMove(userId: string, workspaceId: string, blockId: string, input: MovePlanningBlockInput): Promise<PlanningBlockMoveResult> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.workspaces.assertMemberTx(tx, userId, workspaceId);
+      const current = await this.assertBlockTx(tx, workspaceId, blockId);
+      this.assertRevision(current, input.expectedRevision);
+      const { startAt, endAt, shiftMinutes } = this.moveWindow(current, input);
+      const proposed = { ...current, startAt, endAt };
+      const impact = await this.impactTx(tx, userId, workspaceId, proposed, shiftMinutes);
+      const conflicts = await this.conflictsForTx(tx, userId, workspaceId, proposed);
+      return { block: toDto(proposed, conflicts), conflicts, impact, replayed: false };
+    });
+  }
+
+  private moveWindow(current: BlockRow, input: MovePlanningBlockInput) {
+    const startAt = new Date(input.startAt);
+    const durationMs = current.endAt.getTime() - current.startAt.getTime();
+    const endAt = input.endAt ? new Date(input.endAt) : new Date(startAt.getTime() + durationMs);
+    this.assertRange(startAt, endAt);
+    return { startAt, endAt, shiftMinutes: Math.round((startAt.getTime() - current.startAt.getTime()) / 60_000) };
+  }
+
   /**
    * Перенос окна (в том числе между днями). Событие `planning.block.moved`
    * публикуется в той же транзакции и несёт оценку «что затронуто», чтобы
@@ -170,11 +191,7 @@ export class PlanningBlocksService {
         return { block: toDto(replay, conflicts), conflicts, impact: this.emptyImpact(replay.taskId), replayed: true };
       }
 
-      const startAt = new Date(input.startAt);
-      const durationMs = current.endAt.getTime() - current.startAt.getTime();
-      const endAt = input.endAt ? new Date(input.endAt) : new Date(startAt.getTime() + durationMs);
-      this.assertRange(startAt, endAt);
-      const shiftMinutes = Math.round((startAt.getTime() - current.startAt.getTime()) / 60_000);
+      const { startAt, endAt, shiftMinutes } = this.moveWindow(current, input);
 
       const row = await tx.planningBlock.update({
         where: { id: blockId },

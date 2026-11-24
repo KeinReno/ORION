@@ -5,6 +5,7 @@ import { compareArchitectSchemas, type ArchitectProjectSchema } from "@orion/sha
 import {
   analyzeRepository,
   extractRustModuleRefs,
+  extractLaunchPoints,
   extractTsImports,
   normalizeSubPath,
   resolveTsImport
@@ -37,6 +38,15 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fs.rm(root, { recursive: true, force: true });
+});
+
+describe("extractLaunchPoints", () => {
+  it("видит вход, маршрут, расписание и скрипты, импорт точкой запуска не считает", () => {
+    expect(extractLaunchPoints("apps/api/src/main.ts", "import { AppModule } from './app.module';\nNestFactory.create(AppModule);\n").map(item => item.kind)).toEqual(["main"]);
+    expect(extractLaunchPoints("apps/api/src/notes/notes.controller.ts", "@Get('list')\n@Cron(CronExpression.EVERY_MINUTE)\n").map(item => item.label)).toEqual(["EVERY_MINUTE", "GET list"]);
+    expect(extractLaunchPoints("package.json", JSON.stringify({ scripts: { dev: "nest start" } }))).toEqual([{ path: "package.json", kind: "script", label: "dev: nest start" }]);
+    expect(extractLaunchPoints("apps/web/util.ts", "export const helper = 1;\n")).toEqual([]);
+  });
 });
 
 describe("analyzeRepository", () => {

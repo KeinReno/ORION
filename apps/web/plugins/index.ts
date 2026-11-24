@@ -110,6 +110,8 @@ contribute("calendar.toolbar", { pluginId: "calendar-external", component: Calen
 
 const TaskCommentsTab = dynamic<TaskDetailTabSlotProps>(() => import("./tasks-comments/tab").then((m) => m.TaskCommentsTab), { ssr: false });
 contribute("tasks.detail.tabs", { pluginId: "tasks-comments", component: TaskCommentsTab, order: 10, meta: { tabId: "comments", label: "Комментарии", before: true } });
+const TaskDevelopmentTrace = dynamic<TaskDetailTabSlotProps>(() => import("./tasks-development-trace/tab").then((m) => m.TaskDevelopmentTrace), { ssr: false });
+contribute("tasks.detail.tabs", { pluginId: "tasks-development-trace", component: TaskDevelopmentTrace, order: 50, meta: { tabId: "development-trace", label: "Проверки", needsModule: "orion-dev" } });
 
 // «Доска»: columns side by side (3 up to 640px, 4 from 1152px of panel width — the container queries the list never used).
 contribute("tasks.views", {

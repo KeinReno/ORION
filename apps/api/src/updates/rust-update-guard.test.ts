@@ -34,4 +34,9 @@ describe("rust update guard", () => {
     expect(rustReleaseRefusal({ ...rust, tag: "v0.1.0-windows-beta.3" })).toMatch(/метка релиза/i);
     expect(rustReleaseRefusal(rust)).toBeNull();
   });
+
+  it("принимает чистые метки 0.2.x и ассеты с точкой в имени", () => {
+    expect(rustReleaseRefusal({ ...rust, tag: "v0.2.1", assetName: "ORION.Rust_0.2.1_x64-setup.exe" })).toBeNull();
+    expect(rustReleaseRefusal({ ...rust, tag: "v0.2.1" })).toBeNull();
+  });
 });

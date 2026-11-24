@@ -45,7 +45,7 @@ Projects использует read-only `TaskReferenceReader` для показ�
 | Панели веба | `tasks` |
 | Слоты | — |
 | Маршруты API | `workspaces/:workspaceId/task-fields`, `workspaces/:workspaceId/task-statuses`, `workspaces/:workspaceId/task-values`, `workspaces/:workspaceId/tasks` |
-| Плагины, расширяющие модуль | `team`, `tasks-saved-views`, `tasks-comments`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning` |
+| Плагины, расширяющие модуль | `team`, `tasks-saved-views`, `tasks-comments`, `tasks-development-trace`, `tasks-kanban`, `tasks-recurrence`, `tasks-planning` |
 | Миграции в манифесте | — |
 | Код на сервере | `apps/api/src/tasks/` |
 | При выключении | Панель и API скрываются. Строки задач в базе сохраняются и вернутся при включении. |

@@ -144,6 +144,8 @@ export type WorkbookState = {
   charts?: ChartState[];
   /** Pivot tables inserted via addPivotTable. Empty/absent means the exceljs write path stays unchanged. */
   pivotTables?: PivotTableState[];
+  /** Saving this source would discard chart or pivot data from the original package. */
+  unsupportedObjects?: boolean;
 };
 
 /** Adds a chart to workbook state (pure — returns a new state, does not mutate). */
@@ -180,12 +182,7 @@ export function addPivotTable(state: WorkbookState, config: PivotTableState): Wo
  * out of `WorkbookState` — per 25-OFFICE-REVIEW.md F02's explicit
  * fail-closed instruction, this codec does not claim to losslessly preserve
  * arbitrary third-party OOXML chart/pivot XML. `workbookStateToXlsx` is
- * chosen (exceljs vs modern-xlsx write path) purely by whether
- * `state.charts`/`state.pivotTables` is non-empty, so a file whose charts
- * were NOT recognized here falls through to the exceljs write path, which
- * drops any chart/pivot parts exceljs itself does not understand — an
- * explicit, documented "unsupported content is not silently carried over
- * pretending to be untouched" behavior, not a lossless-preservation claim.
+ * blocked when the source contains an unrecognized chart or pivot part.
  */
 export async function xlsxToWorkbookState(bytes: ArrayBuffer): Promise<WorkbookState> {
   const wb = new ExcelJS.Workbook();
@@ -240,12 +237,13 @@ export async function xlsxToWorkbookState(bytes: ArrayBuffer): Promise<WorkbookS
     };
   });
 
-  const { charts, pivotTables } = await readOrionChartsAndPivots(bytes, sheets);
+  const { charts, pivotTables, unsupportedObjects } = await readOrionChartsAndPivots(bytes, sheets);
 
   return {
     sheets: sheets.length ? sheets : [{ name: "Sheet1", rows: [[{ value: null }]] }],
     charts,
-    pivotTables
+    pivotTables,
+    unsupportedObjects
   };
 }
 
@@ -272,18 +270,19 @@ export async function xlsxToWorkbookState(bytes: ArrayBuffer): Promise<WorkbookS
 async function readOrionChartsAndPivots(
   bytes: ArrayBuffer,
   sheets: SheetState[]
-): Promise<{ charts?: ChartState[]; pivotTables?: PivotTableState[] }> {
+): Promise<Pick<WorkbookState, "charts" | "pivotTables" | "unsupportedObjects">> {
   const JSZip = (await import("jszip")).default;
   let zip: import("jszip");
   try {
     zip = await JSZip.loadAsync(bytes);
   } catch {
-    return {};
+    return { unsupportedObjects: true };
   }
 
   const sheetNameByRelIndex = sheets.map((s) => s.name);
   const charts: ChartState[] = [];
   const pivotTables: PivotTableState[] = [];
+  const chartParts = zip.file(/^xl\/charts\/[^/]+\.xml$/);
 
   // Map each worksheet to the chart parts it embeds via
   // xl/worksheets/_rels/sheetN.xml.rels -> xl/drawings/drawingN.xml ->
@@ -352,7 +351,8 @@ async function readOrionChartsAndPivots(
 
   return {
     charts: charts.length ? charts : undefined,
-    pivotTables: pivotTables.length ? pivotTables : undefined
+    pivotTables: pivotTables.length ? pivotTables : undefined,
+    unsupportedObjects: chartParts.length !== charts.length || pivotFiles.length !== pivotTables.length || pivotFiles.length > 1 || undefined
   };
 }
 
@@ -470,6 +470,9 @@ function parseOrionPivotXml(xml: string, sourceSheet: string, sourceRef: string,
 
 /** In-memory grid state -> valid XLSX bytes (formulas written as formulas). */
 export async function workbookStateToXlsx(state: WorkbookState): Promise<Buffer> {
+  if (state.unsupportedObjects) {
+    throw new Error("Сохранение недоступно: книга содержит диаграммы или сводные таблицы, которые редактор не может сохранить.");
+  }
   if ((state.charts && state.charts.length > 0) || (state.pivotTables && state.pivotTables.length > 0)) {
     return workbookStateToXlsxViaModernXlsx(state);
   }
@@ -723,5 +726,5 @@ export function recalculate(state: WorkbookState): WorkbookState {
   // calling `recalculate` after every cell edit silently stripped any
   // chart/pivot inserted earlier in the same session, before the user ever
   // got to Save.
-  return { sheets, charts: state.charts, pivotTables: state.pivotTables };
+  return { ...state, sheets };
 }

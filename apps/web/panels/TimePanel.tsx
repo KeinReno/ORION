@@ -46,6 +46,7 @@ import { dayLabel, groupEntriesByDay, summariseEntries, timeRange } from "../lib
 import { useEnabledModules } from "../lib/use-enabled-modules";
 import { EntryForm, type EntryFormDraft, type EntryFormValues } from "./time/entry-form";
 import { TimerWidget } from "./time/timer-widget";
+import { WeeklyTimePlan } from "./time/weekly-plan";
 import { useNowTick } from "./time/use-now";
 
 /** Default manual entry: the last hour, so the common "я только что закончил" needs two clicks. */
@@ -389,6 +390,7 @@ export function TimePanel(): React.ReactElement {
             </div>
 
             <div className="min-w-0">
+              {workspaceId ? <WeeklyTimePlan key={workspaceId} workspaceId={workspaceId} canManage={workspace?.role === "owner" || workspace?.role === "lead"} /> : null}
               <ExtensionSlot
                 name="time.insights"
                 props={{

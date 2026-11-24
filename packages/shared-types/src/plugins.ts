@@ -33,6 +33,7 @@ export const CORE_PLUGIN_IDS = [
   "time-billing",
   "calendar-external",
   "tasks-comments",
+  "tasks-development-trace",
   "tasks-kanban",
   "notes-daily",
   "notes-templates",
@@ -263,6 +264,15 @@ const CORE_PLUGIN_CATALOG: readonly PluginManifest[] = [
     summary: "Обсуждение задачи: комментарии с Markdown, правка и удаление своих, уведомление исполнителю.",
     provides: ["Вкладка «Комментарии» в карточке задачи", "Уведомление исполнителю о новом комментарии"],
     disableBehavior: "Вкладка скрывается; комментарии сохраняются и вернутся при повторном включении.",
+    defaultEnabled: true
+  },
+  {
+    id: "tasks-development-trace",
+    extendsModuleId: "tasks",
+    label: "Проверки Architect",
+    summary: "Связанные коммиты и сохранённый структурный анализ ревизий.",
+    provides: ["Вкладка «Проверки» в карточке задачи"],
+    disableBehavior: "Вкладка скрывается, привязки и результаты анализа сохраняются.",
     defaultEnabled: true
   },
   {

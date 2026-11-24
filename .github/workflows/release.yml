@@ -1,0 +1,101 @@
+name: Release
+
+# Сборка установщика строго из тега: бинарник релиза всегда воспроизводимо
+# связан с коммитом тега (provenance в build.json и в summary job'а).
+# До 2026-11-17 установщики собирались вручную на машине владельца — см.
+# docs/REMEDIATION_REPORT.md (P0-5, H9/H10).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Существующий тег для сборки релиза"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      # B:\Temp и прочие системные temp у хостов непредсказуемы (NuGet lock
+      # failures); временные каталоги сборки — внутри workspace (см.
+      # docs/REMEDIATION_REPORT.md, P0-3/п.4).
+      - name: Workspace-local TEMP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE\.tmp-temp" | Out-Null
+          "TEMP=$env:GITHUB_WORKSPACE\.tmp-temp" >> $env:GITHUB_ENV
+          "TMP=$env:GITHUB_WORKSPACE\.tmp-temp" >> $env:GITHUB_ENV
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build installer
+        shell: bash
+        env:
+          ORION_BUILD_TAG: ${{ inputs.tag || github.ref_name }}
+        run: node scripts/build-desktop-installer.mjs
+
+      - name: Locate and hash installer
+        id: installer
+        shell: bash
+        run: |
+          file=$(ls "apps/desktop/src-tauri/target/release/bundle/nsis/"*-setup.exe | head -1)
+          hash=$(sha256sum "$file" | cut -d' ' -f1)
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$file")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$hash" >> "$GITHUB_OUTPUT"
+          echo "## Установщик" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Файл: \`$(basename "$file")\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- SHA-256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Коммит: \`${{ inputs.tag || github.ref_name }}@${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload asset to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" "${{ steps.installer.outputs.file }}" --clobber
+
+      # Updater (apps/api/src/updates/release-feed.ts) требует в описании
+      # идентификатор редакции и SHA-256 — заполняем ТОЛЬКО если описание пустое,
+      # чтобы не затирать вручную написанный changelog.
+      - name: Fill release body when empty
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          SHA: ${{ steps.installer.outputs.sha256 }}
+        run: |
+          body=$(gh release view "$TAG" --json body --jq .body 2>/dev/null || true)
+          if [ -z "${body//[[:space:]]/}" ]; then
+            {
+              echo "Product: com.orion.rust.desktop"
+              echo ""
+              echo "SHA-256 установщика: \`$SHA\`"
+            } | gh release edit "$TAG" --notes-file -
+          fi

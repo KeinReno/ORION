@@ -16,6 +16,7 @@ Optional module for persistent execution attempts. First waves store queue recor
 - Runtime unavailable means `queued`, never `online`; manual MCP remains distinct.
 - Disabling the module preserves all records.
 - Stable `AgentHubAgentProfile` identities are distinct from AI Bridge credentials and runtime sessions. A human owner/lead explicitly links their own eligible credential; names do not merge credentials into an identity.
+- Owner/lead can accept a submitted result via `POST executions/:id/verify` or return it via `POST executions/:id/return-for-rework`. Both require the current revision. The journal stores the decision, reviewer, evidence and reason. A return requeues the execution with the review reason.
 - A task's executor assignment points to a profile. It does not create an execution attempt, wake an IDE, or dispatch work. Explicit execution creation remains a separate action.
 - Tasks and Agent Hub serialize agent/human assignment through the public `TaskAgentAssignmentRegistry` and a row lock on the canonical Task. A claimed or working run prevents reassignment to a different profile until it stops.
 - Profiles and task assignments are included in backup; credential bindings are excluded. Restore preserves assignment and reports `missing` until the owner explicitly rebinds a credential to the same profile.

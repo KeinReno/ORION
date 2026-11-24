@@ -12,10 +12,10 @@ import { NotificationBell } from "./notification-bell";
  * сколько сплитов открыто в доке. Раньше своя кнопка настроек была внутри action-бара каждой
  * группы вкладок (`HeaderActions` в layout.tsx) — при сплите их становилось несколько сразу.
  */
-export function GlobalCorner({ children }: { children?: ReactNode }): React.ReactElement {
+export function GlobalCorner({ children, inline = false }: { children?: ReactNode; inline?: boolean }): React.ReactElement {
   return (
-    <div className="flex min-h-10 shrink-0 items-center justify-end px-3">
-      <div className="orion-transport flex max-w-full flex-wrap items-center justify-end gap-1 rounded-lg border border-border bg-card p-1 shadow-lg shadow-black/20">
+    <div className={inline ? "flex shrink-0 items-center" : "flex min-h-10 shrink-0 items-center justify-end px-3"}>
+      <div className={inline ? "flex items-center gap-1" : "orion-transport flex max-w-full flex-wrap items-center justify-end gap-1 rounded-lg border border-border bg-card p-1 shadow-lg shadow-black/20"}>
         {children}
         <NotificationBell />
         <FeedbackButton />

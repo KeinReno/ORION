@@ -1,13 +1,15 @@
 "use client";
 
 import { createModuleClient, workspaceModuleBase } from "@orion/core";
-import { useCore, useTasks } from "@orion/core-react";
-import { agentHubExecutionSchema, agentHubEventSchema, agentHubReconcileResultSchema, agentHubRuntimeSessionSchema, type AgentHubExecution } from "@orion/shared-types";
+import { useAgentAuditLog, useCore, useTasks } from "@orion/core-react";
+import { AGENT_AUDIT_RESULT_LABEL, agentAuditResultOf, agentHubDelegationPolicySchema, agentHubExecutionSchema, agentHubEventSchema, agentHubReconcileResultSchema, agentHubRuntimeSessionSchema, type AgentHubDelegationPolicy, type AgentHubExecution, type AgentAuditResult } from "@orion/shared-types";
 import { Button, EmptyState, PanelBody, PanelHeader, PanelShell, Skeleton } from "@orion/ui";
 import { Network } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ChoiceSelect } from "../../components/choice-select";
+import { shortDateTime } from "../../lib/format";
+import { openSettings } from "../../lib/panel-bus";
 import { useActiveWorkspace } from "../../lib/use-active-workspace";
 
 const statusLabel: Record<AgentHubExecution["status"], string> = {
@@ -26,6 +28,10 @@ export function AgentHubPanel(): React.ReactElement {
   const [taskId, setTaskId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [reworkFor, setReworkFor] = useState<string | null>(null);
+  const [reworkReason, setReworkReason] = useState("");
   const { data: tasks = [] } = useTasks(workspaceId);
   const openTasks = tasks.filter(task => task.status !== "done" && task.status !== "canceled");
   const taskNames = new Map(tasks.map(task => [task.id, task.title]));
@@ -44,6 +50,15 @@ export function AgentHubPanel(): React.ReactElement {
     queryFn: () => client().get(`/executions/${selectedId}/events`, agentHubEventSchema.array()),
     enabled: Boolean(workspaceId && selectedId)
   });
+  // P3-4: последние вызовы агентов (полный журнал с фильтрами, отменой и CSV — в Настройки → ИИ → Журнал).
+  const audit = useAgentAuditLog(workspaceId, { limit: 10 });
+  const auditTone: Record<AgentAuditResult, string> = {
+    ok: "text-muted-foreground",
+    proposed: "text-warning",
+    denied: "text-danger",
+    limited: "text-danger",
+    error: "text-danger"
+  };
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["agent-hub", workspaceId] });
   const create = useMutation({
     mutationFn: (id: string) => client().post("/executions", { taskId: id, requestId: crypto.randomUUID() }, agentHubExecutionSchema),
@@ -59,6 +74,42 @@ export function AgentHubPanel(): React.ReactElement {
     mutationFn: () => client().post("/reconcile", {}, agentHubReconcileResultSchema),
     onSuccess: async () => { setActionError(""); await refresh(); },
     onError: error => setActionError(error instanceof Error ? error.message : "Не удалось восстановить просроченные исполнения")
+  });
+  // P3-1: политика подтверждений — кому нужно человеческое решение.
+  const policy = useQuery({
+    queryKey: ["agent-hub", workspaceId, "policy"],
+    queryFn: () => client().get("/policy", agentHubDelegationPolicySchema),
+    enabled: Boolean(workspaceId && canManage)
+  });
+  const approve = useMutation({
+    mutationFn: (run: AgentHubExecution) => client().post(`/executions/${run.id}/approve`, { expectedRevision: run.revision }, agentHubExecutionSchema),
+    onSuccess: async () => { setActionError(""); setRejectFor(null); await refresh(); },
+    onError: error => { setActionError(error instanceof Error ? error.message : "Не удалось одобрить"); void refresh(); }
+  });
+  const reject = useMutation({
+    mutationFn: (run: AgentHubExecution) => client().post(`/executions/${run.id}/reject`, { expectedRevision: run.revision, reason: rejectReason.trim() || "Отклонено владельцем" }, agentHubExecutionSchema),
+    onSuccess: async () => { setActionError(""); setRejectFor(null); setRejectReason(""); await refresh(); },
+    onError: error => { setActionError(error instanceof Error ? error.message : "Не удалось отклонить"); void refresh(); }
+  });
+  const setApprovals = useMutation({
+    mutationFn: (approvals: AgentHubDelegationPolicy["approvals"]) => client().put("/policy", { maxDelegationDepth: policy.data?.maxDelegationDepth ?? 3, approvals }, agentHubDelegationPolicySchema),
+    onSuccess: async () => { setActionError(""); await queryClient.invalidateQueries({ queryKey: ["agent-hub", workspaceId, "policy"] }); },
+    onError: error => setActionError(error instanceof Error ? error.message : "Не удалось изменить политику подтверждений")
+  });
+  const reviewResult = useMutation({
+    mutationFn: ({ run, reason }: { run: AgentHubExecution; reason?: string }) => client().post(
+      `/executions/${run.id}/${reason ? "return-for-rework" : "verify"}`,
+      { expectedRevision: run.revision, ...(reason ? { reason } : {}) },
+      agentHubExecutionSchema
+    ),
+    onSuccess: async (run) => {
+      setActionError("");
+      setReworkFor(null);
+      setReworkReason("");
+      setSelectedId(run.id);
+      await refresh();
+    },
+    onError: (error) => { setActionError(error instanceof Error ? error.message : "Не удалось записать решение"); void refresh(); }
   });
   const selected = runs.data?.find(run => run.id === selectedId);
 
@@ -100,13 +151,106 @@ export function AgentHubPanel(): React.ReactElement {
                   {canManage && !["done", "failed", "canceled"].includes(run.status) ? <Button variant="danger" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(run)}>Запросить отмену</Button> : null}</div>
               </div>
               {run.blockedReason ? <p className="mt-2 text-xs text-muted-foreground">Причина: {run.blockedReason}</p> : null}
+              {run.resultSummary ? (
+                <section className="mt-3 border-t border-border pt-3 text-xs" aria-label="Результат исполнения">
+                  <h4 className="font-medium">Результат исполнения</h4>
+                  <p className="mt-1 whitespace-pre-wrap break-words">{run.resultSummary}</p>
+                  {run.verifiedBy ? <p className="mt-1 text-muted-foreground">Проверил: {run.verifiedBy}</p> : null}
+                </section>
+              ) : null}
+              {canManage && run.status === "review" ? (
+                <div className="mt-3 space-y-2 border-t border-border pt-3">
+                  <p className="break-words text-xs text-muted-foreground">Материалы для проверки: {run.evidenceRefs.join(", ")}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" disabled={reviewResult.isPending} onClick={() => reviewResult.mutate({ run })}>Принять результат</Button>
+                    <Button variant="subtle" size="sm" disabled={reviewResult.isPending} onClick={() => {
+                      setReworkFor(reworkFor === run.id ? null : run.id);
+                      setReworkReason("");
+                    }}>Вернуть на доработку</Button>
+                  </div>
+                  {reworkFor === run.id ? (
+                    <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => {
+                      event.preventDefault();
+                      if (reworkReason.trim() && !reviewResult.isPending) reviewResult.mutate({ run, reason: reworkReason.trim() });
+                    }}>
+                      <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs">
+                        Причина возврата
+                        <textarea className="rounded-md border border-border bg-background p-2" required maxLength={2000}
+                          value={reworkReason} onChange={(event) => setReworkReason(event.target.value)} />
+                      </label>
+                      <Button type="submit" size="sm" disabled={!reworkReason.trim() || reviewResult.isPending}>Подтвердить возврат</Button>
+                    </form>
+                  ) : null}
+                </div>
+              ) : null}
+              {run.status === "waiting_approval" && run.approval ? <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                <p className="font-medium">Запрошено подтверждение: {run.approval.action}</p>
+                <p className="mt-1 text-muted-foreground">{run.approval.reason}</p>
+                <p className="mt-1 text-muted-foreground">{run.approval.requestedBy} · {new Date(run.approval.requestedAt).toLocaleString("ru-RU")}</p>
+                {canManage ? <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button size="sm" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate(run)}>Одобрить</Button>
+                  <Button variant="danger" size="sm" disabled={approve.isPending || reject.isPending} onClick={() => setRejectFor(rejectFor === run.id ? null : run.id)}>Отклонить</Button>
+                  {rejectFor === run.id ? <span className="flex min-w-56 flex-1 items-center gap-2">
+                    <input
+                      className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1"
+                      placeholder="Причина отказа"
+                      value={rejectReason}
+                      onChange={event => setRejectReason(event.target.value)}
+                    />
+                    <Button variant="danger" size="sm" disabled={reject.isPending} onClick={() => reject.mutate(run)}>Подтвердить отказ</Button>
+                  </span> : null}
+                </div> : <p className="mt-2 text-muted-foreground">Решение принимает владелец или руководитель пространства.</p>}
+              </div> : null}
               {selectedId === run.id ? <div className="mt-3 border-t border-border pt-3 text-xs">
                 {events.isLoading ? "Загрузка событий…" : events.isError ? "Не удалось загрузить события." :
-                  events.data?.length ? <ol className="space-y-1">{events.data.map(item => <li key={item.id}>{new Date(item.at).toLocaleString("ru-RU")} · {item.action} · ревизия {item.revision}</li>)}</ol> : "Событий пока нет."}
+                  events.data?.length ? <ol className="space-y-1">{events.data.map(item => (
+                    <li key={item.id}>
+                      {new Date(item.at).toLocaleString("ru-RU")} · {item.action === "verify" ? "Результат принят" : item.action === "return_for_rework" ? "Возвращено на доработку" : item.action} · ревизия {item.revision}
+                      {item.action === "verify" || item.action === "return_for_rework" ? <span> · {item.actorId}{typeof item.data?.reason === "string" ? ` · ${item.data.reason}` : ""}</span> : null}
+                    </li>
+                  ))}</ol> : "Событий пока нет."}
                 {selected?.checkpointRef ? <p className="mt-2">Контрольная точка: {selected.checkpointRef}</p> : null}
                 {selected?.evidenceRefs.length ? <p className="mt-2">Ссылки на результат (не проверены): {selected.evidenceRefs.join(", ")}</p> : null}
               </div> : null}
             </article>)}
+        </section>
+        <section aria-label="Подтверждения агентов" className="space-y-2">
+          <h2 className="text-sm font-semibold">Подтверждения агентов</h2>
+          <p className="text-xs text-muted-foreground">Агент останавливается и ждёт вашего решения перед операцией выше чтения. Администраторы (режим токена «admin») действуют без подтверждений, если политика не требует иначе.</p>
+          {canManage ? policy.isLoading ? <Skeleton className="h-10 w-full" /> : policy.isError ? <p role="alert" className="text-xs">Не удалось загрузить политику.</p> :
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span>Требовать подтверждение:</span>
+              <ChoiceSelect
+                className="min-w-56"
+                label="Политика подтверждений"
+                value={policy.data?.approvals ?? "non_admin"}
+                options={[
+                  { value: "non_admin", label: "Только агентам ниже администратора" },
+                  { value: "all", label: "Каждому агенту" }
+                ]}
+                onChange={value => setApprovals.mutate(value as AgentHubDelegationPolicy["approvals"])}
+              />
+            </div> : null}
+        </section>
+        <section aria-label="Последние действия агентов" className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Последние действия агентов</h2>
+            <Button variant="subtle" size="sm" onClick={() => openSettings("agents")}>Полный журнал</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Что агенты делали в этом пространстве: каждый вызов — одна строка. Фильтры, отмена созданного и выгрузка CSV — в журнале настроек.</p>
+          {audit.isLoading ? <Skeleton className="h-16 w-full" /> : audit.isError ? <p role="alert" className="text-xs">Не удалось загрузить журнал.</p> :
+            (audit.data?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Вызовов пока не было.</p> :
+            <ul className="space-y-1">{audit.data?.map(entry => {
+              const result = agentAuditResultOf(entry.status);
+              return (
+                <li key={entry.id} className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                  <span className="shrink-0 text-muted-foreground">{shortDateTime(entry.createdAt)}</span>
+                  <span className="shrink-0 font-medium">{entry.tokenName}</span>
+                  <span className="min-w-0 flex-1 truncate">{entry.summary ?? entry.action}</span>
+                  <span className={`shrink-0 ${auditTone[result]}`}>{AGENT_AUDIT_RESULT_LABEL[result]}</span>
+                </li>
+              );
+            })}</ul>}
         </section>
         <section aria-label="Заявленные runtime" className="space-y-2"><h2 className="text-sm font-semibold">Заявленные runtime</h2>
           <p className="text-xs text-muted-foreground">Присутствие сообщает токен наблюдателя. Оно не подтверждает работающую модель.</p>

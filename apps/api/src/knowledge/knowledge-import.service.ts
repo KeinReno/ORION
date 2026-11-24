@@ -10,6 +10,8 @@ import type {
 import { PrismaService } from "../common/prisma.service";
 import { readKnowledgeSourceTitle as readDocumentTitle } from "../documents/public";
 import { InboxItems } from "../inbox/public/inbox-items";
+import { readSharedKnowledgeSource } from "../notes/public";
+import { ModulesService } from "../modules/modules.service";
 import { ProjectReferences } from "../projects/public/project-references";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { toDetail } from "./knowledge-dto";
@@ -35,8 +37,28 @@ export class KnowledgeImportService {
     private readonly workspaces: WorkspacesService,
     private readonly projectReferences: ProjectReferences,
     private readonly settings: KnowledgeSettingsService,
-    private readonly inbox: InboxItems
+    private readonly inbox: InboxItems,
+    private readonly modules: ModulesService
   ) {}
+
+  async fromNote(userId: string, workspaceId: string, noteId: string): Promise<{ itemId: string }> {
+    return this.prisma.withUser(userId, async (tx) => {
+      await this.modules.assertEnabledTx(tx, userId, workspaceId, "notes");
+      const note = await readSharedKnowledgeSource(tx, workspaceId, noteId);
+      if (!note) throw new NotFoundException("Общая заметка не найдена в этом пространстве");
+      const item = await tx.knowledgeItem.create({
+        data: {
+          workspaceId, title: note.title.slice(0, 200), summary: note.summary, body: note.body,
+          status: "captured", createdBy: userId
+        },
+        select: { id: true }
+      });
+      await tx.knowledgeSource.create({
+        data: { workspaceId, itemId: item.id, type: "note", sourceTitle: note.title, noteId }
+      });
+      return { itemId: item.id };
+    });
+  }
 
   async importDocuments(
     userId: string,

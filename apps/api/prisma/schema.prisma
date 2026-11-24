@@ -329,6 +329,8 @@ model Workspace {
   taskCommitLinks TaskCommitLink[]
   developmentArchitectLayouts DevelopmentArchitectLayout[]
   developmentArchitectSnapshots DevelopmentArchitectSnapshot[]
+  developmentWorkflows  DevelopmentWorkflow[]
+  developmentArchitectureDiagrams DevelopmentArchitectureDiagram[]
   agentProposals        AgentProposal[]
 
   /// ORION — синхронизация/бэкап через WebDAV (см. docs/SYNC.md). Одна
@@ -3917,10 +3919,13 @@ model AgentMemoryRecord {
 }
 
 /// Owner-controlled delegation policy; one row per workspace, created on first write.
+/// `approvals` — кто обязан ждать человеческого подтверждения (миграция
+/// 20261117013000_agent_hub_approval_policy; дефолт non_admin сохраняет поведение).
 model AgentHubPolicy {
   id                 String   @id @default(uuid())
   workspaceId        String   @unique
   maxDelegationDepth Int      @default(3)
+  approvals          String   @default("non_admin")
   updatedById        String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -4838,6 +4843,48 @@ model DevelopmentArchitectSnapshot {
   @@unique([workspaceId, repositoryId, sha])
   @@index([workspaceId, repositoryId, createdAt])
   @@map("development_architect_snapshots")
+}
+
+/// Workbench (Architect): пользовательский процесс — схема из узлов и связей. Граф целиком
+/// хранится в jsonb (одна запись на процесс); запись процесса заменяет граф транзакционно.
+model DevelopmentWorkflow {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String   @default("")
+  /// draft | active | paused | done.
+  status      String   @default("draft")
+  /// Узлы процесса — `[{id,type,title,description,agentName,status,x,y}]`.
+  nodes       Json     @default("[]")
+  /// Связи процесса — `[{id,source,target,kind}]`.
+  edges       Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, updatedAt])
+  @@map("development_workflows")
+}
+
+/// Authored software architecture in Architect. It is independent from repository analyzer maps
+/// and process workflow graphs; graph content is replaced atomically and guarded by revision.
+model DevelopmentArchitectureDiagram {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String   @default("")
+  nodes       Json     @default("[]")
+  edges       Json     @default("[]")
+  viewport    Json?
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, updatedAt])
+  @@map("development_architecture_diagrams")
 }
 // --- END 11-orion-dev-git ---
 

@@ -1,6 +1,4 @@
 fn main() {
-    use std::path::Path;
-
     let command = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "serve".to_owned());
@@ -47,21 +45,16 @@ fn main() {
         }
         #[cfg(windows)]
         "restore" => {
-            let source_dir = std::env::args()
-                .nth(2)
-                .expect("Используйте: restore <staged-backup-dir>");
-            let source_path = Path::new(&source_dir);
-            if !source_path.is_dir() {
-                eprintln!("Каталог не найден: {}", source_dir);
-                std::process::exit(1);
-            }
-            if let Err(error) = orion_runtime::restore_staged_backup(source_path, &profile) {
+            let source_dir = std::env::args_os().nth(2).unwrap_or_default();
+            if let Err(error) =
+                orion_runtime::restore_staged_backup(std::path::Path::new(&source_dir), &profile)
+            {
                 eprintln!("{error}");
                 std::process::exit(1);
             }
         }
         _ => {
-            eprintln!("Команды: show, serve, supervise, supervise-launcher, supervise-direct, restore. Неизвестно: {}", command);
+            eprintln!("Команды: show, serve, supervise, supervise-launcher, supervise-direct. Неизвестно: {}", command);
             std::process::exit(2);
         }
     }

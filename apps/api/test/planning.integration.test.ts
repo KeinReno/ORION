@@ -87,6 +87,21 @@ describe("planning — blocks, gantt and matrix (задание 04)", () => {
     expect(stale.status).toBe(409);
     expect((stale.data as { code?: string }).code).toBe("planning_block_revision_conflict");
 
+    const blockPath = `/workspaces/${ws}/planning/blocks/${first.data.id}`;
+    const preview = await request<{ block: BlockBody; conflicts: unknown[] }>(`${blockPath}/move-preview`, {
+      method: "POST",
+      token: alice.accessToken,
+      body: { startAt: "2026-12-01T11:30:00.000Z", expectedRevision: 1 }
+    });
+    expect(preview.status).toBe(200);
+    expect(preview.data.block.startAt).toBe("2026-12-01T11:30:00.000Z");
+    expect(preview.data.conflicts).toEqual([
+      expect.objectContaining({ kind: "block", id: second.data.id, minutes: 30 })
+    ]);
+    const persisted = await request<BlockBody>(blockPath, { method: "GET", token: alice.accessToken });
+    expect(persisted.data.startAt).toBe(first.data.startAt);
+    expect(persisted.data.revision).toBe(first.data.revision);
+
     const mutation = "move-00000001";
     const moved = await request<{ block: BlockBody; conflicts: unknown[]; impact: { shiftMinutes: number }; replayed: boolean }>(
       `/workspaces/${ws}/planning/blocks/${first.data.id}/move`,

@@ -26,6 +26,7 @@ export function ProjectLogbookTab({ workspaceId, projectId }: ProjectTabSlotProp
   const { toast } = useToast();
   const [kind, setKind] = useState<ProjectLogKind>("observation");
   const [text, setText] = useState("");
+  const [rationale, setRationale] = useState("");
   const [taskComments, setTaskComments] = useState<Record<string, string>>({});
   const [dragOver, setDragOver] = useState(false);
   const [relationType, setRelationType] = useState<ProjectRelationType>("continues");
@@ -57,9 +58,11 @@ export function ProjectLogbookTab({ workspaceId, projectId }: ProjectTabSlotProp
     try {
       await createEntry.mutateAsync({
         kind, text,
+        ...(kind === "decision" ? { rationale } : {}),
         tasks: Object.entries(taskComments).map(([taskId, comment]) => ({ taskId, comment }))
       });
       setText("");
+      setRationale("");
       setTaskComments({});
       toast({ title: "Запись добавлена" });
     } catch (error) {
@@ -96,6 +99,12 @@ export function ProjectLogbookTab({ workspaceId, projectId }: ProjectTabSlotProp
             </Select>
           </div>
           <Textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={5000} rows={3} placeholder="Что произошло, какое решение приняли или почему меняется план?" aria-label="Текст записи журнала" required />
+          {kind === "decision" ? (
+            <label className="block space-y-1 text-sm">
+              <span>Обоснование решения</span>
+              <Textarea value={rationale} onChange={(event) => setRationale(event.target.value)} maxLength={5000} rows={2} required />
+            </label>
+          ) : null}
 
           {tasksOn ? (
             <div
@@ -133,7 +142,7 @@ export function ProjectLogbookTab({ workspaceId, projectId }: ProjectTabSlotProp
           ) : null}
 
           <div className="flex justify-end">
-            <Button type="submit" size="sm" disabled={busy || text.trim().length === 0}><Plus className="h-4 w-4" /> Добавить запись</Button>
+            <Button type="submit" size="sm" disabled={busy || !text.trim() || (kind === "decision" && !rationale.trim())}><Plus className="h-4 w-4" /> Добавить запись</Button>
           </div>
         </form>
 
@@ -150,6 +159,7 @@ export function ProjectLogbookTab({ workspaceId, projectId }: ProjectTabSlotProp
                       <span className="text-xs text-subtle-foreground">{entry.authorName} · <time dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleString("ru-RU")}</time></span>
                     </div>
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{entry.text}</p>
+                    {entry.rationale ? <p className="mt-1 whitespace-pre-wrap text-sm text-subtle-foreground"><strong>Обоснование:</strong> {entry.rationale}</p> : null}
                   </div>
                   {entry.mine ? <Button size="sm" variant="ghost" aria-label="Удалить запись журнала" onClick={() => removeEntry.mutate(entry.id, { onError: (error) => toast({ title: "Не удалось удалить запись", description: describeAuthError(error), tone: "danger" }) })}><Trash2 className="h-4 w-4" /></Button> : null}
                 </div>

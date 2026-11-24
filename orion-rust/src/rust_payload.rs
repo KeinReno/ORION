@@ -119,7 +119,10 @@ impl PayloadCrypto for BuiltinPayloadCrypto {
         };
         use ed25519_dalek::Verifier;
         public_key
-            .verify(message, &ed25519_dalek::Signature::from_bytes(&signature_bytes))
+            .verify(
+                message,
+                &ed25519_dalek::Signature::from_bytes(&signature_bytes),
+            )
             .is_ok()
     }
 }
@@ -464,13 +467,21 @@ pub fn prune_stale_versions(data: &Path, max_age: Duration) -> Result<usize, Pay
         }
         // Симлинк или не-каталог: не удаляем из ротации, пусть решают
         // проверки безопасности пути (ensure_directory_not_link).
-        let Ok(file_type) = entry.file_type() else { continue };
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         if !file_type.is_dir() {
             continue;
         }
-        let Ok(metadata) = entry.metadata() else { continue };
-        let Ok(modified) = metadata.modified() else { continue };
-        let Ok(age) = now.duration_since(modified) else { continue };
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        let Ok(age) = now.duration_since(modified) else {
+            continue;
+        };
         if age < max_age {
             continue;
         }

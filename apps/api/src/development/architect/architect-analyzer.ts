@@ -50,11 +50,50 @@ export interface AnalyzeInput {
   maxFiles?: number;
 }
 
+export interface ArchitectLaunch {
+  path: string;
+  kind: "main" | "route" | "cron" | "script";
+  label: string;
+}
+
 export interface AnalyzeResult {
   nodes: ArchitectNode[];
   edges: ArchitectEdge[];
   metrics: ArchitectMetrics;
   truncated: boolean;
+  launches: ArchitectLaunch[];
+}
+
+const LAUNCH_CAP = 24;
+
+/** Точки, которые файл реально стартует. Импорт сюда не входит. */
+export function extractLaunchPoints(filePath: string, source: string): ArchitectLaunch[] {
+  const found: ArchitectLaunch[] = [];
+  const base = filePath.split("/").pop() ?? filePath;
+  if (base === "package.json") {
+    try {
+      const parsed = JSON.parse(source) as { scripts?: Record<string, unknown> };
+      for (const [name, command] of Object.entries(parsed.scripts ?? {})) {
+        if (found.length >= LAUNCH_CAP) break;
+        found.push({ path: filePath, kind: "script", label: `${name}: ${String(command).slice(0, 80)}` });
+      }
+    } catch {
+      return found;
+    }
+    return found;
+  }
+  if (base === "main.rs" || /\bfn\s+main\s*\(/.test(source)) found.push({ path: filePath, kind: "main", label: "fn main" });
+  else if (/^main\.(ts|tsx|js|mjs|cjs)$/.test(base) || /NestFactory\.create\s*\(/.test(source)) found.push({ path: filePath, kind: "main", label: base });
+  for (const match of source.matchAll(/@Cron\(\s*(?:CronExpression\.(\w+)|["'`]([^"'`]*)["'`])/g)) {
+    if (found.length >= LAUNCH_CAP) break;
+    found.push({ path: filePath, kind: "cron", label: match[1] || match[2] || "@Cron" });
+  }
+  for (const match of source.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:["'`]([^"'`]*)["'`])?/g)) {
+    if (found.length >= LAUNCH_CAP) break;
+    const verb = (match[1] ?? "Get").toUpperCase();
+    found.push({ path: filePath, kind: "route", label: match[2] ? `${verb} ${match[2]}` : verb });
+  }
+  return found;
 }
 
 interface FileEntry {
@@ -232,6 +271,7 @@ export async function analyzeRepository(input: AnalyzeInput): Promise<AnalyzeRes
 
   const nodes: ArchitectNode[] = [];
   const edges: ArchitectEdge[] = [];
+  const launches: ArchitectLaunch[] = [];
   const edgeIds = new Set<string>();
   const pushEdge = (from: string, to: string, external: boolean): void => {
     const key = `${from}->${to}`;
@@ -291,6 +331,7 @@ export async function analyzeRepository(input: AnalyzeInput): Promise<AnalyzeRes
     } catch {
       continue;
     }
+    launches.push(...extractLaunchPoints(file.path, source));
     if (isTsFile(file.path)) {
       for (const specifier of extractTsImports(source)) {
         const target = resolveTsImport(file.path, specifier, fileSet);
@@ -322,7 +363,7 @@ export async function analyzeRepository(input: AnalyzeInput): Promise<AnalyzeRes
     externalEdges: cleanEdges.filter((edge) => edge.external).length,
     bytes: files.reduce((sum, file) => sum + file.size, 0)
   };
-  return { nodes, edges: cleanEdges, metrics, truncated };
+  return { nodes, edges: cleanEdges, metrics, truncated, launches };
 }
 
 /** `crates/foo/src/lib.rs` → `crates/foo/src`; `src/main.rs` → `src`; иначе корень репозитория. */

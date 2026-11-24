@@ -1,106 +1,113 @@
 <!doctype html>
 <html lang="ru" data-edition="{{STARTUP_EDITION}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Запуск ORION</title>
 <style>
-:root{color-scheme:dark;font-family:"Segoe UI",sans-serif;background:#16171a;color:#edece8;--gold:#c9a86a;--ink:#beb9af;--ease:cubic-bezier(0.16,1,0.3,1)}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:40px;overflow:visible;background:radial-gradient(ellipse at 50% 42%,rgba(201,168,106,.14),transparent 46%),radial-gradient(ellipse at 50% 100%,#07080a,transparent 54%),#16171a}
-.field{position:fixed;inset:0;pointer-events:none;overflow:hidden}
-.field::before{content:"";position:absolute;left:50%;top:40%;width:78vmax;height:78vmax;margin:-39vmax 0 0 -39vmax;background:radial-gradient(circle,rgba(201,168,106,.2),transparent 60%);transform-origin:center}
-.orbit{position:absolute;left:50%;top:40%;border-radius:50%;border:1px solid transparent;transform:translate(-50%,-50%)}
-.orbit-a{width:92vmin;height:92vmin;border-top-color:rgba(201,168,106,.28);border-right-color:rgba(201,168,106,.08)}
-.orbit-b{width:128vmin;height:128vmin;border-bottom-color:rgba(201,168,106,.16);border-left-color:rgba(201,168,106,.05)}
-main{position:relative;width:min(28rem,100%);overflow:visible;display:flex;flex-direction:column;align-items:center;text-align:center}
-.seal{position:relative;width:168px;height:168px;margin:0 0 28px;overflow:visible}
-.seal::before{content:"";position:absolute;left:50%;top:46%;width:360px;height:360px;margin:-180px 0 0 -180px;background:radial-gradient(circle,rgba(201,168,106,.42) 0%,rgba(201,168,106,.16) 34%,transparent 62%);pointer-events:none;transform-origin:center}
-.plot{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.plot *{fill:none;stroke:#e7d7a8;stroke-linecap:round}
-.ring{stroke-dasharray:415;stroke-dashoffset:415}
-.ring.inner{stroke-width:1.25;stroke-dasharray:1.6 4.2;stroke-dashoffset:400}
-.ring.outer{stroke-width:1.7}
-.hand{stroke:#fff4d4;stroke-width:2.6;stroke-dasharray:26 400;stroke-dashoffset:0}
-.rail{stroke-width:1.6;stroke-dasharray:176;stroke-dashoffset:176}
-.tick{fill:#e7d7a8;stroke:none;opacity:0;transform-box:fill-box;transform-origin:center}
-.mark{width:168px;height:168px;object-fit:contain;display:block;mix-blend-mode:screen;position:relative;z-index:1}
-h1{font-size:36px;font-weight:500;letter-spacing:.12em;margin:0}
-.role{color:var(--ink);font-size:13px;margin:8px 0 0}
-h2{font-weight:500;font-size:21px;line-height:1.4;margin:32px 0 10px;text-wrap:balance}
-p{font-size:14px;line-height:1.65;color:var(--ink);margin:0;max-width:42ch}
-.time{margin-top:24px;color:var(--gold);font-variant-numeric:tabular-nums}
-#error{white-space:pre-wrap;overflow-wrap:anywhere;color:#efb3a8;margin-top:18px}
-button{font:inherit;border:1px solid #736342;color:#edece8;background:#28251e;border-radius:8px;padding:10px 16px;margin-top:20px;cursor:pointer}
-button:hover{background:#393124}button:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
-#skip{background:transparent;border-color:transparent;color:var(--ink);padding-left:0;padding-right:0}
-#skip:hover{background:transparent;color:#edece8}
+:root{color-scheme:dark;--gold:#c9a86a;--gold-bright:#e7d7a8;--ink:#beb9af;--muted:#6e6a60;--danger:#efb3a8;--danger-deep:#5a3630;--mono:Consolas,"IBM Plex Mono",monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0b0b0d;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;color:#edece8}
+#stage-scale{position:absolute;left:50%;top:50%;width:1280px;height:800px;background:#16171a;overflow:hidden;transform-origin:center}
+/* ---------------------------------------------------------- сцена */
+#sky{position:absolute;left:0;top:0;width:760px;height:800px}
+#haze{position:absolute;left:160px;top:120px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,106,.10),transparent 62%)}
+canvas{display:block}
+#ecliptic{position:absolute;left:30px;top:560px;width:700px;border-top:1px dashed rgba(231,215,168,.12)}
+#ecl-label{position:absolute;left:600px;top:570px;font:10px var(--mono);letter-spacing:3px;color:var(--muted)}
+.nav{position:absolute;left:40px;font:11px var(--mono);letter-spacing:2px;color:var(--muted)}
+#nav-az{top:60px;color:var(--ink)}
+#nav-ra{top:86px}
+#nav-dec{top:112px}
+#mark{position:absolute;left:296px;top:266px;width:168px;height:168px;mix-blend-mode:screen;opacity:0}
+#pulse{position:absolute;left:286px;top:256px;width:188px;height:188px;border:1px solid var(--gold);border-radius:50%;opacity:0;pointer-events:none}
+/* ---------------------------------------------------------- консоль */
+#divider{position:absolute;left:760px;top:40px;width:1px;height:720px;background:rgba(255,255,255,.08)}
+#console{position:absolute;left:820px;top:60px;width:400px}
+#tag{font:11px var(--mono);letter-spacing:3px;color:var(--gold)}
+h1{font-size:44px;font-weight:500;letter-spacing:5px;color:#edece8;margin-top:14px}
+.role{font-size:13px;color:var(--ink);margin-top:10px}
+#phases{margin-top:38px;display:flex;flex-direction:column;gap:18px}
+.phase{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted);transition:color .4s}
+.phase .ic{width:13px;height:13px;flex:none;display:grid;place-items:center;font-size:12px;color:var(--gold)}
+.phase .ic::before{content:"";width:9px;height:9px;border-radius:50%;border:1px solid #4a463c;display:block}
+.phase.active{color:var(--gold-bright);font-weight:500}
+.phase.active .ic::before{background:var(--gold);border-color:var(--gold);box-shadow:0 0 10px rgba(201,168,106,.6)}
+.phase.done{color:#9a927e}
+.phase.done .ic::before{content:"✓";background:none;border:none;box-shadow:none}
+.phase.failed{color:var(--danger);font-weight:500}
+.phase.failed .ic::before{content:"✕";background:none;border:none;box-shadow:none;color:var(--danger)}
+#stack{margin-top:44px;display:flex;flex-direction:column;gap:14px;font:12px var(--mono);color:#9a927e}
+.check{display:flex;justify-content:space-between;max-width:380px}
+.check .v{color:var(--muted)}
+.check.active .k{color:var(--gold-bright)}
+.check.active .v{color:var(--gold)}
+#track{margin-top:48px;width:380px;height:2px;border-radius:1px;background:rgba(255,255,255,.08);overflow:hidden}
+#track-fill{height:100%;width:0%;background:var(--gold);transition:width .6s cubic-bezier(.4,0,.2,1)}
+#status-row{margin-top:14px;display:flex;gap:18px;align-items:baseline}
+#stage-text{font:11px var(--mono);letter-spacing:2px;color:var(--ink)}
+#time{font:11px var(--mono);letter-spacing:2px;color:var(--muted)}
+#enter{margin-top:14px;font-size:14px;font-weight:500;color:var(--gold-bright);opacity:0;transition:opacity .6s}
+#coords{position:absolute;left:820px;top:740px;font:11px var(--mono);letter-spacing:2px;color:#55524a}
+/* ---------------------------------------------------------- служебные */
+#hint{position:absolute;left:820px;top:636px;width:380px;font-size:13px;line-height:1.55;color:var(--muted)}
+#error{position:absolute;left:820px;top:430px;width:380px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;color:var(--danger);background:#1f1d1a;border:1px solid var(--danger-deep);border-radius:12px;padding:16px 18px}
+#actions{position:absolute;left:820px;top:596px;display:flex;gap:12px}
+button{font:inherit;cursor:pointer;border-radius:8px;padding:12px 22px}
+#retry{border:none;background:var(--gold);color:#16171a;font-weight:500}
+#retry:hover{background:var(--gold-bright)}
+#retry:focus-visible{outline:2px solid var(--gold);outline-offset:4px}
+#skip{background:transparent;border:1px solid #4a463c;color:var(--ink)}
+#skip:hover{color:#edece8}
 [hidden]{display:none!important}
-::selection{background:#c9a86a;color:#16171a}
-body.is-motion{--draw:1.15s}
-body.is-motion.premiere{--draw:2.5s}
-body.is-motion .ring.outer{animation:ink var(--draw) var(--ease) forwards}
-body.is-motion .ring.inner{animation:ink var(--draw) var(--ease) forwards;animation-delay:calc(var(--draw) * .22)}
-body.is-motion .rail{animation:ink calc(var(--draw) * .62) var(--ease) forwards;animation-delay:calc(var(--draw) * .34)}
-body.is-motion .hand{animation:sweep var(--draw) linear both}
-body.is-motion .t1{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw) * .48)}
-body.is-motion .t2{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw) * .58)}
-body.is-motion .t3{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw) * .68)}
-body.is-motion .t4{animation:tickin .28s var(--ease) both;animation-delay:calc(var(--draw) * .78)}
-body.is-motion:not(.is-hold) .mark{opacity:0;animation:lock .5s var(--ease) both;animation-delay:calc(var(--draw) * .74)}
-body.is-motion.premiere .pulse{animation:bloom .85s var(--ease) both;animation-delay:calc(var(--draw) * .82)}
-body.is-motion.premiere:not(.is-hold) h1{animation:arrive .9s .9s var(--ease) both}
-body.is-motion.premiere:not(.is-hold) .role{animation:rise .7s 1.35s var(--ease) both}
-body.is-motion.premiere:not(.is-hold) #stage,body.is-motion.premiere:not(.is-hold) #hint{animation:rise .7s 1.7s var(--ease) both}
-body.is-hold .plot,body.is-depart .plot,body.is-failed .plot,body.is-hold .pulse,body.is-depart .pulse{display:none}
-body.is-hold .mark,body.is-depart .mark,body.is-failed .mark{animation:none;opacity:1;filter:none}
-body.is-motion .field::before{animation:drift 16s ease-in-out infinite}
-body.is-motion .orbit-a{animation:spin 42s linear infinite}
-body.is-motion .orbit-b{animation:spin 68s linear infinite reverse}
-body.is-motion.is-hold .seal::before{animation:breath 3.6s ease-in-out infinite}
-body.is-motion #stage.tick{animation:stage .22s var(--ease)}
-body.is-depart main{animation:leave .42s cubic-bezier(.4,0,1,1) forwards}
-body.is-failed .seal::before,body.is-depart .seal::before{animation:none}
-body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hint,body.is-failed #error{animation:none;opacity:1;filter:none;transform:none}
-.pulse{position:absolute;inset:10px;border:1px solid var(--gold);border-radius:50%;opacity:0;pointer-events:none}
-@keyframes ink{to{stroke-dashoffset:0}}
-@keyframes sweep{to{stroke-dashoffset:-415}}
-@keyframes tickin{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
-@keyframes lock{from{opacity:0;filter:blur(6px)}to{opacity:1;filter:blur(0)}}
-@keyframes bloom{from{opacity:.8;transform:scale(.72)}to{opacity:0;transform:scale(1.22)}}
-@keyframes arrive{from{opacity:0;letter-spacing:.26em;filter:blur(6px)}to{opacity:1;letter-spacing:.12em;filter:blur(0)}}
-@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes breath{0%,100%{opacity:.34;transform:scale(.9)}50%{opacity:.85;transform:scale(1)}}
-@keyframes drift{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.65}50%{transform:translate3d(0,-2.5vmax,0) scale(1.06);opacity:1}}
-@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
-@keyframes stage{from{opacity:.45}to{opacity:1}}
-@keyframes leave{to{opacity:0;transform:translateY(-8px)}}
-@media(prefers-reduced-motion:reduce){
-  .plot,.pulse,.mark,h1,.role,#stage,#hint,main,.seal::before,.field::before,.orbit{animation:none!important}
-  .plot,.pulse{display:none}
-  .mark{opacity:1;filter:none}
+::selection{background:var(--gold);color:#16171a}
+/* узкое окно: консоль скрывается, сцена центрируется */
+@media (max-width:900px){
+  #divider,#console,#coords,#hint,#error,#actions{display:none!important}
 }
-@media(max-width:500px){body{padding:28px}.seal{margin-bottom:28px}h1{font-size:30px}h2{margin-top:32px}}
-</style></head><body><div class="field" aria-hidden="true"><span class="orbit orbit-a"></span><span class="orbit orbit-b"></span></div><main aria-busy="true" id="main">
-<div class="seal">
-<svg class="plot" viewBox="0 0 192 192" aria-hidden="true">
-<circle class="ring outer" cx="96" cy="96" r="66"/>
-<circle class="ring inner" cx="96" cy="96" r="60"/>
-<line class="rail" x1="93" y1="8" x2="93" y2="184"/>
-<line class="rail" x1="99" y1="8" x2="99" y2="184"/>
-<circle class="tick t1" cx="96" cy="30" r="2.4"/>
-<circle class="tick t2" cx="162" cy="96" r="2.4"/>
-<circle class="tick t3" cx="96" cy="162" r="2.4"/>
-<circle class="tick t4" cx="30" cy="96" r="2.4"/>
-<circle class="hand" cx="96" cy="96" r="66"/>
-</svg>
-<span class="pulse" aria-hidden="true"></span>
-<img class="mark" src="/__orion_startup/logo.png" alt="" width="168" height="168">
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head><body>
+<div id="stage-scale">
+  <div id="sky">
+    <div id="haze"></div>
+    <canvas id="field" width="760" height="800"></canvas>
+    <div id="ecliptic"></div>
+    <div id="ecl-label">ЭКЛИПТИКА</div>
+    <div class="nav" id="nav-az">АЗ 047.2°</div>
+    <div class="nav" id="nav-ra">RA 05h 35m</div>
+    <div class="nav" id="nav-dec">DEC −05° 23′</div>
+    <span id="pulse"></span>
+    <img id="mark" src="/__orion_startup/logo.png" alt="" onerror="this.remove()">
+  </div>
+  <div id="divider"></div>
+  <div id="console">
+    <div id="tag">ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА</div>
+    <h1>ORION</h1>
+    <div class="role">Навигация по личным и семейным делам</div>
+    <div id="phases">
+      <div class="phase" data-phase="preparing"><span class="ic"></span>Ядро оболочки</div>
+      <div class="phase" data-phase="database"><span class="ic"></span>Хранилище данных</div>
+      <div class="phase" data-phase="migrations"><span class="ic"></span>Карты и индексы</div>
+      <div class="phase" data-phase="server"><span class="ic"></span>Службы приложения</div>
+      <div class="phase" data-phase="ready"><span class="ic"></span>Выход на орбиту</div>
+    </div>
+    <div id="stack">
+      <div class="check" data-phase="preparing"><span class="k">Оболочка Tauri</span><span class="v">…</span></div>
+      <div class="check" data-phase="database"><span class="k">PostgreSQL 16</span><span class="v">…</span></div>
+      <div class="check" data-phase="migrations"><span class="k">Миграции</span><span class="v">…</span></div>
+    </div>
+    <div id="track"><div id="track-fill"></div></div>
+    <div id="status-row">
+      <span id="stage-text" role="status" aria-live="polite"><span id="stage">Готовим рабочую среду</span></span>
+      <span id="time"></span>
+    </div>
+    <div id="enter">Все системы в норме. Открываем ORION</div>
+  </div>
+  <div id="coords">ORION · КАНАЛ БЕТА</div>
+  <p id="hint">Запускаем локальные службы на этом компьютере.</p>
+  <p id="error" role="alert" hidden></p>
+  <div id="actions">
+    <button id="retry" type="button" hidden>Проверить состояние ещё раз</button>
+    <button id="skip" type="button" hidden>Пропустить</button>
+  </div>
 </div>
-<h1>ORION</h1>
-<p class="role">Локальная рабочая среда</p>
-<h2 id="stage" role="status" aria-live="polite">Готовим рабочую среду</h2>
-<p id="hint">Запускаем локальные службы на этом компьютере.</p>
-<p class="time" id="time"></p>
-<p id="error" role="alert" hidden></p>
-<button id="retry" type="button" hidden>Проверить состояние ещё раз</button>
-<button id="skip" type="button" hidden>Пропустить</button>
-</main><script>
+<main id="main" aria-busy="true" hidden></main><script>
 (() => {
   const started = performance.now();
   let stopped = false, failures = 0, holdTimer = 0;
@@ -110,52 +117,141 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
   let premiere = false;
   try { premiere = edition !== "" && localStorage.getItem(seenKey) !== edition; } catch { premiere = false; }
   const labels = { preparing: "Готовим рабочую среду", database: "Подключаем базу данных", migrations: "Проверяем структуру данных", server: "Запускаем локальный сервер", ready: "Открываем ORION" };
-  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"), error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip");
-  if (!reduce) document.body.classList.add("is-motion");
-  function acknowledge() { try { if (edition) localStorage.setItem(seenKey, edition); } catch { /* остаётся премьерой в следующий раз */ } premiere = false; }
+  const progress = { preparing: 0.18, database: 0.42, migrations: 0.66, server: 0.86, ready: 1 };
+  const order = ["preparing", "database", "migrations", "server", "ready"];
+  const main = document.getElementById("main"), stage = document.getElementById("stage"), hint = document.getElementById("hint"),
+    error = document.getElementById("error"), retry = document.getElementById("retry"), skip = document.getElementById("skip"),
+    fill = document.getElementById("track-fill"), enter = document.getElementById("enter"), navAz = document.getElementById("nav-az"),
+    mark = document.getElementById("mark"), pulse = document.getElementById("pulse"), stageScale = document.getElementById("stage-scale");
+  const phaseRows = [...document.querySelectorAll(".phase")];
+  const checkRows = [...document.querySelectorAll(".check")];
+  main.hidden = false;
+  if (edition) document.getElementById("coords").textContent = `СЕАНС 014 · КАНАЛ БЕТА · ${edition}`;
+
+  /* Масштаб фиксированной сцены 1280x800 под окно; в узком окне консоль скрыта — центрируем небо. */
+  function fit() {
+    const compact = innerWidth <= 900;
+    const s = Math.min(innerWidth / 1280, innerHeight / 800) * (compact ? 1.35 : 1);
+    const shift = compact ? -260 * s : 0;
+    stageScale.style.transform = `translate(calc(-50% + ${shift}px), -50%) scale(${s})`;
+  }
+  addEventListener("resize", fit);
+  fit();
+
+  /* ------------------------------------------------ звёздное поле */
+  const cv = document.getElementById("field"), ctx = cv.getContext("2d");
+  const CX = 380, CY = 350;
+  const targets = [];
+  for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; targets.push([CX + Math.cos(a) * 132, CY + Math.sin(a) * 132, 2.2]); }
+  for (let i = 0; i < 26; i++) { const a = (i + .5) / 26 * Math.PI * 2; targets.push([CX + Math.cos(a) * 120, CY + Math.sin(a) * 120, 1.5]); }
+  for (let i = 0; i < 9; i++) { const y = CY - 190 + i * (380 / 8); targets.push([CX - 4, y, 1.7], [CX + 4, y, 1.7]); }
+  targets.push([CX, CY - 132, 3.4], [CX + 132, CY, 3.4], [CX, CY + 132, 3.4], [CX - 132, CY, 3.4]);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const stars = targets.map((t, i) => ({ sx: rnd(30, 730), sy: rnd(30, 770), tx: t[0], ty: t[1], r: t[2], d: i / targets.length * 0.5, tw: rnd(1.5, 4), ph: rnd(0, 6.28), conv: true }));
+  for (let i = 0; i < 26; i++) stars.push({ sx: rnd(30, 730), sy: rnd(30, 770), r: rnd(1, 2.4), tw: rnd(1, 5), ph: rnd(0, 6.28), conv: false });
+  const ease = t => 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
+  let g = 0, gTarget = 0.06, last = performance.now(), failed = false;
+  function draw(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    g += (gTarget - g) * Math.min(dt * 1.1, 1);
+    ctx.clearRect(0, 0, 760, 800);
+    for (const s of stars) {
+      let x = s.sx, y = s.sy, glow = .45;
+      if (s.conv) {
+        const p = ease((g - s.d * 0.4) / 0.6);
+        x = s.sx + (s.tx - s.sx) * p; y = s.sy + (s.ty - s.sy) * p;
+        glow = .45 + .5 * p;
+      }
+      const tw = .55 + .45 * Math.sin(now / 1000 * s.tw + s.ph);
+      const a = Math.min(glow * tw, 1);
+      ctx.beginPath();
+      ctx.fillStyle = failed ? `rgba(239,179,168,${a})` : `rgba(231,215,168,${a})`;
+      ctx.arc(x, y, s.r, 0, 6.29); ctx.fill();
+      if (s.r > 2.6) { ctx.beginPath(); ctx.fillStyle = `rgba(231,215,168,${a * .16})`; ctx.arc(x, y, s.r * 3.4, 0, 6.29); ctx.fill(); }
+    }
+    if (!reduce) requestAnimationFrame(draw);
+  }
+  if (!reduce) requestAnimationFrame(draw);
+
+  /* ------------------------------------------------ состояния UI */
+  const reached = { preparing: performance.now() };
+  function fmtElapsed(phase) {
+    const seconds = ((reached[phase] ?? performance.now()) - reached.preparing) / 1000;
+    return seconds < 0.05 ? "ок" : `ок · ${seconds.toFixed(1)} с`;
+  }
+  function acknowledge() { try { if (edition) localStorage.setItem(seenKey, edition); } catch { /* остаётся премьерой */ } premiere = false; }
+  function setPhase(phase) {
+    if (!(phase in reached)) {
+      reached[phase] = performance.now();
+      const idx = order.indexOf(phase);
+      for (let i = 0; i < idx; i++) if (!(order[i] in reached)) reached[order[i]] = reached[phase];
+    }
+    const idx = order.indexOf(phase);
+    phaseRows.forEach((row, i) => {
+      row.classList.remove("active", "done");
+      if (failed) return;
+      if (i < idx) row.classList.add("done");
+      else if (i === idx && phase !== "ready") row.classList.add("active");
+      else if (phase === "ready") row.classList.add("done");
+    });
+    checkRows.forEach(row => {
+      const ri = order.indexOf(row.dataset.phase);
+      row.classList.toggle("active", !failed && ri === idx && phase !== "ready");
+      if (!failed && ri < idx) row.querySelector(".v").textContent = fmtElapsed(row.dataset.phase);
+      if (!failed && row.dataset.phase === "migrations" && ri === idx && phase !== "ready") row.querySelector(".v").textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+    });
+    gTarget = progress[phase] || 0.06;
+    fill.style.width = Math.round(gTarget * 100) + "%";
+    if (reduce) { mark.style.opacity = gTarget > .8 ? 1 : 0; if (!stopped) requestAnimationFrame(ts => draw(ts)); }
+  }
+  function revealMark() {
+    if (reduce || !mark.isConnected) { if (mark.isConnected) mark.style.opacity = 1; return; }
+    mark.style.transition = "opacity 1.2s ease";
+    mark.style.opacity = 1;
+    if (pulse.animate) pulse.animate([{ opacity: .8, transform: "scale(.72)" }, { opacity: 0, transform: "scale(1.25)" }], { duration: 900, easing: "cubic-bezier(.16,1,.3,1)" });
+  }
   function enterHold() {
     clearTimeout(holdTimer);
-    document.body.classList.add("is-hold");
-    document.body.classList.remove("premiere");
     skip.hidden = true;
     acknowledge();
   }
   function skipPremiere(event) {
-    if (!document.body.classList.contains("premiere") || stopped) return;
+    if (!premiere || stopped) return;
     if (event) event.preventDefault();
+    gTarget = Math.max(gTarget, 0.9);
     enterHold();
   }
   if (premiere && !reduce) {
-    document.body.classList.add("premiere");
     skip.hidden = false;
     skip.addEventListener("click", skipPremiere);
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" || event.key === "Enter" || event.key === " ") skipPremiere(event);
-    });
-    main.addEventListener("click", (event) => { if (event.target === skip || event.target === retry) return; skipPremiere(event); });
+    addEventListener("keydown", e => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") skipPremiere(e); });
     holdTimer = setTimeout(() => { if (!stopped) enterHold(); }, 3400);
-  } else {
-    if (premiere) acknowledge();
-    holdTimer = setTimeout(() => { if (!stopped) document.body.classList.add("is-hold"); }, 1600);
-  }
+  } else if (premiere) { acknowledge(); }
   const tick = setInterval(() => {
     const seconds = Math.floor((performance.now() - started) / 1000);
-    document.getElementById("time").textContent = `${seconds} с`;
+    document.getElementById("time").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
     if (seconds >= 20 && !stopped) hint.textContent = "Запуск занимает больше времени. При первом запуске и после обновления подготовка данных может длиться дольше.";
+    if (!failed && reached.migrations && !reached.server && !stopped) {
+      const v = document.querySelector('.check[data-phase="migrations"] .v');
+      if (v && v.textContent.startsWith("идёт")) v.textContent = `идёт · ${Math.max(1, Math.round((performance.now() - reached.migrations) / 1000))} с`;
+    }
   }, 1000);
   function fail(message, canCheck = false) {
-    stopped = true;
+    stopped = true; failed = true;
     clearTimeout(holdTimer);
-    document.body.classList.add("is-failed");
-    document.body.classList.remove("premiere");
+    const active = phaseRows.find(r => r.classList.contains("active"));
+    if (active) { active.classList.remove("active"); active.classList.add("failed"); }
+    phaseRows.forEach(r => { if (!r.classList.contains("done") && !r.classList.contains("failed")) r.style.opacity = .5; });
     skip.hidden = true;
     main.setAttribute("aria-busy", "false");
     stage.textContent = "Не удалось запустить ORION";
+    navAz.textContent = "СИГНАЛ ПОТЕРЯН"; navAz.style.color = "#efb3a8";
     error.textContent = message;
     error.hidden = false;
     retry.hidden = !canCheck;
     hint.textContent = "Закройте приложение и запустите его снова. Если ошибка повторится, проверьте журнал запуска по указанному пути.";
     clearInterval(tick);
+    if (reduce) requestAnimationFrame(ts => draw(ts));
   }
   function depart() {
     if (stopped) return;
@@ -166,9 +262,12 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
     skip.hidden = true;
     main.setAttribute("aria-busy", "false");
     stage.textContent = labels.ready;
+    setPhase("ready");
+    revealMark();
+    enter.style.opacity = 1;
+    navAz.textContent = "ОРБИТА ЗАНЯТА"; navAz.style.color = "#e7d7a8";
     if (reduce) { location.replace("/"); return; }
-    document.body.classList.add("is-depart");
-    setTimeout(() => location.replace("/"), 460);
+    setTimeout(() => location.replace("/"), 900);
   }
   async function poll() {
     try {
@@ -178,10 +277,8 @@ body.is-failed h1,body.is-failed .role,body.is-failed #stage,body.is-failed #hin
       failures = 0;
       if (state.phase === "error") { fail(state.error || "Закройте приложение и запустите его снова."); return; }
       const label = labels[state.phase] || labels.preparing;
-      if (stage.textContent !== label) {
-        stage.textContent = label;
-        if (!reduce && !document.body.classList.contains("premiere")) { stage.classList.remove("tick"); void stage.offsetWidth; stage.classList.add("tick"); }
-      }
+      if (stage.textContent !== label) stage.textContent = label;
+      if (!stopped) setPhase(state.phase);
       if (state.phase === "ready") { depart(); return; }
     } catch {
       if (++failures >= 10) { fail("Не удаётся получить состояние оболочки.", true); return; }

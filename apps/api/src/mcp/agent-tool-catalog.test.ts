@@ -15,9 +15,13 @@ describe("динамический tools/list (аренда scope'ов)", () => 
     const without = selectAgentTools(available()).map((tool) => tool.name);
     expect(without).not.toContain("orion_git_graph");
     expect(without).not.toContain("orion_architect_map");
+    expect(without).not.toContain("orion_architecture_diagrams");
+    expect(without).not.toContain("orion_architecture_update");
 
     const granted = selectAgentTools(available({ modulePermissions: ["orion-dev.development_import.read"] })).map((tool) => tool.name);
-    expect(granted).toEqual(expect.arrayContaining(["orion_git_graph", "orion_architect_map"]));
+    expect(granted).toEqual(expect.arrayContaining(["orion_git_graph", "orion_architect_map", "orion_architecture_diagrams", "orion_architecture_diagram"]));
+    const editTools = selectAgentTools(available({ modulePermissions: ["orion-dev.development_import.update"] })).map(tool => tool.name);
+    expect(editTools).toContain("orion_architecture_update");
   });
 
   it("выключенный модуль скрывает инструмент, даже если разрешение выдано", () => {
@@ -29,6 +33,7 @@ describe("динамический tools/list (аренда scope'ов)", () => 
     ).map((tool) => tool.name);
     expect(hidden).not.toContain("orion_git_graph");
     expect(hidden).not.toContain("orion_architect_map");
+    expect(hidden).not.toContain("orion_architecture_diagram");
   });
 
   it("инструменты ядра фильтруются по scope'ам токена, а не по модулям", () => {

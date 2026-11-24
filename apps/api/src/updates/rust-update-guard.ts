@@ -2,7 +2,7 @@ import { APP_UPDATE_DEFAULT_REPO } from "@orion/shared-types";
 import { parseRustTag } from "./release-feed";
 
 /** Установщик этой редакции. Обычный `ORION_*setup.exe` сюда не подходит. */
-export const RUST_INSTALLER_NAME = /^ORION-Rust_.+-setup\.exe$/i;
+export const RUST_INSTALLER_NAME = /^ORION[.-]Rust_.+-setup\.exe$/i;
 export const RUST_PRODUCT_ID = "com.orion.rust.desktop";
 
 export interface RustReleaseCheck {

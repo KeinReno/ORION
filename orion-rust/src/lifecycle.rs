@@ -155,7 +155,7 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     let user_identity = windows_user_identity()?;
     let app_version =
         package_version(&root.join("api/package.json")).unwrap_or_else(|| "dev".to_owned());
-    let paths = resolve_runtime_paths(
+    let mut paths = resolve_runtime_paths(
         &requested_data,
         &root,
         &app_version,
@@ -164,19 +164,24 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     )?;
     validate_profile_paths(profile, &requested_data, &paths.effective_data_dir)?;
 
-    // ProgramData is used only when PostgreSQL cannot consume the requested path.
-    // Validate or create a private root before copying executable files there.
-    if paths.mirror_pg || paths.effective_data_dir != requested_data {
+    // Preserve the existing location of databases whose requested path is Unicode.
+    if normalized_path(&paths.effective_data_dir) != normalized_path(&requested_data) {
         ensure_private_dir(&paths.fallback_root)?;
-    }
-    if paths.effective_data_dir != requested_data {
-        ensure_private_dir(&paths.effective_data_dir)?;
     }
     let effective_profile = Profile {
         data_dir: paths.effective_data_dir.clone(),
         ..profile.clone()
     };
     validate_profile(&effective_profile)?;
+    ensure_private_dir(&paths.effective_data_dir)?;
+    if paths.mirror_pg {
+        let name = paths
+            .effective_pg_dir
+            .file_name()
+            .ok_or("Не удалось определить имя каталога PostgreSQL")?;
+        paths.effective_pg_dir = paths.effective_data_dir.join(name);
+        paths.fallback_root = paths.effective_data_dir.clone();
+    }
     let pg_root = prepare_postgres_binaries(&paths, &app_version)?;
     let base_layout = layout(&root, &pg_root, &root)?;
     let cluster = paths.effective_data_dir.join("postgres");
@@ -188,7 +193,6 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
         &paths.effective_data_dir.join("local-runtime.json"),
         &cluster,
     )?;
-    ensure_private_dir(&paths.effective_data_dir)?;
     let secrets = load_or_create_secrets(&paths.effective_data_dir.join("local-runtime.json"))?;
     ensure_private_dir(&cluster)?;
     let admin_url = postgres_url(
@@ -568,7 +572,11 @@ fn supervise_direct_experimental(profile: &Profile) -> Result<(), String> {
     crate::logging::event(
         if result.is_ok() { "info" } else { "error" },
         "shutdown",
-        if result.is_ok() { "supervise-direct exit ok" } else { "supervise-direct exit error" },
+        if result.is_ok() {
+            "supervise-direct exit ok"
+        } else {
+            "supervise-direct exit error"
+        },
         match &result {
             Ok(()) => serde_json::json!({ "ok": true }),
             Err(error) => serde_json::json!({ "ok": false, "error": error }),
@@ -1109,7 +1117,8 @@ fn normalized_path(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-fn ensure_private_dir(path: &Path) -> Result<(), String> {
+/// Create a private runtime directory or verify access to an existing directory.
+pub fn ensure_private_dir(path: &Path) -> Result<(), String> {
     let created = match fs::create_dir(path) {
         Ok(()) => true,
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
@@ -1585,18 +1594,12 @@ extern "system" {
     ) -> i32;
 }
 
-/// Restore a staged backup into an isolated PostgreSQL database.
-/// This is the final step in the migration workflow: read staged copy, write to target DB, verify integrity.
+/// Reject the legacy staged migration command without accessing the backup or target.
 pub fn restore_staged_backup(_source_dir: &Path, _profile: &Profile) -> Result<(), String> {
-    // TODO: Implement full restoration flow:
-    // 1. Start temporary PostgreSQL instance on isolated port
-    // 2. Apply Prisma migrations to empty target database (orion_target)
-    // 3. Call stage-backup.mjs if source needs staging
-    // 4. Call restore-staged.mjs to restore into target database
-    // 5. Verify data integrity through SQL queries or health check
-    // 6. Clean up temporary resources
-
-    Err("Восстановление пока не реализовано; данные не изменялись".to_owned())
+    Err(concat!(
+        "Команда переноса подготовленной копии отключена. Данные не изменялись. ",
+        "Для полной резервной копии ORION-R используйте процедуру API из docs/DEPLOYMENT_READINESS.md."
+    ).to_owned())
 }
 
 #[cfg(test)]

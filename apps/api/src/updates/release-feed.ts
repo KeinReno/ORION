@@ -1,6 +1,9 @@
 /**
  * Чистая логика выбора релиза: разбор меток, сравнение, поиск установщика и контрольной суммы в описании.
- * Метка релиза — `v<мажор>.<минор>.<патч>-windows-beta.<n>` (например `v0.1.0-windows-beta.3`) или `v<мажор>.<минор>.<патч>`.
+ * Метка классического релиза — `v<мажор>.<минор>.<патч>-windows-beta.<n>` (например `v0.1.0-windows-beta.3`)
+ * или `v<мажор>.<минор>.<патч>`. Метка ORION Rust — `v<мажор>.<минор>.<патч>-orion-rust-beta.<n>`
+ * или просто `v<мажор>.<минор>.<патч>` (с 0.2.x Rust-релизы идут с чистыми метками; «чистая» метка
+ * новее любой беты той же версии).
  */
 export interface ParsedTag {
   core: [number, number, number];
@@ -16,9 +19,10 @@ export function parseTag(tag: string): ParsedTag | null {
 
 /** Rust builds share the private GitHub repository, so they use a disjoint tag namespace. */
 export function parseRustTag(tag: string): ParsedTag | null {
-  const match = /^v(\d+)\.(\d+)\.(\d+)-orion-rust-beta\.(\d+)$/.exec(tag.trim());
+  const match = /^v(\d+)\.(\d+)\.(\d+)(?:-orion-rust-beta\.(\d+))?$/.exec(tag.trim());
   if (!match) return null;
-  return { core: [Number(match[1]), Number(match[2]), Number(match[3])], beta: Number(match[4]) };
+  // Без суффикса-беты — «чистый» релиз: новее любой беты той же версии.
+  return { core: [Number(match[1]), Number(match[2]), Number(match[3])], beta: match[4] === undefined ? Number.POSITIVE_INFINITY : Number(match[4]) };
 }
 
 /** >0, если `a` новее `b`; метки, которые не разобрать, считаются старше любой разобранной. */
@@ -40,7 +44,8 @@ export function compareRustTags(a: string, b: string): number {
   if (!left) return -1;
   if (!right) return 1;
   for (let i = 0; i < 3; i++) if (left.core[i] !== right.core[i]) return left.core[i]! - right.core[i]!;
-  return left.beta - right.beta;
+  if (left.beta === right.beta) return 0;
+  return left.beta > right.beta ? 1 : -1;
 }
 
 export interface GithubAsset {
@@ -64,7 +69,9 @@ export function pickInstallerAsset(release: Pick<GithubRelease, "assets">): Gith
 }
 
 export function pickRustInstallerAsset(release: Pick<GithubRelease, "assets">): GithubAsset | null {
-  return release.assets.find((asset) => /^ORION-Rust_.+-setup\.exe$/i.test(asset.name)) ?? null;
+  // Tauri называет файл по productName («ORION Rust_…»), при публикации ассет
+  // переименовывали в «ORION-Rust_…» или «ORION.Rust_…» — принимаем все варианты.
+  return release.assets.find((asset) => /^ORION[.-]Rust_.+-setup\.exe$/i.test(asset.name)) ?? null;
 }
 
 export function pickPayloadAsset(release: Pick<GithubRelease, "assets">, baseTag?: string): GithubAsset | null {

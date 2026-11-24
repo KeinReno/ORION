@@ -331,6 +331,27 @@ describe("Knowledge 2.0", () => {
     expect(limited.data[0]?.id).not.toBe(first.data.id);
   });
 
+  it("копирует общую заметку со ссылкой на источник и отклоняет личную заметку", async () => {
+    const user = await register("import-note");
+    const token = user.accessToken;
+    const workspacePath = `/workspaces/${user.workspaceId}`;
+    const createNote = (isPrivate: boolean) => request<{ id: string }>(`${workspacePath}/notes`, {
+      method: "POST", token, body: { title: "Импорт заметки", body: "Текст источника", isPrivate }
+    });
+    const shared = await createNote(false);
+    const personal = await createNote(true);
+    expect(shared.status).toBe(201);
+    expect(personal.status).toBe(201);
+    const importNote = (id: string) => request<{ itemId: string }>(`${workspacePath}/knowledge/from-note/${id}`, { method: "POST", token });
+    expect((await importNote(personal.data.id)).status).toBe(404);
+    const imported = await importNote(shared.data.id);
+    expect(imported.status).toBe(201);
+    const detail = await request(`${workspacePath}/knowledge/items/${imported.data.itemId}`, { method: "GET", token });
+    expect(detail.data).toMatchObject({
+      body: "Текст источника", sources: [expect.objectContaining({ type: "note", noteId: shared.data.id })]
+    });
+  });
+
   it("импортирует файлы пофайлово и маршрутизирует входящее с отдельным подтверждением удаления", async () => {
     const session = await register("import");
     const auth = { token: session.accessToken };

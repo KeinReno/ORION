@@ -35,7 +35,8 @@ const MIGRATION_DISPOSITIONS: Record<MigrationTableDisposition, ReadonlySet<stri
   // Durable Agent Hub identity and assignment intent survive a profile move.
   // The append-only run journal is retained as historical evidence.
   preserve: new Set([
-    "agent_hub_events", "agent_hub_agent_profiles", "agent_hub_task_assignments"
+    "agent_hub_events", "agent_hub_agent_profiles", "agent_hub_task_assignments",
+    "development_architect_snapshots", "development_workflows"
   ]),
   "sanitize-credentials": new Set(["refresh_tokens", "agent_tokens", "workspace_invites", "workspaces"]),
   "sanitize-exchanges": new Set(["publication_rules", "shared_publications", "cross_workspace_grants", "calendar_connections"]),

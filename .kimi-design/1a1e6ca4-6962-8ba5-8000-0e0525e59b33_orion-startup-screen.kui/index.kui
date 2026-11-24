@@ -1,0 +1,24 @@
+version: v1
+name: ORION — экран загрузки
+
+tokens:
+  color.canvas: { type: color, values: "#16171A" }
+  color.gold: { type: color, values: "#C9A86A" }
+  color.gold-bright: { type: color, values: "#E7D7A8" }
+  color.text: { type: color, values: "#EDECE8" }
+  color.ink: { type: color, values: "#BEB9AF" }
+  color.muted: { type: color, values: "#6E6A60" }
+  color.danger: { type: color, values: "#EFB3A8" }
+  color.danger-deep: { type: color, values: "#5A3630" }
+  color.card: { type: color, values: "#1F1D1A" }
+
+customFonts:
+  - { family: Onest, src: "https://fonts.googleapis.com/css2?family=Onest" }
+  - {
+      family: IBM Plex Mono,
+      src: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"
+    }
+
+pages:
+  - pages/startup.uipage
+  - pages/odyssey.uipage

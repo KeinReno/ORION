@@ -38,9 +38,12 @@ for (const pluginsOff of [false, true]) {
     await page.getByText(LONG_TITLE, { exact: true }).first().click();
     const detail = page.getByRole("region", { name: "Детали задачи", exact: true });
     await expect(detail.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue(LONG_TITLE);
-    await detail.getByRole("combobox", { name: "Статус", exact: true }).selectOption("in_progress");
-    await detail.getByRole("combobox", { name: /^Приоритет/ }).selectOption("high");
-    await detail.getByRole("combobox", { name: /^Проект/ }).selectOption({ label: "Ремонт кухни" });
+    await detail.getByRole("button", { name: "Статус", exact: true }).click();
+    await page.getByRole("option", { name: "В работе", exact: true }).click();
+    await detail.getByRole("button", { name: "Приоритет", exact: true }).click();
+    await page.getByRole("option", { name: "Высокий", exact: true }).click();
+    await detail.getByRole("combobox", { name: "Проект", exact: true }).click();
+    await page.getByRole("option", { name: "Ремонт кухни", exact: true }).click();
     await detail.getByRole("textbox", { name: "Описание", exact: true }).fill("Три окна: спальня 140×150, детская 120×150 и балконный блок.\n\nПодрядчик просит предоплату 30%.");
     await expect(detail).toContainText("Всё сохранено");
     await shot(page, pluginsOff ? "detail-1440-plugins-off" : "detail-1440");
@@ -51,9 +54,9 @@ for (const pluginsOff of [false, true]) {
     const opened = page.getByRole("region", { name: "Детали задачи", exact: true });
     if ((await opened.count()) === 0) await page.getByText(LONG_TITLE, { exact: true }).first().click();
     await expect(opened.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue(LONG_TITLE);
-    await expect(opened.getByRole("combobox", { name: "Статус", exact: true })).toHaveValue("in_progress");
-    await expect(opened.getByRole("combobox", { name: /^Приоритет/ })).toHaveValue("high");
-    await expect(opened.getByRole("combobox", { name: /^Проект/ })).toHaveValue(seeded.home.id);
+    await expect(opened.getByRole("button", { name: "Статус", exact: true })).toHaveText("В работе");
+    await expect(opened.getByRole("button", { name: "Приоритет", exact: true })).toHaveText("Высокий");
+    await expect(opened.getByRole("combobox", { name: "Проект", exact: true })).toHaveValue("Ремонт кухни");
     await expect(opened.getByRole("textbox", { name: "Описание", exact: true })).toHaveValue(/предоплату 30%/);
 
     // The whole title is readable, not cut at the pane edge.
@@ -68,11 +71,11 @@ for (const pluginsOff of [false, true]) {
       await expect.poll(() => opened.evaluate((node, w) => node.clientWidth > w * 0.8 && node.getBoundingClientRect().right <= w + 0.5, width)).toBe(true);
       expect.soft(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `no page overflow at ${width}`).toBe(true);
       expect.soft(await opened.evaluate((node) => node.scrollWidth <= node.clientWidth), `no pane overflow at ${width}`).toBe(true);
-      const status = opened.getByRole("combobox", { name: "Статус", exact: true });
-      expect.soft(await status.evaluate((node: HTMLSelectElement) => {
+      const status = opened.getByRole("button", { name: "Статус", exact: true });
+      expect.soft(await status.evaluate((node) => {
         const probe = document.createElement("span");
         probe.style.font = getComputedStyle(node).font;
-        probe.textContent = node.selectedOptions[0]?.text ?? "";
+        probe.textContent = node.textContent;
         document.body.append(probe);
         const fits = probe.getBoundingClientRect().width + 40 <= node.clientWidth;
         probe.remove();

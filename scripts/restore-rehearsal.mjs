@@ -82,7 +82,17 @@ const email = `rehearsal-${Date.now()}@example.test`;
 const password = "Rehearsal-Strong-Password-42";
 const token = (await call(4200, "POST", "/auth/register", null, { name: "Репетиция", email, password })).json().accessToken;
 const ws = (await call(4200, "GET", "/workspaces/me", token)).json()[0].id;
-await call(4200, "POST", `/workspaces/${ws}/notes`, token, { title: "Заметка до бэкапа", body: "проверка восстановления" });
+const note = (await call(4200, "POST", `/workspaces/${ws}/notes`, token, { title: "Заметка до бэкапа", body: "проверка восстановления" })).json();
+const project = (await call(4200, "POST", `/workspaces/${ws}/projects`, token, { name: "Проект до бэкапа" })).json();
+const task = (await call(4200, "POST", `/workspaces/${ws}/tasks`, token, { title: "Задача до бэкапа", projectId: project.id })).json();
+const startAt = "2026-11-23T09:00:00.000Z";
+const endAt = "2026-11-23T10:00:00.000Z";
+const block = (await call(4200, "POST", `/workspaces/${ws}/planning/blocks`, token, {
+  title: "Блок до бэкапа", taskId: task.id, projectId: project.id, startAt, endAt
+})).json();
+const time = (await call(4200, "POST", `/workspaces/${ws}/time`, token, {
+  taskId: task.id, projectId: project.id, startedAt: startAt, endedAt: endAt
+})).json();
 const list = (await call(4200, "POST", `/workspaces/${ws}/lists`, token, { name: "Покупки" })).json();
 const entry = (await call(4200, "POST", `/workspaces/${ws}/lists/${list.id}/items`, token, { label: "Фильтр" })).json();
 const stock = (await call(4200, "POST", `/workspaces/${ws}/inventory/items`, token, { name: "Фильтр для воды" })).json();
@@ -93,6 +103,7 @@ const form = new FormData();
 form.append("files", new Blob([fileBytes], { type: "text/plain" }), "rehearsal.txt");
 const uploaded = (await call(4200, "POST", `/workspaces/${ws}/documents/upload`, token, form)).json();
 const docId = (Array.isArray(uploaded) ? uploaded[0] : uploaded).id;
+await call(4200, "POST", `/workspaces/${ws}/notes/${note.id}/attachments`, token, { documentId: docId });
 a.kill();
 log("source populated: workspace", ws, "document", docId);
 
@@ -116,7 +127,17 @@ try {
   const ws2 = (await call(4201, "GET", "/workspaces/me", token2)).json();
   if (!ws2.some((w) => w.id === ws)) throw new Error("restored workspace not visible under RLS");
   const notes = (await call(4201, "GET", `/workspaces/${ws}/notes`, token2)).json();
-  if (!notes.some((n) => n.title === "Заметка до бэкапа")) throw new Error("note missing after restore");
+  if (!notes.some((n) => n.id === note.id && n.title === note.title)) throw new Error("note missing after restore");
+  const project2 = (await call(4201, "GET", `/workspaces/${ws}/projects/${project.id}`, token2)).json();
+  const tasks = (await call(4201, "GET", `/workspaces/${ws}/tasks`, token2)).json();
+  const task2 = tasks.find((row) => row.id === task.id);
+  const block2 = (await call(4201, "GET", `/workspaces/${ws}/planning/blocks/${block.id}`, token2)).json();
+  const times = (await call(4201, "GET", `/workspaces/${ws}/time?projectId=${project.id}`, token2)).json();
+  const attachments = (await call(4201, "GET", `/workspaces/${ws}/notes/${note.id}/attachments`, token2)).json();
+  if (project2.name !== project.name || task2?.projectId !== project.id || task2.title !== task.title) throw new Error("project or task differs after restore");
+  if (block2.startAt !== startAt || block2.endAt !== endAt || block2.taskId !== task.id || block2.projectId !== project.id) throw new Error("planning block differs after restore");
+  if (!times.items.some((row) => row.id === time.id && row.taskId === task.id && row.minutes === 60)) throw new Error("time entry differs after restore");
+  if (!attachments.some((row) => row.documentId === docId)) throw new Error("note attachment missing after restore");
   const lists = (await call(4201, "GET", `/workspaces/${ws}/lists`, token2)).json();
   const restoredEntry = lists.flatMap((l) => l.items).find((i) => i.id === entry.id);
   if (!restoredEntry?.stocked || restoredEntry.inventoryItemId !== stock.id) throw new Error("list ↔ inventory link lost after restore");
@@ -125,7 +146,7 @@ try {
   const bytes = (await call(4201, "GET", `/workspaces/${ws}/documents/${docId}/content`, token2)).buf;
   const sha = (x) => createHash("sha256").update(x).digest("hex");
   if (sha(bytes) !== sha(fileBytes)) throw new Error("document bytes differ after restore");
-  log("OK: login, workspace under RLS, note, list↔inventory link, balance and document sha256 match after restore");
+  log("OK: login, workspace under RLS, note attachment, project, task, planning block, time, list↔inventory link, balance and document sha256 match after restore");
 } finally {
   b.kill();
 }

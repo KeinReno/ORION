@@ -50,6 +50,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm architecture-check
+      - run: pnpm paths:check
       - run: pnpm module-docs:check
       - run: pnpm platform-map:check
       - run: pnpm plugin-contract-check

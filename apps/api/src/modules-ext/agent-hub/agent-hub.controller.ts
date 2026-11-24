@@ -153,6 +153,26 @@ export class AgentHubController {
     return this.delegation.approve(user.userId, workspaceId, executionId, body);
   }
 
+  @Post("executions/:executionId/verify")
+  @RequirePermission("agent-hub.execution.update")
+  verifyResult(
+    @CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string,
+    @Param("executionId") executionId: string,
+    @Body(new ZodValidationPipe(agentHubApproveInputSchema)) body: AgentHubApproveInput
+  ): Promise<AgentHubExecution> {
+    return this.hub.review(user.userId, workspaceId, executionId, body.expectedRevision);
+  }
+
+  @Post("executions/:executionId/return-for-rework")
+  @RequirePermission("agent-hub.execution.update")
+  returnForRework(
+    @CurrentUser() user: RequestUser, @Param("workspaceId") workspaceId: string,
+    @Param("executionId") executionId: string,
+    @Body(new ZodValidationPipe(agentHubRejectInputSchema)) body: AgentHubRejectInput
+  ): Promise<AgentHubExecution> {
+    return this.hub.review(user.userId, workspaceId, executionId, body.expectedRevision, body.reason);
+  }
+
   @Post("executions/:executionId/reject")
   @RequirePermission("agent-hub.execution.update")
   reject(

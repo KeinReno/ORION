@@ -131,6 +131,13 @@ export function transitionAgentHubExecution(
       if (command.reviewerId === current.workerId) throw new AgentHubTransitionError("self_review");
       if (current.evidenceRefs.length === 0) throw new AgentHubTransitionError("invalid_evidence");
       return { ...next, status: "done", verifiedBy: command.reviewerId };
+    case "return_for_rework":
+      assertStatus("review");
+      if (command.reviewerId === current.workerId) throw new AgentHubTransitionError("self_review");
+      return {
+        ...next, status: "queued", workerId: null, runtimeId: null, leaseUntil: null,
+        evidenceRefs: [], resultSummary: null, verifiedBy: null, blockedReason: command.reason
+      };
     case "fail":
       assertStatus("claimed", "working");
       assertWorker(command.workerId);

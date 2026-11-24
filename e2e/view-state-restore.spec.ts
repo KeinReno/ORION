@@ -133,8 +133,11 @@ test("a saved project filter is not restored while Projects is off; records and 
   await page.goto(`/dashboard?workspaceId=${account.workspaceId}`);
 
   await page.getByRole("button", { name: "Заметки", exact: true }).click();
-  await page.getByRole("combobox", { name: "Фильтр по проекту", exact: true }).selectOption(project.id);
-  await expect(page.getByText(loose.title, { exact: true })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Фильтр по проекту", exact: true }).click();
+  await page.getByRole("option", { name: project.name, exact: true }).click();
+  const noteRow = (title: string) => page.getByRole("checkbox", { name: `Выбрать заметку «${title}» для стопки`, exact: true });
+  await expect(noteRow(loose.title)).toHaveCount(0);
+  await expect(noteRow(inProject.title)).toBeVisible();
   await page.getByRole("button", { name: "Задачи", exact: true }).click();
   await page.getByRole("button", { name: project.name, exact: true }).first().click();
   await expect(page.getByText(taskLoose.title, { exact: true })).toHaveCount(0);
@@ -144,8 +147,8 @@ test("a saved project filter is not restored while Projects is off; records and 
   expect(off.ok(), await off.text()).toBe(true);
   await page.reload();
   await page.getByRole("button", { name: "Заметки", exact: true }).click();
-  await expect(page.getByText(loose.title, { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(inProject.title, { exact: true }).first()).toBeVisible();
+  await expect(noteRow(loose.title)).toBeVisible();
+  await expect(noteRow(inProject.title)).toBeVisible();
   await page.getByRole("button", { name: "Задачи", exact: true }).click();
   await expect(page.getByText(taskLoose.title, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(taskIn.title, { exact: true }).first()).toBeVisible();

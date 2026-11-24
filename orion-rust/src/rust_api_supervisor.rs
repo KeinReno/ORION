@@ -521,7 +521,9 @@ impl ApiSupervisorBackend for SystemApiBackend {
             if !api_listener_owned_by_job(process, request.api_port)? {
                 return Ok(false);
             }
-            let Some(health) = local_health(process.api_port, crate::timeouts::API_HEALTH_PROBE_TIMEOUT) else {
+            let Some(health) =
+                local_health(process.api_port, crate::timeouts::API_HEALTH_PROBE_TIMEOUT)
+            else {
                 return Ok(false);
             };
             // Refuse a listener swap between the ownership check and HTTP probe.
@@ -1158,9 +1160,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 fn header_value<'a>(headers: &'a str, name: &str) -> Option<&'a str> {
     headers.lines().find_map(|line| {
         let (key, value) = line.split_once(':')?;
-        key.trim()
-            .eq_ignore_ascii_case(name)
-            .then(|| value.trim())
+        key.trim().eq_ignore_ascii_case(name).then(|| value.trim())
     })
 }
 
@@ -1215,7 +1215,8 @@ mod unit_tests {
 
     #[test]
     fn health_parser_accepts_crlf_and_lf_headers() {
-        let crlf = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"database\":\"ok\"}";
+        let crlf =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"database\":\"ok\"}";
         let (headers, body) = split_http_headers(crlf).unwrap();
         assert!(String::from_utf8_lossy(headers).starts_with("HTTP/1.1 200"));
         assert_eq!(body, br#"{"database":"ok"}"#);
@@ -1240,7 +1241,8 @@ mod unit_tests {
 
     #[test]
     fn header_lookup_is_case_insensitive() {
-        let headers = "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\nContent-Type: application/json";
+        let headers =
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\nContent-Type: application/json";
         assert_eq!(header_value(headers, "transfer-encoding"), Some("Chunked"));
         assert_eq!(header_value(headers, "TRANSFER-ENCODING"), Some("Chunked"));
         assert_eq!(header_value(headers, "content-length"), None);

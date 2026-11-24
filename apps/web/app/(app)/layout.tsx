@@ -1498,10 +1498,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
       {compact ? sidebarNode(primaryBar, true) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-row">
         {edgeSlot("left")}
-        <div className="flex min-h-[240px] min-w-[24rem] flex-1 flex-col">
+        <div className={`flex min-h-[240px] flex-1 flex-col ${compact ? "min-w-0" : "min-w-[24rem]"}`}>
           {edgeSlot("top")}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <GlobalCorner>{globalShellActions}</GlobalCorner>
+        {!precision || compact ? <GlobalCorner>{globalShellActions}</GlobalCorner> : null}
         {compact ? (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 pt-[env(safe-area-inset-top)]">
             <button
@@ -1535,9 +1535,10 @@ export default function AppLayout({ children }: { children: ReactNode }): React.
           {activeProjectId && !editorContext ? <IconButton id="orion-inspector-toggle" label="Свойства объекта" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen(value => !value)}><PanelRight className="h-4 w-4" /></IconButton> : null}
           <IconButton label="Второй сайдбар" className="h-11 w-11 sm:h-8 sm:w-8" aria-expanded={secondaryDock.open} onClick={secondaryDock.toggle}><Columns2 className="h-4 w-4" /></IconButton>
           <button type="button" aria-label="Учётная запись" onClick={() => openSettings("profile")} className="rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><AccountAvatar userId={user.id} name={user.name} hasAvatar={user.hasAvatar} size={24} /></button>
+          {!compact ? <GlobalCorner inline>{globalShellActions}</GlobalCorner> : null}
         </header> : null}
         <main id="orion-workbench" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border">
+          {precision && !compact && !contextHidden ? <div className="w-60 shrink-0 border-r border-border bg-card">
             <WorkspaceContext key={workspace.id} userId={user.id} workspaceId={workspace.id} activeProjectId={activeProjectId} activeKind={activeDefinition?.navParent ?? activeDefinition?.id}
               projectsEnabled={navPanels.some(panel => panel.id === "projects")} views={projectViews} folders={folderViews}
               links={orderedNav.map(panel => ({ id: panel.id, label: panel.label, icon: panel.icon, onClick: () => openFromMenu(panel.id) }))}

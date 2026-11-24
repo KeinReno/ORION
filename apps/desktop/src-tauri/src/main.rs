@@ -13,10 +13,10 @@ mod startup;
 #[cfg(debug_assertions)]
 mod startup_smoke;
 
-#[cfg(all(windows, not(debug_assertions)))]
-use orion_runtime::supervisor as process_supervisor;
 #[cfg(all(windows, debug_assertions))]
 use orion_runtime as _;
+#[cfg(all(windows, not(debug_assertions)))]
+use orion_runtime::supervisor as process_supervisor;
 
 #[cfg(all(windows, not(debug_assertions)))]
 static RUNTIME_STDIN: std::sync::Mutex<Option<std::fs::File>> = std::sync::Mutex::new(None);
@@ -29,17 +29,30 @@ static EXIT_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 
 #[cfg(all(windows, not(debug_assertions)))]
 fn runtime_pipe() -> Result<(std::fs::File, std::fs::File), String> {
-    use std::os::windows::io::FromRawHandle;
     use std::ffi::c_void;
+    use std::os::windows::io::FromRawHandle;
     #[link(name = "kernel32")]
     extern "system" {
-        fn CreatePipe(read: *mut *mut c_void, write: *mut *mut c_void, attributes: *mut c_void, size: u32) -> i32;
+        fn CreatePipe(
+            read: *mut *mut c_void,
+            write: *mut *mut c_void,
+            attributes: *mut c_void,
+            size: u32,
+        ) -> i32;
     }
     let (mut read, mut write) = (std::ptr::null_mut(), std::ptr::null_mut());
     if unsafe { CreatePipe(&mut read, &mut write, std::ptr::null_mut(), 0) } == 0 {
-        return Err(format!("Не удалось создать канал остановки runtime: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "Не удалось создать канал остановки runtime: {}",
+            std::io::Error::last_os_error()
+        ));
     }
-    Ok(unsafe { (std::fs::File::from_raw_handle(read), std::fs::File::from_raw_handle(write)) })
+    Ok(unsafe {
+        (
+            std::fs::File::from_raw_handle(read),
+            std::fs::File::from_raw_handle(write),
+        )
+    })
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
@@ -54,7 +67,9 @@ fn health_responds(api_port: u16) -> bool {
     use std::net::TcpStream;
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], api_port));
-    let Ok(mut stream) = TcpStream::connect_timeout(&addr, orion_runtime::timeouts::SHELL_HEALTH_CONNECT_TIMEOUT) else {
+    let Ok(mut stream) =
+        TcpStream::connect_timeout(&addr, orion_runtime::timeouts::SHELL_HEALTH_CONNECT_TIMEOUT)
+    else {
         return false;
     };
     let _ = stream.set_read_timeout(Some(orion_runtime::timeouts::SHELL_HEALTH_READ_TIMEOUT));
@@ -180,6 +195,17 @@ fn reject_occupied_port(name: &str, port: u16, pids: &[u32]) -> Result<(), Strin
 }
 
 #[cfg(all(windows, not(debug_assertions)))]
+fn local_runtime_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager;
+    if std::env::var_os("ORION_DESKTOP_DATA_DIR").is_some() {
+        return Ok(orion_runtime::load_profile()?.data_dir);
+    }
+    app.path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(all(windows, not(debug_assertions)))]
 fn start_local_runtime(
     app: &tauri::AppHandle,
 ) -> Result<(process_supervisor::Supervisor, u32), String> {
@@ -204,13 +230,15 @@ fn start_local_runtime(
             runtime_exe.display()
         ));
     }
-    let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let data_dir = local_runtime_data_dir(app)?;
     let shutdown_nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| format!("Не удалось подготовить сигнал завершения: {error}"))?
         .as_nanos();
-    let shutdown_marker = data_dir.join(format!("runtime-stopped-{}-{shutdown_nonce}.marker", std::process::id()));
+    let shutdown_marker = data_dir.join(format!(
+        "runtime-stopped-{}-{shutdown_nonce}.marker",
+        std::process::id()
+    ));
     let phase_file = data_dir.join("startup-state.json");
     let _ = fs::remove_file(&phase_file);
     let log_file = data_dir.join("launcher.log");
@@ -249,14 +277,31 @@ fn start_local_runtime(
     let deadline = Instant::now() + orion_runtime::timeouts::SHELL_READY_DEADLINE;
     while Instant::now() < deadline {
         startup::update_phase(app, &phase_file);
-        let phase = fs::read(&phase_file).ok()
+        let phase = fs::read(&phase_file)
+            .ok()
             .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-            .and_then(|value| value.get("phase").and_then(|phase| phase.as_str()).map(str::to_owned));
-        if let Some(phase) = phase.filter(|phase| matches!(phase.as_str(), "preparing" | "database" | "migrations" | "server")) {
+            .and_then(|value| {
+                value
+                    .get("phase")
+                    .and_then(|phase| phase.as_str())
+                    .map(str::to_owned)
+            });
+        if let Some(phase) = phase.filter(|phase| {
+            matches!(
+                phase.as_str(),
+                "preparing" | "database" | "migrations" | "server"
+            )
+        }) {
             if phase != last_phase {
                 last_phase = phase;
-                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file) {
-                    let _ = writeln!(timing, "[startup] phase={} elapsed_ms={}", last_phase, started.elapsed().as_millis());
+                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file)
+                {
+                    let _ = writeln!(
+                        timing,
+                        "[startup] phase={} elapsed_ms={}",
+                        last_phase,
+                        started.elapsed().as_millis()
+                    );
                 }
             }
         }
@@ -274,8 +319,13 @@ fn start_local_runtime(
                     .map_err(|error| error.to_string())
             })?;
             if api_owned && pg_owned {
-                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file) {
-                    let _ = writeln!(timing, "[startup] phase=ready elapsed_ms={}", started.elapsed().as_millis());
+                if let Ok(mut timing) = OpenOptions::new().create(true).append(true).open(&log_file)
+                {
+                    let _ = writeln!(
+                        timing,
+                        "[startup] phase=ready elapsed_ms={}",
+                        started.elapsed().as_millis()
+                    );
                 }
                 return Ok((supervisor, pid));
             }
@@ -436,6 +486,9 @@ fn main() {
             payload_ui_smoke::setup(app)?;
             #[cfg(debug_assertions)]
             startup_smoke::setup(app)?;
+            #[cfg(all(windows, not(debug_assertions)))]
+            let profile_setup = local_runtime_data_dir(app.handle())
+                .and_then(|path| orion_runtime::lifecycle::ensure_private_dir(&path));
             let mut config = app.config().app.windows[0].clone();
             #[cfg(all(windows, not(debug_assertions)))]
             { config.url = tauri::WebviewUrl::App(startup::PATH.into()); }
@@ -446,9 +499,20 @@ fn main() {
                 // Dev build without smoke: load the Next dev server (tauri.conf.json devUrl).
                 // App("index.html") would hit the unregistered tauri:// protocol and the
                 // webview channel dies with FailedToReceiveMessage — no window appears.
-                config.url = tauri::WebviewUrl::External("about:blank".parse().expect("devUrl"));
+                config.url = tauri::WebviewUrl::External("http://localhost:3011".parse().expect("devUrl"));
             }
             let window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+            #[cfg(all(windows, not(debug_assertions)))]
+            {
+                use tauri::Manager;
+                let probe = app.path().app_local_data_dir().map(|d| d.join("launcher.log"));
+                if let Ok(log) = probe {
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+                        use std::io::Write;
+                        let _ = writeln!(f, "[shell] building window: label={} url={:?}", config.label, config.url);
+                    }
+                }
+            }
             #[cfg(debug_assertions)]
             let window = if payload_ui_smoke::enabled() { window.initialization_script(payload_ui_smoke::FAKE_API) } else { window };
             #[cfg(debug_assertions)]
@@ -466,12 +530,32 @@ fn main() {
             }
             #[cfg(not(debug_assertions))]
             let built = window.build();
+            #[cfg(all(windows, not(debug_assertions)))]
+            {
+                // Diagnostics: a silent no-window start must leave a trace in launcher.log.
+                use tauri::Manager;
+                let probe = app.path().app_local_data_dir().map(|d| d.join("launcher.log"));
+                if let Ok(log) = probe {
+                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log) {
+                        use std::io::Write;
+                        match &built {
+                            Ok(w) => {
+                                let _ = writeln!(f, "[shell] window built: hwnd={:?} size={:?} visible={:?} title={:?}",
+                                    w.hwnd(), w.inner_size(), w.is_visible(), w.title());
+                            }
+                            Err(e) => {
+                                let _ = writeln!(f, "[shell] window build FAILED: {e}");
+                            }
+                        }
+                    }
+                }
+            }
             built?;
             #[cfg(all(windows, not(debug_assertions)))]
             {
                 let handle = app.handle().clone();
                 // setup must return immediately so Windows can paint and process input.
-                std::thread::spawn(move || { match start_local_runtime(&handle) {
+                std::thread::spawn(move || { match profile_setup.and_then(|()| start_local_runtime(&handle)) {
                     Ok((supervisor, pid)) => {
                         startup::set(&handle, "ready", None);
                         payload_ui::watch_selection(handle.clone());

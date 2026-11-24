@@ -49,6 +49,7 @@ for (const pluginsOff of [false, true]) {
     await expect.poll(async () => (await (await request.get(`${seeded.base}/notes/${seeded.note.id}`, { headers: seeded.headers })).json()).title).toBe("Маршрут по Карелии — правка");
 
     // Back to the project with the keyboard: same tab, same open task, nothing duplicated.
+    await noteTitle.blur();
     await page.keyboard.press("Alt+ArrowLeft");
     await expect(detail.getByRole("textbox", { name: "Название задачи", exact: true })).toHaveValue(seeded.task.title);
     await expect(page.locator(".dv-tab").filter({ hasText: "Поездка в Карелию" })).toHaveCount(1);

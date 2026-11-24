@@ -184,12 +184,9 @@ describe("S15 (добивка): finance transactions at scale — pagination + e
 
     const COUNT = 550; // > 500, and well past the 50-row default list page
     const AMOUNT = 1_000;
-    // `ReportsService.monthlySummary` only ever buckets by the *current*
-    // real-world month (no arbitrary month query) — seed a tight cluster
-    // "now" (1s apart, ~9 minutes total span) so every row lands in the
-    // current month bucket regardless of when in the month this runs.
     const now = new Date();
-    const start = new Date(now.getTime() - COUNT * 1000);
+    // Keep every row in the current UTC month, including at the month boundary.
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     await seedTransactions(bob.workspaceId, account.data.id, COUNT, AMOUNT, start, 1000);
 

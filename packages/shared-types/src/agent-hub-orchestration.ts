@@ -11,15 +11,34 @@ import { agentHubExecutionSchema } from "./agent-hub";
 export const AGENT_HUB_DEFAULT_MAX_DELEGATION_DEPTH = 3;
 export const AGENT_HUB_MAX_DELEGATION_DEPTH = 6;
 
+/**
+ * Кому нужно человеческое подтверждение операции выше read-only:
+ *  - `non_admin` (default) — токенам с режимом ниже «Администратора» (agentMode !== "admin").
+ *    Администратор действует без паузы;
+ *  - `all` — каждый запрос `request_approval` останавливает исполнение до
+ *    решения человека (поведение задания 09).
+ */
+export const AGENT_HUB_APPROVAL_POLICIES = ["non_admin", "all"] as const;
+export type AgentHubApprovalPolicy = (typeof AGENT_HUB_APPROVAL_POLICIES)[number];
+export const AGENT_HUB_DEFAULT_APPROVAL_POLICY: AgentHubApprovalPolicy = "non_admin";
+
+/** Пауза waiting_approval требуется только если политика требует подтверждения для этого агента. */
+export function agentHubApprovalPauseRequired(mode: AgentHubApprovalPolicy, requesterIsAdmin: boolean): boolean {
+  if (mode === "all") return true;
+  return !requesterIsAdmin;
+}
+
 export const agentHubDelegationPolicySchema = z.object({
   workspaceId: z.string().min(1),
   maxDelegationDepth: z.number().int().min(1).max(AGENT_HUB_MAX_DELEGATION_DEPTH),
+  approvals: z.enum(AGENT_HUB_APPROVAL_POLICIES).default(AGENT_HUB_DEFAULT_APPROVAL_POLICY),
   updatedAt: z.string().datetime().nullable()
 });
 export type AgentHubDelegationPolicy = z.infer<typeof agentHubDelegationPolicySchema>;
 
 export const agentHubDelegationPolicyInputSchema = z.object({
-  maxDelegationDepth: z.number().int().min(1).max(AGENT_HUB_MAX_DELEGATION_DEPTH)
+  maxDelegationDepth: z.number().int().min(1).max(AGENT_HUB_MAX_DELEGATION_DEPTH),
+  approvals: z.enum(AGENT_HUB_APPROVAL_POLICIES).optional()
 }).strict();
 export type AgentHubDelegationPolicyInput = z.infer<typeof agentHubDelegationPolicyInputSchema>;
 

@@ -1,19 +1,35 @@
 //! Native startup rehearsal. No launcher, credentials or database, isolated WebView profile.
 use tauri::{Manager, Webview};
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    if !super::startup::smoke_enabled() { return Ok(()); }
-    if app.config().identifier != "com.orion.startup-smoke" { return Err("Isolated startup identifier required".into()); }
+    if !super::startup::smoke_enabled() {
+        return Ok(());
+    }
+    if app.config().identifier != "com.orion.startup-smoke" {
+        return Err("Isolated startup identifier required".into());
+    }
     let root = std::fs::canonicalize(std::env::var("ORION_STARTUP_SMOKE_ROOT")?)?;
     let data = app.path().app_local_data_dir()?;
     std::fs::create_dir_all(&data)?;
-    std::fs::write(data.join("app-runtime.json"), serde_json::to_vec(&serde_json::json!({"web":root}))?)?;
+    std::fs::write(
+        data.join("app-runtime.json"),
+        serde_json::to_vec(&serde_json::json!({"web":root}))?,
+    )?;
     Ok(())
 }
 pub fn loaded(view: &Webview, payload: &tauri::webview::PageLoadPayload<'_>) {
-    if !super::startup::smoke_enabled() || view.app_handle().config().identifier != "com.orion.startup-smoke"
-        || !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) || payload.url().path() != super::startup::PATH { return; }
-    let Ok(report) = std::env::var("ORION_STARTUP_SMOKE_REPORT") else { return; };
-    if !report.starts_with("http://127.0.0.1:") { return; }
+    if !super::startup::smoke_enabled()
+        || view.app_handle().config().identifier != "com.orion.startup-smoke"
+        || !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+        || payload.url().path() != super::startup::PATH
+    {
+        return;
+    }
+    let Ok(report) = std::env::var("ORION_STARTUP_SMOKE_REPORT") else {
+        return;
+    };
+    if !report.starts_with("http://127.0.0.1:") {
+        return;
+    }
     let report = serde_json::to_string(&report).unwrap();
     let _ = view.eval(&format!(r#"(() => {{
         let frames=0,last='';function frame(){{frames++;requestAnimationFrame(frame)}}requestAnimationFrame(frame);

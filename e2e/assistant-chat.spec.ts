@@ -12,6 +12,13 @@ test.use({ reducedMotion: "reduce" });
 let fake: Server;
 const systems: string[] = [];
 
+async function openAssistant(page: import("@playwright/test").Page) {
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "Поиск и команды", exact: true });
+  await palette.getByRole("textbox", { name: "Поиск команд и записей", exact: true }).fill("Ассистент");
+  await palette.getByRole("button", { name: /^Ассистент(?:\s|$)/ }).click();
+}
+
 test.beforeAll(async () => {
   fake = createServer((req, res) => {
     let raw = "";
@@ -51,7 +58,7 @@ test("the assistant sees the open task, proposes a rename applied in the chat, a
   await page.getByText("Купить корм коту", { exact: true }).first().click();
   await expect(page.getByRole("region", { name: "Детали задачи", exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Ассистент", exact: true }).first().click();
+  await openAssistant(page);
   const composer = page.getByRole("textbox", { name: "Сообщение ассистенту", exact: true });
   // Who answers: the key here; Codex / Cursor are listed and say what is missing when not installed.
   await expect(page.getByRole("button", { name: "Кто отвечает", exact: true })).toContainText("Свой ключ Anthropic · claude-test");
@@ -73,7 +80,7 @@ test("the assistant sees the open task, proposes a rename applied in the chat, a
   const list = page.getByRole("complementary", { name: "Беседы", exact: true });
   await expect(list.getByRole("button", { name: /^переименуй эту задачу/ })).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Ассистент", exact: true }).first().click();
+  await openAssistant(page);
   await expect(page.getByRole("region", { name: "Беседа", exact: true }).getByText("переименуй эту задачу", { exact: true })).toBeVisible();
   await page.screenshot({ path: "tmp/redesign/assistant-chat.png" });
 

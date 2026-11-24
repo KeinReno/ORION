@@ -85,6 +85,31 @@ describe("Agent Hub: durable human queue v1", () => {
     expect((await request(`/invites/${inviteToken}/accept`, "POST", member.token)).status).toBe(201);
   }
 
+  it("records a human return and acceptance with the reviewed evidence", async () => {
+    const s = await setup();
+    await s.setModule(true);
+    const created = await s.call<AgentHubExecution>("POST", "/executions", { taskId: s.taskId });
+    expect(created.status).toBe(201);
+    const path = `/executions/${created.data.id}`;
+    const submitFixture = () => prisma.asSystem((tx) => tx.agentHubExecution.update({
+      where: { id: created.data.id },
+      data: { status: "review", workerId: "test-worker", evidenceRefs: ["fixture:result"], resultSummary: "Результат теста" }
+    }));
+    await submitFixture();
+    const returned = await s.call<AgentHubExecution>("POST", `${path}/return-for-rework`, { expectedRevision: 0, reason: "Добавить подтверждение" });
+    expect(returned.status).toBe(201);
+    expect(returned.data).toMatchObject({ status: "queued", evidenceRefs: [], blockedReason: "Добавить подтверждение", revision: 1 });
+    await submitFixture();
+    const accepted = await s.call<AgentHubExecution>("POST", `${path}/verify`, { expectedRevision: 1 });
+    expect(accepted.status).toBe(201);
+    expect(accepted.data).toMatchObject({ status: "done", revision: 2 });
+    const events = await s.call<AgentHubEvent[]>("GET", `${path}/events`);
+    expect(events.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "return_for_rework", data: expect.objectContaining({ reason: "Добавить подтверждение", evidenceRefs: ["fixture:result"] }) }),
+      expect.objectContaining({ action: "verify", actorId: accepted.data.verifiedBy })
+    ]));
+  });
+
   it("is a registered optional module with persistent snapshot models", () => {
     expect(ORION_MODULE_IDS).toContain("agent-hub");
     expect(MODULE_CATALOG.find((m) => m.id === "agent-hub")?.defaultEnabled).toBe(true);

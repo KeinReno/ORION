@@ -33,11 +33,12 @@ import {
   useContextMenu,
   useToast
 } from "@orion/ui";
-import { ArrowLeft, ExternalLink, MoreHorizontal, PanelRight, Play, Send, Square, Trash2, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, MoreHorizontal, PanelRight, Play, Send, Square, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { EntityLinksSection } from "../../components/entity-links";
 import { ResizablePane } from "../../components/resizable-pane";
-import { openPanel, openSend } from "../../lib/panel-bus";
+import { openPanel, openSend, planTaskOnCalendar } from "../../lib/panel-bus";
+import { useEnabledModules } from "../../lib/use-enabled-modules";
 import { buildPanelDragId } from "../../lib/panel-drag";
 import { panelDragHandleProps } from "../../lib/panel-drag-handle";
 import { detachPanelToWindow } from "../../lib/panel-window";
@@ -130,7 +131,8 @@ export function TaskDetail({
   const [tab, setTab] = useState<DetailTab | null>(null);
   const recurrenceApi = useSlotContributions("tasks.recurrence")[0]?.meta?.api;
   const planning = useSlotContributions("tasks.planning")[0]?.meta?.api;
-  const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta !== undefined);
+  const { isEnabled } = useEnabledModules();
+  const pluginTabs = useSlotContributions("tasks.detail.tabs").filter((c) => c.meta && (!c.meta.needsModule || isEnabled(c.meta.needsModule)));
   const tabOptions: { value: DetailTab; label: string }[] = [
     ...pluginTabs.filter((c) => c.meta?.before).map((c) => ({ value: c.meta!.tabId, label: c.meta!.label })),
     { value: "history", label: "История" },
@@ -280,6 +282,9 @@ export function TaskDetail({
   const showParent = parentOptions !== undefined && ((parentOptions?.length ?? 0) > 0 || Boolean(fields.parentId));
 
   const menuItems: React.ComponentProps<typeof DropdownMenu>["items"] = [
+    ...(isEnabled("calendar") && isEnabled("planning") && task.status !== "done" && task.status !== "canceled"
+      ? [{ label: "Запланировать…", icon: CalendarDays, onSelect: () => planTaskOnCalendar(task.id) }]
+      : []),
     ...(standalone
       ? []
       : [

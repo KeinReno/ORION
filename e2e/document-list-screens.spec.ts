@@ -59,9 +59,9 @@ for (const pluginsOff of [false, true]) {
     await page.getByRole("checkbox", { name: "Выбрать Чек 01 — строительный магазин.txt", exact: true }).check();
     await page.getByRole("checkbox", { name: "Выбрать Чек 02 — строительный магазин.txt", exact: true }).check();
     await expect(page.getByText("Выбрано: 2")).toBeVisible();
-    expect.soft(await page.getByRole("toolbar", { name: "Выбранные документы" }).evaluate((node) => node.getBoundingClientRect().height < 56), "bulk bar is one line").toBe(true);
+    expect.soft(await page.getByRole("group", { name: "Выбранные документы" }).evaluate((node) => node.getBoundingClientRect().height < 56), "bulk bar is one line").toBe(true);
     if (!pluginsOff) await shot(page, "selected-1440");
-    await page.getByRole("button", { name: "Снять выбор", exact: true }).click();
+    await page.getByRole("group", { name: "Выбранные документы" }).getByRole("button", { name: "Снять", exact: true }).click();
 
     // Narrow widths: nothing sticks out, rows stay reachable.
     for (const width of [768, 390, 320]) {
